@@ -85,6 +85,8 @@ export interface ScanResult {
   edgesFound: number;
   durationMs: number;
   languageBreakdown: Record<string, number>;
+  interrupted?: boolean;
+  totalFiles?: number;
 }
 
 export interface Snapshot {

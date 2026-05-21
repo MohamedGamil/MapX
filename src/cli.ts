@@ -253,10 +253,23 @@ export function buildCLI(): Command {
 
       const onProgress = createProgressRenderer();
       const scanner = new Scanner(store, config, graph, onProgress);
+
+      const onSigInt = () => {
+        scanner.abort();
+        process.stderr.write('\n');
+      };
+      process.once('SIGINT', onSigInt);
+
       const result = await scanner.scanFull();
 
+      process.removeListener('SIGINT', onSigInt);
       process.stderr.write('\r' + ' '.repeat(80) + '\r');
-      console.log(`Scanned ${result.filesScanned} files in ${result.durationMs}ms`);
+
+      if (result.interrupted) {
+        console.log(`Scan interrupted after ${result.filesScanned}/${result.totalFiles} files. Progress saved — run \`scan\` again to resume.`);
+      } else {
+        console.log(`Scanned ${result.filesScanned} files in ${result.durationMs}ms`);
+      }
       console.log(`Languages: ${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')}`);
       console.log(`Found ${result.symbolsFound} symbols, ${result.edgesFound} edges`);
     });
@@ -274,6 +287,7 @@ export function buildCLI(): Command {
       if (!isGitRepo(repoRoot)) {
         console.log('Not a git repo, falling back to full scan');
         const scanner = new Scanner(store, config, graph, onProgress);
+        process.once('SIGINT', () => scanner.abort());
         const result = await scanner.scanFull();
         process.stderr.write('\r' + ' '.repeat(80) + '\r');
         console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
@@ -287,6 +301,7 @@ export function buildCLI(): Command {
       }
 
       const scanner = new Scanner(store, config, graph, onProgress);
+      process.once('SIGINT', () => scanner.abort());
       const result = await scanner.scanIncremental();
 
       process.stderr.write('\r' + ' '.repeat(80) + '\r');

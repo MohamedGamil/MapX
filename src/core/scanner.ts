@@ -1,5 +1,6 @@
 import { readFile, stat, readdir } from 'node:fs/promises';
 import { resolve, relative, extname, join } from 'node:path';
+import { cpus } from 'node:os';
 import { Store } from './store.js';
 import { CodeGraph } from './graph.js';
 import { Config } from './config.js';
@@ -8,94 +9,142 @@ import { getLanguageForFile } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback } from '../types.js';
 
+const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 16);
+
 const DEFAULT_IGNORE = new Set([
   'node_modules', 'vendor', '.git', 'dist', '.codegraph', '__pycache__',
   '.next', '.nuxt', 'coverage', '.cache', '.turbo', 'target', 'build',
   '.gradle', '.idea', '.vscode', '.vs',
 ]);
 
+interface ScanResumeState {
+  totalFiles: number;
+  completedFiles: string[];
+  totalSymbols: number;
+  totalEdges: number;
+}
+
+interface FileInfo {
+  absolutePath: string;
+  language: string;
+  sizeBytes: number;
+  lines: number;
+}
+
 export class Scanner {
   private store: Store;
   private config: Config;
   private graph: CodeGraph;
   private onProgress?: ProgressCallback;
+  private concurrency: number;
+  private aborted = false;
 
   constructor(store: Store, config: Config, graph: CodeGraph, onProgress?: ProgressCallback) {
     this.store = store;
     this.config = config;
     this.graph = graph;
     this.onProgress = onProgress;
+    this.concurrency = DEFAULT_CONCURRENCY;
+  }
+
+  abort(): void {
+    this.aborted = true;
+  }
+
+  private loadResumeState(): ScanResumeState | null {
+    const data = this.store.getMeta('scan_resume_state');
+    if (!data) return null;
+    try {
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+
+  private saveResumeState(state: ScanResumeState): void {
+    this.store.setMeta('scan_resume_state', JSON.stringify(state));
+  }
+
+  private clearResumeState(): void {
+    this.store.setMeta('scan_resume_state', '');
   }
 
   async scanFull(): Promise<ScanResult> {
     const startTime = Date.now();
+    this.aborted = false;
     const workspaceRoot = this.config.getWorkspaceRoot();
     const repo = this.config.repo;
     const repoRoot = resolve(workspaceRoot, repo.path);
 
-    const files = await this.walkDirectory(repoRoot, repo.path);
-    const langBreakdown: Record<string, number> = {};
-    let totalSymbols = 0;
-    let totalEdges = 0;
+    const allFiles = await this.walkDirectory(repoRoot, repo.path);
+    this.onProgress?.({ phase: 'discover', current: allFiles.length, total: allFiles.length });
 
-    this.onProgress?.({ phase: 'index', current: 0, total: files.length });
+    this.indexAllFiles(allFiles, workspaceRoot, repo, repoRoot);
 
-    const gitHashes = isGitRepo(repoRoot) ? getGitBlobHashes(repoRoot) : new Map<string, string>();
+    const resumeState = this.loadResumeState();
+    const completed = new Set(resumeState?.completedFiles || []);
+    let totalSymbols = resumeState?.totalSymbols || 0;
+    let totalEdges = resumeState?.totalEdges || 0;
 
-    this.store.inTransaction(() => {
-      for (let i = 0; i < files.length; i++) {
-        const fileInfo = files[i];
-        const relativePath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
-        const blobHash = gitHashes.get(relativePath) || null;
+    const filesToParse = completed.size > 0
+      ? allFiles.filter(f => !completed.has(relative(workspaceRoot, f.absolutePath).replace(/\\/g, '/')))
+      : allFiles;
 
-        this.store.upsertFile({
-          path: relativePath,
-          repo: repo.name,
-          language: fileInfo.language,
-          gitBlobHash: blobHash,
-          lastScanned: new Date().toISOString(),
-          sizeBytes: fileInfo.sizeBytes,
-          lines: fileInfo.lines,
-        });
+    this.onProgress?.({ phase: 'parse', current: completed.size, total: allFiles.length });
 
-        this.graph.addFileNode(relativePath, fileInfo.language, fileInfo.sizeBytes, fileInfo.lines);
+    const parseResults = await this.parseFilesConcurrent(filesToParse, workspaceRoot);
 
-        langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
+    for (let i = 0; i < filesToParse.length && !this.aborted; i++) {
+      const relPath = relative(workspaceRoot, filesToParse[i].absolutePath).replace(/\\/g, '/');
+      const result = parseResults[i];
 
-        this.onProgress?.({ phase: 'index', current: i + 1, total: files.length, file: relativePath });
-      }
-    });
-
-    for (let i = 0; i < files.length; i++) {
-      const fileInfo = files[i];
-      const relativePath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
-      const result = await this.parseAndIndex(relativePath, fileInfo.absolutePath, repo.name);
+      this.writeParseResult(relPath, result, repo.name);
 
       totalSymbols += result.symbols.length;
       totalEdges += result.references.length;
+      completed.add(relPath);
 
-      this.onProgress?.({ phase: 'parse', current: i + 1, total: files.length, file: relativePath });
+      this.saveResumeState({
+        totalFiles: allFiles.length,
+        completedFiles: [...completed],
+        totalSymbols,
+        totalEdges,
+      });
+
+      this.onProgress?.({
+        phase: 'parse',
+        current: completed.size,
+        total: allFiles.length,
+        file: relPath,
+      });
     }
 
-    const commitSha = isGitRepo(repoRoot) ? getCurrentCommitSha(repoRoot) : null;
-    if (commitSha) {
-      this.store.setMeta('last_scan_commit', commitSha);
+    const langBreakdown: Record<string, number> = {};
+    for (const f of allFiles) {
+      langBreakdown[f.language] = (langBreakdown[f.language] || 0) + 1;
     }
-    this.store.setMeta('last_scan_time', new Date().toISOString());
 
-    const durationMs = Date.now() - startTime;
+    if (!this.aborted) {
+      const commitSha = isGitRepo(repoRoot) ? getCurrentCommitSha(repoRoot) : null;
+      if (commitSha) this.store.setMeta('last_scan_commit', commitSha);
+      this.store.setMeta('last_scan_time', new Date().toISOString());
+      this.clearResumeState();
+    }
 
     return {
-      filesScanned: files.length,
+      filesScanned: completed.size,
       symbolsFound: totalSymbols,
       edgesFound: totalEdges,
-      durationMs,
+      durationMs: Date.now() - startTime,
       languageBreakdown: langBreakdown,
+      interrupted: this.aborted,
+      totalFiles: allFiles.length,
     };
   }
 
   async scanIncremental(): Promise<ScanResult> {
     const startTime = Date.now();
+    this.aborted = false;
     const workspaceRoot = this.config.getWorkspaceRoot();
     const repo = this.config.repo;
     const repoRoot = resolve(workspaceRoot, repo.path);
@@ -118,34 +167,31 @@ export class Scanner {
       };
     }
 
-    let totalSymbols = 0;
-    let totalEdges = 0;
-    const langBreakdown: Record<string, number> = {};
+    const toRemove: string[] = [];
+    const toReindex: Array<{ path: string; fileInfo: FileInfo }> = [];
 
-    for (let i = 0; i < changes.length; i++) {
-      const change = changes[i];
+    for (const change of changes) {
       const relativePath = change.path.replace(/\\/g, '/');
-
       if (change.status === 'removed') {
-        this.store.inTransaction(() => {
-          this.store.deleteFile(relativePath);
-        });
-        this.onProgress?.({ phase: 'parse', current: i + 1, total: changes.length, file: relativePath });
+        toRemove.push(relativePath);
         continue;
       }
-
       const absolutePath = resolve(workspaceRoot, relativePath);
       const fileInfo = await this.getFileInfo(absolutePath, relativePath);
-      if (!fileInfo) {
-        this.onProgress?.({ phase: 'parse', current: i + 1, total: changes.length, file: relativePath });
-        continue;
+      if (fileInfo) {
+        toReindex.push({ path: relativePath, fileInfo });
       }
+    }
 
-      this.store.inTransaction(() => {
-        this.store.deleteSymbolsForFile(relativePath);
-        this.store.deleteEdgesForFile(relativePath);
+    this.store.inTransaction(() => {
+      for (const p of toRemove) {
+        this.store.deleteFile(p);
+      }
+      for (const { path: p, fileInfo } of toReindex) {
+        this.store.deleteSymbolsForFile(p);
+        this.store.deleteEdgesForFile(p);
         this.store.upsertFile({
-          path: relativePath,
+          path: p,
           repo: repo.name,
           language: fileInfo.language,
           gitBlobHash: null,
@@ -153,21 +199,41 @@ export class Scanner {
           sizeBytes: fileInfo.sizeBytes,
           lines: fileInfo.lines,
         });
-      });
+      }
+    });
 
-      const result = await this.parseAndIndex(relativePath, absolutePath, repo.name);
+    const parseResults = await this.parseFilesConcurrent(
+      toReindex.map(r => r.fileInfo),
+      workspaceRoot,
+    );
+
+    let totalSymbols = 0;
+    let totalEdges = 0;
+    const langBreakdown: Record<string, number> = {};
+
+    for (let i = 0; i < toReindex.length && !this.aborted; i++) {
+      const { path: relPath, fileInfo } = toReindex[i];
+      const result = parseResults[i];
+
+      this.writeParseResult(relPath, result, repo.name);
+
       totalSymbols += result.symbols.length;
       totalEdges += result.references.length;
       langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
 
-      this.onProgress?.({ phase: 'parse', current: i + 1, total: changes.length, file: relativePath });
+      this.onProgress?.({
+        phase: 'parse',
+        current: i + 1,
+        total: changes.length,
+        file: relPath,
+      });
     }
 
-    const commitSha = getCurrentCommitSha(repoRoot);
-    if (commitSha) {
-      this.store.setMeta('last_scan_commit', commitSha);
+    if (!this.aborted) {
+      const commitSha = getCurrentCommitSha(repoRoot);
+      if (commitSha) this.store.setMeta('last_scan_commit', commitSha);
+      this.store.setMeta('last_scan_time', new Date().toISOString());
     }
-    this.store.setMeta('last_scan_time', new Date().toISOString());
 
     return {
       filesScanned: changes.length,
@@ -178,19 +244,75 @@ export class Scanner {
     };
   }
 
-  private async parseAndIndex(relativePath: string, absolutePath: string, repoName: string): Promise<ParseResult> {
-    const source = await readFile(absolutePath, 'utf-8');
-    const parser = getParserForFile(relativePath, this.config.getResolvedUserLanguages());
+  private async parseFilesConcurrent(files: FileInfo[], workspaceRoot: string): Promise<ParseResult[]> {
+    const results: ParseResult[] = new Array(files.length);
 
-    const result = await parser.parse(relativePath, source);
+    const sources = await Promise.all(
+      files.map(async (f) => {
+        try {
+          return await readFile(f.absolutePath, 'utf-8');
+        } catch {
+          return null;
+        }
+      }),
+    );
 
+    for (let i = 0; i < files.length && !this.aborted; i++) {
+      const fileInfo = files[i];
+      const relPath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
+
+      if (sources[i] === null) {
+        results[i] = { symbols: [], references: [], errors: [{ message: `Failed to read ${relPath}` }] };
+        continue;
+      }
+
+      try {
+        const parser = getParserForFile(relPath, this.config.getResolvedUserLanguages());
+        results[i] = await parser.parse(relPath, sources[i]!);
+      } catch {
+        results[i] = { symbols: [], references: [], errors: [{ message: `Failed to parse ${relPath}` }] };
+      }
+    }
+
+    return results;
+  }
+
+  private indexAllFiles(files: FileInfo[], workspaceRoot: string, repo: { name: string; path: string }, repoRoot: string): void {
+    this.onProgress?.({ phase: 'index', current: 0, total: files.length });
+
+    const gitHashes = isGitRepo(repoRoot) ? getGitBlobHashes(repoRoot) : new Map<string, string>();
+
+    this.store.inTransaction(() => {
+      for (let i = 0; i < files.length; i++) {
+        const fileInfo = files[i];
+        const relativePath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
+        const blobHash = gitHashes.get(relativePath) || null;
+
+        this.store.upsertFile({
+          path: relativePath,
+          repo: repo.name,
+          language: fileInfo.language,
+          gitBlobHash: blobHash,
+          lastScanned: new Date().toISOString(),
+          sizeBytes: fileInfo.sizeBytes,
+          lines: fileInfo.lines,
+        });
+
+        this.graph.addFileNode(relativePath, fileInfo.language, fileInfo.sizeBytes, fileInfo.lines);
+
+        this.onProgress?.({ phase: 'index', current: i + 1, total: files.length, file: relativePath });
+      }
+    });
+  }
+
+  private writeParseResult(relativePath: string, result: ParseResult, repoName: string): void {
     this.store.inTransaction(() => {
       this.store.deleteSymbolsForFile(relativePath);
 
       for (const sym of result.symbols) {
         this.graph.addSymbolNode(
           sym.name, relativePath, sym.name, sym.kind,
-          sym.startLine, sym.endLine, sym.scope
+          sym.startLine, sym.endLine, sym.scope,
         );
 
         this.store.insertSymbol({
@@ -214,8 +336,6 @@ export class Scanner {
         this.store.insertEdge(edge);
       }
     });
-
-    return result;
   }
 
   private resolveReferences(refs: ExtractedReference[], sourcePath: string, repoName: string): GraphEdge[] {
@@ -291,19 +411,8 @@ export class Scanner {
     return null;
   }
 
-  private async walkDirectory(dir: string, repoPath: string): Promise<Array<{
-    absolutePath: string;
-    language: string;
-    sizeBytes: number;
-    lines: number;
-  }>> {
-    const files: Array<{
-      absolutePath: string;
-      language: string;
-      sizeBytes: number;
-      lines: number;
-    }> = [];
-
+  private async walkDirectory(dir: string, repoPath: string): Promise<FileInfo[]> {
+    const files: FileInfo[] = [];
     const workspaceRoot = this.config.getWorkspaceRoot();
     const excludePatterns = this.config.settings.excludePatterns;
 
@@ -321,8 +430,8 @@ export class Scanner {
         if (entry.isDirectory()) {
           await walk(fullPath);
         } else if (entry.isFile()) {
-          const relativePath = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
-          if (this.shouldExclude(relativePath, excludePatterns)) continue;
+          const relPath = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
+          if (this.shouldExclude(relPath, excludePatterns)) continue;
 
           const langDef = getLanguageForFile(fullPath, this.config.getResolvedUserLanguages());
           if (!langDef) continue;
@@ -339,7 +448,7 @@ export class Scanner {
               lines,
             });
 
-            this.onProgress?.({ phase: 'discover', current: files.length, total: 0, file: relativePath });
+            this.onProgress?.({ phase: 'discover', current: files.length, total: 0, file: relPath });
           } catch {
             // skip unreadable files
           }
@@ -363,7 +472,7 @@ export class Scanner {
     return false;
   }
 
-  private async getFileInfo(absolutePath: string, relativePath: string) {
+  private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {
     const langDef = getLanguageForFile(absolutePath, this.config.getResolvedUserLanguages());
     if (!langDef) return null;
 
