@@ -1,6 +1,7 @@
 {
   "name": "codegraph",
   "version": "0.1.0",
+  "license": "MIT",
   "description": "Multi-language code graph memory system for LLMs",
   "type": "module",
   "bin": {
