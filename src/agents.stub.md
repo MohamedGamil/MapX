@@ -46,6 +46,7 @@ codegraph export [--dir /path]              # default: LLM format, 8192 token bu
 codegraph export --tokens=16384             # larger budget
 codegraph export --format=json              # full graph as JSON
 codegraph export --format=dot               # GraphViz DOT for visualization
+codegraph export --format=svg               # SVG visualization (uses GraphViz if installed, else built-in renderer)
 
 # Search for symbols
 codegraph query <symbol-name> [--dir /path]

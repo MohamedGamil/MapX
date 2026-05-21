@@ -11,6 +11,7 @@ import { Config } from './core/config.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
+import { SvgExporter } from './exporters/svg-exporter.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
@@ -396,37 +397,67 @@ export function buildCLI(): Command {
     .command('export')
     .description('Export code graph for LLM consumption')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--format <format>', 'Output format: llm, json, dot', 'llm')
+    .option('--format <format>', 'Output format: llm, json, dot, svg', 'llm')
     .option('--tokens <budget>', 'Token budget for LLM export', '8192')
     .option('--repo <name>', 'Filter by repo name')
+    .option('-o, --output <file>', 'Write output to file instead of stdout')
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store, graph } = await loadContext(dir);
 
       const format = opts.format as string;
       const tokenBudget = parseInt(opts.tokens as string, 10) || 8192;
+      const outputPath = opts.output as string | undefined;
+
+      if (outputPath) {
+        const outputDir = resolve(outputPath, '..');
+        if (!existsSync(outputDir)) {
+          console.error(`Error: output directory does not exist: ${outputDir}`);
+          process.exit(1);
+        }
+        try {
+          writeFileSync(outputPath, '', 'utf-8');
+        } catch {
+          console.error(`Error: cannot write to: ${resolve(outputPath)}`);
+          process.exit(1);
+        }
+      }
+
+      let output: string;
 
       switch (format) {
         case 'json': {
           const exporter = new GraphExporter(store, graph);
-          console.log(exporter.exportAsJSONString(opts.repo as string | undefined));
+          output = exporter.exportAsJSONString(opts.repo as string | undefined);
           break;
         }
         case 'dot': {
           const exporter = new DotExporter(store, graph);
-          console.log(exporter.export(opts.repo as string | undefined));
+          output = exporter.export(opts.repo as string | undefined);
+          break;
+        }
+        case 'svg': {
+          const exporter = new SvgExporter(store, graph);
+          output = exporter.export(opts.repo as string | undefined);
           break;
         }
         case 'llm':
         default: {
           const exporter = new LLMExporter(store, graph);
-          console.log(exporter.export({
+          output = exporter.export({
             format: 'llm',
             tokenBudget,
             repo: opts.repo as string | undefined,
-          }));
+          });
           break;
         }
+      }
+
+      if (outputPath) {
+        writeFileSync(resolve(outputPath), output, 'utf-8');
+        console.log(`Exported ${format} to ${resolve(outputPath)} (${Buffer.byteLength(output, 'utf-8')} bytes)`);
+      } else {
+        console.log(output);
       }
     });
 

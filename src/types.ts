@@ -104,7 +104,7 @@ export interface Snapshot {
 }
 
 export interface ExportOptions {
-  format: 'llm' | 'json' | 'dot';
+  format: 'llm' | 'json' | 'dot' | 'svg';
   tokenBudget: number;
   repo?: string;
   files?: string[];

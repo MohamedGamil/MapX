@@ -1,4 +1,4 @@
-.PHONY: help init scan update status export export-json export-dot \
+.PHONY: help init scan update status export export-json export-dot export-svg \
        query deps summary serve lang-list \
        test test-full test-clean clean clean-all \
        wasm build build-all build-linux build-linux-arm \
@@ -91,6 +91,9 @@ test-full: ## Full test: init + scan + all exports + query + deps
 	@echo ""
 	@echo "=== EXPORT (DOT, first 20 lines) ==="
 	$(CLI) export --format=dot --dir=$(DIR) | head -20
+	@echo ""
+	@echo "=== EXPORT (SVG, first 10 lines) ==="
+	$(CLI) export --format=svg --dir=$(DIR) | head -10
 	@echo ""
 	@echo "=== QUERY: Stub ==="
 	$(CLI) query "Stub" --dir=$(DIR)

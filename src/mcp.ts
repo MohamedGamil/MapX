@@ -13,6 +13,8 @@ import { Scanner } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
+import { DotExporter } from './exporters/dot-exporter.js';
+import { SvgExporter } from './exporters/svg-exporter.js';
 
 let defaultDir = process.cwd();
 
@@ -121,7 +123,7 @@ export async function startMcpServer(dir?: string): Promise<void> {
         inputSchema: {
           type: 'object',
           properties: {
-            format: { type: 'string', enum: ['llm', 'json'], description: 'Output format', default: 'llm' },
+            format: { type: 'string', enum: ['llm', 'json', 'dot', 'svg'], description: 'Output format', default: 'llm' },
             tokens: { type: 'number', description: 'Token budget for LLM format', default: 8192 },
             repo: { type: 'string', description: 'Filter by repo name' },
             ...dirProperty,
@@ -219,6 +221,16 @@ export async function startMcpServer(dir?: string): Promise<void> {
         if (format === 'json') {
           const exporter = new GraphExporter(ctx.store, ctx.graph);
           return { content: [{ type: 'text', text: exporter.exportAsJSONString(repo) }] };
+        }
+
+        if (format === 'dot') {
+          const exporter = new DotExporter(ctx.store, ctx.graph);
+          return { content: [{ type: 'text', text: exporter.export(repo) }] };
+        }
+
+        if (format === 'svg') {
+          const exporter = new SvgExporter(ctx.store, ctx.graph);
+          return { content: [{ type: 'text', text: exporter.export(repo) }] };
         }
 
         const exporter = new LLMExporter(ctx.store, ctx.graph);
