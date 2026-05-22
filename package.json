@@ -3,6 +3,11 @@
   "version": "0.1.6",
   "license": "Apache-2.0",
   "description": "Multi-language code graph memory system for LLMs",
+  "author": {
+    "email": "mgamil.dev@gmail.com",
+    "name": "Mohamed Gamil",
+    "url": "https://gamil.io"
+  },
   "type": "module",
   "bin": {
     "mapx": "./src/main.ts"
