@@ -225,7 +225,7 @@ export function buildServer(): Server {
           properties: {
             start: { type: 'string', description: 'Symbol (e.g. \'UserController::store\') or file path' },
             direction: { type: 'string', enum: ['up', 'down', 'both'], default: 'both', description: 'Direction of traversal' },
-            depth: { type: 'number', default: 6, description: 'Max traversal depth' },
+            depth: { type: 'number', default: 3, description: 'Max traversal depth' },
             format: { type: 'string', enum: ['text', 'dot', 'json'], default: 'text', description: 'Output format' },
             include_structural: { type: 'boolean', default: false, description: 'Include structural edges (e.g., import/extends)' },
             ...dirProperty,
@@ -1212,7 +1212,7 @@ Callees: ${callees.length}`;
 
         const start = (args as any)?.start;
         const direction = (args as any)?.direction || 'both';
-        const depth = (args as any)?.depth || 6;
+        const depth = (args as any)?.depth || 3;
         const format = (args as any)?.format || 'text';
         const includeStructural = (args as any)?.include_structural || false;
 

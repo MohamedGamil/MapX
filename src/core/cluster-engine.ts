@@ -287,11 +287,28 @@ export class ClusterEngine {
       labels.set(node, node);
     }
 
+    const seededShuffle = <T>(array: T[], seed: number): T[] => {
+      const result = [...array];
+      let currentSeed = seed;
+      const random = () => {
+        currentSeed = (currentSeed * 9301 + 49297) % 233280;
+        return currentSeed / 233280;
+      };
+      for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        const temp = result[i];
+        result[i] = result[j];
+        result[j] = temp;
+      }
+      return result;
+    };
+
     const maxIterations = 10;
     let changed = true;
     for (let iter = 0; iter < maxIterations && changed; iter++) {
       changed = false;
-      for (const node of filesList) {
+      const shuffledNodes = seededShuffle(filesList, 42 + iter);
+      for (const node of shuffledNodes) {
         const neighbors = weights.get(node);
         if (!neighbors || neighbors.size === 0) continue;
 

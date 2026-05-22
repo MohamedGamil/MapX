@@ -977,7 +977,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Trace data flow paths from a starting symbol or file')
     .option('-d, --dir <path>', 'Target directory')
     .option('--direction <dir>', 'up | down | both', 'both')
-    .option('--depth <n>', 'Maximum traversal depth', '6')
+    .option('--depth <n>', 'Maximum traversal depth', '3')
+    .option('--max-depth <n>', 'Maximum traversal depth (alias for --depth)')
     .option('--format <fmt>', 'text | dot | json', 'text')
     .option('--include-structural', 'Include import/extends edges in trace', false)
     .option('--sources', 'Show entry points', false)
@@ -1057,10 +1058,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         return;
       }
 
+      const requestedDepth = opts.maxDepth !== undefined ? opts.maxDepth : opts.depth;
+      const parsedDepth = parseInt(requestedDepth as string, 10);
+
       const result = tracer.trace({
         startSymbol: start,
         direction: opts.direction as any,
-        maxDepth: parseInt(opts.depth as string, 10),
+        maxDepth: parsedDepth,
         includeStructural: !!opts.includeStructural,
         repo: config.repo.name,
       });
@@ -1069,7 +1073,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const jsonOutput = {
           start: result.start,
           direction: result.direction,
-          maxDepth: parseInt(opts.depth as string, 10),
+          maxDepth: parsedDepth,
           nodeCount: result.nodeCount,
           edgeCount: result.edgeCount,
           maxDepthReached: result.maxDepthReached,
@@ -1105,7 +1109,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const safeStartName = (result.start.symbol || result.start.file).replace(/[^a-zA-Z0-9]/g, '_');
         lines.push(`digraph Trace_${safeStartName} {`);
         lines.push('  rankdir=TB;');
-        lines.push(`  label="Trace: ${result.start.symbol || result.start.file} (${result.direction}stream, depth≤${opts.depth})";`);
+        lines.push(`  label="Trace: ${result.start.symbol || result.start.file} (${result.direction}stream, depth≤${parsedDepth})";`);
         lines.push('  fontsize=12;');
         lines.push('  node [shape=box, style=filled, fontsize=10];');
         lines.push('');
@@ -1169,7 +1173,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       const dirSymbol = result.direction === 'down' ? '↓ downstream' : result.direction === 'up' ? '↑ upstream' : '↕ bidirectional';
-      console.log(`\nTrace: ${start}  ${dirSymbol}  depth≤${opts.depth}`);
+      console.log(`\nTrace: ${start}  ${dirSymbol}  depth≤${parsedDepth}`);
       console.log('─'.repeat(53));
       console.log('');
 
@@ -1218,7 +1222,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       console.log('');
       const cyclesStr = result.cycles.length > 0 ? `   Cycles: ${result.cycles.length}` : '';
-      console.log(`Nodes: ${result.nodeCount}   Edges: ${result.edgeCount}   Max depth: ${opts.depth}${cyclesStr}`);
+      console.log(`Nodes: ${result.nodeCount}   Edges: ${result.edgeCount}   Max depth: ${parsedDepth}${cyclesStr}`);
       if (result.sinks.length > 0) {
         const sinkNames = result.sinks.map(s => s.symbol || s.file.split('/').pop() || s.file);
         console.log(`Sinks: ${sinkNames.join(', ')}`);

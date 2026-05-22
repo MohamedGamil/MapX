@@ -144,11 +144,11 @@
 
 ## Risk Mitigation
 
-- [ ] **I08** — Label Propagation: add deterministic seed; test cluster stability across runs
-- [ ] **I08** — Data-flow depth: add configurable `--max-depth` (default 3); benchmark on 10k-node graphs
-- [ ] **I12** — Language sub-phases: ship SP1 before starting SP2; gate each on CI green
-- [ ] **I13** — Framework scope: implement 3 concrete detectors before building `FrameworkDetector` interface
-- [ ] **I13** — False positives: confidence score < 0.5 suppresses edge emission; log warnings
+- [x] **I08** — Label Propagation: add deterministic seed; test cluster stability across runs
+- [x] **I08** — Data-flow depth: add configurable `--max-depth` (default 3); benchmark on 10k-node graphs
+- [x] **I12** — Language sub-phases: ship SP1 before starting SP2; gate each on CI green
+- [x] **I13** — Framework scope: implement 3 concrete detectors before building `FrameworkDetector` interface
+- [x] **I13** — False positives: confidence score < 0.5 suppresses edge emission; log warnings
 - [x] **I11** — Breaking change: add `CHANGELOG` entry; deprecation warning in old `mapx_status` text until next major version
 - [x] **I15** — Bundle size: CI check that `dist/ui/main.js` gzipped size ≤ 200 KB; audit Cytoscape plugin additions
 
@@ -177,10 +177,10 @@
 
 ## Success Metrics
 
-- [ ] TypeScript type-check (`npx tsc --noEmit`) passes with 0 errors after every iteration
-- [ ] All acceptance criteria in each feature spec pass
-- [ ] No regression on existing `mapx scan/export/query` behaviour
-- [ ] WASM parser bundle per language ≤ budget defined in F20 spec
-- [ ] Dashboard initial bundle ≤ 200 KB gzipped
-- [ ] `mapx_context` p95 response time ≤ 200 ms on a 1000-file project
-- [ ] All schema migrations are additive (no column drops, no table renames)
+- [x] TypeScript type-check (`npx tsc --noEmit`) passes with 0 errors after every iteration
+- [x] All acceptance criteria in each feature spec pass
+- [x] No regression on existing `mapx scan/export/query` behaviour
+- [x] WASM parser bundle per language ≤ budget defined in F20 spec
+- [x] Dashboard initial bundle ≤ 200 KB gzipped
+- [x] `mapx_context` p95 response time ≤ 200 ms on a 1000-file project
+- [x] All schema migrations are additive (no column drops, no table renames)

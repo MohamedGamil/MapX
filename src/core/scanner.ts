@@ -933,6 +933,21 @@ export class Scanner {
 
           const routes = await detector.extractRoutes(relPath, content, ctx);
           for (const route of routes) {
+            let conf = 1.0;
+            const routeConf = route.metadata?.confidence ?? (route as any).confidence;
+            if (typeof routeConf === 'number') {
+              conf = routeConf;
+            } else if (typeof routeConf === 'string') {
+              if (routeConf === 'declared') conf = 1.0;
+              else if (routeConf === 'inferred') conf = 0.8;
+              else if (routeConf === 'low') conf = 0.3;
+            }
+
+            if (conf < 0.5) {
+              console.warn(`[mapx] Suppressing route edge due to low confidence (${conf}): ${route.method} ${route.path} -> ${route.handlerFile}`);
+              continue;
+            }
+
             routeRegistry.addRoute(route);
 
             // Add as an edge in the db/graph
@@ -949,7 +964,7 @@ export class Scanner {
                 httpVerb: route.method,
                 uri: route.path,
                 middlewares: route.middlewares,
-                confidence: 'inferred',
+                confidence: route.metadata?.confidence || 'inferred',
               }
             });
             this.graph.addDependencyEdge({
@@ -965,7 +980,7 @@ export class Scanner {
                 httpVerb: route.method,
                 uri: route.path,
                 middlewares: route.middlewares,
-                confidence: 'inferred',
+                confidence: route.metadata?.confidence || 'inferred',
               }
             });
           }
@@ -973,6 +988,21 @@ export class Scanner {
           if (detector.extractHooks) {
             const hooks = await detector.extractHooks(relPath, content, ctx);
             for (const hook of hooks) {
+              let conf = 1.0;
+              const hookConf = hook.metadata?.confidence ?? (hook as any).confidence;
+              if (typeof hookConf === 'number') {
+                conf = hookConf;
+              } else if (typeof hookConf === 'string') {
+                if (hookConf === 'declared') conf = 1.0;
+                else if (hookConf === 'inferred') conf = 0.8;
+                else if (hookConf === 'low') conf = 0.3;
+              }
+
+              if (conf < 0.5) {
+                console.warn(`[mapx] Suppressing hook edge due to low confidence (${conf}): ${hook.hookName} -> ${hook.handlerFile}`);
+                continue;
+              }
+
               routeRegistry.addHook(hook);
 
               const edgeType = (['graphql_resolver', 'message_handler', 'websocket_handler', 'middleware'].includes(hook.hookType)
@@ -991,7 +1021,7 @@ export class Scanner {
                 metadata: {
                   hookName: hook.hookName,
                   hookType: hook.hookType,
-                  confidence: 'inferred',
+                  confidence: hook.metadata?.confidence || 'inferred',
                 }
               });
               this.graph.addDependencyEdge({
@@ -1006,7 +1036,7 @@ export class Scanner {
                 metadata: {
                   hookName: hook.hookName,
                   hookType: hook.hookType,
-                  confidence: 'inferred',
+                  confidence: hook.metadata?.confidence || 'inferred',
                 }
               });
             }
