@@ -1,4 +1,5 @@
-import { readFile, stat, readdir } from 'node:fs/promises';
+import { readFile, writeFile, unlink, stat, readdir, open } from 'node:fs/promises';
+import { existsSync, readFileSync, closeSync } from 'node:fs';
 import { resolve, relative, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
@@ -78,7 +79,55 @@ export class Scanner {
     this.store.setMeta('scan_resume_state', '');
   }
 
+  private getLockPath(): string {
+    return join(this.config.getWorkspaceRoot(), '.codegraph', 'scan.lock');
+  }
+
+  private async acquireScanLock(): Promise<boolean> {
+    const lockPath = this.getLockPath();
+    try {
+      const fd = await open(lockPath, 'wx');
+      await fd.write(String(process.pid), 0, 'utf-8');
+      await fd.close();
+      return true;
+    } catch (err: any) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+    try {
+      const pid = parseInt(readFileSync(lockPath, 'utf-8').trim(), 10);
+      if (pid && pid !== process.pid) {
+        try {
+          process.kill(pid, 0);
+          return false;
+        } catch {
+          try { await unlink(lockPath); } catch { /* race: another process cleaned it */ }
+          return this.acquireScanLock();
+        }
+      }
+    } catch { /* unreadable */ }
+    try { await unlink(lockPath); } catch { /* race */ }
+    return this.acquireScanLock();
+  }
+
+  private async releaseScanLock(): Promise<void> {
+    try { await unlink(this.getLockPath()); } catch { /* already gone */ }
+  }
+
   async scanFull(): Promise<ScanResult> {
+    const acquired = await this.acquireScanLock();
+    if (!acquired) {
+      const lockPath = this.getLockPath();
+      const pid = existsSync(lockPath) ? readFileSync(lockPath, 'utf-8').trim() : '?';
+      throw new Error(`Another scan is already running on this project (PID ${pid}). Wait for it to finish or delete ${lockPath} if it is stale.`);
+    }
+    try {
+      return await this._scanFull();
+    } finally {
+      await this.releaseScanLock();
+    }
+  }
+
+  private async _scanFull(): Promise<ScanResult> {
     const startTime = Date.now();
     this.aborted = false;
     const workspaceRoot = this.config.getWorkspaceRoot();
@@ -232,6 +281,20 @@ export class Scanner {
   }
 
   async scanIncremental(): Promise<ScanResult> {
+    const acquired = await this.acquireScanLock();
+    if (!acquired) {
+      const lockPath = this.getLockPath();
+      const pid = existsSync(lockPath) ? readFileSync(lockPath, 'utf-8').trim() : '?';
+      throw new Error(`Another scan is already running on this project (PID ${pid}). Wait for it to finish or delete ${lockPath} if it is stale.`);
+    }
+    try {
+      return await this._scanIncremental();
+    } finally {
+      await this.releaseScanLock();
+    }
+  }
+
+  private async _scanIncremental(): Promise<ScanResult> {
     const startTime = Date.now();
     this.aborted = false;
     const workspaceRoot = this.config.getWorkspaceRoot();
@@ -239,7 +302,7 @@ export class Scanner {
     const repoRoot = resolve(workspaceRoot, repo.path);
 
     if (!isGitRepo(repoRoot)) {
-      return this.scanFull();
+      return this._scanFull();
     }
 
     const lastCommit = this.store.getMeta('last_scan_commit');

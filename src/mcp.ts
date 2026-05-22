@@ -18,15 +18,18 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 
-let defaultDir = process.cwd();
+// defaultDir is set by startMcpServer(); null means not yet configured.
+let defaultDir: string | null = null;
 
 const DirSchema = z.object({
   dir: z.string().optional(),
 });
 
-function resolveDir(args: Record<string, unknown>): string {
+function resolveDir(args: Record<string, unknown>): string | null {
   const parsed = DirSchema.parse(args);
-  return parsed.dir ? resolve(parsed.dir) : defaultDir;
+  if (parsed.dir) return resolve(parsed.dir);
+  if (defaultDir) return defaultDir;
+  return null;
 }
 
 async function loadContext(dir: string) {
@@ -150,6 +153,11 @@ function buildServer(): Server {
     const { name, arguments: args } = request.params;
     // Each tool call opens a fresh Store; track it so we can close it when done.
     let activeStore: Store | undefined;
+    const resolveOrFail = (a: Record<string, unknown>): { dir: string } | { error: string } => {
+      const dir = resolveDir(a);
+      if (!dir) return { error: 'No project directory set. Either pass a "dir" argument or start the server with --dir /path/to/project.' };
+      return { dir };
+    };
     const loadCtx = async (dir: string) => {
       const ctx = await loadContext(dir);
       if (!('error' in ctx)) activeStore = ctx.store;
@@ -159,23 +167,30 @@ function buildServer(): Server {
     try {
     switch (name) {
       case 'codegraph_scan': {
-        const dir = resolveDir(args || {});
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const scanner = new Scanner(ctx.store, ctx.config, ctx.graph);
-        const result = await scanner.scanFull();
-
-        return {
-          content: [{
-            type: 'text',
-            text: `Scanned ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
-          }],
-        };
+        try {
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph);
+          const result = await scanner.scanFull();
+          return {
+            content: [{
+              type: 'text',
+              text: `Scanned ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
+            }],
+          };
+        } catch (err: any) {
+          return { content: [{ type: 'text', text: `Scan failed: ${err.message}` }] };
+        }
       }
 
       case 'codegraph_query': {
-        const dir = resolveDir(args || {});
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
         const term = (args as any)?.term;
         if (!term) return { content: [{ type: 'text', text: 'Missing required parameter: term' }] };
 
@@ -196,7 +211,9 @@ function buildServer(): Server {
       }
 
       case 'codegraph_dependencies': {
-        const dir = resolveDir(args || {});
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
         const file = (args as any)?.file;
         if (!file) return { content: [{ type: 'text', text: 'Missing required parameter: file' }] };
 
@@ -221,7 +238,9 @@ function buildServer(): Server {
       }
 
       case 'codegraph_export': {
-        const dir = resolveDir(args || {});
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
@@ -250,7 +269,9 @@ function buildServer(): Server {
       }
 
       case 'codegraph_status': {
-        const dir = resolveDir(args || {});
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
@@ -366,8 +387,22 @@ function generateConfigs(dir: string, transport: 'stdio' | 'sse', port?: number)
 export async function startMcpServer(dir?: string, options?: ServeOptions): Promise<void> {
   if (dir) {
     defaultDir = resolve(dir);
+  } else {
+    // Fall back to cwd only if it is an initialized codegraph project; otherwise
+    // leave defaultDir as null so tool calls without an explicit "dir" fail clearly
+    // instead of silently operating on the wrong database.
+    const cwd = process.cwd();
+    if (existsSync(resolve(cwd, '.codegraph', 'config.json'))) {
+      defaultDir = cwd;
+    }
+    // defaultDir stays null when cwd is not an initialized project
   }
 
+  if (defaultDir) {
+    process.stderr.write(`[codegraph] Default project directory: ${defaultDir}\n`);
+  } else {
+    process.stderr.write(`[codegraph] No default project directory set. Pass --dir /path/to/project or include "dir" in each tool call.\n`);
+  }
   if (options?.sse) {
     const port = options.port || 3000;
     const transports: Map<string, SSEServerTransport> = new Map();
@@ -416,11 +451,11 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
       httpServer.listen(port, () => resolve());
     });
 
-    console.error(generateConfigs(defaultDir, 'sse', port));
+    console.error(generateConfigs(defaultDir!, 'sse', port));
   } else {
     const server = buildServer();
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error(generateConfigs(defaultDir, 'stdio'));
+    console.error(generateConfigs(defaultDir!, 'stdio'));
   }
 }

@@ -7,6 +7,7 @@ export class BunStore implements StoreBackend {
     const { Database } = require('bun:sqlite');
     this.db = new Database(dbPath, { create: true });
     this.pragma('journal_mode = WAL');
+    this.pragma('busy_timeout = 5000');
     this.pragma('foreign_keys = ON');
   }
 

@@ -10,6 +10,12 @@ if (isImplicitMcp) {
   });
 } else {
   const program = buildCLI();
-  program.parse(process.argv);
+  program.parseAsync(process.argv).catch((err: Error) => {
+    if (err.message.includes('Another scan is already running')) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+    console.error(err);
+    process.exit(1);
+  });
 }
-// test comment

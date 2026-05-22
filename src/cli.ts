@@ -292,7 +292,13 @@ export function buildCLI(): Command {
       };
       process.once('SIGINT', onSigInt);
 
-      const result = await scanner.scanFull();
+      const result = await scanner.scanFull().catch((err: Error) => {
+        if (err.message.includes('Another scan is already running')) {
+          console.error(`Error: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      });
 
       process.removeListener('SIGINT', onSigInt);
       process.stderr.write('\r' + ' '.repeat(80) + '\r');
@@ -315,12 +321,20 @@ export function buildCLI(): Command {
       const { config, store, graph } = await loadContext(dir);
       const onProgress = createProgressRenderer();
 
+      const handleLockError = (err: Error) => {
+        if (err.message.includes('Another scan is already running')) {
+          console.error(`Error: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      };
+
       const repoRoot = resolve(dir, config.repo.path);
       if (!isGitRepo(repoRoot)) {
         console.log('Not a git repo, falling back to full scan');
         const scanner = new Scanner(store, config, graph, onProgress);
         process.once('SIGINT', () => scanner.abort());
-        const result = await scanner.scanFull();
+        const result = await scanner.scanFull().catch(handleLockError);
         process.stderr.write('\r' + ' '.repeat(80) + '\r');
         console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
         return;
@@ -334,7 +348,7 @@ export function buildCLI(): Command {
 
       const scanner = new Scanner(store, config, graph, onProgress);
       process.once('SIGINT', () => scanner.abort());
-      const result = await scanner.scanIncremental();
+      const result = await scanner.scanIncremental().catch(handleLockError);
 
       process.stderr.write('\r' + ' '.repeat(80) + '\r');
       console.log(`Updated ${result.filesScanned} files in ${result.durationMs}ms`);

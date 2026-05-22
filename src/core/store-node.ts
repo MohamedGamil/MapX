@@ -10,6 +10,7 @@ export class NodeStore implements StoreBackend {
     const Database = _require('better-sqlite3');
     this.db = new Database(dbPath);
     this.pragma('journal_mode = WAL');
+    this.pragma('busy_timeout = 5000');
     this.pragma('foreign_keys = ON');
   }
 
