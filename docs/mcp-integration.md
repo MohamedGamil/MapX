@@ -29,7 +29,7 @@ codegraph serve --sse --port 3456 --dir /path/to/project
 
 Options:
 - `--sse` — Enable SSE transport (HTTP) instead of stdio
-- `--port <port>` — Port to listen on (default: 3000)
+- `--port <port>` — Port to listen on (default: 45123)
 - `--dir / -d` — Default target directory for MCP tools
 
 On startup, prints the SSE URL, messages endpoint, and ready-to-copy configuration.
@@ -200,6 +200,22 @@ The SSE transport follows the standard MCP SSE protocol:
    ```
 
 Each SSE connection creates an independent MCP session with its own server instance.
+
+## Default Project Directory
+
+The `--dir` flag sets the default directory used by all tool calls that do not include an explicit `dir` argument.
+
+If `--dir` is omitted:
+- If the current working directory contains a `.codegraph/config.json` file, it is used as the default.
+- Otherwise no default is set, and every tool call **must** include a `dir` argument. Missing it returns an error:
+  ```
+  No project directory set. Either pass a "dir" argument or start the server with --dir /path/to/project.
+  ```
+
+The active directory is always printed to stderr at startup:
+```
+[codegraph] Default project directory: /path/to/project
+```
 
 ## Available Tools
 

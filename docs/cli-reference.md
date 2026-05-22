@@ -53,11 +53,18 @@ codegraph update [/path]
 
 ## `codegraph status`
 
-Show files changed since the last scan.
+Show scan metrics, collected data, graph statistics, and git changes since the last scan.
 
 ```bash
 codegraph status [/path]
 ```
+
+Outputs:
+- **Scan info**: project name, directory, last scan time, last git commit, schema version
+- **Collected data**: file/symbol/edge counts, language breakdown, symbol kind breakdown, edge type breakdown
+- **Graph metrics**: graph density, average edges per file, top 5 most-connected files
+- **Storage**: database path and size
+- **Git changes**: added/modified/removed/renamed files since last scan
 
 ## `codegraph query <term>`
 
@@ -149,9 +156,11 @@ codegraph serve [--dir /path] [--sse] [--port <port>]
 Options:
 - `--dir / -d` — Default target directory for MCP tools
 - `--sse` — Enable SSE (HTTP) transport instead of stdio
-- `--port <port>` — Port for SSE transport (default: 3000)
+- `--port <port>` — Port for SSE transport (default: 45123)
 
 On startup, prints ready-to-copy configuration snippets for Claude Desktop, Cursor, and VS Code. SSE mode additionally prints the connection URL and messages endpoint.
+
+> **Note:** When started without `--dir`, the server checks whether the current working directory is an initialized CodeGraph project. If it is, that directory becomes the default. Otherwise no default is set and each tool call must include a `dir` argument. The active directory is logged to stderr at startup.
 
 Examples:
 ```bash

@@ -58,7 +58,8 @@ Running `init` creates a `.codegraph/` directory in your project and an `AGENTS.
 ```
 .codegraph/
 ├── config.json       # Project configuration
-└── codegraph.db      # SQLite database (after scan)
+├── codegraph.db      # SQLite database (after scan)
+└── scan.lock         # Scan lock file (present only while a scan is running)
 
 AGENTS.md             # CodeGraph documentation for LLMs (auto-generated)
 ```
@@ -99,7 +100,7 @@ The content is wrapped in markers:
 
 ## Scan Resilience
 
-Scans survive interruptions (Ctrl+C). Progress is saved after each file, so re-running `scan` resumes from where it left off.
+Scans survive interruptions (Ctrl+C). Progress is saved in batches, so re-running `scan` resumes from where it left off.
 
 ```
 $ codegraph scan
@@ -108,6 +109,17 @@ Scan interrupted after 15/32 files. Progress saved — run `scan` again to resum
 $ codegraph scan
 Scanned 32 files in 523ms    # resumes from file 16
 ```
+
+## Concurrent Scan Protection
+
+Only one scan can run on a project at a time. `scanFull` and `scanIncremental` write a PID lock file (`.codegraph/scan.lock`) on entry. A second invocation targeting the same project fails immediately:
+
+```
+Error: Another scan is already running on this project (PID 12345).
+Wait for it to finish or delete /path/to/.codegraph/scan.lock if it is stale.
+```
+
+Stale locks (process no longer alive) are cleared automatically.
 
 ## Building a Standalone Binary
 
