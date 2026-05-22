@@ -40,7 +40,13 @@ specs/
 │   ├── F17-llm-integration-files.md ← Feature 17: LLM agent integration file generation
 │   ├── F18-git-workspace-submodules.md ← Feature 18: Git workspace & submodule awareness
 │   ├── F19-smart-context-tools.md   ← Feature 19: Smart context & search MCP/CLI tools
-│   └── F20-language-expansion.md    ← Feature 20: Language expansion (19 languages)
+│   ├── F20-language-expansion.md    ← Feature 20: Language expansion (19 languages)
+│   ├── F21-framework-infrastructure.md ← Feature 21: Framework detection infrastructure
+│   ├── F22-python-frameworks.md     ← Feature 22: Python framework routes (Django, Flask, FastAPI)
+│   ├── F23-nodejs-frameworks.md     ← Feature 23: Node.js/TS framework routes (Express, NestJS)
+│   ├── F24-frontend-routing.md      ← Feature 24: Frontend routing (React Router, Tanstack, Next.js, SvelteKit)
+│   ├── F25-backend-frameworks.md   ← Feature 25: Backend framework routes (Rails, Spring, Go, Rust, ASP.NET, Vapor, Drupal, Laravel extended)
+│   └── F26-php-cms-frameworks.md   ← Feature 26: PHP CMS/frameworks (Symfony, Yii2, Yii3, WordPress)
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -54,8 +60,7 @@ specs/
     ├── I09.md                        ← Iteration 9: LLM agent integration files
     ├── I10.md                        ← Iteration 10: git workspace & submodule awareness
     ├── I11.md                        ← Iteration 11: smart context & search tools
-    └── I12.md                        ← Iteration 12: language expansion (19 languages)
-```
+    └── I12.md                        ← Iteration 12: language expansion (19 languages)│   └── I13.md                        ← Iteration 13: framework-aware parsing & route context```
 
 ---
 
@@ -83,6 +88,12 @@ specs/
 | F18 | Git workspace & submodule awareness | `planned` | I10 | [F18](features/F18-git-workspace-submodules.md) |
 | F19 | Smart context & search MCP/CLI tools | `planned` | I11 | [F19](features/F19-smart-context-tools.md) |
 | F20 | Language expansion (Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Dart, Svelte, Vue, Lua/Luau, Elixir, Zig, Bash, Pascal) | `planned` | I12 | [F20](features/F20-language-expansion.md) |
+| F21 | Framework detection infrastructure (FrameworkDetector, RouteRegistry, schema v3, `mapx routes`) | `planned` | I13 | [F21](features/F21-framework-infrastructure.md) |
+| F22 | Python framework routes (Django, Flask, FastAPI) | `planned` | I13 | [F22](features/F22-python-frameworks.md) |
+| F23 | Node.js/TypeScript framework routes (Express, NestJS) | `planned` | I13 | [F23](features/F23-nodejs-frameworks.md) |
+| F24 | Frontend routing frameworks (React Router, Tanstack Router, Next.js, SvelteKit) | `planned` | I13 | [F24](features/F24-frontend-routing.md) |
+| F25 | Backend framework routes (Laravel extended, Drupal, Rails, Spring, Gin/chi/gorilla, Axum/actix/Rocket, ASP.NET Core, Vapor) | `planned` | I13 | [F25](features/F25-backend-frameworks.md) |
+| F26 | PHP CMS/framework routes (Symfony attribute + YAML routes, Yii2/Yii3, WordPress hooks/filters/shortcodes/REST/template hierarchy) | `planned` | I13 | [F26](features/F26-php-cms-frameworks.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -104,6 +115,7 @@ specs/
 | [I10](iterations/I10.md) | Git workspace & submodule awareness | `planned` | F18 |
 | [I11](iterations/I11.md) | Smart context & search tools | `planned` | F19 |
 | [I12](iterations/I12.md) | Language expansion (19 languages) | `planned` | F20 |
+| [I13](iterations/I13.md) | Framework-aware parsing & route context (21 frameworks) | `planned` | F21, F22, F23, F24, F25, F26 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -185,4 +197,10 @@ I12 (F20: language expansion)
  ├── FULLY INDEPENDENT — no dependency on any other iteration
  ├── Framework-aware edges for new languages (e.g. Django routes) deferred to future iterations
  └── Quality of symbol extraction depends on tree-sitter grammar maturity per language
+
+I13 (F21–F26: framework-aware parsing)
+ ├── F21 (framework infrastructure) is the prerequisite for F22–F26 — merge first
+ ├── F22 (Python), F23 (Node.js), F24 (frontend), F25 (other backends), F26 (PHP CMS) are independent of each other
+ ├── F25/F26 (Go/Rust/Java/C#/Swift/Ruby/PHP backends) benefit from I12 parsers but use regex extraction — can proceed before I12
+ └── Route edges are richer when I05/I06 Laravel edges are already present (F25 Laravel extended builds on F08)
 ```

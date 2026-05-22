@@ -338,3 +338,28 @@ _None yet._
 ### Blockers / notes
 
 Fully independent of all other iterations. The biggest risk is scope-tracking correctness for languages where method scope requires AST traversal beyond direct parent (Go receivers, Rust impl blocks). Svelte and Vue parsers are most complex due to multi-part file structure. `tree-sitter-pascal` is less maintained — fall back gracefully if grammar quality is poor.
+
+---
+
+## I13 — Framework-Aware Parsing & Route Context
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Features | F21, F22, F23, F24, F25 |
+| Branch | `feat/i13-framework-routes` |
+| PR | — |
+
+### Scope
+
+Adds framework-specific route extraction for 21 web frameworks across 9 language ecosystems. A shared `FrameworkDetector` interface and `RouteRegistry` (F21) power all detectors. Python ecosystems (Django, Flask, FastAPI) are covered by F22; Node.js/TypeScript backends (Express, NestJS) by F23; frontend routing (React Router v6, Tanstack Router, Next.js, SvelteKit) by F24; the remaining backends (Laravel extended, Drupal, Rails, Spring Boot, Gin/chi/gorilla/mux, Axum/actix-web/Rocket, ASP.NET Core, Vapor) by F25; and PHP CMS/frameworks (Symfony, Yii2/Yii3, WordPress) by F26. The new `mapx routes` CLI command and `mapx_routes` MCP tool surface extracted routes; the new `mapx hooks` command and `mapx_hooks` MCP tool surface hook/filter/event registrations. Schema v3 adds a `metadata TEXT` column to the `edges` table for route-specific data (HTTP method, path, framework, confidence).
+
+Four new `ReferenceType` values are introduced: `hook` (Drupal hook implementations), `graphql_resolver` (NestJS @Query/@Mutation), `message_handler` (NestJS @MessagePattern), `websocket_handler` (NestJS @SubscribeMessage).
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+F21 (infrastructure) must be merged before any of F22–F25 can proceed. F22–F25 are independent of each other once F21 is available. All framework detectors use regex-based extraction rather than tree-sitter AST — this means F25's Go/Rust/Java/C#/Swift/Ruby detectors do not require I12 language parsers to be merged first. Laravel extended support (F25) builds on the F08 route extractor refactored in F21; F21 must be merged before F25 Laravel work starts.
