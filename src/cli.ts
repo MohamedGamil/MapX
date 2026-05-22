@@ -333,33 +333,127 @@ export function buildCLI(): Command {
 
   program
     .command('status')
-    .description('Show changed files since last scan')
+    .description('Show scan status, collected metrics, and changed files')
     .argument('[path]', 'Target directory')
     .action(async (path: string | undefined) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
-      const { config, store } = await loadContext(dir);
+      const { config, store, graph } = await loadContext(dir);
 
+      const lastScan    = store.getMeta('last_scan_time');
+      const lastCommit  = store.getMeta('last_scan_commit');
+      const schemaVer   = store.getMeta('schema_version');
+      const dbPath      = resolve(dir, '.codegraph', 'codegraph.db');
+
+      // ── Scan info ──────────────────────────────────────────────────────
+      console.log('\n── Scan ─────────────────────────────────────────────');
+      console.log(`  Project:     ${config.repo.name}`);
+      console.log(`  Directory:   ${dir}`);
+      console.log(`  Last scan:   ${lastScan  || 'never'}`);
+      console.log(`  Last commit: ${lastCommit || 'none'}`);
+      console.log(`  Schema:      v${schemaVer || '?'}`);
+
+      // ── Collected data ─────────────────────────────────────────────────
+      const fileCount   = store.getFileCount();
+      const symbolCount = store.getSymbolCount();
+      const edgeCount   = store.getEdgeCount();
+      const breakdown   = store.getLanguageBreakdown();
+
+      console.log('\n── Collected data ───────────────────────────────────');
+      console.log(`  Files:       ${fileCount}`);
+      console.log(`  Symbols:     ${symbolCount}`);
+      console.log(`  Edges:       ${edgeCount}`);
+
+      // Language breakdown
+      const langs = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
+      if (langs.length > 0) {
+        console.log(`  Languages:`);
+        for (const [lang, cnt] of langs) {
+          console.log(`    ${lang.padEnd(14)} ${cnt} files`);
+        }
+      }
+
+      // Symbol kind breakdown (direct SQL aggregation)
+      const kindRows = store.raw.prepare(
+        'SELECT kind, COUNT(*) as cnt FROM symbols GROUP BY kind ORDER BY cnt DESC'
+      ).all() as Array<{ kind: string; cnt: number }>;
+      if (kindRows.length > 0) {
+        console.log(`  Symbol kinds:`);
+        for (const row of kindRows) {
+          console.log(`    ${row.kind.padEnd(14)} ${row.cnt}`);
+        }
+      }
+
+      // Edge type breakdown
+      const edgeTypeRows = store.raw.prepare(
+        'SELECT edge_type, COUNT(*) as cnt FROM edges GROUP BY edge_type ORDER BY cnt DESC'
+      ).all() as Array<{ edge_type: string; cnt: number }>;
+      if (edgeTypeRows.length > 0) {
+        console.log(`  Edge types:`);
+        for (const row of edgeTypeRows) {
+          console.log(`    ${row.edge_type.padEnd(14)} ${row.cnt}`);
+        }
+      }
+
+      // ── Graph metrics ──────────────────────────────────────────────────
+      if (fileCount > 0) {
+        const densityNum = edgeCount / Math.max(fileCount * (fileCount - 1), 1);
+        const density = (densityNum * 100).toFixed(2);
+
+        // Top 5 most-connected files (highest out-degree = most dependencies)
+        const connRows = store.raw.prepare(`
+          SELECT source_file, COUNT(*) as cnt FROM edges
+          GROUP BY source_file ORDER BY cnt DESC LIMIT 5
+        `).all() as Array<{ source_file: string; cnt: number }>;
+
+        console.log('\n── Graph metrics ────────────────────────────────────');
+        console.log(`  Density:     ${density}%`);
+        const avgEdges = fileCount > 0 ? (edgeCount / fileCount).toFixed(1) : '0';
+        console.log(`  Avg edges/file: ${avgEdges}`);
+        if (connRows.length > 0) {
+          console.log(`  Most connected files:`);
+          for (const row of connRows) {
+            const rel = row.source_file.replace(dir + '/', '');
+            console.log(`    ${String(row.cnt).padStart(4)} edges  ${rel}`);
+          }
+        }
+      }
+
+      // ── Storage ────────────────────────────────────────────────────────
+      try {
+        const { statSync } = await import('node:fs');
+        const dbSize = statSync(dbPath).size;
+        const kb = (dbSize / 1024).toFixed(1);
+        console.log('\n── Storage ──────────────────────────────────────────');
+        console.log(`  Database:    ${kb} KB  (${dbPath})`);
+      } catch { /* db may not exist yet */ }
+
+      // ── Git changes ────────────────────────────────────────────────────
       const repoRoot = resolve(dir, config.repo.path);
       if (!isGitRepo(repoRoot)) {
-        console.log('Not a git repo');
+        console.log('\n── Git ──────────────────────────────────────────────');
+        console.log('  Not a git repository');
+        console.log('');
         return;
       }
 
-      const lastScan = store.getMeta('last_scan_time');
-      const lastCommit = store.getMeta('last_scan_commit');
-      console.log(`Last scan: ${lastScan || 'never'}`);
-      console.log(`Last commit: ${lastCommit || 'none'}`);
-
       const changes = getChangedFiles(repoRoot, lastCommit || undefined);
+      console.log('\n── Git changes since last scan ──────────────────────');
       if (changes.length === 0) {
-        console.log('No changes since last scan');
+        console.log('  No changes since last scan');
       } else {
-        console.log(`\n${changes.length} changed files:`);
+        const byStatus = { added: 0, modified: 0, removed: 0, renamed: 0, unchanged: 0 };
+        for (const c of changes) byStatus[c.status] = (byStatus[c.status] || 0) + 1;
+        const summary = (Object.entries(byStatus) as Array<[string, number]>)
+          .filter(([, n]) => n > 0)
+          .map(([s, n]) => `${n} ${s}`)
+          .join(', ');
+        console.log(`  ${changes.length} changed files  (${summary})`);
+        const icon = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' };
         for (const change of changes) {
-          const icon = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' }[change.status];
-          console.log(`  ${icon} ${change.path}`);
+          console.log(`    ${icon[change.status]} ${change.path}`);
         }
       }
+      console.log('');
     });
 
   program
