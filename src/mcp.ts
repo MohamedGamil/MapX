@@ -14,6 +14,7 @@ import { MapxGraph } from './core/graph.js';
 import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
+import { AgentGenerator } from './agents/generator.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -217,6 +218,25 @@ export function buildServer(): Server {
             ...dirProperty,
           },
         },
+      },
+      {
+        name: 'mapx_agents_generate',
+        description: 'Generate provider-specific LLM integration files (AGENTS.md, CLAUDE.md, etc.) for the project.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ...dirProperty,
+            providers: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'List of providers to generate files for (e.g. generic, claude, cursor, copilot, windsurf, cline, aider, gemini, continue, zed).'
+            },
+            all: {
+              type: 'boolean',
+              description: 'Generate files for all available providers.'
+            }
+          }
+        }
       },
       {
         name: 'mapx_sinks',
@@ -823,6 +843,44 @@ export function buildServer(): Server {
           lines.push(`  ${s.file.padEnd(40)} ${extra}`);
         }
         return { content: [{ type: 'text', text: lines.join('\n') }] };
+      }
+
+      case 'mapx_agents_generate': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+
+        const generator = new AgentGenerator();
+        const available = generator.listProviders();
+        let targetProviders: string[] = [];
+
+        const requestArgs = args as any || {};
+        if (requestArgs.all) {
+          targetProviders = available;
+        } else if (requestArgs.providers && Array.isArray(requestArgs.providers)) {
+          targetProviders = requestArgs.providers.filter((p: string) => available.includes(p));
+        } else {
+          // Default to generic
+          targetProviders = ['generic'];
+        }
+
+        if (targetProviders.length === 0) {
+          return { content: [{ type: 'text', text: 'No valid providers specified.' }] };
+        }
+
+        const actions = generator.plan(targetProviders, { dir });
+        const results: string[] = [];
+
+        for (const action of actions) {
+          if (action.status === 'up_to_date') {
+            results.push(`${action.filename}: Up to date.`);
+          } else {
+            generator.execute(action);
+            results.push(`${action.filename}: Successfully generated/updated (${action.status}).`);
+          }
+        }
+
+        return { content: [{ type: 'text', text: results.join('\n') }] };
       }
 
       default:

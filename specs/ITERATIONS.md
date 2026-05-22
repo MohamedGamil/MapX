@@ -251,7 +251,7 @@ Independent of I01–I07. F14 benefits from F05 (accurate PHP namespace parsing)
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
 | Features | F17 |
 | Branch | `feat/i09-llm-integration-files` |
 | PR | — |

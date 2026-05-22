@@ -65,10 +65,10 @@
 - [x] Confirm: F11 uses static facade map only — no dependency on F09 IoC binding table
 
 ### I09 · LLM Agent Integration Files · F17 · Risk: Low · Requires: none (enriched by I08, I10)
-- [ ] Implement `mapx agents generate [--format=X]` command
-- [ ] Build per-format templates: `AGENTS.md`, `.cursorrules`, `copilot-instructions.md`, `CLAUDE.md`
-- [ ] Add version sentinel comments for stale-detection / update flow
-- [ ] Add `mapx_agents_generate` MCP tool
+- [x] Implement `mapx agents generate` command
+- [x] Build templates: `AGENTS.md`, `.cursor/rules/mapx.mdc`, `.github/copilot-instructions.md`, `CLAUDE.md`, `.windsurf/rules/mapx.md`, `.clinerules`, `AIDER.md`, `GEMINI.md`, `.continue/mapx.yaml`, `.zed/mapx-instructions.md`
+- [x] Add version sentinel comments for stale-detection / update flow
+- [x] Add `mapx_agents_generate` MCP tool
 
 ### I10 · Git Workspace & Submodule Awareness · F18 · Risk: Medium · Requires: I08 (schema v4 → v5)
 - [ ] Implement `WorkspaceManager`: parse `.gitmodules`, detect VS Code `.code-workspace`, peer repos

@@ -9,6 +9,7 @@ import { MapxGraph } from './core/graph.js';
 import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
+import { AgentGenerator } from './agents/generator.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -207,54 +208,37 @@ function prompt(question: string, options: string[]): Promise<number> {
   });
 }
 
-async function writeAgentsMd(dir: string): Promise<void> {
-  const agentsPath = join(dir, 'AGENTS.md');
-  const block = generateAgentsBlock();
+function askQuestion(query: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise(resolve => rl.question(query, ans => {
+    rl.close();
+    resolve(ans);
+  }));
+}
 
-  if (!existsSync(agentsPath)) {
-    writeFileSync(agentsPath, block + '\n', 'utf-8');
-    console.log('Created AGENTS.md with MapxGraph documentation');
-    return;
+async function selectProvidersInteractive(): Promise<string[]> {
+  const generator = new AgentGenerator();
+  const providers = generator.listProviders();
+  console.log('\nWhich LLM/agent tools do you use in this project?');
+  console.log('Enter numbers separated by commas (e.g. 1,3), type "all" for all, or press Enter for default [1 (generic)]:');
+  providers.forEach((p, idx) => {
+    console.log(`  [${idx + 1}] ${p}`);
+  });
+
+  const answer = await askQuestion('\nSelection: ');
+  const input = answer.trim().toLowerCase();
+  if (!input) {
+    return ['generic'];
   }
-
-  const existing = readFileSync(agentsPath, 'utf-8');
-
-  if (hasMarkers(existing)) {
-    const updated = replaceBetweenMarkers(existing, block);
-    if (updated !== existing) {
-      writeFileSync(agentsPath, updated, 'utf-8');
-      console.log('Updated MapxGraph docs in AGENTS.md');
-    }
-    return;
+  if (input === 'all') {
+    return providers;
   }
-
-  if (existing.includes(MAPX_MARKER_START)) {
-    writeFileSync(agentsPath, existing.replace(MAPX_MARKER_START, block), 'utf-8');
-    console.log('Updated MapxGraph docs in AGENTS.md');
-    return;
-  }
-
-  if (!process.stdin.isTTY) {
-    console.log('AGENTS.md exists without MapxGraph docs. Re-run `init` in a terminal to add them.');
-    return;
-  }
-
-  console.log(`\nAGENTS.md already exists in ${dir}`);
-  const choice = await prompt('How would you like to handle AGENTS.md?', [
-    'Insert MapxGraph docs at the end',
-    'Insert MapxGraph docs at the beginning',
-    'Skip (keep current file)',
-  ]);
-
-  if (choice === 0) {
-    writeFileSync(agentsPath, existing.trimEnd() + '\n\n' + block + '\n', 'utf-8');
-    console.log('Inserted MapxGraph documentation into AGENTS.md');
-  } else if (choice === 1) {
-    writeFileSync(agentsPath, block + '\n\n' + existing.trimStart(), 'utf-8');
-    console.log('Inserted MapxGraph documentation into AGENTS.md');
-  } else {
-    console.log('Skipped AGENTS.md (kept existing file)');
-  }
+  const parts = input.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n) && n >= 1 && n <= providers.length);
+  const selected = parts.map((n: number) => providers[n - 1]);
+  return selected.length === 0 ? ['generic'] : selected;
 }
 
 export function buildCLI(): Command {
@@ -300,16 +284,6 @@ function detectLaravel(workspaceRoot: string): boolean {
   return false;
 }
 
-function askQuestion(query: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise(resolve => rl.question(query, ans => {
-    rl.close();
-    resolve(ans);
-  }));
-}
 
 async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> {
   if (noSuggestions) return false;
@@ -348,7 +322,23 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
       const config = await Config.init(dir, opts.name as string | undefined, isLaravel, shouldAddLaravelExcludes);
       if (opts.agents !== false) {
-        await writeAgentsMd(dir);
+        if (process.stdin.isTTY && opts.suggestions !== false) {
+          const selected = await selectProvidersInteractive();
+          console.log(`Generating integration files for: ${selected.join(', ')}...`);
+          const generator = new AgentGenerator();
+          const actions = generator.plan(selected, { dir });
+          for (const action of actions) {
+            generator.execute(action);
+            console.log(`  ✓ Generated ${action.filename} (${action.status})`);
+          }
+        } else {
+          const generator = new AgentGenerator();
+          const actions = generator.plan(['generic'], { dir });
+          for (const action of actions) {
+            generator.execute(action);
+            console.log(`  ✓ Generated ${action.filename} (${action.status})`);
+          }
+        }
       }
       console.log(`Initialized mapx in ${dir}/.mapx/`);
       console.log(`Repo: ${config.repo.name}`);
@@ -1217,6 +1207,142 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log(`- ${e.source_file}${srcSym} → ${e.target_file}${tgtSym} (${e.edge_type})${infSuffix}`);
       }
       console.log('');
+    });
+
+  const agentsCmd = program.command('agents').description('Manage LLM agent integration files');
+
+  agentsCmd
+    .command('list')
+    .description('List all supported LLM integration providers')
+    .action(() => {
+      const generator = new AgentGenerator();
+      const providers = generator.listProviders();
+      console.log('\nSupported LLM integration providers:');
+      for (const p of providers) {
+        const temp = generator.getTemplate(p);
+        const appendStr = temp?.isAppend ? ' (append-mode)' : '';
+        console.log(`  - ${p.padEnd(12)} -> ${temp?.filename}${appendStr}`);
+      }
+      console.log('');
+    });
+
+  agentsCmd
+    .command('generate')
+    .description('Generate/overwrite LLM integration files')
+    .option('--providers <list>', 'Comma-separated list of providers to generate')
+    .option('--all', 'Generate integration files for all supported providers')
+    .option('--dry-run', 'Show actions without writing files')
+    .option('--force', 'Force overwrite of existing files without prompt')
+    .option('--mcp-port <number>', 'Port for the MCP SSE transport server', '3456')
+    .action(async (opts: Record<string, any>) => {
+      const dir = program.opts().dir ? resolve(program.opts().dir) : process.cwd();
+      const generator = new AgentGenerator();
+      const available = generator.listProviders();
+      let targets: string[] = [];
+
+      if (opts.all) {
+        targets = available;
+      } else if (opts.providers) {
+        targets = opts.providers.split(',').map((s: string) => s.trim().toLowerCase()).filter((p: string) => available.includes(p));
+      } else {
+        if (process.stdin.isTTY) {
+          targets = await selectProvidersInteractive();
+        } else {
+          targets = ['generic'];
+        }
+      }
+
+      if (targets.length === 0) {
+        console.error('No valid providers specified.');
+        process.exit(1);
+      }
+
+      const actions = generator.plan(targets, { dir, mcpPort: parseInt(opts.mcpPort, 10) });
+
+      for (const action of actions) {
+        if (action.status === 'up_to_date') {
+          console.log(`  - ${action.filename}: Up to date. Skipping.`);
+          continue;
+        }
+
+        if (action.status === 'update_conflict' || action.status === 'no_sentinel') {
+          console.log(`\n⚠️ Conflict/Modification detected in ${action.filename}:`);
+          if (action.diff) {
+            console.log(action.diff);
+          }
+          if (!opts.force) {
+            const confirm = await askQuestion(`Overwrite ${action.filename}? [y/N] `);
+            if (confirm.trim().toLowerCase() !== 'y') {
+              console.log(`Skipped ${action.filename}.`);
+              continue;
+            }
+          }
+        }
+
+        if (opts.dryRun) {
+          console.log(`[DRY RUN] Would write to ${action.filepath} (status: ${action.status})`);
+        } else {
+          generator.execute(action);
+          console.log(`✓ Wrote to ${action.filename} (status: ${action.status})`);
+        }
+      }
+    });
+
+  agentsCmd
+    .command('update')
+    .description('Update existing LLM integration files to the current MapxGraph version')
+    .option('--dry-run', 'Show updates without writing files')
+    .option('--force', 'Force overwrite of customized blocks without prompt')
+    .option('--mcp-port <number>', 'Port for the MCP SSE transport server', '3456')
+    .action(async (opts: Record<string, any>) => {
+      const dir = program.opts().dir ? resolve(program.opts().dir) : process.cwd();
+      const generator = new AgentGenerator();
+      const available = generator.listProviders();
+
+      const existingProviders = available.filter(p => {
+        const temp = generator.getTemplate(p);
+        return temp && existsSync(join(dir, temp.filename));
+      });
+
+      if (existingProviders.length === 0) {
+        console.log('No existing LLM integration files found to update.');
+        return;
+      }
+
+      const actions = generator.plan(existingProviders, { dir, mcpPort: parseInt(opts.mcpPort, 10) });
+      let updatedCount = 0;
+
+      for (const action of actions) {
+        if (action.status === 'up_to_date') {
+          continue;
+        }
+
+        if (action.status === 'update_conflict') {
+          console.log(`\n⚠️ Customized content detected in ${action.filename}:`);
+          if (action.diff) {
+            console.log(action.diff);
+          }
+          if (!opts.force) {
+            const confirm = await askQuestion(`Overwrite customizations in ${action.filename}? [y/N] `);
+            if (confirm.trim().toLowerCase() !== 'y') {
+              console.log(`Skipped ${action.filename}.`);
+              continue;
+            }
+          }
+        }
+
+        if (opts.dryRun) {
+          console.log(`[DRY RUN] Would update ${action.filepath}`);
+        } else {
+          generator.execute(action);
+          console.log(`✓ Updated ${action.filename}`);
+          updatedCount++;
+        }
+      }
+
+      if (updatedCount === 0 && !opts.dryRun) {
+        console.log('All integration files are already up to date.');
+      }
     });
 
   return program;
