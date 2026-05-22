@@ -27,7 +27,8 @@ specs/
 │   ├── F09-service-provider-bindings.md ← Feature 9: IoC container binding edges
 │   ├── F10-laravel-noise-reduction.md ← Feature 10: Laravel-aware scan exclusions
 │   ├── F11-facade-resolution.md      ← Feature 11: Facade → concrete service resolution
-│   └── F12-event-job-dispatch.md     ← Feature 12: Event/Job/Notification dispatch edges
+│   ├── F12-event-job-dispatch.md     ← Feature 12: Event/Job/Notification dispatch edges
+│   └── F13-npm-distribution.md      ← Feature 13: npm/npx distribution & Node.js DX
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -35,7 +36,8 @@ specs/
     ├── I03.md                        ← Iteration 3: CLI/MCP surface
     ├── I04.md                        ← Iteration 4: PHP parser fundamentals
     ├── I05.md                        ← Iteration 5: Laravel structural patterns
-    └── I06.md                        ← Iteration 6: Laravel advanced patterns
+    ├── I06.md                        ← Iteration 6: Laravel advanced patterns
+    └── I07.md                        ← Iteration 7: npm distribution & Node.js DX
 ```
 
 ---
@@ -56,6 +58,7 @@ specs/
 | F10 | Laravel-aware scan exclusions & noise reduction | `planned` | I04 | [F10](features/F10-laravel-noise-reduction.md) |
 | F11 | Laravel facade resolution | `planned` | I06 | [F11](features/F11-facade-resolution.md) |
 | F12 | Event / Job / Notification dispatch edges | `planned` | I06 | [F12](features/F12-event-job-dispatch.md) |
+| F13 | npm / npx distribution & Node.js developer experience | `planned` | I07 | [F13](features/F13-npm-distribution.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -71,6 +74,7 @@ specs/
 | [I04](iterations/I04.md) | PHP parser fundamentals (FQN, type hints, noise) | `planned` | F05, F06, F10 |
 | [I05](iterations/I05.md) | Laravel structural patterns (models, routes, IoC) | `planned` | F07, F08, F09 |
 | [I06](iterations/I06.md) | Laravel advanced patterns (facades, dispatch) | `planned` | F11, F12 |
+| [I07](iterations/I07.md) | npm distribution & Node.js developer experience | `planned` | F13 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -125,4 +129,7 @@ I06 (F11 + F12: Laravel advanced)
  ├── depends on I05
  ├── F11 (facades) depends on F09 binding table (optional: for cross-reference)
  └── F12 (dispatch) depends on F05 FQN only; independent of F07-F09
+
+I07 (F13: npm distribution)
+ └── FULLY INDEPENDENT — no dependency on I01–I06, can be merged at any time
 ```

@@ -182,3 +182,28 @@ _None yet._
 ### Blockers / notes
 
 Depends on I05 being merged. F11 and F12 are independent of each other within I06 and can be developed in parallel. The `$listen` array parsing in `EventServiceProvider` is a stretch goal in F12 — may slip to I07 if tree-sitter query complexity is too high.
+
+---
+
+## I07 — npm Distribution & Node.js Developer Experience
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Started | — |
+| Completed | — |
+| Features | F13 |
+| Branch | `feat/i07-npm-distribution` |
+| PR | — |
+
+### Scope
+
+Adds an npm-compatible build pipeline so that Node.js developers can install mapx with `npm install -g mapx` or run it with no prior installation via `npx mapx`. The core changes are: (1) add `tsup` to transpile TypeScript to JS preserving directory structure (required for WASM path resolution to work correctly in the installed package); (2) update `package.json` with `bin`, `files`, `engines`, promote `better-sqlite3` to a regular dependency; (3) add a GitHub Actions workflow that automatically publishes to npm on version tag push with npm provenance for supply chain transparency. No parsing, graph, or export logic is changed — the Node.js runtime path already exists in the codebase via `NodeStore`.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Fully independent of I01–I06. Can be merged at any time. Requires a one-time setup by the repository maintainer: create npm account, generate automation token, configure `NPM_TOKEN` secret in GitHub repository settings, verify package name availability, and perform the first manual `npm publish --access public`.
