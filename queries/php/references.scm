@@ -77,3 +77,33 @@
   (#match? @ref.binding_method_name "^(bind|singleton|scoped|instance|alias)$")
   arguments: (arguments) @ref.binding_arguments
 ) @ref.type_binding_call
+
+; F12: Event, Job, and Notification dispatch
+(function_call_expression
+  function: (name) @_fn (#match? @_fn "^(event|dispatch|dispatch_sync)$")
+  arguments: (arguments
+    (argument
+      (object_creation_expression
+        (name) @ref.target_dispatch)))) @ref.type_dispatch
+
+(scoped_call_expression
+  scope: (name) @ref.target_dispatch_static
+  name: (name) @_dispatch_method (#match? @_dispatch_method "^(dispatch|dispatchSync|dispatchIf|dispatchUnless|dispatchAfterResponse)$")
+) @ref.type_dispatch_static_call
+
+(member_call_expression
+  name: (name) @_notify_method (#match? @_notify_method "^(notify|notifyNow)$")
+  arguments: (arguments
+    (argument
+      (object_creation_expression
+        (name) @ref.target_notify)))) @ref.type_notify
+
+(scoped_call_expression
+  scope: (name) @_notif_facade (#eq? @_notif_facade "Notification")
+  name: (name) @_send (#match? @_send "^(send|sendNow)$")
+  arguments: (arguments
+    (argument)
+    (argument
+      (object_creation_expression
+        (name) @ref.target_notify)))) @ref.type_notify_facade
+

@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | ID | F11 |
-| Status | `planned` |
+| Status | `implemented` |
 | Iteration | I06 |
 | Branch | `feat/i06-laravel-advanced` |
 | Depends on | F05 (FQN resolution) |
@@ -196,16 +196,16 @@ Parsing `config/app.php` to extract the aliases array is out of scope for F11. U
 
 ## Acceptance Criteria
 
-- [ ] `Cache::get(...)` call → edge to `Illuminate\Cache\CacheManager`, `inferred`
-- [ ] `DB::table(...)` → edge to `Illuminate\Database\DatabaseManager`, `metadata.isRawDbAccess = true`
-- [ ] `Log::info(...)` → edge to `Illuminate\Log\LogManager`
-- [ ] Custom facade in `.mapx/config.json` overrides built-in map
-- [ ] `Route::get(...)` NOT rewritten — handled by F08
-- [ ] `Schema::` calls in migration files produce no edges (F10 suppresses them)
-- [ ] `mapx query Cache` resolves to `CacheManager` references, not facade stub
-- [ ] `metadata.facadeAlias` preserved on edge for traceability
-- [ ] TypeScript type-check passes
-- [ ] Manual test: verify `DB` and `Cache` facade resolution on a real Laravel project
+- [x] `Cache::get(...)` call → edge to `Illuminate\Cache\CacheManager`, `inferred`
+- [x] `DB::table(...)` → edge to `Illuminate\Database\DatabaseManager`, `metadata.isRawDbAccess = true`
+- [x] `Log::info(...)` → edge to `Illuminate\Log\LogManager`
+- [x] Custom facade in `.mapx/config.json` overrides built-in map
+- [x] `Route::get(...)` NOT rewritten — handled by F08
+- [x] `Schema::` calls in migration files produce no edges (F10 suppresses them)
+- [x] `mapx query Cache` resolves to `CacheManager` references, not facade stub
+- [x] `metadata.facadeAlias` preserved on edge for traceability
+- [x] TypeScript type-check passes
+- [x] Manual test: verify `DB` and `Cache` facade resolution on a real Laravel project
 
 ---
 

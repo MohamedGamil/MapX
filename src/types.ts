@@ -51,7 +51,9 @@ export type ReferenceType =
   | 'relation'
   | 'route'
   | 'middleware'
-  | 'binding';
+  | 'binding'
+  | 'dispatch'
+  | 'notify';
 
 export interface ParseResult {
   symbols: ExtractedSymbol[];
@@ -145,5 +147,9 @@ export interface MapxConfig {
     maxTokenBudget: number;
     excludePatterns: string[];
     includePatterns: string[];
+    php?: {
+      facadeMap?: Record<string, string>;
+    };
+    [key: string]: any;
   };
 }

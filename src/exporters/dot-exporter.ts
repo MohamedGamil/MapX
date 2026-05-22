@@ -61,6 +61,8 @@ export class DotExporter {
       route: 'solid',
       binding: 'dashed',
       middleware: 'dotted',
+      dispatch: 'dashed',
+      notify: 'dotted',
     };
 
     const seen = new Set<string>();
@@ -85,6 +87,10 @@ export class DotExporter {
         colorAttr = ', color="purple"';
       } else if (type === 'middleware') {
         colorAttr = ', color="orange"';
+      } else if (type === 'dispatch') {
+        colorAttr = ', color="magenta"';
+      } else if (type === 'notify') {
+        colorAttr = ', color="pink"';
       }
       lines.push(`  "${src}" -> "${tgt}" [label="${type}", style=${style}${colorAttr}];`);
     }

@@ -4,6 +4,39 @@ import type { LanguageDefinition } from '../../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from '../wasm-parser.js';
 import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
 
+export const LARAVEL_FACADE_MAP: Record<string, string> = {
+  App:           'Illuminate\\Foundation\\Application',
+  Auth:          'Illuminate\\Auth\\AuthManager',
+  Bus:           'Illuminate\\Contracts\\Bus\\Dispatcher',
+  Cache:         'Illuminate\\Cache\\CacheManager',
+  Config:        'Illuminate\\Config\\Repository',
+  Cookie:        'Illuminate\\Cookie\\CookieJar',
+  Crypt:         'Illuminate\\Encryption\\Encrypter',
+  DB:            'Illuminate\\Database\\DatabaseManager',
+  Event:         'Illuminate\\Events\\Dispatcher',
+  File:          'Illuminate\\Filesystem\\Filesystem',
+  Gate:          'Illuminate\\Auth\\Access\\Gate',
+  Hash:          'Illuminate\\Hashing\\HashManager',
+  Http:          'Illuminate\\Http\\Client\\Factory',
+  Lang:          'Illuminate\\Translation\\Translator',
+  Log:           'Illuminate\\Log\\LogManager',
+  Mail:          'Illuminate\\Mail\\Mailer',
+  Notification:  'Illuminate\\Notifications\\ChannelManager',
+  Password:      'Illuminate\\Auth\\Passwords\\PasswordBrokerManager',
+  Queue:         'Illuminate\\Queue\\QueueManager',
+  RateLimiter:   'Illuminate\\Cache\\RateLimiter',
+  Redirect:      'Illuminate\\Routing\\Redirector',
+  Request:       'Illuminate\\Http\\Request',
+  Response:      'Illuminate\\Routing\\ResponseFactory',
+  Route:         'Illuminate\\Routing\\Router',
+  Schema:        'Illuminate\\Database\\Schema\\Builder',
+  Session:       'Illuminate\\Session\\SessionManager',
+  Storage:       'Illuminate\\Filesystem\\FilesystemManager',
+  URL:           'Illuminate\\Routing\\UrlGenerator',
+  Validator:     'Illuminate\\Validation\\Factory',
+  View:          'Illuminate\\View\\Factory',
+};
+
 export class PhpParser implements LanguageParser {
   readonly languageName = 'php';
   readonly supportedExtensions = ['.php', '.phtml', '.php3', '.php4', '.php5', '.php7'];
@@ -29,7 +62,7 @@ export class PhpParser implements LanguageParser {
     return this.loadingPromise;
   }
 
-  async parse(filePath: string, source: string): Promise<ParseResult> {
+  async parse(filePath: string, source: string, options?: any): Promise<ParseResult> {
     // F10: Noise Reduction / Exclusions
     if (filePath.includes('bootstrap/cache/') || filePath.endsWith('.blade.php')) {
       return { symbols: [], references: [], errors: [] };
@@ -154,7 +187,10 @@ export class PhpParser implements LanguageParser {
         if (
           captureName === 'ref.target_param' ||
           captureName === 'ref.target_return_type' ||
-          captureName === 'ref.target_property'
+          captureName === 'ref.target_property' ||
+          captureName === 'ref.target_dispatch' ||
+          captureName === 'ref.target_dispatch_static' ||
+          captureName === 'ref.target_notify'
         ) {
           continue;
         }
@@ -647,12 +683,124 @@ export class PhpParser implements LanguageParser {
         }
       }
 
+      // F12: Event, Job, and Notification dispatches
+      const targetDispatchCaptures = refCaptures.get('ref.target_dispatch') || [];
+      for (const cap of targetDispatchCaptures) {
+        const targetRaw = cap.node.text;
+        const targetFqn = resolveToFqn(targetRaw);
+        const startLine = cap.node.startPosition.row + 1;
+        const { methodName } = getEnclosingScope(cap.node);
+        
+        let curr: any = cap.node;
+        let fnName = 'dispatch';
+        while (curr) {
+          if (curr.type === 'function_call_expression') {
+            fnName = curr.childForFieldName('function')?.text || 'dispatch';
+            break;
+          }
+          curr = curr.parent;
+        }
+
+        const dispatchedRole = fnName === 'event' ? 'event' : 'job';
+
+        references.push({
+          sourceSymbol: methodName,
+          targetName: targetFqn,
+          referenceType: 'dispatch',
+          startLine,
+          verifiability: 'verified',
+          metadata: {
+            dispatchMethod: fnName,
+            dispatchedRole,
+          }
+        });
+      }
+
+      const targetDispatchStaticCaptures = refCaptures.get('ref.target_dispatch_static') || [];
+      for (const cap of targetDispatchStaticCaptures) {
+        const targetRaw = cap.node.text;
+        const targetFqn = resolveToFqn(targetRaw);
+        const startLine = cap.node.startPosition.row + 1;
+        const { methodName } = getEnclosingScope(cap.node);
+
+        let curr: any = cap.node;
+        let methodCallName = 'dispatch';
+        while (curr) {
+          if (curr.type === 'scoped_call_expression') {
+            methodCallName = curr.childForFieldName('name')?.text || 'dispatch';
+            break;
+          }
+          curr = curr.parent;
+        }
+
+        references.push({
+          sourceSymbol: methodName,
+          targetName: targetFqn,
+          referenceType: 'dispatch',
+          startLine,
+          verifiability: 'verified',
+          metadata: {
+            dispatchMethod: methodCallName,
+            dispatchedRole: 'job',
+          }
+        });
+      }
+
+      const targetNotifyCaptures = refCaptures.get('ref.target_notify') || [];
+      for (const cap of targetNotifyCaptures) {
+        const targetRaw = cap.node.text;
+        const targetFqn = resolveToFqn(targetRaw);
+        const startLine = cap.node.startPosition.row + 1;
+        const { methodName } = getEnclosingScope(cap.node);
+
+        let curr: any = cap.node;
+        let sendMethod = 'notify';
+        while (curr) {
+          if (curr.type === 'member_call_expression') {
+            sendMethod = curr.childForFieldName('name')?.text || 'notify';
+            break;
+          }
+          if (curr.type === 'scoped_call_expression') {
+            const scope = curr.childForFieldName('scope')?.text;
+            const name = curr.childForFieldName('name')?.text;
+            if (scope === 'Notification') {
+              sendMethod = `Notification::${name}`;
+              break;
+            }
+          }
+          curr = curr.parent;
+        }
+
+        references.push({
+          sourceSymbol: methodName,
+          targetName: targetFqn,
+          referenceType: 'notify',
+          startLine,
+          verifiability: 'verified',
+          metadata: {
+            sendMethod,
+          }
+        });
+      }
+
       // Collect extend-based classes and resolve roles on symbols
+      const classExtends = new Map<string, string>();
+      const classImplements = new Map<string, string[]>();
+      const classesWithHandle = new Set<string>();
+
+      for (const sym of symbols) {
+        if (sym.kind === 'method' && sym.name === 'handle' && sym.scope) {
+          classesWithHandle.add(sym.scope);
+        }
+      }
+
       const extendsCapList = refCaptures.get('ref.target_extends') || [];
       for (const ext of extendsCapList) {
         const { className } = getEnclosingScope(ext.node);
         if (!className) continue;
         const extText = ext.node.text;
+        classExtends.set(className, extText);
+
         if (
           extText === 'Model' || extText === 'Authenticatable' || extText === 'Pivot' ||
           extText.endsWith('\\Model') || extText.endsWith('\\Authenticatable') || extText.endsWith('\\Pivot')
@@ -673,6 +821,42 @@ export class PhpParser implements LanguageParser {
         }
       }
 
+      const implementsCapList = refCaptures.get('ref.target_implements') || [];
+      for (const imp of implementsCapList) {
+        const { className } = getEnclosingScope(imp.node);
+        if (!className) continue;
+        const impText = imp.node.text;
+        if (!classImplements.has(className)) {
+          classImplements.set(className, []);
+        }
+        classImplements.get(className)!.push(impText);
+      }
+
+      // F12: Detect Laravel Roles (event, job, notification, listener)
+      const eventClasses = new Set<string>();
+      const jobClasses = new Set<string>();
+      const notificationClasses = new Set<string>();
+      const listenerClasses = new Set<string>();
+
+      for (const sym of symbols) {
+        if (sym.kind === 'class') {
+          const className = sym.name;
+          const extText = classExtends.get(className);
+          const imps = classImplements.get(className) || [];
+
+          // Heuristic checks
+          const isEvent = filePath.includes('/Events/') || className.endsWith('Event') || imps.includes('ShouldBroadcast') || imps.includes('ShouldBroadcastNow');
+          const isJob = filePath.includes('/Jobs/') || className.endsWith('Job') || imps.includes('ShouldQueue') || imps.includes('ShouldBeUnique');
+          const isNotification = filePath.includes('/Notifications/') || className.endsWith('Notification') || extText === 'Notification' || extText?.endsWith('\\Notification');
+          const isListener = filePath.includes('/Listeners/') || className.endsWith('Listener') || (classesWithHandle.has(className) && (imps.includes('ShouldQueue') || filePath.includes('/Listeners/')));
+
+          if (isEvent) eventClasses.add(className);
+          else if (isJob) jobClasses.add(className);
+          else if (isNotification) notificationClasses.add(className);
+          else if (isListener) listenerClasses.add(className);
+        }
+      }
+
       for (const sym of symbols) {
         if (sym.kind === 'class') {
           if (modelClasses.has(sym.name)) {
@@ -681,6 +865,14 @@ export class PhpParser implements LanguageParser {
             sym.metadata.laravelRole = 'controller';
           } else if (serviceProviderClasses.has(sym.name)) {
             sym.metadata.laravelRole = 'service_provider';
+          } else if (eventClasses.has(sym.name)) {
+            sym.metadata.laravelRole = 'event';
+          } else if (jobClasses.has(sym.name)) {
+            sym.metadata.laravelRole = 'job';
+          } else if (notificationClasses.has(sym.name)) {
+            sym.metadata.laravelRole = 'notification';
+          } else if (listenerClasses.has(sym.name)) {
+            sym.metadata.laravelRole = 'listener';
           }
         }
       }
@@ -724,7 +916,48 @@ export class PhpParser implements LanguageParser {
       errors.push({ message: e.message, line: 0 });
     }
 
-    return { symbols, references, errors, fileMetadata };
+    // F12: Suppress duplicate instantiation/call references for specific dispatch/notify targets
+    const specificTargets = new Set<string>();
+    for (const ref of references) {
+      if (ref.referenceType === 'dispatch' || ref.referenceType === 'notify') {
+        specificTargets.add(`${ref.targetName}:${ref.startLine}`);
+      }
+    }
+
+    const finalReferences = references.filter(ref => {
+      if (ref.referenceType === 'instantiation' || ref.referenceType === 'call') {
+        if (specificTargets.has(`${ref.targetName}:${ref.startLine}`)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // F11: Laravel Facade Resolution
+    const mergedFacadeMap = {
+      ...LARAVEL_FACADE_MAP,
+      ...(options?.facadeMap || {}),
+    };
+
+    for (const ref of finalReferences) {
+      if (ref.referenceType === 'call' || ref.referenceType === 'instantiation') {
+        const shortName = ref.targetName.split('\\').at(-1) ?? ref.targetName;
+        if (shortName !== 'Route') {
+          const resolved = mergedFacadeMap[shortName];
+          if (resolved) {
+            ref.targetName = resolved;
+            ref.verifiability = 'inferred';
+            ref.metadata = {
+              ...ref.metadata,
+              facadeAlias: shortName,
+              isRawDbAccess: shortName === 'DB',
+            };
+          }
+        }
+      }
+    }
+
+    return { symbols, references: finalReferences, errors, fileMetadata };
   }
 
   private extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {
@@ -768,6 +1001,8 @@ export class PhpParser implements LanguageParser {
       implements: 'implements',
       call: 'call',
       instantiation: 'instantiation',
+      dispatch: 'dispatch',
+      notify: 'notify',
     };
     return map[refType] || 'call';
   }

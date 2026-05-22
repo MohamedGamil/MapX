@@ -576,7 +576,9 @@ export class Scanner {
 
         try {
           const parser = getParserForFile(relPath, this.config.getResolvedUserLanguages());
-          results[i] = await parser.parse(relPath, sources[i]!);
+          results[i] = await parser.parse(relPath, sources[i]!, {
+            facadeMap: this.config.settings.php?.facadeMap,
+          });
         } catch {
           results[i] = { symbols: [], references: [], errors: [{ message: `Failed to parse ${relPath}` }] };
         }

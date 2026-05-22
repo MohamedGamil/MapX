@@ -4,5 +4,5 @@ export interface LanguageParser {
   readonly languageName: string;
   readonly supportedExtensions: string[];
 
-  parse(filePath: string, source: string): Promise<ParseResult>;
+  parse(filePath: string, source: string, options?: any): Promise<ParseResult>;
 }

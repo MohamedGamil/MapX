@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | ID | F12 |
-| Status | `planned` |
+| Status | `implemented` |
 | Iteration | I06 |
 | Branch | `feat/i06-laravel-advanced` |
 | Depends on | F05 (FQN resolution) |
@@ -280,19 +280,19 @@ OrderController  —[notify]→                 InvoiceReady (notification)
 
 ## Acceptance Criteria
 
-- [ ] `event(new UserRegistered($user))` → `dispatch` edge from enclosing class to `UserRegistered`
-- [ ] `ProcessOrder::dispatch($order)` → `dispatch` edge, `metadata.dispatchMethod = 'dispatch'`
-- [ ] `dispatch(new ProcessOrder($order))` → `dispatch` edge
-- [ ] `$user->notify(new InvoiceReady($invoice))` → `notify` edge
-- [ ] `Notification::send($users, new InvoiceReady(...))` → `notify` edge
-- [ ] Event classes receive `laravelRole = 'event'`
-- [ ] Job classes receive `laravelRole = 'job'`
-- [ ] Notification classes receive `laravelRole = 'notification'`
-- [ ] Listener classes receive `laravelRole = 'listener'`
-- [ ] FQN resolution via F05 use-import table
-- [ ] `dispatch` edges rendered as dashed in DOT exporter
-- [ ] TypeScript type-check passes
-- [ ] Verified on a real Laravel project with events and jobs
+- [x] `event(new UserRegistered($user))` → `dispatch` edge from enclosing class to `UserRegistered`
+- [x] `ProcessOrder::dispatch($order)` → `dispatch` edge, `metadata.dispatchMethod = 'dispatch'`
+- [x] `dispatch(new ProcessOrder($order))` → `dispatch` edge
+- [x] `$user->notify(new InvoiceReady($invoice))` → `notify` edge
+- [x] `Notification::send($users, new InvoiceReady(...))` → `notify` edge
+- [x] Event classes receive `laravelRole = 'event'`
+- [x] Job classes receive `laravelRole = 'job'`
+- [x] Notification classes receive `laravelRole = 'notification'`
+- [x] Listener classes receive `laravelRole = 'listener'`
+- [x] FQN resolution via F05 use-import table
+- [x] `dispatch` edges rendered as dashed in DOT exporter
+- [x] TypeScript type-check passes
+- [x] Verified on a real Laravel project with events and jobs
 
 ---
 
