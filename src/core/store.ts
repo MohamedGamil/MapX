@@ -1,5 +1,6 @@
 import type { StoreBackend } from './store-interface.js';
 import { createRequire } from 'node:module';
+import type { MapxGraph } from './graph.js';
 
 const dynamicRequire = createRequire(import.meta.url);
 
@@ -575,6 +576,186 @@ export class Store {
       this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM meta WHERE key LIKE ? OR key LIKE ?').run(`last_scan_commit:${repoName}`, `last_scan_time:${repoName}`);
     });
+  }
+
+  searchSymbolsFiltered(options: {
+    term: string;
+    kind?: string;
+    filePrefix?: string;
+    exact?: boolean;
+    limit?: number;
+    repo?: string;
+  }): Record<string, any>[] {
+    const limit = options.limit ?? 20;
+    let sql = 'SELECT * FROM symbols WHERE ';
+    const params: any[] = [];
+
+    if (options.exact) {
+      sql += 'name = ?';
+      params.push(options.term);
+    } else {
+      sql += 'name LIKE ?';
+      params.push(`%${options.term}%`);
+    }
+
+    if (options.kind) {
+      sql += ' AND kind = ?';
+      params.push(options.kind);
+    }
+
+    if (options.filePrefix) {
+      sql += ' AND file_path LIKE ?';
+      params.push(`${options.filePrefix}%`);
+    }
+
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+
+    sql += ' ORDER BY kind, name LIMIT ?';
+    params.push(limit);
+
+    return this.backend.prepare(sql).all(...params);
+  }
+
+  getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
+    if (fullName.includes('::')) {
+      const [scope, name] = fullName.split('::');
+      if (repo) {
+        return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? AND repo = ? LIMIT 1').get(scope, name, repo);
+      }
+      return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? LIMIT 1').get(scope, name);
+    } else {
+      if (repo) {
+        return this.backend.prepare('SELECT * FROM symbols WHERE name = ? AND repo = ? LIMIT 1').get(fullName, repo);
+      }
+      return this.backend.prepare('SELECT * FROM symbols WHERE name = ? LIMIT 1').get(fullName);
+    }
+  }
+
+  getFilesFiltered(options: {
+    pathPrefix?: string;
+    lang?: string;
+    sort?: 'lines' | 'path';
+    limit?: number;
+    repo?: string;
+  }): Record<string, any>[] {
+    const limit = options.limit ?? 50;
+    let sql = 'SELECT * FROM files WHERE 1=1';
+    const params: any[] = [];
+
+    if (options.pathPrefix) {
+      sql += ' AND path LIKE ?';
+      params.push(`${options.pathPrefix}%`);
+    }
+
+    if (options.lang) {
+      sql += ' AND LOWER(language) = ?';
+      params.push(options.lang.toLowerCase());
+    }
+
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+
+    if (options.sort === 'lines') {
+      sql += ' ORDER BY lines DESC';
+    } else if (options.sort === 'path') {
+      sql += ' ORDER BY path ASC';
+    }
+
+    sql += ' LIMIT ?';
+    params.push(limit);
+
+    return this.backend.prepare(sql).all(...params);
+  }
+
+  getCallersOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
+    let symbols: Record<string, any>[] = [];
+    if (fullName.includes('::')) {
+      const [scope, name] = fullName.split('::');
+      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
+      const params = [scope, name];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    } else {
+      let sql = 'SELECT * FROM symbols WHERE name = ?';
+      const params = [fullName];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    }
+
+    if (symbols.length === 0) {
+      return [];
+    }
+
+    const results: Record<string, any>[] = [];
+    for (const sym of symbols) {
+      let sql = 'SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?)';
+      const params = [sym.file_path, sym.name, `${sym.scope}::${sym.name}`];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      const edges = this.backend.prepare(sql).all(...params);
+      results.push(...edges);
+    }
+    return results;
+  }
+
+  getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
+    let symbols: Record<string, any>[] = [];
+    if (fullName.includes('::')) {
+      const [scope, name] = fullName.split('::');
+      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
+      const params = [scope, name];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    } else {
+      let sql = 'SELECT * FROM symbols WHERE name = ?';
+      const params = [fullName];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    }
+
+    if (symbols.length === 0) {
+      return [];
+    }
+
+    const results: Record<string, any>[] = [];
+    for (const sym of symbols) {
+      let sql = 'SELECT * FROM edges WHERE source_file = ? AND (source_symbol = ? OR source_symbol = ?)';
+      const params = [sym.file_path, sym.name, `${sym.scope}::${sym.name}`];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      const edges = this.backend.prepare(sql).all(...params);
+      results.push(...edges);
+    }
+    return results;
+  }
+
+  getTopFilesByPageRank(graph: MapxGraph, limit: number = 5): any[] {
+    return graph.getRankedFiles().slice(0, limit);
+  }
+
+  getTopSymbolsByPageRank(graph: MapxGraph, limit: number = 5): any[] {
+    return graph.getRankedSymbols().slice(0, limit);
   }
 
   inTransaction<T>(fn: () => T): T {

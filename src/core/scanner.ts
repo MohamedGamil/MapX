@@ -797,6 +797,7 @@ export class Scanner {
           weight: 1.0,
           verifiability: ref.verifiability ?? 'verified',
           targetRepo: (targetRepoName && targetRepoName !== repoName) ? targetRepoName : undefined,
+          metadata: { startLine: ref.startLine },
         });
       }
     }

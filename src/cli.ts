@@ -451,8 +451,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
 
-      const lastScan    = store.getMeta('last_scan_time');
-      const lastCommit  = store.getMeta('last_scan_commit');
+      const lastScan    = store.getMeta('last_scan_time:' + config.repo.name) || store.getMeta('last_scan_time');
+      const lastCommit  = store.getMeta('last_scan_commit:' + config.repo.name) || store.getMeta('last_scan_commit');
       const schemaVer   = store.getMeta('schema_version');
       const dbPath      = resolve(dir, '.mapx', 'mapx.db');
 
@@ -553,31 +553,62 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log(`  Database:    ${kb} KB  (${dbPath})`);
       } catch { /* db may not exist yet */ }
 
+      // ── PageRank Importance ──────────────────────────────
+      console.log('\n── PageRank Importance ──────────────────────────────');
+      const topFiles = store.getTopFilesByPageRank(graph, 5);
+      const topSymbols = store.getTopSymbolsByPageRank(graph, 5);
+
+      if (topFiles.length > 0) {
+        console.log('  Top files by PageRank:');
+        for (const tf of topFiles) {
+          console.log(`    ${tf.pagerank.toFixed(6)}  ${tf.path}`);
+        }
+      } else {
+        console.log('  No ranked files (run a scan first)');
+      }
+
+      if (topSymbols.length > 0) {
+        console.log('\n  Top symbols by PageRank:');
+        for (const ts of topSymbols) {
+          const scope = ts.scope ? `${ts.scope}::` : '';
+          console.log(`    ${ts.pagerank.toFixed(6)}  ${scope}${ts.name} (${ts.filePath})`);
+        }
+      } else {
+        console.log('\n  No ranked symbols (run a scan first)');
+      }
+
       // ── Git changes ────────────────────────────────────────────────────
       const repoRoot = resolve(dir, config.repo.path);
+      let isStale = false;
       if (!isGitRepo(repoRoot)) {
         console.log('\n── Git ──────────────────────────────────────────────');
         console.log('  Not a git repository');
-        console.log('');
-        return;
+      } else {
+        const changes = getChangedFiles(repoRoot, lastCommit || undefined);
+        console.log('\n── Git changes since last scan ──────────────────────');
+        if (changes.length === 0) {
+          console.log('  No changes since last scan  (✓ index is current)');
+        } else {
+          isStale = true;
+          const byStatus = { added: 0, modified: 0, removed: 0, renamed: 0, unchanged: 0 };
+          for (const c of changes) byStatus[c.status] = (byStatus[c.status] || 0) + 1;
+          const summary = (Object.entries(byStatus) as Array<[string, number]>)
+            .filter(([, n]) => n > 0)
+            .map(([s, n]) => `${n} ${s}`)
+            .join(', ');
+          console.log(`  ${changes.length} changed files  (${summary})  (⚠ stale)`);
+          const icon = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' };
+          for (const change of changes) {
+            console.log(`    ${icon[change.status]} ${change.path}`);
+          }
+        }
       }
 
-      const changes = getChangedFiles(repoRoot, lastCommit || undefined);
-      console.log('\n── Git changes since last scan ──────────────────────');
-      if (changes.length === 0) {
-        console.log('  No changes since last scan');
+      console.log('\n── Recommendations ──────────────────────────────────');
+      if (isStale) {
+        console.log('  ⚠ Index is stale. Run `mapx sync` or `mapx update` to bring it up to date.');
       } else {
-        const byStatus = { added: 0, modified: 0, removed: 0, renamed: 0, unchanged: 0 };
-        for (const c of changes) byStatus[c.status] = (byStatus[c.status] || 0) + 1;
-        const summary = (Object.entries(byStatus) as Array<[string, number]>)
-          .filter(([, n]) => n > 0)
-          .map(([s, n]) => `${n} ${s}`)
-          .join(', ');
-        console.log(`  ${changes.length} changed files  (${summary})`);
-        const icon = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' };
-        for (const change of changes) {
-          console.log(`    ${icon[change.status]} ${change.path}`);
-        }
+        console.log('  ✓ Index is up to date.');
       }
       console.log('');
     });
@@ -603,6 +634,310 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         if (sym.signature && sym.signature !== sym.name) {
           console.log(`    signature: ${sym.signature}`);
         }
+      }
+    });
+
+  program
+    .command('search <term>')
+    .description('Symbol search with kind/file/exact filters')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--kind <kind>', 'Filter by symbol kind (e.g. class, method)')
+    .option('--file <prefix>', 'Filter by file path prefix')
+    .option('--exact', 'Only match exact name', false)
+    .option('--limit <limit>', 'Max results to return', '20')
+    .action(async (term: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store, graph } = await loadContext(dir);
+
+      const results = store.searchSymbolsFiltered({
+        term,
+        kind: opts.kind as string,
+        filePrefix: opts.file as string,
+        exact: !!opts.exact,
+        limit: parseInt(opts.limit as string, 10),
+      });
+
+      if (results.length === 0) {
+        console.log(`No symbols matching "${term}"`);
+        return;
+      }
+
+      const rankedAll = graph.getRankedSymbols();
+      const rankMap = new Map<string, number>();
+      for (const item of rankedAll) {
+        rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
+      }
+
+      for (const sym of results) {
+        const scope = sym.scope ? `${sym.scope}::` : '';
+        const key = `${sym.file_path}::${sym.name}`;
+        const pagerankVal = rankMap.get(key) || 0;
+        console.log(`  ${sym.kind} ${scope}${sym.name} [pagerank: ${pagerankVal.toFixed(6)}]`);
+        console.log(`    @ ${sym.file_path}:${sym.start_line}`);
+        if (sym.signature && sym.signature !== sym.name) {
+          console.log(`    signature: ${sym.signature}`);
+        }
+      }
+    });
+
+  program
+    .command('callers <symbol>')
+    .description('Show callers of a symbol')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--depth <depth>', 'Traversal depth', '1')
+    .action(async (symbol: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+      const maxDepth = parseInt(opts.depth as string, 10);
+
+      const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
+      const visited = new Set<string>([symbol]);
+      const results: Array<{ caller: string; callee: string; file: string; line: number; depth: number }> = [];
+
+      while (queue.length > 0) {
+        const { symName, depth } = queue.shift()!;
+        if (depth >= maxDepth) continue;
+
+        const callers = store.getCallersOfSymbol(symName);
+        for (const edge of callers) {
+          const callerName = edge.source_symbol ? `${edge.source_symbol}` : '<top-level>';
+          const calleeName = edge.target_symbol || symName;
+          const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
+
+          results.push({
+            caller: callerName,
+            callee: calleeName,
+            file: edge.source_file,
+            line: meta.startLine || 1,
+            depth: depth + 1
+          });
+
+          const nextSym = edge.source_symbol;
+          if (nextSym && !visited.has(nextSym)) {
+            visited.add(nextSym);
+            queue.push({ symName: nextSym, depth: depth + 1 });
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        console.log(`No callers found for "${symbol}"`);
+        return;
+      }
+
+      console.log(`Callers of "${symbol}":`);
+      for (const res of results) {
+        const indent = '  '.repeat(res.depth);
+        console.log(`${indent}← ${res.caller} (calls ${res.callee})`);
+        console.log(`${indent}  @ ${res.file}:${res.line}`);
+      }
+    });
+
+  program
+    .command('callees <symbol>')
+    .description('Show callees of a symbol')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--depth <depth>', 'Traversal depth', '1')
+    .action(async (symbol: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+      const maxDepth = parseInt(opts.depth as string, 10);
+
+      const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
+      const visited = new Set<string>([symbol]);
+      const results: Array<{ caller: string; callee: string; file: string; line: number; depth: number }> = [];
+
+      while (queue.length > 0) {
+        const { symName, depth } = queue.shift()!;
+        if (depth >= maxDepth) continue;
+
+        const callees = store.getCalleesOfSymbol(symName);
+        for (const edge of callees) {
+          const calleeName = edge.target_symbol || '<unknown>';
+          const callerName = edge.source_symbol || symName;
+          const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
+
+          results.push({
+            caller: callerName,
+            callee: calleeName,
+            file: edge.target_file,
+            line: meta.startLine || 1,
+            depth: depth + 1
+          });
+
+          if (edge.target_symbol && !visited.has(edge.target_symbol)) {
+            visited.add(edge.target_symbol);
+            queue.push({ symName: edge.target_symbol, depth: depth + 1 });
+          }
+        }
+      }
+
+      if (results.length === 0) {
+        console.log(`No callees found for "${symbol}"`);
+        return;
+      }
+
+      console.log(`Callees of "${symbol}":`);
+      for (const res of results) {
+        const indent = '  '.repeat(res.depth);
+        console.log(`${indent}→ ${res.callee} (called by ${res.caller})`);
+        console.log(`${indent}  @ ${res.file}:${res.line}`);
+      }
+    });
+
+  program
+    .command('impact <symbol>')
+    .description('Show transitive blast-radius of changing a symbol')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--depth <depth>', 'Traversal depth', '3')
+    .option('--format <format>', 'text | json', 'text')
+    .action(async (symbol: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+      const maxDepth = parseInt(opts.depth as string, 10);
+
+      const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
+      const visited = new Set<string>([symbol]);
+      const items: Array<{ symbol: string; file: string; depth: number; edgeType: string; risk: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
+
+      while (queue.length > 0) {
+        const { symName, depth } = queue.shift()!;
+        if (depth >= maxDepth) continue;
+
+        const callers = store.getCallersOfSymbol(symName);
+        for (const edge of callers) {
+          const callerName = edge.source_symbol || '<top-level>';
+          const key = `${edge.source_file}::${callerName}`;
+          if (visited.has(key)) continue;
+          visited.add(key);
+
+          let risk: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+          const isStructural = ['import', 'require', 'extends', 'implements'].includes(edge.edge_type);
+          const curDepth = depth + 1;
+
+          if (curDepth === 1) {
+            risk = isStructural ? 'MEDIUM' : 'HIGH';
+          } else if (curDepth === 2) {
+            risk = isStructural ? 'LOW' : 'MEDIUM';
+          } else {
+            risk = 'LOW';
+          }
+
+          items.push({
+            symbol: callerName,
+            file: edge.source_file,
+            depth: curDepth,
+            edgeType: edge.edge_type,
+            risk
+          });
+
+          if (edge.source_symbol) {
+            queue.push({ symName: edge.source_symbol, depth: curDepth });
+          }
+        }
+      }
+
+      let recommendation = 'No callers found — safe to change';
+      if (items.some(x => x.risk === 'HIGH')) {
+        recommendation = 'Treat as BREAKING CHANGE — update all HIGH-risk callers';
+      } else if (items.length > 0) {
+        recommendation = 'Low blast radius — proceed with caution';
+      }
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify({
+          affected: items,
+          summary: {
+            high: items.filter(x => x.risk === 'HIGH').length,
+            medium: items.filter(x => x.risk === 'MEDIUM').length,
+            low: items.filter(x => x.risk === 'LOW').length,
+          },
+          recommendation
+        }, null, 2));
+      } else {
+        if (items.length === 0) {
+          console.log(`No callers affected by changing "${symbol}"`);
+        } else {
+          console.log(`Impact analysis for "${symbol}":`);
+          for (const item of items) {
+            console.log(`  [${item.risk}] ${item.symbol} (${item.file}) [depth: ${item.depth}, type: ${item.edgeType}]`);
+          }
+        }
+        console.log(`\nRecommendation: ${recommendation}`);
+      }
+    });
+
+  program
+    .command('node <symbol>')
+    .description('Show full symbol details and optional source code')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--source', 'Extract and display source code', false)
+    .action(async (symbol: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+      const { readFileSync } = await import('node:fs');
+
+      const sym = store.getSymbolByName(symbol);
+      if (!sym) {
+        console.error(`Error: Symbol "${symbol}" not found`);
+        process.exit(1);
+      }
+
+      const callers = store.getCallersOfSymbol(symbol);
+      const callees = store.getCalleesOfSymbol(symbol);
+
+      console.log(`Symbol: ${sym.scope ? `${sym.scope}::` : ''}${sym.name}`);
+      console.log(`Kind:   ${sym.kind}`);
+      console.log(`File:   ${sym.file_path}`);
+      console.log(`Lines:  ${sym.start_line}-${sym.end_line}`);
+      console.log(`Signature: ${sym.signature}`);
+      console.log(`Callers: ${callers.length}`);
+      console.log(`Callees: ${callees.length}`);
+
+      if (opts.source) {
+        try {
+          const absolutePath = resolve(dir, sym.file_path as string);
+          const content = readFileSync(absolutePath, 'utf8');
+          const lines = content.split('\n');
+          const start = (sym.start_line as number) - 1;
+          const end = (sym.end_line as number);
+          const sliced = lines.slice(start, end).join('\n');
+          console.log('\nSource Code:');
+          console.log('----------------------------------------');
+          console.log(sliced);
+          console.log('----------------------------------------');
+        } catch (err: any) {
+          console.error(`Failed to read source code: ${err.message}`);
+        }
+      }
+    });
+
+  program
+    .command('files')
+    .description('List indexed files with prefix/lang/sort filters')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--path <prefix>', 'Filter by path prefix')
+    .option('--lang <lang>', 'Filter by language')
+    .option('--sort <sort>', 'lines | path', 'path')
+    .option('--limit <limit>', 'Max files to return', '50')
+    .action(async (opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+
+      const results = store.getFilesFiltered({
+        pathPrefix: opts.path as string,
+        lang: opts.lang as string,
+        sort: opts.sort as 'lines' | 'path',
+        limit: parseInt(opts.limit as string, 10),
+      });
+
+      if (results.length === 0) {
+        console.log('No files found matching filters');
+        return;
+      }
+
+      for (const file of results) {
+        console.log(`  ${file.path} (${file.language}, ${file.lines} lines, ${file.size_bytes} bytes)`);
       }
     });
 

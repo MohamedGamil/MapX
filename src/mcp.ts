@@ -20,6 +20,8 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { calculateMetrics } from './core/metrics.js';
+import { ContextBuilder } from './core/context-builder.js';
+import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -265,6 +267,103 @@ export function buildServer(): Server {
           },
         },
       },
+      {
+        name: 'mapx_search',
+        description: 'Symbol search with kind/file/exact filters and importance scores.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            term: { type: 'string', description: 'Symbol name or pattern to search for' },
+            kind: { type: 'string', description: 'Filter by symbol kind (e.g. class, method)' },
+            file: { type: 'string', description: 'Filter by file path prefix' },
+            exact: { type: 'boolean', description: 'Only match exact name', default: false },
+            limit: { type: 'number', description: 'Max results to return', default: 20 },
+            ...dirProperty,
+          },
+          required: ['term'],
+        },
+      },
+      {
+        name: 'mapx_context',
+        description: 'Smart context builder: graph-expansion + keyword matching + PageRank ranking.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            task: { type: 'string', description: 'Task description' },
+            seeds: { type: 'array', items: { type: 'string' }, description: 'Specific symbols or file paths to anchor context' },
+            tokens: { type: 'number', description: 'Token budget', default: 8192 },
+            depth: { type: 'number', description: 'Graph traversal depth', default: 2 },
+            ...dirProperty,
+          },
+          required: ['task'],
+        },
+      },
+      {
+        name: 'mapx_callers',
+        description: 'Who calls this symbol? (symbol-level, with depth)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            symbol: { type: 'string', description: 'Symbol name' },
+            depth: { type: 'number', description: 'Traversal depth', default: 1 },
+            ...dirProperty,
+          },
+          required: ['symbol'],
+        },
+      },
+      {
+        name: 'mapx_callees',
+        description: 'What does this symbol call? (symbol-level, with depth)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            symbol: { type: 'string', description: 'Symbol name' },
+            depth: { type: 'number', description: 'Traversal depth', default: 1 },
+            ...dirProperty,
+          },
+          required: ['symbol'],
+        },
+      },
+      {
+        name: 'mapx_impact',
+        description: 'Transitive blast-radius of changing a symbol with risk scoring.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            symbol: { type: 'string', description: 'Symbol name' },
+            depth: { type: 'number', description: 'Traversal depth', default: 3 },
+            ...dirProperty,
+          },
+          required: ['symbol'],
+        },
+      },
+      {
+        name: 'mapx_node',
+        description: 'Full symbol details + optional source code extraction.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            symbol: { type: 'string', description: 'Symbol name' },
+            source: { type: 'boolean', description: 'Extract and display source code', default: false },
+            ...dirProperty,
+          },
+          required: ['symbol'],
+        },
+      },
+      {
+        name: 'mapx_files',
+        description: 'Indexed file list with path/language/sort filters.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            path: { type: 'string', description: 'Filter by path prefix' },
+            lang: { type: 'string', description: 'Filter by language' },
+            sort: { type: 'string', enum: ['lines', 'path'], description: 'Sort field', default: 'path' },
+            limit: { type: 'number', description: 'Max files to return', default: 50 },
+            ...dirProperty,
+          },
+        },
+      },
     ],
   }));
 
@@ -459,28 +558,409 @@ export function buildServer(): Server {
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const lastScan = ctx.store.getMeta('last_scan_time');
-        const lastCommit = ctx.store.getMeta('last_scan_commit');
+        const lastScan = ctx.store.getMeta('last_scan_time:' + ctx.config.repo.name) || ctx.store.getMeta('last_scan_time');
+        const lastCommit = ctx.store.getMeta('last_scan_commit:' + ctx.config.repo.name) || ctx.store.getMeta('last_scan_commit');
         const fileCount = ctx.store.getFileCount();
         const symbolCount = ctx.store.getSymbolCount();
         const edgeCount = ctx.store.getEdgeCount();
         const verifiedEdgeCount = (ctx.store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified'").get() as any)?.cnt || 0;
         const inferredEdgeCount = (ctx.store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'inferred'").get() as any)?.cnt || 0;
 
-        const excludeStr = (args as any)?.exclude;
-        const includeStr = (args as any)?.include;
-        const exclude = excludeStr ? excludeStr.split(',').map((s: string) => s.trim()) : [];
-        const include = includeStr ? includeStr.split(',').map((s: string) => s.trim()) : [];
+        const breakdown = ctx.store.getLanguageBreakdown();
+        const topFiles = ctx.store.getTopFilesByPageRank(ctx.graph, 5);
+        const topSymbols = ctx.store.getTopSymbolsByPageRank(ctx.graph, 5);
 
-        const activeExcludes = [...(ctx.config.settings.excludePatterns ?? []), ...exclude];
-        const activeIncludes = [...(ctx.config.settings.includePatterns ?? []), ...include];
+        const repoRoot = resolve(dir, ctx.config.repo.path);
+        let isStale = false;
+        let gitInfo = '';
+        if (isGitRepo(repoRoot)) {
+          const changes = getChangedFiles(repoRoot, lastCommit || undefined);
+          if (changes.length === 0) {
+            gitInfo = 'No changes since last scan  (✓ index is current)';
+          } else {
+            isStale = true;
+            gitInfo = `${changes.length} changed files  (⚠ stale)`;
+          }
+        } else {
+          gitInfo = 'Not a git repository  (✓ index is current)';
+        }
+
+        const recommendations = isStale
+          ? '⚠ Index is stale. Run `mapx sync` or `mapx update` to bring it up to date.'
+          : '✓ Index is up to date.';
+
+        const textOutput = `Directory: ${dir}
+Last scan: ${lastScan || 'never'}
+Last commit: ${lastCommit || 'none'}
+Files: ${fileCount} | Symbols: ${symbolCount} | Edges: ${edgeCount} (verified: ${verifiedEdgeCount}, inferred: ${inferredEdgeCount})
+
+Language Breakdown:
+${Object.entries(breakdown).map(([l, c]) => `  ${l}: ${c} files`).join('\n')}
+
+Top Files by PageRank:
+${topFiles.map(tf => `  ${tf.pagerank.toFixed(6)}  ${tf.path}`).join('\n')}
+
+Top Symbols by PageRank:
+${topSymbols.map(ts => `  ${ts.pagerank.toFixed(6)}  ${ts.scope ? `${ts.scope}::` : ''}${ts.name} (${ts.filePath})`).join('\n')}
+
+Git Status:
+  ${gitInfo}
+
+Recommendation:
+  ${recommendations}`;
 
         return {
           content: [{
             type: 'text',
-            text: `Directory: ${dir}\nLast scan: ${lastScan || 'never'}\nLast commit: ${lastCommit || 'none'}\nFiles: ${fileCount} | Symbols: ${symbolCount} | Edges: ${edgeCount} (verified: ${verifiedEdgeCount}, inferred: ${inferredEdgeCount})\nExcludes: [${activeExcludes.join(', ')}]\nIncludes: [${activeIncludes.join(', ')}]`,
+            text: textOutput,
           }],
         };
+      }
+
+      case 'mapx_search': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const term = (args as any)?.term;
+        if (!term) return { content: [{ type: 'text', text: 'Missing required parameter: term' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const results = ctx.store.searchSymbolsFiltered({
+          term,
+          kind: (args as any)?.kind,
+          filePrefix: (args as any)?.file,
+          exact: !!(args as any)?.exact,
+          limit: (args as any)?.limit,
+        });
+
+        if (results.length === 0) {
+          return { content: [{ type: 'text', text: `No symbols matching "${term}"` }] };
+        }
+
+        const rankedAll = ctx.graph.getRankedSymbols();
+        const rankMap = new Map<string, number>();
+        for (const item of rankedAll) {
+          rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
+        }
+
+        const lines = results.map(sym => {
+          const scope = sym.scope ? `${sym.scope}::` : '';
+          const key = `${sym.file_path}::${sym.name}`;
+          const pagerankVal = rankMap.get(key) || 0;
+          return `${sym.kind} ${scope}${sym.name} [pagerank: ${pagerankVal.toFixed(6)}]\n  @ ${sym.file_path}:${sym.start_line}${sym.signature && sym.signature !== sym.name ? `\n  signature: ${sym.signature}` : ''}`;
+        });
+
+        return { content: [{ type: 'text', text: lines.join('\n\n') }] };
+      }
+
+      case 'mapx_context': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const task = (args as any)?.task;
+        if (!task) return { content: [{ type: 'text', text: 'Missing required parameter: task' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const builder = new ContextBuilder(ctx.store, ctx.graph);
+        const format = (args as any)?.format || 'text';
+
+        const result = await builder.buildContext({
+          task,
+          seeds: (args as any)?.seeds,
+          tokens: (args as any)?.tokens,
+          depth: (args as any)?.depth,
+        });
+
+        if (format === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
+        const mdLines: string[] = [];
+        mdLines.push('# Mapx smart Context');
+        mdLines.push(`*Estimated tokens:* ${result.estimatedTokens}\n`);
+        
+        mdLines.push('## Included Files');
+        if (result.includedFiles.length === 0) {
+          mdLines.push('None');
+        } else {
+          for (const f of result.includedFiles) {
+            mdLines.push(`### [${f.path}](file://${resolve(dir, f.path)})`);
+            mdLines.push(`- Language: ${f.language}`);
+            mdLines.push(`- Lines: ${f.lineCount} | Size: ${f.sizeBytes} bytes`);
+            if (f.symbols.length > 0) {
+              mdLines.push('- Symbols:');
+              for (const sym of f.symbols) {
+                const scopeStr = sym.scope ? `${sym.scope}::` : '';
+                mdLines.push(`  - \`${sym.kind}\` \`${scopeStr}${sym.name}\` (lines ${sym.startLine}-${sym.endLine})`);
+              }
+            }
+          }
+        }
+
+        if (result.edges.length > 0) {
+          mdLines.push('\n## Cross-File Dependencies');
+          for (const edge of result.edges) {
+            const srcSym = edge.sourceSymbol ? `#${edge.sourceSymbol}` : '';
+            const tgtSym = edge.targetSymbol ? `#${edge.targetSymbol}` : '';
+            mdLines.push(`- \`${edge.sourceFile}${srcSym}\` → \`${edge.targetFile}${tgtSym}\` (${edge.edgeType})`);
+          }
+        }
+
+        if (result.excludedFiles.length > 0) {
+          mdLines.push('\n## Excluded Files (Token budget exhausted)');
+          for (const f of result.excludedFiles) {
+            mdLines.push(`- ${f}`);
+          }
+        }
+
+        return { content: [{ type: 'text', text: mdLines.join('\n') }] };
+      }
+
+      case 'mapx_callers': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const symbolName = (args as any)?.symbol;
+        if (!symbolName) return { content: [{ type: 'text', text: 'Missing required parameter: symbol' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const maxDepth = (args as any)?.depth ?? 1;
+        const queue: Array<{ symName: string; depth: number }> = [{ symName: symbolName, depth: 0 }];
+        const visited = new Set<string>([symbolName]);
+        const results: Array<{ caller: string; callee: string; file: string; line: number; depth: number }> = [];
+
+        while (queue.length > 0) {
+          const { symName, depth } = queue.shift()!;
+          if (depth >= maxDepth) continue;
+
+          const callers = ctx.store.getCallersOfSymbol(symName);
+          for (const edge of callers) {
+            const callerName = edge.source_symbol ? `${edge.source_symbol}` : '<top-level>';
+            const calleeName = edge.target_symbol || symName;
+            const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
+
+            results.push({
+              caller: callerName,
+              callee: calleeName,
+              file: edge.source_file,
+              line: meta.startLine || 1,
+              depth: depth + 1
+            });
+
+            const nextSym = edge.source_symbol;
+            if (nextSym && !visited.has(nextSym)) {
+              visited.add(nextSym);
+              queue.push({ symName: nextSym, depth: depth + 1 });
+            }
+          }
+        }
+
+        if (results.length === 0) {
+          return { content: [{ type: 'text', text: `No callers found for "${symbolName}"` }] };
+        }
+
+        const lines = results.map(res => {
+          const indent = '  '.repeat(res.depth);
+          return `${indent}← ${res.caller} (calls ${res.callee})\n${indent}  @ ${res.file}:${res.line}`;
+        });
+
+        return { content: [{ type: 'text', text: `Callers of "${symbolName}":\n` + lines.join('\n') }] };
+      }
+
+      case 'mapx_callees': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const symbolName = (args as any)?.symbol;
+        if (!symbolName) return { content: [{ type: 'text', text: 'Missing required parameter: symbol' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const maxDepth = (args as any)?.depth ?? 1;
+        const queue: Array<{ symName: string; depth: number }> = [{ symName: symbolName, depth: 0 }];
+        const visited = new Set<string>([symbolName]);
+        const results: Array<{ caller: string; callee: string; file: string; line: number; depth: number }> = [];
+
+        while (queue.length > 0) {
+          const { symName, depth } = queue.shift()!;
+          if (depth >= maxDepth) continue;
+
+          const callees = ctx.store.getCalleesOfSymbol(symName);
+          for (const edge of callees) {
+            const calleeName = edge.target_symbol || '<unknown>';
+            const callerName = edge.source_symbol || symName;
+            const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
+
+            results.push({
+              caller: callerName,
+              callee: calleeName,
+              file: edge.target_file,
+              line: meta.startLine || 1,
+              depth: depth + 1
+            });
+
+            if (edge.target_symbol && !visited.has(edge.target_symbol)) {
+              visited.add(edge.target_symbol);
+              queue.push({ symName: edge.target_symbol, depth: depth + 1 });
+            }
+          }
+        }
+
+        if (results.length === 0) {
+          return { content: [{ type: 'text', text: `No callees found for "${symbolName}"` }] };
+        }
+
+        const lines = results.map(res => {
+          const indent = '  '.repeat(res.depth);
+          return `${indent}→ ${res.callee} (called by ${res.caller})\n${indent}  @ ${res.file}:${res.line}`;
+        });
+
+        return { content: [{ type: 'text', text: `Callees of "${symbolName}":\n` + lines.join('\n') }] };
+      }
+
+      case 'mapx_impact': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const symbolName = (args as any)?.symbol;
+        if (!symbolName) return { content: [{ type: 'text', text: 'Missing required parameter: symbol' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const maxDepth = (args as any)?.depth ?? 3;
+        const queue: Array<{ symName: string; depth: number }> = [{ symName: symbolName, depth: 0 }];
+        const visited = new Set<string>([symbolName]);
+        const items: Array<{ symbol: string; file: string; depth: number; edgeType: string; risk: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
+
+        while (queue.length > 0) {
+          const { symName, depth } = queue.shift()!;
+          if (depth >= maxDepth) continue;
+
+          const callers = ctx.store.getCallersOfSymbol(symName);
+          for (const edge of callers) {
+            const callerName = edge.source_symbol || '<top-level>';
+            const key = `${edge.source_file}::${callerName}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+
+            let risk: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
+            const isStructural = ['import', 'require', 'extends', 'implements'].includes(edge.edge_type);
+            const curDepth = depth + 1;
+
+            if (curDepth === 1) {
+              risk = isStructural ? 'MEDIUM' : 'HIGH';
+            } else if (curDepth === 2) {
+              risk = isStructural ? 'LOW' : 'MEDIUM';
+            } else {
+              risk = 'LOW';
+            }
+
+            items.push({
+              symbol: callerName,
+              file: edge.source_file,
+              depth: curDepth,
+              edgeType: edge.edge_type,
+              risk
+            });
+
+            if (edge.source_symbol) {
+              queue.push({ symName: edge.source_symbol, depth: curDepth });
+            }
+          }
+        }
+
+        let recommendation = 'No callers found — safe to change';
+        if (items.some(x => x.risk === 'HIGH')) {
+          recommendation = 'Treat as BREAKING CHANGE — update all HIGH-risk callers';
+        } else if (items.length > 0) {
+          recommendation = 'Low blast radius — proceed with caution';
+        }
+
+        const outJson = {
+          affected: items,
+          summary: {
+            high: items.filter(x => x.risk === 'HIGH').length,
+            medium: items.filter(x => x.risk === 'MEDIUM').length,
+            low: items.filter(x => x.risk === 'LOW').length,
+          },
+          recommendation
+        };
+
+        return { content: [{ type: 'text', text: JSON.stringify(outJson, null, 2) }] };
+      }
+
+      case 'mapx_node': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const symbolName = (args as any)?.symbol;
+        if (!symbolName) return { content: [{ type: 'text', text: 'Missing required parameter: symbol' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const sym = ctx.store.getSymbolByName(symbolName);
+        if (!sym) {
+          return { content: [{ type: 'text', text: `Error: Symbol "${symbolName}" not found.` }] };
+        }
+
+        const callers = ctx.store.getCallersOfSymbol(symbolName);
+        const callees = ctx.store.getCalleesOfSymbol(symbolName);
+
+        let outputText = `Symbol: ${sym.scope ? `${sym.scope}::` : ''}${sym.name}
+Kind:   ${sym.kind}
+File:   ${sym.file_path}
+Lines:  ${sym.start_line}-${sym.end_line}
+Signature: ${sym.signature}
+Callers: ${callers.length}
+Callees: ${callees.length}`;
+
+        if ((args as any)?.source) {
+          try {
+            const { readFileSync } = await import('node:fs');
+            const absolutePath = resolve(dir, sym.file_path as string);
+            const content = readFileSync(absolutePath, 'utf8');
+            const lines = content.split('\n');
+            const start = (sym.start_line as number) - 1;
+            const end = (sym.end_line as number);
+            const sliced = lines.slice(start, end).join('\n');
+            outputText += `\n\nSource Code:\n----------------------------------------\n${sliced}\n----------------------------------------`;
+          } catch (err: any) {
+            outputText += `\n\nFailed to read source code: ${err.message}`;
+          }
+        }
+
+        return { content: [{ type: 'text', text: outputText }] };
+      }
+
+      case 'mapx_files': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const results = ctx.store.getFilesFiltered({
+          pathPrefix: (args as any)?.path,
+          lang: (args as any)?.lang,
+          sort: (args as any)?.sort,
+          limit: (args as any)?.limit,
+        });
+
+        if (results.length === 0) {
+          return { content: [{ type: 'text', text: 'No files found matching filters.' }] };
+        }
+
+        const outText = results.map(f => `  ${f.path} (${f.language}, ${f.lines} lines, ${f.size_bytes} bytes)`).join('\n');
+        return { content: [{ type: 'text', text: outText }] };
       }
 
       case 'mapx_metrics': {

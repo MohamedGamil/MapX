@@ -10,4 +10,4 @@ export { DotExporter } from './exporters/dot-exporter.js';
 export { FlowTracer } from './core/flow-tracer.js';
 export { AgentGenerator } from './agents/generator.js';
 export { WorkspaceManager } from './core/workspace-manager.js';
-
+export { ContextBuilder, ContextOptions, ContextResult } from './core/context-builder.js';

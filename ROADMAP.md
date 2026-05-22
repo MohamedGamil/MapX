@@ -71,13 +71,13 @@
 - [x] Add `mapx_agents_generate` MCP tool
 
 ### I10 · Git Workspace & Submodule Awareness · F18 · Risk: Medium · Requires: I08 (schema v4 → v5)
-- [ ] Implement `WorkspaceManager`: parse `.gitmodules`, detect VS Code `.code-workspace`, peer repos
-- [ ] Fix incremental scan correctness: call `getGitBlobHashes()` per-repo with its own git root
-- [ ] Track cross-repo edges: `ALTER TABLE edges ADD COLUMN target_repo TEXT` (v4 → v5)
-- [ ] Add `mapx workspaces` / `mapx workspaces discover` / `mapx workspaces add` / `mapx workspaces remove`
-- [ ] Add `--all` flag to `mapx scan`, `mapx update`, `mapx status`, `mapx export`
-- [ ] Add `mapx_workspaces` MCP tool
-- [ ] Warn on unregistered nested `.git` directories found during scan
+- [x] Implement `WorkspaceManager`: parse `.gitmodules`, detect VS Code `.code-workspace`, peer repos
+- [x] Fix incremental scan correctness: call `getGitBlobHashes()` per-repo with its own git root
+- [x] Track cross-repo edges: `ALTER TABLE edges ADD COLUMN target_repo TEXT` (v4 → v5)
+- [x] Add `mapx workspaces` / `mapx workspaces discover` / `mapx workspaces add` / `mapx workspaces remove`
+- [x] Add `--all` flag to `mapx scan`, `mapx update`, `mapx status`, `mapx export`
+- [x] Add `mapx_workspaces` MCP tool
+- [x] Warn on unregistered nested `.git` directories found during scan
 
 ### I11 · Smart Context & Search Tools · F19 · Risk: Medium · Requires: none (enriched by I01, I08)
 - [ ] Implement `ContextBuilder` class: seed extraction → BFS graph expansion → token-budget trimming
