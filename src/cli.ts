@@ -15,6 +15,7 @@ import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
+import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateMetrics } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { getBuiltinLanguages } from './languages/registry.js';
@@ -1227,12 +1228,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('export')
     .description('Export code graph for LLM consumption')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--format <format>', 'Output format: llm, json, dot, svg', 'llm')
+    .option('--format <format>', 'Output format: llm, json, dot, svg, toon', 'llm')
     .option('--tokens <budget>', 'Token budget for LLM export', '8192')
     .option('--repo <name>', 'Filter by repo name')
     .option('-o, --output <file>', 'Write output to file instead of stdout')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .option('--delimiter <delimiter>', 'Delimiter for TOON format: comma, tab, pipe', 'comma')
+    .option('--key-folding', 'Collapse single-key chains into dotted paths for TOON', false)
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -1240,6 +1243,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const format = opts.format as string;
       const tokenBudget = parseInt(opts.tokens as string, 10) || 8192;
       const outputPath = opts.output as string | undefined;
+      const delimiter = opts.delimiter as 'comma' | 'tab' | 'pipe' | undefined;
+      const keyFolding = !!opts.keyFolding;
 
       if (outputPath) {
         const outputDir = resolve(outputPath, '..');
@@ -1283,6 +1288,18 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         case 'svg': {
           const exporter = new SvgExporter(store, graph);
           output = exporter.export(opts.repo as string | undefined, filteredFiles);
+          break;
+        }
+        case 'toon': {
+          const exporter = new ToonExporter(store, graph);
+          output = exporter.export({
+            format: 'toon',
+            tokenBudget,
+            repo: opts.repo as string | undefined,
+            files: filteredFiles,
+            delimiter,
+            keyFolding,
+          });
           break;
         }
         case 'llm':

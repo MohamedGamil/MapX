@@ -124,11 +124,11 @@
 ## Phase 6 — Polish & UX
 
 ### I14 · TOON Export Format · F27 · Risk: Low · Requires: none (independent)
-- [ ] Implement `ToonExporter` class conforming to TOON v3.3 spec (tabular arrays, inline arrays, key folding)
-- [ ] Add `--format=toon` to `mapx export`; register in `src/exporters/index.ts`
-- [ ] Implement `toonQuote()`: handle lone `-` null marker, leading `-\S` values, control chars `\u0000-\u001F\u007F-\u009F`
-- [ ] Support `--tokens=N` budget trimming with trailing `# N nodes omitted` comment
-- [ ] Note spec version in TOON output header: `# toon v3.3`
+- [x] Implement `ToonExporter` class conforming to TOON v3.3 spec (tabular arrays, inline arrays, key folding)
+- [x] Add `--format=toon` to `mapx export`; register in `src/exporters/index.ts`
+- [x] Implement `toonQuote()`: handle lone `-` null marker, leading `-\S` values, control chars `\u0000-\u001F\u007F-\u009F`
+- [x] Support `--tokens=N` budget trimming with trailing `# N nodes omitted` comment
+- [x] Note spec version in TOON output header: `# toon v3.3`
 
 ### I15 · Bundled Web Dashboard · F28 · Risk: Medium · Requires: I07
 - [ ] Create `src/ui-server.ts` (HTTP server, Node.js built-ins only — no Express)

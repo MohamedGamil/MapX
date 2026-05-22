@@ -120,10 +120,12 @@ export interface Snapshot {
 }
 
 export interface ExportOptions {
-  format: 'llm' | 'json' | 'dot' | 'svg';
+  format: 'llm' | 'json' | 'dot' | 'svg' | 'toon';
   tokenBudget: number;
   repo?: string;
   files?: string[];
+  delimiter?: 'comma' | 'tab' | 'pipe';
+  keyFolding?: boolean;
 }
 
 export interface RepoConfig {

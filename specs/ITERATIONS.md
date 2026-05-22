@@ -34,9 +34,9 @@ Chronological record of all iterations: when they were started, completed, what 
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F01 |
 | Branch | `feat/i01-edge-verifiability` |
 | PR | — |
@@ -59,9 +59,9 @@ _None yet._
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F03 |
 | Branch | `feat/i02-glob-filters` |
 | PR | — |
@@ -84,9 +84,9 @@ _None yet._
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F02, F04 |
 | Branch | `feat/i03-metrics-edges` |
 | PR | — |
@@ -114,9 +114,9 @@ Depends on I01 being merged before the `--verified-only` flag in `mapx metrics` 
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F05, F06, F10 |
 | Branch | `feat/i04-php-fundamentals` |
 | PR | — |
@@ -139,9 +139,9 @@ F05 is a prerequisite for all of I05 — the use-import table it builds is consu
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F07, F08, F09 |
 | Branch | `feat/i05-laravel-structural` |
 | PR | — |
@@ -189,9 +189,9 @@ Depends on I05 being merged. F11 and F12 are independent of each other within I0
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F13 |
 | Branch | `feat/i07-npm-distribution` |
 | PR | — |
@@ -252,6 +252,8 @@ Independent of I01–I07. F14 benefits from F05 (accurate PHP namespace parsing)
 | Field | Value |
 |-------|-------|
 | Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F17 |
 | Branch | `feat/i09-llm-integration-files` |
 | PR | — |
@@ -303,7 +305,9 @@ Independent of all other iterations. Cross-repo FQN edge resolution is richer wh
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F19 |
 | Branch | `feat/i11-smart-context-tools` |
 | PR | — |
@@ -326,7 +330,9 @@ Fully independent of all other iterations. No schema changes required. `mapx_con
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F20 |
 | Branch | `feat/i12-language-expansion` |
 | PR | — |
@@ -374,7 +380,9 @@ F21 (infrastructure) must be merged before any of F22–F25 can proceed. F22–F
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F27 |
 | Branch | `feat/i14-toon-export` |
 | PR | — |
