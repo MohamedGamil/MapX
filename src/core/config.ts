@@ -61,15 +61,45 @@ export class Config {
     const codegraphDir = join(workspaceRoot, '.codegraph');
     await mkdir(codegraphDir, { recursive: true });
 
+    const configPath = join(codegraphDir, 'config.json');
+
+    // Read and merge existing config if present, preserving user customisations
+    let existing: CodeGraphConfig | null = null;
+    if (existsSync(configPath)) {
+      try {
+        existing = JSON.parse(await readFile(configPath, 'utf-8')) as CodeGraphConfig;
+      } catch {
+        existing = null; // corrupt file — overwrite cleanly
+      }
+    }
+
+    const defaultExclude = DEFAULT_CONFIG.settings.excludePatterns;
+
+    // User patterns come first (higher priority); add any default patterns the
+    // user hasn't already covered, then deduplicate the merged list.
+    const userExclude = existing?.settings?.excludePatterns ?? [];
+    const userInclude = existing?.settings?.includePatterns ?? [];
+    const mergedExclude = [...new Set([...userExclude, ...defaultExclude.filter(p => !userExclude.includes(p))])];
+    const mergedInclude = [...new Set([...userInclude, ...DEFAULT_CONFIG.settings.includePatterns])];
+
+    const defaultRepoName = repoName || resolve(workspaceRoot).split('/').pop() || 'default';
+    // Keep existing repos; ensure there is at least the default entry
+    const existingRepos: RepoConfig[] = existing?.repos ?? [];
+    const repos: RepoConfig[] = existingRepos.length > 0
+      ? existingRepos
+      : [{ name: defaultRepoName, path: '.' }];
+
     const config: CodeGraphConfig = {
-      ...DEFAULT_CONFIG,
-      repos: [{
-        name: repoName || resolve(workspaceRoot).split('/').pop() || 'default',
-        path: '.',
-      }],
+      version: existing?.version ?? DEFAULT_CONFIG.version,
+      repos,
+      languages: existing?.languages ?? {},
+      settings: {
+        maxTokenBudget: existing?.settings?.maxTokenBudget ?? DEFAULT_CONFIG.settings.maxTokenBudget,
+        excludePatterns: mergedExclude,
+        includePatterns: mergedInclude,
+      },
     };
 
-    const configPath = join(codegraphDir, 'config.json');
     await writeFile(configPath, JSON.stringify(config, null, 2), 'utf-8');
     return new Config(configPath, config);
   }
