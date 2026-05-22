@@ -621,6 +621,8 @@ mapx files [--path=<prefix>] [--lang=<lang>] [--sort=<field>] [--limit=N] [--dir
 
 **Enriches the existing `mapx_status` tool with actionable health information.**
 
+> **⚠ BREAKING CHANGE** — The text output format of `mapx_status` is restructured. Consumers parsing `mapx_status` output programmatically (scripts, CI pipelines) must update their parsers. The JSON output format (if used via the MCP tool) preserves all existing fields and adds new ones (additive, not breaking for JSON consumers). The backward-compatibility guarantee is: the first summary line (`Files: N | Symbols: N | Edges: N`) is preserved in the same position.
+
 The existing implementation returns only:
 ```
 Directory: /path

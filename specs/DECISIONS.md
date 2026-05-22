@@ -89,3 +89,44 @@ Option 1 (discovery-time). Excluded files should incur zero I/O cost. This is es
 - Scanner `walkDirectory` must accept a compiled glob matcher before yielding paths.
 - Config-level patterns (from `.mapx/config.json`) and CLI flag patterns must be merged before the walk begins.
 - Files excluded at discovery time will not appear in `status` change tracking either, which is the desired behaviour.
+
+---
+
+## ADR-003 — Canonical schema version sequence for all planned iterations
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-05-22 |
+| Status | `accepted` |
+| Iteration | Cross-cutting (I01, I08, I10, I13) |
+| Supersedes | — |
+
+### Context
+
+Multiple specs claimed the same schema version number (particularly v3 being claimed by both F01/I01 and F14/I08 and F21/I13). This caused confusion during planning and would cause migration failures at runtime. A canonical, non-conflicting version sequence was needed.
+
+### Options considered
+
+1. **Claim versions as features merge** — let each PR bump the version to the next available integer at merge time. Flexible, but requires coordination and could lead to re-ordering.
+2. **Pre-assign a canonical sequence during planning** — assign schema versions upfront to all features that require migrations, regardless of merge order. Merge order must respect the sequence.
+
+### Decision
+
+Option 2 (pre-assigned canonical sequence). The following version assignments are canonical and must not be reordered:
+
+| Schema Version | Feature | Iteration | Migration |
+|---------------|---------|-----------|-----------|
+| **v2** | baseline | — | existing schema (`CURRENT_SCHEMA_VERSION = 2` in `store.ts`) |
+| **v3** | F01 | I01 | `ALTER TABLE edges ADD COLUMN verifiability TEXT DEFAULT 'verified'` |
+| **v4** | F14 | I08 | add `clusters` table, `cluster_membership` table, `namespace` on `files` |
+| **v5** | F18 | I10 | `ALTER TABLE edges ADD COLUMN target_repo TEXT` |
+| **v6** | F21 | I13 | `ALTER TABLE edges ADD COLUMN metadata TEXT` |
+
+Features that do not require schema migrations (e.g. F02, F03, F05–F13, F15–F17, F19–F20, F22–F28) do not bump the version.
+
+### Consequences
+
+- Specs for F01, F14, F18, F21 have been updated to use their assigned version numbers.
+- Iteration ordering constraints: I01 must merge before I08; I08 must merge before I10; I10 must merge before I13 (or the migration chain must be applied as a combined migration if iterations are squash-merged out of order).
+- Any future feature that requires a schema migration takes **v7** and must be documented in this ADR.
+- The `store.ts` constant `CURRENT_SCHEMA_VERSION` must be updated to match the highest version after all planned iterations are merged (v6).

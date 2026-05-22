@@ -130,7 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_membership_cluster ON cluster_membership(cluster_
 
 ### Schema migration
 
-This is schema version 3. The upgrade migration:
+This is schema version **4** (v3 is taken by F01/I01 which adds `verifiability` to `edges`). The upgrade migration:
 
 ```sql
 -- Migration v3
@@ -337,7 +337,7 @@ export type ScanPhase = 'discover' | 'index' | 'parse' | 'resolve' | 'detect' | 
 
 ## Acceptance Criteria
 
-- [ ] Schema v3 migration creates `clusters` and `cluster_membership` tables without errors
+- [ ] Schema v4 migration creates `clusters` and `cluster_membership` tables without errors
 - [ ] `mapx scan` on the mapx project itself detects `src.core`, `src.exporters`, `src.parsers` as directory clusters
 - [ ] PHP project: `namespace App\Http\Controllers` → cluster `App.Http.Controllers`
 - [ ] PHP project: namespace clusters have `source = 'namespace'`; directory clusters have `source = 'directory'`

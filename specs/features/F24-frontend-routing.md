@@ -17,6 +17,8 @@ Frontend routing frameworks define routes in different ways: React Router uses J
 
 All four produce `route` edges that link route definitions to the components or handlers they render.
 
+> **Semantics note:** These are **client-side routing configurations** — they define how the browser navigates between views at runtime. They are NOT server-side HTTP routes (those are handled by F08/F22/F23). `route` edges produced here carry `metadata.routeType = "client"` and `metadata.framework = "<name>"` to distinguish them from server-side `route` edges (which use `metadata.routeType = "server"`). The edge means "this route definition **renders** this component", not "this URL path **serves** this HTTP response".
+
 ---
 
 ## React Router v6+

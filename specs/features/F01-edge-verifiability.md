@@ -38,7 +38,7 @@ CREATE INDEX IF NOT EXISTS idx_edges_verifiability ON edges (verifiability);
 
 No data migration is required. All existing edges inherit `'verified'` as the default, which is the conservative/safe choice.
 
-The Store schema version must be bumped (e.g. `1.0.0` → `1.1.0`) and a migration guard added to `store.ts` so existing databases are upgraded on first open.
+The Store schema version must be bumped from 2 to 3, and a migration guard added to `store.ts` so existing databases are upgraded on first open.
 
 ---
 

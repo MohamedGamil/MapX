@@ -23,7 +23,7 @@ F08 introduced Laravel route → controller edges as a one-off, ad-hoc implement
 2. Build a `FrameworkRegistry` that auto-detects active frameworks per repo
 3. Build a `RouteRegistry` that collects `RouteBinding` records, resolves target files/symbols, and writes edges
 4. Introduce new `ReferenceType` values: `hook`, `graphql_resolver`, `message_handler`, `websocket_handler`
-5. Add optional `edge_metadata` JSON column to the `edges` table (schema v3)
+5. Add optional `edge_metadata` JSON column to the `edges` table (schema v6)
 6. Add `mapx routes` CLI command and `mapx_routes` MCP tool
 7. Refactor F08 (Laravel route extraction) to use the new infrastructure
 
@@ -36,8 +36,8 @@ export type ReferenceType =
   | 'import' | 'require' | 'extends' | 'implements'
   | 'call' | 'instantiation' | 'return_type' | 'param_type'
   | 'relation'          // F07: Eloquent model relationships
-  | 'route'             // F08: HTTP route → handler (extended here to all frameworks)
-  | 'middleware'        // F08: Route middleware
+  | 'route'             // F08: HTTP route → handler (introduced in F08/I05, extended here to all frameworks)
+  | 'middleware'        // F08: Route middleware (introduced in F08/I05, extended here)
   | 'binding'           // F09: IoC container bindings
   | 'dispatch'          // F12: Event/Job dispatch
   | 'notify'            // F12: Notification send
@@ -57,7 +57,7 @@ The existing `edges` table is extended with an optional JSON column:
 ALTER TABLE edges ADD COLUMN metadata TEXT;  -- JSON, nullable
 ```
 
-Schema bumps to v3. Migration is automatic on open (existing rows get `metadata = NULL`).
+Schema bumps to v6 (v3 = F01 verifiability, v4 = F14 clusters, v5 = F18 target_repo). Migration is automatic on open (existing rows get `metadata = NULL`).
 
 **Route edge metadata structure:**
 ```json

@@ -274,7 +274,7 @@ function toonQuote(value: string, activeDelimiter: ',' | '\t' | '|' = ','): stri
     value === 'true' || value === 'false' || value === 'null' ||
     /^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value) || // looks like number
     /[:"\\\[\]{}\u0000-\u001F]/.test(value) ||
-    value === '-' || /^-/.test(value) ||
+    value === '-' || /^-\S/.test(value) ||     // TOON spec: "-" alone, or "-" followed by any non-space char
     value.includes(activeDelimiter);
   if (!needsQuoting) return value;
   return '"' + value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t').replace(/[\u0000-\u001F]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4,'0')}`) + '"';

@@ -524,7 +524,7 @@ No schema migration required. All necessary columns already exist:
 ALTER TABLE edges ADD COLUMN target_repo TEXT;
 ```
 
-This requires a schema version bump (v3 if not already taken by I08, otherwise v4).
+This requires a schema version bump to **v5** (v3 = F01 verifiability, v4 = F14 clusters, v5 = F18 target_repo, v6 = F21 edge metadata).
 
 ---
 

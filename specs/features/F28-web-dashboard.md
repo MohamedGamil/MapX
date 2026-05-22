@@ -28,7 +28,7 @@ mapx exposes rich graph data through the CLI and MCP tools, but there is no huma
 
 ## Goal
 
-Ship a lightweight, self-contained web dashboard that is **optionally** served alongside the existing MCP server or standalone. The dashboard has zero runtime framework dependencies in the server path (Node.js built-ins only) and a minimal client bundle (< 200 KB gzipped).
+Ship a lightweight, self-contained web dashboard that is **optionally** served alongside the existing MCP server or standalone. The dashboard has zero runtime framework dependencies in the server path (Node.js built-ins only) and a minimal client bundle (< 350 KB gzipped).
 
 ```
 mapx ui                   # dashboard on http://localhost:4000 (auto-opens browser)
@@ -257,7 +257,7 @@ function wrapTool(name: string, handler: ToolHandler): ToolHandler {
 | State | No framework — plain TypeScript modules with DOM manipulation | Avoids React/Vue/Svelte runtime in the client bundle |
 | SSE | Native `EventSource` API | No polyfill needed for Node 18+, all modern browsers |
 
-Target bundle size: < 200 KB gzipped (Cytoscape + layout plugins + uPlot + app code).
+Target bundle size: < 350 KB gzipped (Cytoscape ~150 KB + layout plugins ~20 KB + uPlot ~15 KB + app code). The cytoscape-fcose layout plugin is lazy-loaded on first use to keep the initial load to < 200 KB.
 
 ### Build step
 
@@ -291,6 +291,8 @@ await build({
 | Sensitive data | API responses contain only data already available via `mapx export` (no secrets, no env vars, no file contents beyond symbols) |
 | Source snippets | `GET /api/symbol/:name` may return source lines; scope strictly to the project directory; reject paths outside project root |
 | CORS | Only allow `Origin: http://localhost:<port>` — reject cross-origin requests |
+| Rate limiting | `/api/context` and `/api/graph` are CPU/I/O intensive; limit to 10 req/min per client IP; respond `429 Too Many Requests` when exceeded |
+| Response size | `/api/graph` response capped at 10 MB; `/api/symbols` and `/api/context` capped at 2 MB. Graph endpoint uses `limit=N` pagination (default: 200 nodes) to prevent accidental huge payloads |
 
 ---
 
@@ -378,6 +380,6 @@ When set, `scripts/build-all.ts` skips the client build step. Useful for CI envi
 - [ ] `mapx serve --ui` starts both MCP and dashboard in one process; tool calls appear in Tool Call Log
 - [ ] `dist/ui/` is included in the published npm package
 - [ ] `MAPX_NO_UI=1 make build` completes without building client assets
-- [ ] Dashboard bundle is < 200 KB gzipped
+- [ ] Dashboard initial bundle (before lazy-loaded layout plugins) is < 200 KB gzipped; total bundle including lazy chunks is < 350 KB gzipped
 - [ ] `npx tsc --noEmit` passes with 0 errors
 - [ ] `mapx ui --help` prints usage

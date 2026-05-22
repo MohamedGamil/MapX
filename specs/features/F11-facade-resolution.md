@@ -6,7 +6,7 @@
 | Status | `planned` |
 | Iteration | I06 |
 | Branch | `feat/i06-laravel-advanced` |
-| Depends on | F05 (FQN resolution), F09 (binding table) |
+| Depends on | F05 (FQN resolution) |
 | Blocked by | I05 must be merged |
 
 ---

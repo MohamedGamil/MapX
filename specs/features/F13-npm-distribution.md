@@ -198,7 +198,7 @@ export default defineConfig({
   ],
 
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
 
   "dependencies": {
@@ -233,7 +233,7 @@ export default defineConfig({
 |-------|--------|-------|--------|
 | `bin.mapx` | `./src/main.ts` | `./dist/main.js` | Compiled JS for Node.js |
 | `files` | _(absent — publishes everything)_ | Listed subset | Exclude dev artifacts |
-| `engines` | _(absent)_ | `{ "node": ">=18.0.0" }` | Node 18 required for `web-tree-sitter` & `node:fs/promises` |
+| `engines` | _(absent)_ | `{ "node": ">=20.0.0" }` | Node 20+ LTS required for `web-tree-sitter` & `node:fs/promises` |
 | `better-sqlite3` | `optionalDependencies` | `dependencies` | Required for Node.js runtime |
 | `@modelcontextprotocol/sdk` | `optionalDependencies` | `optionalDependencies` | Keep optional — MCP only needed for `mapx serve` |
 | `tsup` | _(absent)_ | `devDependencies` | npm build tooling |

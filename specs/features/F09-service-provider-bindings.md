@@ -6,7 +6,7 @@
 | Status | `planned` |
 | Iteration | I05 |
 | Branch | `feat/i05-laravel-structural` |
-| Depends on | F05 (FQN resolution), F06 (type hints) |
+| Depends on | F05 (FQN resolution) |
 | Blocked by | I04 must be merged |
 
 ---
