@@ -12,7 +12,7 @@ import { getLanguageForFile } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import { minimatch } from 'minimatch';
-import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback } from '../types.js';
+import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig } from '../types.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
