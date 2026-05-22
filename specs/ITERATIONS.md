@@ -292,3 +292,26 @@ _None yet._
 ### Blockers / notes
 
 Independent of all other iterations. Cross-repo FQN edge resolution is richer when I04/I05 (PHP namespace resolution) are merged, but F18 functions correctly without them. Schema version coordination needed with I08 (F14): whichever iteration merges first claims v3; the other uses v4.
+
+---
+
+## I11 — Smart Context & Search Tools
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Features | F19 |
+| Branch | `feat/i11-smart-context-tools` |
+| PR | — |
+
+### Scope
+
+Adds 7 new MCP tools and 6 new CLI commands that give LLMs symbol-level precision tools for navigating the code graph. Core new capability: `mapx_context` — a smart context builder that takes a natural-language task description, expands through the graph using keyword matching + PageRank weighting, and returns a focused, token-efficient context block. Supporting tools: `mapx_search` (filtered symbol search), `mapx_callers`/`mapx_callees` (call graph traversal), `mapx_impact` (transitive blast-radius with HIGH/MEDIUM/LOW risk), `mapx_node` (symbol details + optional source code), `mapx_files` (indexed file list with filters). The existing `mapx_status` tool is enhanced with language breakdown, top symbols, and stale detection. No schema changes — all queries work against existing `files`, `symbols`, and `edges` tables. New `src/core/context-builder.ts` added.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Fully independent of all other iterations. No schema changes required. `mapx_context` quality improves when F14 cluster data is available (clusters used as context grouping signals) and when F07/F08/F12 Laravel edges are present (richer call graph). `mapx_query` is kept as a backward-compatible alias for `mapx_search`.

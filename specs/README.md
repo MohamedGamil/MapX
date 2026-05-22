@@ -17,6 +17,7 @@ specs/
 ├── 03-code-structure-and-dataflow.md ← clusters, structure & data flow overview (reference)
 ├── 04-llm-integration-files.md       ← LLM agent integration files overview (reference)
 ├── 05-git-workspace-awareness.md     ← git workspace & submodule awareness overview (reference)
+├── 06-smart-context-and-search.md    ← smart context & search tools overview (reference)
 │
 ├── features/
 │   ├── F01-edge-verifiability.md     ← Feature 1: dynamic vs. verified edges
@@ -36,7 +37,8 @@ specs/
 │   ├── F15-cluster-visualization.md ← Feature 15: Cluster-aware export & visualization
 │   ├── F16-data-flow-tracing.md     ← Feature 16: Data flow tracing & source/sink detection
 │   ├── F17-llm-integration-files.md ← Feature 17: LLM agent integration file generation
-│   └── F18-git-workspace-submodules.md ← Feature 18: Git workspace & submodule awareness
+│   ├── F18-git-workspace-submodules.md ← Feature 18: Git workspace & submodule awareness
+│   └── F19-smart-context-tools.md   ← Feature 19: Smart context & search MCP/CLI tools
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -48,7 +50,8 @@ specs/
     ├── I07.md                        ← Iteration 7: npm distribution & Node.js DX
     ├── I08.md                        ← Iteration 8: clusters, structure & data flow
     ├── I09.md                        ← Iteration 9: LLM agent integration files
-    └── I10.md                        ← Iteration 10: git workspace & submodule awareness
+    ├── I10.md                        ← Iteration 10: git workspace & submodule awareness
+    └── I11.md                        ← Iteration 11: smart context & search tools
 ```
 
 ---
@@ -75,6 +78,7 @@ specs/
 | F16 | Data flow tracing & source/sink detection | `planned` | I08 | [F16](features/F16-data-flow-tracing.md) |
 | F17 | LLM agent integration file generation (`mapx agents`) | `planned` | I09 | [F17](features/F17-llm-integration-files.md) |
 | F18 | Git workspace & submodule awareness | `planned` | I10 | [F18](features/F18-git-workspace-submodules.md) |
+| F19 | Smart context & search MCP/CLI tools | `planned` | I11 | [F19](features/F19-smart-context-tools.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -94,6 +98,7 @@ specs/
 | [I08](iterations/I08.md) | Code structure, clusters & data flow | `planned` | F14, F15, F16 |
 | [I09](iterations/I09.md) | LLM agent integration files (`mapx agents`) | `planned` | F17 |
 | [I10](iterations/I10.md) | Git workspace & submodule awareness | `planned` | F18 |
+| [I11](iterations/I11.md) | Smart context & search tools | `planned` | F19 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -165,4 +170,9 @@ I09 (F17: LLM agent integration files)
 I10 (F18: git workspace & submodule awareness)
  ├── INDEPENDENT of all other iterations
  └── Cross-repo edges are richer when I04/I05 (PHP FQN resolution) are merged
+
+I11 (F19: smart context & search tools)
+ ├── INDEPENDENT of all other iterations
+ ├── mapx_context is richer when F14 (clusters) are available
+ └── mapx_callers/mapx_callees are richer with F16 (flow edges) and F07/F08/F12 (Laravel edges)
 ```
