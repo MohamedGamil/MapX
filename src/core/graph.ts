@@ -56,6 +56,8 @@ export class MapxGraph {
             weight: edge.weight,
             verifiability: edge.verifiability || 'verified',
             metadata: edge.metadata || {},
+            repo: edge.repo,
+            targetRepo: edge.targetRepo,
           });
         } catch {
           // edge already exists from different source

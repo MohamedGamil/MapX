@@ -1,5 +1,5 @@
 # Ignore Core app artifacts
-.codegraph/
+.mapx/
 *.db
 *.db-journal
 *.db-wal

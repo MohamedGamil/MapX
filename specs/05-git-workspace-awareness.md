@@ -78,32 +78,32 @@ Cross-repo edges (imports from repo A to repo B) are stored in the `edges` table
 ## New CLI surface
 
 ```bash
-mapx workspaces               # list all registered repos with scan status
-mapx workspaces discover      # auto-discover submodules + peers, show what would be added
-mapx workspaces add <path>    # manually register a repo
-mapx workspaces remove <name> # unregister a repo (does not delete data immediately)
+mapx workspaces list          # list all registered repos (active) and discovered submodules, peers, and VS Code folders
+mapx workspaces show          # alias for list
+mapx workspaces add <path>    # manually register a repo and run initial full scan (optional --name <name>)
+mapx workspaces remove <name> # unregister a repo and delete its data from SQLite immediately
+mapx workspaces sync          # automatically discover and register submodules, peers, and VS Code workspaces, scanning them
 
+mapx scan --repo <name>       # scan a specific registered repo
 mapx scan --all               # scan all registered repos
+mapx update --repo <name>     # incremental update for a specific repo
 mapx update --all             # incremental update across all repos
-mapx status --all             # per-repo status table
-mapx export --repo=<name>     # export a specific repo only
-mapx export --all             # combined multi-repo export
 ```
 
 ---
 
 ## Scope
 
-Covered in F18:
-- Submodule discovery and registration
-- Peer repo discovery (sibling `.git` directories)
-- VS Code `.code-workspace` file reading
-- Nested `.git` detection during scan (warn + stop)
-- Per-repo scan isolation (correct blob hashes per repo)
-- `mapx workspaces` command group
-- `--all` flags on `scan`, `update`, `status`, `export`
-- Cross-repo edges in the graph
-- `mapx_workspaces` MCP tool
+### Covered in F18 (Implemented & Verified):
+- **Submodule discovery and registration**: Parses `.gitmodules` files to discover submodule names and paths.
+- **Peer repo discovery**: Scans parent directory for sibling `.git` repositories.
+- **VS Code workspace support**: Scans `.code-workspace` files to discover folder definitions.
+- **Nested repo detection during scan**: Warns and stops walking inside unregistered nested `.git` directories.
+- **Per-repo scan isolation**: Uses separate git trackers and commits.
+- **`mapx workspaces` command group**: Completed with list, add, remove, and sync subcommands.
+- **`--repo` and `--all` options**: Fully integrated into both `scan` and `update` commands.
+- **Cross-repo edge tracking**: Graph dependency edges store `targetRepo` when targeting external workspace repositories.
+- **`mapx_scan` MCP tool**: Updated to support optional `repo` and `all` parameters.
 
 Not covered (deferred):
 - Sparse-checkout / partial submodule awareness

@@ -210,8 +210,8 @@ export class Config {
     }
   }
 
-  removeRepo(path: string): void {
-    this.config.repos = this.config.repos.filter(r => r.path !== path);
+  removeRepo(nameOrPath: string): void {
+    this.config.repos = this.config.repos.filter(r => r.name !== nameOrPath && r.path !== nameOrPath);
   }
 
   getWorkspaceRoot(): string {

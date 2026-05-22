@@ -78,6 +78,7 @@ export interface GraphEdge {
   weight: number;
   verifiability?: 'verified' | 'inferred';
   metadata?: Record<string, any>;
+  targetRepo?: string | null;
 }
 
 export type ScanPhase = 'discover' | 'index' | 'parse' | 'resolve' | 'detect' | 'cluster';
@@ -152,4 +153,28 @@ export interface MapxConfig {
     };
     [key: string]: any;
   };
+}
+
+export interface SubmoduleInfo {
+  name: string;
+  path: string;
+  url: string;
+  isInitialized: boolean;
+}
+
+export interface WorkspaceInfo {
+  path: string;
+  repos: RepoConfig[];
+}
+
+export interface RepoSummary {
+  name: string;
+  path: string;
+  type: 'primary' | 'submodule' | 'peer';
+  fileCount: number;
+  symbolCount: number;
+  edgeCount: number;
+  crossRepoEdgeCount: number;
+  lastScanned: string | null;
+  headSha: string | null;
 }

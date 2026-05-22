@@ -278,9 +278,11 @@ Fully independent of all other iterations. Can be merged at any time. No schema 
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `completed` |
 | Features | F18 |
 | Branch | `feat/i10-git-workspace-awareness` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | PR | — |
 
 ### Scope

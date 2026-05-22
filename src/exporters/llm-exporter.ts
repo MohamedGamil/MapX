@@ -13,18 +13,19 @@ export class LLMExporter {
     this.graph = graph;
   }
 
-  export(options: ExportOptions): string {
-    const budget = options.tokenBudget || 8192;
+  export(options?: Partial<ExportOptions>): string {
+    const opt = options || {};
+    const budget = opt.tokenBudget || 8192;
     const parts: string[] = [];
 
-    let files = this.store.getAllFiles(options.repo);
-    let symbols = this.store.getAllSymbols(options.repo);
-    let edges = this.store.getAllEdges(options.repo);
+    let files = this.store.getAllFiles(opt.repo);
+    let symbols = this.store.getAllSymbols(opt.repo);
+    let edges = this.store.getAllEdges(opt.repo);
     let rankedFiles = this.graph.getRankedFiles();
     let rankedSymbols = this.graph.getRankedSymbols();
 
-    if (options.files) {
-      const allowed = new Set(options.files);
+    if (opt.files) {
+      const allowed = new Set(opt.files);
       files = files.filter(f => allowed.has(f.path as string));
       symbols = symbols.filter(s => allowed.has(s.file_path as string));
       edges = edges.filter(e => allowed.has(e.source_file as string) && allowed.has(e.target_file as string));
@@ -32,11 +33,11 @@ export class LLMExporter {
       rankedSymbols = rankedSymbols.filter(s => allowed.has(s.filePath));
     }
 
-    const repoName = options.repo || 'project';
+    const repoName = opt.repo || 'project';
     parts.push(`# Mapx: ${repoName}`);
     parts.push('');
 
-    const structureSection = this.buildStructureSection(options.repo);
+    const structureSection = this.buildStructureSection(opt.repo);
     if (structureSection) {
       parts.push(structureSection);
     }
@@ -258,7 +259,7 @@ export class LLMExporter {
       lines.push(`- ${group.source} → ${group.controller} (${group.routes.length} routes: ${descParts.join(', ')})`);
     }
 
-    const unique = new Map<string, { source: string; target: string; type: string; verifiability?: string }>();
+    const unique = new Map<string, { source: string; target: string; type: string; verifiability?: string; targetRepo?: string }>();
     for (const edge of otherEdges) {
       const key = `${edge.source_file}->${edge.target_file}:${edge.edge_type}`;
       if (!unique.has(key)) {
@@ -267,13 +268,15 @@ export class LLMExporter {
           target: edge.target_file as string,
           type: edge.edge_type as string,
           verifiability: edge.verifiability as string || 'verified',
+          targetRepo: edge.target_repo as string | undefined,
         });
       }
     }
 
     for (const dep of unique.values()) {
       const infSuffix = dep.verifiability === 'inferred' ? ' [inferred]' : '';
-      lines.push(`- ${dep.source} → ${dep.target} (${dep.type})${infSuffix}`);
+      const targetRepoSuffix = dep.targetRepo ? ` [repo: ${dep.targetRepo}]` : '';
+      lines.push(`- ${dep.source} → ${dep.target}${targetRepoSuffix} (${dep.type})${infSuffix}`);
     }
 
     lines.push('');

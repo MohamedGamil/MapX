@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 
 const dynamicRequire = createRequire(import.meta.url);
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -13,8 +13,7 @@ CREATE TABLE IF NOT EXISTS files (
   git_blob_hash TEXT,
   last_scanned TEXT,
   size_bytes INTEGER DEFAULT 0,
-  lines INTEGER DEFAULT 0,
-  metadata TEXT DEFAULT '{}'
+  lines INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS symbols (
@@ -44,9 +43,7 @@ CREATE TABLE IF NOT EXISTS edges (
   target_symbol TEXT,
   edge_type TEXT NOT NULL,
   repo TEXT NOT NULL,
-  weight REAL DEFAULT 1.0,
-  verifiability TEXT NOT NULL DEFAULT 'verified',
-  metadata TEXT DEFAULT '{}'
+  weight REAL DEFAULT 1.0
 );
 
 CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_file);
@@ -126,6 +123,14 @@ const MIGRATIONS: Migration[] = [
       )`,
       `CREATE INDEX IF NOT EXISTS idx_membership_file ON cluster_membership(file_path)`,
       `CREATE INDEX IF NOT EXISTS idx_membership_cluster ON cluster_membership(cluster_name)`,
+    ],
+  },
+  {
+    version: 6,
+    description: 'Add target_repo column to edges table',
+    up: [
+      `ALTER TABLE edges ADD COLUMN target_repo TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_edges_target_repo ON edges(target_repo)`,
     ],
   },
 ];
@@ -326,10 +331,11 @@ export class Store {
     weight: number;
     verifiability?: 'verified' | 'inferred';
     metadata?: Record<string, any>;
+    targetRepo?: string | null;
   }): void {
     this.backend.prepare(`
-      INSERT INTO edges (source_file, target_file, source_symbol, target_symbol, edge_type, repo, weight, verifiability, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO edges (source_file, target_file, source_symbol, target_symbol, edge_type, repo, weight, verifiability, metadata, target_repo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       edge.sourceFile,
       edge.targetFile,
@@ -339,7 +345,8 @@ export class Store {
       edge.repo,
       edge.weight,
       edge.verifiability ?? 'verified',
-      edge.metadata ? JSON.stringify(edge.metadata) : '{}'
+      edge.metadata ? JSON.stringify(edge.metadata) : '{}',
+      edge.targetRepo ?? null
     );
   }
 
@@ -558,6 +565,15 @@ export class Store {
         edgeCount: g.edgeCount,
         dominantType,
       };
+    });
+  }
+
+  deleteRepo(repoName: string): void {
+    this.inTransaction(() => {
+      this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM edges WHERE repo = ? OR target_repo = ?').run(repoName, repoName);
+      this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM meta WHERE key LIKE ? OR key LIKE ?').run(`last_scan_commit:${repoName}`, `last_scan_time:${repoName}`);
     });
   }
 

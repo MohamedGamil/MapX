@@ -67,6 +67,7 @@ async function loadContext(dir: string) {
       repo: edge.repo as string,
       weight: edge.weight as number,
       verifiability: edge.verifiability as any,
+      targetRepo: edge.target_repo as string | null,
     });
   }
 
@@ -101,6 +102,8 @@ export function buildServer(): Server {
           properties: {
             exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
+            repo: { type: 'string', description: 'Scan only a specific registered repository' },
+            all: { type: 'boolean', description: 'Scan all registered repositories' },
             ...dirProperty,
           },
         },
@@ -277,12 +280,21 @@ export function buildServer(): Server {
 
         const excludeStr = (args as any)?.exclude;
         const includeStr = (args as any)?.include;
+        const repo = (args as any)?.repo;
+        const all = !!(args as any)?.all;
         const exclude = excludeStr ? excludeStr.split(',').map((s: string) => s.trim()) : [];
         const include = includeStr ? includeStr.split(',').map((s: string) => s.trim()) : [];
 
+        let repoNames: string[] | undefined = undefined;
+        if (repo) {
+          repoNames = [repo];
+        } else if (all) {
+          repoNames = ['all'];
+        }
+
         try {
           const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
-          const result = await scanner.scanFull();
+          const result = await scanner.scanFull(repoNames);
           return {
             content: [{
               type: 'text',

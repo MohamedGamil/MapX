@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { resolve, join, dirname } from 'node:path';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve, join, dirname, relative, basename } from 'node:path';
+import { existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import * as readline from 'node:readline';
@@ -10,6 +10,7 @@ import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { AgentGenerator } from './agents/generator.js';
+import { WorkspaceManager } from './core/workspace-manager.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -350,6 +351,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .argument('[path]', 'Target directory')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .option('--repo <name>', 'Scan only a specific registered repository')
+    .option('--all', 'Scan all registered repositories')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -366,7 +369,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       };
       process.once('SIGINT', onSigInt);
 
-      const result = await scanner.scanFull().catch((err: Error) => {
+      let repoNames: string[] | undefined = undefined;
+      if (opts.repo) {
+        repoNames = [opts.repo as string];
+      } else if (opts.all) {
+        repoNames = ['all'];
+      }
+
+      const result = await scanner.scanFull(repoNames).catch((err: Error) => {
         if (err.message.includes('Another scan is already running')) {
           console.error(`Error: ${err.message}`);
           process.exit(1);
@@ -392,6 +402,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .argument('[path]', 'Target directory')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .option('--repo <name>', 'Update only a specific registered repository')
+    .option('--all', 'Update all registered repositories')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -405,24 +417,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         throw err;
       };
 
-      const repoRoot = resolve(dir, config.repo.path);
-      if (!isGitRepo(repoRoot)) {
-        console.log('Not a git repo, falling back to full scan');
-        const scanner = new Scanner(store, config, graph, onProgress, {
-          excludes: opts.exclude as string[],
-          includes: opts.include as string[],
-        });
-        process.once('SIGINT', () => scanner.abort());
-        const result = await scanner.scanFull().catch(handleLockError);
-        process.stderr.write('\r' + ' '.repeat(80) + '\r');
-        console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
-        return;
-      }
-
-      const changes = getChangedFiles(repoRoot);
-      if (changes.length === 0) {
-        console.log('No changes detected');
-        return;
+      let repoNames: string[] | undefined = undefined;
+      if (opts.repo) {
+        repoNames = [opts.repo as string];
+      } else if (opts.all) {
+        repoNames = ['all'];
       }
 
       const scanner = new Scanner(store, config, graph, onProgress, {
@@ -430,11 +429,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         includes: opts.include as string[],
       });
       process.once('SIGINT', () => scanner.abort());
-      const result = await scanner.scanIncremental().catch(handleLockError);
+      const result = await scanner.scanIncremental(repoNames).catch(handleLockError);
 
       process.stderr.write('\r' + ' '.repeat(80) + '\r');
-      console.log(`Updated ${result.filesScanned} files in ${result.durationMs}ms`);
-      console.log(`${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated`);
+      if (result.interrupted) {
+        console.log(`Update interrupted after ${result.filesScanned} files.`);
+      } else {
+        console.log(`Updated ${result.filesScanned} files in ${result.durationMs}ms`);
+        console.log(`${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated`);
+      }
     });
 
   program
@@ -1345,6 +1348,190 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
     });
 
+  const workspacesCmd = program.command('workspaces').description('Manage multi-repository workspace contexts');
+
+  workspacesCmd
+    .command('list')
+    .alias('show')
+    .description('List registered repositories and other discovered peer/submodule directories')
+    .action(async () => {
+      const dir = resolveDir({}, program.opts());
+      const { config } = await loadContext(dir);
+
+      console.log('\nRegistered repositories:');
+      const registeredPaths = new Set<string>();
+      for (const r of config.repos) {
+        const absPath = resolve(dir, r.path);
+        registeredPaths.add(absPath);
+        const fwStr = r.framework ? ` [${r.framework}]` : '';
+        console.log(`  - ${r.name.padEnd(15)} -> ${r.path} (active)${fwStr}`);
+      }
+
+      // Discover uninitialized submodules
+      const submodules = WorkspaceManager.discoverSubmodules(dir);
+      const uninitSubmodules = submodules.filter(s => !registeredPaths.has(resolve(dir, s.path)));
+      if (uninitSubmodules.length > 0) {
+        console.log('\nDiscovered submodules:');
+        for (const s of uninitSubmodules) {
+          const status = s.isInitialized ? 'available' : 'uninitialized';
+          console.log(`  - ${s.name.padEnd(15)} -> ${s.path} (${status})`);
+        }
+      }
+
+      // Discover peer repos
+      const peers = WorkspaceManager.discoverPeerRepos(dir);
+      const uninitPeers = peers.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitPeers.length > 0) {
+        console.log('\nDiscovered peer repositories:');
+        for (const p of uninitPeers) {
+          console.log(`  - ${p.name.padEnd(15)} -> ${p.path} (available)`);
+        }
+      }
+
+      // Discover VS Code workspace files
+      const wsFiles = readdirSync(dir).filter(f => f.endsWith('.code-workspace'));
+      if (wsFiles.length > 0) {
+        console.log('\nDiscovered VS Code Workspace folders:');
+        for (const f of wsFiles) {
+          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(join(dir, f), dir);
+          const uninitWs = wsFolderRepos.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+          for (const p of uninitWs) {
+            console.log(`  - ${p.name.padEnd(15)} -> ${p.path} (available)`);
+          }
+        }
+      }
+      console.log('');
+    });
+
+  workspacesCmd
+    .command('add <path>')
+    .description('Register a repository path')
+    .option('--name <name>', 'Repository name (defaults to folder name)')
+    .action(async (repoPath: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir({}, program.opts());
+      const { config, store, graph } = await loadContext(dir);
+
+      const absPath = resolve(dir, repoPath);
+      if (!existsSync(absPath)) {
+        console.error(`Error: Path ${repoPath} does not exist.`);
+        process.exit(1);
+      }
+      if (!isGitRepo(absPath)) {
+        console.error(`Error: Path ${repoPath} is not a git repository.`);
+        process.exit(1);
+      }
+
+      const relPath = relative(dir, absPath);
+      const name = (opts.name as string) || basename(absPath);
+
+      if (config.repos.some(r => r.name === name || r.path === relPath)) {
+        console.log(`Repository already registered: ${name} (${relPath})`);
+        return;
+      }
+
+      config.addRepo(name, relPath);
+      await config.save();
+      console.log(`Registered repository: ${name} -> ${relPath}`);
+
+      console.log('Running initial full scan for the new repository...');
+      const onProgress = createProgressRenderer();
+      const scanner = new Scanner(store, config, graph, onProgress);
+      const result = await scanner.scanFull([name]);
+      console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
+    });
+
+  workspacesCmd
+    .command('remove <name>')
+    .description('Unregister a repository by name or path')
+    .action(async (name: string) => {
+      const dir = resolveDir({}, program.opts());
+      const { config, store } = await loadContext(dir);
+
+      const repo = config.repos.find(r => r.name === name || r.path === name);
+      if (!repo) {
+        console.error(`Error: Repository ${name} is not registered.`);
+        process.exit(1);
+      }
+
+      const repoName = repo.name;
+      config.removeRepo(name);
+      await config.save();
+      console.log(`Unregistered repository: ${repoName}`);
+
+      console.log(`Cleaning up stored data for repository: ${repoName}...`);
+      store.deleteRepo(repoName);
+      console.log(`Done.`);
+    });
+
+  workspacesCmd
+    .command('sync')
+    .description('Sync all discovered submodules, peer repos, and VS Code workspace folders')
+    .action(async () => {
+      const dir = resolveDir({}, program.opts());
+      const { config, store, graph } = await loadContext(dir);
+
+      const registeredPaths = new Set<string>();
+      for (const r of config.repos) {
+        registeredPaths.add(resolve(dir, r.path));
+      }
+
+      const toAdd: Array<{ name: string; path: string }> = [];
+
+      // 1. Submodules
+      const submodules = WorkspaceManager.discoverSubmodules(dir);
+      for (const s of submodules) {
+        if (s.isInitialized) {
+          const abs = resolve(dir, s.path);
+          if (!registeredPaths.has(abs)) {
+            toAdd.push({ name: s.name, path: s.path });
+            registeredPaths.add(abs);
+          }
+        }
+      }
+
+      // 2. Peer repos
+      const peers = WorkspaceManager.discoverPeerRepos(dir);
+      for (const p of peers) {
+        const abs = resolve(dir, p.path);
+        if (!registeredPaths.has(abs)) {
+          toAdd.push({ name: p.name, path: p.path });
+          registeredPaths.add(abs);
+        }
+      }
+
+      // 3. VS Code Workspaces
+      const wsFiles = readdirSync(dir).filter(f => f.endsWith('.code-workspace'));
+      for (const f of wsFiles) {
+        const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(join(dir, f), dir);
+        for (const p of wsFolderRepos) {
+          const abs = resolve(dir, p.path);
+          if (!registeredPaths.has(abs)) {
+            toAdd.push({ name: p.name, path: p.path });
+            registeredPaths.add(abs);
+          }
+        }
+      }
+
+      if (toAdd.length === 0) {
+        console.log('No new repositories discovered to sync.');
+        return;
+      }
+
+      console.log(`Syncing ${toAdd.length} newly discovered repositories:`);
+      const scanner = new Scanner(store, config, graph, createProgressRenderer());
+
+      for (const item of toAdd) {
+        config.addRepo(item.name, item.path);
+        console.log(`  + Registered: ${item.name} -> ${item.path}`);
+      }
+      await config.save();
+
+      console.log('\nRunning initial full scan for new repositories...');
+      const newNames = toAdd.map(item => item.name);
+      const result = await scanner.scanFull(newNames);
+      console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
+    });
+
   return program;
 }
 
@@ -1408,6 +1595,7 @@ export async function loadContext(dir: string): Promise<{
       repo: edge.repo as string,
       weight: edge.weight as number,
       verifiability: edge.verifiability as any,
+      targetRepo: edge.target_repo as string | null,
     });
   }
 
