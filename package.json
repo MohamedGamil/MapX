@@ -1,6 +1,6 @@
 {
   "name": "codegraph",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "license": "Apache-2.0",
   "description": "Multi-language code graph memory system for LLMs",
   "type": "module",
