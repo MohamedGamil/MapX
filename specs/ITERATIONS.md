@@ -242,3 +242,30 @@ _None yet._
 ### Blockers / notes
 
 Independent of I01–I07. F14 benefits from F05 (accurate PHP namespace parsing) but is not blocked by it. F16 traces are richer when F07–F12 Laravel edges (`dispatch`, `route`, `relation`) are present but will function correctly without them.
+
+---
+
+## I09 — LLM Agent Integration Files
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Features | F17 |
+| Branch | `feat/i09-llm-integration-files` |
+| PR | — |
+
+### Scope
+
+Adds the `mapx agents` command group and provider-specific LLM integration file generation. When a developer installs mapx and runs `mapx init`, they are offered an interactive menu to select which LLM/agentic tools they use. mapx then generates correctly formatted, provider-specific integration files (`CLAUDE.md`, `.cursor/rules/mapx.mdc`, `.github/copilot-instructions.md`, etc.) that teach those tools how to use mapx for the current project.
+
+The 10 supported providers are: Generic/Amp/Devin/OpenCode, Claude Desktop, Cursor, GitHub Copilot, Windsurf, Cline, Aider, Gemini CLI, Continue, and Zed.
+
+All generated files contain a `<!-- mapx VERSION TIMESTAMP -->` / `<!-- /mapx -->` sentinel block. `mapx agents update` detects stale blocks and refreshes them in-place, preserving any user content outside the block. Files that append to shared instruction files (`.clinerules`, `.github/copilot-instructions.md`) never overwrite existing content.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Fully independent of all other iterations. Can be merged at any time. No schema changes required. No new MCP tools (deferred to avoid security surface of MCP tools writing files).

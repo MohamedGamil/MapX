@@ -15,6 +15,7 @@ specs/
 ├── 01-mapx-enhancements.md           ← original enhancement overview (reference)
 ├── 02-php-laravel-enhancements.md    ← PHP/Laravel enhancement overview (reference)
 ├── 03-code-structure-and-dataflow.md ← clusters, structure & data flow overview (reference)
+├── 04-llm-integration-files.md       ← LLM agent integration files overview (reference)
 │
 ├── features/
 │   ├── F01-edge-verifiability.md     ← Feature 1: dynamic vs. verified edges
@@ -32,7 +33,8 @@ specs/
 │   ├── F13-npm-distribution.md      ← Feature 13: npm/npx distribution & Node.js DX
 │   ├── F14-cluster-detection.md     ← Feature 14: Module/domain cluster detection
 │   ├── F15-cluster-visualization.md ← Feature 15: Cluster-aware export & visualization
-│   └── F16-data-flow-tracing.md     ← Feature 16: Data flow tracing & source/sink detection
+│   ├── F16-data-flow-tracing.md     ← Feature 16: Data flow tracing & source/sink detection
+│   └── F17-llm-integration-files.md ← Feature 17: LLM agent integration file generation
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -42,7 +44,8 @@ specs/
     ├── I05.md                        ← Iteration 5: Laravel structural patterns
     ├── I06.md                        ← Iteration 6: Laravel advanced patterns
     ├── I07.md                        ← Iteration 7: npm distribution & Node.js DX
-    └── I08.md                        ← Iteration 8: clusters, structure & data flow
+    ├── I08.md                        ← Iteration 8: clusters, structure & data flow
+    └── I09.md                        ← Iteration 9: LLM agent integration files
 ```
 
 ---
@@ -67,6 +70,7 @@ specs/
 | F14 | Module / domain cluster detection | `planned` | I08 | [F14](features/F14-cluster-detection.md) |
 | F15 | Cluster-aware export & visualization | `planned` | I08 | [F15](features/F15-cluster-visualization.md) |
 | F16 | Data flow tracing & source/sink detection | `planned` | I08 | [F16](features/F16-data-flow-tracing.md) |
+| F17 | LLM agent integration file generation (`mapx agents`) | `planned` | I09 | [F17](features/F17-llm-integration-files.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -84,6 +88,7 @@ specs/
 | [I06](iterations/I06.md) | Laravel advanced patterns (facades, dispatch) | `planned` | F11, F12 |
 | [I07](iterations/I07.md) | npm distribution & Node.js developer experience | `planned` | F13 |
 | [I08](iterations/I08.md) | Code structure, clusters & data flow | `planned` | F14, F15, F16 |
+| [I09](iterations/I09.md) | LLM agent integration files (`mapx agents`) | `planned` | F17 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -148,4 +153,7 @@ I08 (F14 + F15 + F16: clusters & data flow)
  ├── F15 (cluster export) depends on F14 within I08
  ├── F16 (data flow) is independent of F14/F15 — can be developed in parallel with F14
  └── F16 traces are richer when F07–F12 Laravel edges are present (dispatch, route, relation)
+
+I09 (F17: LLM agent integration files)
+ └── FULLY INDEPENDENT — no dependency on any other iteration, can be merged at any time
 ```
