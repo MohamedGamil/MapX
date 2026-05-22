@@ -115,7 +115,7 @@
 - [x] Implement frontend detectors: React Router, Tanstack Router, Next.js, SvelteKit, Vue Router (F24)
   - [x] Mark all frontend route edges with `metadata.routeType = "client"` (distinct from server routes)
 - [x] Implement backend detectors: Rails, Spring Boot, Gin, chi, gorilla/mux, Axum, actix-web, Rocket, ASP.NET Core, Vapor; Laravel extended, Drupal (F25)
-- [ ] Implement PHP CMS detectors: Symfony, Yii2, Yii3, WordPress (F26)
+- [x] Implement PHP CMS detectors: Symfony, Yii2, Yii3, WordPress (F26)
 - [ ] **Risk**: frontend `route` edges must carry `routeType: "client"` to distinguish from server-side route edges
 - [ ] **Risk**: 21 frameworks = high ongoing maintenance surface — confidence scoring is mandatory
 

@@ -17,6 +17,9 @@ import { GoDetector } from './detectors/go.js';
 import { RustDetector } from './detectors/rust.js';
 import { AspNetDetector } from './detectors/aspnet.js';
 import { VaporDetector } from './detectors/vapor.js';
+import { SymfonyDetector } from './detectors/symfony.js';
+import { YiiDetector } from './detectors/yii.js';
+import { WordPressDetector } from './detectors/wordpress.js';
 
 export class FrameworkRegistry {
   private static instance: FrameworkRegistry | null = null;
@@ -41,6 +44,9 @@ export class FrameworkRegistry {
     this.register(new RustDetector());
     this.register(new AspNetDetector());
     this.register(new VaporDetector());
+    this.register(new SymfonyDetector());
+    this.register(new YiiDetector());
+    this.register(new WordPressDetector());
   }
 
   static getInstance(): FrameworkRegistry {
