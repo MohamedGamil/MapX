@@ -36,6 +36,11 @@ export class LLMExporter {
     parts.push(`# Mapx: ${repoName}`);
     parts.push('');
 
+    const structureSection = this.buildStructureSection(options.repo);
+    if (structureSection) {
+      parts.push(structureSection);
+    }
+
     const fileSection = this.buildFileSection(files, rankedFiles, edges);
     parts.push(fileSection);
 
@@ -55,6 +60,55 @@ export class LLMExporter {
     }
 
     return result;
+  }
+
+  private buildStructureSection(repo?: string): string {
+    const clusters = this.store.getClusters(repo);
+    if (clusters.length === 0) return '';
+
+    const lines: string[] = [];
+    lines.push('## Structure');
+
+    const roots: any[] = [];
+    const childrenMap = new Map<string, any[]>();
+    
+    for (const c of clusters) {
+      if (!c.parent_name) {
+        roots.push(c);
+      } else {
+        const parentName = c.parent_name as string;
+        if (!childrenMap.has(parentName)) {
+          childrenMap.set(parentName, []);
+        }
+        childrenMap.get(parentName)!.push(c);
+      }
+    }
+
+    for (const list of childrenMap.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    roots.sort((a, b) => a.name.localeCompare(b.name));
+
+    const printTree = (node: any, indent: number) => {
+      const padding = '  '.repeat(indent);
+      const namePart = node.name;
+      const sourcePart = `(${node.source})`;
+      const filesPart = `[${node.file_count} files]`;
+      
+      lines.push(`${padding}${namePart} ${sourcePart} ${filesPart}`);
+
+      const children = childrenMap.get(node.name) || [];
+      for (const child of children) {
+        printTree(child, indent + 1);
+      }
+    };
+
+    for (const root of roots) {
+      printTree(root, 0);
+    }
+
+    lines.push('');
+    return lines.join('\n');
   }
 
   private buildFileSection(

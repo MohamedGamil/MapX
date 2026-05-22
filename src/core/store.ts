@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 
 const dynamicRequire = createRequire(import.meta.url);
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -99,6 +99,35 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE files ADD COLUMN metadata TEXT DEFAULT '{}'`,
     ],
   },
+  {
+    version: 5,
+    description: 'Add clusters and cluster_membership tables, namespace column in files',
+    up: [
+      `ALTER TABLE files ADD COLUMN namespace TEXT`,
+      `CREATE TABLE IF NOT EXISTS clusters (
+        id   INTEGER PRIMARY KEY AUTOINCREMENT,
+        repo TEXT NOT NULL,
+        name TEXT NOT NULL,
+        label TEXT NOT NULL,
+        source TEXT NOT NULL,
+        parent_name TEXT,
+        depth INTEGER DEFAULT 0,
+        file_count INTEGER DEFAULT 0,
+        UNIQUE(repo, name)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_clusters_repo ON clusters(repo)`,
+      `CREATE INDEX IF NOT EXISTS idx_clusters_parent ON clusters(parent_name)`,
+      `CREATE TABLE IF NOT EXISTS cluster_membership (
+        file_path    TEXT NOT NULL,
+        cluster_name TEXT NOT NULL,
+        repo         TEXT NOT NULL,
+        is_primary   INTEGER DEFAULT 1,
+        PRIMARY KEY (file_path, cluster_name, repo)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_membership_file ON cluster_membership(file_path)`,
+      `CREATE INDEX IF NOT EXISTS idx_membership_cluster ON cluster_membership(cluster_name)`,
+    ],
+  },
 ];
 
 function createStoreBackend(dbPath: string): StoreBackend {
@@ -190,10 +219,11 @@ export class Store {
     sizeBytes: number;
     lines: number;
     metadata?: Record<string, any>;
+    namespace?: string | null;
   }): void {
     this.backend.prepare(`
-      INSERT OR REPLACE INTO files (path, repo, language, git_blob_hash, content_hash, last_scanned, size_bytes, lines, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO files (path, repo, language, git_blob_hash, content_hash, last_scanned, size_bytes, lines, metadata, namespace)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       file.path,
       file.repo,
@@ -203,7 +233,8 @@ export class Store {
       file.lastScanned,
       file.sizeBytes,
       file.lines,
-      file.metadata ? JSON.stringify(file.metadata) : '{}'
+      file.metadata ? JSON.stringify(file.metadata) : '{}',
+      file.namespace ?? null
     );
   }
 
@@ -215,7 +246,12 @@ export class Store {
         merged = { ...JSON.parse(file.metadata as string), ...metadata };
       } catch {}
     }
-    this.backend.prepare('UPDATE files SET metadata = ? WHERE path = ?').run(JSON.stringify(merged), filePath);
+    const namespace = metadata.namespace || null;
+    if (namespace) {
+      this.backend.prepare('UPDATE files SET metadata = ?, namespace = ? WHERE path = ?').run(JSON.stringify(merged), namespace, filePath);
+    } else {
+      this.backend.prepare('UPDATE files SET metadata = ? WHERE path = ?').run(JSON.stringify(merged), filePath);
+    }
   }
 
   deleteFile(filePath: string): void {
@@ -403,6 +439,126 @@ export class Store {
 
   getLatestSnapshot(): Record<string, unknown> | undefined {
     return this.backend.prepare('SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1').get();
+  }
+
+  clearClusters(repo: string): void {
+    this.backend.prepare('DELETE FROM cluster_membership WHERE repo = ?').run(repo);
+    this.backend.prepare('DELETE FROM clusters WHERE repo = ?').run(repo);
+  }
+
+  insertCluster(cluster: {
+    repo: string;
+    name: string;
+    label: string;
+    source: string;
+    parentName: string | null;
+    depth: number;
+    fileCount: number;
+  }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cluster.repo,
+      cluster.name,
+      cluster.label,
+      cluster.source,
+      cluster.parentName,
+      cluster.depth,
+      cluster.fileCount
+    );
+  }
+
+  insertClusterMembership(membership: {
+    filePath: string;
+    clusterName: string;
+    repo: string;
+    isPrimary: number;
+  }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO cluster_membership (file_path, cluster_name, repo, is_primary)
+      VALUES (?, ?, ?, ?)
+    `).run(
+      membership.filePath,
+      membership.clusterName,
+      membership.repo,
+      membership.isPrimary
+    );
+  }
+
+  getClusters(repo?: string): Record<string, unknown>[] {
+    if (repo) {
+      return this.backend.prepare('SELECT * FROM clusters WHERE repo = ?').all(repo);
+    }
+    return this.backend.prepare('SELECT * FROM clusters').all();
+  }
+
+  getClusterMemberships(repo?: string): Record<string, unknown>[] {
+    if (repo) {
+      return this.backend.prepare('SELECT * FROM cluster_membership WHERE repo = ?').all(repo);
+    }
+    return this.backend.prepare('SELECT * FROM cluster_membership').all();
+  }
+
+  getClusterFiles(clusterName: string, repo: string): string[] {
+    const rows = this.backend.prepare(`
+      SELECT file_path FROM cluster_membership
+      WHERE cluster_name = ? AND repo = ? AND is_primary = 1
+    `).all(clusterName, repo);
+    return rows.map((row: any) => row.file_path as string);
+  }
+
+  getClusterEdges(clusterName: string, repo: string): {
+    sourceCluster: string;
+    targetCluster: string;
+    edgeCount: number;
+    dominantType: string;
+  }[] {
+    const rows = this.backend.prepare(`
+      SELECT 
+        src_cm.cluster_name AS sourceCluster,
+        tgt_cm.cluster_name AS targetCluster,
+        COUNT(*) AS edgeCount,
+        edge_type AS dominantType
+      FROM edges e
+      JOIN cluster_membership src_cm ON e.source_file = src_cm.file_path AND src_cm.is_primary = 1 AND src_cm.repo = e.repo
+      JOIN cluster_membership tgt_cm ON e.target_file = tgt_cm.file_path AND tgt_cm.is_primary = 1 AND tgt_cm.repo = e.repo
+      WHERE e.repo = ? AND (src_cm.cluster_name = ? OR tgt_cm.cluster_name = ?) AND src_cm.cluster_name != tgt_cm.cluster_name
+      GROUP BY src_cm.cluster_name, tgt_cm.cluster_name, e.edge_type
+    `).all(repo, clusterName, clusterName);
+
+    const grouped = new Map<string, { sourceCluster: string; targetCluster: string; edgeCount: number; types: Record<string, number> }>();
+    for (const r of rows as any[]) {
+      const key = `${r.sourceCluster}->${r.targetCluster}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          sourceCluster: r.sourceCluster,
+          targetCluster: r.targetCluster,
+          edgeCount: 0,
+          types: {},
+        });
+      }
+      const entry = grouped.get(key)!;
+      entry.edgeCount += r.edgeCount;
+      entry.types[r.dominantType] = (entry.types[r.dominantType] || 0) + r.edgeCount;
+    }
+
+    return Array.from(grouped.values()).map(g => {
+      let dominantType = '';
+      let maxCount = -1;
+      for (const [t, c] of Object.entries(g.types)) {
+        if (c > maxCount) {
+          maxCount = c;
+          dominantType = t;
+        }
+      }
+      return {
+        sourceCluster: g.sourceCluster,
+        targetCluster: g.targetCluster,
+        edgeCount: g.edgeCount,
+        dominantType,
+      };
+    });
   }
 
   inTransaction<T>(fn: () => T): T {

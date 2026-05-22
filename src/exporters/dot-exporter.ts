@@ -40,12 +40,80 @@ export class DotExporter {
 
     const rankMap = new Map(rankedFiles.map(f => [f.path, f.pagerank]));
 
+    const clusters = this.store.getClusters(repo);
+    const memberships = this.store.getClusterMemberships(repo);
+    const primaryMemberships = new Map<string, string>();
+    for (const m of memberships) {
+      if (m.is_primary === 1) {
+        primaryMemberships.set(m.file_path as string, m.cluster_name as string);
+      }
+    }
+
+    const roots: any[] = [];
+    const childrenMap = new Map<string, any[]>();
+    const clusterFilesMap = new Map<string, string[]>();
+
+    for (const c of clusters) {
+      if (!c.parent_name) {
+        roots.push(c);
+      } else {
+        const parentName = c.parent_name as string;
+        if (!childrenMap.has(parentName)) {
+          childrenMap.set(parentName, []);
+        }
+        childrenMap.get(parentName)!.push(c);
+      }
+    }
+
     for (const file of files) {
       const path = file.path as string;
-      const lang = file.language as string;
-      const color = langColors[lang] || '#CCCCCC';
-      const label = path.split('/').pop() || path;
-      lines.push(`  "${path}" [label="${label}", fillcolor="${color}", fontcolor="white"];`);
+      const clusterName = primaryMemberships.get(path);
+      if (clusterName) {
+        if (!clusterFilesMap.has(clusterName)) {
+          clusterFilesMap.set(clusterName, []);
+        }
+        clusterFilesMap.get(clusterName)!.push(path);
+      }
+    }
+
+    const outputCluster = (node: any, indent: number): string[] => {
+      const pad = '  '.repeat(indent);
+      const subLines: string[] = [];
+      const safeId = 'cluster_' + node.name.replace(/[^a-zA-Z0-9]/g, '_');
+      subLines.push(`${pad}subgraph "${safeId}" {`);
+      subLines.push(`${pad}  label="${node.label}";`);
+      subLines.push(`${pad}  color=gray;`);
+      subLines.push(`${pad}  style=dashed;`);
+
+      const fList = clusterFilesMap.get(node.name) || [];
+      for (const f of fList) {
+        const lang = files.find(file => file.path === f)?.language as string;
+        const color = langColors[lang] || '#CCCCCC';
+        const label = f.split('/').pop() || f;
+        subLines.push(`${pad}  "${f}" [label="${label}", fillcolor="${color}", fontcolor="white"];`);
+      }
+
+      const children = childrenMap.get(node.name) || [];
+      for (const child of children) {
+        subLines.push(...outputCluster(child, indent + 1));
+      }
+
+      subLines.push(`${pad}}`);
+      return subLines;
+    };
+
+    for (const file of files) {
+      const path = file.path as string;
+      if (!primaryMemberships.has(path)) {
+        const lang = file.language as string;
+        const color = langColors[lang] || '#CCCCCC';
+        const label = path.split('/').pop() || path;
+        lines.push(`  "${path}" [label="${label}", fillcolor="${color}", fontcolor="white"];`);
+      }
+    }
+
+    for (const root of roots) {
+      lines.push(...outputCluster(root, 1));
     }
 
     lines.push('');

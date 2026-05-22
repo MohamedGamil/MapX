@@ -80,7 +80,7 @@ export interface GraphEdge {
   metadata?: Record<string, any>;
 }
 
-export type ScanPhase = 'discover' | 'index' | 'parse' | 'resolve' | 'detect';
+export type ScanPhase = 'discover' | 'index' | 'parse' | 'resolve' | 'detect' | 'cluster';
 
 export interface ScanProgress {
   phase: ScanPhase;

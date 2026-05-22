@@ -46,23 +46,23 @@
 - [x] Confirm: F08 and F09 depend only on F05 FQN resolution, not F06 type hints
 
 ### I08 · Code Structure, Clusters & Data Flow · F14, F15, F16 · Risk: HIGH · Requires: I01
-- [ ] Implement `ClusterDetector` with namespace, directory, and Label Propagation strategies (F14)
-- [ ] Schema migration: add `clusters`, `cluster_membership` tables; `namespace TEXT` on `files` (v3 → v4)
-- [ ] Add `mapx clusters` CLI command and `mapx_clusters` MCP tool
-- [ ] Implement cluster-aware DOT/SVG export with subgraph outlines (F15)
-- [ ] Add data-flow tracer `mapx flow <symbol>` with source/sink detection; depth cap required (F16)
-- [ ] Add `mapx_flow` MCP tool
-- [ ] **Risk**: Label Propagation is non-deterministic — implement deterministic seeding strategy
-- [ ] **Risk**: Data-flow traversal can degrade super-linearly — enforce configurable depth limit
+- [x] Implement `ClusterDetector` with namespace, directory, and Label Propagation strategies (F14)
+- [x] Schema migration: add `clusters`, `cluster_membership` tables; `namespace TEXT` on `files` (v3 → v4)
+- [x] Add `mapx clusters` CLI command and `mapx_clusters` MCP tool
+- [x] Implement cluster-aware DOT/SVG export with subgraph outlines (F15)
+- [x] Add data-flow tracer `mapx trace <symbol>` with source/sink detection; depth cap required (F16)
+- [x] Add `mapx_trace` MCP tool
+- [x] **Risk**: Label Propagation is non-deterministic — implement deterministic seeding strategy
+- [x] **Risk**: Data-flow traversal can degrade super-linearly — enforce configurable depth limit
 
 ---
 
 ## Phase 3 — Laravel Completion & Context (sequential within phase)
 
 ### I06 · Laravel Advanced Patterns · F11, F12 · Risk: Medium · Requires: I04, I05
-- [ ] Implement `FacadeResolver` static map (50+ built-in Laravel facades → concrete classes) (F11)
-- [ ] Add event dispatch edges: `dispatches`, `fires`, `listens_to`, `notifies`, `queues` (F12)
-- [ ] Confirm: F11 uses static facade map only — no dependency on F09 IoC binding table
+- [x] Implement `FacadeResolver` static map (50+ built-in Laravel facades → concrete classes) (F11)
+- [x] Add event dispatch edges: `dispatches`, `fires`, `listens_to`, `notifies`, `queues` (F12)
+- [x] Confirm: F11 uses static facade map only — no dependency on F09 IoC binding table
 
 ### I09 · LLM Agent Integration Files · F17 · Risk: Low · Requires: none (enriched by I08, I10)
 - [ ] Implement `mapx agents generate [--format=X]` command

@@ -30,6 +30,9 @@ export class GraphExporter {
       graphData.edges = graphData.edges.filter((e: any) => allowed.has(e.source) && allowed.has(e.target));
     }
 
+    const clusters = this.store.getClusters(repo);
+    const memberships = this.store.getClusterMemberships(repo);
+
     return {
       version: '1.0.0',
       exportedAt: new Date().toISOString(),
@@ -39,6 +42,7 @@ export class GraphExporter {
         totalSymbols: symbols.length,
         totalEdges: edges.length,
         languages: this.store.getLanguageBreakdown(repo),
+        totalClusters: clusters.length,
       },
       files: files.map(f => ({
         path: f.path,
@@ -65,6 +69,19 @@ export class GraphExporter {
         targetSymbol: e.target_symbol || undefined,
         verifiability: e.verifiability || 'verified',
         metadata: e.metadata ? JSON.parse(e.metadata as string) : undefined,
+      })),
+      clusters: clusters.map(c => ({
+        name: c.name,
+        label: c.label,
+        source: c.source,
+        parentName: c.parent_name || undefined,
+        depth: c.depth,
+        fileCount: c.file_count,
+      })),
+      memberships: memberships.map(m => ({
+        filePath: m.file_path,
+        clusterName: m.cluster_name,
+        isPrimary: m.is_primary === 1,
       })),
       graph: graphData,
     };

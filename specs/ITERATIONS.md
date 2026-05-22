@@ -164,9 +164,9 @@ Depends on I04 being fully merged — all three features rely on the use-import 
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F11, F12 |
 | Branch | `feat/i06-laravel-advanced` |
 | PR | — |
@@ -214,7 +214,9 @@ Fully independent of I01–I06. Can be merged at any time. Requires a one-time s
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F14, F15, F16 |
 | Branch | `feat/i08-clusters-and-flow` |
 | PR | — |

@@ -90,6 +90,12 @@ export class PhpParser implements LanguageParser {
             const startLine = capture.node.startPosition.row + 1;
             const endLine = capture.node.endPosition.row + 1;
 
+            if (kind === 'namespace') {
+              if (!fileMetadata) fileMetadata = {};
+              fileMetadata.namespace = name;
+              continue;
+            }
+
             if (kind === 'class' || kind === 'interface' || kind === 'trait' || kind === 'enum') {
               currentClass = name;
             }

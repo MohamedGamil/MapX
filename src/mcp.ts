@@ -13,6 +13,7 @@ import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
 import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
+import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -175,6 +176,54 @@ export function buildServer(): Server {
             type: { type: 'string', description: 'Filter edges by type' },
             from: { type: 'string', description: 'Filter edges originating from a file pattern (substring match)' },
             to: { type: 'string', description: 'Filter edges targeting a file pattern (substring match)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_clusters',
+        description: 'List detected code clusters/modules. Returns cluster hierarchy with file counts and inter-cluster dependencies.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            source: { type: 'string', enum: ['all', 'namespace', 'directory', 'community'], description: 'Filter clusters by source type' },
+            cluster: { type: 'string', description: 'Specific cluster name to inspect' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_trace',
+        description: 'Trace data flow paths from a starting symbol or file. Returns upstream callers (up), downstream callees (down), or both. Use this to understand how data moves through the codebase.',
+        inputSchema: {
+          type: 'object',
+          required: ['start'],
+          properties: {
+            start: { type: 'string', description: 'Symbol (e.g. \'UserController::store\') or file path' },
+            direction: { type: 'string', enum: ['up', 'down', 'both'], default: 'both', description: 'Direction of traversal' },
+            depth: { type: 'number', default: 6, description: 'Max traversal depth' },
+            format: { type: 'string', enum: ['text', 'dot', 'json'], default: 'text', description: 'Output format' },
+            include_structural: { type: 'boolean', default: false, description: 'Include structural edges (e.g., import/extends)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_sources',
+        description: 'Find all entry points in the codebase — files/symbols with no incoming data-flow edges. Useful for understanding where data enters the system.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_sinks',
+        description: 'Find all terminal consumers — files/symbols with no outgoing data-flow edges. Useful for identifying where data is persisted, queued, or sent externally.',
+        inputSchema: {
+          type: 'object',
+          properties: {
             ...dirProperty,
           },
         },
@@ -429,6 +478,351 @@ export function buildServer(): Server {
             text: lines.join('\n'),
           }],
         };
+      }
+
+      case 'mapx_clusters': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const source = (args as any)?.source || 'all';
+        const clusterQuery = (args as any)?.cluster;
+
+        const clusters = ctx.store.getClusters(ctx.config.repo.name);
+
+        let filtered = clusters;
+        if (source && source !== 'all') {
+          filtered = clusters.filter((c: any) => c.source === source);
+        }
+
+        if (clusterQuery) {
+          const targetCluster = clusters.find((c: any) => c.name === clusterQuery);
+          if (!targetCluster) {
+            return { content: [{ type: 'text', text: `Cluster "${clusterQuery}" not found.` }] };
+          }
+
+          const files = ctx.store.getClusterFiles(targetCluster.name as string, ctx.config.repo.name);
+          const clusterEdges = ctx.store.getClusterEdges(targetCluster.name as string, ctx.config.repo.name);
+
+          const lines = [];
+          lines.push(`${targetCluster.name}  [${targetCluster.source}]  ${targetCluster.file_count} files`);
+          for (const f of files) {
+            lines.push(`  ${f}`);
+          }
+
+          const dependsOn = clusterEdges.filter(e => e.sourceCluster === targetCluster.name);
+          lines.push('\nDepends on:');
+          if (dependsOn.length === 0) {
+            lines.push('  (none)');
+          } else {
+            for (const dep of dependsOn) {
+              lines.push(`  ${dep.targetCluster.padEnd(25)} [${dep.edgeCount} edges — dominant: ${dep.dominantType}]`);
+            }
+          }
+
+          const dependedOnBy = clusterEdges.filter(e => e.targetCluster === targetCluster.name);
+          lines.push('\nDepended on by:');
+          if (dependedOnBy.length === 0) {
+            lines.push('  (none)');
+          } else {
+            for (const dep of dependedOnBy) {
+              lines.push(`  ${dep.sourceCluster.padEnd(25)} [${dep.edgeCount} edges — dominant: ${dep.dominantType}]`);
+            }
+          }
+
+          return { content: [{ type: 'text', text: lines.join('\n') }] };
+        }
+
+        const roots: any[] = [];
+        const childrenMap = new Map<string, any[]>();
+        
+        for (const c of filtered) {
+          if (!c.parent_name) {
+            roots.push(c);
+          } else {
+            const parentName = c.parent_name as string;
+            if (!childrenMap.has(parentName)) {
+              childrenMap.set(parentName, []);
+            }
+            childrenMap.get(parentName)!.push(c);
+          }
+        }
+
+        for (const list of childrenMap.values()) {
+          list.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        roots.sort((a, b) => a.name.localeCompare(b.name));
+
+        const lines: string[] = [];
+        const printTree = (node: any, indent: number) => {
+          const padding = '  '.repeat(indent);
+          const namePart = node.name;
+          const sourcePart = `(${node.source})`;
+          const filesPart = `[${node.file_count} files]`;
+          
+          const formatted = `${padding}${namePart.padEnd(35 - indent * 2)}${sourcePart.padEnd(15)} ${filesPart}`;
+          lines.push(formatted);
+
+          const children = childrenMap.get(node.name) || [];
+          for (const child of children) {
+            printTree(child, indent + 1);
+          }
+        };
+
+        for (const root of roots) {
+          printTree(root, 0);
+        }
+
+        const nsCount = filtered.filter((c: any) => c.source === 'namespace').length;
+        const dirCount = filtered.filter((c: any) => c.source === 'directory').length;
+        const commCount = filtered.filter((c: any) => c.source === 'community').length;
+        lines.push(`\n${filtered.length} clusters detected (${nsCount} namespace, ${dirCount} directory, ${commCount} community)`);
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
+      }
+
+      case 'mapx_trace': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const start = (args as any)?.start;
+        const direction = (args as any)?.direction || 'both';
+        const depth = (args as any)?.depth || 6;
+        const format = (args as any)?.format || 'text';
+        const includeStructural = (args as any)?.include_structural || false;
+
+        if (!start) {
+          return { content: [{ type: 'text', text: 'Error: "start" argument is required.' }] };
+        }
+
+        const tracer = new FlowTracer(ctx.store);
+        const result = tracer.trace({
+          startSymbol: start,
+          direction: direction as any,
+          maxDepth: depth,
+          includeStructural,
+          repo: ctx.config.repo.name,
+        });
+
+        if (format === 'json') {
+          const jsonOutput = {
+            start: result.start,
+            direction: result.direction,
+            maxDepth: depth,
+            nodeCount: result.nodeCount,
+            edgeCount: result.edgeCount,
+            maxDepthReached: result.maxDepthReached,
+            sources: result.sources.map(s => ({ file: s.file, symbol: s.symbol })),
+            sinks: result.sinks.map(s => ({ file: s.file, symbol: s.symbol })),
+            cycles: result.cycles,
+            nodes: Array.from(new Map(result.paths.flatMap(p => p.nodes).map(n => [`${n.file}::${n.symbol || ''}`, n])).values()).map(n => ({
+              file: n.file,
+              symbol: n.symbol,
+              depth: n.depth,
+              incomingEdgeType: n.incomingEdgeType,
+            })),
+            edges: Array.from(new Set(result.paths.flatMap(p => {
+              const arr = [];
+              for (let i = 1; i < p.nodes.length; i++) {
+                arr.push(JSON.stringify({
+                  from: p.nodes[i - 1].file,
+                  to: p.nodes[i].file,
+                  edgeType: p.nodes[i].incomingEdgeType,
+                  fromSymbol: p.nodes[i - 1].symbol,
+                  toSymbol: p.nodes[i].symbol,
+                }));
+              }
+              return arr;
+            }))).map(s => JSON.parse(s)),
+          };
+          return { content: [{ type: 'text', text: JSON.stringify(jsonOutput, null, 2) }] };
+        }
+
+        if (format === 'dot') {
+          const lines: string[] = [];
+          const safeStartName = (result.start.symbol || result.start.file).replace(/[^a-zA-Z0-9]/g, '_');
+          lines.push(`digraph Trace_${safeStartName} {`);
+          lines.push('  rankdir=TB;');
+          lines.push(`  label="Trace: ${result.start.symbol || result.start.file} (${result.direction}stream, depth≤${depth})";`);
+          lines.push('  fontsize=12;');
+          lines.push('  node [shape=box, style=filled, fontsize=10];');
+          lines.push('');
+
+          const uniqueNodes = new Map<string, { file: string; symbol: string | null; shape: string; color: string }>();
+          const edgesSet = new Set<string>();
+
+          for (const p of result.paths) {
+            for (let i = 0; i < p.nodes.length; i++) {
+              const n = p.nodes[i];
+              const key = `${n.file}::${n.symbol || ''}`;
+              if (!uniqueNodes.has(key)) {
+                let shape = 'box';
+                let color = '#E8F4FD';
+
+                const isStart = n.file === result.start.file && n.symbol === result.start.symbol;
+                const isSink = result.sinks.some(s => s.file === n.file && s.symbol === n.symbol);
+                const isSource = result.sources.some(s => s.file === n.file && s.symbol === n.symbol);
+
+                if (isStart) {
+                  shape = 'diamond';
+                  color = '#FFE0B2';
+                } else if (isSink) {
+                  shape = 'octagon';
+                  color = '#FFEBEE';
+                } else if (isSource) {
+                  shape = 'ellipse';
+                  color = '#E8F5E9';
+                }
+
+                uniqueNodes.set(key, { file: n.file, symbol: n.symbol, shape, color });
+              }
+
+              if (i > 0) {
+                const fromNode = p.nodes[i - 1];
+                const toNode = p.nodes[i];
+                edgesSet.add(JSON.stringify({
+                  from: `${fromNode.file}::${fromNode.symbol || ''}`,
+                  to: `${toNode.file}::${toNode.symbol || ''}`,
+                  type: toNode.incomingEdgeType,
+                }));
+              }
+            }
+          }
+
+          for (const [key, n] of uniqueNodes.entries()) {
+            const label = n.symbol || n.file.split('/').pop() || n.file;
+            lines.push(`  "${key}" [label="${label}", fillcolor="${n.color}", shape=${n.shape}];`);
+          }
+
+          lines.push('');
+
+          for (const edgeStr of edgesSet) {
+            const e = JSON.parse(edgeStr);
+            lines.push(`  "${e.from}" -> "${e.to}" [label="${e.type}"];`);
+          }
+
+          lines.push('}');
+          return { content: [{ type: 'text', text: lines.join('\n') }] };
+        }
+
+        const dirSymbol = result.direction === 'down' ? '↓ downstream' : result.direction === 'up' ? '↑ upstream' : '↕ bidirectional';
+        const lines = [`Trace: ${start}  ${dirSymbol}  depth≤${depth}`];
+        lines.push('─'.repeat(53));
+        lines.push('');
+
+        const printNode = (node: TraceNode, indentLevel: number) => {
+          const indent = '  '.repeat(indentLevel);
+          const prefix = indentLevel === 0 ? '' : `└─[${node.incomingEdgeType}]─→  `;
+          const displayName = node.symbol || node.file;
+          const filePart = node.symbol ? `  (${node.file})` : '';
+
+          const isSink = result.sinks.some(s => s.file === node.file && s.symbol === node.symbol);
+          const sinkStr = isSink ? '  ⊗ sink' : '';
+
+          const cycle = result.cycles.find(c => c.fromFile === node.file && c.fromSymbol === node.symbol);
+          const cycleStr = cycle ? '  ↻ cycle' : '';
+
+          lines.push(`${indent}${prefix}${displayName}${filePart}${sinkStr}${cycleStr}`);
+
+          if (!cycle) {
+            const children: TraceNode[] = [];
+            const seenChildKeys = new Set<string>();
+            for (const path of result.paths) {
+              const idx = path.nodes.findIndex(n => n.file === node.file && n.symbol === node.symbol && n.depth === node.depth);
+              if (idx !== -1 && idx + 1 < path.nodes.length) {
+                const nextNode = path.nodes[idx + 1];
+                const key = `${nextNode.file}::${nextNode.symbol || ''}::${nextNode.depth}`;
+                if (!seenChildKeys.has(key)) {
+                  seenChildKeys.add(key);
+                  children.push(nextNode);
+                }
+              }
+            }
+
+            for (const child of children) {
+              printNode(child, indentLevel + 1);
+            }
+          }
+        };
+
+        const startNode: TraceNode = {
+          file: result.start.file,
+          symbol: result.start.symbol,
+          depth: 0,
+          incomingEdgeType: 'start',
+        };
+        printNode(startNode, 0);
+
+        lines.push('');
+        const cyclesStr = result.cycles.length > 0 ? `   Cycles: ${result.cycles.length}` : '';
+        lines.push(`Nodes: ${result.nodeCount}   Edges: ${result.edgeCount}   Max depth: ${depth}${cyclesStr}`);
+        if (result.sinks.length > 0) {
+          const sinkNames = result.sinks.map(s => s.symbol || s.file.split('/').pop() || s.file);
+          lines.push(`Sinks: ${sinkNames.join(', ')}`);
+        }
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
+      }
+
+      case 'mapx_sources': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const tracer = new FlowTracer(ctx.store);
+        const sources = tracer.findSources(ctx.config.repo.name);
+        const lines = [`Entry points (data sources) — ${sources.length} found:`];
+        for (const s of sources) {
+          let extra = '[no incoming data edges]';
+          if (s.file.includes('routes/')) {
+            const routes = ctx.store.getEdgesForFile(s.file).filter(e => e.edge_type === 'route');
+            extra = `[route file — ${routes.length} controller endpoints]`;
+          } else if (s.file.includes('app/Jobs/')) {
+            extra = '[dispatched externally — queue worker]';
+          } else if (s.file.includes('app/Listeners/')) {
+            extra = '[event listener — external trigger]';
+          } else if (s.file.includes('app/Http/Middleware/')) {
+            extra = '[middleware — filter chain entry]';
+          }
+          lines.push(`  ${s.file.padEnd(40)} ${extra}`);
+        }
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
+      }
+
+      case 'mapx_sinks': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const tracer = new FlowTracer(ctx.store);
+        const sinks = tracer.findSinks(ctx.config.repo.name);
+        const lines = [`Terminal consumers (data sinks) — ${sinks.length} found:`];
+        for (const s of sinks) {
+          const inEdges = ctx.store.getReverseEdges(s.file).filter(e => [
+            'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route'
+          ].includes(e.edge_type as string));
+          let extra = `[terminal — no outgoing data edges]`;
+          if (s.file.includes('DatabaseManager') || s.file.includes('database')) {
+            extra = `[DB facade → raw SQL — ${inEdges.length} in-edges]`;
+          } else if (s.file.includes('CacheManager') || s.file.includes('cache')) {
+            extra = `[Cache facade → Redis/Memcache — ${inEdges.length} in-edges]`;
+          } else if (s.file.includes('Mailer') || s.file.includes('mail')) {
+            extra = `[Mail facade → SMTP — ${inEdges.length} in-edges]`;
+          } else if (s.file.includes('QueueManager') || s.file.includes('queue')) {
+            extra = `[Queue::push — ${inEdges.length} in-edges]`;
+          }
+          lines.push(`  ${s.file.padEnd(40)} ${extra}`);
+        }
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
 
       default:

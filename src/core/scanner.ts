@@ -4,6 +4,7 @@ import { resolve, relative, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
 import { Store } from './store.js';
+import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
@@ -300,6 +301,11 @@ export class Scanner {
       if (commitSha) this.store.setMeta('last_scan_commit', commitSha);
       this.store.setMeta('last_scan_time', new Date().toISOString());
       this.clearResumeState();
+
+      // Trigger cluster detection
+      this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
+      const clusterEngine = new ClusterEngine(this.store);
+      clusterEngine.detect(repo.name);
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -436,6 +442,11 @@ export class Scanner {
       const commitSha = getCurrentCommitSha(repoRoot);
       if (commitSha) this.store.setMeta('last_scan_commit', commitSha);
       this.store.setMeta('last_scan_time', new Date().toISOString());
+
+      // Trigger cluster detection
+      this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
+      const clusterEngine = new ClusterEngine(this.store);
+      clusterEngine.detect(repo.name);
     }
 
     return {
