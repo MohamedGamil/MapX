@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 
 const dynamicRequire = createRequire(import.meta.url);
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -78,6 +78,14 @@ const MIGRATIONS: Migration[] = [
     description: 'Add content_hash column to files table',
     up: [
       `ALTER TABLE files ADD COLUMN content_hash TEXT`,
+    ],
+  },
+  {
+    version: 3,
+    description: 'Add verifiability column to edges table',
+    up: [
+      `ALTER TABLE edges ADD COLUMN verifiability TEXT NOT NULL DEFAULT 'verified'`,
+      `CREATE INDEX IF NOT EXISTS idx_edges_verifiability ON edges (verifiability)`,
     ],
   },
 ];
@@ -247,11 +255,21 @@ export class Store {
     edgeType: string;
     repo: string;
     weight: number;
+    verifiability?: 'verified' | 'inferred';
   }): void {
     this.backend.prepare(`
-      INSERT INTO edges (source_file, target_file, source_symbol, target_symbol, edge_type, repo, weight)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(edge.sourceFile, edge.targetFile, edge.sourceSymbol, edge.targetSymbol, edge.edgeType, edge.repo, edge.weight);
+      INSERT INTO edges (source_file, target_file, source_symbol, target_symbol, edge_type, repo, weight, verifiability)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      edge.sourceFile,
+      edge.targetFile,
+      edge.sourceSymbol,
+      edge.targetSymbol,
+      edge.edgeType,
+      edge.repo,
+      edge.weight,
+      edge.verifiability ?? 'verified'
+    );
   }
 
   deleteEdgesForFile(filePath: string): void {
@@ -275,6 +293,30 @@ export class Store {
       return this.backend.prepare('SELECT * FROM edges WHERE repo = ?').all(repo);
     }
     return this.backend.prepare('SELECT * FROM edges').all();
+  }
+
+  queryEdges(options: { type?: string; from?: string; to?: string; repo?: string }): Record<string, unknown>[] {
+    let sql = 'SELECT * FROM edges WHERE 1=1';
+    const params: string[] = [];
+
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+    if (options.type) {
+      sql += ' AND edge_type = ?';
+      params.push(options.type);
+    }
+    if (options.from) {
+      sql += ' AND source_file LIKE ?';
+      params.push(`%${options.from}%`);
+    }
+    if (options.to) {
+      sql += ' AND target_file LIKE ?';
+      params.push(`%${options.to}%`);
+    }
+
+    return this.backend.prepare(sql).all(...params);
   }
 
   getFileCount(repo?: string): number {

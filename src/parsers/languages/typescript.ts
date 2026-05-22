@@ -2,6 +2,7 @@ import type { LanguageParser } from '../parser-interface.js';
 import type { ParseResult, ExtractedSymbol, ExtractedReference, SymbolKind } from '../../types.js';
 import type { LanguageDefinition } from '../../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from '../wasm-parser.js';
+import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
 
 export class TypeScriptParser implements LanguageParser {
   readonly languageName = 'typescript';
@@ -72,12 +73,19 @@ export class TypeScriptParser implements LanguageParser {
           for (const capture of captures) {
             const targetName = this.cleanTarget(capture.node.text, refType);
             const startLine = capture.node.startPosition.row + 1;
+            const referenceType = this.mapRefType(refType);
+
+            let verifiability: 'verified' | 'inferred' = 'verified';
+            if (referenceType === 'call' && COMMON_FRAMEWORK_METHODS.has(targetName)) {
+              verifiability = 'inferred';
+            }
 
             references.push({
               sourceSymbol: null,
               targetName,
-              referenceType: this.mapRefType(refType),
+              referenceType,
               startLine,
+              verifiability,
             });
           }
         }

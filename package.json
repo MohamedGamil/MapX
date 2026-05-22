@@ -30,6 +30,7 @@
     "commander": "^13.1.0",
     "graphology": "^0.26.0",
     "graphology-metrics": "^2.4.0",
+    "minimatch": "^10.2.5",
     "tree-sitter-javascript": "^0.25.0",
     "tree-sitter-php": "^0.24.2",
     "tree-sitter-typescript": "^0.23.2",

@@ -18,7 +18,11 @@
       "*.min.js",
       "*.min.css",
       "package-lock.json",
-      "composer.lock"
+      "composer.lock",
+      "**/dist/**",
+      "**/__tests__/**",
+      "**/*.test.ts",
+      "**/*.spec.ts"
     ],
     "includePatterns": []
   }

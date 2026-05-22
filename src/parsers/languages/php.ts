@@ -2,6 +2,7 @@ import type { LanguageParser } from '../parser-interface.js';
 import type { ParseResult, ExtractedSymbol, ExtractedReference, SymbolKind } from '../../types.js';
 import type { LanguageDefinition } from '../../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from '../wasm-parser.js';
+import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
 
 export class PhpParser implements LanguageParser {
   readonly languageName = 'php';
@@ -81,12 +82,23 @@ export class PhpParser implements LanguageParser {
           for (const capture of captures) {
             const targetName = capture.node.text;
             const startLine = capture.node.startPosition.row + 1;
+            const cleaned = this.cleanTargetName(targetName, refType);
+            const referenceType = this.mapRefType(refType);
+
+            let verifiability: 'verified' | 'inferred' = 'verified';
+            if (referenceType === 'call') {
+              const parentType = capture.node.parent?.type;
+              if (parentType === 'member_call_expression' || COMMON_FRAMEWORK_METHODS.has(cleaned)) {
+                verifiability = 'inferred';
+              }
+            }
 
             references.push({
               sourceSymbol: null,
-              targetName: this.cleanTargetName(targetName, refType),
-              referenceType: this.mapRefType(refType),
+              targetName: cleaned,
+              referenceType,
               startLine,
+              verifiability,
             });
           }
         }

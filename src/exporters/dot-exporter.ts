@@ -10,10 +10,17 @@ export class DotExporter {
     this.graph = graph;
   }
 
-  export(repo?: string): string {
-    const files = this.store.getAllFiles(repo);
-    const edges = this.store.getAllEdges(repo);
-    const rankedFiles = this.graph.getRankedFiles();
+  export(repo?: string, filesFilter?: string[]): string {
+    let files = this.store.getAllFiles(repo);
+    let edges = this.store.getAllEdges(repo);
+    let rankedFiles = this.graph.getRankedFiles();
+
+    if (filesFilter) {
+      const allowed = new Set(filesFilter);
+      files = files.filter(f => allowed.has(f.path as string));
+      edges = edges.filter(e => allowed.has(e.source_file as string) && allowed.has(e.target_file as string));
+      rankedFiles = rankedFiles.filter(f => allowed.has(f.path));
+    }
 
     const lines: string[] = [];
     lines.push('digraph Mapx {');
@@ -61,7 +68,10 @@ export class DotExporter {
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const style = edgeStyles[type] || 'solid';
+      let style = edgeStyles[type] || 'solid';
+      if (edge.verifiability === 'inferred') {
+        style = 'dashed';
+      }
       lines.push(`  "${src}" -> "${tgt}" [label="${type}", style=${style}];`);
     }
 

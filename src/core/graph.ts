@@ -54,6 +54,7 @@ export class MapxGraph {
             sourceSymbol: edge.sourceSymbol,
             targetSymbol: edge.targetSymbol,
             weight: edge.weight,
+            verifiability: edge.verifiability || 'verified',
           });
         } catch {
           // edge already exists from different source

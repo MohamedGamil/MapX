@@ -11,12 +11,13 @@ import { existsSync } from 'node:fs';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { Scanner } from './core/scanner.js';
+import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
+import { calculateMetrics } from './core/metrics.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -63,6 +64,7 @@ async function loadContext(dir: string) {
       edgeType: edge.edge_type as any,
       repo: edge.repo as string,
       weight: edge.weight as number,
+      verifiability: edge.verifiability as any,
     });
   }
 
@@ -81,7 +83,7 @@ interface ServeOptions {
   port?: number;
 }
 
-function buildServer(): Server {
+export function buildServer(): Server {
   const server = new Server(
     { name: 'mapx', version: '0.1.3' },
     { capabilities: { tools: {} } }
@@ -95,6 +97,8 @@ function buildServer(): Server {
         inputSchema: {
           type: 'object',
           properties: {
+            exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
+            include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
             ...dirProperty,
           },
         },
@@ -132,6 +136,8 @@ function buildServer(): Server {
             format: { type: 'string', enum: ['llm', 'json', 'dot', 'svg'], description: 'Output format', default: 'llm' },
             tokens: { type: 'number', description: 'Token budget for LLM format', default: 8192 },
             repo: { type: 'string', description: 'Filter by repo name' },
+            exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
+            include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
             ...dirProperty,
           },
         },
@@ -142,6 +148,33 @@ function buildServer(): Server {
         inputSchema: {
           type: 'object',
           properties: {
+            exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
+            include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_metrics',
+        description: 'Get coupling (afferent/efferent) and instability metrics for all files, optionally filtered by language and verified-only.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            lang: { type: 'string', description: 'Filter metrics by language' },
+            verifiedOnly: { type: 'boolean', description: 'Only compute metrics using verified edges', default: false },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_edges',
+        description: 'Granular query of dependency edges in the code graph.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', description: 'Filter edges by type' },
+            from: { type: 'string', description: 'Filter edges originating from a file pattern (substring match)' },
+            to: { type: 'string', description: 'Filter edges targeting a file pattern (substring match)' },
             ...dirProperty,
           },
         },
@@ -173,8 +206,13 @@ function buildServer(): Server {
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
+        const excludeStr = (args as any)?.exclude;
+        const includeStr = (args as any)?.include;
+        const exclude = excludeStr ? excludeStr.split(',').map((s: string) => s.trim()) : [];
+        const include = includeStr ? includeStr.split(',').map((s: string) => s.trim()) : [];
+
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph);
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
           const result = await scanner.scanFull();
           return {
             content: [{
@@ -248,23 +286,40 @@ function buildServer(): Server {
         const tokens = (args as any)?.tokens || 8192;
         const repo = (args as any)?.repo;
 
+        const excludeStr = (args as any)?.exclude;
+        const includeStr = (args as any)?.include;
+        const exclude = excludeStr ? excludeStr.split(',').map((s: string) => s.trim()) : [];
+        const include = includeStr ? includeStr.split(',').map((s: string) => s.trim()) : [];
+
+        const excludes = [
+          ...(ctx.config.settings.excludePatterns ?? []),
+          ...exclude,
+        ];
+        const includes = [
+          ...(ctx.config.settings.includePatterns ?? []),
+          ...include,
+        ];
+        const matcher = buildMatcher(excludes, includes);
+        const allFiles = ctx.store.getAllFiles(repo).map(f => f.path as string);
+        const filteredFiles = allFiles.filter(f => matcher(f));
+
         if (format === 'json') {
           const exporter = new GraphExporter(ctx.store, ctx.graph);
-          return { content: [{ type: 'text', text: exporter.exportAsJSONString(repo) }] };
+          return { content: [{ type: 'text', text: exporter.exportAsJSONString(repo, filteredFiles) }] };
         }
 
         if (format === 'dot') {
           const exporter = new DotExporter(ctx.store, ctx.graph);
-          return { content: [{ type: 'text', text: exporter.export(repo) }] };
+          return { content: [{ type: 'text', text: exporter.export(repo, filteredFiles) }] };
         }
 
         if (format === 'svg') {
           const exporter = new SvgExporter(ctx.store, ctx.graph);
-          return { content: [{ type: 'text', text: exporter.export(repo) }] };
+          return { content: [{ type: 'text', text: exporter.export(repo, filteredFiles) }] };
         }
 
         const exporter = new LLMExporter(ctx.store, ctx.graph);
-        const output = exporter.export({ format: 'llm', tokenBudget: tokens, repo });
+        const output = exporter.export({ format: 'llm', tokenBudget: tokens, repo, files: filteredFiles });
         return { content: [{ type: 'text', text: output }] };
       }
 
@@ -280,11 +335,98 @@ function buildServer(): Server {
         const fileCount = ctx.store.getFileCount();
         const symbolCount = ctx.store.getSymbolCount();
         const edgeCount = ctx.store.getEdgeCount();
+        const verifiedEdgeCount = (ctx.store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified'").get() as any)?.cnt || 0;
+        const inferredEdgeCount = (ctx.store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'inferred'").get() as any)?.cnt || 0;
+
+        const excludeStr = (args as any)?.exclude;
+        const includeStr = (args as any)?.include;
+        const exclude = excludeStr ? excludeStr.split(',').map((s: string) => s.trim()) : [];
+        const include = includeStr ? includeStr.split(',').map((s: string) => s.trim()) : [];
+
+        const activeExcludes = [...(ctx.config.settings.excludePatterns ?? []), ...exclude];
+        const activeIncludes = [...(ctx.config.settings.includePatterns ?? []), ...include];
 
         return {
           content: [{
             type: 'text',
-            text: `Directory: ${dir}\nLast scan: ${lastScan || 'never'}\nLast commit: ${lastCommit || 'none'}\nFiles: ${fileCount} | Symbols: ${symbolCount} | Edges: ${edgeCount}`,
+            text: `Directory: ${dir}\nLast scan: ${lastScan || 'never'}\nLast commit: ${lastCommit || 'none'}\nFiles: ${fileCount} | Symbols: ${symbolCount} | Edges: ${edgeCount} (verified: ${verifiedEdgeCount}, inferred: ${inferredEdgeCount})\nExcludes: [${activeExcludes.join(', ')}]\nIncludes: [${activeIncludes.join(', ')}]`,
+          }],
+        };
+      }
+
+      case 'mapx_metrics': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const lang = (args as any)?.lang;
+        const verifiedOnly = !!(args as any)?.verifiedOnly;
+
+        const metrics = calculateMetrics(ctx.store, {
+          repo: ctx.config.repo.name,
+          language: lang,
+          verifiedOnly,
+        });
+
+        if (metrics.length === 0) {
+          return { content: [{ type: 'text', text: 'No metrics found.' }] };
+        }
+
+        const lines = [
+          '── Coupling & Instability Metrics ─────────────────────',
+          `${'File Path'.padEnd(45)} | ${'Lang'.padEnd(10)} | ${'Ca'.padStart(4)} | ${'Ce'.padStart(4)} | ${'Instability'.padStart(11)}`,
+          '-'.repeat(85),
+        ];
+
+        for (const m of metrics) {
+          const pathTrunc = m.path.length > 45 ? '...' + m.path.substring(m.path.length - 42) : m.path;
+          lines.push(`${pathTrunc.padEnd(45)} | ${m.language.padEnd(10)} | ${String(m.afferent).padStart(4)} | ${String(m.efferent).padStart(4)} | ${m.instability.toFixed(4).padStart(11)}`);
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: lines.join('\n'),
+          }],
+        };
+      }
+
+      case 'mapx_edges': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const type = (args as any)?.type;
+        const from = (args as any)?.from;
+        const to = (args as any)?.to;
+
+        const edges = ctx.store.queryEdges({
+          repo: ctx.config.repo.name,
+          type,
+          from,
+          to,
+        });
+
+        if (edges.length === 0) {
+          return { content: [{ type: 'text', text: 'No matching edges found.' }] };
+        }
+
+        const lines = [`Found ${edges.length} matching edges:`];
+        for (const e of edges) {
+          const srcSym = e.source_symbol ? `#${e.source_symbol}` : '';
+          const tgtSym = e.target_symbol ? `#${e.target_symbol}` : '';
+          const infSuffix = e.verifiability === 'inferred' ? ' [inferred]' : '';
+          lines.push(`- ${e.source_file}${srcSym} → ${e.target_file}${tgtSym} (${e.edge_type})${infSuffix}`);
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: lines.join('\n'),
           }],
         };
       }
@@ -377,7 +519,7 @@ function generateConfigs(dir: string, transport: 'stdio' | 'sse', port?: number)
 
   lines.push(
     '',
-    '  Available tools: mapx_scan, mapx_query, mapx_dependencies, mapx_export, mapx_status',
+    '  Available tools: mapx_scan, mapx_query, mapx_dependencies, mapx_export, mapx_status, mapx_metrics, mapx_edges',
     '',
   );
 

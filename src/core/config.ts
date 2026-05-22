@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import type { MapxConfig, RepoConfig, UserLanguageDefinition } from '../types.js';
@@ -73,7 +73,36 @@ export class Config {
       }
     }
 
-    const defaultExclude = DEFAULT_CONFIG.settings.excludePatterns;
+    const defaultExclude = [...DEFAULT_CONFIG.settings.excludePatterns];
+    let isPHP = false;
+    let isJSTS = false;
+    try {
+      const rootFiles = await readdir(workspaceRoot);
+      for (const file of rootFiles) {
+        if (file === 'composer.json' || file.endsWith('.php')) {
+          isPHP = true;
+        }
+        if (
+          file === 'package.json' ||
+          file === 'tsconfig.json' ||
+          file.endsWith('.ts') ||
+          file.endsWith('.js') ||
+          file.endsWith('.tsx') ||
+          file.endsWith('.jsx')
+        ) {
+          isJSTS = true;
+        }
+      }
+    } catch {
+      // ignore readdir errors
+    }
+
+    if (isPHP) {
+      defaultExclude.push('**/migrations/**', '**/seeds/**', '**/storage/**');
+    }
+    if (isJSTS) {
+      defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts');
+    }
 
     // User patterns come first (higher priority); add any default patterns the
     // user hasn't already covered, then deduplicate the merged list.

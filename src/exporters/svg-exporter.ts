@@ -12,9 +12,9 @@ export class SvgExporter {
     this.graph = graph;
   }
 
-  export(repo?: string): string {
+  export(repo?: string, filesFilter?: string[]): string {
     const dotExporter = new DotExporter(this.store, this.graph);
-    const dot = dotExporter.export(repo);
+    const dot = dotExporter.export(repo, filesFilter);
 
     try {
       return execSync('dot -Tsvg', {
@@ -24,14 +24,21 @@ export class SvgExporter {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
     } catch {
-      return this.renderFallback(repo);
+      return this.renderFallback(repo, filesFilter);
     }
   }
 
-  private renderFallback(repo?: string): string {
-    const files = this.store.getAllFiles(repo);
-    const edges = this.store.getAllEdges(repo);
-    const rankedFiles = this.graph.getRankedFiles();
+  private renderFallback(repo?: string, filesFilter?: string[]): string {
+    let files = this.store.getAllFiles(repo);
+    let edges = this.store.getAllEdges(repo);
+    let rankedFiles = this.graph.getRankedFiles();
+
+    if (filesFilter) {
+      const allowed = new Set(filesFilter);
+      files = files.filter(f => allowed.has(f.path as string));
+      edges = edges.filter(e => allowed.has(e.source_file as string) && allowed.has(e.target_file as string));
+      rankedFiles = rankedFiles.filter(f => allowed.has(f.path));
+    }
 
     const langColors: Record<string, string> = {
       php: '#8892BF',
@@ -131,7 +138,8 @@ export class SvgExporter {
       const ty = tgtNode.y;
 
       const style = edgeStyles[type] || { stroke: '#666', dash: '' };
-      const dashAttr = style.dash ? ` stroke-dasharray="${style.dash}"` : '';
+      const dash = edge.verifiability === 'inferred' ? '5,5' : style.dash;
+      const dashAttr = dash ? ` stroke-dasharray="${dash}"` : '';
       const midY = (sy + ty) / 2;
 
       edgeLines.push(

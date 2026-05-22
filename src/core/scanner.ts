@@ -10,6 +10,7 @@ import { getParserForFile } from '../parsers/parser-registry.js';
 import { getLanguageForFile } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
+import { minimatch } from 'minimatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback } from '../types.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
@@ -41,6 +42,29 @@ interface DiscoveredFile extends FileInfo {
   contentChanged: boolean;
 }
 
+export function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
+  return (rel: string) => {
+    if (excludes.some(p => {
+      if (minimatch(rel, p, { dot: true })) return true;
+      const segments = rel.split('/');
+      if (segments.some(seg => seg === p)) return true;
+      return false;
+    })) {
+      return false;
+    }
+    if (includes.length > 0) {
+      const matched = includes.some(p => {
+        if (minimatch(rel, p, { dot: true })) return true;
+        const segments = rel.split('/');
+        if (segments.some(seg => seg === p)) return true;
+        return false;
+      });
+      if (!matched) return false;
+    }
+    return true;
+  };
+}
+
 export class Scanner {
   private store: Store;
   private config: Config;
@@ -48,13 +72,23 @@ export class Scanner {
   private onProgress?: ProgressCallback;
   private concurrency: number;
   private aborted = false;
+  private cliExcludes: string[] = [];
+  private cliIncludes: string[] = [];
 
-  constructor(store: Store, config: Config, graph: MapxGraph, onProgress?: ProgressCallback) {
+  constructor(
+    store: Store,
+    config: Config,
+    graph: MapxGraph,
+    onProgress?: ProgressCallback,
+    options?: { excludes?: string[]; includes?: string[] }
+  ) {
     this.store = store;
     this.config = config;
     this.graph = graph;
     this.onProgress = onProgress;
     this.concurrency = DEFAULT_CONCURRENCY;
+    this.cliExcludes = options?.excludes ?? [];
+    this.cliIncludes = options?.includes ?? [];
   }
 
   abort(): void {
@@ -319,11 +353,25 @@ export class Scanner {
       };
     }
 
+    const excludes = [
+      ...this.config.settings.excludePatterns,
+      ...this.cliExcludes,
+    ];
+    const includes = [
+      ...this.config.settings.includePatterns,
+      ...this.cliIncludes,
+    ];
+    const matcher = buildMatcher(excludes, includes);
+
     const toRemove: string[] = [];
     const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string }> = [];
 
     for (const change of changes) {
       const relativePath = change.path.replace(/\\/g, '/');
+      if (!matcher(relativePath)) {
+        toRemove.push(relativePath);
+        continue;
+      }
       if (change.status === 'removed') {
         toRemove.push(relativePath);
         continue;
@@ -402,7 +450,15 @@ export class Scanner {
   private async discoverFiles(repoRoot: string): Promise<DiscoveredFile[]> {
     const files: DiscoveredFile[] = [];
     const workspaceRoot = this.config.getWorkspaceRoot();
-    const excludePatterns = this.config.settings.excludePatterns;
+    const excludes = [
+      ...this.config.settings.excludePatterns,
+      ...this.cliExcludes,
+    ];
+    const includes = [
+      ...this.config.settings.includePatterns,
+      ...this.cliIncludes,
+    ];
+    const matcher = buildMatcher(excludes, includes);
 
     const trackedHashes = new Map<string, string>();
     const allTracked = this.store.getAllFiles(this.config.repo.name);
@@ -424,11 +480,11 @@ export class Scanner {
 
         if (entry.isDirectory()) {
           const relDir = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
-          if (this.shouldExclude(relDir, excludePatterns)) continue;
+          if (this.shouldExcludeDir(relDir, excludes)) continue;
           await walk(fullPath);
         } else if (entry.isFile()) {
           const relPath = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
-          if (this.shouldExclude(relPath, excludePatterns)) continue;
+          if (!matcher(relPath)) continue;
 
           const langDef = getLanguageForFile(fullPath, this.config.getResolvedUserLanguages());
           if (!langDef) continue;
@@ -612,6 +668,7 @@ export class Scanner {
           edgeType: ref.referenceType,
           repo: repoName,
           weight: 1.0,
+          verifiability: ref.verifiability ?? 'verified',
         });
       }
     }
@@ -635,12 +692,16 @@ export class Scanner {
   }
 
   private resolveImportPath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
+    const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
+    const resolvedTarget = target.startsWith('.') ? join(dir, target) : target;
+    const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+
     const candidates = [
-      target.replace(/^\.\//, ''),
-      target + '/index.js',
-      target + '/index.ts',
-      target + '.js',
-      target + '.ts',
+      normalizedTarget,
+      normalizedTarget + '/index.js',
+      normalizedTarget + '/index.ts',
+      normalizedTarget + '.js',
+      normalizedTarget + '.ts',
     ];
 
     for (const candidate of candidates) {
@@ -656,24 +717,14 @@ export class Scanner {
     }
     return null;
   }
-
-  private shouldExclude(path: string, patterns: string[]): boolean {
-    const segments = path.split('/');
-    for (const pattern of patterns) {
-      if (pattern.includes('*')) {
-        const regex = new RegExp('^' + pattern.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*').replace(/\?/g, '.') + '$');
-        if (regex.test(path)) return true;
-        for (let i = 0; i < segments.length; i++) {
-          if (regex.test(segments.slice(i).join('/'))) return true;
-        }
-      } else {
-        if (path === pattern) return true;
-        if (segments.some(s => s === pattern)) return true;
-        if (path.startsWith(pattern + '/')) return true;
-        if (('/' + path).includes('/' + pattern + '/')) return true;
-      }
-    }
-    return false;
+  private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
+    return excludes.some(p => {
+      if (minimatch(relDir, p, { dot: true })) return true;
+      if (minimatch(relDir + '/**', p, { dot: true })) return true;
+      const segments = relDir.split('/');
+      if (segments.some(seg => seg === p)) return true;
+      return false;
+    });
   }
 
   private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {

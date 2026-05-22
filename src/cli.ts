@@ -6,12 +6,13 @@ import { fileURLToPath } from 'node:url';
 import * as readline from 'node:readline';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { Scanner } from './core/scanner.js';
+import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
+import { calculateMetrics } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
@@ -26,6 +27,10 @@ function readVersion(): string {
     if (existsSync(candidate)) return readFileSync(candidate, 'utf-8').trim();
   }
   return '0.1.0';
+}
+
+function collectPatterns(val: string, memo: string[]): string[] {
+  return memo.concat(val.split(',').map(s => s.trim()));
 }
 
 function resolveDir(cmdOpts: Record<string, unknown>, programOpts: Record<string, unknown>): string {
@@ -279,12 +284,17 @@ export function buildCLI(): Command {
     .command('scan')
     .description('Full scan: parse all files, build graph')
     .argument('[path]', 'Target directory')
-    .action(async (path: string | undefined) => {
+    .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
+    .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
 
       const onProgress = createProgressRenderer();
-      const scanner = new Scanner(store, config, graph, onProgress);
+      const scanner = new Scanner(store, config, graph, onProgress, {
+        excludes: opts.exclude as string[],
+        includes: opts.include as string[],
+      });
 
       const onSigInt = () => {
         scanner.abort();
@@ -316,7 +326,9 @@ export function buildCLI(): Command {
     .command('update')
     .description('Incremental scan: re-scan only changed files')
     .argument('[path]', 'Target directory')
-    .action(async (path: string | undefined) => {
+    .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
+    .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
       const onProgress = createProgressRenderer();
@@ -332,7 +344,10 @@ export function buildCLI(): Command {
       const repoRoot = resolve(dir, config.repo.path);
       if (!isGitRepo(repoRoot)) {
         console.log('Not a git repo, falling back to full scan');
-        const scanner = new Scanner(store, config, graph, onProgress);
+        const scanner = new Scanner(store, config, graph, onProgress, {
+          excludes: opts.exclude as string[],
+          includes: opts.include as string[],
+        });
         process.once('SIGINT', () => scanner.abort());
         const result = await scanner.scanFull().catch(handleLockError);
         process.stderr.write('\r' + ' '.repeat(80) + '\r');
@@ -346,7 +361,10 @@ export function buildCLI(): Command {
         return;
       }
 
-      const scanner = new Scanner(store, config, graph, onProgress);
+      const scanner = new Scanner(store, config, graph, onProgress, {
+        excludes: opts.exclude as string[],
+        includes: opts.include as string[],
+      });
       process.once('SIGINT', () => scanner.abort());
       const result = await scanner.scanIncremental().catch(handleLockError);
 
@@ -359,7 +377,9 @@ export function buildCLI(): Command {
     .command('status')
     .description('Show scan status, collected metrics, and changed files')
     .argument('[path]', 'Target directory')
-    .action(async (path: string | undefined) => {
+    .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
+    .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
 
@@ -368,6 +388,15 @@ export function buildCLI(): Command {
       const schemaVer   = store.getMeta('schema_version');
       const dbPath      = resolve(dir, '.mapx', 'mapx.db');
 
+      const activeExcludes = [
+        ...(config.settings.excludePatterns ?? []),
+        ...((opts.exclude as string[]) ?? []),
+      ];
+      const activeIncludes = [
+        ...(config.settings.includePatterns ?? []),
+        ...((opts.include as string[]) ?? []),
+      ];
+
       // ── Scan info ──────────────────────────────────────────────────────
       console.log('\n── Scan ─────────────────────────────────────────────');
       console.log(`  Project:     ${config.repo.name}`);
@@ -375,17 +404,21 @@ export function buildCLI(): Command {
       console.log(`  Last scan:   ${lastScan  || 'never'}`);
       console.log(`  Last commit: ${lastCommit || 'none'}`);
       console.log(`  Schema:      v${schemaVer || '?'}`);
+      console.log(`  Excludes:    [${activeExcludes.join(', ')}]`);
+      console.log(`  Includes:    [${activeIncludes.join(', ')}]`);
 
       // ── Collected data ─────────────────────────────────────────────────
       const fileCount   = store.getFileCount();
       const symbolCount = store.getSymbolCount();
       const edgeCount   = store.getEdgeCount();
       const breakdown   = store.getLanguageBreakdown();
+      const verifiedEdgeCount = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified'").get() as any)?.cnt || 0;
+      const inferredEdgeCount = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'inferred'").get() as any)?.cnt || 0;
 
       console.log('\n── Collected data ───────────────────────────────────');
       console.log(`  Files:       ${fileCount}`);
       console.log(`  Symbols:     ${symbolCount}`);
-      console.log(`  Edges:       ${edgeCount}`);
+      console.log(`  Edges:       ${edgeCount} (verified: ${verifiedEdgeCount}, inferred: ${inferredEdgeCount})`);
 
       // Language breakdown
       const langs = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
@@ -540,9 +573,11 @@ export function buildCLI(): Command {
     .option('--tokens <budget>', 'Token budget for LLM export', '8192')
     .option('--repo <name>', 'Filter by repo name')
     .option('-o, --output <file>', 'Write output to file instead of stdout')
+    .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
+    .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
-      const { store, graph } = await loadContext(dir);
+      const { config, store, graph } = await loadContext(dir);
 
       const format = opts.format as string;
       const tokenBudget = parseInt(opts.tokens as string, 10) || 8192;
@@ -562,22 +597,34 @@ export function buildCLI(): Command {
         }
       }
 
+      const excludes = [
+        ...(config.settings.excludePatterns ?? []),
+        ...((opts.exclude as string[]) ?? []),
+      ];
+      const includes = [
+        ...(config.settings.includePatterns ?? []),
+        ...((opts.include as string[]) ?? []),
+      ];
+      const matcher = buildMatcher(excludes, includes);
+      const allFiles = store.getAllFiles(opts.repo as string | undefined).map(f => f.path as string);
+      const filteredFiles = allFiles.filter(f => matcher(f));
+
       let output: string;
 
       switch (format) {
         case 'json': {
           const exporter = new GraphExporter(store, graph);
-          output = exporter.exportAsJSONString(opts.repo as string | undefined);
+          output = exporter.exportAsJSONString(opts.repo as string | undefined, filteredFiles);
           break;
         }
         case 'dot': {
           const exporter = new DotExporter(store, graph);
-          output = exporter.export(opts.repo as string | undefined);
+          output = exporter.export(opts.repo as string | undefined, filteredFiles);
           break;
         }
         case 'svg': {
           const exporter = new SvgExporter(store, graph);
-          output = exporter.export(opts.repo as string | undefined);
+          output = exporter.export(opts.repo as string | undefined, filteredFiles);
           break;
         }
         case 'llm':
@@ -587,6 +634,7 @@ export function buildCLI(): Command {
             format: 'llm',
             tokenBudget,
             repo: opts.repo as string | undefined,
+            files: filteredFiles,
           });
           break;
         }
@@ -648,6 +696,70 @@ export function buildCLI(): Command {
         sse: opts.sse as boolean | undefined,
         port: parseInt(opts.port as string, 10) || 45123,
       });
+    });
+
+  program
+    .command('metrics')
+    .description('Show coupling and instability metrics for files')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--lang <language>', 'Filter metrics by language')
+    .option('--verified-only', 'Only compute metrics using verified edges')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      const metrics = calculateMetrics(store, {
+        repo: config.repo.name,
+        language: opts.lang as string | undefined,
+        verifiedOnly: !!opts.verifiedOnly,
+      });
+
+      if (metrics.length === 0) {
+        console.log('No metrics found.');
+        return;
+      }
+
+      console.log('\n── Coupling & Instability Metrics ─────────────────────');
+      console.log(`${'File Path'.padEnd(45)} | ${'Lang'.padEnd(10)} | ${'Ca'.padStart(4)} | ${'Ce'.padStart(4)} | ${'Instability'.padStart(11)}`);
+      console.log('-'.repeat(85));
+      for (const m of metrics) {
+        const pathTrunc = m.path.length > 45 ? '...' + m.path.substring(m.path.length - 42) : m.path;
+        console.log(`${pathTrunc.padEnd(45)} | ${m.language.padEnd(10)} | ${String(m.afferent).padStart(4)} | ${String(m.efferent).padStart(4)} | ${m.instability.toFixed(4).padStart(11)}`);
+      }
+      console.log('');
+    });
+
+  program
+    .command('edges')
+    .description('Granular query of dependency edges')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--type <type>', 'Filter edges by type')
+    .option('--from <file>', 'Filter edges originating from a file pattern')
+    .option('--to <file>', 'Filter edges targeting a file pattern')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      const edges = store.queryEdges({
+        repo: config.repo.name,
+        type: opts.type as string | undefined,
+        from: opts.from as string | undefined,
+        to: opts.to as string | undefined,
+      });
+
+      if (edges.length === 0) {
+        console.log('No matching edges found.');
+        return;
+      }
+
+      console.log(`\nFound ${edges.length} matching edges:`);
+      for (const e of edges) {
+        const srcSym = e.source_symbol ? `#${e.source_symbol}` : '';
+        const tgtSym = e.target_symbol ? `#${e.target_symbol}` : '';
+        const infSuffix = e.verifiability === 'inferred' ? ' [inferred]' : '';
+        console.log(`- ${e.source_file}${srcSym} → ${e.target_file}${tgtSym} (${e.edge_type})${infSuffix}`);
+      }
+      console.log('');
     });
 
   return program;
@@ -712,6 +824,7 @@ export async function loadContext(dir: string): Promise<{
       edgeType: edge.edge_type as any,
       repo: edge.repo as string,
       weight: edge.weight as number,
+      verifiability: edge.verifiability as any,
     });
   }
 

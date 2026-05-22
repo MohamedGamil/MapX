@@ -34,6 +34,7 @@ export interface ExtractedReference {
   targetName: string;
   referenceType: ReferenceType;
   startLine: number;
+  verifiability?: 'verified' | 'inferred';
 }
 
 export type ReferenceType =
@@ -66,6 +67,7 @@ export interface GraphEdge {
   edgeType: ReferenceType;
   repo: string;
   weight: number;
+  verifiability?: 'verified' | 'inferred';
 }
 
 export type ScanPhase = 'discover' | 'index' | 'parse' | 'resolve' | 'detect';

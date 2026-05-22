@@ -17,11 +17,20 @@ export class LLMExporter {
     const budget = options.tokenBudget || 8192;
     const parts: string[] = [];
 
-    const files = this.store.getAllFiles(options.repo);
-    const symbols = this.store.getAllSymbols(options.repo);
-    const edges = this.store.getAllEdges(options.repo);
-    const rankedFiles = this.graph.getRankedFiles();
-    const rankedSymbols = this.graph.getRankedSymbols();
+    let files = this.store.getAllFiles(options.repo);
+    let symbols = this.store.getAllSymbols(options.repo);
+    let edges = this.store.getAllEdges(options.repo);
+    let rankedFiles = this.graph.getRankedFiles();
+    let rankedSymbols = this.graph.getRankedSymbols();
+
+    if (options.files) {
+      const allowed = new Set(options.files);
+      files = files.filter(f => allowed.has(f.path as string));
+      symbols = symbols.filter(s => allowed.has(s.file_path as string));
+      edges = edges.filter(e => allowed.has(e.source_file as string) && allowed.has(e.target_file as string));
+      rankedFiles = rankedFiles.filter(f => allowed.has(f.path));
+      rankedSymbols = rankedSymbols.filter(s => allowed.has(s.filePath));
+    }
 
     const repoName = options.repo || 'project';
     parts.push(`# Mapx: ${repoName}`);
@@ -63,7 +72,8 @@ export class LLMExporter {
       const tgt = edge.target_file as string;
       const type = edge.edge_type as string;
       if (!depMap.has(src)) depMap.set(src, []);
-      depMap.get(src)!.push(`${tgt} (${type})`);
+      const infSuffix = edge.verifiability === 'inferred' ? ' [inferred]' : '';
+      depMap.get(src)!.push(`${tgt} (${type})${infSuffix}`);
     }
 
     const sorted = [...files].sort((a, b) => {
@@ -144,7 +154,7 @@ export class LLMExporter {
     const lines: string[] = [];
     lines.push('## Dependencies');
 
-    const unique = new Map<string, { source: string; target: string; type: string }>();
+    const unique = new Map<string, { source: string; target: string; type: string; verifiability?: string }>();
     for (const edge of edges) {
       const key = `${edge.source_file}->${edge.target_file}:${edge.edge_type}`;
       if (!unique.has(key)) {
@@ -152,12 +162,14 @@ export class LLMExporter {
           source: edge.source_file as string,
           target: edge.target_file as string,
           type: edge.edge_type as string,
+          verifiability: edge.verifiability as string || 'verified',
         });
       }
     }
 
     for (const dep of unique.values()) {
-      lines.push(`- ${dep.source} → ${dep.target} (${dep.type})`);
+      const infSuffix = dep.verifiability === 'inferred' ? ' [inferred]' : '';
+      lines.push(`- ${dep.source} → ${dep.target} (${dep.type})${infSuffix}`);
     }
 
     lines.push('');
