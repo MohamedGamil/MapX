@@ -131,14 +131,14 @@
 - [x] Note spec version in TOON output header: `# toon v3.3`
 
 ### I15 · Bundled Web Dashboard · F28 · Risk: Medium · Requires: I07
-- [ ] Create `src/ui-server.ts` (HTTP server, Node.js built-ins only — no Express)
-- [ ] Create `src/ui-events.ts` (shared EventEmitter for MCP tool-call interception)
-- [ ] Build `src/ui/` client bundle with esbuild: Cytoscape.js graph, symbol table, tool log, metrics, context viewer
-- [ ] Add `mapx ui [--port=N] [--host=X] [--token=X] [--no-open]` and `mapx serve --ui`
-- [ ] Implement REST API: `/api/status`, `/api/graph`, `/api/symbols`, `/api/symbol/:name`, `/api/metrics`, `/api/context`, `/api/routes`
-- [ ] Implement SSE stream at `/events`: `tool-call`, `scan-progress`, `scan-complete` events
-- [ ] **Bundle target**: initial load < 200 KB gzipped (lazy-load fCoSE layout plugin); total < 350 KB gzipped
-- [ ] **Security**: bind `127.0.0.1` by default; optional `Authorization: Bearer` token; rate-limit `/api/context` + `/api/graph` to 10 req/min; cap responses at 10 MB; reject path traversal; CORS localhost only
+- [x] Create `src/ui-server.ts` (HTTP server, Node.js built-ins only — no Express)
+- [x] Create `src/ui-events.ts` (shared EventEmitter for MCP tool-call interception)
+- [x] Build `src/ui/` client bundle with esbuild: Cytoscape.js graph, symbol table, tool log, metrics, context viewer
+- [x] Add `mapx ui [--port=N] [--host=X] [--token=X] [--no-open]` and `mapx serve --ui`
+- [x] Implement REST API: `/api/status`, `/api/graph`, `/api/symbols`, `/api/symbol/:name`, `/api/metrics`, `/api/context`, `/api/routes`
+- [x] Implement SSE stream at `/events`: `tool-call`, `scan-progress`, `scan-complete` events
+- [x] **Bundle target**: initial load < 200 KB gzipped (lazy-load fCoSE layout plugin); total < 350 KB gzipped
+- [x] **Security**: bind `127.0.0.1` by default; optional `Authorization: Bearer` token; rate-limit `/api/context` + `/api/graph` to 10 req/min; cap responses at 10 MB; reject path traversal; CORS localhost only
 
 ---
 
@@ -150,7 +150,7 @@
 - [ ] **I13** — Framework scope: implement 3 concrete detectors before building `FrameworkDetector` interface
 - [ ] **I13** — False positives: confidence score < 0.5 suppresses edge emission; log warnings
 - [x] **I11** — Breaking change: add `CHANGELOG` entry; deprecation warning in old `mapx_status` text until next major version
-- [ ] **I15** — Bundle size: CI check that `dist/ui/main.js` gzipped size ≤ 200 KB; audit Cytoscape plugin additions
+- [x] **I15** — Bundle size: CI check that `dist/ui/main.js` gzipped size ≤ 200 KB; audit Cytoscape plugin additions
 
 ---
 

@@ -25,6 +25,7 @@ import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
+import { UiEventBus } from './ui-events.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -426,7 +427,7 @@ export function buildServer(): Server {
     ],
   }));
 
-  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const executeTool = async (request: any) => {
     const { name, arguments: args } = request.params;
     // Each tool call opens a fresh Store; track it so we can close it when done.
     let activeStore: Store | undefined;
@@ -1568,6 +1569,38 @@ Callees: ${callees.length}`;
     }
     } finally {
       try { activeStore?.close(); } catch { /* already closed */ }
+    }
+  };
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const startTime = Date.now();
+    let result: any;
+    let error: any;
+    try {
+      result = await executeTool(request);
+      return result;
+    } catch (e: any) {
+      error = e;
+      throw e;
+    } finally {
+      let isSuccess = !error;
+      let errorMsg = error?.message;
+      if (result && Array.isArray(result.content)) {
+        const textContent = result.content.find((c: any) => c.type === 'text')?.text;
+        if (textContent && (textContent.startsWith('Error') || textContent.includes('failed'))) {
+          isSuccess = false;
+          errorMsg = textContent;
+        }
+      }
+      const eventBus = UiEventBus.getInstance();
+      eventBus.emitToolCall({
+        tool: request.params.name,
+        input: request.params.arguments || {},
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - startTime,
+        success: isSuccess,
+        error: errorMsg
+      });
     }
   });
 

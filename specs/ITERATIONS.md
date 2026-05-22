@@ -407,7 +407,7 @@ Fully independent — can be merged at any time. The exporter uses a manual TOON
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
 | Features | F28 |
 | Branch | `feat/i15-web-dashboard` |
 | PR | — |

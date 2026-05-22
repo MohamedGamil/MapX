@@ -1394,13 +1394,54 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('-d, --dir <path>', 'Default target directory for MCP tools')
     .option('--port <port>', 'Port for SSE transport (default: 45123)', '45123')
     .option('--sse', 'Enable SSE transport instead of stdio')
+    .option('--ui', 'Enable UI dashboard alongside MCP server')
+    .option('--ui-port <port>', 'Port to run UI on (default: 45124)', '45124')
+    .option('--ui-host <host>', 'Host to run UI on (default: 127.0.0.1)', '127.0.0.1')
+    .option('--ui-token <token>', 'Bearer token for authorization')
     .action(async (opts: Record<string, unknown>) => {
       const defaultDir = resolveDir(opts, program.opts());
       const { startMcpServer } = await import('./mcp.js');
+      
+      if (opts.ui) {
+        const { startUiServer } = await import('./ui-server.js');
+        const uiPort = parseInt(opts.uiPort as string, 10) || 45124;
+        const uiHost = (opts.uiHost as string) || '127.0.0.1';
+        const uiToken = opts.uiToken as string | undefined;
+        startUiServer({ port: uiPort, host: uiHost, token: uiToken, dir: defaultDir });
+      }
+
       await startMcpServer(defaultDir, {
         sse: opts.sse as boolean | undefined,
         port: parseInt(opts.port as string, 10) || 45123,
       });
+    });
+
+  program
+    .command('ui')
+    .description('Start the Web Dashboard')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('-p, --port <port>', 'Port to run UI on (default: 45124)', '45124')
+    .option('--host <host>', 'Host to run UI on (default: 127.0.0.1)', '127.0.0.1')
+    .option('--token <token>', 'Bearer token for authorization')
+    .option('--no-open', 'Do not open the dashboard in the browser automatically')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const port = parseInt(opts.port as string, 10) || 45124;
+      const host = (opts.host as string) || '127.0.0.1';
+      const token = opts.token as string | undefined;
+
+      const { startUiServer } = await import('./ui-server.js');
+      startUiServer({ port, host, token, dir });
+
+      const url = `http://${host}:${port}`;
+      console.log(`Mapx Web Dashboard started at ${url}`);
+
+      if (opts.open !== false) {
+        const { exec } = await import('node:child_process');
+        const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+        exec(`${openCmd} ${url}`).unref();
+      }
     });
 
   program

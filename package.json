@@ -33,7 +33,7 @@
     "build:mac-x64": "bun build --compile --minify --bytecode --target=bun-darwin-x64 ./src/main.ts --outfile dist/mapx-darwin-x64",
     "build:win": "bun build --compile --minify --bytecode --target=bun-windows-x64 ./src/main.ts --outfile dist/mapx-windows-x64.exe",
     "build:all": "tsx scripts/build-all.ts",
-    "build:npm": "tsup",
+    "build:npm": "tsup && tsx scripts/build-ui.ts",
     "prepublishOnly": "npm run build:npm",
     "scan": "tsx src/main.ts scan",
     "export": "tsx src/main.ts export",
@@ -42,6 +42,7 @@
   "dependencies": {
     "better-sqlite3": "^12.10.0",
     "commander": "^13.1.0",
+    "cytoscape": "^3.33.4",
     "graphology": "^0.26.0",
     "graphology-metrics": "^2.4.0",
     "minimatch": "^10.2.5",
@@ -53,6 +54,7 @@
     "tree-sitter-python": "0.25.0",
     "tree-sitter-rust": "0.24.0",
     "tree-sitter-typescript": "^0.23.2",
+    "uplot": "^1.6.32",
     "web-tree-sitter": "^0.26.9",
     "zod": "^3.25.0"
   },
@@ -61,7 +63,9 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/cytoscape": "^3.21.9",
     "@types/node": "^22.19.19",
+    "esbuild": "^0.28.0",
     "tsup": "^8.5.1",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"

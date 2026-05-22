@@ -101,7 +101,7 @@ specs/
 | F25 | Backend framework routes (Laravel extended, Drupal, Rails, Spring, Gin/chi/gorilla, Axum/actix/Rocket, ASP.NET Core, Vapor) | `planned` | I13 | [F25](features/F25-backend-frameworks.md) |
 | F26 | PHP CMS/framework routes (Symfony attribute + YAML routes, Yii2/Yii3, WordPress hooks/filters/shortcodes/REST/template hierarchy) | `planned` | I13 | [F26](features/F26-php-cms-frameworks.md) |
 | F27 | TOON export format (`mapx export --format=toon`) | `done` | I14 | [F27](features/F27-toon-export.md) |
-| F28 | Bundled lightweight web dashboard (`mapx ui`) | `planned` | I15 | [F28](features/F28-web-dashboard.md) |
+| F28 | Bundled lightweight web dashboard (`mapx ui`) | `done` | I15 | [F28](features/F28-web-dashboard.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -125,7 +125,7 @@ specs/
 | [I12](iterations/I12.md) | Language expansion (19 languages) | `done` | F20 |
 | [I13](iterations/I13.md) | Framework-aware parsing & route context (21 frameworks) | `in-progress` | F21, F22, F23, F24, F25, F26 |
 | [I14](iterations/I14.md) | TOON export format | `done` | F27 |
-| [I15](iterations/I15.md) | Bundled web dashboard (`mapx ui`) | `planned` | F28 |
+| [I15](iterations/I15.md) | Bundled web dashboard (`mapx ui`) | `done` | F28 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
