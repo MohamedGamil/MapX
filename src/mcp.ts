@@ -148,11 +148,19 @@ function buildServer(): Server {
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+    // Each tool call opens a fresh Store; track it so we can close it when done.
+    let activeStore: Store | undefined;
+    const loadCtx = async (dir: string) => {
+      const ctx = await loadContext(dir);
+      if (!('error' in ctx)) activeStore = ctx.store;
+      return ctx;
+    };
 
+    try {
     switch (name) {
       case 'codegraph_scan': {
         const dir = resolveDir(args || {});
-        const ctx = await loadContext(dir);
+        const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const scanner = new Scanner(ctx.store, ctx.config, ctx.graph);
@@ -171,7 +179,7 @@ function buildServer(): Server {
         const term = (args as any)?.term;
         if (!term) return { content: [{ type: 'text', text: 'Missing required parameter: term' }] };
 
-        const ctx = await loadContext(dir);
+        const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const results = ctx.store.searchSymbols(term);
@@ -192,7 +200,7 @@ function buildServer(): Server {
         const file = (args as any)?.file;
         if (!file) return { content: [{ type: 'text', text: 'Missing required parameter: file' }] };
 
-        const ctx = await loadContext(dir);
+        const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const deps = ctx.graph.getDependencies(file);
@@ -214,7 +222,7 @@ function buildServer(): Server {
 
       case 'codegraph_export': {
         const dir = resolveDir(args || {});
-        const ctx = await loadContext(dir);
+        const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const format = (args as any)?.format || 'llm';
@@ -243,7 +251,7 @@ function buildServer(): Server {
 
       case 'codegraph_status': {
         const dir = resolveDir(args || {});
-        const ctx = await loadContext(dir);
+        const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const lastScan = ctx.store.getMeta('last_scan_time');
@@ -262,6 +270,9 @@ function buildServer(): Server {
 
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
+    }
+    } finally {
+      try { activeStore?.close(); } catch { /* already closed */ }
     }
   });
 
