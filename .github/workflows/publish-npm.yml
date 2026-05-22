@@ -1,0 +1,51 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Verify version sync
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          FILE_VERSION=$(cat VERSION | tr -d '[:space:]')
+          if [ "$PKG_VERSION" != "$FILE_VERSION" ]; then
+            echo "Version mismatch: package.json=$PKG_VERSION, VERSION=$FILE_VERSION"
+            exit 1
+          fi
+          echo "Version OK: $PKG_VERSION"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build WASM grammars
+        run: npx tsx scripts/build-wasm.ts
+
+      - name: Build npm package
+        run: npm run build:npm
+
+      - name: Verify package contents
+        run: npm pack --dry-run
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

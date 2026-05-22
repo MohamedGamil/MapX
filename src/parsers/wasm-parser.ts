@@ -10,16 +10,22 @@ const __thisFile = fileURLToPath(import.meta.url);
 /**
  * Find the root directory that contains wasm/ and queries/ subdirectories.
  *
- * - Source/dev mode (bun run, tsx): the source file exists at its real path,
- *   so we navigate 2 dirs up (src/parsers/ → project root).
- * - Compiled binary mode (bun build --compile): import.meta.url is a virtual
- *   path baked in at compile time. We search standard locations relative to
- *   the binary's own executable path so the binary is self-sufficient once
- *   assets are installed alongside it.
+ * Three execution contexts:
+ *   1. Source/dev (tsx or bun run src/main.ts):
+ *      __thisFile = /path/to/mapx/src/parsers/wasm-parser.ts  → exists
+ *      asset root  = resolve(dir, '..', '..')  →  /path/to/mapx/
+ *
+ *   2. npm-installed (node dist/main.js via npm bin symlink):
+ *      __thisFile = /path/to/node_modules/mapx/dist/parsers/wasm-parser.js  → exists
+ *      asset root  = resolve(dir, '..', '..')  →  /path/to/node_modules/mapx/
+ *
+ *   3. Compiled native binary (bun build --compile):
+ *      __thisFile = virtual bun:// path  → does NOT exist
+ *      falls through to process.execPath-relative search
  */
 function findAssetRoot(): string {
   if (existsSync(__thisFile)) {
-    // Source/dev: navigate up from src/parsers/wasm-parser.ts
+    // Source/dev or npm-installed transpiled: navigate up from dist/parsers/ or src/parsers/
     return resolve(dirname(__thisFile), '..', '..');
   }
 

@@ -115,6 +115,7 @@ export interface ExportOptions {
 export interface RepoConfig {
   name: string;
   path: string;
+  framework?: string;
   languages?: Record<string, UserLanguageDefinition>;
 }
 

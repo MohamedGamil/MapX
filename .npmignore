@@ -1,0 +1,15 @@
+# .npmignore
+src/
+scripts/
+docs/
+specs/
+.mapx/
+.github/
+*.ts
+!*.d.ts
+tsconfig*.json
+tsup.config.*
+Makefile
+*.sh
+*.ps1
+

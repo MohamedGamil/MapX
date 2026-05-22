@@ -264,15 +264,87 @@ export function buildCLI(): Command {
     .version(readVersion())
     .option('-d, --dir <path>', 'Target project directory (default: current directory)');
 
+function detectLaravel(workspaceRoot: string): boolean {
+  const composerPath = join(workspaceRoot, 'composer.json');
+  if (existsSync(composerPath)) {
+    try {
+      const content = readFileSync(composerPath, 'utf-8');
+      const composer = JSON.parse(content);
+      if (composer.require && composer.require['laravel/framework']) {
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (existsSync(join(workspaceRoot, 'artisan'))) {
+    return true;
+  }
+
+  if (existsSync(join(workspaceRoot, 'app', 'Http', 'Kernel.php'))) {
+    return true;
+  }
+
+  if (
+    existsSync(join(workspaceRoot, 'app')) &&
+    existsSync(join(workspaceRoot, 'routes')) &&
+    existsSync(join(workspaceRoot, 'config')) &&
+    existsSync(join(workspaceRoot, 'database'))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function askQuestion(query: string): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  return new Promise(resolve => rl.question(query, ans => {
+    rl.close();
+    resolve(ans);
+  }));
+}
+
+async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> {
+  if (noSuggestions) return false;
+  if (!process.stdin.isTTY) {
+    return true;
+  }
+  
+  console.log('\nDetected Laravel project.');
+  console.log('\nSuggested exclusions (recommended):');
+  console.log('  ✓ database/migrations/**   (schema DDL — no app logic)');
+  console.log('  ✓ database/seeders/**      (data fixtures)');
+  console.log('  ✓ database/factories/**    (test data)');
+  console.log('  ✓ storage/**               (runtime-generated)');
+  console.log('  ✓ bootstrap/cache/**       (artisan-generated cache)');
+  console.log('  ✓ public/**                (web assets)');
+  console.log('  ✓ resources/views/**       (Blade templates — not yet supported)');
+  console.log('  ✓ **/*.blade.php           (Blade files)');
+  
+  const answer = await askQuestion('\nAdd these to .mapx/config.json? [Y/n] ');
+  return answer.toLowerCase() !== 'n';
+}
+
   program
     .command('init')
     .description('Initialize mapx for a project')
     .argument('[path]', 'Target directory')
     .option('--name <name>', 'Repository name')
     .option('--no-agents', 'Skip AGENTS.md creation')
+    .option('--no-suggestions', 'Skip interactive framework suggestions')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
-      const config = await Config.init(dir, opts.name as string | undefined);
+      const isLaravel = detectLaravel(dir);
+      let shouldAddLaravelExcludes = false;
+      if (isLaravel) {
+        shouldAddLaravelExcludes = await confirmLaravelExcludes(opts.suggestions === false);
+      }
+      const config = await Config.init(dir, opts.name as string | undefined, isLaravel, shouldAddLaravelExcludes);
       if (opts.agents !== false) {
         await writeAgentsMd(dir);
       }
@@ -400,6 +472,7 @@ export function buildCLI(): Command {
       // ── Scan info ──────────────────────────────────────────────────────
       console.log('\n── Scan ─────────────────────────────────────────────');
       console.log(`  Project:     ${config.repo.name}`);
+      console.log(`  Framework:   ${config.repo.framework || 'generic'}`);
       console.log(`  Directory:   ${dir}`);
       console.log(`  Last scan:   ${lastScan  || 'never'}`);
       console.log(`  Last commit: ${lastCommit || 'none'}`);

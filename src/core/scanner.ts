@@ -711,8 +711,22 @@ export class Scanner {
   }
 
   private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>): string | null {
-    const matches = this.store.searchSymbols(symbolName);
+    let matches = this.store.searchSymbols(symbolName);
     if (matches.length > 0) {
+      const exactMatch = matches.find(m => m.name === symbolName);
+      if (exactMatch) return exactMatch.file_path as string;
+    }
+
+    if (symbolName.includes('\\')) {
+      const parts = symbolName.split('\\');
+      const shortName = parts[parts.length - 1];
+      matches = this.store.searchSymbols(shortName);
+      if (matches.length > 0) {
+        const exactMatch = matches.find(m => m.name === shortName);
+        if (exactMatch) return exactMatch.file_path as string;
+        return matches[0].file_path as string;
+      }
+    } else if (matches.length > 0) {
       return matches[0].file_path as string;
     }
     return null;

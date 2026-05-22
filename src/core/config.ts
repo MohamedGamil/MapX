@@ -57,7 +57,12 @@ export class Config {
     return new Config(configPath, config);
   }
 
-  static async init(workspaceRoot: string, repoName?: string): Promise<Config> {
+  static async init(
+    workspaceRoot: string,
+    repoName?: string,
+    isLaravel = false,
+    shouldAddLaravelExcludes = false
+  ): Promise<Config> {
     const mapxDir = join(workspaceRoot, '.mapx');
     await mkdir(mapxDir, { recursive: true });
 
@@ -74,34 +79,54 @@ export class Config {
     }
 
     const defaultExclude = [...DEFAULT_CONFIG.settings.excludePatterns];
-    let isPHP = false;
-    let isJSTS = false;
-    try {
-      const rootFiles = await readdir(workspaceRoot);
-      for (const file of rootFiles) {
-        if (file === 'composer.json' || file.endsWith('.php')) {
-          isPHP = true;
-        }
-        if (
-          file === 'package.json' ||
-          file === 'tsconfig.json' ||
-          file.endsWith('.ts') ||
-          file.endsWith('.js') ||
-          file.endsWith('.tsx') ||
-          file.endsWith('.jsx')
-        ) {
-          isJSTS = true;
+
+    if (shouldAddLaravelExcludes) {
+      const LARAVEL_DEFAULT_EXCLUDES = [
+        'database/migrations/**',
+        'database/seeders/**',
+        'database/factories/**',
+        'storage/**',
+        'bootstrap/cache/**',
+        'public/**',
+        'resources/views/**',
+        '**/*.blade.php',
+        'vendor/**',
+      ];
+      for (const pattern of LARAVEL_DEFAULT_EXCLUDES) {
+        if (!defaultExclude.includes(pattern)) {
+          defaultExclude.push(pattern);
         }
       }
-    } catch {
-      // ignore readdir errors
-    }
+    } else {
+      let isPHP = false;
+      let isJSTS = false;
+      try {
+        const rootFiles = await readdir(workspaceRoot);
+        for (const file of rootFiles) {
+          if (file === 'composer.json' || file.endsWith('.php')) {
+            isPHP = true;
+          }
+          if (
+            file === 'package.json' ||
+            file === 'tsconfig.json' ||
+            file.endsWith('.ts') ||
+            file.endsWith('.js') ||
+            file.endsWith('.tsx') ||
+            file.endsWith('.jsx')
+          ) {
+            isJSTS = true;
+          }
+        }
+      } catch {
+        // ignore readdir errors
+      }
 
-    if (isPHP) {
-      defaultExclude.push('**/migrations/**', '**/seeds/**', '**/storage/**');
-    }
-    if (isJSTS) {
-      defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts');
+      if (isPHP) {
+        defaultExclude.push('**/migrations/**', '**/seeds/**', '**/storage/**');
+      }
+      if (isJSTS) {
+        defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts');
+      }
     }
 
     // User patterns come first (higher priority); add any default patterns the
@@ -116,7 +141,15 @@ export class Config {
     const existingRepos: RepoConfig[] = existing?.repos ?? [];
     const repos: RepoConfig[] = existingRepos.length > 0
       ? existingRepos
-      : [{ name: defaultRepoName, path: '.' }];
+      : [{
+          name: defaultRepoName,
+          path: '.',
+          ...(isLaravel ? { framework: 'laravel' } : {}),
+        }];
+
+    if (repos[0] && isLaravel) {
+      repos[0].framework = 'laravel';
+    }
 
     const config: MapxConfig = {
       version: existing?.version ?? DEFAULT_CONFIG.version,

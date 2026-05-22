@@ -264,6 +264,20 @@ make install-local
 
 ---
 
+## Publishing to npm
+
+To publish new releases of the npm package:
+
+1. Create a tag matching the version in `package.json` and push it:
+   ```bash
+   git tag v0.1.7
+   git push origin v0.1.7
+   ```
+2. The GitHub Actions publish workflow will automatically run, verify version synchronization, build WASM grammars, compile the TypeScript code using `tsup`, and publish to the npm registry with provenance.
+3. **Important**: The workflow requires a repository secret named `NPM_TOKEN`. This token must be generated on `npmjs.com` as an **Automation** access token.
+
+---
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).

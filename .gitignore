@@ -36,3 +36,6 @@ Desktop.ini
 *.bak
 *.tmp
 *.swp
+*_walkthrough.md
+scratch/
+

@@ -10,7 +10,18 @@
   },
   "type": "module",
   "bin": {
-    "mapx": "./src/main.ts"
+    "mapx": "./dist/main.js"
+  },
+  "files": [
+    "dist/",
+    "wasm/",
+    "queries/",
+    "VERSION",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
   },
   "scripts": {
     "version-sync": "tsx scripts/sync-version.ts",
@@ -22,11 +33,14 @@
     "build:mac-x64": "bun build --compile --minify --bytecode --target=bun-darwin-x64 ./src/main.ts --outfile dist/mapx-darwin-x64",
     "build:win": "bun build --compile --minify --bytecode --target=bun-windows-x64 ./src/main.ts --outfile dist/mapx-windows-x64.exe",
     "build:all": "tsx scripts/build-all.ts",
+    "build:npm": "tsup",
+    "prepublishOnly": "npm run build:npm",
     "scan": "tsx src/main.ts scan",
     "export": "tsx src/main.ts export",
     "test": "tsx src/main.ts scan && tsx src/main.ts export"
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "commander": "^13.1.0",
     "graphology": "^0.26.0",
     "graphology-metrics": "^2.4.0",
@@ -38,12 +52,12 @@
     "zod": "^3.25.0"
   },
   "optionalDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "better-sqlite3": "^12.10.0"
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.19",
+    "tsup": "^8.5.1",
     "tsx": "^4.20.0",
     "typescript": "^5.8.0"
   }
