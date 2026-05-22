@@ -46,7 +46,8 @@ specs/
 │   ├── F23-nodejs-frameworks.md     ← Feature 23: Node.js/TS framework routes (Express, NestJS)
 │   ├── F24-frontend-routing.md      ← Feature 24: Frontend routing (React Router, Tanstack, Next.js, SvelteKit)
 │   ├── F25-backend-frameworks.md   ← Feature 25: Backend framework routes (Rails, Spring, Go, Rust, ASP.NET, Vapor, Drupal, Laravel extended)
-│   └── F26-php-cms-frameworks.md   ← Feature 26: PHP CMS/frameworks (Symfony, Yii2, Yii3, WordPress)
+│   ├── F26-php-cms-frameworks.md   ← Feature 26: PHP CMS/frameworks (Symfony, Yii2, Yii3, WordPress)
+│   └── F27-toon-export.md           ← Feature 27: TOON (Token-Oriented Object Notation) export format
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -94,6 +95,7 @@ specs/
 | F24 | Frontend routing frameworks (React Router, Tanstack Router, Next.js, SvelteKit) | `planned` | I13 | [F24](features/F24-frontend-routing.md) |
 | F25 | Backend framework routes (Laravel extended, Drupal, Rails, Spring, Gin/chi/gorilla, Axum/actix/Rocket, ASP.NET Core, Vapor) | `planned` | I13 | [F25](features/F25-backend-frameworks.md) |
 | F26 | PHP CMS/framework routes (Symfony attribute + YAML routes, Yii2/Yii3, WordPress hooks/filters/shortcodes/REST/template hierarchy) | `planned` | I13 | [F26](features/F26-php-cms-frameworks.md) |
+| F27 | TOON export format (`mapx export --format=toon`) | `planned` | I14 | [F27](features/F27-toon-export.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -116,6 +118,7 @@ specs/
 | [I11](iterations/I11.md) | Smart context & search tools | `planned` | F19 |
 | [I12](iterations/I12.md) | Language expansion (19 languages) | `planned` | F20 |
 | [I13](iterations/I13.md) | Framework-aware parsing & route context (21 frameworks) | `planned` | F21, F22, F23, F24, F25, F26 |
+| [I14](iterations/I14.md) | TOON export format | `planned` | F27 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -203,4 +206,8 @@ I13 (F21–F26: framework-aware parsing)
  ├── F22 (Python), F23 (Node.js), F24 (frontend), F25 (other backends), F26 (PHP CMS) are independent of each other
  ├── F25/F26 (Go/Rust/Java/C#/Swift/Ruby/PHP backends) benefit from I12 parsers but use regex extraction — can proceed before I12
  └── Route edges are richer when I05/I06 Laravel edges are already present (F25 Laravel extended builds on F08)
+
+I14 (F27: TOON export)
+ ├── FULLY INDEPENDENT — no dependency on any other iteration
+ └── Benefits from I13 route/hook metadata in edges table (metadata JSON column from F21 schema v3) but works without it
 ```

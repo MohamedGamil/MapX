@@ -363,3 +363,26 @@ _None yet._
 ### Blockers / notes
 
 F21 (infrastructure) must be merged before any of F22–F25 can proceed. F22–F25 are independent of each other once F21 is available. All framework detectors use regex-based extraction rather than tree-sitter AST — this means F25's Go/Rust/Java/C#/Swift/Ruby detectors do not require I12 language parsers to be merged first. Laravel extended support (F25) builds on the F08 route extractor refactored in F21; F21 must be merged before F25 Laravel work starts.
+
+---
+
+## I14 — TOON Export Format
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Features | F27 |
+| Branch | `feat/i14-toon-export` |
+| PR | — |
+
+### Scope
+
+Adds `toon` as a first-class export format alongside the existing `llm`, `json`, `dot`, and `svg` formats. TOON (Token-Oriented Object Notation, spec v3.3) is a line-oriented, indentation-based format with the same data model as JSON but significantly fewer tokens — making it well-suited for LLM consumption of the mapx graph. The exporter serialises files, symbols, and edges as tabular TOON arrays, respects the `--tokens` budget with truncation and a `truncated:` footer, and supports optional `--delimiter=tab|pipe` and `--key-folding` flags. A new `ToonExporter` class is added to `src/exporters/toon-exporter.ts`, exported from `src/exporters/index.ts`, and wired into the `mapx export` CLI command and the `mapx export --format=toon` MCP path.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Fully independent — can be merged at any time. The exporter uses a manual TOON encoder (no external runtime dependency). The reference TOON npm package (`@toon-format/toon`) is added as a `devDependency` only, for round-trip validation in tests.
