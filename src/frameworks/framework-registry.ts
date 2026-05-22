@@ -10,6 +10,13 @@ import { TanstackRouterDetector } from './detectors/tanstack-router.js';
 import { NextJSDetector } from './detectors/nextjs.js';
 import { SvelteKitDetector } from './detectors/sveltekit.js';
 import { VueRouterDetector } from './detectors/vue-router.js';
+import { DrupalDetector } from './detectors/drupal.js';
+import { RailsDetector } from './detectors/rails.js';
+import { SpringDetector } from './detectors/spring.js';
+import { GoDetector } from './detectors/go.js';
+import { RustDetector } from './detectors/rust.js';
+import { AspNetDetector } from './detectors/aspnet.js';
+import { VaporDetector } from './detectors/vapor.js';
 
 export class FrameworkRegistry {
   private static instance: FrameworkRegistry | null = null;
@@ -27,6 +34,13 @@ export class FrameworkRegistry {
     this.register(new NextJSDetector());
     this.register(new SvelteKitDetector());
     this.register(new VueRouterDetector());
+    this.register(new DrupalDetector());
+    this.register(new RailsDetector());
+    this.register(new SpringDetector());
+    this.register(new GoDetector());
+    this.register(new RustDetector());
+    this.register(new AspNetDetector());
+    this.register(new VaporDetector());
   }
 
   static getInstance(): FrameworkRegistry {
