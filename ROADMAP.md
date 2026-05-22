@@ -80,11 +80,11 @@
 - [x] Warn on unregistered nested `.git` directories found during scan
 
 ### I11 · Smart Context & Search Tools · F19 · Risk: Medium · Requires: none (enriched by I01, I08)
-- [ ] Implement `ContextBuilder` class: seed extraction → BFS graph expansion → token-budget trimming
-- [ ] Add 7 new MCP tools: `mapx_search`, `mapx_context`, `mapx_callers`, `mapx_callees`, `mapx_impact`, `mapx_node`, `mapx_files`
-- [ ] Add 6 new CLI commands: `mapx search`, `mapx callers`, `mapx callees`, `mapx impact`, `mapx node`, `mapx files`
-- [ ] Enhance `mapx_status`: language breakdown, top-5 files/symbols by PageRank, stale detection
-- [ ] **⚠ BREAKING**: `mapx_status` text output format restructured — document migration notes; first summary line preserved
+- [x] Implement `ContextBuilder` class: seed extraction → BFS graph expansion → token-budget trimming
+- [x] Add 7 new MCP tools: `mapx_search`, `mapx_context`, `mapx_callers`, `mapx_callees`, `mapx_impact`, `mapx_node`, `mapx_files`
+- [x] Add 6 new CLI commands: `mapx search`, `mapx callers`, `mapx callees`, `mapx impact`, `mapx node`, `mapx files`
+- [x] Enhance `mapx_status`: language breakdown, top-5 files/symbols by PageRank, stale detection
+- [x] **⚠ BREAKING**: `mapx_status` text output format restructured — document migration notes; first summary line preserved
 
 ---
 
@@ -149,7 +149,7 @@
 - [ ] **I12** — Language sub-phases: ship SP1 before starting SP2; gate each on CI green
 - [ ] **I13** — Framework scope: implement 3 concrete detectors before building `FrameworkDetector` interface
 - [ ] **I13** — False positives: confidence score < 0.5 suppresses edge emission; log warnings
-- [ ] **I11** — Breaking change: add `CHANGELOG` entry; deprecation warning in old `mapx_status` text until next major version
+- [x] **I11** — Breaking change: add `CHANGELOG` entry; deprecation warning in old `mapx_status` text until next major version
 - [ ] **I15** — Bundle size: CI check that `dist/ui/main.js` gzipped size ≤ 200 KB; audit Cytoscape plugin additions
 
 ---

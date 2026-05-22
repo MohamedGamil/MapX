@@ -8,6 +8,12 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added (I11 — Smart Context & Search Tools)
+- Added `ContextBuilder` API for intelligent, token-budgeted prompt context generation.
+- Added 7 new MCP tools: `mapx_search`, `mapx_context`, `mapx_callers`, `mapx_callees`, `mapx_impact`, `mapx_node`, and `mapx_files`.
+- Added 6 new CLI commands: `mapx search`, `mapx callers`, `mapx callees`, `mapx impact`, `mapx node`, and `mapx files`.
+- Enhanced `mapx status` CLI and `mapx_status` MCP tool with language breakdown, PageRank top files/symbols lists, and Git stale index detection with upgrade recommendations.
+
 ### Planned (I01 — Edge Verifiability)
 - Add `verifiability` column (`verified` | `inferred`) to `edges` table
 - Bump store schema version with automatic migration for existing databases
