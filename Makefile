@@ -173,72 +173,25 @@ build: build-linux ## Build for current platform (linux-x64 default)
 VERSION := $(shell cat VERSION | tr -d '[:space:]')
 DIST_DIR := dist/release
 
-package-linux: build-linux ## Package linux-x64 binary as .tar.gz
-	@mkdir -p $(DIST_DIR)
-	@echo "Packaging codegraph-$(VERSION)-linux-x64..."
-	cp dist/codegraph-linux-x64 dist/codegraph
-	chmod +x dist/codegraph
-	tar -czf $(DIST_DIR)/codegraph-$(VERSION)-linux-x64.tar.gz \
-		-C dist codegraph \
-		-C $(CURDIR) AGENTS.md \
-		-C $(CURDIR) queries/ \
-		-C $(CURDIR) wasm/ \
-		-C $(CURDIR) docs/
-	rm dist/codegraph
-	@echo "Created: $(DIST_DIR)/codegraph-$(VERSION)-linux-x64.tar.gz"
+package-linux: build-linux ## Package linux-x64 binary as .tar.gz + installer
+	bash scripts/package.sh --skip-build linux-x64
 
-package-linux-arm: build-linux-arm ## Package linux-arm64 binary as .tar.gz
-	@mkdir -p $(DIST_DIR)
-	cp dist/codegraph-linux-arm64 dist/codegraph
-	chmod +x dist/codegraph
-	tar -czf $(DIST_DIR)/codegraph-$(VERSION)-linux-arm64.tar.gz \
-		-C dist codegraph \
-		-C $(CURDIR) AGENTS.md \
-		-C $(CURDIR) queries/ \
-		-C $(CURDIR) wasm/ \
-		-C $(CURDIR) docs/
-	rm dist/codegraph
-	@echo "Created: $(DIST_DIR)/codegraph-$(VERSION)-linux-arm64.tar.gz"
+package-linux-arm: build-linux-arm ## Package linux-arm64 binary as .tar.gz + installer
+	bash scripts/package.sh --skip-build linux-arm64
 
-package-mac-arm: build-mac-arm ## Package macOS ARM binary as .tar.gz
-	@mkdir -p $(DIST_DIR)
-	cp dist/codegraph-darwin-arm64 dist/codegraph
-	chmod +x dist/codegraph
-	tar -czf $(DIST_DIR)/codegraph-$(VERSION)-darwin-arm64.tar.gz \
-		-C dist codegraph \
-		-C $(CURDIR) AGENTS.md \
-		-C $(CURDIR) queries/ \
-		-C $(CURDIR) wasm/ \
-		-C $(CURDIR) docs/
-	rm dist/codegraph
-	@echo "Created: $(DIST_DIR)/codegraph-$(VERSION)-darwin-arm64.tar.gz"
+package-mac-arm: build-mac-arm ## Package macOS ARM binary as .tar.gz + installer
+	bash scripts/package.sh --skip-build darwin-arm64
 
-package-mac-x64: build-mac-x64 ## Package macOS x64 binary as .tar.gz
-	@mkdir -p $(DIST_DIR)
-	cp dist/codegraph-darwin-x64 dist/codegraph
-	chmod +x dist/codegraph
-	tar -czf $(DIST_DIR)/codegraph-$(VERSION)-darwin-x64.tar.gz \
-		-C dist codegraph \
-		-C $(CURDIR) AGENTS.md \
-		-C $(CURDIR) queries/ \
-		-C $(CURDIR) wasm/ \
-		-C $(CURDIR) docs/
-	rm dist/codegraph
-	@echo "Created: $(DIST_DIR)/codegraph-$(VERSION)-darwin-x64.tar.gz"
+package-mac-x64: build-mac-x64 ## Package macOS x64 binary as .tar.gz + installer
+	bash scripts/package.sh --skip-build darwin-x64
 
-package-win: build-win ## Package Windows binary as .zip
-	@mkdir -p $(DIST_DIR)
-	@echo "Packaging codegraph-$(VERSION)-windows-x64..."
-	cp dist/codegraph-windows-x64.exe dist/codegraph.exe
-	cd dist && zip -j $(CURDIR)/$(DIST_DIR)/codegraph-$(VERSION)-windows-x64.zip \
-		codegraph.exe
-	cp AGENTS.md queries/ docs/ /tmp/codegraph-win-staging/ 2>/dev/null || true
-	rm dist/codegraph.exe
-	@echo "Created: $(DIST_DIR)/codegraph-$(VERSION)-windows-x64.zip"
+package-win: build-win ## Package Windows binary as .zip + installer
+	bash scripts/package.sh --skip-build windows-x64
 
 package: package-linux ## Package for current platform
 
-package-all: package-linux package-linux-arm package-mac-arm package-mac-x64 package-win ## Package all platforms
+package-all: build-all ## Package all platforms
+	bash scripts/package.sh --skip-build all
 	@echo ""
 	@echo "All packages created in $(DIST_DIR)/:"
 	@ls -lh $(DIST_DIR)/*.tar.gz $(DIST_DIR)/*.zip 2>/dev/null
