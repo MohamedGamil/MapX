@@ -1,289 +1,186 @@
-# MapxGraph — Comprehensive Project Roadmap
+# MapxGraph — Implementation Checklist
 
-> **Last updated:** 2026-05-22  
-> **Scope:** 28 features across 15 iterations  
-> **Based on:** Complete review of specs/ directory  
-
----
-
-## Executive Summary
-
-MapxGraph is a local code-graph memory tool that scans source files, extracts symbols and dependencies, builds a weighted graph with PageRank scoring, and exposes the result through a CLI and MCP server. This roadmap presents a refined development plan based on thorough analysis of all specifications, addressing duplicates, conflicts, unrealistic expectations, and alignment issues identified during review.
+> 28 features · 15 iterations · schema v2 → v6 · ~37 CLI commands · 20 MCP tools  
+> Specs: [specs/README.md](specs/README.md) · Decisions: [specs/DECISIONS.md](specs/DECISIONS.md)
 
 ---
 
-## Key Improvements from Original Roadmap
+## Phase 1 — Foundation (all parallel)
 
-1. **Resolved Schema Version Conflicts**: Established canonical version sequence (v3→v4→v5→v6)
-2. **Adjusted Scope for Expansion Features**: Recommended incremental approach for language/framework support
-3. **Clarified Dependencies**: Fixed incorrect dependency claims (e.g., F08/F09 no longer incorrectly depend on F06)
-4. **Enhanced Risk Assessment**: Identified and documented high-risk iterations with mitigation strategies
-5. **Improved Readiness Assessment**: Separated "ready for implementation" features from those needing refinement
+### I01 · Schema Migration + Parser Edge Labelling · F01 · Risk: Low
+- [ ] `ALTER TABLE edges ADD COLUMN verifiability TEXT DEFAULT 'verified'` (schema v2 → v3)
+- [ ] Update PHP, JS, TS parsers to label edges as `verified` or `inferred`
+- [ ] Implement common-method filter list (suppress noise from generic method names)
+- [ ] Add `--verified-only` flag to `mapx metrics` and `mapx export`
 
----
+### I02 · Glob Filter Pipeline · F03 · Risk: Low
+- [ ] Add `--include` / `--exclude` glob patterns to `mapx scan`, `mapx update`, `mapx export`
+- [ ] Apply filtering at discovery time (zero I/O cost for excluded files)
+- [ ] Persist patterns in `.mapx/config.json` under `includePatterns` / `excludePatterns`
 
-## Refined Development Strategy
+### I04 · PHP Parser Fundamentals · F05, F06, F10 · Risk: Medium
+- [ ] Implement `UsageImportTable` class for FQN resolution from `use` imports (F05)
+- [ ] Add type-hint dependency edges: `param_type`, `return_type`, `property_type` (F06)
+- [ ] Auto-exclude `vendor/`, `bootstrap/cache/`, compiled views, test helpers (F10)
+- [ ] Validate: F05 is the only shared dependency of F06, F07, F08, F09
 
-### Phase-Based Approach
-
-Instead of strictly sequential iterations, we recommend a **phase-based approach** that maximizes parallel work while respecting true dependencies:
-
-#### Phase 1: Foundation (Can run in parallel)
-- **I01**: Schema migration + parser edge labelling (F01)
-- **I02**: Glob filter pipeline (F03) 
-- **I04**: PHP parser fundamentals (F05, F06, F10)
-- **I07**: npm distribution & Node.js DX (F13)
-
-#### Phase 2: Core Features (After Phase 1 prerequisites)
-- **I03**: CLI + MCP surface (F02, F04) - requires I01
-- **I05**: Laravel structural patterns (F07, F08, F09) - requires I04
-- **I08**: Code structure, clusters & data flow (F14, F15, F16) - requires I01
-
-#### Phase 3: Laravel Completion & Context
-- **I06**: Laravel advanced patterns (F11, F12) - requires I04,I05
-- **I09**: LLM agent integration files (F17) - enriched by I08,I10
-- **I10**: Git workspace & submodule awareness (F18) - requires I08
-- **I11**: Smart context & search tools (F19) - requires I03,I08
-
-#### Phase 4: Language Expansion (Sequential)
-- **I12**: Language expansion (F20) - independent but large scope
-  - **Recommended**: Implement in sub-phases (5 languages at a time)
-
-#### Phase 5: Framework Support (After language foundation)
-- **I13**: Framework-aware parsing (F21-F26) - requires I12 for non-PHP/JS/TS frameworks
-  - **Recommended**: Start with concrete implementations, extract patterns, then build infrastructure
-
-#### Phase 6: Polish & UX
-- **I14**: TOON export format (F27) - independent
-- **I15**: Bundled web dashboard (F28) - requires I07
+### I07 · npm Distribution & Node.js DX · F13 · Risk: Low
+- [ ] Publish `mapx` npm package with `bin: { mapx }`, `engines: { node: ">=20.0.0" }`
+- [ ] Implement `store-node.ts` using `better-sqlite3` (fallback when Bun unavailable)
+- [ ] Add `curl | sh` installer script and `mapx init` AGENTS.md injection
+- [ ] Add `MAPX_NO_UI=1` env flag to skip client bundle build in CI
 
 ---
 
-## Detailed Iteration Plan with Adjusted Scoping
+## Phase 2 — Core Features (after relevant Phase 1 items)
 
-### I01 — Schema Migration + Parser Edge Labelling
-**Status**: Ready for implementation  
-**Risk**: Low  
-**Deliverables**: 
-- `ALTER TABLE edges ADD COLUMN verifiability TEXT DEFAULT 'verified'`
-- Parser updates for PHP, JS, TS to label edges as verified/inferred
-- Common-method filter list implementation
-- `mapx metrics --verified-only` flag
+### I03 · CLI + MCP Surface · F02, F04 · Risk: Low · Requires: I01
+- [ ] Implement `mapx metrics [--lang=X] [--verified-only]` with Ca/Ce/instability reports (F02)
+- [ ] Implement `mapx edges [--type=X] [--from=X] [--to=X]` for granular edge querying (F04)
+- [ ] Add MCP tools: `mapx_metrics`, `mapx_edges`
 
-### I02 — Glob Filter Pipeline  
-**Status**: Ready for implementation  
-**Risk**: Low  
-**Deliverables**:
-- `--include` / `--exclude` glob patterns for scan/update/export
-- Discovery-time filtering (zero I/O cost for excluded files)
-- Config persistence in `.mapx/config.json`
+### I05 · Laravel Structural Patterns · F07, F08, F09 · Risk: Medium · Requires: I04
+- [ ] Add Eloquent relationship edges: `has_one`, `has_many`, `belongs_to`, `belongs_to_many`, `morph_*` (F07)
+- [ ] Detect route-to-controller bindings; emit `route` + `middleware` edge types (F08)
+- [ ] Detect IoC container bindings; emit `binds`, `singleton`, `alias` edge types (F09)
+- [ ] Confirm: F08 and F09 depend only on F05 FQN resolution, not F06 type hints
 
-### I03 — CLI + MCP Surface (metrics, edges)
-**Status**: Ready for implementation (after I01)  
-**Risk**: Low  
-**Deliverables**:
-- `mapx metrics` command with coupling/instability reports
-- `mapx edges` command for granular edge querying
-- Corresponding MCP tools: `mapx_metrics`, `mapx_edges`
-
-### I04 — PHP Parser Fundamentals
-**Status**: Ready for implementation  
-**Risk**: Medium  
-**Deliverables**:
-- FQN resolution from `use` import declarations (F05)
-- Type-hint dependency edges (param_type/return_type) (F06)  
-- Laravel-aware scan exclusions (vendor/, bootstrap/cache/, etc.) (F10)
-- UsageImportTable class implementation
-
-### I05 — Laravel Structural Patterns
-**Status**: Ready for implementation (after I04)  
-**Risk**: Medium  
-**Deliverables**:
-- Eloquent relationship edges (hasMany, belongsTo, etc.) (F07)
-- Route-to-controller binding edges (F08)
-- IoC service container binding edges (F09)
-- All features depend only on F05 FQN resolution, not F06
-
-### I06 — Laravel Advanced Patterns
-**Status**: Ready for implementation (after I04,I05)  
-**Risk**: Medium  
-**Deliverables**:
-- Facade resolution (static map to concrete services) (F11)
-- Event/job/notification dispatch edges (F12)
-- Dispatch/fires/listens_to/notifies/queues edge types
-
-### I07 — npm Distribution & Node.js DX
-**Status**: Ready for implementation  
-**Risk**: Low  
-**Deliverables**:
-- npm package publication with `bin: { mapx }`
-- Node.js SQLite fallback via better-sqlite3
-- Installer script and AGENTS.md injection at `mapx init`
-- Node 20+ LTS requirement
-
-### I08 — Code Structure, Clusters & Data Flow
-**Status**: Needs refinement  
-**Risk**: HIGH  
-**Deliverables**:
-- Cluster detection via namespace, directory, and community detection
-- Schema migration: clusters, cluster_membership tables + namespace column
-- `mapx clusters` CLI command and MCP tool
-- Cluster-aware DOT/SVG export with subgraph rendering
-- Data flow tracing (`mapx trace <symbol>`) with source/sink detection
-- **Recommendation**: Consider splitting into sub-iterations due to high complexity
-
-### I09 — LLM Agent Integration Files
-**Status**: Ready for implementation  
-**Risk**: Low  
-**Deliverables**:
-- `mapx agents` command group (generate, list, update)
-- Provider-specific templates for 10+ LLM/Cursor/Copilot/etc.
-- Version sentinel comments for update detection
-- MCP tool for agent file generation
-
-### I10 — Git Workspace & Submodule Awareness
-**Status**: Ready for implementation (after I08)  
-**Risk**: Medium  
-**Deliverables**:
-- WorkspaceManager for submodule, peer repo, and VS Code workspace detection
-- Per-repo scan isolation with independent blob hash tracking
-- Cross-repo edge tracking with source_repo/target_repo fields
-- `mapx workspaces` command group and `--all` flags
-- Schema migration: `ALTER TABLE edges ADD COLUMN target_repo TEXT`
-
-### I11 — Smart Context & Search Tools
-**Status**: Ready for implementation  
-**Risk**: Medium  
-**Deliverables**:
-- ContextBuilder class for task-focused context assembly
-- New tools: mapx_search, mapx_callers, mapx_callees, mapx_impact, mapx_node, mapx_files
-- Enhanced mapx_status with language breakdown and stale detection
-- **Note**: mapx_status text format change is a breaking change
-
-### I12 — Language Expansion (19 Languages)
-**Status**: Needs scoping adjustment  
-**Risk**: HIGH  
-**Deliverables**:
-- GenericWasmParser base class for language expansion
-- Language tier system: built-in, bundled, installable, user
-- WASM fetch/cache infrastructure in ~/.mapx/grammars/
-- **Recommendation**: Implement in phases:
-  - Phase 1: Python, Go, Rust, Java, C# (built-in)
-  - Phase 2: Ruby, C, C++, Swift, Kotlin (bundled)  
-  - Phase 3: Remaining 10 languages (installable via mapx lang install)
-
-### I13 — Framework-Aware Parsing & Route Context
-**Status**: Needs scoping adjustment  
-**Risk**: HIGH  
-**Deliverables**:
-- FrameworkDetector abstraction and RouteRegistry
-- mapx routes CLI command and MCP tool
-- Framework-specific detectors for 21 frameworks across 5 specs
-- Schema migration: `ALTER TABLE edges ADD COLUMN metadata TEXT`
-- **Recommendation**: 
-  1. Implement 2-3 concrete detectors first (Django, Express, Laravel)
-  2. Extract common patterns from implementations
-  3. Build FrameworkDetector infrastructure based on observed patterns
-  4. Expand to additional frameworks incrementally
-
-### I14 — TOON Export Format
-**Status**: Ready for implementation  
-**Risk**: Low  
-**Deliverables**:
-- TOON v3.3 export format (token-efficient alternative to JSON)
-- ToonExporter class with key folding and tabular arrays
-- --format=toon flag for mapx export and MCP tool
-- Optional --delimiter and --key-folding flags
-
-### I15 — Bundled Web Dashboard
-**Status**: Ready for implementation (after I07)  
-**Risk**: Medium  
-**Deliverables**:
-- Self-contained web dashboard via `mapx ui`
-- Graph exploration with Cytoscape.js (force-directed layout)
-- Symbol explorer table with search/sort/filter
-- Live MCP tool-call log via SSE
-- Metrics panel with PageRank and coupling charts
-- Context viewer (when F11 available)
-- Security: 127.0.0.1 binding, rate limiting, response size limits
+### I08 · Code Structure, Clusters & Data Flow · F14, F15, F16 · Risk: HIGH · Requires: I01
+- [ ] Implement `ClusterDetector` with namespace, directory, and Label Propagation strategies (F14)
+- [ ] Schema migration: add `clusters`, `cluster_membership` tables; `namespace TEXT` on `files` (v3 → v4)
+- [ ] Add `mapx clusters` CLI command and `mapx_clusters` MCP tool
+- [ ] Implement cluster-aware DOT/SVG export with subgraph outlines (F15)
+- [ ] Add data-flow tracer `mapx flow <symbol>` with source/sink detection; depth cap required (F16)
+- [ ] Add `mapx_flow` MCP tool
+- [ ] **Risk**: Label Propagation is non-deterministic — implement deterministic seeding strategy
+- [ ] **Risk**: Data-flow traversal can degrade super-linearly — enforce configurable depth limit
 
 ---
 
-## Risk Mitigation Strategies
+## Phase 3 — Laravel Completion & Context (sequential within phase)
 
-### High-Risk Iterations (I08, I12, I13)
+### I06 · Laravel Advanced Patterns · F11, F12 · Risk: Medium · Requires: I04, I05
+- [ ] Implement `FacadeResolver` static map (50+ built-in Laravel facades → concrete classes) (F11)
+- [ ] Add event dispatch edges: `dispatches`, `fires`, `listens_to`, `notifies`, `queues` (F12)
+- [ ] Confirm: F11 uses static facade map only — no dependency on F09 IoC binding table
 
-**I08 - Clusters & Data Flow**:
-- Implement Label Propagation with deterministic seeding
-- Add depth limits and performance guards for data flow tracing
-- Consider splitting cluster detection (F14) from data flow (F16)
+### I09 · LLM Agent Integration Files · F17 · Risk: Low · Requires: none (enriched by I08, I10)
+- [ ] Implement `mapx agents generate [--format=X]` command
+- [ ] Build per-format templates: `AGENTS.md`, `.cursorrules`, `copilot-instructions.md`, `CLAUDE.md`
+- [ ] Add version sentinel comments for stale-detection / update flow
+- [ ] Add `mapx_agents_generate` MCP tool
 
-**I12 - Language Expansion**:
-- Implement incrementally (5 languages per sub-iteration)
-- Set WASM bundle size budgets per parser
-- Prioritize languages with mature tree-sitter grammars
-- Create per-language test corpora early
+### I10 · Git Workspace & Submodule Awareness · F18 · Risk: Medium · Requires: I08 (schema v4 → v5)
+- [ ] Implement `WorkspaceManager`: parse `.gitmodules`, detect VS Code `.code-workspace`, peer repos
+- [ ] Fix incremental scan correctness: call `getGitBlobHashes()` per-repo with its own git root
+- [ ] Track cross-repo edges: `ALTER TABLE edges ADD COLUMN target_repo TEXT` (v4 → v5)
+- [ ] Add `mapx workspaces` / `mapx workspaces discover` / `mapx workspaces add` / `mapx workspaces remove`
+- [ ] Add `--all` flag to `mapx scan`, `mapx update`, `mapx status`, `mapx export`
+- [ ] Add `mapx_workspaces` MCP tool
+- [ ] Warn on unregistered nested `.git` directories found during scan
 
-**I13 - Framework Support**:
-- Start with concrete implementations before abstraction
-- Use regex-based extraction initially for rapid iteration
-- Extract FrameworkDetector interface after 2-3 implementations
-- Add framework detection confidence scoring to reduce false positives
-
-### Breaking Changes
-- **I11**: mapx_status text format change - document clearly, provide migration notes
-- All schema migrations are forward-only; use git to revert features if needed
+### I11 · Smart Context & Search Tools · F19 · Risk: Medium · Requires: none (enriched by I01, I08)
+- [ ] Implement `ContextBuilder` class: seed extraction → BFS graph expansion → token-budget trimming
+- [ ] Add 7 new MCP tools: `mapx_search`, `mapx_context`, `mapx_callers`, `mapx_callees`, `mapx_impact`, `mapx_node`, `mapx_files`
+- [ ] Add 6 new CLI commands: `mapx search`, `mapx callers`, `mapx callees`, `mapx impact`, `mapx node`, `mapx files`
+- [ ] Enhance `mapx_status`: language breakdown, top-5 files/symbols by PageRank, stale detection
+- [ ] **⚠ BREAKING**: `mapx_status` text output format restructured — document migration notes; first summary line preserved
 
 ---
 
-## Dependency Verification
+## Phase 4 — Language Expansion (sub-phases)
 
-All dependencies have been verified and corrected:
+### I12 · Language Expansion · F20 · Risk: HIGH · Requires: none
+- [ ] Add `LanguageTier.bundled` enum value to `src/languages/registry.ts` (currently missing)
+- [ ] Create `GenericWasmParser` base class with WASM fetch/cache in `~/.mapx/grammars/`
+- [ ] Add `mapx lang list` / `mapx lang install` / `mapx lang uninstall` commands
+- [ ] **Sub-phase 1**: Python, Go, Rust, Java, C# — built-in tier, WASM bundled in npm package
+- [ ] **Sub-phase 2**: Ruby, C, C++, Swift, Kotlin — bundled tier, enforce per-parser WASM size budget
+- [ ] **Sub-phase 3**: Svelte, Vue, Lua/Luau, Elixir, Zig, Bash, Pascal, Dart, Scala, Kotlin (via `mapx lang install`)
+- [ ] Create per-language test corpora; per-parser `queries/<lang>/symbols.scm` + `references.scm`
+- [ ] **Risk**: 19 parsers to maintain — prioritise languages with mature tree-sitter grammars
 
-### Corrected Dependencies:
-- **F08/F09**: No longer incorrectly depend on F06 (type hints) - they use string literals and ::class constants
-- **F11**: No longer incorrectly depends on F09 (binding table) - uses static facade map
-- **Schema Versions**: Canonical sequence established (v3→F01, v4→F14, v5→F18, v6→F21)
+---
 
-### Valid Dependencies:
-- **F02 → F01**: Metrics needs verifiability for --verified-only filtering
-- **F05 → F06**: Type hints need use-import table for FQN resolution  
-- **F04 → Independent**: Edge querying works on base graph
-- **F14 → Benefits from F05**: Better clusters with accurate PHP namespaces
-- **F16 → Enriched by F07-F12**: Richer traces with Laravel dispatch/route edges
-- **F21 → Prerequisite for F22-F26**: Framework infrastructure needed first
-- **F22-F26 → Benefit from F12**: Non-PHP/JS/TS frameworks need language parsers
+## Phase 5 — Framework Support (after I12)
+
+### I13 · Framework-Aware Parsing & Route Context · F21–F26 · Risk: HIGH · Requires: I12 (v5 → v6)
+- [ ] **Concrete first**: implement Django, Express, and Laravel extended detectors before abstracting
+- [ ] Extract `FrameworkDetector` interface and `RouteRegistry` class from concrete implementations (F21)
+- [ ] Add `mapx routes [--framework=X]` CLI and `mapx_routes` MCP tool
+- [ ] Schema migration: `ALTER TABLE edges ADD COLUMN metadata TEXT` (v5 → v6)
+- [ ] Add framework detection confidence scoring to suppress false positives
+- [ ] Implement Python detectors: Django, Flask, FastAPI (F22)
+- [ ] Implement Node.js detectors: Express, NestJS (F23)
+- [ ] Implement frontend detectors: React Router, Tanstack Router, Next.js, SvelteKit (F24)
+  - [ ] Mark all frontend route edges with `metadata.routeType = "client"` (distinct from server routes)
+- [ ] Implement backend detectors: Rails, Spring Boot, Gin, chi, gorilla/mux, Axum, actix-web, Rocket, ASP.NET Core, Vapor; Laravel extended, Drupal (F25)
+- [ ] Implement PHP CMS detectors: Symfony, Yii2, Yii3, WordPress (F26)
+- [ ] **Risk**: frontend `route` edges must carry `routeType: "client"` to distinguish from server-side route edges
+- [ ] **Risk**: 21 frameworks = high ongoing maintenance surface — confidence scoring is mandatory
+
+---
+
+## Phase 6 — Polish & UX
+
+### I14 · TOON Export Format · F27 · Risk: Low · Requires: none (independent)
+- [ ] Implement `ToonExporter` class conforming to TOON v3.3 spec (tabular arrays, inline arrays, key folding)
+- [ ] Add `--format=toon` to `mapx export`; register in `src/exporters/index.ts`
+- [ ] Implement `toonQuote()`: handle lone `-` null marker, leading `-\S` values, control chars `\u0000-\u001F\u007F-\u009F`
+- [ ] Support `--tokens=N` budget trimming with trailing `# N nodes omitted` comment
+- [ ] Note spec version in TOON output header: `# toon v3.3`
+
+### I15 · Bundled Web Dashboard · F28 · Risk: Medium · Requires: I07
+- [ ] Create `src/ui-server.ts` (HTTP server, Node.js built-ins only — no Express)
+- [ ] Create `src/ui-events.ts` (shared EventEmitter for MCP tool-call interception)
+- [ ] Build `src/ui/` client bundle with esbuild: Cytoscape.js graph, symbol table, tool log, metrics, context viewer
+- [ ] Add `mapx ui [--port=N] [--host=X] [--token=X] [--no-open]` and `mapx serve --ui`
+- [ ] Implement REST API: `/api/status`, `/api/graph`, `/api/symbols`, `/api/symbol/:name`, `/api/metrics`, `/api/context`, `/api/routes`
+- [ ] Implement SSE stream at `/events`: `tool-call`, `scan-progress`, `scan-complete` events
+- [ ] **Bundle target**: initial load < 200 KB gzipped (lazy-load fCoSE layout plugin); total < 350 KB gzipped
+- [ ] **Security**: bind `127.0.0.1` by default; optional `Authorization: Bearer` token; rate-limit `/api/context` + `/api/graph` to 10 req/min; cap responses at 10 MB; reject path traversal; CORS localhost only
+
+---
+
+## Risk Mitigation
+
+- [ ] **I08** — Label Propagation: add deterministic seed; test cluster stability across runs
+- [ ] **I08** — Data-flow depth: add configurable `--max-depth` (default 3); benchmark on 10k-node graphs
+- [ ] **I12** — Language sub-phases: ship SP1 before starting SP2; gate each on CI green
+- [ ] **I13** — Framework scope: implement 3 concrete detectors before building `FrameworkDetector` interface
+- [ ] **I13** — False positives: confidence score < 0.5 suppresses edge emission; log warnings
+- [ ] **I11** — Breaking change: add `CHANGELOG` entry; deprecation warning in old `mapx_status` text until next major version
+- [ ] **I15** — Bundle size: CI check that `dist/ui/main.js` gzipped size ≤ 200 KB; audit Cytoscape plugin additions
+
+---
+
+## Dependency Reference
+
+| Dependency | Direction | Reason |
+|-----------|-----------|--------|
+| F01 → F02 | required | `--verified-only` flag needs verifiability column |
+| F05 → F06 | required | type-hint edges need use-import table for FQN resolution |
+| F05 → F07, F08, F09 | required | Eloquent/route/IoC detection needs FQN resolution |
+| F08 ↛ F06 | **not required** | route detection uses string literals, not type hints |
+| F09 ↛ F06 | **not required** | IoC bindings use `::class` constants, not type hints |
+| F11 ↛ F09 | **not required** | facade resolution uses static map, not IoC binding table |
+| I01 → I08 | schema order | v3 must exist before v4 migration |
+| I08 → I10 | schema order | v4 must exist before v5 migration |
+| I10 → I13 | schema order | v5 must exist before v6 migration |
+| I12 → I13 | parser coverage | non-PHP/JS/TS frameworks need their language parsers first |
+| I07 → I15 | bundled assets | npm package infrastructure needed before shipping UI assets |
+| F21 → F22–F26 | infrastructure | `FrameworkDetector` base class required before concrete detectors |
+
+**Schema sequence**: v2 (baseline) → **v3** (F01 verifiability) → **v4** (F14 clusters) → **v5** (F18 target_repo) → **v6** (F21 edge metadata)
 
 ---
 
 ## Success Metrics
 
-### Technical Quality:
-- All features implementable with clear acceptance criteria
-- TypeScript type safety maintained throughout
-- Semantic versioning for API stability
-- Comprehensive test coverage targets (>80%)
-
-### Operational Excellence:
-- Backup/recovery procedures for .mapx database
-- Configuration validation at startup
-- Progressive error messages with recovery suggestions
-- Performance benchmarks for various codebase sizes
-
-### User Value:
-- Immediate value from core features (I01-I04, I08)
-- Incremental delivery of advanced capabilities
-- Clear upgrade path with documented migration steps
-- Backward compatibility maintained where possible
-
----
-
-## Conclusion
-
-This refined roadmap maintains the ambitious vision of MapxGraph while addressing practical implementation concerns. By adjusting scope for expansion features, clarifying dependencies, and identifying risks with mitigation strategies, the project can deliver consistent value to users while building toward its full potential.
-
-The recommended phase-based approach allows for parallel workstreams while respecting true technical dependencies, ensuring steady progress toward becoming a comprehensive developer intelligence tool.
-
----
-
-*This document supersedes the original ROADMAP.md and should be used as the definitive implementation guide.*
+- [ ] TypeScript type-check (`npx tsc --noEmit`) passes with 0 errors after every iteration
+- [ ] All acceptance criteria in each feature spec pass
+- [ ] No regression on existing `mapx scan/export/query` behaviour
+- [ ] WASM parser bundle per language ≤ budget defined in F20 spec
+- [ ] Dashboard initial bundle ≤ 200 KB gzipped
+- [ ] `mapx_context` p95 response time ≤ 200 ms on a 1000-file project
+- [ ] All schema migrations are additive (no column drops, no table renames)
