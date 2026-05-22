@@ -643,6 +643,16 @@ export async function loadContext(dir: string): Promise<{
   const config = await Config.load(dir);
   const dbPath = resolve(dir, '.codegraph', 'codegraph.db');
   const store = new Store(dbPath);
+
+  // Ensure the DB connection is closed when the process exits normally or
+  // after an unhandled error — this prevents the process from hanging after
+  // command completion due to SQLite's open file descriptor keeping the event
+  // loop alive.
+  const closeStore = () => { try { store.close(); } catch { /* already closed */ } };
+  process.once('exit', closeStore);
+  process.once('SIGINT', () => { closeStore(); process.exit(130); });
+  process.once('SIGTERM', () => { closeStore(); process.exit(143); });
+
   const graph = new CodeGraph(config.repo.name);
 
   const files = store.getAllFiles();
