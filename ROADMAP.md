@@ -105,10 +105,10 @@
 ## Phase 5 — Framework Support (after I12)
 
 ### I13 · Framework-Aware Parsing & Route Context · F21–F26 · Risk: HIGH · Requires: I10, I12 (v5 → v6)
+- [x] Extract `FrameworkDetector` interface and `RouteRegistry` class from concrete implementations (F21)
+- [x] Add `mapx routes [--framework=X]` CLI and `mapx_routes` MCP tool
+- [x] Schema migration: `ALTER TABLE edges ADD COLUMN metadata TEXT` (v5 → v6)
 - [ ] **Concrete first**: implement Django, Express, and Laravel extended detectors before abstracting
-- [ ] Extract `FrameworkDetector` interface and `RouteRegistry` class from concrete implementations (F21)
-- [ ] Add `mapx routes [--framework=X]` CLI and `mapx_routes` MCP tool
-- [ ] Schema migration: `ALTER TABLE edges ADD COLUMN metadata TEXT` (v5 → v6)
 - [ ] Add framework detection confidence scoring to suppress false positives
 - [ ] Implement Python detectors: Django, Flask, FastAPI (F22)
 - [ ] Implement Node.js detectors: Express, NestJS (F23)

@@ -355,7 +355,9 @@ Fully independent of all other iterations. The biggest risk is scope-tracking co
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `in-progress` |
+| Started | 2026-05-23 |
+| Completed | — |
 | Features | F21, F22, F23, F24, F25 |
 | Branch | `feat/i13-framework-routes` |
 | PR | — |

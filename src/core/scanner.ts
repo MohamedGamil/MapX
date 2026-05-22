@@ -12,7 +12,9 @@ import { getLanguageForFile } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import { minimatch } from 'minimatch';
-import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig } from '../types.js';
+import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
+import { FrameworkRegistry } from '../frameworks/framework-registry.js';
+import { RouteRegistry } from '../frameworks/route-registry.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -351,6 +353,8 @@ export class Scanner {
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
+
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -536,6 +540,8 @@ export class Scanner {
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
+
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
     }
 
     return {
@@ -889,5 +895,124 @@ export class Scanner {
     } catch {
       return null;
     }
+  }
+
+  private async scanFrameworkRoutesAndHooks(repo: RepoConfig, repoRoot: string): Promise<void> {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const files = await this.store.getAllFiles(repo.name);
+    const filePaths = files.map(f => f.path as string);
+
+    const registry = FrameworkRegistry.getInstance();
+    const activeDetectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+    if (activeDetectors.length === 0) return;
+
+    // Save active frameworks
+    const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+    const activeNames = activeDetectors.map(d => d.name);
+    await writeFile(frameworksPath, JSON.stringify(activeNames, null, 2), 'utf-8');
+
+    const routeRegistry = new RouteRegistry();
+    await routeRegistry.load(workspaceRoot);
+
+    // Context for symbol resolution
+    const ctx: ScanContext = {
+      workspaceRoot,
+      repoName: repo.name,
+      resolveSymbolToFile: (symName: string) => {
+        return this.resolveSymbolToFile(symName, this.workspaceFileMap);
+      }
+    };
+
+    for (const detector of activeDetectors) {
+      // Find files that match the detector's pattern (e.g. routes/api.php)
+      const matchingPaths = filePaths.filter(p => detector.filePattern.test(p));
+      for (const relPath of matchingPaths) {
+        try {
+          const absPath = resolve(workspaceRoot, relPath);
+          const content = await readFile(absPath, 'utf-8');
+
+          const routes = await detector.extractRoutes(relPath, content, ctx);
+          for (const route of routes) {
+            routeRegistry.addRoute(route);
+
+            // Add as an edge in the db/graph
+            this.store.insertEdge({
+              sourceFile: relPath,
+              targetFile: route.handlerFile,
+              sourceSymbol: null,
+              targetSymbol: route.handlerSymbol || null,
+              edgeType: 'route',
+              repo: repo.name,
+              weight: 1.0,
+              verifiability: 'inferred',
+              metadata: {
+                httpVerb: route.method,
+                uri: route.path,
+                middlewares: route.middlewares,
+                confidence: 'inferred',
+              }
+            });
+            this.graph.addDependencyEdge({
+              sourceFile: relPath,
+              targetFile: route.handlerFile,
+              sourceSymbol: null,
+              targetSymbol: route.handlerSymbol || null,
+              edgeType: 'route',
+              repo: repo.name,
+              weight: 1.0,
+              verifiability: 'inferred',
+              metadata: {
+                httpVerb: route.method,
+                uri: route.path,
+                middlewares: route.middlewares,
+                confidence: 'inferred',
+              }
+            });
+          }
+
+          if (detector.extractHooks) {
+            const hooks = await detector.extractHooks(relPath, content, ctx);
+            for (const hook of hooks) {
+              routeRegistry.addHook(hook);
+
+              this.store.insertEdge({
+                sourceFile: relPath,
+                targetFile: hook.handlerFile,
+                sourceSymbol: null,
+                targetSymbol: hook.handlerSymbol || null,
+                edgeType: 'hook',
+                repo: repo.name,
+                weight: 1.0,
+                verifiability: 'inferred',
+                metadata: {
+                  hookName: hook.hookName,
+                  hookType: hook.hookType,
+                  confidence: 'inferred',
+                }
+              });
+              this.graph.addDependencyEdge({
+                sourceFile: relPath,
+                targetFile: hook.handlerFile,
+                sourceSymbol: null,
+                targetSymbol: hook.handlerSymbol || null,
+                edgeType: 'hook',
+                repo: repo.name,
+                weight: 1.0,
+                verifiability: 'inferred',
+                metadata: {
+                  hookName: hook.hookName,
+                  hookType: hook.hookType,
+                  confidence: 'inferred',
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to extract routes/hooks for ${relPath}:`, err);
+        }
+      }
+    }
+
+    await routeRegistry.save(workspaceRoot);
   }
 }

@@ -24,6 +24,7 @@ import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
+import { RouteRegistry } from './frameworks/route-registry.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -226,6 +227,32 @@ export function buildServer(): Server {
             depth: { type: 'number', default: 6, description: 'Max traversal depth' },
             format: { type: 'string', enum: ['text', 'dot', 'json'], default: 'text', description: 'Output format' },
             include_structural: { type: 'boolean', default: false, description: 'Include structural edges (e.g., import/extends)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_routes',
+        description: 'Show routes from all detected frameworks',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            framework: { type: 'string', description: 'Filter by framework name' },
+            method: { type: 'string', description: 'Filter by HTTP method (GET, POST, etc.)' },
+            pathPattern: { type: 'string', description: 'Filter by route path pattern' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_hooks',
+        description: 'Show hooks/events from all detected frameworks',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            framework: { type: 'string', description: 'Filter by framework name' },
+            type: { type: 'string', description: 'Filter by hook type' },
+            namePattern: { type: 'string', description: 'Filter by hook name pattern' },
             ...dirProperty,
           },
         },
@@ -1453,6 +1480,50 @@ Callees: ${callees.length}`;
         }
 
         return { content: [{ type: 'text', text: results.join('\n') }] };
+      }
+
+      case 'mapx_routes': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+
+        const routeRegistry = new RouteRegistry();
+        await routeRegistry.load(dir);
+
+        const routes = routeRegistry.queryRoutes({
+          framework: (args as any)?.framework,
+          method: (args as any)?.method,
+          path: (args as any)?.pathPattern,
+        });
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(routes, null, 2),
+          }],
+        };
+      }
+
+      case 'mapx_hooks': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+
+        const routeRegistry = new RouteRegistry();
+        await routeRegistry.load(dir);
+
+        const hooks = routeRegistry.queryHooks({
+          framework: (args as any)?.framework,
+          hookType: (args as any)?.type,
+          hookName: (args as any)?.namePattern,
+        });
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(hooks, null, 2),
+          }],
+        };
       }
 
       case 'mapx_lang_list': {

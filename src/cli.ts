@@ -21,6 +21,7 @@ import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
+import { RouteRegistry } from './frameworks/route-registry.js';
 
 const dynamicRequire = createRequire(import.meta.url);
 
@@ -1592,6 +1593,90 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const infSuffix = e.verifiability === 'inferred' ? ' [inferred]' : '';
         console.log(`- ${e.source_file}${srcSym} → ${e.target_file}${tgtSym} (${e.edge_type})${infSuffix}`);
       }
+      console.log('');
+    });
+
+  program
+    .command('routes')
+    .description('Show routes from all detected frameworks')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--framework <name>', 'Filter by framework name')
+    .option('--method <verb>', 'Filter by HTTP method (GET, POST, etc.)')
+    .option('--path-pattern <pattern>', 'Filter by route path pattern')
+    .option('--json', 'Output routes as JSON')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(dir);
+
+      const routes = routeRegistry.queryRoutes({
+        framework: opts.framework as string | undefined,
+        method: opts.method as string | undefined,
+        path: opts.pathPattern as string | undefined,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(routes, null, 2));
+        return;
+      }
+
+      if (routes.length === 0) {
+        console.log('No routes found.');
+        return;
+      }
+
+      console.log(`\nDetected Routes (${routes.length}):`);
+      console.log(''.padEnd(80, '-'));
+      console.log(`${'Framework'.padEnd(12)} | ${'Method'.padEnd(8)} | ${'Path'.padEnd(30)} | ${'Handler'}`);
+      console.log(''.padEnd(80, '-'));
+      for (const r of routes) {
+        const handler = r.handlerSymbol || r.handlerFile;
+        console.log(`${r.framework.padEnd(12)} | ${r.method.toUpperCase().padEnd(8)} | ${r.path.padEnd(30)} | ${handler}`);
+      }
+      console.log(''.padEnd(80, '-'));
+      console.log('');
+    });
+
+  program
+    .command('hooks')
+    .description('Show hooks from all detected frameworks')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--framework <name>', 'Filter by framework name')
+    .option('--type <type>', 'Filter by hook type')
+    .option('--name <pattern>', 'Filter by hook name pattern')
+    .option('--json', 'Output hooks as JSON')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(dir);
+
+      const hooks = routeRegistry.queryHooks({
+        framework: opts.framework as string | undefined,
+        hookType: opts.type as string | undefined,
+        hookName: opts.name as string | undefined,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(hooks, null, 2));
+        return;
+      }
+
+      if (hooks.length === 0) {
+        console.log('No hooks found.');
+        return;
+      }
+
+      console.log(`\nDetected Hooks (${hooks.length}):`);
+      console.log(''.padEnd(80, '-'));
+      console.log(`${'Framework'.padEnd(12)} | ${'Type'.padEnd(15)} | ${'Hook Name'.padEnd(25)} | ${'Handler'}`);
+      console.log(''.padEnd(80, '-'));
+      for (const h of hooks) {
+        const handler = h.handlerSymbol || h.handlerFile;
+        console.log(`${h.framework.padEnd(12)} | ${h.hookType.padEnd(15)} | ${h.hookName.padEnd(25)} | ${handler}`);
+      }
+      console.log(''.padEnd(80, '-'));
       console.log('');
     });
 
