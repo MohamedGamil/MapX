@@ -18,6 +18,7 @@ specs/
 ├── 04-llm-integration-files.md       ← LLM agent integration files overview (reference)
 ├── 05-git-workspace-awareness.md     ← git workspace & submodule awareness overview (reference)
 ├── 06-smart-context-and-search.md    ← smart context & search tools overview (reference)
+├── 07-language-expansion.md          ← language expansion overview (reference)
 │
 ├── features/
 │   ├── F01-edge-verifiability.md     ← Feature 1: dynamic vs. verified edges
@@ -38,7 +39,8 @@ specs/
 │   ├── F16-data-flow-tracing.md     ← Feature 16: Data flow tracing & source/sink detection
 │   ├── F17-llm-integration-files.md ← Feature 17: LLM agent integration file generation
 │   ├── F18-git-workspace-submodules.md ← Feature 18: Git workspace & submodule awareness
-│   └── F19-smart-context-tools.md   ← Feature 19: Smart context & search MCP/CLI tools
+│   ├── F19-smart-context-tools.md   ← Feature 19: Smart context & search MCP/CLI tools
+│   └── F20-language-expansion.md    ← Feature 20: Language expansion (19 languages)
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -51,7 +53,8 @@ specs/
     ├── I08.md                        ← Iteration 8: clusters, structure & data flow
     ├── I09.md                        ← Iteration 9: LLM agent integration files
     ├── I10.md                        ← Iteration 10: git workspace & submodule awareness
-    └── I11.md                        ← Iteration 11: smart context & search tools
+    ├── I11.md                        ← Iteration 11: smart context & search tools
+    └── I12.md                        ← Iteration 12: language expansion (19 languages)
 ```
 
 ---
@@ -79,6 +82,7 @@ specs/
 | F17 | LLM agent integration file generation (`mapx agents`) | `planned` | I09 | [F17](features/F17-llm-integration-files.md) |
 | F18 | Git workspace & submodule awareness | `planned` | I10 | [F18](features/F18-git-workspace-submodules.md) |
 | F19 | Smart context & search MCP/CLI tools | `planned` | I11 | [F19](features/F19-smart-context-tools.md) |
+| F20 | Language expansion (Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Dart, Svelte, Vue, Lua/Luau, Elixir, Zig, Bash, Pascal) | `planned` | I12 | [F20](features/F20-language-expansion.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -99,6 +103,7 @@ specs/
 | [I09](iterations/I09.md) | LLM agent integration files (`mapx agents`) | `planned` | F17 |
 | [I10](iterations/I10.md) | Git workspace & submodule awareness | `planned` | F18 |
 | [I11](iterations/I11.md) | Smart context & search tools | `planned` | F19 |
+| [I12](iterations/I12.md) | Language expansion (19 languages) | `planned` | F20 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -175,4 +180,9 @@ I11 (F19: smart context & search tools)
  ├── INDEPENDENT of all other iterations
  ├── mapx_context is richer when F14 (clusters) are available
  └── mapx_callers/mapx_callees are richer with F16 (flow edges) and F07/F08/F12 (Laravel edges)
+
+I12 (F20: language expansion)
+ ├── FULLY INDEPENDENT — no dependency on any other iteration
+ ├── Framework-aware edges for new languages (e.g. Django routes) deferred to future iterations
+ └── Quality of symbol extraction depends on tree-sitter grammar maturity per language
 ```

@@ -315,3 +315,26 @@ _None yet._
 ### Blockers / notes
 
 Fully independent of all other iterations. No schema changes required. `mapx_context` quality improves when F14 cluster data is available (clusters used as context grouping signals) and when F07/F08/F12 Laravel edges are present (richer call graph). `mapx_query` is kept as a backward-compatible alias for `mapx_search`.
+
+---
+
+## I12 — Language Expansion (19 languages)
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Features | F20 |
+| Branch | `feat/i12-language-expansion` |
+| PR | — |
+
+### Scope
+
+Extends mapx from 3 supported languages (PHP, JavaScript, TypeScript) to 22 by adding tree-sitter-based parsing for Python, Go, Rust, Java, C# (Tier 1 — built-in); Ruby, C, C++, Swift, Kotlin, Scala, Dart (Tier 2 — bundled); and Svelte, Vue2/Vue3, Lua/Luau, Elixir, Zig, Bash/Shell, Pascal/Delphi (Tier 3 — installable via `mapx lang install`). Core architectural change: `GenericWasmParser` base class replaces boilerplate per-language parser classes. New `mapx lang install / uninstall / list / info` commands for on-demand grammar management. No schema changes.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Fully independent of all other iterations. The biggest risk is scope-tracking correctness for languages where method scope requires AST traversal beyond direct parent (Go receivers, Rust impl blocks). Svelte and Vue parsers are most complex due to multi-part file structure. `tree-sitter-pascal` is less maintained — fall back gracefully if grammar quality is poor.
