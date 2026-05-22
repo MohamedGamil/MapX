@@ -14,6 +14,7 @@ specs/
 │
 ├── 01-mapx-enhancements.md           ← original enhancement overview (reference)
 ├── 02-php-laravel-enhancements.md    ← PHP/Laravel enhancement overview (reference)
+├── 03-code-structure-and-dataflow.md ← clusters, structure & data flow overview (reference)
 │
 ├── features/
 │   ├── F01-edge-verifiability.md     ← Feature 1: dynamic vs. verified edges
@@ -28,7 +29,10 @@ specs/
 │   ├── F10-laravel-noise-reduction.md ← Feature 10: Laravel-aware scan exclusions
 │   ├── F11-facade-resolution.md      ← Feature 11: Facade → concrete service resolution
 │   ├── F12-event-job-dispatch.md     ← Feature 12: Event/Job/Notification dispatch edges
-│   └── F13-npm-distribution.md      ← Feature 13: npm/npx distribution & Node.js DX
+│   ├── F13-npm-distribution.md      ← Feature 13: npm/npx distribution & Node.js DX
+│   ├── F14-cluster-detection.md     ← Feature 14: Module/domain cluster detection
+│   ├── F15-cluster-visualization.md ← Feature 15: Cluster-aware export & visualization
+│   └── F16-data-flow-tracing.md     ← Feature 16: Data flow tracing & source/sink detection
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -37,7 +41,8 @@ specs/
     ├── I04.md                        ← Iteration 4: PHP parser fundamentals
     ├── I05.md                        ← Iteration 5: Laravel structural patterns
     ├── I06.md                        ← Iteration 6: Laravel advanced patterns
-    └── I07.md                        ← Iteration 7: npm distribution & Node.js DX
+    ├── I07.md                        ← Iteration 7: npm distribution & Node.js DX
+    └── I08.md                        ← Iteration 8: clusters, structure & data flow
 ```
 
 ---
@@ -59,6 +64,9 @@ specs/
 | F11 | Laravel facade resolution | `planned` | I06 | [F11](features/F11-facade-resolution.md) |
 | F12 | Event / Job / Notification dispatch edges | `planned` | I06 | [F12](features/F12-event-job-dispatch.md) |
 | F13 | npm / npx distribution & Node.js developer experience | `planned` | I07 | [F13](features/F13-npm-distribution.md) |
+| F14 | Module / domain cluster detection | `planned` | I08 | [F14](features/F14-cluster-detection.md) |
+| F15 | Cluster-aware export & visualization | `planned` | I08 | [F15](features/F15-cluster-visualization.md) |
+| F16 | Data flow tracing & source/sink detection | `planned` | I08 | [F16](features/F16-data-flow-tracing.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -75,6 +83,7 @@ specs/
 | [I05](iterations/I05.md) | Laravel structural patterns (models, routes, IoC) | `planned` | F07, F08, F09 |
 | [I06](iterations/I06.md) | Laravel advanced patterns (facades, dispatch) | `planned` | F11, F12 |
 | [I07](iterations/I07.md) | npm distribution & Node.js developer experience | `planned` | F13 |
+| [I08](iterations/I08.md) | Code structure, clusters & data flow | `planned` | F14, F15, F16 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -132,4 +141,11 @@ I06 (F11 + F12: Laravel advanced)
 
 I07 (F13: npm distribution)
  └── FULLY INDEPENDENT — no dependency on I01–I06, can be merged at any time
+
+I08 (F14 + F15 + F16: clusters & data flow)
+ ├── INDEPENDENT of I01–I07 (can be developed in parallel)
+ ├── F14 (cluster detection) benefits from F05 being merged (accurate PHP namespaces)
+ ├── F15 (cluster export) depends on F14 within I08
+ ├── F16 (data flow) is independent of F14/F15 — can be developed in parallel with F14
+ └── F16 traces are richer when F07–F12 Laravel edges are present (dispatch, route, relation)
 ```

@@ -207,3 +207,38 @@ _None yet._
 ### Blockers / notes
 
 Fully independent of I01–I06. Can be merged at any time. Requires a one-time setup by the repository maintainer: create npm account, generate automation token, configure `NPM_TOKEN` secret in GitHub repository settings, verify package name availability, and perform the first manual `npm publish --access public`.
+
+---
+
+## I08 — Code Structure, Clusters & Data Flow
+
+| Field | Value |
+|-------|-------|
+| Status | `planned` |
+| Features | F14, F15, F16 |
+| Branch | `feat/i08-clusters-and-flow` |
+| PR | — |
+
+### Scope
+
+Adds structural intelligence and data-flow tracing to mapx. Three capabilities:
+
+1. **F14 — Cluster detection**: infer logical modules/domains from namespace declarations (PHP, TypeScript), directory hierarchy, and edge-density community detection (Label Propagation). Clusters are persisted to a new schema v3 SQLite schema and exposed via `mapx clusters`.
+
+2. **F15 — Cluster-aware export**: DOT `subgraph cluster_*` rendering, SVG cluster bounding boxes, LLM `## Structure` section, JSON `clusters` array. New `--cluster` and `--depth` flags on `mapx export`. Fully backward-compatible — default `--cluster none` produces identical output to current.
+
+3. **F16 — Data flow tracing**: `mapx trace <symbol>` follows data-bearing edges (`call`, `instantiation`, `param_type`, `return_type`, `relation`, `dispatch`, `notify`, `route`) forward and backward through the graph. Detects cycles, identifies entry points (sources) and terminal consumers (sinks). Outputs text trees, DOT subgraphs, and JSON.
+
+### Recommended implementation order
+
+1. F14 (cluster engine + schema) — all other I08 work benefits from this
+2. F16 (flow tracer) — can be developed in parallel with F14 since it reads existing `edges` table
+3. F15 (cluster export) — depends on F14 cluster data being populated
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+Independent of I01–I07. F14 benefits from F05 (accurate PHP namespace parsing) but is not blocked by it. F16 traces are richer when F07–F12 Laravel edges (`dispatch`, `route`, `relation`) are present but will function correctly without them.
