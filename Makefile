@@ -1,6 +1,8 @@
 .PHONY: help init uninit scan update status export export-wide export-json export-dot export-svg export-svg-grid export-toon \
        query search deps summary trace callers callees impact node files clusters \
-       serve serve-sse ui workspaces-list workspaces-discover lang-list \
+       routes hooks \
+       agents-list agents-generate agents-mcp agents-mcp-detect \
+       serve serve-sse ui workspaces-list workspaces-discover workspaces-sync lang-list \
        bench bench-json \
        test test-full test-clean clean clean-all \
        wasm build build-all build-linux build-linux-arm \
@@ -127,8 +129,31 @@ workspaces-list: ## List registered repos
 workspaces-discover: ## Discover unregistered repos
 	$(CLI) workspaces discover --dir=$(DIR)
 
+workspaces-sync: ## Auto-register discovered repos
+	$(CLI) workspaces sync --dir=$(DIR)
+
 lang-list: ## List supported languages
 	$(CLI) lang list
+
+routes: ## Show detected framework routes (make routes DIR=/path)
+	$(CLI) routes $(DIR)
+
+hooks: ## Show detected framework hooks (make hooks DIR=/path)
+	$(CLI) hooks $(DIR)
+
+# ── Agent Integration ─────────────────────────────────────────
+
+agents-list: ## List all supported LLM integration providers
+	$(CLI) agents list
+
+agents-generate: ## Generate LLM integration files (make agents-generate [p=antigravity] DIR=/path)
+	$(CLI) agents generate $(if $(p),--providers $(p),--all) --dir=$(DIR)
+
+agents-mcp: ## Auto-detect agent tools and generate MCP config files (make agents-mcp DIR=/path)
+	$(CLI) agents mcp --dir=$(DIR)
+
+agents-mcp-detect: ## Detect agent tools without writing files (make agents-mcp-detect DIR=/path)
+	$(CLI) agents mcp --detect --dir=$(DIR)
 
 # ── Benchmarking ──────────────────────────────────────────────
 
