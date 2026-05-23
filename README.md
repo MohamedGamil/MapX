@@ -305,6 +305,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | [CLI Reference](docs/cli-reference.md) | All 31 commands and their flags |
 | [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 25 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
+| [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |
 | [Architecture](docs/architecture.md) | Internals and component overview |
 

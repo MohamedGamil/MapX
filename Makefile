@@ -1,6 +1,7 @@
 .PHONY: help init scan update status export export-wide export-json export-dot export-svg export-toon \
        query search deps summary trace callers callees impact node files clusters \
        serve serve-sse ui workspaces-list workspaces-discover lang-list \
+       bench bench-json \
        test test-full test-clean clean clean-all \
        wasm build build-all build-linux build-linux-arm \
        build-mac-arm build-mac-x64 build-win \
@@ -122,6 +123,14 @@ workspaces-discover: ## Discover unregistered repos
 
 lang-list: ## List supported languages
 	$(CLI) lang list
+
+# ── Benchmarking ──────────────────────────────────────────────
+
+bench: ## Run token consumption benchmark (make bench DIR=/path)
+	npx tsx benchmarks/run.ts $(DIR)
+
+bench-json: ## Run benchmark with JSON output (make bench-json DIR=/path)
+	npx tsx benchmarks/run.ts $(DIR) --json
 
 # ── Testing ───────────────────────────────────────────────────
 
