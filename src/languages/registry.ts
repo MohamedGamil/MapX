@@ -249,15 +249,15 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   vue: {
     name: 'vue',
     extensions: ['.vue'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-vue.wasm'),
+    grammarWasm: 'wasm/tree-sitter-vue.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'vue', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'vue', 'references.scm'),
+      symbols: 'queries/vue/symbols.scm',
+      references: 'queries/vue/references.scm',
     },
     nodeMappings: {
       function: 'function_declaration',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   lua: {
     name: 'lua',
