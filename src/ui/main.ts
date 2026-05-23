@@ -1072,14 +1072,34 @@ function setupContextBuilder() {
             <div><strong>Token Budget Used:</strong> ${context.estimatedTokens || 0} tokens</div>
             <div>
               <strong>Key Context Files:</strong>
-              <ul style="padding-left:20px; margin-top:5px;">
-                ${context.files && context.files.length > 0 ? context.files.map((f: any) => `<li><code>${f.path || f}</code></li>`).join('') : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'}
+              <ul style="padding-left:20px; margin-top:5px; display: flex; flex-direction: column; gap: 4px;">
+                ${context.files && context.files.length > 0 
+                  ? context.files.map((f: any) => `
+                      <li>
+                        <code>${f.path || f}</code> 
+                        <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
+                          (${f.language || 'unknown'} • ${f.lineCount || 0} lines)
+                        </span>
+                      </li>
+                    `).join('') 
+                  : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
+                }
               </ul>
             </div>
             <div>
               <strong>Relevant Entry Symbols:</strong>
-              <ul style="padding-left:20px; margin-top:5px;">
-                ${context.symbols && context.symbols.length > 0 ? context.symbols.map((s: any) => `<li><code>${s.name || s}</code></li>`).join('') : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'}
+              <ul style="padding-left:20px; margin-top:5px; display: flex; flex-direction: column; gap: 4px;">
+                ${context.symbols && context.symbols.length > 0 
+                  ? context.symbols.map((s: any) => `
+                      <li>
+                        <code>${s.name || s}</code> 
+                        <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
+                          (${s.kind || 'unknown'} • <code>${s.filePath || ''}</code>)
+                        </span>
+                      </li>
+                    `).join('') 
+                  : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
+                }
               </ul>
             </div>
           </div>

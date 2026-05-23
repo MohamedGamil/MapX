@@ -32,6 +32,22 @@ export interface ContextResult {
     edgeType: string;
   }>;
   estimatedTokens: number;
+  matchedSymbols?: Array<{
+    name: string;
+    kind: string;
+    filePath: string;
+  }>;
+  files?: Array<{
+    path: string;
+    language: string;
+    lineCount: number;
+    sizeBytes: number;
+  }>;
+  symbols?: Array<{
+    name: string;
+    kind: string;
+    filePath: string;
+  }>;
 }
 
 const STOP_WORDS = new Set([
@@ -75,7 +91,7 @@ export class ContextBuilder {
     const maxDepth = options.depth ?? 2;
     const repo = options.repo;
 
-    // 1. Initial matching (keywords + seeds)
+    const matchedSymbols: Array<{ name: string; kind: string; filePath: string }> = [];
     const seedFiles = new Set<string>();
 
     // Process explicit seeds
@@ -91,6 +107,11 @@ export class ContextBuilder {
           const sym = this.store.getSymbolByName(seed, repo);
           if (sym) {
             seedFiles.add(sym.file_path as string);
+            matchedSymbols.push({
+              name: sym.name as string,
+              kind: sym.kind as string,
+              filePath: sym.file_path as string,
+            });
           }
         }
       }
@@ -102,15 +123,47 @@ export class ContextBuilder {
       const syms = this.store.searchSymbolsFiltered({ term: kw, repo, limit: 10 });
       for (const sym of syms) {
         seedFiles.add(sym.file_path as string);
+        if (!matchedSymbols.some(s => s.name === sym.name && s.filePath === sym.file_path)) {
+          matchedSymbols.push({
+            name: sym.name as string,
+            kind: sym.kind as string,
+            filePath: sym.file_path as string,
+          });
+        }
       }
     }
 
-    // 2. Graph Expansion (BFS)
-    const visited = new Set<string>(seedFiles);
-    const queue: Array<{ file: string; depth: number }> = Array.from(seedFiles).map(f => ({ file: f, depth: 0 }));
+    // Query files matching the keywords in their paths (realistic addition!)
+    const allFiles = this.store.getAllFiles(repo);
+    for (const kw of keywords) {
+      const kwLower = kw.toLowerCase();
+      for (const f of allFiles) {
+        if ((f.path as string).toLowerCase().includes(kwLower)) {
+          seedFiles.add(f.path as string);
+        }
+      }
+    }
 
-    while (queue.length > 0) {
-      const { file, depth: currentDepth } = queue.shift()!;
+    // Fallback: if no seeds were matched, seed with top 5 PageRank files to provide general codebase entry context
+    if (seedFiles.size === 0) {
+      const topFiles = this.graph.getRankedFiles().slice(0, 5);
+      for (const tf of topFiles) {
+        seedFiles.add(tf.path);
+      }
+    }
+
+    // 2. Graph Expansion (BFS tracking exact shortest path distance)
+    const distances = new Map<string, number>();
+    for (const sf of seedFiles) {
+      distances.set(sf, 0);
+    }
+
+    const queue: string[] = Array.from(seedFiles);
+    let head = 0;
+
+    while (head < queue.length) {
+      const file = queue[head++];
+      const currentDepth = distances.get(file)!;
       if (currentDepth >= maxDepth) continue;
 
       const neighbors = [
@@ -119,37 +172,82 @@ export class ContextBuilder {
       ];
 
       for (const neighbor of neighbors) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          queue.push({ file: neighbor, depth: currentDepth + 1 });
+        if (!distances.has(neighbor)) {
+          distances.set(neighbor, currentDepth + 1);
+          queue.push(neighbor);
         }
       }
     }
 
-    // 3. Rank Candidates by PageRank
+    // 3. Rank Candidates by relevance score
     const rankedAll = this.graph.getRankedFiles();
-    const rankedCandidates = rankedAll.filter(f => visited.has(f.path));
-    
-    // Add visited candidates not present in PageRank results
-    for (const path of visited) {
-      if (!rankedCandidates.some(rc => rc.path === path)) {
-        const dbFile = this.store.getFile(path);
-        if (dbFile) {
-          rankedCandidates.push({
-            path,
-            pagerank: 0,
-            language: dbFile.language as string
-          });
+    const rankedMap = new Map<string, number>();
+    for (const f of rankedAll) {
+      rankedMap.set(f.path, f.pagerank);
+    }
+
+    const candidates = Array.from(distances.keys());
+    const candidateScores = candidates.map(path => {
+      const depth = distances.get(path)!;
+      const dbFile = this.store.getFile(path);
+      const language = dbFile ? (dbFile.language as string) : 'unknown';
+
+      // Base score on depth (exact path distance from seeds)
+      let score = 0;
+      if (depth === 0) {
+        score += 1000;
+      } else if (depth === 1) {
+        score += 100;
+      } else if (depth === 2) {
+        score += 10;
+      } else {
+        score += 1;
+      }
+
+      // Keyword match boost in path
+      const pathLower = path.toLowerCase();
+      let keywordPathMatches = 0;
+      for (const kw of keywords) {
+        if (pathLower.includes(kw.toLowerCase())) {
+          keywordPathMatches++;
         }
       }
-    }
+      score += keywordPathMatches * 200;
+
+      // Keyword match boost in symbols
+      const fileSyms = this.store.getSymbolsForFile(path);
+      let keywordSymbolMatches = 0;
+      for (const sym of fileSyms) {
+        const symNameLower = (sym.name as string).toLowerCase();
+        for (const kw of keywords) {
+          if (symNameLower.includes(kw.toLowerCase())) {
+            keywordSymbolMatches++;
+          }
+        }
+      }
+      score += keywordSymbolMatches * 50;
+
+      // PageRank tie-breaker
+      const pr = rankedMap.get(path) || 0;
+      score += pr * 20;
+
+      return {
+        path,
+        language,
+        score,
+        depth
+      };
+    });
+
+    // Sort candidates by score descending
+    candidateScores.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
 
     // 4. Token-constrained Packaging
     const includedFiles: ContextResult['includedFiles'] = [];
     const excludedFiles: string[] = [];
     let currentTokens = 0;
 
-    for (const cand of rankedCandidates) {
+    for (const cand of candidateScores) {
       const dbFile = this.store.getFile(cand.path);
       if (!dbFile) continue;
 
@@ -201,11 +299,21 @@ export class ContextBuilder {
       }
     }
 
+    const simpleFiles = includedFiles.map(f => ({
+      path: f.path,
+      language: f.language,
+      lineCount: f.lineCount,
+      sizeBytes: f.sizeBytes
+    }));
+
     return {
       includedFiles,
       excludedFiles,
       edges,
-      estimatedTokens: currentTokens
+      estimatedTokens: currentTokens,
+      matchedSymbols,
+      files: simpleFiles,
+      symbols: matchedSymbols
     };
   }
 }
