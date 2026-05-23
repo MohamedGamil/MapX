@@ -121,56 +121,198 @@ async function loadStatus() {
   }
 }
 
+let rawGraphElements: any[] = [];
+let showClusters = false;
+
+function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
+  if (!useClusters) {
+    // Return copy of elements without parent fields
+    return rawElements.map(el => {
+      if (el.data && el.data.parent) {
+        const copy = JSON.parse(JSON.stringify(el));
+        delete copy.data.parent;
+        return copy;
+      }
+      return el;
+    });
+  }
+
+  const processed: any[] = [];
+  const directoriesSeen = new Set<string>();
+
+  const getParentId = (filePath: string): string | undefined => {
+    const parts = filePath.split('/');
+    return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : undefined;
+  };
+
+  const addDirectoryParents = (filePath: string) => {
+    const parts = filePath.split('/');
+    if (parts.length <= 1) return;
+    
+    for (let i = 1; i < parts.length; i++) {
+      const dirPath = parts.slice(0, i).join('/');
+      const dirId = `dir:${dirPath}`;
+      if (!directoriesSeen.has(dirId)) {
+        directoriesSeen.add(dirId);
+        
+        const parentDirPath = parts.slice(0, i - 1).join('/');
+        const parentId = parentDirPath ? `dir:${parentDirPath}` : undefined;
+        
+        processed.push({
+          data: {
+            id: dirId,
+            label: parts[i - 1],
+            type: 'parent',
+            parent: parentId
+          }
+        });
+      }
+    }
+  };
+
+  for (const el of rawElements) {
+    if (el.data && el.data.type === 'file') {
+      const filePath = el.data.id;
+      addDirectoryParents(filePath);
+      
+      const parts = filePath.split('/');
+      const parentId = parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : undefined;
+      
+      const copy = JSON.parse(JSON.stringify(el));
+      copy.data.parent = parentId;
+      processed.push(copy);
+    }
+  }
+
+  // Aggregate inter-cluster edges
+  const interClusterEdges = new Map<string, { source: string, target: string, count: number }>();
+
+  for (const el of rawElements) {
+    if (el.data && el.data.source && el.data.target) {
+      const src = el.data.source;
+      const tgt = el.data.target;
+      const parentSrc = getParentId(src) || src;
+      const parentTgt = getParentId(tgt) || tgt;
+
+      if (parentSrc !== parentTgt) {
+        const edgeKey = `${parentSrc}->${parentTgt}`;
+        if (!interClusterEdges.has(edgeKey)) {
+          interClusterEdges.set(edgeKey, { source: parentSrc, target: parentTgt, count: 0 });
+        }
+        interClusterEdges.get(edgeKey)!.count++;
+      } else {
+        processed.push(JSON.parse(JSON.stringify(el)));
+      }
+    }
+  }
+
+  // Add aggregated inter-cluster edges
+  for (const [key, info] of interClusterEdges.entries()) {
+    processed.push({
+      data: {
+        id: `edge-cluster-${info.source}-${info.target}`,
+        source: info.source,
+        target: info.target,
+        type: 'cluster-dependency',
+        label: `${info.count}`,
+        count: info.count
+      }
+    });
+  }
+
+  return processed;
+}
+
 // Setup Cytoscape view and fetch graph
 async function loadGraph() {
   try {
     const res = await fetch('/api/graph');
     if (!res.ok) return;
-    const elements = await res.json();
+    rawGraphElements = await res.json();
 
     const container = document.getElementById('cy');
     if (!container) return;
 
+    const initialElements = buildGraphElements(rawGraphElements, showClusters);
+
     cyInstance = cytoscape({
       container: container,
-      elements: elements,
+      elements: initialElements,
       style: [
         {
           selector: 'node',
           style: {
             'label': 'data(label)',
-            'color': '#cbd5e1',
+            'color': '#f8fafc',
             'font-family': 'Outfit, sans-serif',
             'font-size': '11px',
-            'background-color': '#3b82f6',
-            'width': '35px',
-            'height': '35px',
+            'font-weight': '600',
+            'background-color': '#64748b',
+            'shape': 'ellipse',
+            'width': '32px',
+            'height': '32px',
             'text-valign': 'bottom',
             'text-margin-y': 6,
-            'overlay-color': '#3b82f6',
-            'overlay-opacity': 0.2
+            'overlay-color': '#60a5fa',
+            'overlay-opacity': 0.2,
+            'text-outline-color': '#0b0f19',
+            'text-outline-width': '2px',
+            'transition-property': 'opacity, width, height, border-color, border-width, background-color',
+            'transition-duration': 0.2
           }
         },
         {
-          selector: 'node[language="php"]',
-          style: { 'background-color': '#4f5b93' }
+          selector: 'node[type="file"]',
+          style: {
+            'shape': 'ellipse',
+            'border-width': '2px',
+            'border-color': '#0f172a'
+          }
         },
         {
-          selector: 'node[language="javascript"]',
-          style: { 'background-color': '#f7df1e' }
+          selector: 'node[type="symbol"]',
+          style: {
+            'shape': 'ellipse',
+            'border-width': '2px',
+            'border-color': '#0f172a'
+          }
         },
         {
-          selector: 'node[language="typescript"]',
-          style: { 'background-color': '#3178c6' }
+          selector: ':parent',
+          style: {
+            'background-color': 'rgba(30, 41, 59, 0.4)',
+            'border-width': '2px',
+            'border-color': '#475569',
+            'border-style': 'dashed',
+            'label': 'data(label)',
+            'color': '#cbd5e1',
+            'font-family': 'Outfit, sans-serif',
+            'font-size': '12px',
+            'font-weight': 'bold',
+            'text-valign': 'top',
+            'text-halign': 'center',
+            'text-outline-width': '2px',
+            'text-outline-color': '#0b0f19',
+            'padding': '20px'
+          }
         },
-        {
-          selector: 'node[language="python"]',
-          style: { 'background-color': '#3776ab' }
-        },
-        {
-          selector: 'node[language="rust"]',
-          style: { 'background-color': '#dea584' }
-        },
+        { selector: 'node[language="php"]', style: { 'background-color': '#4f5b93' } },
+        { selector: 'node[language="javascript"]', style: { 'background-color': '#eab308' } },
+        { selector: 'node[language="typescript"]', style: { 'background-color': '#2563eb' } },
+        { selector: 'node[language="tsx"]', style: { 'background-color': '#3178c6' } },
+        { selector: 'node[language="python"]', style: { 'background-color': '#3776ab' } },
+        { selector: 'node[language="rust"]', style: { 'background-color': '#dea584' } },
+        { selector: 'node[language="go"]', style: { 'background-color': '#00ADD8' } },
+        { selector: 'node[language="java"]', style: { 'background-color': '#b07219' } },
+        { selector: 'node[language="c_sharp"]', style: { 'background-color': '#178600' } },
+        { selector: 'node[language="cpp"]', style: { 'background-color': '#f34b7d' } },
+        { selector: 'node[language="c"]', style: { 'background-color': '#555555' } },
+        { selector: 'node[language="ruby"]', style: { 'background-color': '#701516' } },
+        { selector: 'node[language="swift"]', style: { 'background-color': '#f05138' } },
+        { selector: 'node[language="kotlin"]', style: { 'background-color': '#a97bff' } },
+        { selector: 'node[language="vue"]', style: { 'background-color': '#41b883' } },
+        { selector: 'node[language="scala"]', style: { 'background-color': '#c22d40' } },
+        { selector: 'node[language="dart"]', style: { 'background-color': '#00b4ab' } },
         {
           selector: 'edge',
           style: {
@@ -180,7 +322,9 @@ async function loadGraph() {
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             'overlay-color': '#fff',
-            'overlay-opacity': 0.1
+            'overlay-opacity': 0.1,
+            'transition-property': 'opacity, width, line-color, target-arrow-color',
+            'transition-duration': 0.2
           }
         },
         {
@@ -191,28 +335,150 @@ async function loadGraph() {
           }
         },
         {
+          selector: 'edge[type="cluster-dependency"]',
+          style: {
+            'width': '3px',
+            'line-color': '#3b82f6',
+            'target-arrow-color': '#3b82f6',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'label': 'data(label)',
+            'color': '#93c5fd',
+            'font-family': 'Outfit, sans-serif',
+            'font-size': '10px',
+            'font-weight': 'bold',
+            'text-background-color': '#0f172a',
+            'text-background-opacity': 0.9,
+            'text-background-padding': '3px',
+            'text-background-shape': 'roundrectangle'
+          }
+        },
+        {
           selector: 'node:selected',
           style: {
             'border-width': '3px',
             'border-color': '#fff'
           }
+        },
+        {
+          selector: '.dimmed',
+          style: {
+            'opacity': 0.15,
+            'text-opacity': 0.15
+          }
+        },
+        {
+          selector: '.highlighted-center',
+          style: {
+            'width': '45px',
+            'height': '45px',
+            'border-width': '4px',
+            'border-color': '#3b82f6',
+            'overlay-opacity': 0.4,
+            'z-index': 9999,
+            'opacity': 1,
+            'text-opacity': 1
+          }
+        },
+        {
+          selector: '.highlighted-outgoing',
+          style: {
+            'line-color': '#10b981',
+            'target-arrow-color': '#10b981',
+            'width': 4,
+            'z-index': 9998,
+            'opacity': 1
+          }
+        },
+        {
+          selector: '.highlighted-outgoing-node',
+          style: {
+            'border-width': '3px',
+            'border-color': '#10b981',
+            'z-index': 9997,
+            'opacity': 1,
+            'text-opacity': 1
+          }
+        },
+        {
+          selector: '.highlighted-incoming',
+          style: {
+            'line-color': '#a855f7',
+            'target-arrow-color': '#a855f7',
+            'width': 4,
+            'z-index': 9998,
+            'opacity': 1
+          }
+        },
+        {
+          selector: '.highlighted-incoming-node',
+          style: {
+            'border-width': '3px',
+            'border-color': '#a855f7',
+            'z-index': 9997,
+            'opacity': 1,
+            'text-opacity': 1
+          }
         }
       ],
       layout: {
         name: 'cose',
-        animate: false
+        animate: false,
+        nodeRepulsion: 80000,
+        idealEdgeLength: 150,
+        gravity: 0.1,
+        nodeOverlap: 40,
+        nestingFactor: 1.2
       }
     });
 
     // Handle Layout button clicks
     document.getElementById('btn-layout-fcose')?.addEventListener('click', () => {
-      cyInstance.layout({ name: 'cose', animate: true }).run();
+      cyInstance.layout({
+        name: 'cose',
+        animate: true,
+        nodeRepulsion: 80000,
+        idealEdgeLength: 150,
+        gravity: 0.1,
+        nodeOverlap: 40,
+        nestingFactor: 1.2
+      }).run();
     });
     document.getElementById('btn-layout-circle')?.addEventListener('click', () => {
       cyInstance.layout({ name: 'circle', animate: true }).run();
     });
     document.getElementById('btn-layout-grid')?.addEventListener('click', () => {
       cyInstance.layout({ name: 'grid', animate: true }).run();
+    });
+
+    // Toggle clusters button listener
+    document.getElementById('btn-toggle-clusters')?.addEventListener('click', (e) => {
+      showClusters = !showClusters;
+      const btn = e.currentTarget as HTMLButtonElement;
+      if (showClusters) {
+        btn.textContent = '📂 Hide Clusters';
+        btn.classList.add('btn-primary');
+        btn.classList.remove('btn-secondary');
+      } else {
+        btn.textContent = '📂 Show Clusters';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+      }
+
+      cyInstance.batch(() => {
+        cyInstance.elements().remove();
+        cyInstance.add(buildGraphElements(rawGraphElements, showClusters));
+      });
+
+      cyInstance.layout({
+        name: 'cose',
+        animate: true,
+        nodeRepulsion: 80000,
+        idealEdgeLength: 150,
+        gravity: 0.1,
+        nodeOverlap: 40,
+        nestingFactor: 1.2
+      }).run();
     });
 
     // Filter by language dropdown listener
@@ -224,24 +490,86 @@ async function loadGraph() {
         cyInstance.elements().hide();
         cyInstance.elements(`node[language="${lang}"]`).show();
         cyInstance.elements(`node[language="${lang}"]`).connectedEdges().show();
+        // Also show parent nodes if they exist so layout doesn't break
+        cyInstance.elements(':parent').show();
       }
     });
 
-    // Node & Edge selection details panel
+    // Node & Edge selection details panel and highlighting
     cyInstance.on('tap', 'node', (evt: any) => {
       const node = evt.target;
       const data = node.data();
       const details = document.getElementById('details-content');
       if (details) {
-        details.innerHTML = `
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div><strong>Path:</strong> <span style="word-break:break-all;">${data.id}</span></div>
-            <div><strong>Language:</strong> ${data.language ? data.language.toUpperCase() : 'Unknown'}</div>
-            <div><strong>Lines of Code:</strong> ${data.lines || 'N/A'}</div>
-            <div><strong>File Size:</strong> ${data.size ? `${(data.size / 1024).toFixed(2)} KB` : 'N/A'}</div>
-          </div>
-        `;
+        if (data.type === 'parent') {
+          details.innerHTML = `
+            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Type</span>
+                <span style="color: #10b981; font-weight: bold;">DIRECTORY CLUSTER</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Path</span>
+                <span style="word-break: break-all; text-align: justify;">${data.id.replace('dir:', '')}</span>
+              </div>
+            </div>
+          `;
+        } else {
+          details.innerHTML = `
+            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Path</span>
+                <span style="word-break: break-all; text-align: justify;">${data.id}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Language</span>
+                <span>${data.language ? data.language.toUpperCase() : 'UNKNOWN'}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Lines</span>
+                <span>${data.lines || 'N/A'}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Size</span>
+                <span>${data.size ? `${(data.size / 1024).toFixed(2)} KB` : 'N/A'}</span>
+              </div>
+            </div>
+          `;
+        }
       }
+
+      cyInstance.batch(() => {
+        // Reset classes
+        cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node');
+
+        // Apply dimmed to all elements
+        cyInstance.elements().addClass('dimmed');
+
+        // Highlight selected node
+        node.removeClass('dimmed').addClass('highlighted-center');
+
+        // Highlight outgoing edges and their target nodes (dependencies)
+        const outgoers = node.outgoers();
+        outgoers.forEach((ele: any) => {
+          ele.removeClass('dimmed');
+          if (ele.isEdge()) {
+            ele.addClass('highlighted-outgoing');
+          } else {
+            ele.addClass('highlighted-outgoing-node');
+          }
+        });
+
+        // Highlight incoming edges and their source nodes (dependents)
+        const incomers = node.incomers();
+        incomers.forEach((ele: any) => {
+          ele.removeClass('dimmed');
+          if (ele.isEdge()) {
+            ele.addClass('highlighted-incoming');
+          } else {
+            ele.addClass('highlighted-incoming-node');
+          }
+        });
+      });
     });
 
     cyInstance.on('tap', 'edge', (evt: any) => {
@@ -249,15 +577,80 @@ async function loadGraph() {
       const data = edge.data();
       const details = document.getElementById('details-content');
       if (details) {
-        details.innerHTML = `
-          <div style="display:flex; flex-direction:column; gap:8px;">
-            <div><strong>Edge ID:</strong> ${data.id}</div>
-            <div><strong>Source File:</strong> <span style="word-break:break-all;">${data.source}</span></div>
-            <div><strong>Target File:</strong> <span style="word-break:break-all;">${data.target}</span></div>
-            <div><strong>Edge Type:</strong> <span class="badge" style="background:#8b5cf6; padding:3px 6px; border-radius:4px; font-size:11px;">${data.type}</span></div>
-            <div><strong>Verifiability:</strong> ${data.verifiability}</div>
-          </div>
-        `;
+        if (data.type === 'cluster-dependency') {
+          details.innerHTML = `
+            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Edge ID</span>
+                <span style="word-break: break-all; text-align: justify;">${data.id}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Source</span>
+                <span style="word-break: break-all; text-align: justify;">${data.source.replace('dir:', '')}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Target</span>
+                <span style="word-break: break-all; text-align: justify;">${data.target.replace('dir:', '')}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Edge Type</span>
+                <span><span class="badge" style="background:#2563eb; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">CLUSTER DEPENDENCY</span></span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Count</span>
+                <span style="color: #60a5fa; font-weight: bold;">${data.count} file-level dependency edge(s)</span>
+              </div>
+            </div>
+          `;
+        } else {
+          details.innerHTML = `
+            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Edge ID</span>
+                <span style="word-break: break-all; text-align: justify;">${data.id}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Source</span>
+                <span style="word-break: break-all; text-align: justify;">${data.source}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Target</span>
+                <span style="word-break: break-all; text-align: justify;">${data.target}</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Edge Type</span>
+                <span><span class="badge" style="background:#8b5cf6; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">${data.type}</span></span>
+              </div>
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Verify</span>
+                <span>${data.verifiability}</span>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      cyInstance.batch(() => {
+        // Dim all
+        cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node');
+        cyInstance.elements().addClass('dimmed');
+
+        // Highlight this edge and its source & target nodes
+        edge.removeClass('dimmed');
+        edge.source().removeClass('dimmed').addClass('highlighted-incoming-node');
+        edge.target().removeClass('dimmed').addClass('highlighted-outgoing-node');
+      });
+    });
+
+    cyInstance.on('tap', (evt: any) => {
+      if (evt.target === cyInstance) {
+        cyInstance.batch(() => {
+          cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node');
+        });
+        const details = document.getElementById('details-content');
+        if (details) {
+          details.innerHTML = 'Click a file node or dependency edge to view details.';
+        }
       }
     });
 

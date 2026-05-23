@@ -249,6 +249,7 @@ body {
   flex-direction: column;
   overflow-y: auto;
   backdrop-filter: blur(12px);
+  color: #cbd5e1;
 }
 
 .details-panel h3 {
@@ -257,10 +258,15 @@ body {
   margin-bottom: 15px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding-bottom: 10px;
+  color: #f8fafc;
+}
+
+.details-panel strong {
+  color: #f8fafc;
 }
 
 .details-placeholder {
-  color: #64748b;
+  color: #94a3b8;
   font-size: 14px;
   text-align: center;
   margin-top: 40px;
