@@ -1,9 +1,10 @@
 import type { StoreBackend } from './store-interface.js';
 import { createRequire } from 'node:module';
+import type { MapxGraph } from './graph.js';
 
 const dynamicRequire = createRequire(import.meta.url);
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 6;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -78,6 +79,59 @@ const MIGRATIONS: Migration[] = [
     description: 'Add content_hash column to files table',
     up: [
       `ALTER TABLE files ADD COLUMN content_hash TEXT`,
+    ],
+  },
+  {
+    version: 3,
+    description: 'Add verifiability column to edges table',
+    up: [
+      `ALTER TABLE edges ADD COLUMN verifiability TEXT NOT NULL DEFAULT 'verified'`,
+      `CREATE INDEX IF NOT EXISTS idx_edges_verifiability ON edges (verifiability)`,
+    ],
+  },
+  {
+    version: 4,
+    description: 'Add metadata column to edges and files tables',
+    up: [
+      `ALTER TABLE edges ADD COLUMN metadata TEXT DEFAULT '{}'`,
+      `ALTER TABLE files ADD COLUMN metadata TEXT DEFAULT '{}'`,
+    ],
+  },
+  {
+    version: 5,
+    description: 'Add clusters and cluster_membership tables, namespace column in files',
+    up: [
+      `ALTER TABLE files ADD COLUMN namespace TEXT`,
+      `CREATE TABLE IF NOT EXISTS clusters (
+        id   INTEGER PRIMARY KEY AUTOINCREMENT,
+        repo TEXT NOT NULL,
+        name TEXT NOT NULL,
+        label TEXT NOT NULL,
+        source TEXT NOT NULL,
+        parent_name TEXT,
+        depth INTEGER DEFAULT 0,
+        file_count INTEGER DEFAULT 0,
+        UNIQUE(repo, name)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_clusters_repo ON clusters(repo)`,
+      `CREATE INDEX IF NOT EXISTS idx_clusters_parent ON clusters(parent_name)`,
+      `CREATE TABLE IF NOT EXISTS cluster_membership (
+        file_path    TEXT NOT NULL,
+        cluster_name TEXT NOT NULL,
+        repo         TEXT NOT NULL,
+        is_primary   INTEGER DEFAULT 1,
+        PRIMARY KEY (file_path, cluster_name, repo)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_membership_file ON cluster_membership(file_path)`,
+      `CREATE INDEX IF NOT EXISTS idx_membership_cluster ON cluster_membership(cluster_name)`,
+    ],
+  },
+  {
+    version: 6,
+    description: 'Add target_repo column to edges table',
+    up: [
+      `ALTER TABLE edges ADD COLUMN target_repo TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_edges_target_repo ON edges(target_repo)`,
     ],
   },
 ];
@@ -170,11 +224,40 @@ export class Store {
     lastScanned: string;
     sizeBytes: number;
     lines: number;
+    metadata?: Record<string, any>;
+    namespace?: string | null;
   }): void {
     this.backend.prepare(`
-      INSERT OR REPLACE INTO files (path, repo, language, git_blob_hash, content_hash, last_scanned, size_bytes, lines)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(file.path, file.repo, file.language, file.gitBlobHash, file.contentHash, file.lastScanned, file.sizeBytes, file.lines);
+      INSERT OR REPLACE INTO files (path, repo, language, git_blob_hash, content_hash, last_scanned, size_bytes, lines, metadata, namespace)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      file.path,
+      file.repo,
+      file.language,
+      file.gitBlobHash,
+      file.contentHash,
+      file.lastScanned,
+      file.sizeBytes,
+      file.lines,
+      file.metadata ? JSON.stringify(file.metadata) : '{}',
+      file.namespace ?? null
+    );
+  }
+
+  updateFileMetadata(filePath: string, metadata: Record<string, any>): void {
+    const file = this.getFile(filePath);
+    let merged = { ...metadata };
+    if (file && file.metadata) {
+      try {
+        merged = { ...JSON.parse(file.metadata as string), ...metadata };
+      } catch {}
+    }
+    const namespace = metadata.namespace || null;
+    if (namespace) {
+      this.backend.prepare('UPDATE files SET metadata = ?, namespace = ? WHERE path = ?').run(JSON.stringify(merged), namespace, filePath);
+    } else {
+      this.backend.prepare('UPDATE files SET metadata = ? WHERE path = ?').run(JSON.stringify(merged), filePath);
+    }
   }
 
   deleteFile(filePath: string): void {
@@ -247,15 +330,35 @@ export class Store {
     edgeType: string;
     repo: string;
     weight: number;
+    verifiability?: 'verified' | 'inferred';
+    metadata?: Record<string, any>;
+    targetRepo?: string | null;
   }): void {
     this.backend.prepare(`
-      INSERT INTO edges (source_file, target_file, source_symbol, target_symbol, edge_type, repo, weight)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(edge.sourceFile, edge.targetFile, edge.sourceSymbol, edge.targetSymbol, edge.edgeType, edge.repo, edge.weight);
+      INSERT INTO edges (source_file, target_file, source_symbol, target_symbol, edge_type, repo, weight, verifiability, metadata, target_repo)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      edge.sourceFile,
+      edge.targetFile,
+      edge.sourceSymbol,
+      edge.targetSymbol,
+      edge.edgeType,
+      edge.repo,
+      edge.weight,
+      edge.verifiability ?? 'verified',
+      edge.metadata ? JSON.stringify(edge.metadata) : '{}',
+      edge.targetRepo ?? null
+    );
   }
 
   deleteEdgesForFile(filePath: string): void {
     this.backend.prepare('DELETE FROM edges WHERE source_file = ?').run(filePath);
+  }
+
+  deleteFrameworkEdgesForRepo(repoName: string): void {
+    this.backend.prepare(
+      "DELETE FROM edges WHERE repo = ? AND edge_type IN ('route', 'middleware', 'hook', 'graphql_resolver', 'message_handler', 'websocket_handler')"
+    ).run(repoName);
   }
 
   getEdgesForFile(filePath: string): Record<string, unknown>[] {
@@ -275,6 +378,30 @@ export class Store {
       return this.backend.prepare('SELECT * FROM edges WHERE repo = ?').all(repo);
     }
     return this.backend.prepare('SELECT * FROM edges').all();
+  }
+
+  queryEdges(options: { type?: string; from?: string; to?: string; repo?: string }): Record<string, unknown>[] {
+    let sql = 'SELECT * FROM edges WHERE 1=1';
+    const params: string[] = [];
+
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+    if (options.type) {
+      sql += ' AND edge_type = ?';
+      params.push(options.type);
+    }
+    if (options.from) {
+      sql += ' AND source_file LIKE ?';
+      params.push(`%${options.from}%`);
+    }
+    if (options.to) {
+      sql += ' AND target_file LIKE ?';
+      params.push(`%${options.to}%`);
+    }
+
+    return this.backend.prepare(sql).all(...params);
   }
 
   getFileCount(repo?: string): number {
@@ -326,6 +453,315 @@ export class Store {
 
   getLatestSnapshot(): Record<string, unknown> | undefined {
     return this.backend.prepare('SELECT * FROM snapshots ORDER BY timestamp DESC LIMIT 1').get();
+  }
+
+  clearClusters(repo: string): void {
+    this.backend.prepare('DELETE FROM cluster_membership WHERE repo = ?').run(repo);
+    this.backend.prepare('DELETE FROM clusters WHERE repo = ?').run(repo);
+  }
+
+  insertCluster(cluster: {
+    repo: string;
+    name: string;
+    label: string;
+    source: string;
+    parentName: string | null;
+    depth: number;
+    fileCount: number;
+  }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cluster.repo,
+      cluster.name,
+      cluster.label,
+      cluster.source,
+      cluster.parentName,
+      cluster.depth,
+      cluster.fileCount
+    );
+  }
+
+  insertClusterMembership(membership: {
+    filePath: string;
+    clusterName: string;
+    repo: string;
+    isPrimary: number;
+  }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO cluster_membership (file_path, cluster_name, repo, is_primary)
+      VALUES (?, ?, ?, ?)
+    `).run(
+      membership.filePath,
+      membership.clusterName,
+      membership.repo,
+      membership.isPrimary
+    );
+  }
+
+  getClusters(repo?: string): Record<string, unknown>[] {
+    if (repo) {
+      return this.backend.prepare('SELECT * FROM clusters WHERE repo = ?').all(repo);
+    }
+    return this.backend.prepare('SELECT * FROM clusters').all();
+  }
+
+  getClusterMemberships(repo?: string): Record<string, unknown>[] {
+    if (repo) {
+      return this.backend.prepare('SELECT * FROM cluster_membership WHERE repo = ?').all(repo);
+    }
+    return this.backend.prepare('SELECT * FROM cluster_membership').all();
+  }
+
+  getClusterFiles(clusterName: string, repo: string): string[] {
+    const rows = this.backend.prepare(`
+      SELECT file_path FROM cluster_membership
+      WHERE cluster_name = ? AND repo = ? AND is_primary = 1
+    `).all(clusterName, repo);
+    return rows.map((row: any) => row.file_path as string);
+  }
+
+  getClusterEdges(clusterName: string, repo: string): {
+    sourceCluster: string;
+    targetCluster: string;
+    edgeCount: number;
+    dominantType: string;
+  }[] {
+    const rows = this.backend.prepare(`
+      SELECT 
+        src_cm.cluster_name AS sourceCluster,
+        tgt_cm.cluster_name AS targetCluster,
+        COUNT(*) AS edgeCount,
+        edge_type AS dominantType
+      FROM edges e
+      JOIN cluster_membership src_cm ON e.source_file = src_cm.file_path AND src_cm.is_primary = 1 AND src_cm.repo = e.repo
+      JOIN cluster_membership tgt_cm ON e.target_file = tgt_cm.file_path AND tgt_cm.is_primary = 1 AND tgt_cm.repo = e.repo
+      WHERE e.repo = ? AND (src_cm.cluster_name = ? OR tgt_cm.cluster_name = ?) AND src_cm.cluster_name != tgt_cm.cluster_name
+      GROUP BY src_cm.cluster_name, tgt_cm.cluster_name, e.edge_type
+    `).all(repo, clusterName, clusterName);
+
+    const grouped = new Map<string, { sourceCluster: string; targetCluster: string; edgeCount: number; types: Record<string, number> }>();
+    for (const r of rows as any[]) {
+      const key = `${r.sourceCluster}->${r.targetCluster}`;
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          sourceCluster: r.sourceCluster,
+          targetCluster: r.targetCluster,
+          edgeCount: 0,
+          types: {},
+        });
+      }
+      const entry = grouped.get(key)!;
+      entry.edgeCount += r.edgeCount;
+      entry.types[r.dominantType] = (entry.types[r.dominantType] || 0) + r.edgeCount;
+    }
+
+    return Array.from(grouped.values()).map(g => {
+      let dominantType = '';
+      let maxCount = -1;
+      for (const [t, c] of Object.entries(g.types)) {
+        if (c > maxCount) {
+          maxCount = c;
+          dominantType = t;
+        }
+      }
+      return {
+        sourceCluster: g.sourceCluster,
+        targetCluster: g.targetCluster,
+        edgeCount: g.edgeCount,
+        dominantType,
+      };
+    });
+  }
+
+  deleteRepo(repoName: string): void {
+    this.inTransaction(() => {
+      this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM edges WHERE repo = ? OR target_repo = ?').run(repoName, repoName);
+      this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM meta WHERE key LIKE ? OR key LIKE ?').run(`last_scan_commit:${repoName}`, `last_scan_time:${repoName}`);
+    });
+  }
+
+  searchSymbolsFiltered(options: {
+    term: string;
+    kind?: string;
+    filePrefix?: string;
+    exact?: boolean;
+    limit?: number;
+    repo?: string;
+  }): Record<string, any>[] {
+    const limit = options.limit ?? 20;
+    let sql = 'SELECT * FROM symbols WHERE ';
+    const params: any[] = [];
+
+    if (options.exact) {
+      sql += '(name = ? OR file_path = ?)';
+      params.push(options.term, options.term);
+    } else {
+      sql += '(name LIKE ? OR file_path LIKE ?)';
+      params.push(`%${options.term}%`, `%${options.term}%`);
+    }
+
+    if (options.kind) {
+      sql += ' AND kind = ?';
+      params.push(options.kind);
+    }
+
+    if (options.filePrefix) {
+      sql += ' AND file_path LIKE ?';
+      params.push(`${options.filePrefix}%`);
+    }
+
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+
+    sql += ' ORDER BY kind, name LIMIT ?';
+    params.push(limit);
+
+    return this.backend.prepare(sql).all(...params);
+  }
+
+  getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
+    if (fullName.includes('::')) {
+      const [scope, name] = fullName.split('::');
+      if (repo) {
+        return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? AND repo = ? LIMIT 1').get(scope, name, repo);
+      }
+      return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? LIMIT 1').get(scope, name);
+    } else {
+      if (repo) {
+        return this.backend.prepare('SELECT * FROM symbols WHERE name = ? AND repo = ? LIMIT 1').get(fullName, repo);
+      }
+      return this.backend.prepare('SELECT * FROM symbols WHERE name = ? LIMIT 1').get(fullName);
+    }
+  }
+
+  getFilesFiltered(options: {
+    pathPrefix?: string;
+    lang?: string;
+    sort?: 'lines' | 'path';
+    limit?: number;
+    repo?: string;
+  }): Record<string, any>[] {
+    const limit = options.limit ?? 50;
+    let sql = 'SELECT * FROM files WHERE 1=1';
+    const params: any[] = [];
+
+    if (options.pathPrefix) {
+      sql += ' AND path LIKE ?';
+      params.push(`${options.pathPrefix}%`);
+    }
+
+    if (options.lang) {
+      sql += ' AND LOWER(language) = ?';
+      params.push(options.lang.toLowerCase());
+    }
+
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+
+    if (options.sort === 'lines') {
+      sql += ' ORDER BY lines DESC';
+    } else if (options.sort === 'path') {
+      sql += ' ORDER BY path ASC';
+    }
+
+    sql += ' LIMIT ?';
+    params.push(limit);
+
+    return this.backend.prepare(sql).all(...params);
+  }
+
+  getCallersOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
+    let symbols: Record<string, any>[] = [];
+    if (fullName.includes('::')) {
+      const [scope, name] = fullName.split('::');
+      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
+      const params = [scope, name];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    } else {
+      let sql = 'SELECT * FROM symbols WHERE name = ?';
+      const params = [fullName];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    }
+
+    if (symbols.length === 0) {
+      return [];
+    }
+
+    const results: Record<string, any>[] = [];
+    for (const sym of symbols) {
+      let sql = 'SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?)';
+      const params = [sym.file_path, sym.name, `${sym.scope}::${sym.name}`];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      const edges = this.backend.prepare(sql).all(...params);
+      results.push(...edges);
+    }
+    return results;
+  }
+
+  getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
+    let symbols: Record<string, any>[] = [];
+    if (fullName.includes('::')) {
+      const [scope, name] = fullName.split('::');
+      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
+      const params = [scope, name];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    } else {
+      let sql = 'SELECT * FROM symbols WHERE name = ?';
+      const params = [fullName];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      symbols = this.backend.prepare(sql).all(...params);
+    }
+
+    if (symbols.length === 0) {
+      return [];
+    }
+
+    const results: Record<string, any>[] = [];
+    for (const sym of symbols) {
+      let sql = 'SELECT * FROM edges WHERE source_file = ? AND (source_symbol = ? OR source_symbol = ?)';
+      const params = [sym.file_path, sym.name, `${sym.scope}::${sym.name}`];
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      const edges = this.backend.prepare(sql).all(...params);
+      results.push(...edges);
+    }
+    return results;
+  }
+
+  getTopFilesByPageRank(graph: MapxGraph, limit: number = 5): any[] {
+    return graph.getRankedFiles().slice(0, limit);
+  }
+
+  getTopSymbolsByPageRank(graph: MapxGraph, limit: number = 5): any[] {
+    return graph.getRankedSymbols().slice(0, limit);
   }
 
   inTransaction<T>(fn: () => T): T {

@@ -32,6 +32,9 @@ mapx -d /path/to/project scan
 # First-time setup
 mapx init [/path]            # accepts positional path
 
+# Reverse installation
+mapx uninit [/path]          # removes .mapx/ and reverses integration
+
 # Full scan (run once, or after major changes)
 mapx scan [/path]
 

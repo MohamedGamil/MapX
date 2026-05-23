@@ -1,7 +1,7 @@
 import { Parser, Language, Query, QueryCapture } from 'web-tree-sitter';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { resolve, dirname, join } from 'node:path';
+import { resolve, dirname, join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LanguageDefinition } from '../languages/registry.js';
 
@@ -10,16 +10,22 @@ const __thisFile = fileURLToPath(import.meta.url);
 /**
  * Find the root directory that contains wasm/ and queries/ subdirectories.
  *
- * - Source/dev mode (bun run, tsx): the source file exists at its real path,
- *   so we navigate 2 dirs up (src/parsers/ → project root).
- * - Compiled binary mode (bun build --compile): import.meta.url is a virtual
- *   path baked in at compile time. We search standard locations relative to
- *   the binary's own executable path so the binary is self-sufficient once
- *   assets are installed alongside it.
+ * Three execution contexts:
+ *   1. Source/dev (tsx or bun run src/main.ts):
+ *      __thisFile = /path/to/mapx/src/parsers/wasm-parser.ts  → exists
+ *      asset root  = resolve(dir, '..', '..')  →  /path/to/mapx/
+ *
+ *   2. npm-installed (node dist/main.js via npm bin symlink):
+ *      __thisFile = /path/to/node_modules/mapx/dist/parsers/wasm-parser.js  → exists
+ *      asset root  = resolve(dir, '..', '..')  →  /path/to/node_modules/mapx/
+ *
+ *   3. Compiled native binary (bun build --compile):
+ *      __thisFile = virtual bun:// path  → does NOT exist
+ *      falls through to process.execPath-relative search
  */
 function findAssetRoot(): string {
   if (existsSync(__thisFile)) {
-    // Source/dev: navigate up from src/parsers/wasm-parser.ts
+    // Source/dev or npm-installed transpiled: navigate up from dist/parsers/ or src/parsers/
     return resolve(dirname(__thisFile), '..', '..');
   }
 
@@ -51,7 +57,7 @@ function ensureInit(): Promise<void> {
 
 export async function loadLanguage(langDef: LanguageDefinition): Promise<Language> {
   await ensureInit();
-  const wasmPath = resolve(PROJECT_ROOT, langDef.grammarWasm);
+  const wasmPath = isAbsolute(langDef.grammarWasm) ? langDef.grammarWasm : resolve(PROJECT_ROOT, langDef.grammarWasm);
   const wasmBuffer = await readFile(wasmPath);
   const language = await Language.load(wasmBuffer);
   return language;
@@ -61,6 +67,7 @@ export interface ParsedCaptures {
   symbols: Map<string, QueryCapture[]>;
   references: Map<string, QueryCapture[]>;
   nameByNodeId: Map<number, string>;
+  scopeByNodeId: Map<number, string>;
 }
 
 export async function parseWithQueries(
@@ -76,12 +83,13 @@ export async function parseWithQueries(
   parser.setLanguage(language);
   const tree = parser.parse(source);
   if (!tree) {
-    return { symbols: new Map(), references: new Map(), nameByNodeId: new Map() };
+    return { symbols: new Map(), references: new Map(), nameByNodeId: new Map(), scopeByNodeId: new Map() };
   }
 
   const symbolCaptures = new Map<string, QueryCapture[]>();
   const refCaptures = new Map<string, QueryCapture[]>();
   const nameByNodeId = new Map<number, string>();
+  const scopeByNodeId = new Map<number, string>();
 
   try {
     const symQuery = new Query(language, symbolsQuery);
@@ -106,6 +114,15 @@ export async function parseWithQueries(
           }
           node = node.parent;
         }
+      } else if (capture.name === 'symbol.scope') {
+        let node: any = capture.node.parent;
+        while (node) {
+          if (kindNodeIds.has(node.id)) {
+            scopeByNodeId.set(node.id, capture.node.text);
+            break;
+          }
+          node = node.parent;
+        }
       }
     }
   } catch (e: any) {
@@ -124,11 +141,11 @@ export async function parseWithQueries(
     if (!e.message?.includes('no query')) throw e;
   }
 
-  return { symbols: symbolCaptures, references: refCaptures, nameByNodeId };
+  return { symbols: symbolCaptures, references: refCaptures, nameByNodeId, scopeByNodeId };
 }
 
 export async function loadQueryFile(queryPath: string): Promise<string> {
-  const fullPath = resolve(PROJECT_ROOT, queryPath);
+  const fullPath = isAbsolute(queryPath) ? queryPath : resolve(PROJECT_ROOT, queryPath);
   return readFile(fullPath, 'utf-8');
 }
 

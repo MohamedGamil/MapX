@@ -10,10 +10,28 @@ export class GraphExporter {
     this.graph = graph;
   }
 
-  exportAsJSON(repo?: string): object {
-    const files = this.store.getAllFiles(repo);
-    const symbols = this.store.getAllSymbols(repo);
-    const edges = this.store.getAllEdges(repo);
+  exportAsJSON(repo?: string, filesFilter?: string[]): object {
+    let files = this.store.getAllFiles(repo);
+    let symbols = this.store.getAllSymbols(repo);
+    let edges = this.store.getAllEdges(repo);
+
+    if (filesFilter) {
+      const allowed = new Set(filesFilter);
+      files = files.filter(f => allowed.has(f.path as string));
+      symbols = symbols.filter(s => allowed.has(s.file_path as string));
+      edges = edges.filter(e => allowed.has(e.source_file as string) && allowed.has(e.target_file as string));
+    }
+
+    // Filter the graph object in memory or just filter its nodes/edges before serializing
+    const graphData = this.graph.toJSON() as any;
+    if (filesFilter) {
+      const allowed = new Set(filesFilter);
+      graphData.nodes = graphData.nodes.filter((n: any) => allowed.has(n.key));
+      graphData.edges = graphData.edges.filter((e: any) => allowed.has(e.source) && allowed.has(e.target));
+    }
+
+    const clusters = this.store.getClusters(repo);
+    const memberships = this.store.getClusterMemberships(repo);
 
     return {
       version: '1.0.0',
@@ -24,6 +42,7 @@ export class GraphExporter {
         totalSymbols: symbols.length,
         totalEdges: edges.length,
         languages: this.store.getLanguageBreakdown(repo),
+        totalClusters: clusters.length,
       },
       files: files.map(f => ({
         path: f.path,
@@ -31,6 +50,7 @@ export class GraphExporter {
         sizeBytes: f.size_bytes,
         lines: f.lines,
         lastScanned: f.last_scanned,
+        metadata: f.metadata ? JSON.parse(f.metadata as string) : undefined,
       })),
       symbols: symbols.map(s => ({
         name: s.name,
@@ -47,12 +67,27 @@ export class GraphExporter {
         type: e.edge_type,
         sourceSymbol: e.source_symbol || undefined,
         targetSymbol: e.target_symbol || undefined,
+        verifiability: e.verifiability || 'verified',
+        metadata: e.metadata ? JSON.parse(e.metadata as string) : undefined,
       })),
-      graph: this.graph.toJSON(),
+      clusters: clusters.map(c => ({
+        name: c.name,
+        label: c.label,
+        source: c.source,
+        parentName: c.parent_name || undefined,
+        depth: c.depth,
+        fileCount: c.file_count,
+      })),
+      memberships: memberships.map(m => ({
+        filePath: m.file_path,
+        clusterName: m.cluster_name,
+        isPrimary: m.is_primary === 1,
+      })),
+      graph: graphData,
     };
   }
 
-  exportAsJSONString(repo?: string): string {
-    return JSON.stringify(this.exportAsJSON(repo), null, 2);
+  exportAsJSONString(repo?: string, filesFilter?: string[]): string {
+    return JSON.stringify(this.exportAsJSON(repo, filesFilter), null, 2);
   }
 }

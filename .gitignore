@@ -1,5 +1,4 @@
 # Ignore Core app artifacts
-.codegraph/
 *.db
 *.db-journal
 *.db-wal
@@ -7,11 +6,9 @@
 # Ignore NodeJS app artifacts
 node_modules/
 dist/
-package-lock.json
 coverage
 .env
 .idea
-.vscode
 *.log
 *.tsbuildinfo
 
@@ -36,3 +33,14 @@ Desktop.ini
 *.bak
 *.tmp
 *.swp
+*_walkthrough.md
+scratch/
+
+# Agents & IDEs
+.vscode/
+.agents/
+.cursor/
+.gemini/
+.continue/
+
+.mapx/

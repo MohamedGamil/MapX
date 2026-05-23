@@ -87,6 +87,14 @@ function Install-Data {
         Copy-Item "$srcQueries\*" $dest -Recurse -Force
         Write-OK "Data (queries): $dest"
     }
+
+    $srcUi = Join-Path $ScriptDir "ui"
+    if (Test-Path $srcUi) {
+        $dest = Join-Path $script:DataDir "ui"
+        New-Item -ItemType Directory -Path $dest -Force | Out-Null
+        Copy-Item "$srcUi\*" $dest -Recurse -Force
+        Write-OK "Data (ui):      $dest"
+    }
 }
 
 function Do-Install {

@@ -7,3 +7,7 @@ export { Config } from './core/config.js';
 export { LLMExporter } from './exporters/llm-exporter.js';
 export { GraphExporter } from './exporters/graph-exporter.js';
 export { DotExporter } from './exporters/dot-exporter.js';
+export { FlowTracer } from './core/flow-tracer.js';
+export { AgentGenerator } from './agents/generator.js';
+export { WorkspaceManager } from './core/workspace-manager.js';
+export { ContextBuilder, ContextOptions, ContextResult } from './core/context-builder.js';

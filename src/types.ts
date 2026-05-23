@@ -6,6 +6,7 @@ export interface CodeFile {
   lastScanned: string | null;
   sizeBytes: number;
   lines: number;
+  metadata?: Record<string, any>;
 }
 
 export interface ExtractedSymbol {
@@ -27,13 +28,18 @@ export type SymbolKind =
   | 'constant'
   | 'enum'
   | 'property'
-  | 'namespace';
+  | 'namespace'
+  | 'struct'
+  | 'module'
+  | 'field';
 
 export interface ExtractedReference {
   sourceSymbol: string | null;
   targetName: string;
   referenceType: ReferenceType;
   startLine: number;
+  verifiability?: 'verified' | 'inferred';
+  metadata?: Record<string, any>;
 }
 
 export type ReferenceType =
@@ -44,12 +50,23 @@ export type ReferenceType =
   | 'call'
   | 'instantiation'
   | 'return_type'
-  | 'param_type';
+  | 'param_type'
+  | 'relation'
+  | 'route'
+  | 'middleware'
+  | 'binding'
+  | 'dispatch'
+  | 'notify'
+  | 'hook'
+  | 'graphql_resolver'
+  | 'message_handler'
+  | 'websocket_handler';
 
 export interface ParseResult {
   symbols: ExtractedSymbol[];
   references: ExtractedReference[];
   errors: ParseError[];
+  fileMetadata?: Record<string, any>;
 }
 
 export interface ParseError {
@@ -66,9 +83,12 @@ export interface GraphEdge {
   edgeType: ReferenceType;
   repo: string;
   weight: number;
+  verifiability?: 'verified' | 'inferred';
+  metadata?: Record<string, any>;
+  targetRepo?: string | null;
 }
 
-export type ScanPhase = 'discover' | 'index' | 'parse' | 'resolve' | 'detect';
+export type ScanPhase = 'discover' | 'index' | 'parse' | 'resolve' | 'detect' | 'cluster';
 
 export interface ScanProgress {
   phase: ScanPhase;
@@ -104,15 +124,18 @@ export interface Snapshot {
 }
 
 export interface ExportOptions {
-  format: 'llm' | 'json' | 'dot' | 'svg';
+  format: 'llm' | 'json' | 'dot' | 'svg' | 'toon';
   tokenBudget: number;
   repo?: string;
   files?: string[];
+  delimiter?: 'comma' | 'tab' | 'pipe';
+  keyFolding?: boolean;
 }
 
 export interface RepoConfig {
   name: string;
   path: string;
+  framework?: string;
   languages?: Record<string, UserLanguageDefinition>;
 }
 
@@ -134,5 +157,68 @@ export interface MapxConfig {
     maxTokenBudget: number;
     excludePatterns: string[];
     includePatterns: string[];
+    php?: {
+      facadeMap?: Record<string, string>;
+    };
+    [key: string]: any;
   };
 }
+
+export interface SubmoduleInfo {
+  name: string;
+  path: string;
+  url: string;
+  isInitialized: boolean;
+}
+
+export interface WorkspaceInfo {
+  path: string;
+  repos: RepoConfig[];
+}
+
+export interface RepoSummary {
+  name: string;
+  path: string;
+  type: 'primary' | 'submodule' | 'peer';
+  fileCount: number;
+  symbolCount: number;
+  edgeCount: number;
+  crossRepoEdgeCount: number;
+  lastScanned: string | null;
+  headSha: string | null;
+}
+
+export interface ScanContext {
+  workspaceRoot: string;
+  repoName: string;
+  resolveSymbolToFile: (symbolName: string) => string | null;
+}
+
+export interface RouteBinding {
+  framework: string;
+  method: string;
+  path: string;
+  handlerFile: string;
+  handlerSymbol?: string;
+  middlewares?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface HookBinding {
+  framework: string;
+  hookName: string;
+  hookType: string;
+  handlerFile: string;
+  handlerSymbol?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface FrameworkDetector {
+  readonly name: string;
+  readonly language: string;
+  readonly filePattern: RegExp;
+  detect(projectRoot: string, files: string[]): Promise<boolean>;
+  extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]>;
+  extractHooks?(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]>;
+}
+

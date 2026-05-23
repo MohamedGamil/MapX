@@ -80,6 +80,9 @@ package_tarball() {
     cp -r "$PROJECT_ROOT/docs" "$staging/"
     cp -r "$PROJECT_ROOT/queries" "$staging/"
     cp -r "$PROJECT_ROOT/wasm" "$staging/"
+    if [ -d "$PROJECT_ROOT/dist/ui" ]; then
+        cp -r "$PROJECT_ROOT/dist/ui" "$staging/"
+    fi
 
     cp "$PROJECT_ROOT/scripts/templates/install.sh" "$staging/install.sh"
     chmod +x "$staging/install.sh"
@@ -115,6 +118,9 @@ package_zip() {
     cp -r "$PROJECT_ROOT/docs" "$staging/"
     cp -r "$PROJECT_ROOT/queries" "$staging/"
     cp -r "$PROJECT_ROOT/wasm" "$staging/"
+    if [ -d "$PROJECT_ROOT/dist/ui" ]; then
+        cp -r "$PROJECT_ROOT/dist/ui" "$staging/"
+    fi
 
     cp "$PROJECT_ROOT/scripts/templates/install.ps1" "$staging/"
     echo "$VERSION" > "$staging/VERSION"
@@ -204,6 +210,19 @@ main() {
     echo ""
 
     mkdir -p "$PROJECT_ROOT/dist" "$DIST_DIR"
+
+    local is_build_cmd=false
+    case "$command" in
+        all|linux-x64|linux-arm64|darwin-arm64|darwin-x64|windows-x64)
+            is_build_cmd=true
+            ;;
+    esac
+
+    if [ "$skip_build" = false ] && [ "$is_build_cmd" = true ]; then
+        info "Building Web Dashboard UI..."
+        (cd "$PROJECT_ROOT" && bun run build:npm)
+        echo ""
+    fi
 
     case "$command" in
         all)

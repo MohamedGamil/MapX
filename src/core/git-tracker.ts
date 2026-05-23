@@ -134,3 +134,57 @@ export function getRepoName(repoRoot: string): string {
     return resolve(repoRoot).split('/').pop() || 'unknown';
   }
 }
+
+import { existsSync, readFileSync } from 'node:fs';
+import { SubmoduleInfo } from '../types.js';
+
+export function discoverSubmodules(repoRoot: string): SubmoduleInfo[] {
+  const gitmodulesPath = join(repoRoot, '.gitmodules');
+  if (!existsSync(gitmodulesPath)) return [];
+
+  const submodules: SubmoduleInfo[] = [];
+  try {
+    const content = readFileSync(gitmodulesPath, 'utf-8');
+    let currentSubmodule: Partial<SubmoduleInfo> | null = null;
+
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith(';')) continue;
+
+      const sectionMatch = trimmed.match(/^\[submodule\s+"([^"]+)"\]$/i);
+      if (sectionMatch) {
+        if (currentSubmodule && currentSubmodule.name && currentSubmodule.path && currentSubmodule.url) {
+          submodules.push(currentSubmodule as SubmoduleInfo);
+        }
+        currentSubmodule = {
+          name: sectionMatch[1],
+          isInitialized: false
+        };
+        continue;
+      }
+
+      if (currentSubmodule && trimmed.includes('=')) {
+        const eq = trimmed.indexOf('=');
+        const key = trimmed.slice(0, eq).trim().toLowerCase();
+        const val = trimmed.slice(eq + 1).trim();
+
+        if (key === 'path') {
+          currentSubmodule.path = val;
+          const subPath = join(repoRoot, val);
+          const gitFile = join(subPath, '.git');
+          currentSubmodule.isInitialized = existsSync(gitFile);
+        } else if (key === 'url') {
+          currentSubmodule.url = val;
+        }
+      }
+    }
+
+    if (currentSubmodule && currentSubmodule.name && currentSubmodule.path && currentSubmodule.url) {
+      submodules.push(currentSubmodule as SubmoduleInfo);
+    }
+  } catch {
+    // ignore
+  }
+
+  return submodules;
+}

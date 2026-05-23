@@ -1,0 +1,17 @@
+# .npmignore
+src/
+scripts/
+docs/
+specs/
+.mapx/
+.github/
+*.ts
+!*.d.ts
+tsconfig*.json
+tsup.config.*
+Makefile
+*.sh
+*.ps1
+
+# Ignore local compiled binary builds
+dist/mapx-*

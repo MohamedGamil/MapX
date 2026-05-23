@@ -13,19 +13,34 @@ export class LLMExporter {
     this.graph = graph;
   }
 
-  export(options: ExportOptions): string {
-    const budget = options.tokenBudget || 8192;
+  export(options?: Partial<ExportOptions>): string {
+    const opt = options || {};
+    const budget = opt.tokenBudget || 8192;
     const parts: string[] = [];
 
-    const files = this.store.getAllFiles(options.repo);
-    const symbols = this.store.getAllSymbols(options.repo);
-    const edges = this.store.getAllEdges(options.repo);
-    const rankedFiles = this.graph.getRankedFiles();
-    const rankedSymbols = this.graph.getRankedSymbols();
+    let files = this.store.getAllFiles(opt.repo);
+    let symbols = this.store.getAllSymbols(opt.repo);
+    let edges = this.store.getAllEdges(opt.repo);
+    let rankedFiles = this.graph.getRankedFiles();
+    let rankedSymbols = this.graph.getRankedSymbols();
 
-    const repoName = options.repo || 'project';
+    if (opt.files) {
+      const allowed = new Set(opt.files);
+      files = files.filter(f => allowed.has(f.path as string));
+      symbols = symbols.filter(s => allowed.has(s.file_path as string));
+      edges = edges.filter(e => allowed.has(e.source_file as string) && allowed.has(e.target_file as string));
+      rankedFiles = rankedFiles.filter(f => allowed.has(f.path));
+      rankedSymbols = rankedSymbols.filter(s => allowed.has(s.filePath));
+    }
+
+    const repoName = opt.repo || 'project';
     parts.push(`# Mapx: ${repoName}`);
     parts.push('');
+
+    const structureSection = this.buildStructureSection(opt.repo);
+    if (structureSection) {
+      parts.push(structureSection);
+    }
 
     const fileSection = this.buildFileSection(files, rankedFiles, edges);
     parts.push(fileSection);
@@ -48,6 +63,55 @@ export class LLMExporter {
     return result;
   }
 
+  private buildStructureSection(repo?: string): string {
+    const clusters = this.store.getClusters(repo);
+    if (clusters.length === 0) return '';
+
+    const lines: string[] = [];
+    lines.push('## Structure');
+
+    const roots: any[] = [];
+    const childrenMap = new Map<string, any[]>();
+    
+    for (const c of clusters) {
+      if (!c.parent_name) {
+        roots.push(c);
+      } else {
+        const parentName = c.parent_name as string;
+        if (!childrenMap.has(parentName)) {
+          childrenMap.set(parentName, []);
+        }
+        childrenMap.get(parentName)!.push(c);
+      }
+    }
+
+    for (const list of childrenMap.values()) {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    roots.sort((a, b) => a.name.localeCompare(b.name));
+
+    const printTree = (node: any, indent: number) => {
+      const padding = '  '.repeat(indent);
+      const namePart = node.name;
+      const sourcePart = `(${node.source})`;
+      const filesPart = `[${node.file_count} files]`;
+      
+      lines.push(`${padding}${namePart} ${sourcePart} ${filesPart}`);
+
+      const children = childrenMap.get(node.name) || [];
+      for (const child of children) {
+        printTree(child, indent + 1);
+      }
+    };
+
+    for (const root of roots) {
+      printTree(root, 0);
+    }
+
+    lines.push('');
+    return lines.join('\n');
+  }
+
   private buildFileSection(
     files: Record<string, unknown>[],
     rankedFiles: Array<{ path: string; pagerank: number; language: string }>,
@@ -63,7 +127,8 @@ export class LLMExporter {
       const tgt = edge.target_file as string;
       const type = edge.edge_type as string;
       if (!depMap.has(src)) depMap.set(src, []);
-      depMap.get(src)!.push(`${tgt} (${type})`);
+      const infSuffix = edge.verifiability === 'inferred' ? ' [inferred]' : '';
+      depMap.get(src)!.push(`${tgt} (${type})${infSuffix}`);
     }
 
     const sorted = [...files].sort((a, b) => {
@@ -144,20 +209,74 @@ export class LLMExporter {
     const lines: string[] = [];
     lines.push('## Dependencies');
 
-    const unique = new Map<string, { source: string; target: string; type: string }>();
+    const routeGroups = new Map<string, {
+      source: string;
+      controller: string;
+      routes: Array<{ verb: string; uri: string }>;
+    }>();
+
+    const otherEdges: Record<string, unknown>[] = [];
+
     for (const edge of edges) {
+      if (edge.edge_type === 'route') {
+        const src = edge.source_file as string;
+        const controller = (edge.target_symbol as string) || (edge.target_file as string).split('/').pop() || 'Controller';
+        const key = `${src}->${controller}`;
+
+        let meta: any = {};
+        if (edge.metadata) {
+          try {
+            meta = typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : edge.metadata;
+          } catch {}
+        }
+
+        const verb = meta.httpVerb || 'GET';
+        const uri = meta.uri || '/';
+
+        if (!routeGroups.has(key)) {
+          routeGroups.set(key, { source: src, controller, routes: [] });
+        }
+        routeGroups.get(key)!.routes.push({ verb, uri });
+      } else {
+        otherEdges.push(edge);
+      }
+    }
+
+    // Output route groups
+    for (const group of routeGroups.values()) {
+      const uriToVerbs = new Map<string, Set<string>>();
+      for (const r of group.routes) {
+        if (!uriToVerbs.has(r.uri)) {
+          uriToVerbs.set(r.uri, new Set());
+        }
+        uriToVerbs.get(r.uri)!.add(r.verb);
+      }
+      const descParts: string[] = [];
+      for (const [uri, verbs] of uriToVerbs.entries()) {
+        const verbsStr = Array.from(verbs).sort().join('/');
+        descParts.push(`${verbsStr} ${uri}`);
+      }
+      lines.push(`- ${group.source} → ${group.controller} (${group.routes.length} routes: ${descParts.join(', ')})`);
+    }
+
+    const unique = new Map<string, { source: string; target: string; type: string; verifiability?: string; targetRepo?: string }>();
+    for (const edge of otherEdges) {
       const key = `${edge.source_file}->${edge.target_file}:${edge.edge_type}`;
       if (!unique.has(key)) {
         unique.set(key, {
           source: edge.source_file as string,
           target: edge.target_file as string,
           type: edge.edge_type as string,
+          verifiability: edge.verifiability as string || 'verified',
+          targetRepo: edge.target_repo as string | undefined,
         });
       }
     }
 
     for (const dep of unique.values()) {
-      lines.push(`- ${dep.source} → ${dep.target} (${dep.type})`);
+      const infSuffix = dep.verifiability === 'inferred' ? ' [inferred]' : '';
+      const targetRepoSuffix = dep.targetRepo ? ` [repo: ${dep.targetRepo}]` : '';
+      lines.push(`- ${dep.source} → ${dep.target}${targetRepoSuffix} (${dep.type})${infSuffix}`);
     }
 
     lines.push('');

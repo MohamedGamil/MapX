@@ -125,6 +125,13 @@ install_data() {
         cp -r "$src_queries/." "$DATA_DIR/queries/"
         ok "Data (queries): $DATA_DIR/queries/"
     fi
+
+    local src_ui="$SCRIPT_DIR/ui"
+    if [ -d "$src_ui" ]; then
+        mkdir -p "$DATA_DIR/ui"
+        cp -r "$src_ui/." "$DATA_DIR/ui/"
+        ok "Data (ui):      $DATA_DIR/ui/"
+    fi
 }
 
 add_to_path() {

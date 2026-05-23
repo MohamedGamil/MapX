@@ -4,13 +4,18 @@ import { resolve, relative, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
 import { Store } from './store.js';
+import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
 import { getLanguageForFile } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
-import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback } from '../types.js';
+import { minimatch } from 'minimatch';
+import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
+import { FrameworkRegistry } from '../frameworks/framework-registry.js';
+import { RouteRegistry } from '../frameworks/route-registry.js';
+import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -41,6 +46,29 @@ interface DiscoveredFile extends FileInfo {
   contentChanged: boolean;
 }
 
+export function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
+  return (rel: string) => {
+    if (excludes.some(p => {
+      if (minimatch(rel, p, { dot: true })) return true;
+      const segments = rel.split('/');
+      if (segments.some(seg => seg === p)) return true;
+      return false;
+    })) {
+      return false;
+    }
+    if (includes.length > 0) {
+      const matched = includes.some(p => {
+        if (minimatch(rel, p, { dot: true })) return true;
+        const segments = rel.split('/');
+        if (segments.some(seg => seg === p)) return true;
+        return false;
+      });
+      if (!matched) return false;
+    }
+    return true;
+  };
+}
+
 export class Scanner {
   private store: Store;
   private config: Config;
@@ -48,21 +76,32 @@ export class Scanner {
   private onProgress?: ProgressCallback;
   private concurrency: number;
   private aborted = false;
+  private cliExcludes: string[] = [];
+  private cliIncludes: string[] = [];
+  private workspaceFileMap = new Map<string, string>();
 
-  constructor(store: Store, config: Config, graph: MapxGraph, onProgress?: ProgressCallback) {
+  constructor(
+    store: Store,
+    config: Config,
+    graph: MapxGraph,
+    onProgress?: ProgressCallback,
+    options?: { excludes?: string[]; includes?: string[] }
+  ) {
     this.store = store;
     this.config = config;
     this.graph = graph;
     this.onProgress = onProgress;
     this.concurrency = DEFAULT_CONCURRENCY;
+    this.cliExcludes = options?.excludes ?? [];
+    this.cliIncludes = options?.includes ?? [];
   }
 
   abort(): void {
     this.aborted = true;
   }
 
-  private loadResumeState(): ScanResumeState | null {
-    const data = this.store.getMeta('scan_resume_state');
+  private loadResumeState(repoName: string): ScanResumeState | null {
+    const data = this.store.getMeta(`scan_resume_state:${repoName}`);
     if (!data) return null;
     try {
       return JSON.parse(data);
@@ -71,12 +110,12 @@ export class Scanner {
     }
   }
 
-  private saveResumeState(state: ScanResumeState): void {
-    this.store.setMeta('scan_resume_state', JSON.stringify(state));
+  private saveResumeState(repoName: string, state: ScanResumeState): void {
+    this.store.setMeta(`scan_resume_state:${repoName}`, JSON.stringify(state));
   }
 
-  private clearResumeState(): void {
-    this.store.setMeta('scan_resume_state', '');
+  private clearResumeState(repoName: string): void {
+    this.store.setMeta(`scan_resume_state:${repoName}`, '');
   }
 
   private getLockPath(): string {
@@ -113,7 +152,7 @@ export class Scanner {
     try { await unlink(this.getLockPath()); } catch { /* already gone */ }
   }
 
-  async scanFull(): Promise<ScanResult> {
+  async scanFull(repoNames?: string[], options?: { force?: boolean }): Promise<ScanResult> {
     const acquired = await this.acquireScanLock();
     if (!acquired) {
       const lockPath = this.getLockPath();
@@ -121,20 +160,65 @@ export class Scanner {
       throw new Error(`Another scan is already running on this project (PID ${pid}). Wait for it to finish or delete ${lockPath} if it is stale.`);
     }
     try {
-      return await this._scanFull();
+      const reposToScan = repoNames && repoNames.length > 0
+        ? (repoNames.includes('all') ? this.config.repos.map(r => r.name) : repoNames)
+        : [this.config.repos[0].name];
+
+      this.workspaceFileMap.clear();
+      for (const f of this.store.getAllFiles()) {
+        this.workspaceFileMap.set(f.path as string, f.repo as string);
+      }
+      for (const repoName of reposToScan) {
+        const repo = this.config.repos.find(r => r.name === repoName);
+        if (!repo) continue;
+        const workspaceRoot = this.config.getWorkspaceRoot();
+        const repoRoot = resolve(workspaceRoot, repo.path);
+        const discovered = await this.discoverFiles(repoRoot, repo.name, true);
+        for (const f of discovered) {
+          this.workspaceFileMap.set(f.relativePath, repo.name);
+        }
+      }
+
+      let filesScanned = 0;
+      let symbolsFound = 0;
+      let edgesFound = 0;
+      const combinedLangBreakdown: Record<string, number> = {};
+      const startTime = Date.now();
+
+      for (const repoName of reposToScan) {
+        const repo = this.config.repos.find(r => r.name === repoName);
+        if (!repo) continue;
+        const res = await this._scanFullForRepo(repo, options?.force);
+        filesScanned += res.filesScanned;
+        symbolsFound += res.symbolsFound;
+        edgesFound += res.edgesFound;
+        for (const [lang, count] of Object.entries(res.languageBreakdown)) {
+          combinedLangBreakdown[lang] = (combinedLangBreakdown[lang] || 0) + count;
+        }
+        if (this.aborted) break;
+      }
+
+      return {
+        filesScanned,
+        symbolsFound,
+        edgesFound,
+        durationMs: Date.now() - startTime,
+        languageBreakdown: combinedLangBreakdown,
+        interrupted: this.aborted,
+        totalFiles: filesScanned,
+      };
     } finally {
       await this.releaseScanLock();
     }
   }
 
-  private async _scanFull(): Promise<ScanResult> {
+  private async _scanFullForRepo(repo: RepoConfig, force = false): Promise<ScanResult> {
     const startTime = Date.now();
     this.aborted = false;
     const workspaceRoot = this.config.getWorkspaceRoot();
-    const repo = this.config.repo;
     const repoRoot = resolve(workspaceRoot, repo.path);
 
-    const discovered = await this.discoverFiles(repoRoot);
+    const discovered = await this.discoverFiles(repoRoot, repo.name);
     this.onProgress?.({ phase: 'discover', current: discovered.length, total: discovered.length });
 
     const filesWithSymbols = new Set<string>();
@@ -145,10 +229,10 @@ export class Scanner {
     const newFiles = discovered.filter(f => f.isNew);
     const changedFiles = discovered.filter(f => !f.isNew && f.contentChanged);
     const incompleteFiles = discovered.filter(f => !f.isNew && !f.contentChanged && !filesWithSymbols.has(f.relativePath));
-    const unchangedFiles = discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
-    const filesToParse = [...newFiles, ...changedFiles, ...incompleteFiles];
+    const unchangedFiles = force ? [] : discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
+    const filesToParse = force ? discovered : [...newFiles, ...changedFiles, ...incompleteFiles];
 
-    const resumeState = this.loadResumeState();
+    const resumeState = this.loadResumeState(repo.name);
     const resumedCompleted = new Set(resumeState?.completedFiles || []);
 
     const toParse = resumedCompleted.size > 0
@@ -196,22 +280,30 @@ export class Scanner {
         ...resumedCompleted,
       ]);
 
-      this.saveResumeState({
+      this.saveResumeState(repo.name, {
         totalFiles: discovered.length,
         completedFiles: [...completed],
         totalSymbols,
         totalEdges,
       });
 
-      const parseResults = await this.parseFilesParallel(toParse, workspaceRoot);
+      // Detect active frameworks early so we can build ignored symbols for parsing
+      const registry = FrameworkRegistry.getInstance();
+      const filePaths = discovered.map(f => f.relativePath);
+      const activeDetectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+      const activeFrameworks = activeDetectors.map(d => d.name);
+      const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
 
-      // Pre-build file map once — avoids O(n²) getAllFiles calls inside resolveReferences
-      const allTrackedFiles = this.store.getAllFiles(repo.name);
-      const fileMap = new Map<string, string>();
-      for (const f of allTrackedFiles) fileMap.set(f.path as string, f.path as string);
-      for (const f of toParse) fileMap.set(f.relativePath, f.relativePath);
+      const parseResults = await this.parseFilesParallel(toParse, workspaceRoot, ignoredSymbols);
 
-      // Write in batches to keep each SQLite transaction small (avoids large WAL / fsync stalls)
+      const fileMap = this.workspaceFileMap.size > 0 ? this.workspaceFileMap : (() => {
+        const allTrackedFiles = this.store.getAllFiles();
+        const map = new Map<string, string>();
+        for (const f of allTrackedFiles) map.set(f.path as string, f.repo as string);
+        for (const f of toParse) map.set(f.relativePath, repo.name);
+        return map;
+      })();
+
       const BATCH_SIZE = 100;
       for (let batchStart = 0; batchStart < toParse.length && !this.aborted; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, toParse.length);
@@ -222,7 +314,6 @@ export class Scanner {
           }
         });
 
-        // Progress and resume state updated AFTER the transaction commits
         for (let i = batchStart; i < batchEnd; i++) {
           totalSymbols += parseResults[i].symbols.length;
           totalEdges += parseResults[i].references.length;
@@ -236,7 +327,7 @@ export class Scanner {
           file: toParse[batchEnd - 1].relativePath,
         });
 
-        this.saveResumeState({
+        this.saveResumeState(repo.name, {
           totalFiles: discovered.length,
           completedFiles: [...completed],
           totalSymbols,
@@ -263,9 +354,15 @@ export class Scanner {
 
     if (!this.aborted) {
       const commitSha = isGitRepo(repoRoot) ? getCurrentCommitSha(repoRoot) : null;
-      if (commitSha) this.store.setMeta('last_scan_commit', commitSha);
-      this.store.setMeta('last_scan_time', new Date().toISOString());
-      this.clearResumeState();
+      if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
+      this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
+      this.clearResumeState(repo.name);
+
+      this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
+      const clusterEngine = new ClusterEngine(this.store);
+      clusterEngine.detect(repo.name);
+
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -280,7 +377,7 @@ export class Scanner {
     };
   }
 
-  async scanIncremental(): Promise<ScanResult> {
+  async scanIncremental(repoNames?: string[]): Promise<ScanResult> {
     const acquired = await this.acquireScanLock();
     if (!acquired) {
       const lockPath = this.getLockPath();
@@ -288,24 +385,69 @@ export class Scanner {
       throw new Error(`Another scan is already running on this project (PID ${pid}). Wait for it to finish or delete ${lockPath} if it is stale.`);
     }
     try {
-      return await this._scanIncremental();
+      const reposToScan = repoNames && repoNames.length > 0
+        ? (repoNames.includes('all') ? this.config.repos.map(r => r.name) : repoNames)
+        : [this.config.repos[0].name];
+
+      this.workspaceFileMap.clear();
+      for (const f of this.store.getAllFiles()) {
+        this.workspaceFileMap.set(f.path as string, f.repo as string);
+      }
+      for (const repoName of reposToScan) {
+        const repo = this.config.repos.find(r => r.name === repoName);
+        if (!repo) continue;
+        const workspaceRoot = this.config.getWorkspaceRoot();
+        const repoRoot = resolve(workspaceRoot, repo.path);
+        const discovered = await this.discoverFiles(repoRoot, repo.name, true);
+        for (const f of discovered) {
+          this.workspaceFileMap.set(f.relativePath, repo.name);
+        }
+      }
+
+      let filesScanned = 0;
+      let symbolsFound = 0;
+      let edgesFound = 0;
+      const combinedLangBreakdown: Record<string, number> = {};
+      const startTime = Date.now();
+
+      for (const repoName of reposToScan) {
+        const repo = this.config.repos.find(r => r.name === repoName);
+        if (!repo) continue;
+        const res = await this._scanIncrementalForRepo(repo);
+        filesScanned += res.filesScanned;
+        symbolsFound += res.symbolsFound;
+        edgesFound += res.edgesFound;
+        for (const [lang, count] of Object.entries(res.languageBreakdown)) {
+          combinedLangBreakdown[lang] = (combinedLangBreakdown[lang] || 0) + count;
+        }
+        if (this.aborted) break;
+      }
+
+      return {
+        filesScanned,
+        symbolsFound,
+        edgesFound,
+        durationMs: Date.now() - startTime,
+        languageBreakdown: combinedLangBreakdown,
+        interrupted: this.aborted,
+        totalFiles: filesScanned,
+      };
     } finally {
       await this.releaseScanLock();
     }
   }
 
-  private async _scanIncremental(): Promise<ScanResult> {
+  private async _scanIncrementalForRepo(repo: RepoConfig): Promise<ScanResult> {
     const startTime = Date.now();
     this.aborted = false;
     const workspaceRoot = this.config.getWorkspaceRoot();
-    const repo = this.config.repo;
     const repoRoot = resolve(workspaceRoot, repo.path);
 
     if (!isGitRepo(repoRoot)) {
-      return this._scanFull();
+      return this._scanFullForRepo(repo);
     }
 
-    const lastCommit = this.store.getMeta('last_scan_commit');
+    const lastCommit = this.store.getMeta('last_scan_commit:' + repo.name);
     this.onProgress?.({ phase: 'detect', current: 0, total: 0 });
     const changes = getChangedFiles(repoRoot, lastCommit || undefined);
 
@@ -319,16 +461,30 @@ export class Scanner {
       };
     }
 
+    const excludes = [
+      ...this.config.settings.excludePatterns,
+      ...this.cliExcludes,
+    ];
+    const includes = [
+      ...this.config.settings.includePatterns,
+      ...this.cliIncludes,
+    ];
+    const matcher = buildMatcher(excludes, includes);
+
     const toRemove: string[] = [];
     const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string }> = [];
 
     for (const change of changes) {
-      const relativePath = change.path.replace(/\\/g, '/');
+      const absolutePath = resolve(repoRoot, change.path);
+      const relativePath = relative(workspaceRoot, absolutePath).replace(/\\/g, '/');
+      if (!matcher(relativePath)) {
+        toRemove.push(relativePath);
+        continue;
+      }
       if (change.status === 'removed') {
         toRemove.push(relativePath);
         continue;
       }
-      const absolutePath = resolve(workspaceRoot, relativePath);
       const fileInfo = await this.getFileInfo(absolutePath, relativePath);
       if (fileInfo) {
         const content = await readFile(absolutePath, 'utf-8');
@@ -357,9 +513,17 @@ export class Scanner {
       }
     });
 
+    // Detect active frameworks early so we can build ignored symbols for parsing
+    const registry = FrameworkRegistry.getInstance();
+    const allFilePaths = this.store.getAllFiles(repo.name).map(f => f.path as string);
+    const activeDetectors = await registry.detectActiveFrameworks(repoRoot, allFilePaths);
+    const activeFrameworks = activeDetectors.map(d => d.name);
+    const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+
     const parseResults = await this.parseFilesParallel(
       toReindex.map(r => r.fileInfo),
       workspaceRoot,
+      ignoredSymbols
     );
 
     let totalSymbols = 0;
@@ -386,8 +550,14 @@ export class Scanner {
 
     if (!this.aborted) {
       const commitSha = getCurrentCommitSha(repoRoot);
-      if (commitSha) this.store.setMeta('last_scan_commit', commitSha);
-      this.store.setMeta('last_scan_time', new Date().toISOString());
+      if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
+      this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
+
+      this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
+      const clusterEngine = new ClusterEngine(this.store);
+      clusterEngine.detect(repo.name);
+
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
     }
 
     return {
@@ -399,18 +569,28 @@ export class Scanner {
     };
   }
 
-  private async discoverFiles(repoRoot: string): Promise<DiscoveredFile[]> {
+  private async discoverFiles(repoRoot: string, repoName: string, silent = false): Promise<DiscoveredFile[]> {
     const files: DiscoveredFile[] = [];
     const workspaceRoot = this.config.getWorkspaceRoot();
-    const excludePatterns = this.config.settings.excludePatterns;
+    const excludes = [
+      ...this.config.settings.excludePatterns,
+      ...this.cliExcludes,
+    ];
+    const includes = [
+      ...this.config.settings.includePatterns,
+      ...this.cliIncludes,
+    ];
+    const matcher = buildMatcher(excludes, includes);
 
     const trackedHashes = new Map<string, string>();
-    const allTracked = this.store.getAllFiles(this.config.repo.name);
+    const allTracked = this.store.getAllFiles(repoName);
     for (const f of allTracked) {
       if (f.content_hash) trackedHashes.set(f.path as string, f.content_hash as string);
     }
 
-    this.onProgress?.({ phase: 'discover', current: 0, total: 0 });
+    if (!silent) {
+      this.onProgress?.({ phase: 'discover', current: 0, total: 0 });
+    }
 
     const walk = async (currentDir: string) => {
       const entries = await readdir(currentDir, { withFileTypes: true });
@@ -424,11 +604,23 @@ export class Scanner {
 
         if (entry.isDirectory()) {
           const relDir = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
-          if (this.shouldExclude(relDir, excludePatterns)) continue;
+          if (this.shouldExcludeDir(relDir, excludes)) continue;
+
+          // Check if this directory contains a .git entry (file or directory)
+          // and is NOT the root or any registered repository path.
+          const gitPath = join(fullPath, '.git');
+          if (existsSync(gitPath)) {
+            const registeredAbsPaths = this.config.repos.map(r => resolve(workspaceRoot, r.path));
+            if (!registeredAbsPaths.map(p => resolve(p)).includes(resolve(fullPath))) {
+              console.warn(`\n⚠️ Warning: Found unregistered nested git repository at ${fullPath}. Skipping walk inside this directory.`);
+              continue;
+            }
+          }
+
           await walk(fullPath);
         } else if (entry.isFile()) {
           const relPath = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
-          if (this.shouldExclude(relPath, excludePatterns)) continue;
+          if (!matcher(relPath)) continue;
 
           const langDef = getLanguageForFile(fullPath, this.config.getResolvedUserLanguages());
           if (!langDef) continue;
@@ -453,7 +645,9 @@ export class Scanner {
               contentChanged,
             });
 
-            this.onProgress?.({ phase: 'discover', current: files.length, total: 0, file: relPath });
+            if (!silent) {
+              this.onProgress?.({ phase: 'discover', current: files.length, total: 0, file: relPath });
+            }
           } catch {
             // skip unreadable files
           }
@@ -464,6 +658,7 @@ export class Scanner {
     await walk(repoRoot);
     return files;
   }
+
 
   private detectDeletedFiles(discovered: DiscoveredFile[], repoName: string): string[] {
     const currentPaths = new Set(discovered.map(f => f.relativePath));
@@ -476,16 +671,16 @@ export class Scanner {
     return deleted;
   }
 
-  private async parseFilesParallel(files: FileInfo[], workspaceRoot: string): Promise<ParseResult[]> {
+  private async parseFilesParallel(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
     if (files.length === 0) return [];
-    return this.parseOnMainThread(files, workspaceRoot);
+    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols);
   }
 
-  private async parseWithWorkers(files: FileInfo[], workspaceRoot: string): Promise<ParseResult[]> {
-    return this.parseOnMainThread(files, workspaceRoot);
+  private async parseWithWorkers(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
+    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols);
   }
 
-  private async parseOnMainThread(files: FileInfo[], workspaceRoot: string): Promise<ParseResult[]> {
+  private async parseOnMainThread(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
     const results: ParseResult[] = new Array(files.length);
 
     // Read all files concurrently first (I/O bound, cheap to parallelize)
@@ -520,7 +715,10 @@ export class Scanner {
 
         try {
           const parser = getParserForFile(relPath, this.config.getResolvedUserLanguages());
-          results[i] = await parser.parse(relPath, sources[i]!);
+          results[i] = await parser.parse(relPath, sources[i]!, {
+            facadeMap: this.config.settings.php?.facadeMap,
+            ignoredSymbols,
+          });
         } catch {
           results[i] = { symbols: [], references: [], errors: [{ message: `Failed to parse ${relPath}` }] };
         }
@@ -533,11 +731,13 @@ export class Scanner {
   }
 
   private writeParseResult(relativePath: string, result: ParseResult, repoName: string): void {
-    const allFiles = this.store.getAllFiles(repoName);
-    const fileMap = new Map<string, string>();
-    for (const f of allFiles) fileMap.set(f.path as string, f.path as string);
+    if (this.workspaceFileMap.size === 0) {
+      for (const f of this.store.getAllFiles()) {
+        this.workspaceFileMap.set(f.path as string, f.repo as string);
+      }
+    }
     this.store.inTransaction(() => {
-      this.writeParseResultWithMap(relativePath, result, repoName, fileMap);
+      this.writeParseResultWithMap(relativePath, result, repoName, this.workspaceFileMap);
     });
   }
 
@@ -547,6 +747,9 @@ export class Scanner {
     repoName: string,
     fileMap: Map<string, string>,
   ): void {
+    if (result.fileMetadata) {
+      this.store.updateFileMetadata(relativePath, result.fileMetadata);
+    }
     this.store.deleteSymbolsForFile(relativePath);
 
     for (const sym of result.symbols) {
@@ -570,7 +773,7 @@ export class Scanner {
 
     this.store.deleteEdgesForFile(relativePath);
 
-    const resolvedRefs = this.resolveReferencesWithMap(result.references, relativePath, repoName, fileMap);
+    const resolvedRefs = this.resolveReferencesWithMap(result.references, relativePath, repoName, fileMap, result.symbols);
     for (const edge of resolvedRefs) {
       this.graph.addDependencyEdge(edge);
       this.store.insertEdge(edge);
@@ -578,10 +781,21 @@ export class Scanner {
   }
 
   private resolveReferences(refs: ExtractedReference[], sourcePath: string, repoName: string): GraphEdge[] {
-    const allFiles = this.store.getAllFiles(repoName);
-    const fileMap = new Map<string, string>();
-    for (const f of allFiles) fileMap.set(f.path as string, f.path as string);
-    return this.resolveReferencesWithMap(refs, sourcePath, repoName, fileMap);
+    if (this.workspaceFileMap.size === 0) {
+      for (const f of this.store.getAllFiles()) {
+        this.workspaceFileMap.set(f.path as string, f.repo as string);
+      }
+    }
+    const dbSymbols = this.store.getSymbolsForFile(sourcePath);
+    const symbols = dbSymbols.map((s: any) => ({
+      name: s.name,
+      kind: s.kind,
+      scope: s.scope,
+      startLine: s.start_line,
+      endLine: s.end_line,
+      metadata: s.metadata ? JSON.parse(s.metadata) : {}
+    }));
+    return this.resolveReferencesWithMap(refs, sourcePath, repoName, this.workspaceFileMap, symbols);
   }
 
   private resolveReferencesWithMap(
@@ -589,10 +803,12 @@ export class Scanner {
     sourcePath: string,
     repoName: string,
     fileMap: Map<string, string>,
+    symbols?: any[],
   ): GraphEdge[] {
     const edges: GraphEdge[] = [];
 
     for (const ref of refs) {
+      if (!ref.targetName || typeof ref.targetName !== 'string') continue;
       let targetFile: string | null = null;
 
       if (ref.referenceType === 'require') {
@@ -604,14 +820,37 @@ export class Scanner {
       }
 
       if (targetFile) {
+        const targetRepoName = fileMap.get(targetFile);
+
+        let sourceSymbol: string | null = ref.sourceSymbol;
+        if (!sourceSymbol && symbols) {
+          let bestSym: any = null;
+          let bestSpan = Infinity;
+          for (const sym of symbols) {
+            if (sym.startLine <= ref.startLine && ref.startLine <= sym.endLine) {
+              const span = sym.endLine - sym.startLine;
+              if (span < bestSpan) {
+                bestSpan = span;
+                bestSym = sym;
+              }
+            }
+          }
+          if (bestSym) {
+            sourceSymbol = bestSym.scope ? `${bestSym.scope}::${bestSym.name}` : bestSym.name;
+          }
+        }
+
         edges.push({
           sourceFile: sourcePath,
           targetFile,
-          sourceSymbol: ref.sourceSymbol,
+          sourceSymbol,
           targetSymbol: ref.targetName,
           edgeType: ref.referenceType,
           repo: repoName,
           weight: 1.0,
+          verifiability: ref.verifiability ?? 'verified',
+          targetRepo: (targetRepoName && targetRepoName !== repoName) ? targetRepoName : undefined,
+          metadata: { startLine: ref.startLine },
         });
       }
     }
@@ -620,6 +859,7 @@ export class Scanner {
   }
 
   private resolveRequirePath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
+    if (!target || typeof target !== 'string') return null;
     const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
     const candidates = [
       target.startsWith('./') ? join(dir, target) : target,
@@ -635,45 +875,64 @@ export class Scanner {
   }
 
   private resolveImportPath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
+    if (!target || typeof target !== 'string') return null;
+    let resolvedTarget = target;
+    if (sourcePath.endsWith('.vue') && target.startsWith('@/')) {
+      resolvedTarget = 'src/' + target.substring(2);
+    } else {
+      const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
+      resolvedTarget = target.startsWith('.') ? join(dir, target) : target;
+    }
+    const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+
     const candidates = [
-      target.replace(/^\.\//, ''),
-      target + '/index.js',
-      target + '/index.ts',
-      target + '.js',
-      target + '.ts',
+      normalizedTarget,
+      normalizedTarget + '/index.js',
+      normalizedTarget + '/index.ts',
+      normalizedTarget + '/index.vue',
+      normalizedTarget + '.js',
+      normalizedTarget + '.ts',
+      normalizedTarget + '.vue',
     ];
 
     for (const candidate of candidates) {
-      if (fileMap.has(candidate)) return candidate;
+      if (fileMap.has(candidate)) {
+        return candidate;
+      }
     }
     return null;
   }
 
   private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>): string | null {
-    const matches = this.store.searchSymbols(symbolName);
+    if (!symbolName || typeof symbolName !== 'string') return null;
+    let matches = this.store.searchSymbols(symbolName);
     if (matches.length > 0) {
+      const exactMatch = matches.find(m => m.name === symbolName);
+      if (exactMatch) return exactMatch.file_path as string;
+    }
+
+    if (symbolName.includes('\\')) {
+      const parts = symbolName.split('\\');
+      const shortName = parts[parts.length - 1];
+      matches = this.store.searchSymbols(shortName);
+      if (matches.length > 0) {
+        const exactMatch = matches.find(m => m.name === shortName);
+        if (exactMatch) return exactMatch.file_path as string;
+        return matches[0].file_path as string;
+      }
+    } else if (matches.length > 0) {
       return matches[0].file_path as string;
     }
     return null;
   }
-
-  private shouldExclude(path: string, patterns: string[]): boolean {
-    const segments = path.split('/');
-    for (const pattern of patterns) {
-      if (pattern.includes('*')) {
-        const regex = new RegExp('^' + pattern.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*').replace(/\?/g, '.') + '$');
-        if (regex.test(path)) return true;
-        for (let i = 0; i < segments.length; i++) {
-          if (regex.test(segments.slice(i).join('/'))) return true;
-        }
-      } else {
-        if (path === pattern) return true;
-        if (segments.some(s => s === pattern)) return true;
-        if (path.startsWith(pattern + '/')) return true;
-        if (('/' + path).includes('/' + pattern + '/')) return true;
-      }
-    }
-    return false;
+  private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
+    return excludes.some(p => {
+      if (minimatch(relDir, p, { dot: true })) return true;
+      if (minimatch(relDir + '/**', p, { dot: true })) return true;
+      const segments = relDir.split('/');
+      if (segments.some(seg => seg === p)) return true;
+      return false;
+    });
   }
 
   private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {
@@ -693,5 +952,171 @@ export class Scanner {
     } catch {
       return null;
     }
+  }
+
+  private async scanFrameworkRoutesAndHooks(repo: RepoConfig, repoRoot: string): Promise<void> {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const files = await this.store.getAllFiles(repo.name);
+    const filePaths = files.map(f => f.path as string);
+
+    const registry = FrameworkRegistry.getInstance();
+    const activeDetectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+    if (activeDetectors.length === 0) return;
+
+    // Save active frameworks
+    const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+    const activeNames = activeDetectors.map(d => d.name);
+    await writeFile(frameworksPath, JSON.stringify(activeNames, null, 2), 'utf-8');
+
+    // Clear all existing framework edges for this repo in the DB and Graph
+    this.store.deleteFrameworkEdgesForRepo(repo.name);
+    this.graph.dropFrameworkEdgesForRepo(repo.name);
+
+    const routeRegistry = new RouteRegistry();
+    await routeRegistry.load(workspaceRoot);
+    routeRegistry.clearRepo(repo.name, new Set(filePaths));
+
+    // Context for symbol resolution
+    const ctx: ScanContext = {
+      workspaceRoot,
+      repoName: repo.name,
+      resolveSymbolToFile: (symName: string) => {
+        return this.resolveSymbolToFile(symName, this.workspaceFileMap);
+      }
+    };
+
+    for (const detector of activeDetectors) {
+      // Find files that match the detector's pattern (e.g. routes/api.php)
+      const matchingPaths = filePaths.filter(p => detector.filePattern.test(p));
+      for (const relPath of matchingPaths) {
+        try {
+          const absPath = resolve(workspaceRoot, relPath);
+          const content = await readFile(absPath, 'utf-8');
+
+          const routes = await detector.extractRoutes(relPath, content, ctx);
+          for (const route of routes) {
+            let conf = 1.0;
+            const routeConf = route.metadata?.confidence ?? (route as any).confidence;
+            if (typeof routeConf === 'number') {
+              conf = routeConf;
+            } else if (typeof routeConf === 'string') {
+              if (routeConf === 'declared') conf = 1.0;
+              else if (routeConf === 'inferred') conf = 0.8;
+              else if (routeConf === 'low') conf = 0.3;
+            }
+
+            if (conf < 0.5) {
+              console.warn(`[mapx] Suppressing route edge due to low confidence (${conf}): ${route.method} ${route.path} -> ${route.handlerFile}`);
+              continue;
+            }
+
+            if (!route.metadata) route.metadata = {};
+            route.metadata.repo = repo.name;
+            route.metadata.sourceFile = relPath;
+
+            routeRegistry.addRoute(route);
+
+            // Add as an edge in the db/graph
+            this.store.insertEdge({
+              sourceFile: relPath,
+              targetFile: route.handlerFile,
+              sourceSymbol: null,
+              targetSymbol: route.handlerSymbol || null,
+              edgeType: 'route',
+              repo: repo.name,
+              weight: 1.0,
+              verifiability: 'inferred',
+              metadata: {
+                httpVerb: route.method,
+                uri: route.path,
+                middlewares: route.middlewares,
+                confidence: route.metadata?.confidence || 'inferred',
+              }
+            });
+            this.graph.addDependencyEdge({
+              sourceFile: relPath,
+              targetFile: route.handlerFile,
+              sourceSymbol: null,
+              targetSymbol: route.handlerSymbol || null,
+              edgeType: 'route',
+              repo: repo.name,
+              weight: 1.0,
+              verifiability: 'inferred',
+              metadata: {
+                httpVerb: route.method,
+                uri: route.path,
+                middlewares: route.middlewares,
+                confidence: route.metadata?.confidence || 'inferred',
+              }
+            });
+          }
+
+          if (detector.extractHooks) {
+            const hooks = await detector.extractHooks(relPath, content, ctx);
+            for (const hook of hooks) {
+              let conf = 1.0;
+              const hookConf = hook.metadata?.confidence ?? (hook as any).confidence;
+              if (typeof hookConf === 'number') {
+                conf = hookConf;
+              } else if (typeof hookConf === 'string') {
+                if (hookConf === 'declared') conf = 1.0;
+                else if (hookConf === 'inferred') conf = 0.8;
+                else if (hookConf === 'low') conf = 0.3;
+              }
+
+              if (conf < 0.5) {
+                console.warn(`[mapx] Suppressing hook edge due to low confidence (${conf}): ${hook.hookName} -> ${hook.handlerFile}`);
+                continue;
+              }
+
+              if (!hook.metadata) hook.metadata = {};
+              hook.metadata.repo = repo.name;
+              hook.metadata.sourceFile = relPath;
+
+              routeRegistry.addHook(hook);
+
+              const edgeType = (['graphql_resolver', 'message_handler', 'websocket_handler', 'middleware'].includes(hook.hookType)
+                ? hook.hookType
+                : 'hook') as any;
+
+              this.store.insertEdge({
+                sourceFile: relPath,
+                targetFile: hook.handlerFile,
+                sourceSymbol: null,
+                targetSymbol: hook.handlerSymbol || null,
+                edgeType,
+                repo: repo.name,
+                weight: 1.0,
+                verifiability: 'inferred',
+                metadata: {
+                  hookName: hook.hookName,
+                  hookType: hook.hookType,
+                  confidence: hook.metadata?.confidence || 'inferred',
+                }
+              });
+              this.graph.addDependencyEdge({
+                sourceFile: relPath,
+                targetFile: hook.handlerFile,
+                sourceSymbol: null,
+                targetSymbol: hook.handlerSymbol || null,
+                edgeType,
+                repo: repo.name,
+                weight: 1.0,
+                verifiability: 'inferred',
+                metadata: {
+                  hookName: hook.hookName,
+                  hookType: hook.hookType,
+                  confidence: hook.metadata?.confidence || 'inferred',
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to extract routes/hooks for ${relPath}:`, err);
+        }
+      }
+    }
+
+    await routeRegistry.save(workspaceRoot);
   }
 }
