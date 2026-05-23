@@ -881,8 +881,10 @@ export class Scanner {
       normalizedTarget,
       normalizedTarget + '/index.js',
       normalizedTarget + '/index.ts',
+      normalizedTarget + '/index.vue',
       normalizedTarget + '.js',
       normalizedTarget + '.ts',
+      normalizedTarget + '.vue',
     ];
 
     for (const candidate of candidates) {

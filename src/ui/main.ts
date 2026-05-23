@@ -451,7 +451,7 @@ async function loadGraph() {
             'text-outline-width': '1px',
             'transition-property': 'opacity, width, height, border-color, border-width, background-color',
             'transition-duration': 0.2
-          }
+          } as any
         },
         {
           selector: 'node[type="file"]',
