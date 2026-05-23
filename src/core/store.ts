@@ -597,11 +597,11 @@ export class Store {
     const params: any[] = [];
 
     if (options.exact) {
-      sql += 'name = ?';
-      params.push(options.term);
+      sql += '(name = ? OR file_path = ?)';
+      params.push(options.term, options.term);
     } else {
-      sql += 'name LIKE ?';
-      params.push(`%${options.term}%`);
+      sql += '(name LIKE ? OR file_path LIKE ?)';
+      params.push(`%${options.term}%`, `%${options.term}%`);
     }
 
     if (options.kind) {
