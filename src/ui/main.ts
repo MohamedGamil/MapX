@@ -100,7 +100,7 @@ async function loadStatus() {
     if (!res.ok) return;
     const status = await res.json();
     
-    document.getElementById('repo-name')!.textContent = status.repoName || 'Mapx Project';
+    document.getElementById('repo-name')!.textContent = status.repoName || 'MapX Project';
     document.getElementById('stat-files')!.textContent = status.fileCount || '0';
     document.getElementById('stat-symbols')!.textContent = status.symbolCount || '0';
     document.getElementById('stat-edges')!.textContent = status.edgeCount || '0';
@@ -138,49 +138,117 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
   }
 
   const processed: any[] = [];
-  const directoriesSeen = new Set<string>();
-
-  const getParentId = (filePath: string): string | undefined => {
+  const filesByDirectory: { [dirId: string]: any[] } = {};
+  
+  const getParentId = (filePath: string): string => {
     const parts = filePath.split('/');
-    return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : undefined;
+    return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : 'dir:root';
   };
 
-  const addDirectoryParents = (filePath: string) => {
-    const parts = filePath.split('/');
-    if (parts.length <= 1) return;
-    
-    for (let i = 1; i < parts.length; i++) {
-      const dirPath = parts.slice(0, i).join('/');
-      const dirId = `dir:${dirPath}`;
-      if (!directoriesSeen.has(dirId)) {
-        directoriesSeen.add(dirId);
-        
-        const parentDirPath = parts.slice(0, i - 1).join('/');
-        const parentId = parentDirPath ? `dir:${parentDirPath}` : undefined;
-        
-        processed.push({
-          data: {
-            id: dirId,
-            label: parts[i - 1],
-            type: 'parent',
-            parent: parentId
-          }
-        });
-      }
-    }
-  };
-
+  // Group file nodes
   for (const el of rawElements) {
     if (el.data && el.data.type === 'file') {
-      const filePath = el.data.id;
-      addDirectoryParents(filePath);
-      
-      const parts = filePath.split('/');
-      const parentId = parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : undefined;
-      
+      const parentId = getParentId(el.data.id);
+      if (!filesByDirectory[parentId]) {
+        filesByDirectory[parentId] = [];
+      }
       const copy = JSON.parse(JSON.stringify(el));
       copy.data.parent = parentId;
-      processed.push(copy);
+      filesByDirectory[parentId].push(copy);
+    }
+  }
+
+  // Get and sort directory IDs
+  const dirIds = Object.keys(filesByDirectory).sort();
+  const N = dirIds.length;
+  
+  // Calculate grid layout parameters for clear separation
+  const cols = 3;
+  const W = 550;
+  const H = 450;
+
+  for (let i = 0; i < N; i++) {
+    const dirId = dirIds[i];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const cx = col * W + W / 2;
+    const cy = row * H + H / 2;
+
+    // Add parent node
+    processed.push({
+      data: {
+        id: dirId,
+        label: dirId === 'dir:root' ? 'root' : dirId.replace('dir:', ''),
+        type: 'parent'
+      }
+    });
+
+    // Position children files in a concentric circle structure
+    const files = filesByDirectory[dirId];
+    const M = files.length;
+    if (M > 0) {
+      if (M === 1) {
+        files[0].position = { x: cx, y: cy };
+      } else if (M <= 8) {
+        const R = 75;
+        for (let j = 0; j < M; j++) {
+          const angle = (j * 2 * Math.PI) / M;
+          files[j].position = {
+            x: cx + R * Math.cos(angle),
+            y: cy + R * Math.sin(angle)
+          };
+        }
+      } else if (M <= 16) {
+        const innerCount = 6;
+        const outerCount = M - innerCount;
+        const R1 = 60;
+        const R2 = 120;
+        for (let j = 0; j < innerCount; j++) {
+          const angle = (j * 2 * Math.PI) / innerCount;
+          files[j].position = {
+            x: cx + R1 * Math.cos(angle),
+            y: cy + R1 * Math.sin(angle)
+          };
+        }
+        for (let j = 0; j < outerCount; j++) {
+          const angle = (j * 2 * Math.PI) / outerCount;
+          files[innerCount + j].position = {
+            x: cx + R2 * Math.cos(angle),
+            y: cy + R2 * Math.sin(angle)
+          };
+        }
+      } else {
+        const innerCount = 5;
+        const midCount = 10;
+        const outerCount = M - 15;
+        const R1 = 45;
+        const R2 = 100;
+        const R3 = 150;
+        for (let j = 0; j < innerCount; j++) {
+          const angle = (j * 2 * Math.PI) / innerCount;
+          files[j].position = {
+            x: cx + R1 * Math.cos(angle),
+            y: cy + R1 * Math.sin(angle)
+          };
+        }
+        for (let j = 0; j < midCount; j++) {
+          const angle = (j * 2 * Math.PI) / midCount;
+          files[innerCount + j].position = {
+            x: cx + R2 * Math.cos(angle),
+            y: cy + R2 * Math.sin(angle)
+          };
+        }
+        for (let j = 0; j < outerCount; j++) {
+          const angle = (j * 2 * Math.PI) / outerCount;
+          files[15 + j].position = {
+            x: cx + R3 * Math.cos(angle),
+            y: cy + R3 * Math.sin(angle)
+          };
+        }
+      }
+      
+      // Push files to elements list
+      processed.push(...files);
     }
   }
 
@@ -191,8 +259,8 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
     if (el.data && el.data.source && el.data.target) {
       const src = el.data.source;
       const tgt = el.data.target;
-      const parentSrc = getParentId(src) || src;
-      const parentTgt = getParentId(tgt) || tgt;
+      const parentSrc = getParentId(src);
+      const parentTgt = getParentId(tgt);
 
       if (parentSrc !== parentTgt) {
         const edgeKey = `${parentSrc}->${parentTgt}`;
@@ -221,6 +289,34 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
   }
 
   return processed;
+}
+
+function getLayoutOptions(useClusters: boolean, animate = true) {
+  if (useClusters) {
+    return {
+      name: 'preset',
+      animate: animate,
+      animationDuration: 800,
+      fit: true,
+      padding: 50
+    };
+  } else {
+    return {
+      name: 'cose',
+      animate: animate,
+      nodeDimensionsIncludeLabels: true,
+      nodeRepulsion: 75000,
+      idealEdgeLength: 120,
+      gravity: 0.1,
+      nodeOverlap: 40,
+      nestingFactor: 1.2,
+      componentSpacing: 40,
+      refresh: 20,
+      fit: true,
+      padding: 30,
+      boundingBox: undefined
+    };
+  }
 }
 
 // Setup Cytoscape view and fetch graph
@@ -421,28 +517,12 @@ async function loadGraph() {
           }
         }
       ],
-      layout: {
-        name: 'cose',
-        animate: false,
-        nodeRepulsion: 80000,
-        idealEdgeLength: 150,
-        gravity: 0.1,
-        nodeOverlap: 40,
-        nestingFactor: 1.2
-      }
+      layout: getLayoutOptions(showClusters, false)
     });
 
     // Handle Layout button clicks
     document.getElementById('btn-layout-fcose')?.addEventListener('click', () => {
-      cyInstance.layout({
-        name: 'cose',
-        animate: true,
-        nodeRepulsion: 80000,
-        idealEdgeLength: 150,
-        gravity: 0.1,
-        nodeOverlap: 40,
-        nestingFactor: 1.2
-      }).run();
+      cyInstance.layout(getLayoutOptions(showClusters, true)).run();
     });
     document.getElementById('btn-layout-circle')?.addEventListener('click', () => {
       cyInstance.layout({ name: 'circle', animate: true }).run();
@@ -470,15 +550,7 @@ async function loadGraph() {
         cyInstance.add(buildGraphElements(rawGraphElements, showClusters));
       });
 
-      cyInstance.layout({
-        name: 'cose',
-        animate: true,
-        nodeRepulsion: 80000,
-        idealEdgeLength: 150,
-        gravity: 0.1,
-        nodeOverlap: 40,
-        nestingFactor: 1.2
-      }).run();
+      cyInstance.layout(getLayoutOptions(showClusters, true)).run();
     });
 
     // Filter by language dropdown listener
