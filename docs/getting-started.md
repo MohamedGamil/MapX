@@ -2,20 +2,36 @@
 
 ## Installation
 
+### Global Installation (via npm)
+
 ```bash
-# From npm
-npm install -g mapx
-
-# From source (development)
-git clone <repo-url>
-cd mapx
-npm install
-
-# Or use pre-built binary (no dependencies needed)
-# Download from releases/ and add to PATH
+npm install -g @mgamil/mapx
 ```
 
+### Zero Installation (via npx)
+
+Run commands directly without global installation:
+
+```bash
+npx @mgamil/mapx <command>
+```
+
+### From source (development)
+
+```bash
+git clone <repo-url>
+cd mapx
+npm install --legacy-peer-deps
+```
+
+### Pre-built binary (no dependencies)
+
+Download from releases/ and add to your `PATH`.
+
 ## Quick Start
+
+> [!TIP]
+> If you are using the zero-installation method, replace `mapx` with `npx @mgamil/mapx` in the commands below (e.g. `npx @mgamil/mapx init`, `npx @mgamil/mapx scan`).
 
 ```bash
 # 1. Initialize MapxGraph in your project

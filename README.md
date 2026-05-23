@@ -26,7 +26,27 @@ MapX uses [tree-sitter](https://tree-sitter.github.io/) to parse source files ac
 
 ## Installation
 
-### Pre-built binary (recommended)
+### From npm (Global Installation)
+
+Install MapX globally (recommended):
+
+```bash
+npm install -g @mgamil/mapx
+```
+
+### Zero Installation (via npx)
+
+Run MapX directly without installing it globally:
+
+```bash
+# Initialize project
+npx @mgamil/mapx init
+
+# Scan files
+npx @mgamil/mapx scan
+```
+
+### Pre-built binary
 
 Download the latest release for your platform from the [Releases](../../releases) page and place it on your `PATH`:
 
@@ -47,12 +67,6 @@ cd mapx-<version>
 ./install.sh --system         # installs to /usr/local/bin (needs sudo)
 ```
 
-### From npm
-
-```bash
-npm install -g mapx
-```
-
 ### From source
 
 Requires [Node.js](https://nodejs.org/) ≥ 20 or [Bun](https://bun.sh/).
@@ -67,6 +81,9 @@ npx tsx src/main.ts --help
 ---
 
 ## Quick Start
+
+> [!TIP]
+> If using the zero-installation method, replace `mapx` with `npx @mgamil/mapx` in the commands below (e.g. `npx @mgamil/mapx init`, `npx @mgamil/mapx scan`).
 
 ```bash
 # 1. Initialize mapx in your project (auto-adds .mapx/ to .gitignore)
@@ -466,20 +483,6 @@ make package-all
 # Install locally (no sudo)
 make install-local
 ```
-
----
-
-## Publishing to npm
-
-To publish new releases of the npm package:
-
-1. Create a tag matching the version in `package.json` and push it:
-   ```bash
-   git tag v0.1.7
-   git push origin v0.1.7
-   ```
-2. The GitHub Actions publish workflow will automatically run, verify version synchronization, build WASM grammars, compile the TypeScript code using `tsup`, and publish to the npm registry with provenance.
-3. **Important**: The workflow requires a repository secret named `NPM_TOKEN`. This token must be generated on `npmjs.com` as an **Automation** access token.
 
 ---
 

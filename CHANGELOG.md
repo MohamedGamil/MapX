@@ -10,6 +10,20 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ---
 
+## [0.2.4] — 2026-05-24
+
+### Added
+
+- **Scoped Package Installation Instructions** — Updated global installation documentation to use the scoped package name `@mgamil/mapx`.
+- **Zero-Installation via npx** — Documented instant usage and server configuration templates using `npx @mgamil/mapx` across `README.md`, `docs/getting-started.md`, and `docs/mcp-integration.md`.
+- **Tracked `package-lock.json`** — Removed `package-lock.json` from `.gitignore` to ensure it is committed to the repository. This fixes missing lockfile failures in GitHub Actions setup caching and `npm ci`.
+
+### Changed
+
+- **Peer Dependency Compatibility** — Appended `--legacy-peer-deps` to installation commands in `Makefile` and `publish-npm.yml` workflow to automatically bypass upstream peer dependency conflicts.
+
+---
+
 ## [0.2.3] — 2026-05-23
 
 ### Added
@@ -234,7 +248,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/MohamedGamil/mapx/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/MohamedGamil/mapx/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/MohamedGamil/mapx/compare/v0.2.0...v0.2.1
