@@ -91,15 +91,20 @@ const dirProperty = {
 interface ServeOptions {
   sse?: boolean;
   port?: number;
+  debug?: boolean;
 }
 
-export function buildServer(): Server {
+export function buildServer(options?: ServeOptions): Server {
   const server = new Server(
     { name: 'mapx', version: '0.1.3' },
     { capabilities: { tools: {} } }
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    if (options?.debug) {
+      process.stderr.write(`[mapx debug] Received list_tools request\n`);
+    }
+    return {
     tools: [
       {
         name: 'mapx_scan',
@@ -445,7 +450,8 @@ export function buildServer(): Server {
         },
       },
     ],
-  }));
+  };
+  });
 
   const executeTool = async (request: any) => {
     const { name, arguments: args } = request.params;
@@ -1683,6 +1689,9 @@ Callees: ${callees.length}`;
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const startTime = Date.now();
+    if (options?.debug) {
+      process.stderr.write(`[mapx debug] Received tool call: ${request.params.name} with arguments: ${JSON.stringify(request.params.arguments || {})}\n`);
+    }
     let result: any;
     let error: any;
     try {
@@ -1701,12 +1710,16 @@ Callees: ${callees.length}`;
           errorMsg = textContent;
         }
       }
+      const durationMs = Date.now() - startTime;
+      if (options?.debug) {
+        process.stderr.write(`[mapx debug] Completed tool call: ${request.params.name} in ${durationMs}ms (success: ${isSuccess})${errorMsg ? `, error: ${errorMsg}` : ''}\n`);
+      }
       const eventBus = UiEventBus.getInstance();
       eventBus.emitToolCall({
         tool: request.params.name,
         input: request.params.arguments || {},
         timestamp: new Date().toISOString(),
-        durationMs: Date.now() - startTime,
+        durationMs,
         success: isSuccess,
         error: errorMsg
       });
@@ -1835,7 +1848,7 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
         const transport = new SSEServerTransport('/messages', res);
         transports.set(transport.sessionId, transport);
 
-        const server = buildServer();
+        const server = buildServer(options);
         await server.connect(transport);
 
         res.on('close', () => {
@@ -1874,7 +1887,7 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
 
     console.error(generateConfigs(defaultDir!, 'sse', port));
   } else {
-    const server = buildServer();
+    const server = buildServer(options);
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(generateConfigs(defaultDir!, 'stdio'));

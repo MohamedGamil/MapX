@@ -175,6 +175,12 @@ Start the MCP server and paste the printed configuration into your tool:
 mapx serve --dir /path/to/your/project
 ```
 
+You can optionally append the `--debug` flag to log all incoming MCP tool calls, parameters, execution durations, and success/error status to `stderr` (allowing stdout to remain clean for transport protocols):
+
+```bash
+mapx serve --dir /path/to/your/project --debug
+```
+
 On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, and VS Code.
 
 ### Claude Desktop (`claude_desktop_config.json`)

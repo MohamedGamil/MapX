@@ -364,13 +364,14 @@ mapx agents mcp --tools opencode   # Generate for opencode only
 Start as an MCP server. Supports stdio (default) and SSE (HTTP) transports.
 
 ```bash
-mapx serve [--dir /path] [--sse] [--port <port>]
+mapx serve [--dir /path] [--sse] [--port <port>] [--debug]
 ```
 
 Options:
 - `--dir / -d` — Default target directory for MCP tools
 - `--sse` — Enable SSE (HTTP) transport instead of stdio
 - `--port <port>` — Port for SSE transport (default: 45123)
+- `--debug` — Enable verbose debug logging of MCP calls to stderr (logs request names, parameters, durations, and status)
 
 On startup, prints ready-to-copy configuration snippets for Claude Desktop, Cursor, and VS Code. SSE mode additionally prints the connection URL and messages endpoint.
 

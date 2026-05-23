@@ -30,12 +30,16 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **Cross-process Tool Call Logging in Web UI** — Persistent logging of MCP tool calls to `.mapx/tool-calls.jsonl` enables the Tool Call Log tab in the Web UI dashboard to correctly capture and display MCP tool calls even when the MCP server and Web UI are running in separate processes
   - UI server reads/serves historical logs via `/api/tool-calls` endpoint and tails new logs for real-time pushing via SSE
   - UI client renders status badges, execution durations, parameters, and error details with robust client-side deduplication
-- **Dynamic Graph Node Sizing** — Graph nodes in the Graph Explorer are now dynamically sized based on their degree (count of dependencies, references, and edges), making code architecture hot-spots immediately visible (scaling from `32px` baseline up to `56px`)
+- **Dynamic Graph Node Sizing & Spacing** — Graph nodes in the Graph Explorer are now dynamically sized based on their degree (scaling from `32px` baseline up to `48px`). The layout was enhanced with dynamic `nodeRepulsion` and `idealEdgeLength` functions in `cose` layout, and scaled-up layout circles in cluster mode to give larger nodes more spacing and prevent overlap.
+- **Top-Aligned Node Labels and Rendering Hierarchies** — Standard file node labels are now top-aligned with negative margins. Explicitly configured a z-index hierarchy (`z-index: 10` on nodes, `1` on edges) as a precaution so labels are always rendered on top of edges.
+- **Verbose MCP Debug Mode** — Added `--debug` flag to `mapx serve` CLI command to log verbose MCP calls, including request names, arguments, duration, and completion success/error details to stderr.
 
 ### Changed
 
 - `GenericWasmParser.parse()` now checks `options.ignoredSymbols` (a `Set<string>`) to filter symbols and references — fully data-driven, no per-parser subclass overrides needed
 - Scanner's `parseFilesParallel` / `parseOnMainThread` now accept an optional `ignoredSymbols` set instead of framework-specific boolean flags
+- Graph node selection in the Web UI preserves dynamic size instead of resetting to a hardcoded size.
+- Improved graph interaction with optimized wheel sensitivity (`3.2`) and degree capping.
 
 ---
 

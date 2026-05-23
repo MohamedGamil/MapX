@@ -31,6 +31,7 @@ Options:
 - `--sse` — Enable SSE transport (HTTP) instead of stdio
 - `--port <port>` — Port to listen on (default: 45123)
 - `--dir / -d` — Default target directory for MCP tools
+- `--debug` — Enable verbose debug logging of MCP calls to stderr (logs request names, arguments, execution durations, and status)
 
 On startup, prints the SSE URL, messages endpoint, and ready-to-copy configuration.
 
@@ -216,6 +217,26 @@ The active directory is always printed to stderr at startup:
 ```
 [mapx] Default project directory: /path/to/project
 ```
+
+## Verbose Debug Mode
+
+To troubleshoot or inspect MCP tool requests and responses in real-time, start the server with the `--debug` flag:
+
+```bash
+mapx serve --dir /path/to/project --debug
+```
+
+When active, the MCP server prints all incoming JSON-RPC calls and their outcomes to `stderr` (ensuring the `stdout` channel remains clean for protocol communication). Example stderr output:
+
+```
+[mapx debug] Received list_tools request
+[mapx debug] Received tool call: mapx_status with arguments: {"dir":"/path/to/project"}
+[mapx debug] Completed tool call: mapx_status in 12ms (success: true)
+[mapx debug] Received tool call: mapx_scan with arguments: {"exclude":"node_modules"}
+[mapx debug] Completed tool call: mapx_scan in 242ms (success: true)
+```
+
+This is highly useful when debugging integrations with clients like Claude Desktop, Cursor, or custom LLM frameworks.
 
 ## Available Tools (25 total)
 

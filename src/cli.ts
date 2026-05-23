@@ -1502,6 +1502,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--ui-port <port>', 'Port to run UI on (default: 45124)', '45124')
     .option('--ui-host <host>', 'Host to run UI on (default: 127.0.0.1)', '127.0.0.1')
     .option('--ui-token <token>', 'Bearer token for authorization')
+    .option('--debug', 'Enable verbose debug logging of MCP calls to stderr')
     .action(async (opts: Record<string, unknown>) => {
       const defaultDir = resolveDir(opts, program.opts());
       const { startMcpServer } = await import('./mcp.js');
@@ -1517,6 +1518,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       await startMcpServer(defaultDir, {
         sse: opts.sse as boolean | undefined,
         port: parseInt(opts.port as string, 10) || 45123,
+        debug: opts.debug as boolean | undefined,
       });
     });
 
