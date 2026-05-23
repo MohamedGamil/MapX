@@ -1,12 +1,35 @@
 # Changelog
 
-All notable changes to mapx are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/).
+All notable changes to MapX are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version numbers follow [Semantic Versioning](https://semver.org/).
 
 Unreleased work is tracked under **[Unreleased]**. When a version is released, move its entries from Unreleased and add a release date.
 
 ---
 
 ## [Unreleased]
+
+---
+
+## [0.2.5] — 2026-05-24
+
+### Changed
+
+- **Version Sync Lock Automation** — Updated the `version-sync` target in the `Makefile` to automatically run `npm i --legacy-peer-deps`. This guarantees that `package-lock.json` is updated and synchronized instantly with new version bumps.
+- **README Layout Refinements** — Re-ordered the Installation headers in `README.md` to feature global NPM installation and Zero-Installation (via `npx`) prominently at the top. Clarified the project description by noting MapXGraph is also referred to as MapX.
+
+---
+
+## [0.2.4] — 2026-05-24
+
+### Added
+
+- **Scoped Package Installation Instructions** — Updated global installation documentation to use the scoped package name `@mgamil/mapx`.
+- **Zero-Installation via npx** — Documented instant usage and server configuration templates using `npx @mgamil/mapx` across `README.md`, `docs/getting-started.md`, and `docs/mcp-integration.md`.
+- **Tracked `package-lock.json`** — Removed `package-lock.json` from `.gitignore` to ensure it is committed to the repository. This fixes missing lockfile failures in GitHub Actions setup caching and `npm ci`.
+
+### Changed
+
+- **Peer Dependency Compatibility** — Appended `--legacy-peer-deps` to installation commands in `Makefile` and `publish-npm.yml` workflow to automatically bypass upstream peer dependency conflicts.
 
 ---
 
@@ -234,7 +257,9 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/MohamedGamil/mapx/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/MohamedGamil/mapx/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/MohamedGamil/mapx/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/MohamedGamil/mapx/compare/v0.2.0...v0.2.1

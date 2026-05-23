@@ -13,18 +13,25 @@ MapxGraph supports two MCP transport modes:
 
 ## Starting the Server
 
+If you installed MapX globally using npm (`npm install -g @mgamil/mapx`), start the server with:
+
 ### stdio (default)
 
 ```bash
 mapx serve --dir /path/to/project
 ```
 
-On startup, prints ready-to-copy configuration for Claude Desktop, Cursor, and VS Code.
-
 ### SSE (HTTP)
 
 ```bash
 mapx serve --sse --port 3456 --dir /path/to/project
+```
+
+### Or using zero-installation (via npx):
+
+```bash
+npx @mgamil/mapx serve --dir /path/to/project
+npx @mgamil/mapx serve --sse --port 3456 --dir /path/to/project
 ```
 
 Options:
@@ -74,7 +81,7 @@ SSE mode additionally prints:
 
 Add to `claude_desktop_config.json`:
 
-**stdio:**
+**stdio (Global installation):**
 ```json
 {
   "mcpServers": {
@@ -86,7 +93,19 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-Or with `npx tsx` from source:
+**stdio (Zero installation via npx):**
+```json
+{
+  "mcpServers": {
+    "mapx": {
+      "command": "npx",
+      "args": ["-y", "@mgamil/mapx", "serve", "--dir", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+**stdio (From source):**
 ```json
 {
   "mcpServers": {
@@ -113,13 +132,25 @@ Or with `npx tsx` from source:
 
 Add to `.cursor/mcp.json`:
 
-**stdio:**
+**stdio (Global installation):**
 ```json
 {
   "mcpServers": {
     "mapx": {
       "command": "mapx",
       "args": ["serve", "--dir", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+**stdio (Zero installation via npx):**
+```json
+{
+  "mcpServers": {
+    "mapx": {
+      "command": "npx",
+      "args": ["-y", "@mgamil/mapx", "serve", "--dir", "/path/to/your/project"]
     }
   }
 }
@@ -140,7 +171,7 @@ Add to `.cursor/mcp.json`:
 
 Add to `.vscode/settings.json` or your user settings:
 
-**stdio:**
+**stdio (Global installation):**
 ```json
 {
   "mcp": {
@@ -148,6 +179,20 @@ Add to `.vscode/settings.json` or your user settings:
       "mapx": {
         "command": "mapx",
         "args": ["serve", "--dir", "/path/to/your/project"]
+      }
+    }
+  }
+}
+```
+
+**stdio (Zero installation via npx):**
+```json
+{
+  "mcp": {
+    "servers": {
+      "mapx": {
+        "command": "npx",
+        "args": ["-y", "@mgamil/mapx", "serve", "--dir", "/path/to/your/project"]
       }
     }
   }
@@ -171,12 +216,25 @@ Add to `.vscode/settings.json` or your user settings:
 
 Add to your opencode configuration:
 
+**stdio (Global installation):**
 ```json
 {
   "mcp": {
     "mapx": {
       "command": "mapx",
       "args": ["serve", "--dir", "/path/to/your/project"]
+    }
+  }
+}
+```
+
+**stdio (Zero installation via npx):**
+```json
+{
+  "mcp": {
+    "mapx": {
+      "command": "npx",
+      "args": ["-y", "@mgamil/mapx", "serve", "--dir", "/path/to/your/project"]
     }
   }
 }

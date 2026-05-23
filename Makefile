@@ -35,6 +35,7 @@ setup: ## Install dependencies and prepare WASM grammars
 
 version-sync: ## Sync package.json version from root VERSION file
 	npx tsx scripts/sync-version.ts
+	npm i --legacy-peer-deps
 
 # ── Daily Usage ───────────────────────────────────────────────
 
