@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { calculateMetrics } from './core/metrics.js';
+import { calculateMetrics, calculateGraphMetrics } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { UiEventBus } from './ui-events.js';
@@ -270,6 +270,7 @@ export function startUiServer(opts: ServerOpts) {
           }
 
           const fileMetrics = calculateMetrics(store, { repo: config.repo.name });
+          const graphMetrics = calculateGraphMetrics(store, config.repo.name);
           const topFiles = store.getTopFilesByPageRank(graph, 5);
           const topSymbols = store.getTopSymbolsByPageRank(graph, 5);
 
@@ -277,6 +278,8 @@ export function startUiServer(opts: ServerOpts) {
           res.end(JSON.stringify({
             totalFiles: store.getFileCount(),
             totalSymbols: store.getSymbolCount(),
+            density: `${(graphMetrics.density * 100).toFixed(4)}%`,
+            transitivity: graphMetrics.transitivity.toFixed(4),
             fileMetrics,
             topFiles,
             topSymbols

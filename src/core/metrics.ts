@@ -65,3 +65,60 @@ export function calculateMetrics(
 
   return results.sort((a, b) => b.instability - a.instability || b.afferent - a.afferent || a.path.localeCompare(b.path));
 }
+
+export interface GraphMetrics {
+  density: number;
+  transitivity: number;
+}
+
+export function calculateGraphMetrics(store: Store, repo?: string): GraphMetrics {
+  const files = store.getAllFiles(repo);
+  const edges = store.getAllEdges(repo);
+
+  const fileCount = files.length;
+  const edgeCount = edges.length;
+
+  const density = fileCount > 1 ? edgeCount / (fileCount * (fileCount - 1)) : 0;
+
+  // Adjacency list for transitivity
+  const adj = new Map<string, Set<string>>();
+  for (const f of files) {
+    adj.set(f.path as string, new Set());
+  }
+
+  for (const e of edges) {
+    const src = e.source_file as string;
+    const tgt = e.target_file as string;
+    if (!src || !tgt || src === tgt) continue;
+    
+    if (!adj.has(src)) adj.set(src, new Set());
+    if (!adj.has(tgt)) adj.set(tgt, new Set());
+
+    adj.get(src)!.add(tgt);
+    adj.get(tgt)!.add(src);
+  }
+
+  let totalTriplets = 0;
+  let closedTriplets = 0;
+
+  for (const neighbors of adj.values()) {
+    const k = neighbors.size;
+    if (k < 2) continue;
+    totalTriplets += (k * (k - 1)) / 2;
+
+    const neighborArr = Array.from(neighbors);
+    for (let i = 0; i < neighborArr.length; i++) {
+      for (let j = i + 1; j < neighborArr.length; j++) {
+        const u = neighborArr[i];
+        const w = neighborArr[j];
+        if (adj.get(u)?.has(w)) {
+          closedTriplets++;
+        }
+      }
+    }
+  }
+
+  const transitivity = totalTriplets > 0 ? (closedTriplets / totalTriplets) : 0;
+
+  return { density, transitivity };
+}
