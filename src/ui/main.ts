@@ -838,6 +838,15 @@ async function loadSymbols(query: string = '') {
   }
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Fetch specific symbol details
 async function loadSymbolDetails(name: string) {
   try {
@@ -849,28 +858,52 @@ async function loadSymbolDetails(name: string) {
     if (!detailView) return;
 
     detailView.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:16px;">
-        <h3>${data.symbol.name} (${data.symbol.kind})</h3>
-        <div><strong>File:</strong> ${data.symbol.file_path} (Lines ${data.symbol.start_line}-${data.symbol.end_line})</div>
-        
-        <div>
-          <strong>Callers (${data.callers.length}):</strong>
-          <ul style="padding-left: 20px; margin-top:5px;">
-            ${data.callers.map((c: any) => `<li>${c.source_symbol || 'unknown'}</li>`).join('') || '<li>None</li>'}
+      <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; color: #cbd5e1; display: flex; flex-direction: column; gap: 16px; width: 100%;">
+        <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px;">
+          <h3 style="margin: 0 0 6px 0; color: #e5c07b; font-size: 14px;">${data.symbol.name}</h3>
+          <span style="background: rgba(229, 192, 123, 0.1); color: #e5c07b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${data.symbol.kind}</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">File</span>
+          <span style="word-break: break-all; text-align: right;">${data.symbol.file_path}</span>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Lines</span>
+          <span style="text-align: right;">${data.symbol.start_line}-${data.symbol.end_line}</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callers (${data.callers.length})</span>
+          <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
+            ${data.callers.map((c: any) => {
+              const name = c.source_symbol;
+              if (name && name !== '<top-level>') {
+                return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.source_file}</span></li>`;
+              }
+              return `<li style="margin-bottom: 4px; color: #5c6370;"><span style="color: #5c6370;">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
+            }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
-        <div>
-          <strong>Callees (${data.callees.length}):</strong>
-          <ul style="padding-left: 20px; margin-top:5px;">
-            ${data.callees.map((c: any) => `<li>${c.target_symbol || 'unknown'}</li>`).join('') || '<li>None</li>'}
+        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callees (${data.callees.length})</span>
+          <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
+            ${data.callees.map((c: any) => {
+              const name = c.target_symbol;
+              if (name) {
+                return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.target_file}</span></li>`;
+              }
+              return `<li style="margin-bottom: 4px; color: #5c6370;">in ${c.target_file}</li>`;
+            }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
         ${data.sourceCode ? `
-          <div>
-            <strong>Source Code:</strong>
-            <pre style="background:#090d16; padding:12px; border-radius:6px; overflow-x:auto; font-family:'JetBrains Mono', monospace; font-size:12px; margin-top:5px;">${data.sourceCode}</pre>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Source Code</span>
+            <pre style="background: #1e1e24; color: #abb2bf; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: inherit; font-size: 11px; margin: 4px 0 0 0; border: 1px solid rgba(255, 255, 255, 0.05); line-height: 1.5;">${escapeHtml(data.sourceCode)}</pre>
           </div>
         ` : ''}
       </div>
@@ -1024,5 +1057,18 @@ document.addEventListener('DOMContentLoaded', () => {
   symbolSearch?.addEventListener('input', (e) => {
     const query = (e.target as HTMLInputElement).value;
     loadSymbols(query);
+  });
+
+  // Click delegation for symbol explorer callers/callees links
+  const symbolDetailView = document.getElementById('symbol-detail-view');
+  symbolDetailView?.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (target && target.classList.contains('symbol-link')) {
+      e.preventDefault();
+      const symName = target.getAttribute('data-symbol');
+      if (symName) {
+        loadSymbolDetails(symName);
+      }
+    }
   });
 });

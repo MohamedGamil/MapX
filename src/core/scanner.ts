@@ -756,7 +756,7 @@ export class Scanner {
 
     this.store.deleteEdgesForFile(relativePath);
 
-    const resolvedRefs = this.resolveReferencesWithMap(result.references, relativePath, repoName, fileMap);
+    const resolvedRefs = this.resolveReferencesWithMap(result.references, relativePath, repoName, fileMap, result.symbols);
     for (const edge of resolvedRefs) {
       this.graph.addDependencyEdge(edge);
       this.store.insertEdge(edge);
@@ -769,7 +769,16 @@ export class Scanner {
         this.workspaceFileMap.set(f.path as string, f.repo as string);
       }
     }
-    return this.resolveReferencesWithMap(refs, sourcePath, repoName, this.workspaceFileMap);
+    const dbSymbols = this.store.getSymbolsForFile(sourcePath);
+    const symbols = dbSymbols.map((s: any) => ({
+      name: s.name,
+      kind: s.kind,
+      scope: s.scope,
+      startLine: s.start_line,
+      endLine: s.end_line,
+      metadata: s.metadata ? JSON.parse(s.metadata) : {}
+    }));
+    return this.resolveReferencesWithMap(refs, sourcePath, repoName, this.workspaceFileMap, symbols);
   }
 
   private resolveReferencesWithMap(
@@ -777,6 +786,7 @@ export class Scanner {
     sourcePath: string,
     repoName: string,
     fileMap: Map<string, string>,
+    symbols?: any[],
   ): GraphEdge[] {
     const edges: GraphEdge[] = [];
 
@@ -793,10 +803,29 @@ export class Scanner {
 
       if (targetFile) {
         const targetRepoName = fileMap.get(targetFile);
+
+        let sourceSymbol: string | null = ref.sourceSymbol;
+        if (!sourceSymbol && symbols) {
+          let bestSym: any = null;
+          let bestSpan = Infinity;
+          for (const sym of symbols) {
+            if (sym.startLine <= ref.startLine && ref.startLine <= sym.endLine) {
+              const span = sym.endLine - sym.startLine;
+              if (span < bestSpan) {
+                bestSpan = span;
+                bestSym = sym;
+              }
+            }
+          }
+          if (bestSym) {
+            sourceSymbol = bestSym.scope ? `${bestSym.scope}::${bestSym.name}` : bestSym.name;
+          }
+        }
+
         edges.push({
           sourceFile: sourcePath,
           targetFile,
-          sourceSymbol: ref.sourceSymbol,
+          sourceSymbol,
           targetSymbol: ref.targetName,
           edgeType: ref.referenceType,
           repo: repoName,
