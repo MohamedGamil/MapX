@@ -1254,8 +1254,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--delimiter <delimiter>', 'Delimiter for TOON format: comma, tab, pipe', 'comma')
     .option('--key-folding', 'Collapse single-key chains into dotted paths for TOON', false)
-    .option('--cluster <mode>', 'Cluster rendering mode for DOT/SVG: none, auto', 'auto')
-    .option('--depth <n>', 'Maximum cluster nesting depth for DOT/SVG export')
+    .option('--cluster <mode>', 'Cluster rendering mode for DOT/SVG: none, auto', 'none')
+    .option('--depth <n>', 'Maximum cluster nesting depth for DOT/SVG export', '3')
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -1266,7 +1266,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const delimiter = opts.delimiter as 'comma' | 'tab' | 'pipe' | undefined;
       const keyFolding = !!opts.keyFolding;
       const clusterMode = (opts.cluster as string) === 'none' ? 'none' as const : 'auto' as const;
-      const clusterDepth = opts.depth ? parseInt(opts.depth as string, 10) : undefined;
+      const clusterDepth = opts.depth ? parseInt(opts.depth as string, 10) : 3;
       const clusterOpts = { cluster: clusterMode, depth: clusterDepth };
 
       if (outputPath) {

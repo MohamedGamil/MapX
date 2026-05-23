@@ -60,7 +60,7 @@ export-dot: ## Export in DOT format (make export-dot DIR=/path)
 	$(CLI) export --format=dot --dir=$(DIR)
 
 export-svg: ## Export in SVG format (make export-svg DIR=/path)
-	$(CLI) export --format=svg --dir=$(DIR)
+	$(CLI) export --format=svg --dir=$(DIR) -o graph.svg --cluster=auto
 
 export-toon: ## Export in TOON format (make export-toon DIR=/path)
 	$(CLI) export --format=toon --dir=$(DIR)
