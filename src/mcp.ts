@@ -26,6 +26,7 @@ import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { UiEventBus } from './ui-events.js';
+import { WorkspaceManager } from './core/workspace-manager.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -158,7 +159,7 @@ export function buildServer(): Server {
         inputSchema: {
           type: 'object',
           properties: {
-            format: { type: 'string', enum: ['llm', 'json', 'dot', 'svg'], description: 'Output format', default: 'llm' },
+            format: { type: 'string', enum: ['llm', 'json', 'dot', 'svg', 'toon'], description: 'Output format', default: 'llm' },
             tokens: { type: 'number', description: 'Token budget for LLM format', default: 8192 },
             repo: { type: 'string', description: 'Filter by repo name' },
             exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
@@ -422,6 +423,22 @@ export function buildServer(): Server {
             lang: { type: 'string', description: 'Name of the language to uninstall' }
           },
           required: ['lang'],
+        },
+      },
+      {
+        name: 'mapx_workspaces',
+        description: 'List registered repositories and discover unregistered submodules, peer repos, and VS Code workspace folders.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['list', 'discover'],
+              description: 'Action to perform. "list" returns registered repos with stats + discovered repos. "discover" returns only unregistered discoveries.',
+              default: 'list',
+            },
+            ...dirProperty,
+          },
         },
       },
     ],
@@ -1564,6 +1581,87 @@ Callees: ${callees.length}`;
         }
       }
 
+      case 'mapx_workspaces': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const action = (args as any)?.action || 'list';
+        const registeredPaths = new Set<string>();
+        for (const r of ctx.config.repos) {
+          registeredPaths.add(resolve(dir, r.path));
+        }
+
+        // Discover unregistered repos
+        const submodules = WorkspaceManager.discoverSubmodules(dir);
+        const peers = WorkspaceManager.discoverPeerRepos(dir);
+        const { readdirSync } = await import('node:fs');
+        const wsFiles = readdirSync(dir).filter((f: string) => f.endsWith('.code-workspace'));
+        const { join: pathJoin } = await import('node:path');
+        const vscodeFolders: Array<{ name: string; path: string; source: string; isInitialized: boolean }> = [];
+        for (const f of wsFiles) {
+          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(pathJoin(dir, f), dir);
+          for (const p of wsFolderRepos) {
+            if (!registeredPaths.has(resolve(dir, p.path))) {
+              vscodeFolders.push({ name: p.name, path: p.path, source: 'vscode-workspace', isInitialized: p.isInitialized });
+            }
+          }
+        }
+
+        const discovered: Array<{ name: string; path: string; source: string; isInitialized: boolean }> = [];
+        for (const s of submodules) {
+          if (!registeredPaths.has(resolve(dir, s.path))) {
+            discovered.push({ name: s.name, path: s.path, source: 'submodule', isInitialized: s.isInitialized });
+          }
+        }
+        for (const p of peers) {
+          if (!registeredPaths.has(resolve(dir, p.path))) {
+            discovered.push({ name: p.name, path: p.path, source: 'peer', isInitialized: p.isInitialized });
+          }
+        }
+        discovered.push(...vscodeFolders);
+
+        if (action === 'discover') {
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ discovered }, null, 2),
+            }],
+          };
+        }
+
+        // "list" action — registered repos with stats
+        const repos: Array<Record<string, unknown>> = [];
+        for (const r of ctx.config.repos) {
+          const fileCount = ctx.store.getFileCount(r.name);
+          const symbolCount = ctx.store.getSymbolCount(r.name);
+          const edgeCount = ctx.store.getEdgeCount(r.name);
+          const crossRepoEdges = ctx.store.raw.prepare(
+            `SELECT COUNT(*) as cnt FROM edges WHERE repo = ? AND target_repo IS NOT NULL AND target_repo != ?`
+          ).get(r.name, r.name) as any;
+          const lastScanned = ctx.store.getMeta('last_scan_time:' + r.name) || ctx.store.getMeta('last_scan_time') || null;
+          repos.push({
+            name: r.name,
+            path: r.path,
+            type: ctx.config.repo.name === r.name ? 'primary' : 'peer',
+            fileCount,
+            symbolCount,
+            edgeCount,
+            crossRepoEdgeCount: crossRepoEdges?.cnt || 0,
+            lastScanned,
+          });
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({ repos, discovered }, null, 2),
+          }],
+        };
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
     }
@@ -1684,7 +1782,10 @@ function generateConfigs(dir: string, transport: 'stdio' | 'sse', port?: number)
 
   lines.push(
     '',
-    '  Available tools: mapx_scan, mapx_sync, mapx_query, mapx_dependencies, mapx_export, mapx_status, mapx_metrics, mapx_edges',
+    '  Available tools: mapx_scan, mapx_sync, mapx_query, mapx_dependencies, mapx_export, mapx_status, mapx_metrics, mapx_edges,',
+    '                    mapx_clusters, mapx_trace, mapx_sources, mapx_sinks, mapx_search, mapx_context, mapx_callers, mapx_callees,',
+    '                    mapx_impact, mapx_node, mapx_files, mapx_routes, mapx_hooks, mapx_workspaces, mapx_agents_generate,',
+    '                    mapx_lang_list, mapx_lang_install, mapx_lang_uninstall',
     '',
   );
 

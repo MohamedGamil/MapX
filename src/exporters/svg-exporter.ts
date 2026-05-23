@@ -12,9 +12,9 @@ export class SvgExporter {
     this.graph = graph;
   }
 
-  export(repo?: string, filesFilter?: string[]): string {
+  export(repo?: string, filesFilter?: string[], opts?: { cluster?: 'none' | 'auto'; depth?: number }): string {
     const dotExporter = new DotExporter(this.store, this.graph);
-    const dot = dotExporter.export(repo, filesFilter);
+    const dot = dotExporter.export(repo, filesFilter, opts);
 
     try {
       return execSync('dot -Tsvg', {

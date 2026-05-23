@@ -425,3 +425,28 @@ _None yet._
 ### Blockers / notes
 
 Depends on I07 (F13) for npm packaging infrastructure. All other feature dependencies (F02, F14–F16, F18, F19, F21–F26) are optional — the dashboard degrades gracefully when their data is absent. The largest implementation risk is bundle size discipline: Cytoscape.js and layout plugins must be tree-shaken carefully to stay under the 200 KB target.
+
+---
+
+## I16 — Audit Compliance Fixes
+
+| Field | Value |
+|-------|-------|
+| Status | `done` |
+| Started | 2026-05-23 |
+| Completed | 2026-05-23 |
+| Features | F29, F30, F31, F32 |
+| Branch | `fix/i16-audit-compliance` |
+| PR | — |
+
+### Scope
+
+Addresses all high-priority and medium-priority deviations found during the 2026-05-23 roadmap compliance audit. Four features: (F29) missing `mapx_workspaces` MCP tool — the CLI commands exist but the MCP surface was never wired; (F30) language tier misalignment — 12 languages have incorrect tier values in the registry vs. the I12 spec; (F31) missing `--cluster`/`--depth` flags on `mapx export` — the F15 cluster-aware visualization was never exposed through the export pipeline; (F32) missing `mapx workspaces discover` standalone subcommand. Also fixes: `toon` format missing from MCP `mapx_export` enum, and stale available-tools list in `generateConfigs()`.
+
+### Changes from original spec
+
+_N/A — this is a new corrective iteration._
+
+### Blockers / notes
+
+No blockers. All prerequisite infrastructure already exists. This is purely a wiring/alignment iteration.

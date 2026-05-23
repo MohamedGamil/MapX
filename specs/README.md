@@ -102,6 +102,10 @@ specs/
 | F26 | PHP CMS/framework routes (Symfony attribute + YAML routes, Yii2/Yii3, WordPress hooks/filters/shortcodes/REST/template hierarchy) | `done` | I13 | [F26](features/F26-php-cms-frameworks.md) |
 | F27 | TOON export format (`mapx export --format=toon`) | `done` | I14 | [F27](features/F27-toon-export.md) |
 | F28 | Bundled lightweight web dashboard (`mapx ui`) | `done` | I15 | [F28](features/F28-web-dashboard.md) |
+| F29 | `mapx_workspaces` MCP tool | `done` | I16 | [F29](features/F29-mcp-workspaces.md) |
+| F30 | Language tier alignment (built-in / bundled / installable) | `done` | I16 | [F30](features/F30-language-tier-alignment.md) |
+| F31 | Cluster-aware export flags (`--cluster`, `--depth`) | `done` | I16 | [F31](features/F31-cluster-export-flags.md) |
+| F32 | `mapx workspaces discover` CLI subcommand | `done` | I16 | [F32](features/F32-workspaces-discover.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -126,6 +130,7 @@ specs/
 | [I13](iterations/I13.md) | Framework-aware parsing & route context (21 frameworks) | `done` | F21, F22, F23, F24, F25, F26 |
 | [I14](iterations/I14.md) | TOON export format | `done` | F27 |
 | [I15](iterations/I15.md) | Bundled web dashboard (`mapx ui`) | `done` | F28 |
+| [I16](iterations/I16.md) | Audit compliance fixes | `done` | F29, F30, F31, F32 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 

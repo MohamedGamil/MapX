@@ -91,7 +91,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       function: 'function_definition',
       method: 'function_definition',
     },
-    tier: 'bundled',
+    tier: 'built-in',
   },
   go: {
     name: 'go',
@@ -107,7 +107,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       function: 'function_declaration',
       method: 'method_declaration',
     },
-    tier: 'bundled',
+    tier: 'built-in',
   },
   rust: {
     name: 'rust',
@@ -124,7 +124,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       function: 'function_item',
       method: 'function_item',
     },
-    tier: 'bundled',
+    tier: 'built-in',
   },
   java: {
     name: 'java',
@@ -140,7 +140,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       enum: 'enum_declaration',
       method: 'method_declaration',
     },
-    tier: 'bundled',
+    tier: 'built-in',
   },
   'c-sharp': {
     name: 'c-sharp',
@@ -157,58 +157,58 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       struct: 'struct_declaration',
       method: 'method_declaration',
     },
-    tier: 'bundled',
+    tier: 'built-in',
   },
   ruby: {
     name: 'ruby',
     extensions: ['.rb'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-ruby.wasm'),
+    grammarWasm: 'wasm/tree-sitter-ruby.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'ruby', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'ruby', 'references.scm'),
+      symbols: 'queries/ruby/symbols.scm',
+      references: 'queries/ruby/references.scm',
     },
     nodeMappings: {
       class: 'class',
       method: 'method',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   c: {
     name: 'c',
     extensions: ['.c', '.h'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-c.wasm'),
+    grammarWasm: 'wasm/tree-sitter-c.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'c', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'c', 'references.scm'),
+      symbols: 'queries/c/symbols.scm',
+      references: 'queries/c/references.scm',
     },
     nodeMappings: {
       struct: 'struct_specifier',
       function: 'function_definition',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   cpp: {
     name: 'cpp',
     extensions: ['.cpp', '.hpp', '.cc', '.cxx', '.hh'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-cpp.wasm'),
+    grammarWasm: 'wasm/tree-sitter-cpp.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'cpp', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'cpp', 'references.scm'),
+      symbols: 'queries/cpp/symbols.scm',
+      references: 'queries/cpp/references.scm',
     },
     nodeMappings: {
       class: 'class_specifier',
       struct: 'struct_specifier',
       function: 'function_definition',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   swift: {
     name: 'swift',
     extensions: ['.swift'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-swift.wasm'),
+    grammarWasm: 'wasm/tree-sitter-swift.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'swift', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'swift', 'references.scm'),
+      symbols: 'queries/swift/symbols.scm',
+      references: 'queries/swift/references.scm',
     },
     nodeMappings: {
       class: 'class_declaration',
@@ -216,22 +216,22 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       method: 'function_declaration',
       function: 'function_declaration',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   kotlin: {
     name: 'kotlin',
     extensions: ['.kt', '.kts'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-kotlin.wasm'),
+    grammarWasm: 'wasm/tree-sitter-kotlin.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'kotlin', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'kotlin', 'references.scm'),
+      symbols: 'queries/kotlin/symbols.scm',
+      references: 'queries/kotlin/references.scm',
     },
     nodeMappings: {
       class: 'class_declaration',
       method: 'function_declaration',
       function: 'function_declaration',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   svelte: {
     name: 'svelte',
@@ -328,31 +328,31 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   dart: {
     name: 'dart',
     extensions: ['.dart'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-dart.wasm'),
+    grammarWasm: 'wasm/tree-sitter-dart.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'dart', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'dart', 'references.scm'),
+      symbols: 'queries/dart/symbols.scm',
+      references: 'queries/dart/references.scm',
     },
     nodeMappings: {
       class: 'class_definition',
       method: 'method_signature',
       function: 'function_signature',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   scala: {
     name: 'scala',
     extensions: ['.scala', '.sc'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-scala.wasm'),
+    grammarWasm: 'wasm/tree-sitter-scala.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'scala', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'scala', 'references.scm'),
+      symbols: 'queries/scala/symbols.scm',
+      references: 'queries/scala/references.scm',
     },
     nodeMappings: {
       class: 'class_definition',
       function: 'function_definition',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
 };
 

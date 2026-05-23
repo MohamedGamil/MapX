@@ -10,7 +10,9 @@ export class DotExporter {
     this.graph = graph;
   }
 
-  export(repo?: string, filesFilter?: string[]): string {
+  export(repo?: string, filesFilter?: string[], opts?: { cluster?: 'none' | 'auto'; depth?: number }): string {
+    const clusterMode = opts?.cluster ?? 'auto';
+    const maxClusterDepth = opts?.depth ?? Infinity;
     let files = this.store.getAllFiles(repo);
     let edges = this.store.getAllEdges(repo);
     let rankedFiles = this.graph.getRankedFiles();
@@ -76,7 +78,7 @@ export class DotExporter {
       }
     }
 
-    const outputCluster = (node: any, indent: number): string[] => {
+    const outputCluster = (node: any, indent: number, currentDepth: number): string[] => {
       const pad = '  '.repeat(indent);
       const subLines: string[] = [];
       const safeId = 'cluster_' + node.name.replace(/[^a-zA-Z0-9]/g, '_');
@@ -94,26 +96,57 @@ export class DotExporter {
       }
 
       const children = childrenMap.get(node.name) || [];
-      for (const child of children) {
-        subLines.push(...outputCluster(child, indent + 1));
+      if (currentDepth < maxClusterDepth) {
+        for (const child of children) {
+          subLines.push(...outputCluster(child, indent + 1, currentDepth + 1));
+        }
+      } else {
+        // Flatten children files into this cluster when max depth reached
+        const flattenFiles = (c: any) => {
+          const fList2 = clusterFilesMap.get(c.name) || [];
+          for (const f2 of fList2) {
+            const lang2 = files.find(file => file.path === f2)?.language as string;
+            const color2 = langColors[lang2] || '#CCCCCC';
+            const label2 = f2.split('/').pop() || f2;
+            subLines.push(`${pad}  "${f2}" [label="${label2}", fillcolor="${color2}", fontcolor="white"];`);
+          }
+          for (const gc of (childrenMap.get(c.name) || [])) {
+            flattenFiles(gc);
+          }
+        };
+        for (const child of children) {
+          flattenFiles(child);
+        }
       }
 
       subLines.push(`${pad}}`);
       return subLines;
     };
 
-    for (const file of files) {
-      const path = file.path as string;
-      if (!primaryMemberships.has(path)) {
+    if (clusterMode === 'none') {
+      // Flat rendering — all files as top-level nodes
+      for (const file of files) {
+        const path = file.path as string;
         const lang = file.language as string;
         const color = langColors[lang] || '#CCCCCC';
         const label = path.split('/').pop() || path;
         lines.push(`  "${path}" [label="${label}", fillcolor="${color}", fontcolor="white"];`);
       }
-    }
+    } else {
+      // Clustered rendering
+      for (const file of files) {
+        const path = file.path as string;
+        if (!primaryMemberships.has(path)) {
+          const lang = file.language as string;
+          const color = langColors[lang] || '#CCCCCC';
+          const label = path.split('/').pop() || path;
+          lines.push(`  "${path}" [label="${label}", fillcolor="${color}", fontcolor="white"];`);
+        }
+      }
 
-    for (const root of roots) {
-      lines.push(...outputCluster(root, 1));
+      for (const root of roots) {
+        lines.push(...outputCluster(root, 1, 1));
+      }
     }
 
     lines.push('');

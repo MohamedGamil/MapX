@@ -1241,6 +1241,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--delimiter <delimiter>', 'Delimiter for TOON format: comma, tab, pipe', 'comma')
     .option('--key-folding', 'Collapse single-key chains into dotted paths for TOON', false)
+    .option('--cluster <mode>', 'Cluster rendering mode for DOT/SVG: none, auto', 'auto')
+    .option('--depth <n>', 'Maximum cluster nesting depth for DOT/SVG export')
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -1250,6 +1252,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const outputPath = opts.output as string | undefined;
       const delimiter = opts.delimiter as 'comma' | 'tab' | 'pipe' | undefined;
       const keyFolding = !!opts.keyFolding;
+      const clusterMode = (opts.cluster as string) === 'none' ? 'none' as const : 'auto' as const;
+      const clusterDepth = opts.depth ? parseInt(opts.depth as string, 10) : undefined;
+      const clusterOpts = { cluster: clusterMode, depth: clusterDepth };
 
       if (outputPath) {
         const outputDir = resolve(outputPath, '..');
@@ -1287,12 +1292,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
         case 'dot': {
           const exporter = new DotExporter(store, graph);
-          output = exporter.export(opts.repo as string | undefined, filteredFiles);
+          output = exporter.export(opts.repo as string | undefined, filteredFiles, clusterOpts);
           break;
         }
         case 'svg': {
           const exporter = new SvgExporter(store, graph);
-          output = exporter.export(opts.repo as string | undefined, filteredFiles);
+          output = exporter.export(opts.repo as string | undefined, filteredFiles, clusterOpts);
           break;
         }
         case 'toon': {
@@ -1974,6 +1979,69 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       console.log(`Cleaning up stored data for repository: ${repoName}...`);
       store.deleteRepo(repoName);
       console.log(`Done.`);
+    });
+
+  workspacesCmd
+    .command('discover')
+    .description('Discover unregistered submodules, peer repos, and VS Code workspace folders (read-only)')
+    .action(async () => {
+      const dir = resolveDir({}, program.opts());
+      const { config } = await loadContext(dir);
+
+      const registeredPaths = new Set<string>();
+      for (const r of config.repos) {
+        registeredPaths.add(resolve(dir, r.path));
+      }
+
+      let found = 0;
+
+      // Submodules
+      const submodules = WorkspaceManager.discoverSubmodules(dir);
+      const uninitSubs = submodules.filter(s => !registeredPaths.has(resolve(dir, s.path)));
+      if (uninitSubs.length > 0) {
+        console.log('\nSubmodules:');
+        for (const s of uninitSubs) {
+          const status = s.isInitialized ? 'available' : 'uninitialized';
+          console.log(`  - ${s.name.padEnd(20)} -> ${s.path} (${status})`);
+        }
+        found += uninitSubs.length;
+      }
+
+      // Peer repos
+      const peers = WorkspaceManager.discoverPeerRepos(dir);
+      const uninitPeers = peers.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitPeers.length > 0) {
+        console.log('\nPeer repositories:');
+        for (const p of uninitPeers) {
+          console.log(`  - ${p.name.padEnd(20)} -> ${p.path} (available)`);
+        }
+        found += uninitPeers.length;
+      }
+
+      // VS Code workspace folders
+      const wsFiles = readdirSync(dir).filter(f => f.endsWith('.code-workspace'));
+      const vsEntries: Array<{ name: string; path: string }> = [];
+      for (const f of wsFiles) {
+        const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(join(dir, f), dir);
+        for (const p of wsFolderRepos) {
+          if (!registeredPaths.has(resolve(dir, p.path))) {
+            vsEntries.push({ name: p.name, path: p.path });
+          }
+        }
+      }
+      if (vsEntries.length > 0) {
+        console.log('\nVS Code workspace folders:');
+        for (const p of vsEntries) {
+          console.log(`  - ${p.name.padEnd(20)} -> ${p.path} (available)`);
+        }
+        found += vsEntries.length;
+      }
+
+      if (found === 0) {
+        console.log('No unregistered repositories discovered.');
+      } else {
+        console.log(`\n${found} unregistered repositor${found === 1 ? 'y' : 'ies'} discovered. Use \`mapx workspaces add <path>\` to register.`);
+      }
     });
 
   workspacesCmd

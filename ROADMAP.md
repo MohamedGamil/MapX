@@ -1,6 +1,6 @@
 # MapxGraph — Implementation Checklist
 
-> 28 features · 15 iterations · schema v2 → v6 · ~37 CLI commands · 20 MCP tools  
+> 32 features · 16 iterations · schema v2 → v6 · ~37 CLI commands · 21 MCP tools  
 > Specs: [specs/README.md](specs/README.md) · Decisions: [specs/DECISIONS.md](specs/DECISIONS.md)
 
 ---
@@ -139,6 +139,18 @@
 - [x] Implement SSE stream at `/events`: `tool-call`, `scan-progress`, `scan-complete` events
 - [x] **Bundle target**: initial load < 200 KB gzipped (lazy-load fCoSE layout plugin); total < 350 KB gzipped
 - [x] **Security**: bind `127.0.0.1` by default; optional `Authorization: Bearer` token; rate-limit `/api/context` + `/api/graph` to 10 req/min; cap responses at 10 MB; reject path traversal; CORS localhost only
+
+---
+
+## Phase 7 — Audit Compliance (I16)
+
+### I16 · Audit Compliance Fixes · F29–F32 · Risk: Low · Requires: none
+- [x] Implement `mapx_workspaces` MCP tool: register in tools list, add handler with list/discover actions (F29)
+- [x] Fix language tier alignment: Python/Go/Rust/Java/C# → `built-in`; Ruby/C/C++/Swift/Kotlin/Scala/Dart → `bundled` (F30)
+- [x] Add `--cluster` (`none`|`auto`) and `--depth` flags to `mapx export`; wire into DOT/SVG exporters (F31)
+- [x] Add `mapx workspaces discover` standalone CLI subcommand (read-only discovery) (F32)
+- [x] Add `toon` to `mapx_export` MCP format enum
+- [x] Update `generateConfigs()` available tools list in `mcp.ts`
 
 ---
 
