@@ -106,7 +106,7 @@ specs/
 | F30 | Language tier alignment (built-in / bundled / installable) | `done` | I16 | [F30](features/F30-language-tier-alignment.md) |
 | F31 | Cluster-aware export flags (`--cluster`, `--depth`) | `done` | I16 | [F31](features/F31-cluster-export-flags.md) |
 | F32 | `mapx workspaces discover` CLI subcommand | `done` | I16 | [F32](features/F32-workspaces-discover.md) |
-| F33 | Comprehensive language syntax coverage (14 languages) | `done` | I17 | [F33](features/F33-language-syntax-coverage.md) |
+| F33 | Comprehensive language syntax coverage (20 languages) | `done` | I17 | [F33](features/F33-language-syntax-coverage.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 

@@ -271,6 +271,10 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     },
     nodeMappings: {
       function: 'function_declaration',
+      class: 'class_declaration',
+      method: 'method_definition',
+      property: 'export_statement',
+      constant: 'lexical_declaration',
     },
     tier: 'installable',
   },
@@ -300,6 +304,8 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     },
     nodeMappings: {
       function: 'function_definition',
+      method: 'function_definition',
+      constant: 'variable_assignment',
     },
     tier: 'installable',
   },
@@ -314,6 +320,9 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     nodeMappings: {
       module: 'call',
       function: 'call',
+      struct: 'call',
+      interface: 'call',
+      constant: 'unary_operator',
     },
     tier: 'installable',
   },
@@ -327,6 +336,9 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     },
     nodeMappings: {
       function: 'fn_proto',
+      struct: 'variable_declaration',
+      constant: 'variable_declaration',
+      enum: 'error_set_declaration',
     },
     tier: 'installable',
   },
@@ -340,6 +352,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     },
     nodeMappings: {
       function: 'function_definition',
+      constant: 'variable_assignment',
     },
     tier: 'installable',
   },
@@ -353,6 +366,14 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     },
     nodeMappings: {
       function: 'function_declaration',
+      class: 'class_declaration',
+      struct: 'record_declaration',
+      interface: 'interface_declaration',
+      method: 'method_declaration',
+      constant: 'constant_declaration',
+      module: 'unit_declaration',
+      property: 'variable_declaration',
+      enum: 'enum_type',
     },
     tier: 'installable',
   },

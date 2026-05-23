@@ -170,7 +170,13 @@
 - [x] **Dart**: Add enum, mixin, extension, constant symbols; add extends, implements, with, instantiation refs
 - [x] **Scala**: Add trait, val, var, type alias, package symbols; add extends, instantiation refs
 - [x] **Vue**: Add class, method, property, arrow function symbols; add import, method call refs
-- [x] Update `nodeMappings` in `registry.ts` for all 14 languages
+- [x] **Svelte**: Add class, method, property, constant, arrow function symbols; add import, method call, lifecycle refs
+- [x] **Lua**: Add method, local function, variable symbols; add require, method calls refs
+- [x] **Elixir**: Add defp, defmacro, defstruct, defprotocol, module attr symbols; add alias, import, use, pipe, defimpl refs
+- [x] **Zig**: Add struct, const, test, error set symbols; add @import, method call refs
+- [x] **Bash**: Add variable assignment, alias symbols; add source/. includes, command substitution refs
+- [x] **Pascal**: Add class, record, interface, method, constant, unit, variable, enum symbols; add uses, extends, instantiation refs
+- [x] Update `nodeMappings` in `registry.ts` for all 20 languages
 
 ---
 
