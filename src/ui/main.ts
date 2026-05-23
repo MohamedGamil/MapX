@@ -334,25 +334,26 @@ async function loadGraph() {
     cyInstance = cytoscape({
       container: container,
       elements: initialElements,
+      wheelSensitivity: 4.2,
       style: [
         {
           selector: 'node',
           style: {
             'label': 'data(label)',
-            'color': '#f8fafc',
+            'color': '#abb2bf',
             'font-family': 'Outfit, sans-serif',
             'font-size': '11px',
             'font-weight': '600',
-            'background-color': '#64748b',
+            'background-color': '#5c6370',
             'shape': 'ellipse',
             'width': '32px',
             'height': '32px',
             'text-valign': 'bottom',
             'text-margin-y': 6,
-            'overlay-color': '#60a5fa',
-            'overlay-opacity': 0.2,
-            'text-outline-color': '#0b0f19',
-            'text-outline-width': '2px',
+            'overlay-color': '#61afef',
+            'overlay-opacity': 0.08,
+            'text-outline-color': '#1e222b',
+            'text-outline-width': '2.5px',
             'transition-property': 'opacity, width, height, border-color, border-width, background-color',
             'transition-duration': 0.2
           }
@@ -361,64 +362,64 @@ async function loadGraph() {
           selector: 'node[type="file"]',
           style: {
             'shape': 'ellipse',
-            'border-width': '2px',
-            'border-color': '#0f172a'
+            'border-width': '2.5px',
+            'border-color': '#282c34'
           }
         },
         {
           selector: 'node[type="symbol"]',
           style: {
             'shape': 'ellipse',
-            'border-width': '2px',
-            'border-color': '#0f172a'
+            'border-width': '2.5px',
+            'border-color': '#282c34'
           }
         },
         {
           selector: ':parent',
           style: {
-            'background-color': 'rgba(30, 41, 59, 0.4)',
+            'background-color': 'rgba(40, 44, 52, 0.4)',
             'border-width': '2px',
-            'border-color': '#475569',
+            'border-color': '#3e4452',
             'border-style': 'dashed',
             'label': 'data(label)',
-            'color': '#cbd5e1',
+            'color': '#abb2bf',
             'font-family': 'Outfit, sans-serif',
             'font-size': '12px',
             'font-weight': 'bold',
             'text-valign': 'top',
             'text-halign': 'center',
-            'text-outline-width': '2px',
-            'text-outline-color': '#0b0f19',
+            'text-outline-width': '2.5px',
+            'text-outline-color': '#1e222b',
             'padding': '20px'
           }
         },
-        { selector: 'node[language="php"]', style: { 'background-color': '#4f5b93' } },
-        { selector: 'node[language="javascript"]', style: { 'background-color': '#eab308' } },
-        { selector: 'node[language="typescript"]', style: { 'background-color': '#2563eb' } },
-        { selector: 'node[language="tsx"]', style: { 'background-color': '#3178c6' } },
-        { selector: 'node[language="python"]', style: { 'background-color': '#3776ab' } },
-        { selector: 'node[language="rust"]', style: { 'background-color': '#dea584' } },
-        { selector: 'node[language="go"]', style: { 'background-color': '#00ADD8' } },
-        { selector: 'node[language="java"]', style: { 'background-color': '#b07219' } },
-        { selector: 'node[language="c_sharp"]', style: { 'background-color': '#178600' } },
-        { selector: 'node[language="cpp"]', style: { 'background-color': '#f34b7d' } },
-        { selector: 'node[language="c"]', style: { 'background-color': '#555555' } },
-        { selector: 'node[language="ruby"]', style: { 'background-color': '#701516' } },
-        { selector: 'node[language="swift"]', style: { 'background-color': '#f05138' } },
-        { selector: 'node[language="kotlin"]', style: { 'background-color': '#a97bff' } },
-        { selector: 'node[language="vue"]', style: { 'background-color': '#41b883' } },
-        { selector: 'node[language="scala"]', style: { 'background-color': '#c22d40' } },
-        { selector: 'node[language="dart"]', style: { 'background-color': '#00b4ab' } },
+        { selector: 'node[language="php"]', style: { 'background-color': '#c678dd' } },
+        { selector: 'node[language="javascript"]', style: { 'background-color': '#e5c07b' } },
+        { selector: 'node[language="typescript"]', style: { 'background-color': '#61afef' } },
+        { selector: 'node[language="tsx"]', style: { 'background-color': '#61afef' } },
+        { selector: 'node[language="python"]', style: { 'background-color': '#56b6c2' } },
+        { selector: 'node[language="rust"]', style: { 'background-color': '#d19a66' } },
+        { selector: 'node[language="go"]', style: { 'background-color': '#56b6c2' } },
+        { selector: 'node[language="java"]', style: { 'background-color': '#c678dd' } },
+        { selector: 'node[language="c_sharp"]', style: { 'background-color': '#e06c75' } },
+        { selector: 'node[language="cpp"]', style: { 'background-color': '#e06c75' } },
+        { selector: 'node[language="c"]', style: { 'background-color': '#5c6370' } },
+        { selector: 'node[language="ruby"]', style: { 'background-color': '#e06c75' } },
+        { selector: 'node[language="swift"]', style: { 'background-color': '#d19a66' } },
+        { selector: 'node[language="kotlin"]', style: { 'background-color': '#c678dd' } },
+        { selector: 'node[language="vue"]', style: { 'background-color': '#98c379' } },
+        { selector: 'node[language="scala"]', style: { 'background-color': '#e06c75' } },
+        { selector: 'node[language="dart"]', style: { 'background-color': '#56b6c2' } },
         {
           selector: 'edge',
           style: {
             'width': 2,
-            'line-color': 'rgba(255, 255, 255, 0.15)',
-            'target-arrow-color': 'rgba(255, 255, 255, 0.15)',
+            'line-color': 'rgba(92, 99, 112, 0.18)',
+            'target-arrow-color': 'rgba(92, 99, 112, 0.18)',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
-            'overlay-color': '#fff',
-            'overlay-opacity': 0.1,
+            'overlay-color': '#61afef',
+            'overlay-opacity': 0.05,
             'transition-property': 'opacity, width, line-color, target-arrow-color',
             'transition-duration': 0.2
           }
@@ -426,25 +427,25 @@ async function loadGraph() {
         {
           selector: 'edge[type="route"]',
           style: {
-            'line-color': '#10b981',
-            'target-arrow-color': '#10b981'
+            'line-color': 'rgba(152, 195, 121, 0.7)',
+            'target-arrow-color': 'rgba(152, 195, 121, 0.7)'
           }
         },
         {
           selector: 'edge[type="cluster-dependency"]',
           style: {
             'width': '3px',
-            'line-color': '#3b82f6',
-            'target-arrow-color': '#3b82f6',
+            'line-color': '#61afef',
+            'target-arrow-color': '#61afef',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
             'label': 'data(label)',
-            'color': '#93c5fd',
+            'color': '#61afef',
             'font-family': 'Outfit, sans-serif',
             'font-size': '10px',
             'font-weight': 'bold',
-            'text-background-color': '#0f172a',
-            'text-background-opacity': 0.9,
+            'text-background-color': '#1e222b',
+            'text-background-opacity': 0.95,
             'text-background-padding': '3px',
             'text-background-shape': 'roundrectangle'
           }
@@ -453,7 +454,7 @@ async function loadGraph() {
           selector: 'node:selected',
           style: {
             'border-width': '3px',
-            'border-color': '#fff'
+            'border-color': '#61afef'
           }
         },
         {
@@ -469,8 +470,8 @@ async function loadGraph() {
             'width': '45px',
             'height': '45px',
             'border-width': '4px',
-            'border-color': '#3b82f6',
-            'overlay-opacity': 0.4,
+            'border-color': '#61afef',
+            'overlay-opacity': 0.15,
             'z-index': 9999,
             'opacity': 1,
             'text-opacity': 1
@@ -479,8 +480,8 @@ async function loadGraph() {
         {
           selector: '.highlighted-outgoing',
           style: {
-            'line-color': '#10b981',
-            'target-arrow-color': '#10b981',
+            'line-color': '#98c379',
+            'target-arrow-color': '#98c379',
             'width': 4,
             'z-index': 9998,
             'opacity': 1
@@ -490,7 +491,7 @@ async function loadGraph() {
           selector: '.highlighted-outgoing-node',
           style: {
             'border-width': '3px',
-            'border-color': '#10b981',
+            'border-color': '#98c379',
             'z-index': 9997,
             'opacity': 1,
             'text-opacity': 1
@@ -499,8 +500,8 @@ async function loadGraph() {
         {
           selector: '.highlighted-incoming',
           style: {
-            'line-color': '#a855f7',
-            'target-arrow-color': '#a855f7',
+            'line-color': '#c678dd',
+            'target-arrow-color': '#c678dd',
             'width': 4,
             'z-index': 9998,
             'opacity': 1
@@ -510,7 +511,7 @@ async function loadGraph() {
           selector: '.highlighted-incoming-node',
           style: {
             'border-width': '3px',
-            'border-color': '#a855f7',
+            'border-color': '#c678dd',
             'z-index': 9997,
             'opacity': 1,
             'text-opacity': 1
