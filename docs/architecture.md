@@ -4,38 +4,60 @@
 
 MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **22 languages** across three tiers (built-in, bundled, installable) and provides **25 MCP tools** for LLM integration.
 
+
+![Architecture Diagram](./images/01-arch.png)
+
+```mermaid
+graph TD
+    classDef interface fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef storage fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef engine fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
+
+    CLI["CLI Interface<br>(cli.ts)"]:::interface
+    MCP["MCP Server<br>(mcp.ts)"]:::interface
+    UI["Web Dashboard<br>(ui-server.ts)"]:::interface
+
+    Scanner["Scanner<br>(scanner.ts)"]:::core
+    GitTracker["Git Tracker<br>(git-tracker.ts)"]:::core
+    Workspace["Workspace Manager<br>(workspace-manager.ts)"]:::core
+
+    Registry["Language Registry<br>(registry.ts)"]:::core
+    Parsers["Parsers<br>(parsers/)"]:::core
+
+    Store["Store Interface<br>(store.ts)"]:::storage
+    SQLite[("SQLite DB<br>(mapx.db)")]:::storage
+    Graphology["In-Memory Graph<br>(graphology)"]:::storage
+
+    Exporters["Exporters<br>(exporters/)"]:::engine
+    FlowTracer["Flow Tracer<br>(flow-tracer.ts)"]:::engine
+    Context["Context Builder<br>(context-builder.ts)"]:::engine
+
+    CLI --> Scanner
+    MCP --> Scanner
+    UI --> Store
+
+    Scanner --> GitTracker
+    Scanner --> Registry
+    Registry --> Parsers
+
+    Scanner --> Store
+    Workspace --> Store
+
+    Store --> SQLite
+    Store --> Graphology
+
+    Store --> Exporters
+    Store --> FlowTracer
+    Store --> Context
+
+    FlowTracer --> CLI
+    FlowTracer --> MCP
+    Context --> MCP
+    Exporters --> CLI
+    Exporters --> MCP
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  CLI / MCP   │────▶│   Scanner    │────▶│   Parsers    │
-│  Interface   │     │  (Walker)    │     │ (tree-sitter)│
-└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
-       │                    │                     │
-       │              ┌─────▼──────┐       ┌──────▼──────┐
-       │              │ GitTracker │       │  Registry   │
-       │              │ (changes)  │       │ (22 langs)  │
-       │              └─────┬──────┘       └─────────────┘
-       │                    │
-┌──────▼────────────────────▼──────┐
-│              Store               │
-│         (SQLite + Graph)         │
-│  ┌─────────┐  ┌───────────────┐  │
-│  │ SQLite  │  │  graphology   │  │
-│  │ (disk)  │  │  (in-memory)  │  │
-│  └─────────┘  └───────────────┘  │
-└──────────────┬───────────────────┘
-               │
-        ┌──────▼───────┐
-        │  Exporters    │
-        │ LLM/JSON/DOT │
-        │  SVG/TOON    │
-        └──────┬───────┘
-               │
-        ┌──────▼───────┐
-        │  Flow Tracer  │
-        │ (data flow,   │
-        │  impact, etc) │
-        └──────────────┘
-```
+
 
 ## Core Components
 
@@ -188,3 +210,75 @@ Visual progress for scan operations:
 8. `impact` → FlowTracer computes blast radius → Returns affected symbols with risk scores
 9. `callers`/`callees` → FlowTracer traces call chains in specified direction
 10. `serve` → Starts MCP server → Exposes all functionality as 25 tools
+
+## Process Flow Diagrams
+
+### 1. Scanning & Indexing Sequence Flow
+This diagram illustrates the step-by-step lifecycle of a project scan, from Git diff analysis to parallel parsing and SQLite persistence.
+
+![Scanning & Indexing Sequence Flow](./images/02-seq.png)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Developer as CLI / MCP Client
+    participant S as Scanner
+    participant G as GitTracker
+    participant R as Language Registry
+    participant P as Parser (web-tree-sitter)
+    participant Db as SQLite Store
+    participant Gr as Graph (graphology)
+
+    Developer->>S: scan() / update()
+    opt Incremental Scan (update)
+        S->>G: getChanges(sinceLastCommit)
+        G-->>S: List of changed / new files
+    end
+    Note over S: Walk files & match extensions
+    loop For each file to scan
+        S->>R: getLanguageForFile(filePath)
+        R-->>S: Language Config (extensions, queries, mappings)
+        S->>P: parse(fileContent, languageConfig)
+        Note over P: web-tree-sitter uses WASM grammar
+        P->>P: Match AST using symbols.scm & references.scm queries
+        P-->>S: Extracted Symbols & References
+        S->>Db: Save batch (SQLite Transaction)
+    end
+    S->>Gr: Load all nodes/edges from SQLite
+    S->>Gr: Compute PageRank centrality
+    S-->>Developer: Scan completed (Duration, counts)
+```
+
+### 2. Flow Tracing & Change Impact Blast Radius
+This diagram details how FlowTracer traverses the graph to resolve callers, callees, data flow, and change risk scores.
+
+![Flow Tracing & Change Impact Blast Radius](./images/03-flow.png)
+
+```mermaid
+graph LR
+    classDef step fill:#e1f5fe,stroke:#01579b,stroke-width:1px;
+    classDef logic fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef db fill:#fff3e0,stroke:#e65100,stroke-width:1px;
+
+    Start["Starting Symbol<br>(e.g. UserService::save)"]:::step
+    Store[("SQLite Store")]:::db
+    Graph["In-Memory Graph<br>(graphology)"]:::db
+    
+    Traverser["FlowTracer Engine"]:::logic
+    PageRank["PageRank Evaluator"]:::logic
+
+    Forward["Forward Call Tracer<br>(callees/downstream)"]:::logic
+    Backward["Reverse Call Tracer<br>(callers/upstream)"]:::logic
+    Impact["Impact Analyzer<br>(risk score & blast radius)"]:::logic
+
+    Start --> Traverser
+    Store --> Graph
+    Graph --> Traverser
+    Graph --> PageRank
+
+    Traverser --> Forward
+    Traverser --> Backward
+    Traverser --> Impact
+
+    PageRank --> Impact
+```

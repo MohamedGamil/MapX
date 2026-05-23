@@ -291,27 +291,57 @@ mapx stores everything locally inside your project:
 
 ## Architecture
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  CLI / MCP   │────▶│   Scanner    │────▶│   Parsers    │
-│  Interface   │     │  (Walker)    │     │ (tree-sitter)│
-└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
-       │                    │                     │
-       │              ┌─────▼──────┐       ┌──────▼──────┐
-       │              │ GitTracker │       │  Registry   │
-       │              │ (changes)  │       │ (22 langs)  │
-       │              └─────┬──────┘       └─────────────┘
-       │                    │
-┌──────▼────────────────────▼──────┐
-│              Store               │
-│         (SQLite + Graph)         │
-└──────────────┬───────────────────┘
-               │
-        ┌──────▼───────┐     ┌──────────────┐
-        │  Exporters   │     │ Flow Tracer  │
-        │ LLM/JSON/DOT │     │ impact, call │
-        │ SVG/TOON     │     │ chains, flow │
-        └──────────────┘     └──────────────┘
+![Architecture Diagram](./docs/images/01-arch.png)
+
+```mermaid
+graph TD
+    classDef interface fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef core fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+    classDef storage fill:#fff3e0,stroke:#e65100,stroke-width:2px;
+    classDef engine fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
+
+    CLI["CLI Interface<br>(cli.ts)"]:::interface
+    MCP["MCP Server<br>(mcp.ts)"]:::interface
+    UI["Web Dashboard<br>(ui-server.ts)"]:::interface
+
+    Scanner["Scanner<br>(scanner.ts)"]:::core
+    GitTracker["Git Tracker<br>(git-tracker.ts)"]:::core
+    Workspace["Workspace Manager<br>(workspace-manager.ts)"]:::core
+
+    Registry["Language Registry<br>(registry.ts)"]:::core
+    Parsers["Parsers<br>(parsers/)"]:::core
+
+    Store["Store Interface<br>(store.ts)"]:::storage
+    SQLite[("SQLite DB<br>(mapx.db)")]:::storage
+    Graphology["In-Memory Graph<br>(graphology)"]:::storage
+
+    Exporters["Exporters<br>(exporters/)"]:::engine
+    FlowTracer["Flow Tracer<br>(flow-tracer.ts)"]:::engine
+    Context["Context Builder<br>(context-builder.ts)"]:::engine
+
+    CLI --> Scanner
+    MCP --> Scanner
+    UI --> Store
+
+    Scanner --> GitTracker
+    Scanner --> Registry
+    Registry --> Parsers
+
+    Scanner --> Store
+    Workspace --> Store
+
+    Store --> SQLite
+    Store --> Graphology
+
+    Store --> Exporters
+    Store --> FlowTracer
+    Store --> Context
+
+    FlowTracer --> CLI
+    FlowTracer --> MCP
+    Context --> MCP
+    Exporters --> CLI
+    Exporters --> MCP
 ```
 
 See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of each component.
@@ -328,6 +358,8 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |
+| [Framework Integration](docs/framework-integration.md) | Heuristics and routing/hook extraction for 21 frameworks |
+| [Agent Best Practices](docs/agent-best-practices.md) | Prompting guidelines and tool selection cheat sheet for LLM agents |
 | [Architecture](docs/architecture.md) | Internals and component overview |
 
 ---
