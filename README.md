@@ -2,7 +2,7 @@
 
 **Local code graph memory for LLMs.** Scan your codebase once — instantly query symbols, trace dependencies, analyze impact, and generate structured summaries without re-reading files.
 
-MapX uses [tree-sitter](https://tree-sitter.github.io/) to parse source files across **22 languages**, builds a PageRank-weighted dependency graph, and persists everything to a local SQLite database. Works as a standalone CLI or as an [MCP server](https://modelcontextprotocol.io/) with **25 tools** for Claude Desktop, Cursor, VS Code, and any other MCP-compatible client.
+MapXGraph _-also known as MapX-_ uses [tree-sitter](https://tree-sitter.github.io/) to parse source files across **22 languages**, builds a PageRank-weighted dependency graph, and persists everything to a local SQLite database. Works as a standalone CLI or as an [MCP server](https://modelcontextprotocol.io/) with **25 tools** for Claude Desktop, Cursor, VS Code, and any other MCP-compatible client.
 
 ---
 
