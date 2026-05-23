@@ -310,7 +310,42 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 
 ---
 
-## Building from Source
+## Development
+
+### npm script shortcuts
+
+All CLI commands are available as npm scripts for development:
+
+```bash
+npm run scan                    # Full scan
+npm run update                  # Incremental scan
+npm run status                  # Show status
+npm run export                  # LLM summary
+npm run export:svg              # SVG export
+npm run query -- UserService    # Symbol search
+npm run search -- User --kind class  # Advanced search
+npm run callers -- handleRequest     # Trace callers
+npm run impact -- UserService        # Change impact
+npm run ui                      # Web dashboard
+npm run serve                   # MCP server (stdio)
+npm run serve:sse               # MCP server (SSE)
+```
+
+### Makefile shortcuts
+
+```bash
+make help                       # Show all targets
+make scan DIR=/path             # Full scan
+make search q=User k=class     # Advanced search
+make callers s=handleRequest   # Trace callers
+make impact s=UserService d=3  # Impact with depth
+make node s=UserService src=1  # Inspect with source
+make export-toon DIR=/path     # TOON export
+make serve-sse PORT=3456       # SSE server
+make ui PORT=8080              # Web dashboard
+```
+
+### Building binaries
 
 Requires [Bun](https://bun.sh/) for binary compilation.
 

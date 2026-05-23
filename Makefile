@@ -1,5 +1,6 @@
-.PHONY: help init scan update status export export-json export-dot export-svg \
-       query deps summary serve lang-list \
+.PHONY: help init scan update status export export-wide export-json export-dot export-svg export-toon \
+       query search deps summary trace callers callees impact node files clusters \
+       serve serve-sse ui workspaces-list workspaces-discover lang-list \
        test test-full test-clean clean clean-all \
        wasm build build-all build-linux build-linux-arm \
        build-mac-arm build-mac-x64 build-win \
@@ -60,19 +61,64 @@ export-dot: ## Export in DOT format (make export-dot DIR=/path)
 export-svg: ## Export in SVG format (make export-svg DIR=/path)
 	$(CLI) export --format=svg --dir=$(DIR)
 
+export-toon: ## Export in TOON format (make export-toon DIR=/path)
+	$(CLI) export --format=toon --dir=$(DIR)
+
 query: ## Search symbols: make query q=ClassName DIR=/path
 	@test -n "$(q)" || (echo "Usage: make query q=SearchTerm [DIR=/path]" && exit 1)
 	$(CLI) query "$(q)" --dir=$(DIR)
+
+search: ## Advanced search: make search q=Term [k=class] DIR=/path
+	@test -n "$(q)" || (echo "Usage: make search q=SearchTerm [k=kind] [DIR=/path]" && exit 1)
+	$(CLI) search "$(q)" $(if $(k),--kind $(k),) --dir=$(DIR)
 
 deps: ## Show file dependencies: make deps f=path/to/file DIR=/path
 	@test -n "$(f)" || (echo "Usage: make deps f=path/to/file [DIR=/path]" && exit 1)
 	$(CLI) deps "$(f)" --dir=$(DIR)
 
+trace: ## Trace data flow: make trace s=SymbolName DIR=/path
+	@test -n "$(s)" || (echo "Usage: make trace s=SymbolName [DIR=/path]" && exit 1)
+	$(CLI) trace "$(s)" --dir=$(DIR)
+
+callers: ## Trace callers: make callers s=SymbolName [d=depth] DIR=/path
+	@test -n "$(s)" || (echo "Usage: make callers s=SymbolName [d=depth] [DIR=/path]" && exit 1)
+	$(CLI) callers "$(s)" $(if $(d),--depth $(d),) --dir=$(DIR)
+
+callees: ## Trace callees: make callees s=SymbolName [d=depth] DIR=/path
+	@test -n "$(s)" || (echo "Usage: make callees s=SymbolName [d=depth] [DIR=/path]" && exit 1)
+	$(CLI) callees "$(s)" $(if $(d),--depth $(d),) --dir=$(DIR)
+
+impact: ## Change impact: make impact s=SymbolName [d=depth] DIR=/path
+	@test -n "$(s)" || (echo "Usage: make impact s=SymbolName [d=depth] [DIR=/path]" && exit 1)
+	$(CLI) impact "$(s)" $(if $(d),--depth $(d),) --dir=$(DIR)
+
+node: ## Inspect symbol: make node s=SymbolName [src=1] DIR=/path
+	@test -n "$(s)" || (echo "Usage: make node s=SymbolName [src=1] [DIR=/path]" && exit 1)
+	$(CLI) node "$(s)" $(if $(src),--source,) --dir=$(DIR)
+
+files: ## List files: make files [p=prefix] [l=lang] DIR=/path
+	$(CLI) files $(if $(p),--path $(p),) $(if $(l),--lang $(l),) --dir=$(DIR)
+
+clusters: ## List code clusters (make clusters DIR=/path)
+	$(CLI) clusters --dir=$(DIR)
+
 summary: ## Show project summary (make summary DIR=/path)
 	$(CLI) summary $(DIR)
 
-serve: ## Start MCP server for a project (make serve DIR=/path)
+serve: ## Start MCP server — stdio (make serve DIR=/path)
 	$(CLI) serve --dir=$(DIR)
+
+serve-sse: ## Start MCP server — SSE/HTTP (make serve-sse [PORT=3456] DIR=/path)
+	$(CLI) serve --sse --port $(or $(PORT),45123) --dir=$(DIR)
+
+ui: ## Open web dashboard (make ui [PORT=8080] DIR=/path)
+	$(CLI) ui $(if $(PORT),--port $(PORT),) --dir=$(DIR)
+
+workspaces-list: ## List registered repos
+	$(CLI) workspaces list --dir=$(DIR)
+
+workspaces-discover: ## Discover unregistered repos
+	$(CLI) workspaces discover --dir=$(DIR)
 
 lang-list: ## List supported languages
 	$(CLI) lang list
@@ -85,7 +131,7 @@ test: ## Quick test: init + scan + export
 	$(CLI) scan $(DIR)
 	$(CLI) export --dir=$(DIR)
 
-test-full: ## Full test: init + scan + all exports + query + deps
+test-full: ## Full test: init + scan + all exports + query + deps + trace + impact
 	rm -rf $(DIR)/.mapx
 	$(CLI) init $(DIR)
 	@echo ""
@@ -107,11 +153,23 @@ test-full: ## Full test: init + scan + all exports + query + deps
 	@echo "=== EXPORT (SVG, first 10 lines) ==="
 	$(CLI) export --format=svg --dir=$(DIR) | head -10
 	@echo ""
+	@echo "=== EXPORT (TOON, first 20 lines) ==="
+	$(CLI) export --format=toon --dir=$(DIR) | head -20
+	@echo ""
 	@echo "=== QUERY: Stub ==="
 	$(CLI) query "Stub" --dir=$(DIR)
 	@echo ""
+	@echo "=== SEARCH: class kind ==="
+	$(CLI) search "Stub" --kind class --limit 5 --dir=$(DIR) || true
+	@echo ""
 	@echo "=== DEPS: index.php ==="
 	$(CLI) deps "index.php" --dir=$(DIR)
+	@echo ""
+	@echo "=== FILES (first 10) ==="
+	$(CLI) files --limit 10 --dir=$(DIR)
+	@echo ""
+	@echo "=== CLUSTERS ==="
+	$(CLI) clusters --dir=$(DIR) || true
 	@echo ""
 	@echo "=== STATUS ==="
 	$(CLI) status $(DIR)

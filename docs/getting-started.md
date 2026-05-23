@@ -167,13 +167,36 @@ Stale locks (process no longer alive) are cleared automatically.
 
 ```bash
 # Build for current platform
-bun build --compile --minify --bytecode ./src/main.ts --outfile mapx
+make build-linux       # or build-mac-arm, build-win
 
 # Cross-compile for all platforms
-npm run build:all
+make build-all
 
 # Build npm package
 npm run build:npm
+
+# Package + installers
+make package-all
 ```
 
 Binaries are output to `dist/` (~85-100MB each).
+
+## Development Shortcuts
+
+All CLI commands are available as npm scripts and Makefile targets:
+
+```bash
+# npm scripts (pass args after --)
+npm run scan
+npm run query -- UserService
+npm run impact -- handleRequest
+npm run serve
+
+# Makefile targets (use variables)
+make scan DIR=/path
+make query q=UserService
+make impact s=handleRequest d=3
+make serve DIR=/path
+
+# Run `make help` for all 30+ targets
+```
