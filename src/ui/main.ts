@@ -180,9 +180,11 @@ let rawGraphElements: any[] = [];
 let showClusters = false;
 
 function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
+  let processed: any[] = [];
+  
   if (!useClusters) {
     // Return copy of elements without parent fields
-    return rawElements.map(el => {
+    processed = rawElements.map(el => {
       if (el.data && el.data.parent) {
         const copy = JSON.parse(JSON.stringify(el));
         delete copy.data.parent;
@@ -190,160 +192,172 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
       }
       return el;
     });
-  }
+  } else {
+    const filesByDirectory: { [dirId: string]: any[] } = {};
+    
+    const getParentId = (filePath: string): string => {
+      const parts = filePath.split('/');
+      return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : 'dir:root';
+    };
 
-  const processed: any[] = [];
-  const filesByDirectory: { [dirId: string]: any[] } = {};
-  
-  const getParentId = (filePath: string): string => {
-    const parts = filePath.split('/');
-    return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : 'dir:root';
-  };
-
-  // Group file nodes
-  for (const el of rawElements) {
-    if (el.data && el.data.type === 'file') {
-      const parentId = getParentId(el.data.id);
-      if (!filesByDirectory[parentId]) {
-        filesByDirectory[parentId] = [];
+    // Group file nodes
+    for (const el of rawElements) {
+      if (el.data && el.data.type === 'file') {
+        const parentId = getParentId(el.data.id);
+        if (!filesByDirectory[parentId]) {
+          filesByDirectory[parentId] = [];
+        }
+        const copy = JSON.parse(JSON.stringify(el));
+        copy.data.parent = parentId;
+        filesByDirectory[parentId].push(copy);
       }
-      const copy = JSON.parse(JSON.stringify(el));
-      copy.data.parent = parentId;
-      filesByDirectory[parentId].push(copy);
+    }
+
+    // Get and sort directory IDs
+    const dirIds = Object.keys(filesByDirectory).sort();
+    const N = dirIds.length;
+    
+    // Calculate grid layout parameters for clear separation
+    const cols = 3;
+    const W = 550;
+    const H = 450;
+
+    for (let i = 0; i < N; i++) {
+      const dirId = dirIds[i];
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = col * W + W / 2;
+      const cy = row * H + H / 2;
+
+      // Add parent node
+      processed.push({
+        data: {
+          id: dirId,
+          label: dirId === 'dir:root' ? 'root' : dirId.replace('dir:', ''),
+          type: 'parent'
+        }
+      });
+
+      // Position children files in a concentric circle structure
+      const files = filesByDirectory[dirId];
+      const M = files.length;
+      if (M > 0) {
+        if (M === 1) {
+          files[0].position = { x: cx, y: cy };
+        } else if (M <= 8) {
+          const R = 110;
+          for (let j = 0; j < M; j++) {
+            const angle = (j * 2 * Math.PI) / M;
+            files[j].position = {
+              x: cx + R * Math.cos(angle),
+              y: cy + R * Math.sin(angle)
+            };
+          }
+        } else if (M <= 16) {
+          const innerCount = 6;
+          const outerCount = M - innerCount;
+          const R1 = 90;
+          const R2 = 180;
+          for (let j = 0; j < innerCount; j++) {
+            const angle = (j * 2 * Math.PI) / innerCount;
+            files[j].position = {
+              x: cx + R1 * Math.cos(angle),
+              y: cy + R1 * Math.sin(angle)
+            };
+          }
+          for (let j = 0; j < outerCount; j++) {
+            const angle = (j * 2 * Math.PI) / outerCount;
+            files[innerCount + j].position = {
+              x: cx + R2 * Math.cos(angle),
+              y: cy + R2 * Math.sin(angle)
+            };
+          }
+        } else {
+          const innerCount = 5;
+          const midCount = 10;
+          const outerCount = M - 15;
+          const R1 = 80;
+          const R2 = 160;
+          const R3 = 240;
+          for (let j = 0; j < innerCount; j++) {
+            const angle = (j * 2 * Math.PI) / innerCount;
+            files[j].position = {
+              x: cx + R1 * Math.cos(angle),
+              y: cy + R1 * Math.sin(angle)
+            };
+          }
+          for (let j = 0; j < midCount; j++) {
+            const angle = (j * 2 * Math.PI) / midCount;
+            files[innerCount + j].position = {
+              x: cx + R2 * Math.cos(angle),
+              y: cy + R2 * Math.sin(angle)
+            };
+          }
+          for (let j = 0; j < outerCount; j++) {
+            const angle = (j * 2 * Math.PI) / outerCount;
+            files[15 + j].position = {
+              x: cx + R3 * Math.cos(angle),
+              y: cy + R3 * Math.sin(angle)
+            };
+          }
+        }
+        
+        // Push files to elements list
+        processed.push(...files);
+      }
+    }
+
+    // Aggregate inter-cluster edges
+    const interClusterEdges = new Map<string, { source: string, target: string, count: number }>();
+
+    for (const el of rawElements) {
+      if (el.data && el.data.source && el.data.target) {
+        const src = el.data.source;
+        const tgt = el.data.target;
+        const parentSrc = getParentId(src);
+        const parentTgt = getParentId(tgt);
+
+        if (parentSrc !== parentTgt) {
+          const edgeKey = `${parentSrc}->${parentTgt}`;
+          if (!interClusterEdges.has(edgeKey)) {
+            interClusterEdges.set(edgeKey, { source: parentSrc, target: parentTgt, count: 0 });
+          }
+          interClusterEdges.get(edgeKey)!.count++;
+        } else {
+          processed.push(JSON.parse(JSON.stringify(el)));
+        }
+      }
+    }
+
+    // Add aggregated inter-cluster edges
+    for (const [key, info] of interClusterEdges.entries()) {
+      processed.push({
+        data: {
+          id: `edge-cluster-${info.source}-${info.target}`,
+          source: info.source,
+          target: info.target,
+          type: 'cluster-dependency',
+          label: `${info.count}`,
+          count: info.count
+        }
+      });
     }
   }
 
-  // Get and sort directory IDs
-  const dirIds = Object.keys(filesByDirectory).sort();
-  const N = dirIds.length;
-  
-  // Calculate grid layout parameters for clear separation
-  const cols = 3;
-  const W = 550;
-  const H = 450;
-
-  for (let i = 0; i < N; i++) {
-    const dirId = dirIds[i];
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    const cx = col * W + W / 2;
-    const cy = row * H + H / 2;
-
-    // Add parent node
-    processed.push({
-      data: {
-        id: dirId,
-        label: dirId === 'dir:root' ? 'root' : dirId.replace('dir:', ''),
-        type: 'parent'
-      }
-    });
-
-    // Position children files in a concentric circle structure
-    const files = filesByDirectory[dirId];
-    const M = files.length;
-    if (M > 0) {
-      if (M === 1) {
-        files[0].position = { x: cx, y: cy };
-      } else if (M <= 8) {
-        const R = 110;
-        for (let j = 0; j < M; j++) {
-          const angle = (j * 2 * Math.PI) / M;
-          files[j].position = {
-            x: cx + R * Math.cos(angle),
-            y: cy + R * Math.sin(angle)
-          };
-        }
-      } else if (M <= 16) {
-        const innerCount = 6;
-        const outerCount = M - innerCount;
-        const R1 = 90;
-        const R2 = 180;
-        for (let j = 0; j < innerCount; j++) {
-          const angle = (j * 2 * Math.PI) / innerCount;
-          files[j].position = {
-            x: cx + R1 * Math.cos(angle),
-            y: cy + R1 * Math.sin(angle)
-          };
-        }
-        for (let j = 0; j < outerCount; j++) {
-          const angle = (j * 2 * Math.PI) / outerCount;
-          files[innerCount + j].position = {
-            x: cx + R2 * Math.cos(angle),
-            y: cy + R2 * Math.sin(angle)
-          };
-        }
-      } else {
-        const innerCount = 5;
-        const midCount = 10;
-        const outerCount = M - 15;
-        const R1 = 80;
-        const R2 = 160;
-        const R3 = 240;
-        for (let j = 0; j < innerCount; j++) {
-          const angle = (j * 2 * Math.PI) / innerCount;
-          files[j].position = {
-            x: cx + R1 * Math.cos(angle),
-            y: cy + R1 * Math.sin(angle)
-          };
-        }
-        for (let j = 0; j < midCount; j++) {
-          const angle = (j * 2 * Math.PI) / midCount;
-          files[innerCount + j].position = {
-            x: cx + R2 * Math.cos(angle),
-            y: cy + R2 * Math.sin(angle)
-          };
-        }
-        for (let j = 0; j < outerCount; j++) {
-          const angle = (j * 2 * Math.PI) / outerCount;
-          files[15 + j].position = {
-            x: cx + R3 * Math.cos(angle),
-            y: cy + R3 * Math.sin(angle)
-          };
-        }
-      }
-      
-      // Push files to elements list
-      processed.push(...files);
+  // Filter out any edges whose source or target nodes do not exist in the final elements list
+  const nodeIds = new Set<string>();
+  for (const el of processed) {
+    if (el.data && !el.data.source && !el.data.target) {
+      nodeIds.add(el.data.id);
     }
   }
 
-  // Aggregate inter-cluster edges
-  const interClusterEdges = new Map<string, { source: string, target: string, count: number }>();
-
-  for (const el of rawElements) {
-    if (el.data && el.data.source && el.data.target) {
-      const src = el.data.source;
-      const tgt = el.data.target;
-      const parentSrc = getParentId(src);
-      const parentTgt = getParentId(tgt);
-
-      if (parentSrc !== parentTgt) {
-        const edgeKey = `${parentSrc}->${parentTgt}`;
-        if (!interClusterEdges.has(edgeKey)) {
-          interClusterEdges.set(edgeKey, { source: parentSrc, target: parentTgt, count: 0 });
-        }
-        interClusterEdges.get(edgeKey)!.count++;
-      } else {
-        processed.push(JSON.parse(JSON.stringify(el)));
-      }
+  return processed.filter(el => {
+    if (el.data && (el.data.source || el.data.target)) {
+      return nodeIds.has(el.data.source) && nodeIds.has(el.data.target);
     }
-  }
-
-  // Add aggregated inter-cluster edges
-  for (const [key, info] of interClusterEdges.entries()) {
-    processed.push({
-      data: {
-        id: `edge-cluster-${info.source}-${info.target}`,
-        source: info.source,
-        target: info.target,
-        type: 'cluster-dependency',
-        label: `${info.count}`,
-        count: info.count
-      }
-    });
-  }
-
-  return processed;
+    return true;
+  });
 }
 
 function getLayoutOptions(useClusters: boolean, animate = true) {
