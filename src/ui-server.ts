@@ -111,159 +111,179 @@ export function startUiServer(opts: ServerOpts) {
         }
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
-        const fileCount = store.getFileCount();
-        const symbolCount = store.getSymbolCount();
-        const edgeCount = store.getEdgeCount();
-        const lastScan = store.getMeta('last_scan_time') || 'never';
-        const config = await Config.load(dir);
+        try {
+          const fileCount = store.getFileCount();
+          const symbolCount = store.getSymbolCount();
+          const edgeCount = store.getEdgeCount();
+          const lastScan = store.getMeta('last_scan_time') || 'never';
+          const config = await Config.load(dir);
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          repoName: config.repo.name,
-          lastScan,
-          fileCount,
-          symbolCount,
-          edgeCount,
-          languages: store.getLanguageBreakdown()
-        }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            repoName: config.repo.name,
+            lastScan,
+            fileCount,
+            symbolCount,
+            edgeCount,
+            languages: store.getLanguageBreakdown()
+          }));
+        } finally {
+          store.close();
+        }
         return;
       }
 
       if (pathname === '/api/graph') {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
-        const files = store.getAllFiles();
-        const edges = store.getAllEdges();
+        try {
+          const files = store.getAllFiles();
+          const edges = store.getAllEdges();
 
-        const elements: any[] = [];
-        for (const f of files) {
-          const fPath = f.path as string;
-          elements.push({
-            data: {
-              id: fPath,
-              label: fPath.split('/').pop() || fPath,
-              type: 'file',
-              language: f.language,
-              size: f.size_bytes,
-              lines: f.lines
-            }
-          });
-        }
-        for (const e of edges) {
-          elements.push({
-            data: {
-              id: `edge-${e.source_file}-${e.target_file}`,
-              source: e.source_file,
-              target: e.target_file,
-              type: e.edge_type,
-              verifiability: e.verifiability
-            }
-          });
-        }
+          const elements: any[] = [];
+          for (const f of files) {
+            const fPath = f.path as string;
+            elements.push({
+              data: {
+                id: fPath,
+                label: fPath.split('/').pop() || fPath,
+                type: 'file',
+                language: f.language,
+                size: f.size_bytes,
+                lines: f.lines
+              }
+            });
+          }
+          for (const e of edges) {
+            elements.push({
+              data: {
+                id: `edge-${e.source_file}-${e.target_file}`,
+                source: e.source_file,
+                target: e.target_file,
+                type: e.edge_type,
+                verifiability: e.verifiability
+              }
+            });
+          }
 
-        const payload = JSON.stringify(elements);
-        if (payload.length > 10 * 1024 * 1024) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Graph too large (exceeded 10MB limit)' }));
-          return;
-        }
+          const payload = JSON.stringify(elements);
+          if (payload.length > 10 * 1024 * 1024) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Graph too large (exceeded 10MB limit)' }));
+            return;
+          }
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(payload);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(payload);
+        } finally {
+          store.close();
+        }
         return;
       }
 
       if (pathname === '/api/symbols') {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
-        const term = parsedUrl.searchParams.get('q') || '';
-        const limit = parseInt(parsedUrl.searchParams.get('limit') || '100', 10);
-        const results = store.searchSymbolsFiltered({ term, limit });
+        try {
+          const term = parsedUrl.searchParams.get('q') || '';
+          const limit = parseInt(parsedUrl.searchParams.get('limit') || '100', 10);
+          const results = store.searchSymbolsFiltered({ term, limit });
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(results));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(results));
+        } finally {
+          store.close();
+        }
         return;
       }
 
       if (pathname.startsWith('/api/symbol/')) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
-        const symName = decodeURIComponent(pathname.substring('/api/symbol/'.length));
-        const sym = store.getSymbolByName(symName);
-        if (!sym) {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Symbol not found' }));
-          return;
-        }
-
-        const callers = store.getCallersOfSymbol(symName);
-        const callees = store.getCalleesOfSymbol(symName);
-
-        // Try reading source file segment if lines are specified
-        let sourceCode = '';
-        if (sym.file_path) {
-          try {
-            const fullFilePath = resolve(dir, sym.file_path);
-            if (existsSync(fullFilePath)) {
-              const fileContent = readFileSync(fullFilePath, 'utf-8');
-              const lines = fileContent.split('\n');
-              const start = Math.max(0, (sym.start_line || 1) - 1);
-              const end = Math.min(lines.length, (sym.end_line || lines.length));
-              sourceCode = lines.slice(start, end).join('\n');
-            }
-          } catch {
-            // Ignored
+        try {
+          const symName = decodeURIComponent(pathname.substring('/api/symbol/'.length));
+          const sym = store.getSymbolByName(symName);
+          if (!sym) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Symbol not found' }));
+            return;
           }
-        }
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          symbol: sym,
-          callers,
-          callees,
-          sourceCode
-        }));
+          const callers = store.getCallersOfSymbol(symName);
+          const callees = store.getCalleesOfSymbol(symName);
+
+          // Try reading source file segment if lines are specified
+          let sourceCode = '';
+          if (sym.file_path) {
+            try {
+              const fullFilePath = resolve(dir, sym.file_path);
+              if (existsSync(fullFilePath)) {
+                const fileContent = readFileSync(fullFilePath, 'utf-8');
+                const lines = fileContent.split('\n');
+                const start = Math.max(0, (sym.start_line || 1) - 1);
+                const end = Math.min(lines.length, (sym.end_line || lines.length));
+                sourceCode = lines.slice(start, end).join('\n');
+              }
+            } catch {
+              // Ignored
+            }
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            symbol: sym,
+            callers,
+            callees,
+            sourceCode
+          }));
+        } finally {
+          store.close();
+        }
         return;
       }
 
       if (pathname === '/api/metrics') {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
-        const config = await Config.load(dir);
-        const graph = new MapxGraph(config.repo.name);
+        try {
+          const config = await Config.load(dir);
+          const graph = new MapxGraph(config.repo.name);
 
-        for (const file of store.getAllFiles()) {
-          graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
-        }
-        for (const sym of store.getAllSymbols()) {
-          graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-        }
-        for (const edge of store.getAllEdges()) {
-          graph.addDependencyEdge({
-            sourceFile: edge.source_file as string,
-            targetFile: edge.target_file as string,
-            sourceSymbol: edge.source_symbol as string | null,
-            targetSymbol: edge.target_symbol as string | null,
-            edgeType: edge.edge_type as any,
-            repo: edge.repo as string,
-            weight: edge.weight as number,
-            verifiability: edge.verifiability as any,
-            targetRepo: edge.target_repo as string | null,
-          });
-        }
+          for (const file of store.getAllFiles()) {
+            graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
+          }
+          for (const sym of store.getAllSymbols()) {
+            graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
+          }
+          for (const edge of store.getAllEdges()) {
+            graph.addDependencyEdge({
+              sourceFile: edge.source_file as string,
+              targetFile: edge.target_file as string,
+              sourceSymbol: edge.source_symbol as string | null,
+              targetSymbol: edge.target_symbol as string | null,
+              edgeType: edge.edge_type as any,
+              repo: edge.repo as string,
+              weight: edge.weight as number,
+              verifiability: edge.verifiability as any,
+              targetRepo: edge.target_repo as string | null,
+            });
+          }
 
-        const fileMetrics = calculateMetrics(store, { repo: config.repo.name });
-        const topFiles = store.getTopFilesByPageRank(graph, 5);
-        const topSymbols = store.getTopSymbolsByPageRank(graph, 5);
+          const fileMetrics = calculateMetrics(store, { repo: config.repo.name });
+          const topFiles = store.getTopFilesByPageRank(graph, 5);
+          const topSymbols = store.getTopSymbolsByPageRank(graph, 5);
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          totalFiles: store.getFileCount(),
-          totalSymbols: store.getSymbolCount(),
-          fileMetrics,
-          topFiles,
-          topSymbols
-        }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            totalFiles: store.getFileCount(),
+            totalSymbols: store.getSymbolCount(),
+            fileMetrics,
+            topFiles,
+            topSymbols
+          }));
+        } finally {
+          store.close();
+        }
         return;
       }
 
@@ -280,12 +300,13 @@ export function startUiServer(opts: ServerOpts) {
         });
 
         req.on('end', async () => {
+          let store: Store | null = null;
           try {
             const data = JSON.parse(body);
             const task = data.task || '';
 
             const dbPath = resolve(dir, '.mapx', 'mapx.db');
-            const store = new Store(dbPath);
+            store = new Store(dbPath);
             const config = await Config.load(dir);
             const graph = new MapxGraph(config.repo.name);
 
@@ -316,6 +337,10 @@ export function startUiServer(opts: ServerOpts) {
           } catch (err: any) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: err.message }));
+          } finally {
+            if (store) {
+              store.close();
+            }
           }
         });
         return;
