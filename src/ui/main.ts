@@ -858,23 +858,23 @@ async function loadSymbolDetails(name: string) {
     if (!detailView) return;
 
     detailView.innerHTML = `
-      <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; color: #cbd5e1; display: flex; flex-direction: column; gap: 16px; width: 100%;">
-        <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px;">
+      <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; color: #cbd5e1; display: flex; flex-direction: column; gap: 16px; width: 100%; height: 100%; min-height: 0;">
+        <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; flex-shrink: 0;">
           <h3 style="margin: 0 0 6px 0; color: #e5c07b; font-size: 14px;">${data.symbol.name}</h3>
           <span style="background: rgba(229, 192, 123, 0.1); color: #e5c07b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${data.symbol.kind}</span>
         </div>
 
-        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start; flex-shrink: 0;">
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">File</span>
           <span style="word-break: break-all; text-align: right;">${data.symbol.file_path}</span>
         </div>
 
-        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
+        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start; flex-shrink: 0;">
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Lines</span>
           <span style="text-align: right;">${data.symbol.start_line}-${data.symbol.end_line}</span>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; flex-shrink: 0;">
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callers (${data.callers.length})</span>
           <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
             ${data.callers.map((c: any) => {
@@ -887,7 +887,7 @@ async function loadSymbolDetails(name: string) {
           </ul>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; flex-shrink: 0;">
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callees (${data.callees.length})</span>
           <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
             ${data.callees.map((c: any) => {
@@ -901,9 +901,9 @@ async function loadSymbolDetails(name: string) {
         </div>
 
         ${data.sourceCode ? `
-          <div style="display: flex; flex-direction: column; gap: 6px;">
-            <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Source Code</span>
-            <pre style="background: #1e1e24; color: #abb2bf; padding: 12px; border-radius: 6px; overflow-x: auto; font-family: inherit; font-size: 11px; margin: 4px 0 0 0; border: 1px solid rgba(255, 255, 255, 0.05); line-height: 1.5;">${escapeHtml(data.sourceCode)}</pre>
+          <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0;">
+            <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source Code</span>
+            <pre class="neat-scrollbar" style="background: #1e1e24; color: #abb2bf; padding: 12px; border-radius: 6px; overflow: auto; font-family: inherit; font-size: 11px; margin: 4px 0 0 0; border: 1px solid rgba(255, 255, 255, 0.05); line-height: 1.5; flex: 1; min-height: 0;">${escapeHtml(data.sourceCode)}</pre>
           </div>
         ` : ''}
       </div>
