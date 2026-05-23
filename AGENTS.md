@@ -1,4 +1,4 @@
-<!-- mapx v0.1.8 -->
+<!-- mapx v0.2.0 -->
 # MapxGraph - LLM Integration Guide
 
 This project uses **MapxGraph** — a local code graph memory system that provides persistent, structured understanding of the codebase across LLM sessions.
@@ -28,6 +28,7 @@ mapx -d /path/to/project scan
 ### Available Commands
 
 - `mapx init [path]` - First-time setup (auto-adds .mapx/ to .gitignore)
+- `mapx uninit [path]` - Remove .mapx/ and reverse integration changes
 - `mapx scan [path]` - Full scan
 - `mapx update [path]` (alias: `sync`) - Incremental update (fast)
 - `mapx status [path]` - Check what changed since last scan

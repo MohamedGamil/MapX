@@ -1,5 +1,4 @@
 # Ignore Core app artifacts
-.mapx/
 *.db
 *.db-journal
 *.db-wal
@@ -39,3 +38,4 @@ Desktop.ini
 *_walkthrough.md
 scratch/
 
+.mapx/
