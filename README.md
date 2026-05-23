@@ -109,8 +109,8 @@ mapx -d /path/to/project export
 
 | Command | Description |
 |---------|-------------|
-| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, update `.gitignore` |
-| `mapx uninit [path]` | Remove mapx; delete `.mapx/`, reverse LLM integration changes, update `.gitignore` |
+| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs |
+| `mapx uninit [path]` | Remove mapx; delete `.mapx/`, reverse LLM integration changes, clean MCP configs |
 | `mapx scan [path]` | Full scan — builds the graph from scratch |
 | `mapx update [path]` | Incremental scan — only re-parses changed files |
 | `mapx status [path]` | Show graph metrics, language breakdown, PageRank rankings, git changes |
@@ -139,6 +139,7 @@ mapx -d /path/to/project export
 | `mapx workspaces add <path>` | Register a new repository |
 | `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders |
 | `mapx workspaces sync` | Auto-register discovered repositories |
+| `mapx agents mcp` | Auto-detect agent tools and generate MCP config files |
 | `mapx serve --dir <path>` | Start MCP server (stdio) |
 | `mapx serve --sse --port 3456` | Start MCP server (SSE/HTTP) |
 
@@ -261,11 +262,25 @@ All languages track **imports**, **inheritance/implementation**, **instantiation
 
 ---
 
-## AGENTS.md
+## Agentic Integration
 
 `mapx init` creates (or updates) an `AGENTS.md` file in your project root. This file documents the mapx CLI and MCP tools so LLM coding agents can discover and use them automatically.
 
-The content is wrapped in markers and can safely coexist with existing AGENTS.md content:
+During initialization, mapx also **auto-detects installed agent tools** and generates MCP server config files:
+
+| Agent Tool | Config File | Auto-Detection |
+|------------|-------------|----------------|
+| opencode | `opencode.json` | `opencode.json` or `opencode.jsonc` exists |
+| Gemini CLI | `.gemini/settings.json` | `.gemini/` directory exists |
+| Cursor | `.cursor/mcp.json` | `.cursor/` directory exists |
+| VS Code | `.vscode/mcp.json` | `.vscode/` directory exists |
+| Antigravity | `.agents/mcp.json` | `.agents/` directory exists |
+
+This means running `mapx init` in a project that uses Cursor and Gemini CLI will auto-register mapx as an MCP server in both tools — no manual config editing needed.
+
+You can also run `mapx agents mcp --detect` to see which tools are available, or `mapx agents mcp --all` to generate configs for all supported tools.
+
+The AGENTS.md content is wrapped in markers and can safely coexist with existing AGENTS.md content:
 
 ```markdown
 <!-- mapx -->

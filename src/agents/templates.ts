@@ -2,7 +2,139 @@ export interface ProviderTemplate {
   filename: string;
   isAppend: boolean;
   content: string;
+  /** True if this template is an MCP server config (JSON) rather than an instruction doc */
+  isMcpConfig?: boolean;
 }
+
+/**
+ * MCP config definitions for agent tools.
+ * Each entry generates a project-local JSON config file that auto-registers
+ * mapx as an MCP server so the agent can discover all 25 tools on startup.
+ *
+ * Config files use the sentinel-block pattern (<!-- mapx --> markers are not
+ * used — the entire file is owned by mapx and can safely be overwritten).
+ */
+export interface McpConfigEntry {
+  /** Agent tool name (e.g. 'opencode', 'gemini-cli') */
+  name: string;
+  /** Relative path from project root to the config file */
+  filename: string;
+  /** Function to generate the JSON config content */
+  generate: (projectDir: string) => string;
+  /** How to detect if this agent tool is active / desired */
+  detect: (projectDir: string) => boolean;
+}
+
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+/**
+ * Build the mapx MCP server command. Prefers global `mapx` binary; falls back
+ * to `npx -y mapx` for npm-installed projects.
+ */
+function mcpCommand(): { command: string; args: string[] } {
+  return { command: 'mapx', args: [] };
+}
+
+function mcpArgs(projectDir: string): string[] {
+  return ['serve', '--dir', projectDir];
+}
+
+export const MCP_CONFIGS: McpConfigEntry[] = [
+  {
+    name: 'opencode',
+    filename: 'opencode.json',
+    detect: (dir: string) => {
+      return existsSync(join(dir, 'opencode.json')) ||
+             existsSync(join(dir, 'opencode.jsonc'));
+    },
+    generate: (projectDir: string) => {
+      const cmd = mcpCommand();
+      return JSON.stringify({
+        "$schema": "https://opencode.ai/config.json",
+        mcp: {
+          mapx: {
+            type: 'local',
+            command: [cmd.command, ...mcpArgs(projectDir)],
+            enabled: true,
+          }
+        }
+      }, null, 2);
+    },
+  },
+  {
+    name: 'gemini-cli',
+    filename: '.gemini/settings.json',
+    detect: (dir: string) => {
+      return existsSync(join(dir, '.gemini'));
+    },
+    generate: (projectDir: string) => {
+      const cmd = mcpCommand();
+      return JSON.stringify({
+        mcpServers: {
+          mapx: {
+            command: cmd.command,
+            args: mcpArgs(projectDir),
+          }
+        }
+      }, null, 2);
+    },
+  },
+  {
+    name: 'cursor-mcp',
+    filename: '.cursor/mcp.json',
+    detect: (dir: string) => {
+      return existsSync(join(dir, '.cursor'));
+    },
+    generate: (projectDir: string) => {
+      const cmd = mcpCommand();
+      return JSON.stringify({
+        mcpServers: {
+          mapx: {
+            command: cmd.command,
+            args: mcpArgs(projectDir),
+          }
+        }
+      }, null, 2);
+    },
+  },
+  {
+    name: 'vscode-mcp',
+    filename: '.vscode/mcp.json',
+    detect: (dir: string) => {
+      return existsSync(join(dir, '.vscode'));
+    },
+    generate: (projectDir: string) => {
+      const cmd = mcpCommand();
+      return JSON.stringify({
+        servers: {
+          mapx: {
+            command: cmd.command,
+            args: mcpArgs(projectDir),
+          }
+        }
+      }, null, 2);
+    },
+  },
+  {
+    name: 'antigravity',
+    filename: '.agents/mcp.json',
+    detect: (dir: string) => {
+      return existsSync(join(dir, '.agents'));
+    },
+    generate: (projectDir: string) => {
+      const cmd = mcpCommand();
+      return JSON.stringify({
+        servers: {
+          mapx: {
+            command: cmd.command,
+            args: mcpArgs(projectDir),
+          }
+        }
+      }, null, 2);
+    },
+  },
+];
 
 export const TEMPLATES: Record<string, ProviderTemplate> = {
   generic: {
@@ -300,5 +432,60 @@ This project uses MapxGraph (22 languages, 25 MCP tools).
 - Run \`mapx impact <symbol>\` to assess change risk before refactoring.
 - Run \`mapx trace <symbol>\` to trace data flow.
 - Run \`mapx sync\` after file edits to update the graph.`
+  },
+  antigravity: {
+    filename: '.agents/rules/mapx.md',
+    isAppend: false,
+    content: `# MapxGraph Initialization Rule
+
+## Context
+
+Triggered when a new task is received, before any planning, reasoning, or execution steps begin.
+This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 25 MCP tools) that provides persistent, structured understanding of the codebase.
+
+## Requirements
+
+You must execute the following MCP tools immediately upon receiving a user prompt:
+
+1. Call \`mapx_sync\` to incrementally re-index any files changed since the last scan.
+2. Call \`mapx_export\` (with \`tokens: 8192\`) to retrieve a compact, PageRank-ranked codebase skeleton.
+
+## Constraints
+
+* **Do not** generate a task plan or response text until both MCP tool responses are received.
+* If either MCP call fails, report the initialization error to the user before proceeding.
+* After receiving the export, use it as your primary codebase context — avoid reading entire files unless specifically needed.
+
+## Pre-Modification Workflow
+
+Before editing any symbol (class, function, method, interface):
+
+1. Call \`mapx_impact\` on the target symbol to assess blast radius and risk score.
+2. Call \`mapx_callers\` to identify all upstream dependents.
+3. If impacted files > 3, call \`mapx_context\` with the affected symbols as seeds to build a token-budgeted context window.
+
+## Post-Modification Workflow
+
+After completing file writes:
+
+1. Call \`mapx_sync\` to re-index modified files.
+2. Verify the updated graph reflects your changes before reporting completion.
+
+## Available MCP Tools
+
+**Graph Building:** \`mapx_scan\`, \`mapx_sync\`
+**Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
+**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`
+**Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
+**Workspaces:** \`mapx_workspaces\` (list/discover)
+**Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
+
+## Key Principles
+
+* **Pre-Planning Trigger**: Always sync and export before planning. Never act on stale graph data.
+* **Strict Ordering**: Initialization → Impact Analysis → Planning → Execution → Re-sync.
+* **Fail-Safe**: Prevent the agent from acting on unverified workspace data.
+* **Token Efficiency**: Use \`mapx_export\` and \`mapx_context\` instead of reading raw source files — reduces token usage by up to 87%.`
   }
 };

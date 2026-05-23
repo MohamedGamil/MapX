@@ -318,6 +318,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--name <name>', 'Repository name')
     .option('--no-agents', 'Skip AGENTS.md creation')
     .option('--no-suggestions', 'Skip interactive framework suggestions')
+    .option('--no-mcp-configs', 'Skip auto-generating MCP config files for detected agent tools')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const isLaravel = detectLaravel(dir);
@@ -345,6 +346,22 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           }
         }
       }
+
+      // Auto-generate MCP config files for detected agent tools
+      if (opts.mcpConfigs !== false) {
+        const generator = new AgentGenerator();
+        const detected = generator.detectAgentTools(dir);
+        if (detected.length > 0) {
+          const mcpActions = generator.generateMcpConfigs(detected, { dir });
+          for (const action of mcpActions) {
+            if (action.status === 'up_to_date') continue;
+            generator.executeMcpConfig(action);
+            const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
+            console.log(`  ✓ MCP config ${verb} ${action.filename} (${action.tool})`);
+          }
+        }
+      }
+
       // Auto-add .mapx/ to .gitignore
       const gitignorePath = join(dir, '.gitignore');
       const hasGitignore = existsSync(gitignorePath);
@@ -383,7 +400,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const generator = new AgentGenerator();
       generator.revert({ dir });
 
-      // 2. Remove .mapx/ from .gitignore
+      // 2. Remove mapx entries from MCP config files
+      generator.revertMcpConfigs({ dir });
+
+      // 3. Remove .mapx/ from .gitignore
       const gitignorePath = join(dir, '.gitignore');
       if (existsSync(gitignorePath)) {
         try {
@@ -407,7 +427,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
       }
 
-      // 3. Delete .mapx/ directory
+      // 4. Delete .mapx/ directory
       if (hasMapx) {
         try {
           rmSync(join(dir, '.mapx'), { recursive: true, force: true });
@@ -1938,6 +1958,69 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       if (updatedCount === 0 && !opts.dryRun) {
         console.log('All integration files are already up to date.');
+      }
+    });
+
+  agentsCmd
+    .command('mcp')
+    .description('Auto-detect agent tools and generate/update MCP config files')
+    .option('--tools <list>', 'Comma-separated list of tools to generate configs for (opencode, gemini-cli, cursor-mcp, vscode-mcp)')
+    .option('--all', 'Generate MCP configs for all supported tools')
+    .option('--detect', 'Only detect agent tools without writing files')
+    .option('--dry-run', 'Show actions without writing files')
+    .action(async (opts: Record<string, any>) => {
+      const dir = program.opts().dir ? resolve(program.opts().dir) : process.cwd();
+      const generator = new AgentGenerator();
+      const allConfigs = generator.listMcpConfigs();
+
+      // Select targets
+      let targets: typeof allConfigs;
+      if (opts.all) {
+        targets = allConfigs;
+      } else if (opts.tools) {
+        const requested = opts.tools.split(',').map((s: string) => s.trim().toLowerCase());
+        targets = allConfigs.filter(c => requested.includes(c.name));
+      } else {
+        // Auto-detect
+        targets = generator.detectAgentTools(dir);
+      }
+
+      if (opts.detect) {
+        if (targets.length === 0) {
+          console.log('No agent tools detected in this project.');
+        } else {
+          console.log(`\nDetected agent tools (${targets.length}):`);
+          for (const t of targets) {
+            console.log(`  ✓ ${t.name.padEnd(15)} → ${t.filename}`);
+          }
+        }
+        console.log(`\nAll available targets:`);
+        for (const c of allConfigs) {
+          const detected = targets.includes(c);
+          const icon = detected ? '✓' : '·';
+          console.log(`  ${icon} ${c.name.padEnd(15)} → ${c.filename}`);
+        }
+        return;
+      }
+
+      if (targets.length === 0) {
+        console.log('No agent tools detected. Use --all or --tools to specify targets.');
+        return;
+      }
+
+      const actions = generator.generateMcpConfigs(targets, { dir });
+      for (const action of actions) {
+        if (action.status === 'up_to_date') {
+          console.log(`  - ${action.filename}: Up to date.`);
+          continue;
+        }
+        if (opts.dryRun) {
+          console.log(`[DRY RUN] Would ${action.status} ${action.filename} (${action.tool})`);
+        } else {
+          generator.executeMcpConfig(action);
+          const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
+          console.log(`  ✓ MCP config ${verb} ${action.filename} (${action.tool})`);
+        }
       }
     });
 

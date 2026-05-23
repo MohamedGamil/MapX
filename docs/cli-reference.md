@@ -23,7 +23,7 @@ mapx -d /path/to/project scan
 Initialize MapxGraph in the current project. Creates `.mapx/` directory, `AGENTS.md`, and auto-adds `.mapx/` to `.gitignore`.
 
 ```bash
-mapx init [/path] [--name <repo-name>] [--no-agents] [--no-suggestions]
+mapx init [/path] [--name <repo-name>] [--no-agents] [--no-suggestions] [--no-mcp-configs]
 ```
 
 Options:
@@ -31,15 +31,17 @@ Options:
 - `--name` — Custom repository name (defaults to directory name)
 - `--no-agents` — Skip AGENTS.md creation
 - `--no-suggestions` — Skip interactive framework suggestions
+- `--no-mcp-configs` — Skip auto-generating MCP config files for detected agent tools
 
 The init command also:
 - Detects Laravel projects and offers to add framework-specific exclusions
 - Prompts for LLM provider selection (generic, Claude, Cursor, VS Code, opencode)
+- **Auto-detects installed agent tools** (opencode, Gemini CLI, Cursor, VS Code, Antigravity) and generates MCP server config files so mapx is immediately available as an MCP server
 - Auto-adds `.mapx/` to `.gitignore` if a `.gitignore` file exists or the project is a git repository
 
 ## `mapx uninit`
 
-Remove mapx configurations, the `.mapx/` directory, and reverse integration changes (reverting files like `AGENTS.md` and custom provider instructions).
+Remove mapx configurations, the `.mapx/` directory, reverse integration changes (reverting files like `AGENTS.md` and custom provider instructions), and remove mapx entries from MCP config files.
 
 ```bash
 mapx uninit [/path] [--force]
@@ -321,6 +323,40 @@ Sync all discovered submodules, peer repos, and VS Code workspace folders (auto-
 
 ```bash
 mapx workspaces sync
+```
+
+## `mapx agents mcp`
+
+Auto-detect installed agent tools and generate/update MCP server config files so mapx is immediately available to LLM agents.
+
+```bash
+mapx agents mcp [--tools <list>] [--all] [--detect] [--dry-run]
+```
+
+Options:
+- `--tools <list>` — Comma-separated list of tools to generate configs for (`opencode`, `gemini-cli`, `cursor-mcp`, `vscode-mcp`, `antigravity`)
+- `--all` — Generate MCP configs for all supported tools
+- `--detect` — Only detect installed agent tools without writing files
+- `--dry-run` — Show actions without writing files
+
+Supported MCP config targets:
+
+| Tool | Config File | Detection |
+|------|-------------|-----------|
+| opencode | `opencode.json` | `opencode.json` or `opencode.jsonc` exists |
+| gemini-cli | `.gemini/settings.json` | `.gemini/` directory exists |
+| cursor-mcp | `.cursor/mcp.json` | `.cursor/` directory exists |
+| vscode-mcp | `.vscode/mcp.json` | `.vscode/` directory exists |
+| antigravity | `.agents/mcp.json` | `.agents/` directory exists |
+
+When a config file already exists, mapx **merges** its MCP entry into the file without overwriting other settings.
+
+Examples:
+```bash
+mapx agents mcp                    # Auto-detect and generate
+mapx agents mcp --detect           # Show detected tools only
+mapx agents mcp --all              # Generate for all tools
+mapx agents mcp --tools opencode   # Generate for opencode only
 ```
 
 ## `mapx serve`
