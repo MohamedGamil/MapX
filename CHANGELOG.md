@@ -20,10 +20,20 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **`@/` alias resolution in Vue components** — Added support for `import "@/..."` target paths pointing to the `src/` directory within Vue Single File Components (SFCs).
 - **Force scan option (`--force`)** — Added a `--force` option to the `scan` command to bypass the incremental parse caching and force re-parsing of all files (useful when parser or import resolver logic changes).
 - **Web Dashboard UI integration** — Bundled and served compiled Web Dashboard UI assets directly from packaged native binaries. Updated local/system installation targets and the release packaging workflow to ensure the `ui` assets folder is correctly bundled and placed in share directories.
+- **Programmatic ESM entry point** — Added `main`, `module`, `types`, and `exports` mapping in `package.json` to allow clean programmatic consumption of Mapx classes and helpers in external Node.js/TypeScript environments.
+- **TypeScript Declarations Generation** — Configured `tsup` to generate `.d.ts` declaration files for all codebase modules, resolving import typing errors.
+
+### Changed
+
+- **Package Lifecycle Hook** — Moved build tasks from `prepublishOnly` to the standard `prepare` lifecycle hook to guarantee clean builds for Git installations, local packing (`npm pack`), and dry-runs.
+- **NPM Publication Exclusions** — Updated `.npmignore` to ignore platform-specific local compiled binary builds (`dist/mapx-*`) to prevent accidental bulk bundling.
+- **Excluded Web UI from tsup compiler** — Prevented tsup from processing browser-only Web UI client files (which contain DOM references), avoiding type-compilation errors during build.
+- **CI/CD Workflow Enhancements** — Enabled dependency caching in `publish-npm.yml` to speed up builds and cleaned up scripting commands by using `npm run build:wasm`.
 
 ### Fixed
 
 - **Type-safe Reference Resolution** — Added type-checking guards for target and symbol names inside reference resolution helpers (`resolveRequirePath`, `resolveImportPath`, `resolveSymbolToFile`) and language parser engines (PHP, generic WASM parser) to prevent crashes when encountering null, undefined, or non-string reference targets during database scans.
+- **Workflow Release Security Guard** — Added strict git tag verification to the publish workflow to ensure the triggering release tag matches the declared version in `package.json`.
 
 ---
 

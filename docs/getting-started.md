@@ -171,6 +171,55 @@ Wait for it to finish or delete /path/to/.mapx/scan.lock if it is stale.
 
 Stale locks (process no longer alive) are cleared automatically.
 
+## Programmatic Usage
+
+You can also import `@mgamil/mapx` programmatically in Node.js or TypeScript applications to manage code graphs, run scans, or generate token-efficient context.
+
+```typescript
+import { Config, Store, Scanner, MapxGraph, ContextBuilder } from '@mgamil/mapx';
+
+// 1. Load configuration and open database
+const dir = '/path/to/project';
+const config = await Config.load(dir);
+const store = new Store(`${dir}/.mapx/mapx.db`);
+
+// 2. Perform an incremental scan
+const scanner = new Scanner(dir, store);
+await scanner.scanIncremental();
+
+// 3. Load graph data
+const graph = new MapxGraph(config.repo.name);
+for (const file of store.getAllFiles()) {
+  graph.addFileNode(file.path, file.language, file.size_bytes, file.lines);
+}
+for (const edge of store.getAllEdges()) {
+  graph.addDependencyEdge({
+    sourceFile: edge.source_file,
+    targetFile: edge.target_file,
+    sourceSymbol: edge.source_symbol,
+    targetSymbol: edge.target_symbol,
+    edgeType: edge.edge_type,
+    repo: edge.repo,
+    weight: edge.weight,
+    verifiability: edge.verifiability,
+    targetRepo: edge.target_repo
+  });
+}
+
+// 4. Build a token-budgeted LLM context for a specific task
+const builder = new ContextBuilder(store, graph);
+const context = await builder.buildContext({
+  task: 'Debug memory leaks in SQLite connections',
+  tokens: 8000
+});
+
+console.log(context.text); // Prints structured Markdown context
+console.log(`Estimated token count: ${context.tokens}`);
+
+// 5. Always close the SQLite database store when done
+store.close();
+```
+
 ## Building a Standalone Binary
 
 ```bash

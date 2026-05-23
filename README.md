@@ -225,6 +225,32 @@ See [docs/mcp-integration.md](docs/mcp-integration.md) for full tool parameters 
 
 ---
 
+## Programmatic Usage
+
+MapX can be imported programmatically as an ESM library in Node.js or TypeScript projects to execute scans, load code graphs, or build token-optimized LLM context:
+
+```typescript
+import { Config, Store, Scanner, MapxGraph, ContextBuilder } from '@mgamil/mapx';
+
+const dir = '/path/to/project';
+const config = await Config.load(dir);
+const store = new Store(`${dir}/.mapx/mapx.db`);
+
+// 1. Run incremental scan
+const scanner = new Scanner(dir, store);
+await scanner.scanIncremental();
+
+// 2. Query code metrics
+console.log(`Scanned ${store.getFileCount()} files and ${store.getSymbolCount()} symbols.`);
+
+// 3. Close database connection
+store.close();
+```
+
+See [docs/getting-started.md](docs/getting-started.md#programmatic-usage) for a detailed programmatic API example.
+
+---
+
 ## Supported Languages
 
 ### Built-in (Tier 1) — Always available
