@@ -5,6 +5,8 @@ import { PhpParser } from './languages/php.js';
 import { JavaScriptParser } from './languages/javascript.js';
 import { TypeScriptParser } from './languages/typescript.js';
 import { FallbackParser } from './fallback-parser.js';
+import { GenericWasmParser } from './generic-wasm-parser.js';
+import { isLanguageInstalled } from '../languages/installer.js';
 
 const parserCache = new Map<string, LanguageParser>();
 const fallbackParser = new FallbackParser();
@@ -12,6 +14,10 @@ const fallbackParser = new FallbackParser();
 export function getParserForFile(filePath: string, userLanguages?: Record<string, LanguageDefinition>): LanguageParser {
   const langDef = getLanguageForFile(filePath, userLanguages);
   if (!langDef) return fallbackParser;
+
+  if (langDef.tier === 'installable' && !isLanguageInstalled(langDef.name)) {
+    return fallbackParser;
+  }
 
   const cached = parserCache.get(langDef.name);
   if (cached) return cached;
@@ -21,6 +27,8 @@ export function getParserForFile(filePath: string, userLanguages?: Record<string
   return parser;
 }
 
+
+
 function createParser(langDef: LanguageDefinition): LanguageParser {
   switch (langDef.name) {
     case 'php':
@@ -29,7 +37,16 @@ function createParser(langDef: LanguageDefinition): LanguageParser {
       return new JavaScriptParser(langDef);
     case 'typescript':
       return new TypeScriptParser(langDef);
+    case 'python':
+    case 'go':
+    case 'rust':
+    case 'java':
+    case 'c-sharp':
+      return new GenericWasmParser(langDef);
     default:
+      if (langDef.tier === 'bundled' || langDef.tier === 'installable' || langDef.tier === 'user') {
+        return new GenericWasmParser(langDef);
+      }
       return fallbackParser;
   }
 }

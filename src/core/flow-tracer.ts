@@ -83,7 +83,7 @@ export class FlowTracer {
   trace(options: TraceOptions): TraceResult {
     const repo = options.repo;
     const direction = options.direction;
-    const maxDepth = options.maxDepth ?? 6;
+    const maxDepth = options.maxDepth ?? 3;
 
     let startFile = options.startFile;
     let startSymbol = options.startSymbol;

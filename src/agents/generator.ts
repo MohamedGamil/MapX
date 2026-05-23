@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, dirname, basename, resolve } from 'node:path';
+import { join, dirname, basename, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TEMPLATES, ProviderTemplate } from './templates.js';
 
@@ -11,6 +11,32 @@ export interface AgentAction {
   oldContent?: string;
   newContent: string;
   diff?: string;
+}
+
+/**
+ * Returns the appropriate sentinel markers for a file based on its extension.
+ * - `.yaml`, `.yml`, `.sh`, `.bash`, `.py` → `# mapx` / `# /mapx` (hash comments)
+ * - `.mdc` → uses HTML-style but placed after frontmatter
+ * - Everything else (`.md`, `.txt`, etc.) → `<!-- mapx -->` / `<!-- /mapx -->` (HTML comments)
+ */
+function getSentinelMarkers(filename: string): { open: (v: string) => string; close: string; regex: RegExp } {
+  const ext = extname(filename).toLowerCase();
+  const base = basename(filename).toLowerCase();
+
+  if (['.yaml', '.yml', '.sh', '.bash', '.py', '.toml', '.conf'].includes(ext) || base === '.clinerules') {
+    return {
+      open: (v: string) => `# mapx v${v}`,
+      close: '# /mapx',
+      regex: /#\s*mapx\s+v([\d.]+)\s*\n([\s\S]*?)#\s*\/mapx/i,
+    };
+  }
+
+  // Default: HTML comment markers (markdown, mdc, etc.)
+  return {
+    open: (v: string) => `<!-- mapx v${v} -->`,
+    close: '<!-- /mapx -->',
+    regex: /<!--\s*mapx\s+v([\d.]+)\s*-->([\s\S]*?)<!--\s*\/mapx\s*-->/i,
+  };
 }
 
 export class AgentGenerator {
@@ -31,7 +57,7 @@ export class AgentGenerator {
         return readFileSync(candidate, 'utf-8').trim();
       }
     }
-    return '0.1.6';
+    return '0.1.7';
   }
 
   public getVersion(): string {
@@ -67,7 +93,8 @@ export class AgentGenerator {
 
       const filepath = join(dir, template.filename);
       const rawContent = this.substitute(template.content, dir, mcpPort);
-      const wrappedNewContent = `<!-- mapx v${this.version} -->\n${rawContent}\n<!-- /mapx -->`;
+      const markers = getSentinelMarkers(template.filename);
+      const wrappedNewContent = `${markers.open(this.version)}\n${rawContent}\n${markers.close}`;
 
       if (!existsSync(filepath)) {
         actions.push({
@@ -82,8 +109,7 @@ export class AgentGenerator {
 
       // File exists
       const existingFileContent = readFileSync(filepath, 'utf-8');
-      const sentinelRegex = /<!--\s*mapx\s+v([\d.]+)\s*-->([\s\S]*?)<!--\s*\/mapx\s*-->/i;
-      const match = existingFileContent.match(sentinelRegex);
+      const match = existingFileContent.match(markers.regex);
 
       if (!match) {
         // No sentinel block
@@ -133,19 +159,8 @@ export class AgentGenerator {
         continue;
       }
 
-      // Content or version changed. Let's see if user modified it
-      // Since we don't have the exact old template for fileVersion, we check if the user modified the block.
-      // If we regenerate it with the current version, does it match?
-      // If it doesn't, we show a diff. If fileVersion === this.version but content differs, user definitely modified it.
-      // If fileVersion !== this.version, we assume it's just an update but we still mark status based on whether it is a clean update.
-      // We'll mark as update_conflict if the content differs from what we would expect, or simply show diff.
-      // To be safe, we mark as update_clean if content matches the current template (which shouldn't happen if they differ),
-      // otherwise update_conflict if they have customized the inside, or update_clean if it's just a version bump.
-      const status = fileVersion !== this.version && expectedContentOld.trim() !== expectedContentNew.trim()
-        ? 'update_conflict'
-        : 'update_conflict'; // Treat all changes of sentinel block as update_conflict to show diff, or update_clean if only version changed.
-      
-      const newFileContent = existingFileContent.replace(sentinelRegex, wrappedNewContent);
+      // Content or version changed — replace sentinel block
+      const newFileContent = existingFileContent.replace(markers.regex, wrappedNewContent);
 
       actions.push({
         provider,

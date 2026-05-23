@@ -74,34 +74,39 @@ specs/
 
 | ID | Title | Status | Iteration | Spec |
 |----|-------|--------|-----------|------|
-| F01 | Edge verifiability (verified / inferred) | `planned` | I01 | [F01](features/F01-edge-verifiability.md) |
-| F02 | Metrics engine (`mapx metrics`) | `planned` | I03 | [F02](features/F02-metrics-engine.md) |
-| F03 | Glob include/exclude filters | `planned` | I02 | [F03](features/F03-glob-filters.md) |
-| F04 | Granular edge querying (`mapx edges`) | `planned` | I03 | [F04](features/F04-edge-querying.md) |
-| F05 | PHP qualified namespace (FQN) resolution | `planned` | I04 | [F05](features/F05-php-fqn-resolution.md) |
-| F06 | PHP type-hint dependency edges | `planned` | I04 | [F06](features/F06-php-type-hint-edges.md) |
-| F07 | Eloquent model relationship edges | `planned` | I05 | [F07](features/F07-eloquent-relationships.md) |
-| F08 | Route-to-controller binding edges | `planned` | I05 | [F08](features/F08-route-controller-binding.md) |
-| F09 | Service container binding edges | `planned` | I05 | [F09](features/F09-service-provider-bindings.md) |
-| F10 | Laravel-aware scan exclusions & noise reduction | `planned` | I04 | [F10](features/F10-laravel-noise-reduction.md) |
-| F11 | Laravel facade resolution | `planned` | I06 | [F11](features/F11-facade-resolution.md) |
-| F12 | Event / Job / Notification dispatch edges | `planned` | I06 | [F12](features/F12-event-job-dispatch.md) |
-| F13 | npm / npx distribution & Node.js developer experience | `planned` | I07 | [F13](features/F13-npm-distribution.md) |
-| F14 | Module / domain cluster detection | `planned` | I08 | [F14](features/F14-cluster-detection.md) |
-| F15 | Cluster-aware export & visualization | `planned` | I08 | [F15](features/F15-cluster-visualization.md) |
-| F16 | Data flow tracing & source/sink detection | `planned` | I08 | [F16](features/F16-data-flow-tracing.md) |
-| F17 | LLM agent integration file generation (`mapx agents`) | `planned` | I09 | [F17](features/F17-llm-integration-files.md) |
-| F18 | Git workspace & submodule awareness | `planned` | I10 | [F18](features/F18-git-workspace-submodules.md) |
-| F19 | Smart context & search MCP/CLI tools | `planned` | I11 | [F19](features/F19-smart-context-tools.md) |
-| F20 | Language expansion (Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Dart, Svelte, Vue, Lua/Luau, Elixir, Zig, Bash, Pascal) | `planned` | I12 | [F20](features/F20-language-expansion.md) |
-| F21 | Framework detection infrastructure (FrameworkDetector, RouteRegistry, schema v6, `mapx routes`) | `planned` | I13 | [F21](features/F21-framework-infrastructure.md) |
-| F22 | Python framework routes (Django, Flask, FastAPI) | `planned` | I13 | [F22](features/F22-python-frameworks.md) |
-| F23 | Node.js/TypeScript framework routes (Express, NestJS) | `planned` | I13 | [F23](features/F23-nodejs-frameworks.md) |
-| F24 | Frontend routing frameworks (React Router, Tanstack Router, Next.js, SvelteKit) | `planned` | I13 | [F24](features/F24-frontend-routing.md) |
-| F25 | Backend framework routes (Laravel extended, Drupal, Rails, Spring, Gin/chi/gorilla, Axum/actix/Rocket, ASP.NET Core, Vapor) | `planned` | I13 | [F25](features/F25-backend-frameworks.md) |
-| F26 | PHP CMS/framework routes (Symfony attribute + YAML routes, Yii2/Yii3, WordPress hooks/filters/shortcodes/REST/template hierarchy) | `planned` | I13 | [F26](features/F26-php-cms-frameworks.md) |
-| F27 | TOON export format (`mapx export --format=toon`) | `planned` | I14 | [F27](features/F27-toon-export.md) |
-| F28 | Bundled lightweight web dashboard (`mapx ui`) | `planned` | I15 | [F28](features/F28-web-dashboard.md) |
+| F01 | Edge verifiability (verified / inferred) | `done` | I01 | [F01](features/F01-edge-verifiability.md) |
+| F02 | Metrics engine (`mapx metrics`) | `done` | I03 | [F02](features/F02-metrics-engine.md) |
+| F03 | Glob include/exclude filters | `done` | I02 | [F03](features/F03-glob-filters.md) |
+| F04 | Granular edge querying (`mapx edges`) | `done` | I03 | [F04](features/F04-edge-querying.md) |
+| F05 | PHP qualified namespace (FQN) resolution | `done` | I04 | [F05](features/F05-php-fqn-resolution.md) |
+| F06 | PHP type-hint dependency edges | `done` | I04 | [F06](features/F06-php-type-hint-edges.md) |
+| F07 | Eloquent model relationship edges | `done` | I05 | [F07](features/F07-eloquent-relationships.md) |
+| F08 | Route-to-controller binding edges | `done` | I05 | [F08](features/F08-route-controller-binding.md) |
+| F09 | Service container binding edges | `done` | I05 | [F09](features/F09-service-provider-bindings.md) |
+| F10 | Laravel-aware scan exclusions & noise reduction | `done` | I04 | [F10](features/F10-laravel-noise-reduction.md) |
+| F11 | Laravel facade resolution | `done` | I06 | [F11](features/F11-facade-resolution.md) |
+| F12 | Event / Job / Notification dispatch edges | `done` | I06 | [F12](features/F12-event-job-dispatch.md) |
+| F13 | npm / npx distribution & Node.js developer experience | `done` | I07 | [F13](features/F13-npm-distribution.md) |
+| F14 | Module / domain cluster detection | `done` | I08 | [F14](features/F14-cluster-detection.md) |
+| F15 | Cluster-aware export & visualization | `done` | I08 | [F15](features/F15-cluster-visualization.md) |
+| F16 | Data flow tracing & source/sink detection | `done` | I08 | [F16](features/F16-data-flow-tracing.md) |
+| F17 | LLM agent integration file generation (`mapx agents`) | `done` | I09 | [F17](features/F17-llm-integration-files.md) |
+| F18 | Git workspace & submodule awareness | `done` | I10 | [F18](features/F18-git-workspace-submodules.md) |
+| F19 | Smart context & search MCP/CLI tools | `done` | I11 | [F19](features/F19-smart-context-tools.md) |
+| F20 | Language expansion (Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Dart, Svelte, Vue, Lua/Luau, Elixir, Zig, Bash, Pascal) | `done` | I12 | [F20](features/F20-language-expansion.md) |
+| F21 | Framework detection infrastructure (FrameworkDetector, RouteRegistry, schema v6, `mapx routes`) | `done` | I13 | [F21](features/F21-framework-infrastructure.md) |
+| F22 | Python framework routes (Django, Flask, FastAPI) | `done` | I13 | [F22](features/F22-python-frameworks.md) |
+| F23 | Node.js/TypeScript framework routes (Express, NestJS) | `done` | I13 | [F23](features/F23-nodejs-frameworks.md) |
+| F24 | Frontend routing frameworks (React Router, Tanstack Router, Next.js, SvelteKit) | `done` | I13 | [F24](features/F24-frontend-routing.md) |
+| F25 | Backend framework routes (Laravel extended, Drupal, Rails, Spring, Gin/chi/gorilla, Axum/actix/Rocket, ASP.NET Core, Vapor) | `done` | I13 | [F25](features/F25-backend-frameworks.md) |
+| F26 | PHP CMS/framework routes (Symfony attribute + YAML routes, Yii2/Yii3, WordPress hooks/filters/shortcodes/REST/template hierarchy) | `done` | I13 | [F26](features/F26-php-cms-frameworks.md) |
+| F27 | TOON export format (`mapx export --format=toon`) | `done` | I14 | [F27](features/F27-toon-export.md) |
+| F28 | Bundled lightweight web dashboard (`mapx ui`) | `done` | I15 | [F28](features/F28-web-dashboard.md) |
+| F29 | `mapx_workspaces` MCP tool | `done` | I16 | [F29](features/F29-mcp-workspaces.md) |
+| F30 | Language tier alignment (built-in / bundled / installable) | `done` | I16 | [F30](features/F30-language-tier-alignment.md) |
+| F31 | Cluster-aware export flags (`--cluster`, `--depth`) | `done` | I16 | [F31](features/F31-cluster-export-flags.md) |
+| F32 | `mapx workspaces discover` CLI subcommand | `done` | I16 | [F32](features/F32-workspaces-discover.md) |
+| F33 | Comprehensive language syntax coverage (20 languages) | `done` | I17 | [F33](features/F33-language-syntax-coverage.md) |
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -111,21 +116,23 @@ specs/
 
 | Iteration | Scope | Status | Features |
 |-----------|-------|--------|----------|
-| [I01](iterations/I01.md) | Schema migration + parser edge labelling | `planned` | F01 |
-| [I02](iterations/I02.md) | Glob filter pipeline in scanner | `planned` | F03 |
-| [I03](iterations/I03.md) | CLI + MCP surface (`metrics`, `edges`) | `planned` | F02, F04 |
-| [I04](iterations/I04.md) | PHP parser fundamentals (FQN, type hints, noise) | `planned` | F05, F06, F10 |
-| [I05](iterations/I05.md) | Laravel structural patterns (models, routes, IoC) | `planned` | F07, F08, F09 |
-| [I06](iterations/I06.md) | Laravel advanced patterns (facades, dispatch) | `planned` | F11, F12 |
-| [I07](iterations/I07.md) | npm distribution & Node.js developer experience | `planned` | F13 |
-| [I08](iterations/I08.md) | Code structure, clusters & data flow | `planned` | F14, F15, F16 |
-| [I09](iterations/I09.md) | LLM agent integration files (`mapx agents`) | `planned` | F17 |
-| [I10](iterations/I10.md) | Git workspace & submodule awareness | `planned` | F18 |
-| [I11](iterations/I11.md) | Smart context & search tools | `planned` | F19 |
-| [I12](iterations/I12.md) | Language expansion (19 languages) | `planned` | F20 |
-| [I13](iterations/I13.md) | Framework-aware parsing & route context (21 frameworks) | `planned` | F21, F22, F23, F24, F25, F26 |
-| [I14](iterations/I14.md) | TOON export format | `planned` | F27 |
-| [I15](iterations/I15.md) | Bundled web dashboard (`mapx ui`) | `planned` | F28 |
+| [I01](iterations/I01.md) | Schema migration + parser edge labelling | `done` | F01 |
+| [I02](iterations/I02.md) | Glob filter pipeline in scanner | `done` | F03 |
+| [I03](iterations/I03.md) | CLI + MCP surface (`metrics`, `edges`) | `done` | F02, F04 |
+| [I04](iterations/I04.md) | PHP parser fundamentals (FQN, type hints, noise) | `done` | F05, F06, F10 |
+| [I05](iterations/I05.md) | Laravel structural patterns (models, routes, IoC) | `done` | F07, F08, F09 |
+| [I06](iterations/I06.md) | Laravel advanced patterns (facades, dispatch) | `done` | F11, F12 |
+| [I07](iterations/I07.md) | npm distribution & Node.js developer experience | `done` | F13 |
+| [I08](iterations/I08.md) | Code structure, clusters & data flow | `done` | F14, F15, F16 |
+| [I09](iterations/I09.md) | LLM agent integration files (`mapx agents`) | `done` | F17 |
+| [I10](iterations/I10.md) | Git workspace & submodule awareness | `done` | F18 |
+| [I11](iterations/I11.md) | Smart context & search tools | `done` | F19 |
+| [I12](iterations/I12.md) | Language expansion (19 languages) | `done` | F20 |
+| [I13](iterations/I13.md) | Framework-aware parsing & route context (21 frameworks) | `done` | F21, F22, F23, F24, F25, F26 |
+| [I14](iterations/I14.md) | TOON export format | `done` | F27 |
+| [I15](iterations/I15.md) | Bundled web dashboard (`mapx ui`) | `done` | F28 |
+| [I16](iterations/I16.md) | Audit compliance fixes | `done` | F29, F30, F31, F32 |
+| [I17](iterations/I17.md) | Comprehensive language syntax coverage | `done` | F33 |
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 

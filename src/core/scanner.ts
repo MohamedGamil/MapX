@@ -12,7 +12,9 @@ import { getLanguageForFile } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import { minimatch } from 'minimatch';
-import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig } from '../types.js';
+import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
+import { FrameworkRegistry } from '../frameworks/framework-registry.js';
+import { RouteRegistry } from '../frameworks/route-registry.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -351,6 +353,8 @@ export class Scanner {
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
+
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -536,6 +540,8 @@ export class Scanner {
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
+
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
     }
 
     return {
@@ -889,5 +895,171 @@ export class Scanner {
     } catch {
       return null;
     }
+  }
+
+  private async scanFrameworkRoutesAndHooks(repo: RepoConfig, repoRoot: string): Promise<void> {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const files = await this.store.getAllFiles(repo.name);
+    const filePaths = files.map(f => f.path as string);
+
+    const registry = FrameworkRegistry.getInstance();
+    const activeDetectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+    if (activeDetectors.length === 0) return;
+
+    // Save active frameworks
+    const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+    const activeNames = activeDetectors.map(d => d.name);
+    await writeFile(frameworksPath, JSON.stringify(activeNames, null, 2), 'utf-8');
+
+    // Clear all existing framework edges for this repo in the DB and Graph
+    this.store.deleteFrameworkEdgesForRepo(repo.name);
+    this.graph.dropFrameworkEdgesForRepo(repo.name);
+
+    const routeRegistry = new RouteRegistry();
+    await routeRegistry.load(workspaceRoot);
+    routeRegistry.clearRepo(repo.name, new Set(filePaths));
+
+    // Context for symbol resolution
+    const ctx: ScanContext = {
+      workspaceRoot,
+      repoName: repo.name,
+      resolveSymbolToFile: (symName: string) => {
+        return this.resolveSymbolToFile(symName, this.workspaceFileMap);
+      }
+    };
+
+    for (const detector of activeDetectors) {
+      // Find files that match the detector's pattern (e.g. routes/api.php)
+      const matchingPaths = filePaths.filter(p => detector.filePattern.test(p));
+      for (const relPath of matchingPaths) {
+        try {
+          const absPath = resolve(workspaceRoot, relPath);
+          const content = await readFile(absPath, 'utf-8');
+
+          const routes = await detector.extractRoutes(relPath, content, ctx);
+          for (const route of routes) {
+            let conf = 1.0;
+            const routeConf = route.metadata?.confidence ?? (route as any).confidence;
+            if (typeof routeConf === 'number') {
+              conf = routeConf;
+            } else if (typeof routeConf === 'string') {
+              if (routeConf === 'declared') conf = 1.0;
+              else if (routeConf === 'inferred') conf = 0.8;
+              else if (routeConf === 'low') conf = 0.3;
+            }
+
+            if (conf < 0.5) {
+              console.warn(`[mapx] Suppressing route edge due to low confidence (${conf}): ${route.method} ${route.path} -> ${route.handlerFile}`);
+              continue;
+            }
+
+            if (!route.metadata) route.metadata = {};
+            route.metadata.repo = repo.name;
+            route.metadata.sourceFile = relPath;
+
+            routeRegistry.addRoute(route);
+
+            // Add as an edge in the db/graph
+            this.store.insertEdge({
+              sourceFile: relPath,
+              targetFile: route.handlerFile,
+              sourceSymbol: null,
+              targetSymbol: route.handlerSymbol || null,
+              edgeType: 'route',
+              repo: repo.name,
+              weight: 1.0,
+              verifiability: 'inferred',
+              metadata: {
+                httpVerb: route.method,
+                uri: route.path,
+                middlewares: route.middlewares,
+                confidence: route.metadata?.confidence || 'inferred',
+              }
+            });
+            this.graph.addDependencyEdge({
+              sourceFile: relPath,
+              targetFile: route.handlerFile,
+              sourceSymbol: null,
+              targetSymbol: route.handlerSymbol || null,
+              edgeType: 'route',
+              repo: repo.name,
+              weight: 1.0,
+              verifiability: 'inferred',
+              metadata: {
+                httpVerb: route.method,
+                uri: route.path,
+                middlewares: route.middlewares,
+                confidence: route.metadata?.confidence || 'inferred',
+              }
+            });
+          }
+
+          if (detector.extractHooks) {
+            const hooks = await detector.extractHooks(relPath, content, ctx);
+            for (const hook of hooks) {
+              let conf = 1.0;
+              const hookConf = hook.metadata?.confidence ?? (hook as any).confidence;
+              if (typeof hookConf === 'number') {
+                conf = hookConf;
+              } else if (typeof hookConf === 'string') {
+                if (hookConf === 'declared') conf = 1.0;
+                else if (hookConf === 'inferred') conf = 0.8;
+                else if (hookConf === 'low') conf = 0.3;
+              }
+
+              if (conf < 0.5) {
+                console.warn(`[mapx] Suppressing hook edge due to low confidence (${conf}): ${hook.hookName} -> ${hook.handlerFile}`);
+                continue;
+              }
+
+              if (!hook.metadata) hook.metadata = {};
+              hook.metadata.repo = repo.name;
+              hook.metadata.sourceFile = relPath;
+
+              routeRegistry.addHook(hook);
+
+              const edgeType = (['graphql_resolver', 'message_handler', 'websocket_handler', 'middleware'].includes(hook.hookType)
+                ? hook.hookType
+                : 'hook') as any;
+
+              this.store.insertEdge({
+                sourceFile: relPath,
+                targetFile: hook.handlerFile,
+                sourceSymbol: null,
+                targetSymbol: hook.handlerSymbol || null,
+                edgeType,
+                repo: repo.name,
+                weight: 1.0,
+                verifiability: 'inferred',
+                metadata: {
+                  hookName: hook.hookName,
+                  hookType: hook.hookType,
+                  confidence: hook.metadata?.confidence || 'inferred',
+                }
+              });
+              this.graph.addDependencyEdge({
+                sourceFile: relPath,
+                targetFile: hook.handlerFile,
+                sourceSymbol: null,
+                targetSymbol: hook.handlerSymbol || null,
+                edgeType,
+                repo: repo.name,
+                weight: 1.0,
+                verifiability: 'inferred',
+                metadata: {
+                  hookName: hook.hookName,
+                  hookType: hook.hookType,
+                  confidence: hook.metadata?.confidence || 'inferred',
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to extract routes/hooks for ${relPath}:`, err);
+        }
+      }
+    }
+
+    await routeRegistry.save(workspaceRoot);
   }
 }

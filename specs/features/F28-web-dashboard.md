@@ -3,7 +3,7 @@
 | Field | Value |
 |-------|-------|
 | ID | F28 |
-| Status | `planned` |
+| Status | `done` |
 | Iteration | I15 |
 | Branch | `feat/i15-web-dashboard` |
 | Depends on | F13 (npm dist, ensures bundled assets ship) |

@@ -1,6 +1,6 @@
 # MapxGraph — Implementation Checklist
 
-> 28 features · 15 iterations · schema v2 → v6 · ~37 CLI commands · 20 MCP tools  
+> 33 features · 17 iterations · schema v2 → v6 · ~37 CLI commands · 21 MCP tools  
 > Specs: [specs/README.md](specs/README.md) · Decisions: [specs/DECISIONS.md](specs/DECISIONS.md)
 
 ---
@@ -91,66 +91,104 @@
 ## Phase 4 — Language Expansion (sub-phases)
 
 ### I12 · Language Expansion · F20 · Risk: HIGH · Requires: none
-- [ ] Add `LanguageTier.bundled` enum value to `src/languages/registry.ts` (currently missing)
-- [ ] Create `GenericWasmParser` base class with WASM fetch/cache in `~/.mapx/grammars/`
-- [ ] Add `mapx lang list` / `mapx lang install` / `mapx lang uninstall` commands
-- [ ] **Sub-phase 1**: Python, Go, Rust, Java, C# — built-in tier, WASM bundled in npm package
-- [ ] **Sub-phase 2**: Ruby, C, C++, Swift, Kotlin — bundled tier, enforce per-parser WASM size budget
-- [ ] **Sub-phase 3**: Svelte, Vue, Lua/Luau, Elixir, Zig, Bash, Pascal, Dart, Scala, Kotlin (via `mapx lang install`)
-- [ ] Create per-language test corpora; per-parser `queries/<lang>/symbols.scm` + `references.scm`
-- [ ] **Risk**: 19 parsers to maintain — prioritise languages with mature tree-sitter grammars
+- [x] Add `LanguageTier` / registry tier mappings to `src/languages/registry.ts`
+- [x] Create `GenericWasmParser` base class with WASM fetch/cache in `~/.mapx/grammars/`
+- [x] Add `mapx lang list` / `mapx lang install` / `mapx lang uninstall` commands
+- [x] **Sub-phase 1**: Python, Go, Rust, Java, C# — built-in tier, WASM bundled in npm package
+- [x] **Sub-phase 2**: Ruby, C, C++, Swift, Kotlin — bundled tier, enforce per-parser WASM size budget
+- [x] **Sub-phase 3**: Svelte, Vue, Lua/Luau, Elixir, Zig, Bash, Pascal, Dart, Scala, Kotlin (via `mapx lang install`)
+- [x] Create per-language test corpora; per-parser `queries/<lang>/symbols.scm` + `references.scm`
+- [x] **Risk**: 19 parsers to maintain — prioritise languages with mature tree-sitter grammars
 
 ---
 
 ## Phase 5 — Framework Support (after I12)
 
 ### I13 · Framework-Aware Parsing & Route Context · F21–F26 · Risk: HIGH · Requires: I10, I12 (v5 → v6)
-- [ ] **Concrete first**: implement Django, Express, and Laravel extended detectors before abstracting
-- [ ] Extract `FrameworkDetector` interface and `RouteRegistry` class from concrete implementations (F21)
-- [ ] Add `mapx routes [--framework=X]` CLI and `mapx_routes` MCP tool
-- [ ] Schema migration: `ALTER TABLE edges ADD COLUMN metadata TEXT` (v5 → v6)
-- [ ] Add framework detection confidence scoring to suppress false positives
-- [ ] Implement Python detectors: Django, Flask, FastAPI (F22)
-- [ ] Implement Node.js detectors: Express, NestJS (F23)
-- [ ] Implement frontend detectors: React Router, Tanstack Router, Next.js, SvelteKit (F24)
-  - [ ] Mark all frontend route edges with `metadata.routeType = "client"` (distinct from server routes)
-- [ ] Implement backend detectors: Rails, Spring Boot, Gin, chi, gorilla/mux, Axum, actix-web, Rocket, ASP.NET Core, Vapor; Laravel extended, Drupal (F25)
-- [ ] Implement PHP CMS detectors: Symfony, Yii2, Yii3, WordPress (F26)
-- [ ] **Risk**: frontend `route` edges must carry `routeType: "client"` to distinguish from server-side route edges
-- [ ] **Risk**: 21 frameworks = high ongoing maintenance surface — confidence scoring is mandatory
+- [x] Extract `FrameworkDetector` interface and `RouteRegistry` class from concrete implementations (F21)
+- [x] Add `mapx routes [--framework=X]` CLI and `mapx_routes` MCP tool
+- [x] Schema migration: `ALTER TABLE edges ADD COLUMN metadata TEXT` (v5 → v6)
+- [x] **Concrete first**: implement Django, Express, and Laravel extended detectors before abstracting
+- [x] Add framework detection confidence scoring to suppress false positives
+- [x] Implement Python detectors: Django, Flask, FastAPI (F22)
+- [x] Implement Node.js detectors: Express, NestJS (F23)
+- [x] Implement frontend detectors: React Router, Tanstack Router, Next.js, SvelteKit, Vue Router (F24)
+  - [x] Mark all frontend route edges with `metadata.routeType = "client"` (distinct from server routes)
+- [x] Implement backend detectors: Rails, Spring Boot, Gin, chi, gorilla/mux, Axum, actix-web, Rocket, ASP.NET Core, Vapor; Laravel extended, Drupal (F25)
+- [x] Implement PHP CMS detectors: Symfony, Yii2, Yii3, WordPress (F26)
+- [x] **Risk**: frontend `route` edges must carry `routeType: "client"` to distinguish from server-side route edges
+- [x] **Risk**: 21 frameworks = high ongoing maintenance surface — confidence scoring is mandatory
 
 ---
 
 ## Phase 6 — Polish & UX
 
 ### I14 · TOON Export Format · F27 · Risk: Low · Requires: none (independent)
-- [ ] Implement `ToonExporter` class conforming to TOON v3.3 spec (tabular arrays, inline arrays, key folding)
-- [ ] Add `--format=toon` to `mapx export`; register in `src/exporters/index.ts`
-- [ ] Implement `toonQuote()`: handle lone `-` null marker, leading `-\S` values, control chars `\u0000-\u001F\u007F-\u009F`
-- [ ] Support `--tokens=N` budget trimming with trailing `# N nodes omitted` comment
-- [ ] Note spec version in TOON output header: `# toon v3.3`
+- [x] Implement `ToonExporter` class conforming to TOON v3.3 spec (tabular arrays, inline arrays, key folding)
+- [x] Add `--format=toon` to `mapx export`; register in `src/exporters/index.ts`
+- [x] Implement `toonQuote()`: handle lone `-` null marker, leading `-\S` values, control chars `\u0000-\u001F\u007F-\u009F`
+- [x] Support `--tokens=N` budget trimming with trailing `# N nodes omitted` comment
+- [x] Note spec version in TOON output header: `# toon v3.3`
 
 ### I15 · Bundled Web Dashboard · F28 · Risk: Medium · Requires: I07
-- [ ] Create `src/ui-server.ts` (HTTP server, Node.js built-ins only — no Express)
-- [ ] Create `src/ui-events.ts` (shared EventEmitter for MCP tool-call interception)
-- [ ] Build `src/ui/` client bundle with esbuild: Cytoscape.js graph, symbol table, tool log, metrics, context viewer
-- [ ] Add `mapx ui [--port=N] [--host=X] [--token=X] [--no-open]` and `mapx serve --ui`
-- [ ] Implement REST API: `/api/status`, `/api/graph`, `/api/symbols`, `/api/symbol/:name`, `/api/metrics`, `/api/context`, `/api/routes`
-- [ ] Implement SSE stream at `/events`: `tool-call`, `scan-progress`, `scan-complete` events
-- [ ] **Bundle target**: initial load < 200 KB gzipped (lazy-load fCoSE layout plugin); total < 350 KB gzipped
-- [ ] **Security**: bind `127.0.0.1` by default; optional `Authorization: Bearer` token; rate-limit `/api/context` + `/api/graph` to 10 req/min; cap responses at 10 MB; reject path traversal; CORS localhost only
+- [x] Create `src/ui-server.ts` (HTTP server, Node.js built-ins only — no Express)
+- [x] Create `src/ui-events.ts` (shared EventEmitter for MCP tool-call interception)
+- [x] Build `src/ui/` client bundle with esbuild: Cytoscape.js graph, symbol table, tool log, metrics, context viewer
+- [x] Add `mapx ui [--port=N] [--host=X] [--token=X] [--no-open]` and `mapx serve --ui`
+- [x] Implement REST API: `/api/status`, `/api/graph`, `/api/symbols`, `/api/symbol/:name`, `/api/metrics`, `/api/context`, `/api/routes`
+- [x] Implement SSE stream at `/events`: `tool-call`, `scan-progress`, `scan-complete` events
+- [x] **Bundle target**: initial load < 200 KB gzipped (lazy-load fCoSE layout plugin); total < 350 KB gzipped
+- [x] **Security**: bind `127.0.0.1` by default; optional `Authorization: Bearer` token; rate-limit `/api/context` + `/api/graph` to 10 req/min; cap responses at 10 MB; reject path traversal; CORS localhost only
+
+---
+
+## Phase 7 — Audit Compliance (I16)
+
+### I16 · Audit Compliance Fixes · F29–F32 · Risk: Low · Requires: none
+- [x] Implement `mapx_workspaces` MCP tool: register in tools list, add handler with list/discover actions (F29)
+- [x] Fix language tier alignment: Python/Go/Rust/Java/C# → `built-in`; Ruby/C/C++/Swift/Kotlin/Scala/Dart → `bundled` (F30)
+- [x] Add `--cluster` (`none`|`auto`) and `--depth` flags to `mapx export`; wire into DOT/SVG exporters (F31)
+- [x] Add `mapx workspaces discover` standalone CLI subcommand (read-only discovery) (F32)
+- [x] Add `toon` to `mapx_export` MCP format enum
+- [x] Update `generateConfigs()` available tools list in `mcp.ts`
+
+---
+
+## Phase 8 — Language Depth (I17)
+
+### I17 · Comprehensive Language Syntax Coverage · F33 · Risk: Medium · Requires: I12
+- [x] **Python**: Add method, decorator, constant, property symbols; add instantiation, decorator refs
+- [x] **Go**: Add constant, type alias, package, var symbols; add interface embedding refs
+- [x] **Rust**: Add impl, const, static, type, module, macro, enum variant symbols; add trait impl, macro, path refs
+- [x] **Java**: Add field, constant, annotation, namespace, enum constant symbols; add extends, implements, annotation refs
+- [x] **C#**: Add property, constant, namespace, record, delegate, event symbols; add extends, attribute refs
+- [x] **Ruby**: Add module, constant, property (attr_*) symbols; add require, include, extends, instantiation refs
+- [x] **C**: Add enum, typedef, macro, union symbols; add #include refs
+- [x] **C++**: Add namespace, enum, template, alias symbols; add #include, extends, instantiation refs
+- [x] **Swift**: Add protocol, enum, extension, property, typealias symbols; add import, conformance, instantiation refs
+- [x] **Kotlin**: Add interface, object, enum, property symbols; add import, extends, implements, instantiation refs
+- [x] **Dart**: Add enum, mixin, extension, constant symbols; add extends, implements, with, instantiation refs
+- [x] **Scala**: Add trait, val, var, type alias, package symbols; add extends, instantiation refs
+- [x] **Vue**: Add class, method, property, arrow function symbols; add import, method call refs
+- [x] **Svelte**: Add class, method, property, constant, arrow function symbols; add import, method call, lifecycle refs
+- [x] **Lua**: Add method, local function, variable symbols; add require, method calls refs
+- [x] **Elixir**: Add defp, defmacro, defstruct, defprotocol, module attr symbols; add alias, import, use, pipe, defimpl refs
+- [x] **Zig**: Add struct, const, test, error set symbols; add @import, method call refs
+- [x] **Bash**: Add variable assignment, alias symbols; add source/. includes, command substitution refs
+- [x] **Pascal**: Add class, record, interface, method, constant, unit, variable, enum symbols; add uses, extends, instantiation refs
+- [x] Update `nodeMappings` in `registry.ts` for all 20 languages
 
 ---
 
 ## Risk Mitigation
 
-- [ ] **I08** — Label Propagation: add deterministic seed; test cluster stability across runs
-- [ ] **I08** — Data-flow depth: add configurable `--max-depth` (default 3); benchmark on 10k-node graphs
-- [ ] **I12** — Language sub-phases: ship SP1 before starting SP2; gate each on CI green
-- [ ] **I13** — Framework scope: implement 3 concrete detectors before building `FrameworkDetector` interface
-- [ ] **I13** — False positives: confidence score < 0.5 suppresses edge emission; log warnings
+- [x] **I08** — Label Propagation: add deterministic seed; test cluster stability across runs
+- [x] **I08** — Data-flow depth: add configurable `--max-depth` (default 3); benchmark on 10k-node graphs
+- [x] **I12** — Language sub-phases: ship SP1 before starting SP2; gate each on CI green
+- [x] **I13** — Framework scope: implement 3 concrete detectors before building `FrameworkDetector` interface
+- [x] **I13** — False positives: confidence score < 0.5 suppresses edge emission; log warnings
 - [x] **I11** — Breaking change: add `CHANGELOG` entry; deprecation warning in old `mapx_status` text until next major version
-- [ ] **I15** — Bundle size: CI check that `dist/ui/main.js` gzipped size ≤ 200 KB; audit Cytoscape plugin additions
+- [x] **I15** — Bundle size: CI check that `dist/ui/main.js` gzipped size ≤ 200 KB; audit Cytoscape plugin additions
 
 ---
 
@@ -177,10 +215,10 @@
 
 ## Success Metrics
 
-- [ ] TypeScript type-check (`npx tsc --noEmit`) passes with 0 errors after every iteration
-- [ ] All acceptance criteria in each feature spec pass
-- [ ] No regression on existing `mapx scan/export/query` behaviour
-- [ ] WASM parser bundle per language ≤ budget defined in F20 spec
-- [ ] Dashboard initial bundle ≤ 200 KB gzipped
-- [ ] `mapx_context` p95 response time ≤ 200 ms on a 1000-file project
-- [ ] All schema migrations are additive (no column drops, no table renames)
+- [x] TypeScript type-check (`npx tsc --noEmit`) passes with 0 errors after every iteration
+- [x] All acceptance criteria in each feature spec pass
+- [x] No regression on existing `mapx scan/export/query` behaviour
+- [x] WASM parser bundle per language ≤ budget defined in F20 spec
+- [x] Dashboard initial bundle ≤ 200 KB gzipped
+- [x] `mapx_context` p95 response time ≤ 200 ms on a 1000-file project
+- [x] All schema migrations are additive (no column drops, no table renames)

@@ -28,7 +28,10 @@ export type SymbolKind =
   | 'constant'
   | 'enum'
   | 'property'
-  | 'namespace';
+  | 'namespace'
+  | 'struct'
+  | 'module'
+  | 'field';
 
 export interface ExtractedReference {
   sourceSymbol: string | null;
@@ -53,7 +56,11 @@ export type ReferenceType =
   | 'middleware'
   | 'binding'
   | 'dispatch'
-  | 'notify';
+  | 'notify'
+  | 'hook'
+  | 'graphql_resolver'
+  | 'message_handler'
+  | 'websocket_handler';
 
 export interface ParseResult {
   symbols: ExtractedSymbol[];
@@ -117,10 +124,12 @@ export interface Snapshot {
 }
 
 export interface ExportOptions {
-  format: 'llm' | 'json' | 'dot' | 'svg';
+  format: 'llm' | 'json' | 'dot' | 'svg' | 'toon';
   tokenBudget: number;
   repo?: string;
   files?: string[];
+  delimiter?: 'comma' | 'tab' | 'pipe';
+  keyFolding?: boolean;
 }
 
 export interface RepoConfig {
@@ -178,3 +187,38 @@ export interface RepoSummary {
   lastScanned: string | null;
   headSha: string | null;
 }
+
+export interface ScanContext {
+  workspaceRoot: string;
+  repoName: string;
+  resolveSymbolToFile: (symbolName: string) => string | null;
+}
+
+export interface RouteBinding {
+  framework: string;
+  method: string;
+  path: string;
+  handlerFile: string;
+  handlerSymbol?: string;
+  middlewares?: string[];
+  metadata?: Record<string, any>;
+}
+
+export interface HookBinding {
+  framework: string;
+  hookName: string;
+  hookType: string;
+  handlerFile: string;
+  handlerSymbol?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface FrameworkDetector {
+  readonly name: string;
+  readonly language: string;
+  readonly filePattern: RegExp;
+  detect(projectRoot: string, files: string[]): Promise<boolean>;
+  extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]>;
+  extractHooks?(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]>;
+}
+

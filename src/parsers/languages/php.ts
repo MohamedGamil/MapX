@@ -3,6 +3,7 @@ import type { ParseResult, ExtractedSymbol, ExtractedReference, SymbolKind } fro
 import type { LanguageDefinition } from '../../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from '../wasm-parser.js';
 import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
+import { GenericWasmParser } from '../generic-wasm-parser.js';
 
 export const LARAVEL_FACADE_MAP: Record<string, string> = {
   App:           'Illuminate\\Foundation\\Application',
@@ -37,29 +38,9 @@ export const LARAVEL_FACADE_MAP: Record<string, string> = {
   View:          'Illuminate\\View\\Factory',
 };
 
-export class PhpParser implements LanguageParser {
-  readonly languageName = 'php';
-  readonly supportedExtensions = ['.php', '.phtml', '.php3', '.php4', '.php5', '.php7'];
-
-  private langDef: LanguageDefinition;
-  private language: any = null;
-  private symbolsQuery: string | null = null;
-  private referencesQuery: string | null = null;
-  private loadingPromise: Promise<void> | null = null;
-
+export class PhpParser extends GenericWasmParser {
   constructor(langDef: LanguageDefinition) {
-    this.langDef = langDef;
-  }
-
-  private ensureLoaded(): Promise<void> {
-    if (!this.loadingPromise) {
-      this.loadingPromise = (async () => {
-        this.language = await loadLanguage(this.langDef);
-        this.symbolsQuery = await loadQueryFile(this.langDef.queries.symbols);
-        this.referencesQuery = await loadQueryFile(this.langDef.queries.references);
-      })();
-    }
-    return this.loadingPromise;
+    super(langDef);
   }
 
   async parse(filePath: string, source: string, options?: any): Promise<ParseResult> {
@@ -398,245 +379,7 @@ export class PhpParser implements LanguageParser {
         }
       }
 
-      // F08: Route-to-Controller Binding Edges
-      const ROUTE_VERBS = new Set([
-        'get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'match',
-        'resource', 'apiResource',
-      ]);
-
-      const routeMethodCaptures = refCaptures.get('ref.route_method_name') || [];
-      let routeCallCount = 0;
-
-      const extractRouteMiddlewares = (node: any): string[] => {
-        const mws: string[] = [];
-        let curr = node.parent;
-        while (curr && (curr.type === 'member_call_expression' || curr.type === 'scoped_call_expression')) {
-          const methodNameNode = curr.childForFieldName('name');
-          const methodName = methodNameNode ? methodNameNode.text : '';
-          if (methodName === 'middleware') {
-            const argsNode = curr.namedChildren.find((c: any) => c.type === 'arguments');
-            if (argsNode) {
-              const firstArg = argsNode.namedChild(0);
-              if (firstArg) {
-                const valNode = firstArg.type === 'argument' ? (firstArg.namedChild(0) || firstArg) : firstArg;
-                if (valNode.type === 'array_creation_expression') {
-                  for (let i = 0; i < valNode.namedChildCount; i++) {
-                    const el = valNode.namedChild(i);
-                    const val = el.type === 'array_element_initializer' ? el.namedChild(el.namedChildCount - 1) : el;
-                    if (val) {
-                      const mwText = cleanQuotes(val.text);
-                      if (mwText) mws.push(mwText);
-                    }
-                  }
-                } else {
-                  const mwText = cleanQuotes(valNode.text);
-                  if (mwText) mws.push(mwText);
-                }
-              }
-            }
-          }
-          curr = curr.parent;
-        }
-        return mws;
-      };
-
-      const extractRouteName = (node: any): string | null => {
-        let curr = node.parent;
-        while (curr && (curr.type === 'member_call_expression' || curr.type === 'scoped_call_expression')) {
-          const methodNameNode = curr.childForFieldName('name');
-          const methodName = methodNameNode ? methodNameNode.text : '';
-          if (methodName === 'name') {
-            const argsNode = curr.namedChildren.find((c: any) => c.type === 'arguments');
-            const nameVal = getArgText(argsNode, 0);
-            if (nameVal) return nameVal;
-          }
-          curr = curr.parent;
-        }
-        return null;
-      };
-
-      const extractEnclosingGroupMiddlewaresAndPrefixes = (node: any): { prefixes: string[], middlewares: string[] } => {
-        const prefixes: string[] = [];
-        const middlewares: string[] = [];
-        let curr = node.parent;
-        while (curr) {
-          if (curr.type === 'anonymous_function' || curr.type === 'arrow_function') {
-            const argNode = curr.parent;
-            const argsNode = argNode?.type === 'argument' ? argNode.parent : argNode;
-            if (argsNode && argsNode.type === 'arguments') {
-              const callNode = argsNode.parent;
-              if (callNode && (callNode.type === 'member_call_expression' || callNode.type === 'scoped_call_expression')) {
-                let chain = callNode;
-                while (chain && (chain.type === 'member_call_expression' || chain.type === 'scoped_call_expression')) {
-                  const mNameNode = chain.childForFieldName('name');
-                  const mName = mNameNode ? mNameNode.text : '';
-                  if (mName === 'prefix') {
-                    const innerArgs = chain.namedChildren.find((c: any) => c.type === 'arguments');
-                    const val = getArgText(innerArgs, 0);
-                    if (val) prefixes.push(val);
-                  } else if (mName === 'middleware') {
-                    const innerArgs = chain.namedChildren.find((c: any) => c.type === 'arguments');
-                    if (innerArgs) {
-                      const firstArg = innerArgs.namedChild(0);
-                      if (firstArg) {
-                        const valNode = firstArg.type === 'argument' ? (firstArg.namedChild(0) || firstArg) : firstArg;
-                        if (valNode.type === 'array_creation_expression') {
-                          for (let i = 0; i < valNode.namedChildCount; i++) {
-                            const el = valNode.namedChild(i);
-                            const innerVal = el.type === 'array_element_initializer' ? el.namedChild(el.namedChildCount - 1) : el;
-                            if (innerVal) {
-                              const mwText = cleanQuotes(innerVal.text);
-                              if (mwText) middlewares.push(mwText);
-                            }
-                          }
-                        } else {
-                          const mwText = cleanQuotes(valNode.text);
-                          if (mwText) middlewares.push(mwText);
-                        }
-                      }
-                    }
-                  }
-                  chain = chain.namedChild(0);
-                }
-              }
-            }
-          }
-          curr = curr.parent;
-        }
-        return { prefixes, middlewares };
-      };
-
-      const buildFullUri = (routeUri: string, prefixes: string[]): string => {
-        const reversed = [...prefixes].reverse();
-        const segments = [...reversed, routeUri].map(p => p.replace(/^\/|\/$/g, '')).filter(Boolean);
-        return '/' + segments.join('/');
-      };
-
-      for (const cap of routeMethodCaptures) {
-        const verb = cap.node.text;
-        if (!ROUTE_VERBS.has(verb)) continue;
-        
-        routeCallCount++;
-
-        const parent = cap.node.parent;
-        if (!parent || parent.type !== 'scoped_call_expression') continue;
-
-        const argsNode = parent.namedChildren.find((c: any) => c.type === 'arguments');
-        if (!argsNode) continue;
-
-        const rawUri = getArgText(argsNode, 0) || '/';
-        const startLine = cap.node.startPosition.row + 1;
-
-        const groupCtx = extractEnclosingGroupMiddlewaresAndPrefixes(parent);
-        const fullUri = buildFullUri(rawUri, groupCtx.prefixes);
-        
-        const chainedMws = extractRouteMiddlewares(parent);
-        const allMiddlewares = Array.from(new Set([...groupCtx.middlewares, ...chainedMws]));
-
-        for (const mw of allMiddlewares) {
-          references.push({
-            sourceSymbol: null,
-            targetName: mw,
-            referenceType: 'middleware',
-            startLine,
-            verifiability: mw.includes('\\') ? 'verified' : 'inferred',
-          });
-        }
-
-        const routeName = extractRouteName(parent);
-
-        if (verb === 'resource' || verb === 'apiResource') {
-          const controllerArgText = getArgText(argsNode, 1);
-          if (controllerArgText) {
-            const controllerFqn = resolveToFqn(controllerArgText);
-            controllerClasses.add(controllerFqn.split('\\').pop()!);
-
-            const arg1 = argsNode.namedChild(1);
-            if (arg1) {
-              const valNode = arg1.type === 'argument' ? (arg1.namedChild(0) || arg1) : arg1;
-              const isClassConst = valNode ? valNode.type === 'class_constant_access_expression' : false;
-
-              references.push({
-                sourceSymbol: null,
-                targetName: controllerFqn,
-                referenceType: 'route',
-                startLine,
-                verifiability: isClassConst ? 'verified' : 'inferred',
-                metadata: {
-                  httpVerb: 'ANY',
-                  uri: fullUri,
-                  controllerMethod: null,
-                  routeName,
-                  middlewares: allMiddlewares,
-                  resourceType: verb,
-                },
-              });
-            }
-          }
-        } else {
-          const handlerArg = argsNode.namedChild(1);
-          if (handlerArg) {
-            const valNode = handlerArg.type === 'argument' ? (handlerArg.namedChild(0) || handlerArg) : handlerArg;
-            let controllerClass: string | null = null;
-            let controllerMethod: string | null = null;
-            let isClassConst = false;
-
-            if (valNode.type === 'array_creation_expression') {
-              const el0 = valNode.namedChild(0);
-              const el1 = valNode.namedChild(1);
-              
-              const getVal = (el: any) => {
-                if (!el) return null;
-                return el.type === 'array_element_initializer' ? el.namedChild(el.namedChildCount - 1) : el;
-              };
-              
-              const v0 = getVal(el0);
-              const v1 = getVal(el1);
-
-              if (v0) {
-                if (v0.type === 'class_constant_access_expression') {
-                  controllerClass = v0.namedChild(0)?.text || null;
-                  isClassConst = true;
-                } else {
-                  controllerClass = cleanQuotes(v0.text);
-                }
-              }
-              if (v1) {
-                controllerMethod = cleanQuotes(v1.text);
-              }
-            } else if (valNode.type === 'string' || valNode.type === 'encapsed_string') {
-              const strVal = cleanQuotes(valNode.text);
-              if (strVal.includes('@')) {
-                const parts = strVal.split('@');
-                controllerClass = parts[0];
-                controllerMethod = parts[1] || null;
-              }
-            }
-
-            if (controllerClass) {
-              const controllerFqn = resolveToFqn(controllerClass);
-              controllerClasses.add(controllerFqn.split('\\').pop()!);
-
-              references.push({
-                sourceSymbol: null,
-                targetName: controllerFqn,
-                referenceType: 'route',
-                startLine,
-                verifiability: isClassConst ? 'verified' : 'inferred',
-                metadata: {
-                  httpVerb: verb.toUpperCase(),
-                  uri: fullUri,
-                  controllerMethod,
-                  routeName,
-                  middlewares: allMiddlewares,
-                  resourceType: null,
-                },
-              });
-            }
-          }
-        }
-      }
-
+      // F08: Route-to-Controller Binding Edges refactored to LaravelDetector
       // F09: Service Container Binding Resolution
       const CONTAINER_BINDING_METHODS = new Set(['bind', 'singleton', 'scoped', 'instance', 'alias']);
       const bindingMethodCaptures = refCaptures.get('ref.binding_method_name') || [];
@@ -884,7 +627,7 @@ export class PhpParser implements LanguageParser {
       }
 
       // Check if file is a route file
-      const isRouteFile = filePath.includes('routes/') || routeCallCount >= 2;
+      const isRouteFile = filePath.replace(/\\/g, '/').includes('routes/');
       if (isRouteFile) {
         fileMetadata = { laravelRole: 'route_file' };
       }
@@ -966,7 +709,7 @@ export class PhpParser implements LanguageParser {
     return { symbols, references: finalReferences, errors, fileMetadata };
   }
 
-  private extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {
+  protected override extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {
     const lines = source.split('\n');
     const lineIdx = startLine - 1;
     if (lineIdx >= lines.length) return name;
@@ -999,7 +742,7 @@ export class PhpParser implements LanguageParser {
     return name;
   }
 
-  private mapRefType(refType: string): ExtractedReference['referenceType'] {
+  protected override mapRefType(refType: string): ExtractedReference['referenceType'] {
     const map: Record<string, ExtractedReference['referenceType']> = {
       import: 'import',
       require: 'require',
