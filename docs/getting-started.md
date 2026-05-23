@@ -3,9 +3,12 @@
 ## Installation
 
 ```bash
+# From npm
+npm install -g mapx
+
 # From source (development)
 git clone <repo-url>
-cd mem-project
+cd mapx
 npm install
 
 # Or use pre-built binary (no dependencies needed)
@@ -33,6 +36,12 @@ mapx deps src/index.ts
 
 # 6. Export as SVG visualization
 mapx export --format=svg -o graph.svg
+
+# 7. Trace callers of a function
+mapx callers handleRequest
+
+# 8. Assess change impact
+mapx impact UserService
 ```
 
 All commands accept a target directory:
@@ -53,18 +62,18 @@ mapx -d /path/to/project scan
 
 ## What Gets Created
 
-Running `init` creates a `.mapx/` directory in your project and an `AGENTS.md` file:
+Running `init` creates a `.mapx/` directory, an `AGENTS.md` file, and updates `.gitignore`:
 
 ```
 .mapx/
 ├── config.json       # Project configuration
-├── mapx.db      # SQLite database (after scan)
+├── mapx.db           # SQLite database (after scan)
 └── scan.lock         # Scan lock file (present only while a scan is running)
 
 AGENTS.md             # MapxGraph documentation for LLMs (auto-generated)
 ```
 
-Add `.mapx/` to your `.gitignore` — it's a local development artifact.
+`.mapx/` is automatically added to `.gitignore` during init (if `.gitignore` exists or the project is a git repository).
 
 ## AGENTS.md
 
@@ -82,21 +91,54 @@ The content is wrapped in markers:
 - **Existing without markers**: Prompts to insert at beginning/end, or skip
 - **`--no-agents` flag**: Skip AGENTS.md creation entirely
 
-## Supported File Types
+## Supported Languages
+
+### Built-in (Tier 1) — Always available, shipped with the tool
 
 | Language | Extensions | Symbols Extracted |
 |----------|-----------|-------------------|
-| PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants |
-| JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, arrow functions |
-| TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, enums, properties |
+| PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
+| JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| Python | `.py` | classes, functions, methods (auto-promoted), constants |
+| Go | `.go` | structs, interfaces, functions, methods, constants, packages, variables, type aliases |
+| Rust | `.rs` | structs, traits, enums, functions, impl blocks, constants, statics, modules, macros |
+| Java | `.java` | classes, interfaces, enums, methods, constructors, fields, constants, annotations, packages |
+| C# | `.cs` | classes, interfaces, enums, structs, methods, properties, constants, namespaces, records, delegates |
+
+### Bundled (Tier 2) — Shipped with tool, available without install
+
+| Language | Extensions | Symbols Extracted |
+|----------|-----------|-------------------|
+| Ruby | `.rb` | classes, modules, methods, constants, properties (attr_*) |
+| C | `.c`, `.h` | structs, functions, enums, typedefs, macros, unions |
+| C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
+| Swift | `.swift` | classes, structs, protocols, enums, functions, properties, extensions |
+| Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties, enum entries |
+| Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals, vars, packages |
+| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks) |
+
+### Installable (Tier 3) — Install via `mapx lang install <name>`
+
+| Language | Extensions | Symbols Extracted |
+|----------|-----------|-------------------|
+| Svelte | `.svelte` | functions, classes, methods, props, constants |
+| Lua | `.lua` | functions, methods, local functions, variables |
+| Elixir | `.ex`, `.exs` | modules, functions (def/defp), macros, structs, protocols |
+| Zig | `.zig` | functions, structs, constants, tests, error sets |
+| Bash | `.sh`, `.bash` | functions, variables, aliases |
+| Pascal | `.pas`, `.pp` | procedures, functions, classes, records, interfaces, methods, constants, units |
+| Dart | `.dart` | classes, functions, methods, enums, mixins, extensions, constants |
 
 ## Dependencies Tracked
 
-- `require` / `include` (PHP)
-- `import` / `from` (JS/TS)
-- `extends` / `implements` (all)
-- Class instantiation (`new`)
-- Function/method calls
+All languages track applicable reference types:
+
+- **Imports**: `import`, `require`, `use`, `include`, `#include`, `using`, `@import`, `alias`
+- **Inheritance**: `extends`, `implements`, protocol conformance, mixins (`with`), `include`/`prepend`
+- **Instantiation**: `new ClassName()`, `ClassName()`, `.new`, composite literals, constructor invocations
+- **Calls**: function calls, method calls, remote calls, pipe operators, macro invocations
+- **Other**: decorator references, annotations, type annotations
 
 ## Scan Resilience
 
@@ -125,13 +167,36 @@ Stale locks (process no longer alive) are cleared automatically.
 
 ```bash
 # Build for current platform
-bun build --compile --minify --bytecode ./src/main.ts --outfile mapx
+make build-linux       # or build-mac-arm, build-win
 
 # Cross-compile for all platforms
 make build-all
 
-# Package with docs and installers
-bash scripts/package.sh all
+# Build npm package
+npm run build:npm
+
+# Package + installers
+make package-all
 ```
 
 Binaries are output to `dist/` (~85-100MB each).
+
+## Development Shortcuts
+
+All CLI commands are available as npm scripts and Makefile targets:
+
+```bash
+# npm scripts (pass args after --)
+npm run scan
+npm run query -- UserService
+npm run impact -- handleRequest
+npm run serve
+
+# Makefile targets (use variables)
+make scan DIR=/path
+make query q=UserService
+make impact s=handleRequest d=3
+make serve DIR=/path
+
+# Run `make help` for all 30+ targets
+```

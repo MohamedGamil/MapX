@@ -355,6 +355,12 @@ export class Store {
     this.backend.prepare('DELETE FROM edges WHERE source_file = ?').run(filePath);
   }
 
+  deleteFrameworkEdgesForRepo(repoName: string): void {
+    this.backend.prepare(
+      "DELETE FROM edges WHERE repo = ? AND edge_type IN ('route', 'middleware', 'hook', 'graphql_resolver', 'message_handler', 'websocket_handler')"
+    ).run(repoName);
+  }
+
   getEdgesForFile(filePath: string): Record<string, unknown>[] {
     return this.backend.prepare(
       'SELECT * FROM edges WHERE source_file = ? ORDER BY edge_type'

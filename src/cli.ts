@@ -15,10 +15,13 @@ import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
+import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateMetrics } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { getBuiltinLanguages } from './languages/registry.js';
+import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
+import { RouteRegistry } from './frameworks/route-registry.js';
 
 const dynamicRequire = createRequire(import.meta.url);
 
@@ -339,6 +342,19 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             generator.execute(action);
             console.log(`  ✓ Generated ${action.filename} (${action.status})`);
           }
+        }
+      }
+      // Auto-add .mapx/ to .gitignore
+      const gitignorePath = join(dir, '.gitignore');
+      const hasGitignore = existsSync(gitignorePath);
+      const isGit = isGitRepo(dir);
+      if (hasGitignore || isGit) {
+        const content = hasGitignore ? readFileSync(gitignorePath, 'utf-8') : '';
+        const lines = content.split('\n').map(l => l.trim());
+        if (!lines.includes('.mapx/') && !lines.includes('.mapx')) {
+          const entry = content.length > 0 && !content.endsWith('\n') ? '\n.mapx/\n' : '.mapx/\n';
+          writeFileSync(gitignorePath, content + entry);
+          console.log(`  ✓ Added .mapx/ to .gitignore`);
         }
       }
       console.log(`Initialized mapx in ${dir}/.mapx/`);
@@ -974,7 +990,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Trace data flow paths from a starting symbol or file')
     .option('-d, --dir <path>', 'Target directory')
     .option('--direction <dir>', 'up | down | both', 'both')
-    .option('--depth <n>', 'Maximum traversal depth', '6')
+    .option('--depth <n>', 'Maximum traversal depth', '3')
+    .option('--max-depth <n>', 'Maximum traversal depth (alias for --depth)')
     .option('--format <fmt>', 'text | dot | json', 'text')
     .option('--include-structural', 'Include import/extends edges in trace', false)
     .option('--sources', 'Show entry points', false)
@@ -1054,10 +1071,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         return;
       }
 
+      const requestedDepth = opts.maxDepth !== undefined ? opts.maxDepth : opts.depth;
+      const parsedDepth = parseInt(requestedDepth as string, 10);
+
       const result = tracer.trace({
         startSymbol: start,
         direction: opts.direction as any,
-        maxDepth: parseInt(opts.depth as string, 10),
+        maxDepth: parsedDepth,
         includeStructural: !!opts.includeStructural,
         repo: config.repo.name,
       });
@@ -1066,7 +1086,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const jsonOutput = {
           start: result.start,
           direction: result.direction,
-          maxDepth: parseInt(opts.depth as string, 10),
+          maxDepth: parsedDepth,
           nodeCount: result.nodeCount,
           edgeCount: result.edgeCount,
           maxDepthReached: result.maxDepthReached,
@@ -1102,7 +1122,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const safeStartName = (result.start.symbol || result.start.file).replace(/[^a-zA-Z0-9]/g, '_');
         lines.push(`digraph Trace_${safeStartName} {`);
         lines.push('  rankdir=TB;');
-        lines.push(`  label="Trace: ${result.start.symbol || result.start.file} (${result.direction}stream, depth≤${opts.depth})";`);
+        lines.push(`  label="Trace: ${result.start.symbol || result.start.file} (${result.direction}stream, depth≤${parsedDepth})";`);
         lines.push('  fontsize=12;');
         lines.push('  node [shape=box, style=filled, fontsize=10];');
         lines.push('');
@@ -1166,7 +1186,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       const dirSymbol = result.direction === 'down' ? '↓ downstream' : result.direction === 'up' ? '↑ upstream' : '↕ bidirectional';
-      console.log(`\nTrace: ${start}  ${dirSymbol}  depth≤${opts.depth}`);
+      console.log(`\nTrace: ${start}  ${dirSymbol}  depth≤${parsedDepth}`);
       console.log('─'.repeat(53));
       console.log('');
 
@@ -1215,7 +1235,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       console.log('');
       const cyclesStr = result.cycles.length > 0 ? `   Cycles: ${result.cycles.length}` : '';
-      console.log(`Nodes: ${result.nodeCount}   Edges: ${result.edgeCount}   Max depth: ${opts.depth}${cyclesStr}`);
+      console.log(`Nodes: ${result.nodeCount}   Edges: ${result.edgeCount}   Max depth: ${parsedDepth}${cyclesStr}`);
       if (result.sinks.length > 0) {
         const sinkNames = result.sinks.map(s => s.symbol || s.file.split('/').pop() || s.file);
         console.log(`Sinks: ${sinkNames.join(', ')}`);
@@ -1226,12 +1246,16 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('export')
     .description('Export code graph for LLM consumption')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--format <format>', 'Output format: llm, json, dot, svg', 'llm')
+    .option('--format <format>', 'Output format: llm, json, dot, svg, toon', 'llm')
     .option('--tokens <budget>', 'Token budget for LLM export', '8192')
     .option('--repo <name>', 'Filter by repo name')
     .option('-o, --output <file>', 'Write output to file instead of stdout')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .option('--delimiter <delimiter>', 'Delimiter for TOON format: comma, tab, pipe', 'comma')
+    .option('--key-folding', 'Collapse single-key chains into dotted paths for TOON', false)
+    .option('--cluster <mode>', 'Cluster rendering mode for DOT/SVG: none, auto', 'auto')
+    .option('--depth <n>', 'Maximum cluster nesting depth for DOT/SVG export')
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -1239,6 +1263,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const format = opts.format as string;
       const tokenBudget = parseInt(opts.tokens as string, 10) || 8192;
       const outputPath = opts.output as string | undefined;
+      const delimiter = opts.delimiter as 'comma' | 'tab' | 'pipe' | undefined;
+      const keyFolding = !!opts.keyFolding;
+      const clusterMode = (opts.cluster as string) === 'none' ? 'none' as const : 'auto' as const;
+      const clusterDepth = opts.depth ? parseInt(opts.depth as string, 10) : undefined;
+      const clusterOpts = { cluster: clusterMode, depth: clusterDepth };
 
       if (outputPath) {
         const outputDir = resolve(outputPath, '..');
@@ -1276,12 +1305,24 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
         case 'dot': {
           const exporter = new DotExporter(store, graph);
-          output = exporter.export(opts.repo as string | undefined, filteredFiles);
+          output = exporter.export(opts.repo as string | undefined, filteredFiles, clusterOpts);
           break;
         }
         case 'svg': {
           const exporter = new SvgExporter(store, graph);
-          output = exporter.export(opts.repo as string | undefined, filteredFiles);
+          output = exporter.export(opts.repo as string | undefined, filteredFiles, clusterOpts);
+          break;
+        }
+        case 'toon': {
+          const exporter = new ToonExporter(store, graph);
+          output = exporter.export({
+            format: 'toon',
+            tokenBudget,
+            repo: opts.repo as string | undefined,
+            files: filteredFiles,
+            delimiter,
+            keyFolding,
+          });
           break;
         }
         case 'llm':
@@ -1325,20 +1366,49 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       console.log(`Languages: ${Object.entries(breakdown).map(([l, c]) => `${l} (${c})`).join(', ')}`);
     });
 
-  program
+  const langCmd = program
     .command('lang')
-    .description('Language support commands')
-    .addCommand(
-      new Command('list')
-        .description('List available languages')
-        .action(() => {
-          const langs = getBuiltinLanguages();
-          console.log('Built-in languages:');
-          for (const [name, def] of Object.entries(langs)) {
-            console.log(`  ${name}: ${def.extensions.join(', ')} [${def.tier}]`);
-          }
-        })
-    );
+    .description('Manage language grammars and configuration');
+
+  langCmd
+    .command('list')
+    .description('List all supported languages, their extensions, tier, and status')
+    .action(() => {
+      const langs = getBuiltinLanguages();
+      console.log('Supported languages:');
+      for (const [name, def] of Object.entries(langs)) {
+        const installed = isLanguageInstalled(name) ? 'Installed' : 'Not Installed';
+        console.log(`  - ${name} (${def.extensions.join(', ')} | tier: ${def.tier} | status: ${installed})`);
+      }
+    });
+
+  langCmd
+    .command('install <lang>')
+    .description('Install grammar and query files for an installable language')
+    .action(async (lang: string) => {
+      try {
+        console.log(`Installing language '${lang}'...`);
+        await installLanguage(lang);
+        console.log(`Successfully installed language '${lang}'.`);
+      } catch (err: any) {
+        console.error(`Error installing language '${lang}':`, err.message);
+        process.exit(1);
+      }
+    });
+
+  langCmd
+    .command('uninstall <lang>')
+    .description('Uninstall grammar and query files for an installable language')
+    .action(async (lang: string) => {
+      try {
+        console.log(`Uninstalling language '${lang}'...`);
+        await uninstallLanguage(lang);
+        console.log(`Successfully uninstalled language '${lang}'.`);
+      } catch (err: any) {
+        console.error(`Error uninstalling language '${lang}':`, err.message);
+        process.exit(1);
+      }
+    });
 
   program
     .command('serve')
@@ -1346,13 +1416,54 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('-d, --dir <path>', 'Default target directory for MCP tools')
     .option('--port <port>', 'Port for SSE transport (default: 45123)', '45123')
     .option('--sse', 'Enable SSE transport instead of stdio')
+    .option('--ui', 'Enable UI dashboard alongside MCP server')
+    .option('--ui-port <port>', 'Port to run UI on (default: 45124)', '45124')
+    .option('--ui-host <host>', 'Host to run UI on (default: 127.0.0.1)', '127.0.0.1')
+    .option('--ui-token <token>', 'Bearer token for authorization')
     .action(async (opts: Record<string, unknown>) => {
       const defaultDir = resolveDir(opts, program.opts());
       const { startMcpServer } = await import('./mcp.js');
+      
+      if (opts.ui) {
+        const { startUiServer } = await import('./ui-server.js');
+        const uiPort = parseInt(opts.uiPort as string, 10) || 45124;
+        const uiHost = (opts.uiHost as string) || '127.0.0.1';
+        const uiToken = opts.uiToken as string | undefined;
+        startUiServer({ port: uiPort, host: uiHost, token: uiToken, dir: defaultDir });
+      }
+
       await startMcpServer(defaultDir, {
         sse: opts.sse as boolean | undefined,
         port: parseInt(opts.port as string, 10) || 45123,
       });
+    });
+
+  program
+    .command('ui')
+    .description('Start the Web Dashboard')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('-p, --port <port>', 'Port to run UI on (default: 45124)', '45124')
+    .option('--host <host>', 'Host to run UI on (default: 127.0.0.1)', '127.0.0.1')
+    .option('--token <token>', 'Bearer token for authorization')
+    .option('--no-open', 'Do not open the dashboard in the browser automatically')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const port = parseInt(opts.port as string, 10) || 45124;
+      const host = (opts.host as string) || '127.0.0.1';
+      const token = opts.token as string | undefined;
+
+      const { startUiServer } = await import('./ui-server.js');
+      startUiServer({ port, host, token, dir });
+
+      const url = `http://${host}:${port}`;
+      console.log(`Mapx Web Dashboard started at ${url}`);
+
+      if (opts.open !== false) {
+        const { exec } = await import('node:child_process');
+        const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+        exec(`${openCmd} ${url}`).unref();
+      }
     });
 
   program
@@ -1545,6 +1656,90 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const infSuffix = e.verifiability === 'inferred' ? ' [inferred]' : '';
         console.log(`- ${e.source_file}${srcSym} → ${e.target_file}${tgtSym} (${e.edge_type})${infSuffix}`);
       }
+      console.log('');
+    });
+
+  program
+    .command('routes')
+    .description('Show routes from all detected frameworks')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--framework <name>', 'Filter by framework name')
+    .option('--method <verb>', 'Filter by HTTP method (GET, POST, etc.)')
+    .option('--path-pattern <pattern>', 'Filter by route path pattern')
+    .option('--json', 'Output routes as JSON')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(dir);
+
+      const routes = routeRegistry.queryRoutes({
+        framework: opts.framework as string | undefined,
+        method: opts.method as string | undefined,
+        path: opts.pathPattern as string | undefined,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(routes, null, 2));
+        return;
+      }
+
+      if (routes.length === 0) {
+        console.log('No routes found.');
+        return;
+      }
+
+      console.log(`\nDetected Routes (${routes.length}):`);
+      console.log(''.padEnd(80, '-'));
+      console.log(`${'Framework'.padEnd(12)} | ${'Method'.padEnd(8)} | ${'Path'.padEnd(30)} | ${'Handler'}`);
+      console.log(''.padEnd(80, '-'));
+      for (const r of routes) {
+        const handler = r.handlerSymbol || r.handlerFile;
+        console.log(`${r.framework.padEnd(12)} | ${r.method.toUpperCase().padEnd(8)} | ${r.path.padEnd(30)} | ${handler}`);
+      }
+      console.log(''.padEnd(80, '-'));
+      console.log('');
+    });
+
+  program
+    .command('hooks')
+    .description('Show hooks from all detected frameworks')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--framework <name>', 'Filter by framework name')
+    .option('--type <type>', 'Filter by hook type')
+    .option('--name <pattern>', 'Filter by hook name pattern')
+    .option('--json', 'Output hooks as JSON')
+    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(dir);
+
+      const hooks = routeRegistry.queryHooks({
+        framework: opts.framework as string | undefined,
+        hookType: opts.type as string | undefined,
+        hookName: opts.name as string | undefined,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(hooks, null, 2));
+        return;
+      }
+
+      if (hooks.length === 0) {
+        console.log('No hooks found.');
+        return;
+      }
+
+      console.log(`\nDetected Hooks (${hooks.length}):`);
+      console.log(''.padEnd(80, '-'));
+      console.log(`${'Framework'.padEnd(12)} | ${'Type'.padEnd(15)} | ${'Hook Name'.padEnd(25)} | ${'Handler'}`);
+      console.log(''.padEnd(80, '-'));
+      for (const h of hooks) {
+        const handler = h.handlerSymbol || h.handlerFile;
+        console.log(`${h.framework.padEnd(12)} | ${h.hookType.padEnd(15)} | ${h.hookName.padEnd(25)} | ${handler}`);
+      }
+      console.log(''.padEnd(80, '-'));
       console.log('');
     });
 
@@ -1797,6 +1992,69 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       console.log(`Cleaning up stored data for repository: ${repoName}...`);
       store.deleteRepo(repoName);
       console.log(`Done.`);
+    });
+
+  workspacesCmd
+    .command('discover')
+    .description('Discover unregistered submodules, peer repos, and VS Code workspace folders (read-only)')
+    .action(async () => {
+      const dir = resolveDir({}, program.opts());
+      const { config } = await loadContext(dir);
+
+      const registeredPaths = new Set<string>();
+      for (const r of config.repos) {
+        registeredPaths.add(resolve(dir, r.path));
+      }
+
+      let found = 0;
+
+      // Submodules
+      const submodules = WorkspaceManager.discoverSubmodules(dir);
+      const uninitSubs = submodules.filter(s => !registeredPaths.has(resolve(dir, s.path)));
+      if (uninitSubs.length > 0) {
+        console.log('\nSubmodules:');
+        for (const s of uninitSubs) {
+          const status = s.isInitialized ? 'available' : 'uninitialized';
+          console.log(`  - ${s.name.padEnd(20)} -> ${s.path} (${status})`);
+        }
+        found += uninitSubs.length;
+      }
+
+      // Peer repos
+      const peers = WorkspaceManager.discoverPeerRepos(dir);
+      const uninitPeers = peers.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitPeers.length > 0) {
+        console.log('\nPeer repositories:');
+        for (const p of uninitPeers) {
+          console.log(`  - ${p.name.padEnd(20)} -> ${p.path} (available)`);
+        }
+        found += uninitPeers.length;
+      }
+
+      // VS Code workspace folders
+      const wsFiles = readdirSync(dir).filter(f => f.endsWith('.code-workspace'));
+      const vsEntries: Array<{ name: string; path: string }> = [];
+      for (const f of wsFiles) {
+        const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(join(dir, f), dir);
+        for (const p of wsFolderRepos) {
+          if (!registeredPaths.has(resolve(dir, p.path))) {
+            vsEntries.push({ name: p.name, path: p.path });
+          }
+        }
+      }
+      if (vsEntries.length > 0) {
+        console.log('\nVS Code workspace folders:');
+        for (const p of vsEntries) {
+          console.log(`  - ${p.name.padEnd(20)} -> ${p.path} (available)`);
+        }
+        found += vsEntries.length;
+      }
+
+      if (found === 0) {
+        console.log('No unregistered repositories discovered.');
+      } else {
+        console.log(`\n${found} unregistered repositor${found === 1 ? 'y' : 'ies'} discovered. Use \`mapx workspaces add <path>\` to register.`);
+      }
     });
 
   workspacesCmd

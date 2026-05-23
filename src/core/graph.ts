@@ -1,5 +1,5 @@
 import Graph from 'graphology';
-import pagerank from 'graphology-metrics/centrality/pagerank';
+import pagerank from 'graphology-metrics/centrality/pagerank.js';
 import type { GraphEdge, SymbolKind } from '../types.js';
 
 export class MapxGraph {
@@ -177,6 +177,19 @@ export class MapxGraph {
       if (attrs.type !== 'contains') count++;
     }
     return count;
+  }
+
+  dropFrameworkEdgesForRepo(repoName: string): void {
+    const toDrop: string[] = [];
+    for (const edge of this.graph.edges()) {
+      const attrs = this.graph.getEdgeAttributes(edge);
+      if (attrs.repo === repoName && ['route', 'middleware', 'hook', 'graphql_resolver', 'message_handler', 'websocket_handler'].includes(attrs.type)) {
+        toDrop.push(edge);
+      }
+    }
+    for (const edge of toDrop) {
+      this.graph.dropEdge(edge);
+    }
   }
 
   toJSON(): object {

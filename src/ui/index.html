@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapx Web Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+  <div class="app-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <span class="logo-accent">Mapx</span> Graph
+        </div>
+        <div class="status-indicator">
+          <span class="indicator-dot online"></span>
+          <span id="repo-name">Loading...</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-tab="graph">
+          <span class="nav-icon">📊</span> Graph Explorer
+        </button>
+        <button class="nav-item" data-tab="symbols">
+          <span class="nav-icon">🔍</span> Symbol Explorer
+        </button>
+        <button class="nav-item" data-tab="routes">
+          <span class="nav-icon">🛣️</span> Routes & Hooks
+        </button>
+        <button class="nav-item" data-tab="metrics">
+          <span class="nav-icon">📈</span> Metrics
+        </button>
+        <button class="nav-item" data-tab="context">
+          <span class="nav-icon">🤖</span> Context Builder
+        </button>
+        <button class="nav-item" data-tab="tool-log">
+          <span class="nav-icon">📋</span> Tool Call Log
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="stats-mini">
+          <div>Files: <strong id="stat-files">-</strong></div>
+          <div>Symbols: <strong id="stat-symbols">-</strong></div>
+          <div>Edges: <strong id="stat-edges">-</strong></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <!-- Tab: Graph Explorer -->
+      <section id="tab-graph" class="tab-pane active">
+        <div class="graph-container">
+          <div id="cy"></div>
+          <div class="graph-toolbar">
+            <button id="btn-layout-fcose" class="btn btn-secondary">fCoSE Layout</button>
+            <button id="btn-layout-circle" class="btn btn-secondary">Circle Layout</button>
+            <button id="btn-layout-grid" class="btn btn-secondary">Grid Layout</button>
+            <select id="filter-lang" class="form-select">
+              <option value="">All Languages</option>
+            </select>
+          </div>
+          <div id="graph-details" class="details-panel">
+            <h3>Selection Details</h3>
+            <div id="details-content" class="details-placeholder">
+              Click a file node or dependency edge to view details.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Symbol Explorer -->
+      <section id="tab-symbols" class="tab-pane">
+        <div class="panel-header">
+          <h2>Symbol Explorer</h2>
+          <div class="search-bar">
+            <input type="text" id="symbol-search" placeholder="Search symbols..." class="form-control">
+          </div>
+        </div>
+        <div class="panel-body split-view">
+          <div class="split-left">
+            <table class="data-table" id="table-symbols">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Kind</th>
+                  <th>File</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Symbols will be populated here -->
+              </tbody>
+            </table>
+          </div>
+          <div class="split-right" id="symbol-detail-view">
+            <div class="details-placeholder">Select a symbol to view callers, callees, and source code.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Routes & Hooks -->
+      <section id="tab-routes" class="tab-pane">
+        <div class="panel-header">
+          <h2>Framework Routes & Hooks</h2>
+        </div>
+        <div class="panel-body">
+          <div class="tabs-sub">
+            <button class="tab-sub-btn active" data-subtab="routes-list">Routes</button>
+            <button class="tab-sub-btn" data-subtab="hooks-list">Hooks</button>
+          </div>
+          
+          <div id="subtab-routes-list" class="subtab-pane active">
+            <table class="data-table" id="table-routes">
+              <thead>
+                <tr>
+                  <th>Framework</th>
+                  <th>Method</th>
+                  <th>Path</th>
+                  <th>Handler</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Routes will be populated here -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="subtab-hooks-list" class="subtab-pane">
+            <table class="data-table" id="table-hooks">
+              <thead>
+                <tr>
+                  <th>Framework</th>
+                  <th>Type</th>
+                  <th>Hook Name</th>
+                  <th>Handler</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Hooks will be populated here -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Metrics -->
+      <section id="tab-metrics" class="tab-pane">
+        <div class="panel-header">
+          <h2>Metrics & Analytics</h2>
+        </div>
+        <div class="panel-body grid-metrics">
+          <div class="metric-card">
+            <h3>Complexity Breakdown</h3>
+            <div id="metrics-summary">Loading metrics...</div>
+          </div>
+          <div class="metric-card">
+            <h3>Top PageRank Files</h3>
+            <ol id="top-files-list"></ol>
+          </div>
+          <div class="metric-card">
+            <h3>Top PageRank Symbols</h3>
+            <ol id="top-symbols-list"></ol>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Context Builder -->
+      <section id="tab-context" class="tab-pane">
+        <div class="panel-header">
+          <h2>Context Builder</h2>
+          <p class="subtitle">Extract optimal context for LLM prompts</p>
+        </div>
+        <div class="panel-body">
+          <div class="context-input-group">
+            <textarea id="context-task" class="form-control" rows="3" placeholder="Describe the task or question (e.g., 'How are user routes handled?')"></textarea>
+            <button id="btn-build-context" class="btn btn-primary">Build Context</button>
+          </div>
+          <div id="context-results" class="context-results-container">
+            <div class="details-placeholder">Describe a task above and build context.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Tool Call Log -->
+      <section id="tab-tool-log" class="tab-pane">
+        <div class="panel-header">
+          <h2>Live Tool Call Log</h2>
+          <p class="subtitle">Intercepts and monitors incoming MCP tool requests in real-time</p>
+        </div>
+        <div class="panel-body">
+          <div class="log-console" id="tool-log-container">
+            <!-- Intercepted tools logs will appear here -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

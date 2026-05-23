@@ -34,9 +34,9 @@ Chronological record of all iterations: when they were started, completed, what 
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F01 |
 | Branch | `feat/i01-edge-verifiability` |
 | PR | — |
@@ -59,9 +59,9 @@ _None yet._
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F03 |
 | Branch | `feat/i02-glob-filters` |
 | PR | — |
@@ -84,9 +84,9 @@ _None yet._
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F02, F04 |
 | Branch | `feat/i03-metrics-edges` |
 | PR | — |
@@ -114,9 +114,9 @@ Depends on I01 being merged before the `--verified-only` flag in `mapx metrics` 
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F05, F06, F10 |
 | Branch | `feat/i04-php-fundamentals` |
 | PR | — |
@@ -139,9 +139,9 @@ F05 is a prerequisite for all of I05 — the use-import table it builds is consu
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F07, F08, F09 |
 | Branch | `feat/i05-laravel-structural` |
 | PR | — |
@@ -189,9 +189,9 @@ Depends on I05 being merged. F11 and F12 are independent of each other within I0
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F13 |
 | Branch | `feat/i07-npm-distribution` |
 | PR | — |
@@ -252,6 +252,8 @@ Independent of I01–I07. F14 benefits from F05 (accurate PHP namespace parsing)
 | Field | Value |
 |-------|-------|
 | Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F17 |
 | Branch | `feat/i09-llm-integration-files` |
 | PR | — |
@@ -303,7 +305,9 @@ Independent of all other iterations. Cross-repo FQN edge resolution is richer wh
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F19 |
 | Branch | `feat/i11-smart-context-tools` |
 | PR | — |
@@ -326,7 +330,9 @@ Fully independent of all other iterations. No schema changes required. `mapx_con
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F20 |
 | Branch | `feat/i12-language-expansion` |
 | PR | — |
@@ -349,7 +355,9 @@ Fully independent of all other iterations. The biggest risk is scope-tracking co
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-23 |
+| Completed | 2026-05-23 |
 | Features | F21, F22, F23, F24, F25 |
 | Branch | `feat/i13-framework-routes` |
 | PR | — |
@@ -374,7 +382,9 @@ F21 (infrastructure) must be merged before any of F22–F25 can proceed. F22–F
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
+| Started | 2026-05-22 |
+| Completed | 2026-05-22 |
 | Features | F27 |
 | Branch | `feat/i14-toon-export` |
 | PR | — |
@@ -397,7 +407,7 @@ Fully independent — can be merged at any time. The exporter uses a manual TOON
 
 | Field | Value |
 |-------|-------|
-| Status | `planned` |
+| Status | `done` |
 | Features | F28 |
 | Branch | `feat/i15-web-dashboard` |
 | PR | — |
@@ -415,3 +425,53 @@ _None yet._
 ### Blockers / notes
 
 Depends on I07 (F13) for npm packaging infrastructure. All other feature dependencies (F02, F14–F16, F18, F19, F21–F26) are optional — the dashboard degrades gracefully when their data is absent. The largest implementation risk is bundle size discipline: Cytoscape.js and layout plugins must be tree-shaken carefully to stay under the 200 KB target.
+
+---
+
+## I16 — Audit Compliance Fixes
+
+| Field | Value |
+|-------|-------|
+| Status | `done` |
+| Started | 2026-05-23 |
+| Completed | 2026-05-23 |
+| Features | F29, F30, F31, F32 |
+| Branch | `fix/i16-audit-compliance` |
+| PR | — |
+
+### Scope
+
+Addresses all high-priority and medium-priority deviations found during the 2026-05-23 roadmap compliance audit. Four features: (F29) missing `mapx_workspaces` MCP tool — the CLI commands exist but the MCP surface was never wired; (F30) language tier misalignment — 12 languages have incorrect tier values in the registry vs. the I12 spec; (F31) missing `--cluster`/`--depth` flags on `mapx export` — the F15 cluster-aware visualization was never exposed through the export pipeline; (F32) missing `mapx workspaces discover` standalone subcommand. Also fixes: `toon` format missing from MCP `mapx_export` enum, and stale available-tools list in `generateConfigs()`.
+
+### Changes from original spec
+
+_N/A — this is a new corrective iteration._
+
+### Blockers / notes
+
+No blockers. All prerequisite infrastructure already exists. This is purely a wiring/alignment iteration.
+
+---
+
+## I17 — Comprehensive Language Syntax Coverage
+
+| Field | Value |
+|-------|-------|
+| Status | `done` |
+| Started | 2026-05-23 |
+| Completed | 2026-05-23 |
+| Features | F33 |
+| Branch | `feat/i17-language-syntax-coverage` |
+| PR | — |
+
+### Scope
+
+Brings all 14 built-in and bundled languages to comprehensive symbol and reference coverage. PHP/JS/TS serve as the baseline (~9 symbol kinds, full import/call/extends/implements/instantiation references). Each of the remaining 11 languages (Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Vue) has its `symbols.scm` and `references.scm` query files expanded to capture all applicable SymbolKind constructs and reference types, and `nodeMappings` in `registry.ts` updated to match.
+
+### Changes from original spec
+
+_None yet._
+
+### Blockers / notes
+
+No blockers. All tree-sitter grammars are available. The `GenericWasmParser` already handles `symbol.kind_*` and `ref.target_*` capture names generically — no parser code changes needed.

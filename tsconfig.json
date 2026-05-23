@@ -19,5 +19,5 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", ".mapx"]
+  "exclude": ["node_modules", "dist", ".mapx", "src/ui"]
 }
