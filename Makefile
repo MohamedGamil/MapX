@@ -26,7 +26,7 @@ help: ## Show this help
 # ── Setup ─────────────────────────────────────────────────────
 
 setup: ## Install dependencies and prepare WASM grammars
-	npm install
+	npm install --legacy-peer-deps
 	@mkdir -p wasm
 	@$(CLI) lang list 2>/dev/null || true
 	@echo ""
