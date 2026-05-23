@@ -10,6 +10,16 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ---
 
+## [0.2.3] — 2026-05-23
+
+### Added
+
+- **Vue parser delegation support** — Added a custom `VueParser` that extracts `<script>` and `<script setup>` blocks and delegates parsing to the `TypeScriptParser`, which allows fully extracting symbols and references inside Vue 2 and Vue 3 Single File Components (SFCs).
+- **Import resolution for Vue** — Enhanced `resolveImportPath` to support `.vue` and `/index.vue` candidates, enabling correct resolution of implicit and explicit imports of Vue components.
+- **Line number offsetting** — Remapped all symbol and reference line numbers within Vue files relative to their original SFC offsets.
+
+---
+
 ## [0.2.2] — 2026-05-23
 
 ### Added
@@ -207,7 +217,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/MohamedGamil/mapx/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/MohamedGamil/mapx/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/MohamedGamil/mapx/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/MohamedGamil/mapx/compare/v0.1.9...v0.2.0
