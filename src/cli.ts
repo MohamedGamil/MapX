@@ -449,6 +449,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--repo <name>', 'Scan only a specific registered repository')
     .option('--all', 'Scan all registered repositories')
+    .option('--force', 'Force re-parsing of all files (bypass cache)', false)
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -472,7 +473,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         repoNames = ['all'];
       }
 
-      const result = await scanner.scanFull(repoNames).catch((err: Error) => {
+      const result = await scanner.scanFull(repoNames, { force: !!opts.force }).catch((err: Error) => {
         if (err.message.includes('Another scan is already running')) {
           console.error(`Error: ${err.message}`);
           process.exit(1);

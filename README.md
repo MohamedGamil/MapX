@@ -111,7 +111,7 @@ mapx -d /path/to/project export
 |---------|-------------|
 | `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs |
 | `mapx uninit [path]` | Remove mapx; delete `.mapx/`, reverse LLM integration changes, clean MCP configs |
-| `mapx scan [path]` | Full scan — builds the graph from scratch |
+| `mapx scan [path]` | Full scan — builds the graph from scratch (supports `--force` to bypass cache) |
 | `mapx update [path]` | Incremental scan — only re-parses changed files |
 | `mapx status [path]` | Show graph metrics, language breakdown, PageRank rankings, git changes |
 | `mapx query <term>` | Search symbols by name (partial match) |
@@ -250,7 +250,7 @@ See [docs/mcp-integration.md](docs/mcp-integration.md) for full tool parameters 
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals |
-| Vue | `.vue` | functions, classes, methods, properties |
+| Vue | `.vue` | functions, classes, methods, properties (supports `@/` alias resolution) |
 
 ### Installable (Tier 3) — `mapx lang install <name>`
 

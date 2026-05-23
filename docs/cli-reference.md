@@ -65,7 +65,7 @@ Perform a full scan of all source files. Builds the graph from scratch.
 - Survives interruptions: progress is saved per-file, re-run to resume
 
 ```bash
-mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all]
+mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--force]
 ```
 
 Options:
@@ -73,6 +73,7 @@ Options:
 - `--include` — Include glob patterns (repeatable)
 - `--repo` — Scan only a specific registered repository
 - `--all` — Scan all registered repositories
+- `--force` — Force re-parsing of all files (bypasses file caching and rebuilds all symbols and edges)
 
 ## `mapx update` / `mapx sync`
 

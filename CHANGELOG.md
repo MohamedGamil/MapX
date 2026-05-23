@@ -17,6 +17,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **Vue parser delegation support** — Added a custom `VueParser` that extracts `<script>` and `<script setup>` blocks and delegates parsing to the `TypeScriptParser`, which allows fully extracting symbols and references inside Vue 2 and Vue 3 Single File Components (SFCs).
 - **Import resolution for Vue** — Enhanced `resolveImportPath` to support `.vue` and `/index.vue` candidates, enabling correct resolution of implicit and explicit imports of Vue components.
 - **Line number offsetting** — Remapped all symbol and reference line numbers within Vue files relative to their original SFC offsets.
+- **`@/` alias resolution in Vue components** — Added support for `import "@/..."` target paths pointing to the `src/` directory within Vue Single File Components (SFCs).
+- **Force scan option (`--force`)** — Added a `--force` option to the `scan` command to bypass the incremental parse caching and force re-parsing of all files (useful when parser or import resolver logic changes).
 
 ---
 

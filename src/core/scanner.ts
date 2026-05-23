@@ -152,7 +152,7 @@ export class Scanner {
     try { await unlink(this.getLockPath()); } catch { /* already gone */ }
   }
 
-  async scanFull(repoNames?: string[]): Promise<ScanResult> {
+  async scanFull(repoNames?: string[], options?: { force?: boolean }): Promise<ScanResult> {
     const acquired = await this.acquireScanLock();
     if (!acquired) {
       const lockPath = this.getLockPath();
@@ -188,7 +188,7 @@ export class Scanner {
       for (const repoName of reposToScan) {
         const repo = this.config.repos.find(r => r.name === repoName);
         if (!repo) continue;
-        const res = await this._scanFullForRepo(repo);
+        const res = await this._scanFullForRepo(repo, options?.force);
         filesScanned += res.filesScanned;
         symbolsFound += res.symbolsFound;
         edgesFound += res.edgesFound;
@@ -212,7 +212,7 @@ export class Scanner {
     }
   }
 
-  private async _scanFullForRepo(repo: RepoConfig): Promise<ScanResult> {
+  private async _scanFullForRepo(repo: RepoConfig, force = false): Promise<ScanResult> {
     const startTime = Date.now();
     this.aborted = false;
     const workspaceRoot = this.config.getWorkspaceRoot();
@@ -229,8 +229,8 @@ export class Scanner {
     const newFiles = discovered.filter(f => f.isNew);
     const changedFiles = discovered.filter(f => !f.isNew && f.contentChanged);
     const incompleteFiles = discovered.filter(f => !f.isNew && !f.contentChanged && !filesWithSymbols.has(f.relativePath));
-    const unchangedFiles = discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
-    const filesToParse = [...newFiles, ...changedFiles, ...incompleteFiles];
+    const unchangedFiles = force ? [] : discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
+    const filesToParse = force ? discovered : [...newFiles, ...changedFiles, ...incompleteFiles];
 
     const resumeState = this.loadResumeState(repo.name);
     const resumedCompleted = new Set(resumeState?.completedFiles || []);
