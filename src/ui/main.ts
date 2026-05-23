@@ -33,7 +33,7 @@ subtabs.forEach(sub => {
     subtabs.forEach(s => s.classList.remove('active'));
     sub.classList.add('active');
 
-    const target = sub.getAttribute('data-subtab') || 'routes-list';
+    const target = sub.getAttribute('data-subtab') || 'subtab-routes-list';
     document.querySelectorAll('.subtab-pane').forEach(p => p.classList.remove('active'));
 
     const targetPane = document.getElementById(target);
