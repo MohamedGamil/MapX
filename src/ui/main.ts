@@ -377,7 +377,7 @@ async function loadGraph() {
         {
           selector: ':parent',
           style: {
-            'background-color': 'rgba(40, 44, 52, 0.4)',
+            'background-color': 'rgba(40, 44, 52, 0.15)',
             'border-width': '1px',
             'border-color': '#3e4452',
             'border-style': 'dashed',
@@ -389,7 +389,7 @@ async function loadGraph() {
             'text-valign': 'top',
             'text-halign': 'center',
             'text-outline-width': '1px',
-            'text-outline-color': '#1e222b',
+            'text-outline-color': '#14161a',
             'padding': '20px'
           }
         },
@@ -469,7 +469,7 @@ async function loadGraph() {
           style: {
             'width': '45px',
             'height': '45px',
-            'border-width': '1.8px',
+            'border-width': '2px',
             'border-color': '#61afef',
             'overlay-opacity': 0.15,
             'z-index': 9999,
@@ -490,7 +490,10 @@ async function loadGraph() {
         {
           selector: '.highlighted-outgoing-node',
           style: {
-            'border-width': '1.5px',
+            'width': '38px',
+            'height': '38px',
+            'font-size': '11.5px',
+            'border-width': '1.8px',
             'border-color': '#98c379',
             'z-index': 9997,
             'opacity': 1,
@@ -510,11 +513,47 @@ async function loadGraph() {
         {
           selector: '.highlighted-incoming-node',
           style: {
-            'border-width': '1.5px',
+            'width': '38px',
+            'height': '38px',
+            'font-size': '11.5px',
+            'border-width': '1.8px',
             'border-color': '#c678dd',
             'z-index': 9997,
             'opacity': 1,
             'text-opacity': 1
+          }
+        },
+        {
+          selector: ':parent.highlighted-parent-active',
+          style: {
+            'border-color': '#61afef',
+            'border-width': '1.5px',
+            'border-style': 'solid',
+            'background-color': 'rgba(74, 82, 99, 0.55)',
+            'color': '#61afef',
+            'text-outline-color': '#14161a'
+          }
+        },
+        {
+          selector: ':parent.highlighted-parent-outgoing',
+          style: {
+            'border-color': '#98c379',
+            'border-width': '1.5px',
+            'border-style': 'solid',
+            'background-color': 'rgba(74, 82, 99, 0.55)',
+            'color': '#98c379',
+            'text-outline-color': '#14161a'
+          }
+        },
+        {
+          selector: ':parent.highlighted-parent-incoming',
+          style: {
+            'border-color': '#c678dd',
+            'border-width': '1.5px',
+            'border-style': 'solid',
+            'background-color': 'rgba(74, 82, 99, 0.55)',
+            'color': '#c678dd',
+            'text-outline-color': '#14161a'
           }
         }
       ],
@@ -629,35 +668,51 @@ async function loadGraph() {
 
       cyInstance.batch(() => {
         // Reset classes
-        cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node');
+        cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node highlighted-parent-active highlighted-parent-outgoing highlighted-parent-incoming');
 
-        // Apply dimmed to all elements
-        cyInstance.elements().addClass('dimmed');
+        if (data.type === 'parent') {
+          // Dim all elements not inside this parent
+          cyInstance.elements().not(':parent').addClass('dimmed');
+          node.addClass('highlighted-parent-active');
+          node.children().removeClass('dimmed');
+        } else {
+          // Apply dimmed to all non-parent elements
+          cyInstance.elements().not(':parent').addClass('dimmed');
 
-        // Highlight selected node
-        node.removeClass('dimmed').addClass('highlighted-center');
-
-        // Highlight outgoing edges and their target nodes (dependencies)
-        const outgoers = node.outgoers();
-        outgoers.forEach((ele: any) => {
-          ele.removeClass('dimmed');
-          if (ele.isEdge()) {
-            ele.addClass('highlighted-outgoing');
-          } else {
-            ele.addClass('highlighted-outgoing-node');
+          // Highlight selected node
+          node.removeClass('dimmed').addClass('highlighted-center');
+          if (node.parent() && node.parent().length > 0) {
+            node.parent().addClass('highlighted-parent-active');
           }
-        });
 
-        // Highlight incoming edges and their source nodes (dependents)
-        const incomers = node.incomers();
-        incomers.forEach((ele: any) => {
-          ele.removeClass('dimmed');
-          if (ele.isEdge()) {
-            ele.addClass('highlighted-incoming');
-          } else {
-            ele.addClass('highlighted-incoming-node');
-          }
-        });
+          // Highlight outgoing edges and their target nodes (dependencies)
+          const outgoers = node.outgoers();
+          outgoers.forEach((ele: any) => {
+            ele.removeClass('dimmed');
+            if (ele.isEdge()) {
+              ele.addClass('highlighted-outgoing');
+            } else {
+              ele.addClass('highlighted-outgoing-node');
+              if (ele.parent() && ele.parent().length > 0) {
+                ele.parent().addClass('highlighted-parent-outgoing');
+              }
+            }
+          });
+
+          // Highlight incoming edges and their source nodes (dependents)
+          const incomers = node.incomers();
+          incomers.forEach((ele: any) => {
+            ele.removeClass('dimmed');
+            if (ele.isEdge()) {
+              ele.addClass('highlighted-incoming');
+            } else {
+              ele.addClass('highlighted-incoming-node');
+              if (ele.parent() && ele.parent().length > 0) {
+                ele.parent().addClass('highlighted-parent-incoming');
+              }
+            }
+          });
+        }
       });
     });
 
@@ -720,21 +775,30 @@ async function loadGraph() {
       }
 
       cyInstance.batch(() => {
-        // Dim all
-        cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node');
-        cyInstance.elements().addClass('dimmed');
+        // Dim all non-parent elements
+        cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node highlighted-parent-active highlighted-parent-outgoing highlighted-parent-incoming');
+        cyInstance.elements().not(':parent').addClass('dimmed');
 
         // Highlight this edge and its source & target nodes
         edge.removeClass('dimmed');
-        edge.source().removeClass('dimmed').addClass('highlighted-incoming-node');
-        edge.target().removeClass('dimmed').addClass('highlighted-outgoing-node');
+        const src = edge.source();
+        const tgt = edge.target();
+        src.removeClass('dimmed').addClass('highlighted-incoming-node');
+        tgt.removeClass('dimmed').addClass('highlighted-outgoing-node');
+
+        if (src.parent() && src.parent().length > 0) {
+          src.parent().addClass('highlighted-parent-incoming');
+        }
+        if (tgt.parent() && tgt.parent().length > 0) {
+          tgt.parent().addClass('highlighted-parent-outgoing');
+        }
       });
     });
 
     cyInstance.on('tap', (evt: any) => {
       if (evt.target === cyInstance) {
         cyInstance.batch(() => {
-          cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node');
+          cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node highlighted-parent-active highlighted-parent-outgoing highlighted-parent-incoming');
         });
         const details = document.getElementById('details-content');
         if (details) {
