@@ -22,6 +22,7 @@ import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
+import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
 
@@ -53,59 +54,103 @@ const PHASE_LABELS: Record<ScanProgress['phase'], { active: string; done: string
   cluster: { active: 'Detecting clusters', done: 'Detected clusters' },
 };
 
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⸦', '⢼', '⣴', '⣷', '⣯', '⣟', '⡿', '⢿', '⣻', '⣽', '⣾'];
-let spinnerIdx = 0;
+interface ProgressRendererCallback {
+  (progress: ScanProgress): void;
+  stop: (title?: string) => void;
+}
 
-function createProgressRenderer(): ProgressCallback {
+function createProgressRenderer(): ProgressRendererCallback {
   let lastPhase: ScanProgress['phase'] | null = null;
-  let lastLineLen = 0;
+  let p: any = null;
+  let s: any = null;
+  let lastCurrent = 0;
 
-  const writeLine = (line: string) => {
-    const clear = lastLineLen > 0 ? '\r' + ' '.repeat(lastLineLen) + '\r' : '\r';
-    process.stderr.write(clear + line);
-    lastLineLen = line.length;
-  };
-
-  const renderBar = (current: number, total: number, width: number = 20): string => {
-    if (total === 0) {
-      const frame = SPINNER_FRAMES[spinnerIdx++ % SPINNER_FRAMES.length];
-      return `${frame} `;
-    }
-    const filled = Math.min(width, Math.max(0, Math.round((current / total) * width)));
-    const empty = width - filled;
-    const bar = '█'.repeat(filled) + '░'.repeat(empty);
-    const pct = Math.round((current / total) * 100);
-    return `${bar} ${pct}%`;
-  };
-
-  return (progress: ScanProgress) => {
-    const { phase, current, total, file } = progress;
+  const callback = (progressData: ScanProgress) => {
+    const { phase, current, total, file } = progressData;
     const label = PHASE_LABELS[phase];
+    if (!label) return;
     const isNewPhase = phase !== lastPhase;
 
-    if (isNewPhase && lastPhase !== null) {
-      const prevLabel = PHASE_LABELS[lastPhase];
-      writeLine(`  ✔ ${prevLabel.done}\n`);
-    }
+    if (isNewPhase) {
+      if (s) {
+        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+        s.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
+        s = null;
+      }
+      if (p) {
+        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+        p.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
+        p = null;
+      }
 
-    lastPhase = phase;
+      lastPhase = phase;
+      lastCurrent = 0;
 
-    const bar = renderBar(current, total);
-    const counter = total > 0 ? `${current}/${total}` : `${current}`;
-    let line = `  ${label.active} ${bar} ${counter}`;
-
-    if (file) {
-      const maxFileLen = Math.max(0, 60 - line.length);
-      const displayFile = file.length > maxFileLen && maxFileLen > 3
-        ? '…' + file.slice(-(maxFileLen - 1))
-        : file.length <= maxFileLen ? file : '';
-      if (displayFile) {
-        line += ` ${displayFile}`;
+      if (total > 0) {
+        p = clack.progress({
+          style: 'block',
+          max: total,
+          size: 40,
+        });
+        p.start(label.active);
+      } else {
+        s = clack.spinner();
+        s.start(label.active);
       }
     }
 
-    writeLine(line);
+    const fileLabel = file ? ` - ${file}` : '';
+    if (total > 0) {
+      if (s) {
+        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+        s.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
+        s = null;
+      }
+      if (!p) {
+        p = clack.progress({
+          style: 'heavy',
+          max: total,
+          size: 40,
+        });
+        p.start(label.active);
+        lastCurrent = 0;
+      }
+      const diff = current - lastCurrent;
+      const msg = `${label.active} (${current}/${total})${fileLabel}`;
+      if (diff > 0) {
+        p.advance(diff, msg);
+      } else {
+        p.message(msg);
+      }
+      lastCurrent = current;
+    } else {
+      if (p) {
+        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+        p.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
+        p = null;
+      }
+      if (!s) {
+        s = clack.spinner();
+        s.start(label.active);
+      }
+      s.message(`${label.active} (${current})${fileLabel}`);
+    }
   };
+
+  callback.stop = (title?: string) => {
+    if (s) {
+      const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+      s.stop(title || (prevLabel ? `✔ ${prevLabel.done}` : '✔ Done'));
+      s = null;
+    }
+    if (p) {
+      const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
+      p.stop(title || (prevLabel ? `✔ ${prevLabel.done}` : '✔ Done'));
+      p = null;
+    }
+  };
+
+  return callback;
 }
 
 const MAPX_MARKER_START = '<!-- mapx -->';
@@ -200,50 +245,23 @@ function replaceBetweenMarkers(existing: string, block: string): string {
   return existing.slice(0, startIdx) + block + existing.slice(endIdx + MAPX_MARKER_END.length);
 }
 
-function prompt(question: string, options: string[]): Promise<number> {
-  return new Promise((res) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
-    const labels = options.map((o, i) => `  ${i + 1}) ${o}`);
-    process.stderr.write(question + '\n' + labels.join('\n') + '\n> ');
-    rl.question('', (answer) => {
-      rl.close();
-      const num = parseInt(answer.trim(), 10);
-      res(num >= 1 && num <= options.length ? num - 1 : options.length - 1);
-    });
-  });
-}
-
-function askQuestion(query: string): Promise<string> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  return new Promise(resolve => rl.question(query, ans => {
-    rl.close();
-    resolve(ans);
-  }));
-}
-
 async function selectProvidersInteractive(): Promise<string[]> {
   const generator = new AgentGenerator();
   const providers = generator.listProviders();
-  console.log('\nWhich LLM/agent tools do you use in this project?');
-  console.log('Enter numbers separated by commas (e.g. 1,3), type "all" for all, or press Enter for default [1 (generic)]:');
-  providers.forEach((p, idx) => {
-    console.log(`  [${idx + 1}] ${p}`);
+
+  const selected = await clack.multiselect({
+    message: 'Which LLM/agent tools do you use in this project?',
+    options: providers.map(p => ({ value: p, label: p })),
+    required: false,
   });
 
-  const answer = await askQuestion('\nSelection: ');
-  const input = answer.trim().toLowerCase();
-  if (!input) {
-    return ['generic'];
+  if (clack.isCancel(selected)) {
+    clack.cancel('Operation cancelled.');
+    process.exit(0);
   }
-  if (input === 'all') {
-    return providers;
-  }
-  const parts = input.split(',').map((s: string) => parseInt(s.trim(), 10)).filter((n: number) => !isNaN(n) && n >= 1 && n <= providers.length);
-  const selected = parts.map((n: number) => providers[n - 1]);
-  return selected.length === 0 ? ['generic'] : selected;
+
+  const result = selected as string[];
+  return result.length === 0 ? ['generic'] : result;
 }
 
 export function buildCLI(): Command {
@@ -307,8 +325,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   console.log('  ✓ resources/views/**       (Blade templates — not yet supported)');
   console.log('  ✓ **/*.blade.php           (Blade files)');
   
-  const answer = await askQuestion('\nAdd these to .mapx/config.json? [Y/n] ');
-  return answer.toLowerCase() !== 'n';
+  const answer = await clack.confirm({
+    message: 'Add these to .mapx/config.json?',
+    initialValue: true,
+  });
+  if (clack.isCancel(answer)) {
+    clack.cancel('Operation cancelled.');
+    process.exit(0);
+  }
+  return answer;
 }
 
   program
@@ -330,23 +355,23 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       if (opts.agents !== false) {
         if (process.stdin.isTTY && opts.suggestions !== false) {
           const selected = await selectProvidersInteractive();
-          console.log(`Generating integration files for: ${selected.join(', ')}...`);
+          clack.log.step(`Generating integration files for: ${selected.join(', ')}...`);
           const generator = new AgentGenerator();
           const actions = generator.plan(selected, { dir });
           for (const action of actions) {
             generator.execute(action);
-            console.log(`  ✓ Generated ${action.filename} (${action.status})`);
+            clack.log.success(`Generated ${action.filename} (${action.status})`);
           }
         } else {
           const generator = new AgentGenerator();
           const actions = generator.plan(['generic'], { dir });
           for (const action of actions) {
             generator.execute(action);
-            console.log(`  ✓ Generated ${action.filename} (${action.status})`);
+            clack.log.success(`Generated ${action.filename} (${action.status})`);
           }
         }
       }
-
+ 
       // Auto-generate MCP config files for detected agent tools
       if (opts.mcpConfigs !== false) {
         const generator = new AgentGenerator();
@@ -357,11 +382,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             if (action.status === 'up_to_date') continue;
             generator.executeMcpConfig(action);
             const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
-            console.log(`  ✓ MCP config ${verb} ${action.filename} (${action.tool})`);
+            clack.log.success(`MCP config ${verb} ${action.filename} (${action.tool})`);
           }
         }
       }
-
+ 
       // Auto-add .mapx/ to .gitignore
       const gitignorePath = join(dir, '.gitignore');
       const hasGitignore = existsSync(gitignorePath);
@@ -372,11 +397,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         if (!lines.includes('.mapx/') && !lines.includes('.mapx')) {
           const entry = content.length > 0 && !content.endsWith('\n') ? '\n.mapx/\n' : '.mapx/\n';
           writeFileSync(gitignorePath, content + entry);
-          console.log(`  ✓ Added .mapx/ to .gitignore`);
+          clack.log.success(`Added .mapx/ to .gitignore`);
         }
       }
-      console.log(`Initialized mapx in ${dir}/.mapx/`);
-      console.log(`Repo: ${config.repo.name}`);
+      clack.log.success(`Initialized mapx in ${dir}/.mapx/`);
+      clack.log.info(`Repo: ${config.repo.name}`);
     });
 
   program
@@ -389,9 +414,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const hasMapx = existsSync(join(dir, '.mapx'));
 
       if (!opts.force && process.stdin.isTTY) {
-        const answer = await askQuestion(`Are you sure you want to remove .mapx/ and reverse all mapx integrations in ${dir}? [y/N] `);
-        if (answer.trim().toLowerCase() !== 'y') {
-          console.log('Aborted.');
+        const answer = await clack.confirm({
+          message: `Are you sure you want to remove .mapx/ and reverse all mapx integrations in ${dir}?`,
+          initialValue: false,
+        });
+        if (clack.isCancel(answer) || !answer) {
+          clack.cancel('Aborted.');
           return;
         }
       }
@@ -420,10 +448,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           });
           if (removed) {
             writeFileSync(gitignorePath, filteredLines.join('\n'), 'utf-8');
-            console.log(`  ✓ Removed .mapx/ from .gitignore`);
+            clack.log.success(`Removed .mapx/ from .gitignore`);
           }
         } catch (err: any) {
-          console.error(`  ✗ Failed to update .gitignore: ${err.message}`);
+          clack.log.error(`Failed to update .gitignore: ${err.message}`);
         }
       }
 
@@ -431,13 +459,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       if (hasMapx) {
         try {
           rmSync(join(dir, '.mapx'), { recursive: true, force: true });
-          console.log(`  ✓ Removed .mapx/ directory`);
+          clack.log.success(`Removed .mapx/ directory`);
         } catch (err: any) {
-          console.error(`  ✗ Failed to remove .mapx/ directory: ${err.message}`);
+          clack.log.error(`Failed to remove .mapx/ directory: ${err.message}`);
         }
       }
 
-      console.log(`Successfully uninitialized mapx for project: ${dir}`);
+      clack.log.success(`Successfully uninitialized mapx for project: ${dir}`);
     });
 
 
@@ -462,6 +490,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const onSigInt = () => {
         scanner.abort();
+        onProgress.stop('Canceled');
         process.stderr.write('\n');
       };
       process.once('SIGINT', onSigInt);
@@ -474,23 +503,24 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       const result = await scanner.scanFull(repoNames, { force: !!opts.force }).catch((err: Error) => {
+        onProgress.stop();
         if (err.message.includes('Another scan is already running')) {
-          console.error(`Error: ${err.message}`);
+          clack.log.error(`Error: ${err.message}`);
           process.exit(1);
         }
         throw err;
       });
 
       process.removeListener('SIGINT', onSigInt);
-      process.stderr.write('\r' + ' '.repeat(80) + '\r');
+      onProgress.stop();
 
       if (result.interrupted) {
-        console.log(`Scan interrupted after ${result.filesScanned}/${result.totalFiles} files. Progress saved — run \`scan\` again to resume.`);
+        clack.log.warn(`Scan interrupted after ${result.filesScanned}/${result.totalFiles} files. Progress saved — run \`scan\` again to resume.`);
       } else {
-        console.log(`Scanned ${result.filesScanned} files in ${result.durationMs}ms`);
+        clack.log.success(`Scanned ${result.filesScanned} files in ${result.durationMs}ms`);
       }
-      console.log(`Languages: ${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')}`);
-      console.log(`Found ${result.symbolsFound} symbols, ${result.edgesFound} edges`);
+      clack.log.info(`Languages: ${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')}`);
+      clack.log.info(`Found ${result.symbolsFound} symbols, ${result.edgesFound} edges`);
     });
 
   program
@@ -507,7 +537,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const { config, store, graph } = await loadContext(dir);
       const onProgress = createProgressRenderer();
 
-      const handleLockError = (err: Error) => {
+      const handleLockError = (err: Error): never => {
         if (err.message.includes('Another scan is already running')) {
           console.error(`Error: ${err.message}`);
           process.exit(1);
@@ -526,15 +556,24 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
       });
-      process.once('SIGINT', () => scanner.abort());
-      const result = await scanner.scanIncremental(repoNames).catch(handleLockError);
+      const onSigInt = () => {
+        scanner.abort();
+        onProgress.stop('Canceled');
+      };
+      process.once('SIGINT', onSigInt);
+      const result = await scanner.scanIncremental(repoNames).catch((err: Error) => {
+        onProgress.stop();
+        handleLockError(err);
+        throw err;
+      });
 
-      process.stderr.write('\r' + ' '.repeat(80) + '\r');
+      process.removeListener('SIGINT', onSigInt);
+      onProgress.stop();
       if (result.interrupted) {
-        console.log(`Update interrupted after ${result.filesScanned} files.`);
+        clack.log.warn(`Update interrupted after ${result.filesScanned} files.`);
       } else {
-        console.log(`Updated ${result.filesScanned} files in ${result.durationMs}ms`);
-        console.log(`${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated`);
+        clack.log.success(`Updated ${result.filesScanned} files in ${result.durationMs}ms`);
+        clack.log.info(`${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated`);
       }
     });
 
@@ -1470,11 +1509,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Install grammar and query files for an installable language')
     .action(async (lang: string) => {
       try {
-        console.log(`Installing language '${lang}'...`);
+        clack.log.step(`Installing language '${lang}'...`);
         await installLanguage(lang);
-        console.log(`Successfully installed language '${lang}'.`);
+        clack.log.success(`Successfully installed language '${lang}'.`);
       } catch (err: any) {
-        console.error(`Error installing language '${lang}':`, err.message);
+        clack.log.error(`Error installing language '${lang}': ${err.message}`);
         process.exit(1);
       }
     });
@@ -1484,11 +1523,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Uninstall grammar and query files for an installable language')
     .action(async (lang: string) => {
       try {
-        console.log(`Uninstalling language '${lang}'...`);
+        clack.log.step(`Uninstalling language '${lang}'...`);
         await uninstallLanguage(lang);
-        console.log(`Successfully uninstalled language '${lang}'.`);
+        clack.log.success(`Successfully uninstalled language '${lang}'.`);
       } catch (err: any) {
-        console.error(`Error uninstalling language '${lang}':`, err.message);
+        clack.log.error(`Error uninstalling language '${lang}': ${err.message}`);
         process.exit(1);
       }
     });
@@ -1872,7 +1911,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (targets.length === 0) {
-        console.error('No valid providers specified.');
+        clack.log.error('No valid providers specified.');
         process.exit(1);
       }
 
@@ -1880,29 +1919,32 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       for (const action of actions) {
         if (action.status === 'up_to_date') {
-          console.log(`  - ${action.filename}: Up to date. Skipping.`);
+          clack.log.info(`${action.filename}: Up to date. Skipping.`);
           continue;
         }
 
         if (action.status === 'update_conflict' || action.status === 'no_sentinel') {
-          console.log(`\n⚠️ Conflict/Modification detected in ${action.filename}:`);
+          clack.log.warn(`Conflict/Modification detected in ${action.filename}:`);
           if (action.diff) {
             console.log(action.diff);
           }
           if (!opts.force) {
-            const confirm = await askQuestion(`Overwrite ${action.filename}? [y/N] `);
-            if (confirm.trim().toLowerCase() !== 'y') {
-              console.log(`Skipped ${action.filename}.`);
+            const confirm = await clack.confirm({
+              message: `Overwrite ${action.filename}?`,
+              initialValue: false,
+            });
+            if (clack.isCancel(confirm) || !confirm) {
+              clack.log.warn(`Skipped ${action.filename}.`);
               continue;
             }
           }
         }
 
         if (opts.dryRun) {
-          console.log(`[DRY RUN] Would write to ${action.filepath} (status: ${action.status})`);
+          clack.log.info(`[DRY RUN] Would write to ${action.filepath} (status: ${action.status})`);
         } else {
           generator.execute(action);
-          console.log(`✓ Wrote to ${action.filename} (status: ${action.status})`);
+          clack.log.success(`Wrote to ${action.filename} (status: ${action.status})`);
         }
       }
     });
@@ -1924,7 +1966,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       });
 
       if (existingProviders.length === 0) {
-        console.log('No existing LLM integration files found to update.');
+        clack.log.info('No existing LLM integration files found to update.');
         return;
       }
 
@@ -1937,30 +1979,33 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
 
         if (action.status === 'update_conflict') {
-          console.log(`\n⚠️ Customized content detected in ${action.filename}:`);
+          clack.log.warn(`Customized content detected in ${action.filename}:`);
           if (action.diff) {
             console.log(action.diff);
           }
           if (!opts.force) {
-            const confirm = await askQuestion(`Overwrite customizations in ${action.filename}? [y/N] `);
-            if (confirm.trim().toLowerCase() !== 'y') {
-              console.log(`Skipped ${action.filename}.`);
+            const confirm = await clack.confirm({
+              message: `Overwrite customizations in ${action.filename}?`,
+              initialValue: false,
+            });
+            if (clack.isCancel(confirm) || !confirm) {
+              clack.log.warn(`Skipped ${action.filename}.`);
               continue;
             }
           }
         }
 
         if (opts.dryRun) {
-          console.log(`[DRY RUN] Would update ${action.filepath}`);
+          clack.log.info(`[DRY RUN] Would update ${action.filepath}`);
         } else {
           generator.execute(action);
-          console.log(`✓ Updated ${action.filename}`);
+          clack.log.success(`Updated ${action.filename}`);
           updatedCount++;
         }
       }
 
       if (updatedCount === 0 && !opts.dryRun) {
-        console.log('All integration files are already up to date.');
+        clack.log.success('All integration files are already up to date.');
       }
     });
 
@@ -1990,39 +2035,39 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       if (opts.detect) {
         if (targets.length === 0) {
-          console.log('No agent tools detected in this project.');
+          clack.log.info('No agent tools detected in this project.');
         } else {
-          console.log(`\nDetected agent tools (${targets.length}):`);
+          clack.log.info(`Detected agent tools (${targets.length}):`);
           for (const t of targets) {
-            console.log(`  ✓ ${t.name.padEnd(15)} → ${t.filename}`);
+            clack.log.success(`${t.name.padEnd(15)} → ${t.filename}`);
           }
         }
-        console.log(`\nAll available targets:`);
+        clack.log.info(`All available targets:`);
         for (const c of allConfigs) {
           const detected = targets.includes(c);
           const icon = detected ? '✓' : '·';
-          console.log(`  ${icon} ${c.name.padEnd(15)} → ${c.filename}`);
+          clack.log.info(`${icon} ${c.name.padEnd(15)} → ${c.filename}`);
         }
         return;
       }
 
       if (targets.length === 0) {
-        console.log('No agent tools detected. Use --all or --tools to specify targets.');
+        clack.log.warn('No agent tools detected. Use --all or --tools to specify targets.');
         return;
       }
 
       const actions = generator.generateMcpConfigs(targets, { dir });
       for (const action of actions) {
         if (action.status === 'up_to_date') {
-          console.log(`  - ${action.filename}: Up to date.`);
+          clack.log.info(`${action.filename}: Up to date.`);
           continue;
         }
         if (opts.dryRun) {
-          console.log(`[DRY RUN] Would ${action.status} ${action.filename} (${action.tool})`);
+          clack.log.info(`[DRY RUN] Would ${action.status} ${action.filename} (${action.tool})`);
         } else {
           generator.executeMcpConfig(action);
           const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
-          console.log(`  ✓ MCP config ${verb} ${action.filename} (${action.tool})`);
+          clack.log.success(`MCP config ${verb} ${action.filename} (${action.tool})`);
         }
       }
     });
@@ -2092,11 +2137,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const absPath = resolve(dir, repoPath);
       if (!existsSync(absPath)) {
-        console.error(`Error: Path ${repoPath} does not exist.`);
+        clack.log.error(`Path ${repoPath} does not exist.`);
         process.exit(1);
       }
       if (!isGitRepo(absPath)) {
-        console.error(`Error: Path ${repoPath} is not a git repository.`);
+        clack.log.error(`Path ${repoPath} is not a git repository.`);
         process.exit(1);
       }
 
@@ -2104,19 +2149,32 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const name = (opts.name as string) || basename(absPath);
 
       if (config.repos.some(r => r.name === name || r.path === relPath)) {
-        console.log(`Repository already registered: ${name} (${relPath})`);
+        clack.log.warn(`Repository already registered: ${name} (${relPath})`);
         return;
       }
 
       config.addRepo(name, relPath);
       await config.save();
-      console.log(`Registered repository: ${name} -> ${relPath}`);
+      clack.log.success(`Registered repository: ${name} -> ${relPath}`);
 
-      console.log('Running initial full scan for the new repository...');
+      clack.log.step('Running initial full scan for the new repository...');
       const onProgress = createProgressRenderer();
       const scanner = new Scanner(store, config, graph, onProgress);
-      const result = await scanner.scanFull([name]);
-      console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
+
+      const onSigInt = () => {
+        scanner.abort();
+        onProgress.stop('Canceled');
+      };
+      process.once('SIGINT', onSigInt);
+
+      const result = await scanner.scanFull([name]).catch((err) => {
+        onProgress.stop();
+        throw err;
+      });
+
+      process.removeListener('SIGINT', onSigInt);
+      onProgress.stop();
+      clack.log.success(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
     });
 
   workspacesCmd
@@ -2128,18 +2186,18 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const repo = config.repos.find(r => r.name === name || r.path === name);
       if (!repo) {
-        console.error(`Error: Repository ${name} is not registered.`);
+        clack.log.error(`Repository ${name} is not registered.`);
         process.exit(1);
       }
 
       const repoName = repo.name;
       config.removeRepo(name);
       await config.save();
-      console.log(`Unregistered repository: ${repoName}`);
+      clack.log.success(`Unregistered repository: ${repoName}`);
 
-      console.log(`Cleaning up stored data for repository: ${repoName}...`);
+      clack.log.step(`Cleaning up stored data for repository: ${repoName}...`);
       store.deleteRepo(repoName);
-      console.log(`Done.`);
+      clack.log.success(`Done.`);
     });
 
   workspacesCmd
@@ -2255,23 +2313,36 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (toAdd.length === 0) {
-        console.log('No new repositories discovered to sync.');
+        clack.log.info('No new repositories discovered to sync.');
         return;
       }
 
-      console.log(`Syncing ${toAdd.length} newly discovered repositories:`);
-      const scanner = new Scanner(store, config, graph, createProgressRenderer());
-
+      clack.log.step(`Syncing ${toAdd.length} newly discovered repositories:`);
       for (const item of toAdd) {
         config.addRepo(item.name, item.path);
-        console.log(`  + Registered: ${item.name} -> ${item.path}`);
+        clack.log.success(`Registered: ${item.name} -> ${item.path}`);
       }
       await config.save();
 
-      console.log('\nRunning initial full scan for new repositories...');
+      clack.log.step('Running initial full scan for new repositories...');
       const newNames = toAdd.map(item => item.name);
-      const result = await scanner.scanFull(newNames);
-      console.log(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
+      const onProgress = createProgressRenderer();
+      const scanner = new Scanner(store, config, graph, onProgress);
+
+      const onSigInt = () => {
+        scanner.abort();
+        onProgress.stop('Canceled');
+      };
+      process.once('SIGINT', onSigInt);
+
+      const result = await scanner.scanFull(newNames).catch((err) => {
+        onProgress.stop();
+        throw err;
+      });
+
+      process.removeListener('SIGINT', onSigInt);
+      onProgress.stop();
+      clack.log.success(`Scanned ${result.filesScanned} files, ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`);
     });
 
   return program;

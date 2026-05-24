@@ -14,6 +14,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Changed
 
+- **Interactive CLI Revamp with Clack** — Integrated `@clack/prompts` to replace old readline-based console prompts with beautiful, interactive terminal widgets. Revamped confirmation prompts, LLM tool multi-select setups (`selectProvidersInteractive`), and converted the text-based scanner progress rendering to premium animated spinner sequences.
 - **Default Exclude Patterns Expansion** — Significantly expanded the default file exclusion patterns in `src/core/config.ts` to automatically ignore build directories (`dist`, `build`, `.next`), virtual environments (`.venv`, `__pycache__`), package lockfiles (`yarn.lock`, `pnpm-lock.yaml`, `poetry.lock`, `go.sum`, etc.), package manifests, system/log files (`DS_Store`, `*.log`), and large third-party assets (Monaco editor files, Bootstrap scripts, React/Vue production builds). This drastically reduces token consumption and database size during scans by default.
 - **PULL_REQUEST_TEMPLATE.md Updates** — Updated the checklist to verify NPM dependency lock synchronization via `make version-sync`, local prebuilt packaging builds (e.g. `make package-linux`), and agentic integration rules (`.agents/rules/mapx.md`). Included testing guidelines for both native CLI running and zero-installation `npx` calls.
 

@@ -1,4 +1,4 @@
-<!-- mapx v0.2.3 -->
+<!-- mapx v0.2.6 -->
 # MapxGraph - LLM Integration Guide
 
 This project uses **MapxGraph** — a local code graph memory system that provides persistent, structured understanding of the codebase across LLM sessions.

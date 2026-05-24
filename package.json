@@ -94,6 +94,8 @@
     "test": "tsx src/main.ts scan && tsx src/main.ts export"
   },
   "dependencies": {
+    "@clack/prompts": "^1.4.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.10.0",
     "commander": "^13.1.0",
     "cytoscape": "^3.33.4",
@@ -110,10 +112,8 @@
     "tree-sitter-typescript": "^0.23.2",
     "uplot": "^1.6.32",
     "web-tree-sitter": "^0.26.9",
-    "zod": "^3.25.0",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "zod": "^3.25.0"
   },
-  "optionalDependencies": {},
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/cytoscape": "^3.21.9",
