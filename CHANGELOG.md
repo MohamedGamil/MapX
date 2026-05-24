@@ -8,7 +8,11 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
-## Changed
+---
+
+## [0.2.7] — 2026-05-24
+
+### Changed
 
 - **Silence prebuild-install Deprecation Warning** — Resolved the NPM deprecation warning for `prebuild-install` (transitive dependency of `better-sqlite3`) by adding a package-level override pointing directly to the tagged GitHub repository release. This preserves SQLite query/transaction integrity and prevents terminal noise during installation.
 - **Fix Bun SQLite Require Compilation Warning** — Replaced direct Node-style `require('bun:sqlite')` with dynamically constructed `createRequire` in `src/core/store-bun.ts`. This silences the compiler warning during ESM builds while preserving native Bun SQLite loader capability.
