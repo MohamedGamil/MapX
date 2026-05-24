@@ -10,6 +10,14 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ---
 
+## [0.2.6] — 2026-05-24
+
+### Changed
+
+- **PULL_REQUEST_TEMPLATE.md Updates** — Updated the checklist to verify NPM dependency lock synchronization via `make version-sync`, local prebuilt packaging builds (e.g. `make package-linux`), and agentic integration rules (`.agents/rules/mapx.md`). Included testing guidelines for both native CLI running and zero-installation `npx` calls.
+
+---
+
 ## [0.2.5] — 2026-05-24
 
 ### Changed
@@ -257,7 +265,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/MohamedGamil/mapx/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/MohamedGamil/mapx/compare/v0.2.2...v0.2.3
