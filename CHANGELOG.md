@@ -12,6 +12,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 - **Silence prebuild-install Deprecation Warning** — Resolved the NPM deprecation warning for `prebuild-install` (transitive dependency of `better-sqlite3`) by adding a package-level override pointing directly to the tagged GitHub repository release. This preserves SQLite query/transaction integrity and prevents terminal noise during installation.
 - **Fix Bun SQLite Require Compilation Warning** — Replaced direct Node-style `require('bun:sqlite')` with dynamically constructed `createRequire` in `src/core/store-bun.ts`. This silences the compiler warning during ESM builds while preserving native Bun SQLite loader capability.
+- **Automatic Database Parent Directory Creation** — Updated the `Store` class constructor to check for and recursively create the target database's parent directory if it does not exist (excluding `:memory:` paths). This prevents `TypeError` crashes when programmatically instantiating the database store in new/nested directory structures.
+- **ESM-Only Programmatic Usage Documentation** — Added an alert to the programmatic usage section of `README.md` clarifying that MapX is ESM-only and requires consumer applications to declare `"type": "module"` in their `package.json` to avoid resolution crashes.
 
 ---
 

@@ -1,6 +1,8 @@
 import type { StoreBackend } from './store-interface.js';
 import { createRequire } from 'node:module';
 import type { MapxGraph } from './graph.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 const dynamicRequire = createRequire(import.meta.url);
 
@@ -150,6 +152,12 @@ export class Store {
   private backend: StoreBackend;
 
   constructor(dbPath: string) {
+    if (dbPath !== ':memory:') {
+      const parentDir = path.dirname(dbPath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+    }
     this.backend = createStoreBackend(dbPath);
     this.backend.exec(INITIAL_SCHEMA);
     this.runMigrations();

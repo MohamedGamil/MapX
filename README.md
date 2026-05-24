@@ -244,7 +244,10 @@ See [docs/mcp-integration.md](docs/mcp-integration.md) for full tool parameters 
 
 ## Programmatic Usage
 
-MapX can be imported programmatically as an ESM library in Node.js or TypeScript projects to execute scans, load code graphs, or build token-optimized LLM context:
+MapX can be imported programmatically as an ESM library in Node.js or TypeScript projects to execute scans, load code graphs, or build token-optimized LLM context.
+
+> [!IMPORTANT]
+> MapX is an **ESM-only** library. When importing MapX programmatically in a Node.js project, make sure to add `"type": "module"` to your consumer application's `package.json` to allow ES module resolution.
 
 ```typescript
 import { Config, Store, Scanner, MapxGraph, ContextBuilder } from '@mgamil/mapx';
