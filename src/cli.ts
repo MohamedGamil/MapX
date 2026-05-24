@@ -59,6 +59,12 @@ interface ProgressRendererCallback {
   stop: (title?: string) => void;
 }
 
+function truncatePath(path: string, maxLength: number): string {
+  if (path.length <= maxLength) return path;
+  if (maxLength <= 3) return '...';
+  return '...' + path.slice(path.length - maxLength + 3);
+}
+
 function createProgressRenderer(): ProgressRendererCallback {
   let lastPhase: ScanProgress['phase'] | null = null;
   let p: any = null;
@@ -88,7 +94,7 @@ function createProgressRenderer(): ProgressRendererCallback {
 
       if (total > 0) {
         p = clack.progress({
-          style: 'block',
+          style: 'heavy',
           max: total,
           size: 40,
         });
@@ -99,40 +105,28 @@ function createProgressRenderer(): ProgressRendererCallback {
       }
     }
 
-    const fileLabel = file ? ` - ${file}` : '';
-    if (total > 0) {
-      if (s) {
-        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
-        s.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
-        s = null;
-      }
-      if (!p) {
-        p = clack.progress({
-          style: 'heavy',
-          max: total,
-          size: 40,
-        });
-        p.start(label.active);
-        lastCurrent = 0;
-      }
+    const cols = process.stdout.columns || 80;
+    let fileLabel = '';
+    if (file) {
+      const prefixText = p 
+        ? `${label.active} (${current}/${total}) - `
+        : `${label.active} (${current}) - `;
+      const clackDecorationLength = p ? 45 : 5;
+      const reserved = prefixText.length + clackDecorationLength;
+      const maxFileLen = Math.max(10, cols - reserved - 3);
+      fileLabel = ` - ${truncatePath(file, maxFileLen)}`;
+    }
+
+    if (p) {
       const diff = current - lastCurrent;
       const msg = `${label.active} (${current}/${total})${fileLabel}`;
       if (diff > 0) {
         p.advance(diff, msg);
+        lastCurrent = current;
       } else {
         p.message(msg);
       }
-      lastCurrent = current;
-    } else {
-      if (p) {
-        const prevLabel = lastPhase ? PHASE_LABELS[lastPhase] : null;
-        p.stop(prevLabel ? `✔ ${prevLabel.done}` : '✔ Done');
-        p = null;
-      }
-      if (!s) {
-        s = clack.spinner();
-        s.start(label.active);
-      }
+    } else if (s) {
       s.message(`${label.active} (${current})${fileLabel}`);
     }
   };
