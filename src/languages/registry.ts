@@ -78,6 +78,27 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     },
     tier: 'built-in',
   },
+  tsx: {
+    name: 'tsx',
+    extensions: ['.tsx'],
+    grammarWasm: 'wasm/tree-sitter-tsx.wasm',
+    queries: {
+      symbols: 'queries/typescript/symbols.scm',
+      references: 'queries/typescript/references.scm',
+    },
+    nodeMappings: {
+      class: 'class_declaration',
+      method: 'method_definition',
+      function: 'function_declaration',
+      interface: 'interface_declaration',
+      constant: 'variable_declarator',
+      enum: 'enum_declaration',
+      property: 'property_identifier',
+      namespace: 'module',
+      trait: '',
+    },
+    tier: 'built-in',
+  },
   python: {
     name: 'python',
     extensions: ['.py'],

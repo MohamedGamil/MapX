@@ -480,13 +480,11 @@ No blockers. All tree-sitter grammars are available. The `GenericWasmParser` alr
 
 ## I18 — React & TSX Parser Fixes
 
-| Field | Value |
-|-------|-------|
-| Status | planned |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-27 |
+| Completed | 2026-05-27 |
 | Features | F34 |
-| Branch | feat/i18-react-tsx-parser-fixes |
+| Branch | `feat/i18-react-tsx-parser-fixes` |
 | PR | — |
 
 ### Scope

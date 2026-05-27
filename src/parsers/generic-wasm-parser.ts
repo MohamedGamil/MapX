@@ -43,18 +43,38 @@ export class GenericWasmParser implements LanguageParser {
       );
 
       let currentScope: string | null = null;
+      const seenNodeIds = new Set<number>();
 
       for (const [captureName, captures] of symCaptures) {
         if (captureName.startsWith('symbol.kind_')) {
           const baseKind = captureName.replace('symbol.kind_', '') as SymbolKind;
           for (const capture of captures) {
+            if (seenNodeIds.has(capture.node.id)) continue;
+            seenNodeIds.add(capture.node.id);
+
             let kind = baseKind;
-            const name = nameByNodeId.get(capture.node.id) || capture.node.text;
+            let name = nameByNodeId.get(capture.node.id);
+            if (!name) {
+              const isDefaultOrAnonymous =
+                capture.node.type === 'arrow_function' ||
+                capture.node.type === 'function_expression' ||
+                (capture.node.type === 'function_declaration' && !capture.node.childForFieldName('name')) ||
+                (capture.node.type === 'class_declaration' && !capture.node.childForFieldName('name')) ||
+                (capture.node.type === 'class' && !capture.node.childForFieldName('name'));
+
+              if (isDefaultOrAnonymous) {
+                const baseName = filePath.split('/').pop() || '';
+                name = baseName.replace(/\.[a-zA-Z0-9]+$/, '') || 'default';
+              } else {
+                name = capture.node.text;
+              }
+            }
+
             const startLine = capture.node.startPosition.row + 1;
             const endLine = capture.node.endPosition.row + 1;
 
             if (this.isContainerKind(kind)) {
-              currentScope = name;
+               currentScope = name;
             }
 
             let extractedScope: string | null = null;

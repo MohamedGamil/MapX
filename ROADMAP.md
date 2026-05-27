@@ -183,8 +183,8 @@
 ## Phase 9 — React & NestJS Deep Integration (I18–I20)
 
 ### I18 · React & TSX Parser Fixes · F34 · Risk: Medium
-- [ ] Fix TSX/TS parser to index default class/function exports and anonymous arrow exports (naming them based on filename)
-- [ ] Fix file discovery/sync issue where `.tsx` files are silently omitted or missing from scans
+- [x] Fix TSX/TS parser to index default class/function exports and anonymous arrow exports (naming them based on filename)
+- [x] Fix file discovery/sync issue where `.tsx` files are silently omitted or missing from scans
 
 ### I19 · JSX Component rendering edges · F35 · Risk: Medium · Requires: I18
 - [ ] Extract JSX/TSX elements (e.g. `<LinksPage />`) to create `render` / `call` type edges from the rendering component/file to the target symbol

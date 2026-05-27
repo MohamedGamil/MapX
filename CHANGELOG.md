@@ -8,6 +8,15 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+
+- **React & TSX Parser Fixes** — Added support for scanning, indexing, and querying TSX files (`.tsx` extensions) using a dedicated TSX tree-sitter parser grammar.
+- **Default and Anonymous Export Parsing** — Enhanced TypeScript and JavaScript symbol extraction to query and match default class/function exports and anonymous arrow functions exported as default.
+- **Anonymous Default Export Auto-naming** — Implemented auto-naming logic in the generic WASM parser to resolve anonymous default exports using the file's base name (e.g., `export default () => {}` in `Home.tsx` is named `Home`).
+- **Duplicate Symbol Node Filtering** — Added a `seenNodeIds` lookup constraint during AST parse collection to prevent duplicate symbols from being extracted when matching multiple query patterns on the same node.
+- **TSX Import Path Resolution** — Updated the path resolution algorithm to recognize `/index.tsx` and `.tsx` candidate targets for relative and absolute imports.
+- **Exclusion Configuration Adjustments** — Extended JS/TS default ignore patterns in the configuration class to automatically exclude `**/*.test.tsx` and `**/*.spec.tsx` files.
+
 ---
 
 ## [0.2.7] — 2026-05-24

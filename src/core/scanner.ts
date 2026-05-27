@@ -922,9 +922,13 @@ export class Scanner {
       normalizedTarget,
       normalizedTarget + '/index.js',
       normalizedTarget + '/index.ts',
+      normalizedTarget + '/index.tsx',
+      normalizedTarget + '/index.jsx',
       normalizedTarget + '/index.vue',
       normalizedTarget + '.js',
       normalizedTarget + '.ts',
+      normalizedTarget + '.tsx',
+      normalizedTarget + '.jsx',
       normalizedTarget + '.vue',
     ];
 

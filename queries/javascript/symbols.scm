@@ -21,3 +21,16 @@
   (variable_declarator
     name: (identifier) @symbol.name
     value: [(arrow_function) (function_expression)])) @symbol.kind_function
+
+(export_statement
+  [
+    (function_declaration)
+    (function_expression)
+    (arrow_function)
+  ] @symbol.kind_function)
+
+(export_statement
+  [
+    (class_declaration)
+    (class)
+  ] @symbol.kind_class)

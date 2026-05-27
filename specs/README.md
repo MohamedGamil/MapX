@@ -124,7 +124,7 @@ specs/
 | F31 | Cluster-aware export flags (`--cluster`, `--depth`) | `done` | I16 | [F31](features/F31-cluster-export-flags.md) |
 | F32 | `mapx workspaces discover` CLI subcommand | `done` | I16 | [F32](features/F32-workspaces-discover.md) |
 | F33 | Comprehensive language syntax coverage (20 languages) | `done` | I17 | [F33](features/F33-language-syntax-coverage.md) |
-| F34 | React & TSX parser fixes | `planned` | I18 | [F34](features/F34-react-tsx-parser-fixes.md) |
+| F34 | React & TSX parser fixes | `done` | I18 | [F34](features/F34-react-tsx-parser-fixes.md) |
 | F35 | JSX component rendering edges | `planned` | I19 | [F35](features/F35-jsx-render-edges.md) |
 | F36 | NestJS decorator and DI parsing | `planned` | I20 | [F36](features/F36-nestjs-decorators.md) |
 | F37 | Graph resolution & noise reduction | `planned` | I21 | [F37](features/F37-graph-resolution-filtering.md) |
@@ -156,7 +156,7 @@ specs/
 | [I15](iterations/I15.md) | Bundled web dashboard (`mapx ui`) | `done` | F28 |
 | [I16](iterations/I16.md) | Audit compliance fixes | `done` | F29, F30, F31, F32 |
 | [I17](iterations/I17.md) | Comprehensive language syntax coverage | `done` | F33 |
-| [I18](iterations/I18.md) | React & TSX parser fixes | `planned` | F34 |
+| [I18](iterations/I18.md) | React & TSX parser fixes | `done` | F34 |
 | [I19](iterations/I19.md) | JSX component rendering edges | `planned` | F35 |
 | [I20](iterations/I20.md) | NestJS routes, hooks, & DI parsing | `planned` | F36 |
 | [I21](iterations/I21.md) | Graph resolution & noise reduction | `planned` | F37 |
