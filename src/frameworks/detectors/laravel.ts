@@ -1,7 +1,7 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
-import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
+import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../../types.js';
 
 interface ChainedCall {
   name: string;
@@ -13,6 +13,353 @@ const controllerCache = new Map<string, {
   content: string,
   middlewares: { middleware: string, only: string[], except: string[] }[]
 }>();
+
+interface LaravelWorkspaceContext {
+  kernelMiddlewares: {
+    groups: Record<string, string[]>;
+    aliases: Record<string, string>;
+  };
+  routeServiceProvider: {
+    routes: Record<string, {
+      prefix: string;
+      namespace: string;
+      middlewares: string[];
+    }>;
+  };
+  packageRoutes: Record<string, {
+    prefix: string;
+    namespace: string;
+    middlewares: string[];
+    providerPath: string;
+  }>;
+  initialized: boolean;
+}
+
+const workspaceInitializationPromises = new Map<string, Promise<LaravelWorkspaceContext>>();
+
+function ensureWorkspaceInitialized(workspaceRoot: string, ctx: ScanContext): Promise<LaravelWorkspaceContext> {
+  let promise = workspaceInitializationPromises.get(workspaceRoot);
+  if (!promise) {
+    promise = (async () => {
+      const wctx: LaravelWorkspaceContext = {
+        kernelMiddlewares: {
+          groups: {},
+          aliases: {}
+        },
+        routeServiceProvider: {
+          routes: {}
+        },
+        packageRoutes: {},
+        initialized: true
+      };
+      
+      // 1. Parse Kernel.php if it exists
+      const kernelPath = join(workspaceRoot, 'app/Http/Kernel.php');
+      if (existsSync(kernelPath)) {
+        try {
+          const content = await readFile(kernelPath, 'utf-8');
+          parseKernel(content, wctx);
+        } catch (e) {
+          // Ignored
+        }
+      }
+
+      // 2. Parse RouteServiceProvider.php if it exists
+      const rspPath = 'app/Providers/RouteServiceProvider.php';
+      if (existsSync(join(workspaceRoot, rspPath))) {
+        try {
+          const content = await readFile(join(workspaceRoot, rspPath), 'utf-8');
+          parseRouteServiceProvider(content, rspPath, wctx);
+        } catch (e) {
+          // Ignored
+        }
+      }
+
+      // 3. Scan for other service providers
+      try {
+        await scanPackageProviders(workspaceRoot, wctx);
+      } catch (e) {
+        // Ignored
+      }
+
+      return wctx;
+    })();
+    workspaceInitializationPromises.set(workspaceRoot, promise);
+  }
+  return promise;
+}
+
+function parseKernel(content: string, wctx: LaravelWorkspaceContext) {
+  // Extract $middlewareGroups block
+  const groupsMatch = content.match(/\$middlewareGroups\s*=\s*/);
+  if (groupsMatch && groupsMatch.index !== undefined) {
+    const afterGroups = content.substring(groupsMatch.index + groupsMatch[0].length);
+    const bracket = getArrayBlockContent(afterGroups);
+    if (bracket) {
+      const groupRegex = /['"]([^'"]+)['"]\s*=>\s*/g;
+      let gMatch;
+      while ((gMatch = groupRegex.exec(bracket.content)) !== null) {
+        const groupName = gMatch[1];
+        const subContent = bracket.content.substring(gMatch.index + gMatch[0].length);
+        const subBracket = getArrayBlockContent(subContent);
+        if (subBracket) {
+          const itemRegex = /['"]([^'"]+)['"]|([a-zA-Z0-9_\\]+)::class/g;
+          const items: string[] = [];
+          let itemMatch;
+          while ((itemMatch = itemRegex.exec(subBracket.content)) !== null) {
+            let item = (itemMatch[1] || itemMatch[2] || '').trim();
+            if (item && item !== 'class' && item !== 'protected' && item !== 'public') {
+              if (item.startsWith('\\')) item = item.substring(1);
+              items.push(item);
+            }
+          }
+          wctx.kernelMiddlewares.groups[groupName] = items;
+        }
+      }
+    }
+  }
+
+  // Extract $routeMiddleware or $middlewareAliases block
+  const routeMwMatch = content.match(/\$(?:routeMiddleware|middlewareAliases)\s*=\s*/);
+  if (routeMwMatch && routeMwMatch.index !== undefined) {
+    const afterMw = content.substring(routeMwMatch.index + routeMwMatch[0].length);
+    const bracket = getArrayBlockContent(afterMw);
+    if (bracket) {
+      const mappingRegex = /['"]([^'"]+)['"]\s*=>\s*['"]?([a-zA-Z0-9_\\]+)(?:::class)?['"]?/g;
+      let mMatch;
+      while ((mMatch = mappingRegex.exec(bracket.content)) !== null) {
+        const alias = mMatch[1];
+        let fqn = mMatch[2];
+        if (fqn && fqn !== 'class') {
+          if (fqn.startsWith('\\')) fqn = fqn.substring(1);
+          wctx.kernelMiddlewares.aliases[alias] = fqn;
+        }
+      }
+    }
+  }
+}
+
+function getArrayBlockContent(str: string): { content: string, endIndex: number } | null {
+  const trimmed = str.trimStart();
+  const startOffset = str.length - trimmed.length;
+  if (trimmed.startsWith('[')) {
+    const res = getBracketedContent(trimmed, 0);
+    if (res) {
+      return { content: res.content, endIndex: res.endIndex + startOffset };
+    }
+  } else if (trimmed.startsWith('array(')) {
+    const res = getParenthesizedContent(trimmed, 5);
+    if (res) {
+      return { content: res.content, endIndex: res.endIndex + startOffset };
+    }
+  }
+  return null;
+}
+
+function resolveRoutePath(arg: string, providerPath: string): string | null {
+  const clean = arg.trim();
+
+  const basePathMatch = clean.match(/base_path\s*\(\s*['"]([^'"]+)['"]\s*\)/);
+  if (basePathMatch) {
+    return basePathMatch[1].replace(/^\/|\/$/g, '').replace(/\\/g, '/');
+  }
+
+  if (clean.includes('__DIR__')) {
+    const relativePartMatch = clean.match(/['"]([^'"]+)['"]/);
+    if (relativePartMatch) {
+      const relPath = relativePartMatch[1];
+      const providerDir = providerPath.includes('/') ? providerPath.substring(0, providerPath.lastIndexOf('/')) : '';
+      const resolved = join(providerDir, relPath).replace(/\\/g, '/');
+      return resolved;
+    }
+  }
+
+  const stringMatch = clean.match(/^['"]([^'"]+)['"]$/);
+  if (stringMatch) {
+    return stringMatch[1].replace(/^\/|\/$/g, '').replace(/\\/g, '/');
+  }
+
+  const phpMatch = clean.match(/['"]?([a-zA-Z0-9_\-/]+\.php)['"]?/);
+  if (phpMatch) {
+    return phpMatch[1].replace(/^\/|\/$/g, '').replace(/\\/g, '/');
+  }
+
+  return null;
+}
+
+function parseRouteServiceProvider(content: string, providerPath: string, wctx: LaravelWorkspaceContext) {
+  const namespaceVarMatch = content.match(/(?:protected|public|private)\s+\$namespace\s*=\s*['"]([^'"]+)['"]/);
+  const classNamespace = namespaceVarMatch ? namespaceVarMatch[1] : 'App\\Http\\Controllers';
+
+  let index = 0;
+  while (true) {
+    const start = content.indexOf('Route::', index);
+    if (start === -1) break;
+
+    const parsed = parseRouteChain(content, start);
+    if (!parsed) {
+      index = start + 7;
+      continue;
+    }
+
+    index = parsed.endIndex;
+
+    const groupCall = parsed.calls.find(c => c.name === 'group');
+    if (groupCall && groupCall.args) {
+      const routePathArg = groupCall.args;
+      const relativeRoutePath = resolveRoutePath(routePathArg, providerPath);
+      if (relativeRoutePath) {
+        let prefix = '';
+        let namespace = classNamespace;
+        const middlewares: string[] = [];
+
+        for (const call of parsed.calls) {
+          if (call.name === 'prefix') {
+            const args = parseArgs(call.args);
+            if (args[0]) prefix = (prefix ? `${prefix}/` : '') + args[0];
+          } else if (call.name === 'namespace') {
+            const args = parseArgs(call.args);
+            if (args[0]) {
+              const val = args[0];
+              if (val === '$this->namespace') {
+                namespace = classNamespace;
+              } else {
+                namespace = val;
+              }
+            }
+          } else if (call.name === 'middleware') {
+            if (call.args.trim().startsWith('[')) {
+              const matches = call.args.match(/['"]([^'"]+)['"]/g) || [];
+              middlewares.push(...matches.map(m => m.replace(/['"]/g, '')));
+            } else {
+              const args = parseArgs(call.args);
+              if (args[0]) middlewares.push(args[0]);
+            }
+          } else if (call.name === 'group' && (call.args.trim().startsWith('[') || call.args.trim().startsWith('array('))) {
+            const groupAttrs = parseGroupAttributes(call.args);
+            if (groupAttrs.prefixes[0]) {
+              prefix = (prefix ? `${prefix}/` : '') + groupAttrs.prefixes[0];
+            }
+            if (groupAttrs.namespaces[0]) {
+              namespace = groupAttrs.namespaces[0];
+            }
+            middlewares.push(...groupAttrs.middlewares);
+          }
+        }
+
+        wctx.routeServiceProvider.routes[relativeRoutePath] = {
+          prefix,
+          namespace,
+          middlewares
+        };
+      }
+    }
+  }
+}
+
+async function scanPackageProviders(dir: string, wctx: LaravelWorkspaceContext, currentRelativeDir: string = ''): Promise<void> {
+  const absoluteDir = currentRelativeDir ? join(dir, currentRelativeDir) : dir;
+  if (!existsSync(absoluteDir)) return;
+
+  const entries = await readdir(absoluteDir, { withFileTypes: true });
+  const skipDirs = new Set(['vendor', 'node_modules', '.git', '.mapx', 'storage', 'bootstrap', 'public', 'tests', 'resources', 'database', 'config']);
+
+  for (const entry of entries) {
+    const relPath = currentRelativeDir ? `${currentRelativeDir}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      if (skipDirs.has(entry.name.toLowerCase())) {
+        continue;
+      }
+      await scanPackageProviders(dir, wctx, relPath);
+    } else if (entry.isFile() && entry.name.endsWith('ServiceProvider.php')) {
+      const filePath = relPath.replace(/\\/g, '/');
+      const content = await readFile(join(dir, relPath), 'utf-8');
+      
+      const loadRoutesRegex = /\$this\s*->\s*loadRoutesFrom\s*\(\s*(['"]([^'"]+)['"]|[^)]+)\s*\)/g;
+      let match;
+      while ((match = loadRoutesRegex.exec(content)) !== null) {
+        const routePathArg = match[1];
+        const resolvedRoute = resolveRoutePath(routePathArg, filePath);
+        if (resolvedRoute) {
+          wctx.packageRoutes[resolvedRoute] = {
+            prefix: '',
+            namespace: '',
+            middlewares: [],
+            providerPath: filePath
+          };
+        }
+      }
+    }
+  }
+}
+
+function getInitialGroupConfig(normalizedPath: string, wctx: LaravelWorkspaceContext): { prefix: string, namespace: string, middlewares: string[] } {
+  if (wctx.routeServiceProvider.routes[normalizedPath]) {
+    const config = wctx.routeServiceProvider.routes[normalizedPath];
+    return {
+      prefix: config.prefix,
+      namespace: config.namespace,
+      middlewares: [...config.middlewares]
+    };
+  }
+
+  if (wctx.packageRoutes[normalizedPath]) {
+    const config = wctx.packageRoutes[normalizedPath];
+    return {
+      prefix: config.prefix,
+      namespace: config.namespace,
+      middlewares: [...config.middlewares]
+    };
+  }
+
+  if (normalizedPath === 'routes/web.php' || normalizedPath.endsWith('/routes/web.php')) {
+    return {
+      prefix: '',
+      namespace: 'App\\Http\\Controllers',
+      middlewares: ['web']
+    };
+  }
+
+  if (normalizedPath === 'routes/api.php' || normalizedPath.endsWith('/routes/api.php')) {
+    return {
+      prefix: 'api',
+      namespace: 'App\\Http\\Controllers',
+      middlewares: ['api']
+    };
+  }
+
+  return {
+    prefix: '',
+    namespace: 'App\\Http\\Controllers',
+    middlewares: []
+  };
+}
+
+async function resolveRouteMiddlewares(routes: RouteBinding[], wctx: LaravelWorkspaceContext) {
+  for (const r of routes) {
+    const mws = r.middlewares || r.metadata?.middlewares;
+    if (!mws) continue;
+
+    const expanded: string[] = [];
+    for (const mw of mws) {
+      if (wctx.kernelMiddlewares.groups[mw]) {
+        for (const subMw of wctx.kernelMiddlewares.groups[mw]) {
+          const resolved = wctx.kernelMiddlewares.aliases[subMw] || subMw;
+          expanded.push(resolved);
+        }
+      } else {
+        const resolved = wctx.kernelMiddlewares.aliases[mw] || mw;
+        expanded.push(resolved);
+      }
+    }
+
+    const uniqueMws = Array.from(new Set(expanded));
+    r.middlewares = uniqueMws;
+    if (r.metadata) {
+      r.metadata.middlewares = uniqueMws;
+    }
+  }
+}
 
 export class LaravelDetector implements FrameworkDetector {
   readonly name = 'laravel';
@@ -39,14 +386,17 @@ export class LaravelDetector implements FrameworkDetector {
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {
+    const wctx = await ensureWorkspaceInitialized(ctx.workspaceRoot, ctx);
     const normalizedPath = filePath.replace(/\\/g, '/');
     const lowerPath = normalizedPath.toLowerCase();
     
     // Support modular structures (e.g. Modules/Blog/Routes/web.php)
+    const isPackageRoute = wctx.packageRoutes[normalizedPath] !== undefined;
     const isRouteFile = lowerPath.includes('/routes/') ||
                         lowerPath.startsWith('routes/') ||
                         lowerPath.endsWith('/routes.php') ||
-                        lowerPath.includes('/routes.php');
+                        lowerPath.includes('/routes.php') ||
+                        isPackageRoute;
 
     const hasRouteAttributes = content.includes('RouteAttributes') ||
       content.includes('#[Route') ||
@@ -68,13 +418,20 @@ export class LaravelDetector implements FrameworkDetector {
     if (isRouteFile) {
       const routes: RouteBinding[] = [];
       let braceDepth = 0;
+      const initialConfig = getInitialGroupConfig(normalizedPath, wctx);
       const groupStack: { 
         prefixes: string[], 
         middlewares: string[], 
         namespaces: string[], 
         controller: string | null, 
         startDepth: number 
-      }[] = [];
+      }[] = [{
+        prefixes: initialConfig.prefix ? [initialConfig.prefix] : [],
+        middlewares: initialConfig.middlewares,
+        namespaces: initialConfig.namespace ? [initialConfig.namespace] : [],
+        controller: null,
+        startDepth: 0
+      }];
       
       const useImports = parseUseImports(content);
 
@@ -106,6 +463,7 @@ export class LaravelDetector implements FrameworkDetector {
 
       // Enrich routes with parameter details and constructor-defined middlewares
       await Promise.all(routes.map(r => enrichRouteFromController(r)));
+      await resolveRouteMiddlewares(routes, wctx);
       return routes;
     }
 
@@ -238,7 +596,76 @@ export class LaravelDetector implements FrameworkDetector {
     }
 
     await Promise.all(routes.map(r => enrichRouteFromController(r)));
+    await resolveRouteMiddlewares(routes, wctx);
     return routes;
+  }
+
+  async extractHooks(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]> {
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    const lowerPath = normalizedPath.toLowerCase();
+    const hooks: HookBinding[] = [];
+
+    // 1. Kernel.php file (Middlewares)
+    if (lowerPath.endsWith('app/http/kernel.php') || normalizedPath.endsWith('Kernel.php')) {
+      const wctx = await ensureWorkspaceInitialized(ctx.workspaceRoot, ctx);
+      
+      // Add all aliases
+      for (const [alias, fqn] of Object.entries(wctx.kernelMiddlewares.aliases)) {
+        const resolvedPath = ctx.resolveSymbolToFile(fqn);
+        hooks.push({
+          framework: this.name,
+          hookName: alias,
+          hookType: 'middleware',
+          handlerFile: resolvedPath || filePath,
+          handlerSymbol: fqn,
+          metadata: {
+            confidence: 'declared',
+            middlewareType: 'alias'
+          }
+        });
+      }
+
+      // Add all groups
+      for (const [groupName, mws] of Object.entries(wctx.kernelMiddlewares.groups)) {
+        for (const mw of mws) {
+          const resolvedPath = ctx.resolveSymbolToFile(mw);
+          hooks.push({
+            framework: this.name,
+            hookName: groupName,
+            hookType: 'middleware',
+            handlerFile: resolvedPath || filePath,
+            handlerSymbol: mw,
+            metadata: {
+              confidence: 'declared',
+              middlewareType: 'group_member'
+            }
+          });
+        }
+      }
+    }
+
+    // 2. Service Provider files
+    if (normalizedPath.endsWith('ServiceProvider.php')) {
+      const namespaceMatch = content.match(/namespace\s+([^;]+);/);
+      const namespace = namespaceMatch ? namespaceMatch[1].trim() : '';
+      const classMatch = content.match(/class\s+(\w+)/);
+      if (classMatch) {
+        const className = classMatch[1];
+        const classFqn = namespace ? `${namespace}\\${className}` : className;
+        hooks.push({
+          framework: this.name,
+          hookName: className,
+          hookType: 'service_provider',
+          handlerFile: filePath,
+          handlerSymbol: classFqn,
+          metadata: {
+            confidence: 'declared'
+          }
+        });
+      }
+    }
+
+    return hooks;
   }
 }
 
