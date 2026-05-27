@@ -10,11 +10,13 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Added
 
+- **Automatic MCP Instructions Generation** — Integrated `instructions.md` (`.agents/rules/instructions.md`) into the central templates registry, so that it is automatically generated and updated during `mapx init`, `mapx agents generate`, and `mapx agents update` setups (while remaining hidden from CLI multiselect provider prompts).
 - **Detailed MCP Guide** — Created `.agents/rules/instructions.md` containing a comprehensive usage guide for MapX MCP server tools, schemas, query parameters, and best practices.
 - **LLM Exporter File Summaries** — Integrated heuristic summaries (class/method/function counts and dominant symbol types) for file nodes in the `llm` export format.
 
 ### Changed
 
+- **Cross-Language Reference Prevention** — Constrained global symbol resolution to respect language compatibility groups. References from a source file (e.g. a PHP WordPress plugin) can no longer resolve to symbols in incompatible language files (e.g. TypeScript), preventing false edges.
 - **Search Wildcard & Case-Insensitivity** — Modified the symbol search command and MCP tool to support wildcard `*` and empty string `""` queries to list all symbols under a file path constraint. Standardized `kind` search filters to run case-insensitively.
 - **Logical Cluster Grouping Boost** — Refined the `mapx_context` token-budget relevance scoring heuristics to give an extra boost (+150 points) to files sharing logical clusters with the matched seed files.
 - **Centralized try/catch-Aware Impact Analysis** — Extracted and centralized BFS traversal and risk categorization logic to a new reusable `ImpactAnalyzer` module. Categorized callers at depth 2+ as `MEDIUM` or `LOW` risk, and calling sites inside test files or wrapped in try/catch blocks as `LOW` risk.

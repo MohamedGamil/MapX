@@ -463,3 +463,20 @@ export function getLanguageNames(): string[] {
 export function isBuiltInLanguage(name: string): boolean {
   return name in BUILTIN_LANGUAGES;
 }
+
+export function areLanguagesCompatible(lang1: string, lang2: string): boolean {
+  const l1 = lang1.toLowerCase();
+  const l2 = lang2.toLowerCase();
+  if (l1 === l2) return true;
+
+  const jsTsGroup = new Set(['javascript', 'typescript', 'tsx', 'vue', 'svelte', 'astro']);
+  if (jsTsGroup.has(l1) && jsTsGroup.has(l2)) return true;
+
+  const cppGroup = new Set(['c', 'cpp', 'c++', 'objective-c', 'objective-cpp']);
+  if (cppGroup.has(l1) && cppGroup.has(l2)) return true;
+
+  const jvmGroup = new Set(['java', 'kotlin', 'scala', 'groovy']);
+  if (jvmGroup.has(l1) && jvmGroup.has(l2)) return true;
+
+  return false;
+}

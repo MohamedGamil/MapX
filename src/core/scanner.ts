@@ -8,7 +8,7 @@ import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
-import { getLanguageForFile } from '../languages/registry.js';
+import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import { minimatch } from 'minimatch';
@@ -852,7 +852,7 @@ export class Scanner {
       } else if (ref.referenceType === 'import') {
         targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
       } else {
-        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap);
+        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath);
       }
 
       if (targetFile) {
@@ -943,9 +943,29 @@ export class Scanner {
     return null;
   }
 
-  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>): string | null {
+  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
+
+    let sourceLang: string | null = null;
+    if (sourcePath) {
+      const langDef = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages());
+      if (langDef) {
+        sourceLang = langDef.name;
+      }
+    }
+
+    const filterMatches = (matches: Record<string, unknown>[]): Record<string, unknown>[] => {
+      if (!sourceLang) return matches;
+      return matches.filter(m => {
+        const targetPath = m.file_path as string;
+        const targetLangDef = getLanguageForFile(targetPath, this.config.getResolvedUserLanguages());
+        const targetLang = targetLangDef ? targetLangDef.name : '';
+        return areLanguagesCompatible(sourceLang!, targetLang);
+      });
+    };
+
     let matches = this.store.searchSymbols(symbolName);
+    matches = filterMatches(matches);
     if (matches.length > 0) {
       const exactMatch = matches.find(m => m.name === symbolName);
       if (exactMatch) return exactMatch.file_path as string;
@@ -955,6 +975,7 @@ export class Scanner {
       const parts = symbolName.split('\\');
       const shortName = parts[parts.length - 1];
       matches = this.store.searchSymbols(shortName);
+      matches = filterMatches(matches);
       if (matches.length > 0) {
         const exactMatch = matches.find(m => m.name === shortName);
         if (exactMatch) return exactMatch.file_path as string;
@@ -1033,7 +1054,14 @@ export class Scanner {
           const absPath = resolve(workspaceRoot, relPath);
           const content = await readFile(absPath, 'utf-8');
 
-          const routes = await detector.extractRoutes(relPath, content, ctx);
+          const localCtx: ScanContext = {
+            ...ctx,
+            resolveSymbolToFile: (symName: string) => {
+              return this.resolveSymbolToFile(symName, this.workspaceFileMap, relPath);
+            }
+          };
+
+          const routes = await detector.extractRoutes(relPath, content, localCtx);
           for (const route of routes) {
             let conf = 1.0;
             const routeConf = route.metadata?.confidence ?? (route as any).confidence;
@@ -1092,7 +1120,7 @@ export class Scanner {
           }
 
           if (detector.extractHooks) {
-            const hooks = await detector.extractHooks(relPath, content, ctx);
+            const hooks = await detector.extractHooks(relPath, content, localCtx);
             for (const hook of hooks) {
               let conf = 1.0;
               const hookConf = hook.metadata?.confidence ?? (hook as any).confidence;

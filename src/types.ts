@@ -192,7 +192,7 @@ export interface RepoSummary {
 export interface ScanContext {
   workspaceRoot: string;
   repoName: string;
-  resolveSymbolToFile: (symbolName: string) => string | null;
+  resolveSymbolToFile: (symbolName: string, sourcePath?: string) => string | null;
 }
 
 export interface RouteBinding {
