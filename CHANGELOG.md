@@ -10,7 +10,12 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Added
 
+- **Graph Resolution Blacklist** — Prevented standard built-in JavaScript/TypeScript globals (`Date`, `Error`, `Map`, `Set`, `Promise`, `Object`, `Array`, `String`, `Number`, `Boolean`, `Function`, `RegExp`, `Symbol`, `JSON`, `Math`, `console`, `Console`, etc.) from incorrectly resolving to user-defined symbols during database reference resolution.
+- **Import Caller Filtering** — Excluded named imports and require declarations (`import` and `require` edge types) from the standard `callers` query outputs, eliminating `<top-level>` import statement noise in call graphs.
+- **Enhanced Change Impact Risk Scoring** — Upgraded `mapx impact` and `mapx_impact` risk grading. Calls from test files (`.test.ts`, `.spec.ts`, etc.) are now classified as `LOW` risk, calls wrapped inside `try`/`catch` blocks are downgraded by one risk level, and callers at depth 2+ or inside test modules are classified as `MEDIUM` or `LOW` risk.
+- **Filesystem Staleness Detection** — Added file modification time checking to output a staleness warning header (`⚠️ Warning: Graph index may be stale...`) in all CLI and MCP query tools when modifications occur on disk without running `mapx update`.
 - **NestJS Decorator Routing** — Implemented decorator-based route extraction from class-level `@Controller` and method-level route handler decorators (`@Get`, `@Post`, `@Patch`, `@Delete`, etc.) supporting both string arguments (including template literals) and object configurations (e.g. `@Controller({ path: 'prefix' })`).
+
 - **NestJS GraphQL & WebSockets Integration** — Added resolver extraction from `@Resolver`, `@Query`, `@Mutation`, and `@Subscription` decorators, WebSocket event subscriptions from `@SubscribeMessage`, and microservice handlers from `@MessagePattern` and `@EventPattern` using a robust, comment-resilient method name discovery helper.
 - **NestJS Lifecycle & Custom Interfaces** — Cataloged class definitions implementing custom interfaces such as lifecycle hooks (`OnModuleInit`, `OnApplicationBootstrap`, etc.) and guard/pipe/interceptor definitions (`CanActivate`, `PipeTransform`, `NestInterceptor`) as queryable hooks.
 - **NestJS Constructor Dependency Injection** — Extended TS/TSX tree-sitter references queries to capture type annotations in constructor parameters (e.g. `constructor(private readonly service: Service)`) and map them as `param_type` dependency injection edges in the graph.

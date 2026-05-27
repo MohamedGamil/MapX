@@ -16,6 +16,7 @@ import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedS
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
+import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -842,6 +843,8 @@ export class Scanner {
 
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
+      const isJsOrTs = /\.(js|ts|jsx|tsx|vue)$/.test(sourcePath);
+      if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       let targetFile: string | null = null;
 
       if (ref.referenceType === 'require') {

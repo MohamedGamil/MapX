@@ -553,11 +553,11 @@ Independent of frontend React work, but requires I17 syntax coverage foundations
 
 | Field | Value |
 |-------|-------|
-| Status | planned |
-| Started | — |
-| Completed | — |
+| Status | `done` |
+| Started | 2026-05-27 |
+| Completed | 2026-05-27 |
 | Features | F37 |
-| Branch | feat/i21-graph-resolution-noise |
+| Branch | `feat/i21-graph-resolution-noise` |
 | PR | — |
 
 ### Scope
@@ -575,14 +575,14 @@ Improves reliability and clarity of `mapx callers`, `mapx trace`, and `mapx impa
 ---
 
 ## I22 — CLI/MCP Search & Context Usability
-
+ 
 | Field | Value |
 |-------|-------|
-| Status | planned |
-| Started | — |
+| Status | `in-progress` |
+| Started | 2026-05-27 |
 | Completed | — |
 | Features | F38 |
-| Branch | feat/i22-mcp-usability |
+| Branch | `feat/i22-mcp-usability` |
 | PR | — |
 
 ### Scope

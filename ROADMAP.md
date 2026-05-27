@@ -200,10 +200,10 @@
 ## Phase 10 — Graph Accuracy & MCP Usability (I21–I22)
 
 ### I21 · Graph Resolution & Noise Reduction · F37 · Risk: Medium
-- [ ] Exclude built-in JS/TS globals (`Date`, `Error`, `Map`, `Set`, `Promise`, `Object`, etc.) from resolving to user-defined symbols during edge resolution
-- [ ] Filter out or distinctively flag import-level `<top-level>` references to suppress caller noise in `mapx_callers`
-- [ ] Enhance `mapx_impact` risk analysis with calling depth-based risk levels (HIGH/MEDIUM/LOW), test file flags, and try/catch checks
-- [ ] Introduce a filesystem staleness warning when queries are run after modifications without syncing
+- [x] Exclude built-in JS/TS globals (`Date`, `Error`, `Map`, `Set`, `Promise`, `Object`, etc.) from resolving to user-defined symbols during edge resolution
+- [x] Filter out or distinctively flag import-level `<top-level>` references to suppress caller noise in `mapx_callers`
+- [x] Enhance `mapx_impact` risk analysis with calling depth-based risk levels (HIGH/MEDIUM/LOW), test file flags, and try/catch checks
+- [x] Introduce a filesystem staleness warning when queries are run after modifications without syncing
 
 ### I22 · CLI/MCP Search & Context Usability · F38 · Risk: Low
 - [ ] Support wildcard `*` or empty string in `mapx_search` to list all symbols when a file filter is provided

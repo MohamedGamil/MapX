@@ -713,7 +713,7 @@ export class Store {
 
     const results: Record<string, any>[] = [];
     for (const sym of symbols) {
-      let sql = 'SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?)';
+      let sql = "SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?) AND edge_type NOT IN ('import', 'require')";
       const params = [sym.file_path, sym.name, `${sym.scope}::${sym.name}`];
       if (repo) {
         sql += ' AND repo = ?';

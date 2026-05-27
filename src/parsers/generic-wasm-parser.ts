@@ -226,6 +226,7 @@ export class GenericWasmParser implements LanguageParser {
   protected mapRefType(refType: string): ExtractedReference['referenceType'] {
     const map: Record<string, ExtractedReference['referenceType']> = {
       import: 'import',
+      import_name: 'import',
       require: 'require',
       extends: 'extends',
       implements: 'implements',
