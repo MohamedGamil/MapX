@@ -277,31 +277,31 @@ build-linux: wasm ## Build for linux-x64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-linux-x64 ./src/main.ts --outfile dist/mapx-linux-x64
+	bun build --compile --minify --target=bun-linux-x64 ./src/main.ts --outfile dist/mapx-linux-x64
 
 build-linux-arm: wasm ## Build for linux-arm64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-linux-arm64 ./src/main.ts --outfile dist/mapx-linux-arm64
+	bun build --compile --minify --target=bun-linux-arm64 ./src/main.ts --outfile dist/mapx-linux-arm64
 
 build-mac-arm: wasm ## Build for macOS ARM (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-darwin-arm64 ./src/main.ts --outfile dist/mapx-darwin-arm64
+	bun build --compile --minify --target=bun-darwin-arm64 ./src/main.ts --outfile dist/mapx-darwin-arm64
 
 build-mac-x64: wasm ## Build for macOS x64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-darwin-x64 ./src/main.ts --outfile dist/mapx-darwin-x64
+	bun build --compile --minify --target=bun-darwin-x64 ./src/main.ts --outfile dist/mapx-darwin-x64
 
 build-win: wasm ## Build for Windows x64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-windows-x64 ./src/main.ts --outfile dist/mapx-windows-x64.exe
+	bun build --compile --minify --target=bun-windows-x64 ./src/main.ts --outfile dist/mapx-windows-x64.exe
 
 build: build-linux ## Build for current platform (linux-x64 default)
 

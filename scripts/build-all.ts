@@ -23,7 +23,7 @@ for (const { target, outfile } of targets) {
   try {
     console.log(`  Building ${outfile}...`);
     execSync(
-      `bun build --compile --minify --bytecode --target=${target} ./src/main.ts --outfile ${outfile}`,
+      `bun build --compile --minify --target=${target} ./src/main.ts --outfile ${outfile}`,
       { cwd: PROJECT_ROOT, stdio: 'pipe' }
     );
     console.log(`  ✓ ${outfile}`);

@@ -46,7 +46,7 @@ build_binary() {
     local outfile="$2"
 
     info "Building $outfile..."
-    if bun build --compile --minify --bytecode \
+    if bun build --compile --minify \
         --target="$target" \
         "$PROJECT_ROOT/src/main.ts" \
         --outfile "$PROJECT_ROOT/dist/$outfile" 2>/dev/null; then

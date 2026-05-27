@@ -144,7 +144,7 @@ SH_EOF
     _sed_inplace "s/@@VERSION@@/${version}/g; s/@@PLATFORM@@/${platform}/g" "$output"
 
     # Append base64-encoded archive after the __PAYLOAD__ marker
-    base64 "$archive" >> "$output"
+    cat "$archive" | base64 >> "$output"
 
     chmod +x "$output"
     ok "Created $(basename "$output") ($(du -h "$output" | cut -f1))"
@@ -225,7 +225,7 @@ PS1_PART1
 
     # Append base64-encoded zip.
     # PowerShell's [Convert]::FromBase64String() handles multi-line (wrapped) base64.
-    base64 "$archive" >> "$output"
+    cat "$archive" | base64 >> "$output"
 
     # Part 2: close the payload here-string, then extraction + delegation logic.
     # NOTE: the closing '@  must be at column 0 — do not indent it.
