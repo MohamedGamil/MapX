@@ -1509,10 +1509,10 @@ async function loadGraph() {
         focusSearchContainer.style.display = mode === 'focus' ? 'inline-flex' : 'none';
       }
 
-      const groupingSelect = document.getElementById('select-grouping-strategy');
+      const groupingSelect = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
       if (groupingSelect) {
-        // Grouping only relevant in proximity mode
-        (groupingSelect as HTMLElement).style.display = mode === 'proximity' ? 'inline-flex' : 'none';
+        // Enabled only in proximity mode at root level (no cluster/directory drilldown)
+        groupingSelect.disabled = !(mode === 'proximity' && !activeClusterId);
       }
 
       const clustersBtn = document.getElementById('btn-toggle-clusters');
@@ -1548,6 +1548,7 @@ async function loadGraph() {
     // Breadcrumbs root button click listener
     document.getElementById('btn-breadcrumb-root')?.addEventListener('click', () => {
       activeClusterId = null;
+      updateToolbarVisibility(currentGraphMode);
       const breadcrumb = document.getElementById('cluster-breadcrumb');
       if (breadcrumb) {
         breadcrumb.style.display = 'none';
@@ -1888,6 +1889,7 @@ async function loadGraph() {
       // If tapping a collapsed cluster-group node, enter drill-down view
       if (data.type === 'cluster-group') {
         activeClusterId = data.id;
+        updateToolbarVisibility(currentGraphMode);
         const breadcrumb = document.getElementById('cluster-breadcrumb');
         if (breadcrumb) {
           breadcrumb.style.display = 'inline-flex';
@@ -2820,8 +2822,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update toolbar visibility and graph
     const focusPanel = document.getElementById('focus-search-container');
     if (focusPanel) focusPanel.style.display = 'none';
-    const groupingEl = document.getElementById('select-grouping-strategy');
-    if (groupingEl) (groupingEl as HTMLElement).style.display = 'inline-flex';
+    const groupingEl = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
+    if (groupingEl) groupingEl.disabled = false;
     const clustersBtn = document.getElementById('btn-toggle-clusters');
     if (clustersBtn) clustersBtn.style.display = 'none';
     const breadcrumb = document.getElementById('cluster-breadcrumb');

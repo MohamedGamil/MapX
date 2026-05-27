@@ -343,6 +343,12 @@ body {
   box-sizing: border-box !important;
 }
 
+.graph-toolbar .form-select:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .graph-toolbar .btn svg {
   margin-right: 4px;
 }
