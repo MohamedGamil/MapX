@@ -191,7 +191,7 @@ let currentGraphMode: 'proximity' | 'directory' | 'focus' | 'full' = 'proximity'
 let focusSeedNode: string | null = null;
 let focusDepth = 1;
 let activeLayout: any = null;
-let activeLayoutName: 'fcose' | 'cose' | 'cola' | 'dagre' | 'elk' | 'concentric' | 'circle' | 'grid' = 'concentric';
+let activeLayoutName: 'fcose' | 'cose' | 'cola' | 'dagre' | 'elk' | 'concentric' | 'circle' | 'grid' = 'cola';
 
 // New states for Proximity Clusters Mode & Groupings & Modifications
 let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
@@ -1524,7 +1524,9 @@ async function loadGraph() {
 
       const breadcrumb = document.getElementById('cluster-breadcrumb');
       if (breadcrumb) {
-        breadcrumb.style.display = (mode === 'proximity' && activeClusterId) ? 'inline-flex' : 'none';
+        // Breadcrumbs visible in proximity (drilldown) and focus modes
+        const showBreadcrumb = (mode === 'proximity' && activeClusterId) || mode === 'focus';
+        breadcrumb.style.display = showBreadcrumb ? 'inline-flex' : 'none';
       }
     }
 
@@ -1623,6 +1625,13 @@ async function loadGraph() {
       focusSeedNode = fileId;
       if (focusSearchInput) focusSearchInput.value = fileId;
       hideAutocomplete();
+      // Update breadcrumb to show focused file
+      const activeLabel = document.getElementById('breadcrumb-active-cluster');
+      if (activeLabel) activeLabel.textContent = fileId.split('/').pop() || fileId;
+      const breadcrumb = document.getElementById('cluster-breadcrumb');
+      if (breadcrumb) breadcrumb.style.display = 'inline-flex';
+      const rootBtn = document.getElementById('btn-breadcrumb-root');
+      if (rootBtn) rootBtn.textContent = 'Focus';
       updateGraphDisplay();
     }
 
@@ -2776,9 +2785,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (modeSelect) modeSelect.value = 'proximity';
 
     // Reset layout
-    activeLayoutName = 'concentric';
+    activeLayoutName = 'cola';
     const layoutSelect = document.getElementById('select-layout') as HTMLSelectElement;
-    if (layoutSelect) layoutSelect.value = 'concentric';
+    if (layoutSelect) layoutSelect.value = 'cola';
 
     // Reset grouping
     groupingStrategy = 'community';

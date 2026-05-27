@@ -99,21 +99,33 @@
         <div class="graph-container">
           <div id="cy"></div>
           <div class="graph-toolbar">
-            <!-- Group 1: View Mode & Navigation -->
+            <!-- Group 1: Layout Algorithm (first for prominence) -->
+            <div class="toolbar-group" id="toolbar-group-layout">
+              <span class="toolbar-group-label">Layout</span>
+              <select id="select-layout" class="form-select toolbar-select-accent">
+                <option value="cola" selected>Tidy — Cola</option>
+                <option value="fcose">Organic — fCoSE</option>
+                <option value="cose">Springy — CoSE</option>
+                <option value="dagre">Layered — Dagre</option>
+                <option value="elk">Tree — ELK</option>
+                <option value="concentric">Radial — Concentric</option>
+                <option value="circle">Circular — Circle</option>
+                <option value="grid">Grid</option>
+              </select>
+            </div>
+
+            <!-- Group 2: View Mode & Filters -->
             <div class="toolbar-group" id="toolbar-group-mode">
               <span class="toolbar-group-label">View</span>
-              <select id="select-graph-mode" class="form-select toolbar-select-accent">
+              <select id="select-graph-mode" class="form-select">
                 <option value="proximity">Proximity Clusters</option>
                 <option value="directory">Directory Aggregated</option>
                 <option value="focus">Neighborhood Focus</option>
                 <option value="full">Full Codebase</option>
               </select>
 
-              <select id="select-grouping-strategy" class="form-select" style="display: none;">
-                <option value="community">Group: Proximity</option>
-                <option value="directory">Group: Directory</option>
-                <option value="language">Group: Language</option>
-                <option value="custom">Group: Custom Tags</option>
+              <select id="filter-lang" class="form-select">
+                <option value="">All Languages</option>
               </select>
 
               <button id="btn-toggle-clusters" class="btn btn-secondary" style="display: none;">
@@ -126,46 +138,11 @@
                 <span>Clusters</span>
               </button>
 
-              <select id="filter-lang" class="form-select">
-                <option value="">All Languages</option>
-              </select>
-            </div>
-
-            <!-- Focus Mode Controls (shown only in focus mode) -->
-            <div class="toolbar-group toolbar-focus-panel" id="focus-search-container" style="display: none;">
-              <span class="toolbar-group-label">Focus</span>
-              <div class="focus-search-wrapper">
-                <input type="text" id="focus-search-input" placeholder="Search file to focus..." class="focus-search-input" autocomplete="off">
-                <button id="btn-focus-clear" class="focus-clear-btn" title="Clear focus">&times;</button>
-                <div id="focus-autocomplete" class="focus-autocomplete-dropdown"></div>
-              </div>
-              <div class="depth-segmented" id="depth-segmented">
-                <span class="depth-label">Depth</span>
-                <button class="depth-btn active" data-depth="1">1</button>
-                <button class="depth-btn" data-depth="2">2</button>
-                <button class="depth-btn" data-depth="3">3</button>
-              </div>
-            </div>
-
-            <!-- Breadcrumbs (shown only in proximity drilldown) -->
-            <div id="cluster-breadcrumb" class="toolbar-group" style="display: none;">
-              <button id="btn-breadcrumb-root" class="btn btn-secondary">All Clusters</button>
-              <span class="breadcrumb-separator">&rarr;</span>
-              <span id="breadcrumb-active-cluster" style="color: var(--text-white); font-weight: 600;"></span>
-            </div>
-
-            <!-- Group 2: Layout Algorithm -->
-            <div class="toolbar-group" id="toolbar-group-layout">
-              <span class="toolbar-group-label">Layout</span>
-              <select id="select-layout" class="form-select">
-                <option value="fcose">Force (fCoSE)</option>
-                <option value="cose">Spring Embedded</option>
-                <option value="cola">Cola (Constraint)</option>
-                <option value="dagre">Tree (Dagre)</option>
-                <option value="elk">Hierarchy (ELK)</option>
-                <option value="concentric" selected>Ring (Concentric)</option>
-                <option value="circle">Circular</option>
-                <option value="grid">Grid</option>
+              <select id="select-grouping-strategy" class="form-select" style="display: none;">
+                <option value="community">Group: Proximity</option>
+                <option value="directory">Group: Directory</option>
+                <option value="language">Group: Language</option>
+                <option value="custom">Group: Custom Tags</option>
               </select>
             </div>
 
@@ -188,6 +165,29 @@
                 </svg>
                 <span style="color: #ef4444;">Unhide</span>
               </button>
+            </div>
+
+            <!-- Breadcrumbs (shown in proximity drilldown and focus mode) -->
+            <div id="cluster-breadcrumb" class="toolbar-group" style="display: none;">
+              <button id="btn-breadcrumb-root" class="btn btn-secondary">All Clusters</button>
+              <span class="breadcrumb-separator">&rarr;</span>
+              <span id="breadcrumb-active-cluster" style="color: var(--text-white); font-weight: 600;"></span>
+            </div>
+
+            <!-- Focus Mode Controls (shown only in focus mode, last in toolbar) -->
+            <div class="toolbar-group toolbar-focus-panel" id="focus-search-container" style="display: none;">
+              <span class="toolbar-group-label">Focus</span>
+              <div class="focus-search-wrapper">
+                <input type="text" id="focus-search-input" placeholder="Search file to focus..." class="focus-search-input" autocomplete="off">
+                <button id="btn-focus-clear" class="focus-clear-btn" title="Clear focus">&times;</button>
+                <div id="focus-autocomplete" class="focus-autocomplete-dropdown"></div>
+              </div>
+              <div class="depth-segmented" id="depth-segmented">
+                <span class="depth-label">Depth</span>
+                <button class="depth-btn active" data-depth="1">1</button>
+                <button class="depth-btn" data-depth="2">2</button>
+                <button class="depth-btn" data-depth="3">3</button>
+              </div>
             </div>
           </div>
           <div id="graph-details" class="details-panel">
