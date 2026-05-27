@@ -98,7 +98,19 @@
       <section id="tab-graph" class="tab-pane active">
         <div class="graph-container">
           <div id="cy"></div>
-          <div class="graph-toolbar">
+          <div class="graph-toolbar" style="flex-wrap: wrap; align-items: center;">
+            <select id="select-graph-mode" class="form-select" style="font-weight: 600; border-color: var(--syntax-blue); cursor: pointer;">
+              <option value="directory">Directory Aggregated</option>
+              <option value="focus">Neighborhood Focus</option>
+              <option value="full">Full Codebase</option>
+            </select>
+            <div id="focus-search-container" style="display: none; align-items: center; gap: 6px;">
+              <input type="text" id="focus-search-input" list="focus-search-list" placeholder="Type file to focus..." class="form-select" style="width: 220px; padding: 6px 10px; font-size: 13px;">
+              <datalist id="focus-search-list"></datalist>
+              <button id="btn-focus-depth" class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px; white-space: nowrap;">Depth: 1</button>
+              <button id="btn-focus-clear" class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px; white-space: nowrap;">Clear</button>
+            </div>
+            <span style="border-left: 1px solid var(--border-color); height: 20px; margin: 0 4px;"></span>
             <button id="btn-layout-fcose" class="btn btn-secondary">fCoSE Layout</button>
             <button id="btn-layout-circle" class="btn btn-secondary">Circle Layout</button>
             <button id="btn-layout-grid" class="btn btn-secondary">Grid Layout</button>

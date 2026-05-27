@@ -178,6 +178,296 @@ async function loadStatus() {
 
 let rawGraphElements: any[] = [];
 let showClusters = false;
+let currentGraphMode: 'directory' | 'focus' | 'full' = 'directory';
+let focusSeedNode: string | null = null;
+let focusDepth = 1;
+let activeLayout: any = null;
+
+function buildDirectoryAggregatedElements(rawElements: any[], useClusters: boolean): any[] {
+  const dirs = new Set<string>();
+  const fileToDir = new Map<string, string>();
+
+  // Extract file directories
+  for (const el of rawElements) {
+    if (el.data && !el.data.source && !el.data.target && el.data.type === 'file') {
+      const parts = el.data.id.split('/');
+      const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
+      dirs.add(dir);
+      fileToDir.set(el.data.id, dir);
+    }
+  }
+
+  const elements: any[] = [];
+
+  if (useClusters) {
+    // Parent folder nested compound nodes
+    const allDirs = new Set<string>();
+    dirs.forEach(dir => {
+      if (dir === 'root') {
+        allDirs.add('root');
+        return;
+      }
+      const parts = dir.split('/');
+      for (let i = 1; i <= parts.length; i++) {
+        allDirs.add(parts.slice(0, i).join('/'));
+      }
+    });
+
+    allDirs.forEach(dir => {
+      const isRoot = dir === 'root';
+      const hasParent = !isRoot && dir.includes('/');
+      const parentId = hasParent ? `dir:${dir.substring(0, dir.lastIndexOf('/'))}` : (isRoot ? null : 'dir:root');
+      
+      const nodeEl: any = {
+        data: {
+          id: `dir:${dir}`,
+          label: dir === 'root' ? 'root' : dir.substring(dir.lastIndexOf('/') + 1),
+          type: 'parent-folder'
+        }
+      };
+      if (parentId) {
+        nodeEl.data.parent = parentId;
+      }
+      elements.push(nodeEl);
+    });
+  } else {
+    // Create flat directory nodes
+    dirs.forEach(dir => {
+      elements.push({
+        data: {
+          id: `dir:${dir}`,
+          label: dir === 'root' ? 'root' : dir,
+          type: 'parent-folder'
+        }
+      });
+    });
+  }
+
+  // Aggregate inter-directory edges
+  const dirEdges = new Map<string, { source: string, target: string, count: number }>();
+  for (const el of rawElements) {
+    if (el.data && el.data.source && el.data.target) {
+      const srcDir = fileToDir.get(el.data.source);
+      const tgtDir = fileToDir.get(el.data.target);
+      if (srcDir && tgtDir && srcDir !== tgtDir) {
+        const sourceId = `dir:${srcDir}`;
+        const targetId = `dir:${tgtDir}`;
+        const edgeKey = `${sourceId}->${targetId}`;
+        if (!dirEdges.has(edgeKey)) {
+          dirEdges.set(edgeKey, { source: sourceId, target: targetId, count: 0 });
+        }
+        dirEdges.get(edgeKey)!.count++;
+      }
+    }
+  }
+
+  dirEdges.forEach((info) => {
+    elements.push({
+      data: {
+        id: `dir-edge:${info.source}->${info.target}`,
+        source: info.source,
+        target: info.target,
+        type: 'aggregated-dependency',
+        label: `${info.count}`,
+        count: info.count
+      }
+    });
+  });
+
+  return elements;
+}
+
+function buildFocusModeElements(rawElements: any[], seedId: string, depth: number, useClusters: boolean): any[] {
+  const nodeMap = new Map<string, any>();
+  const edgesBySource = new Map<string, any[]>();
+  const edgesByTarget = new Map<string, any[]>();
+
+  for (const el of rawElements) {
+    if (el.data && !el.data.source && !el.data.target) {
+      nodeMap.set(el.data.id, el);
+    } else if (el.data && el.data.source && el.data.target) {
+      const src = el.data.source;
+      const tgt = el.data.target;
+      if (!edgesBySource.has(src)) edgesBySource.set(src, []);
+      if (!edgesByTarget.has(tgt)) edgesByTarget.set(tgt, []);
+      edgesBySource.get(src)!.push(el);
+      edgesByTarget.get(tgt)!.push(el);
+    }
+  }
+
+  const visitedNodes = new Set<string>([seedId]);
+  const visitedEdges = new Set<any>();
+  let currentLevel = new Set<string>([seedId]);
+
+  for (let d = 0; d < depth; d++) {
+    const nextLevel = new Set<string>();
+    for (const nodeId of currentLevel) {
+      const outEdges = edgesBySource.get(nodeId) || [];
+      for (const edge of outEdges) {
+        const tgt = edge.data.target;
+        visitedEdges.add(edge);
+        if (!visitedNodes.has(tgt)) {
+          visitedNodes.add(tgt);
+          nextLevel.add(tgt);
+        }
+      }
+      const inEdges = edgesByTarget.get(nodeId) || [];
+      for (const edge of inEdges) {
+        const src = edge.data.source;
+        visitedEdges.add(edge);
+        if (!visitedNodes.has(src)) {
+          visitedNodes.add(src);
+          nextLevel.add(src);
+        }
+      }
+    }
+    currentLevel = nextLevel;
+  }
+
+  const elements: any[] = [];
+
+  if (useClusters) {
+    const filesByDirectory: { [dirId: string]: any[] } = {};
+    const getParentId = (filePath: string): string => {
+      const parts = filePath.split('/');
+      return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : 'dir:root';
+    };
+
+    visitedNodes.forEach(id => {
+      const node = nodeMap.get(id);
+      if (node) {
+        const copy = JSON.parse(JSON.stringify(node));
+        if (id === seedId) {
+          copy.data.isSeed = true;
+        }
+        const parentId = getParentId(id);
+        copy.data.parent = parentId;
+        if (!filesByDirectory[parentId]) {
+          filesByDirectory[parentId] = [];
+        }
+        filesByDirectory[parentId].push(copy);
+      }
+    });
+
+    // Add parent nodes
+    Object.keys(filesByDirectory).forEach(dirId => {
+      elements.push({
+        data: {
+          id: dirId,
+          label: dirId === 'dir:root' ? 'root' : dirId.replace('dir:', ''),
+          type: 'parent'
+        }
+      });
+      elements.push(...filesByDirectory[dirId]);
+    });
+  } else {
+    visitedNodes.forEach(id => {
+      const node = nodeMap.get(id);
+      if (node) {
+        const copy = JSON.parse(JSON.stringify(node));
+        if (id === seedId) {
+          copy.data.isSeed = true;
+        }
+        elements.push(copy);
+      }
+    });
+  }
+
+  visitedEdges.forEach(edge => {
+    elements.push(JSON.parse(JSON.stringify(edge)));
+  });
+
+  return elements;
+}
+
+function buildGraphElementsForMode(): any[] {
+  if (currentGraphMode === 'directory') {
+    return buildDirectoryAggregatedElements(rawGraphElements, showClusters);
+  } else if (currentGraphMode === 'focus') {
+    if (!focusSeedNode) {
+      const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
+      focusSeedNode = firstFile ? firstFile.data.id : null;
+    }
+    if (focusSeedNode) {
+      return buildFocusModeElements(rawGraphElements, focusSeedNode, focusDepth, showClusters);
+    }
+    return [];
+  } else {
+    return buildGraphElements(rawGraphElements, showClusters);
+  }
+}
+
+function updateGraphDisplay() {
+  if (!cyInstance) return;
+
+  const newElements = buildGraphElementsForMode();
+
+  cyInstance.batch(() => {
+    cyInstance.elements().remove();
+    cyInstance.add(newElements);
+  });
+
+  if (currentGraphMode === 'directory') {
+    runLayout({
+      name: 'cose',
+      animate: true,
+      nodeRepulsion: () => 90000,
+      idealEdgeLength: () => 180,
+      fit: true,
+      padding: 50
+    });
+  } else if (currentGraphMode === 'focus') {
+    runLayout({
+      name: 'cose',
+      animate: true,
+      nodeRepulsion: () => 60000,
+      idealEdgeLength: () => 120,
+      fit: true,
+      padding: 50
+    });
+  } else {
+    runLayout(getLayoutOptions(showClusters, true));
+  }
+}
+
+function runLayout(layoutConfig: any) {
+  if (activeLayout) {
+    try {
+      activeLayout.stop();
+    } catch (e) {
+      // Ignored
+    }
+  }
+
+  const visibleCount = cyInstance.elements(':visible').length;
+  if (visibleCount > 500) {
+    layoutConfig = { ...layoutConfig, animate: false };
+    activeLayout = cyInstance.layout(layoutConfig);
+    activeLayout.run();
+    return;
+  }
+
+  if (layoutConfig.animate) {
+    if (layoutConfig.name === 'cose' || layoutConfig.name === 'fcose') {
+      layoutConfig = {
+        ...layoutConfig,
+        animate: 'end',
+        animationDuration: 500,
+        animationEasing: 'ease-out'
+      };
+    } else {
+      layoutConfig = {
+        ...layoutConfig,
+        animate: true,
+        animationDuration: 500,
+        animationEasing: 'ease-out'
+      };
+    }
+  }
+
+  activeLayout = cyInstance.layout(layoutConfig);
+  activeLayout.run();
+}
 
 function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
   let processed: any[] = [];
@@ -408,7 +698,36 @@ async function loadGraph() {
     const container = document.getElementById('cy');
     if (!container) return;
 
-    const initialElements = buildGraphElements(rawGraphElements, showClusters);
+    // Decide default mode based on file count
+    const fileCount = rawGraphElements.filter(el => el.data && !el.data.source && !el.data.target && el.data.type === 'file').length;
+    if (fileCount > 1000) {
+      currentGraphMode = 'directory';
+      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+      if (modeSelect) modeSelect.value = 'directory';
+    } else {
+      currentGraphMode = 'full';
+      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+      if (modeSelect) modeSelect.value = 'full';
+    }
+
+    const focusSearchContainer = document.getElementById('focus-search-container');
+    if (focusSearchContainer) {
+      focusSearchContainer.style.display = currentGraphMode === 'focus' ? 'inline-flex' : 'none';
+    }
+
+    // Populate focus search autocompletion datalist
+    const focusSearchList = document.getElementById('focus-search-list');
+    if (focusSearchList) {
+      focusSearchList.innerHTML = '';
+      const fileNodes = rawGraphElements.filter(el => el.data && el.data.type === 'file');
+      fileNodes.forEach(node => {
+        const option = document.createElement('option');
+        option.value = node.data.id;
+        focusSearchList.appendChild(option);
+      });
+    }
+
+    const initialElements = buildGraphElementsForMode();
 
     if (initialElements.length === 0) {
       container.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; font-size: 15px; color: var(--text-muted); text-align: center; gap: 8px; padding: 20px;"><div style="font-size: 24px;">🕸️</div><div>No codebase graph elements found.</div><div style="font-size: 12px; opacity: 0.8;">Run a scan using the mapx CLI/MCP to index files and generate the graph.</div></div>';
@@ -645,20 +964,163 @@ async function loadGraph() {
             'color': '#c678dd',
             'text-outline-color': '#14161a'
           }
+        },
+        {
+          selector: 'node[type="parent-folder"]',
+          style: {
+            'shape': 'round-rectangle',
+            'background-color': '#2d3139',
+            'border-width': '2px',
+            'border-color': '#61afef',
+            'width': '52px',
+            'height': '36px',
+            'font-size': '12px',
+            'font-weight': 'bold',
+            'color': '#abb2bf',
+            'text-valign': 'center',
+            'text-halign': 'center',
+            'text-outline-width': '0px',
+            'z-index': 15
+          }
+        },
+        {
+          selector: 'edge[type="aggregated-dependency"]',
+          style: {
+            'width': (edge: any) => {
+              const cnt = edge.data('count') || 1;
+              return Math.min(1.5 + Math.log2(cnt), 7) + 'px';
+            },
+            'line-color': 'rgba(97, 175, 239, 0.45)',
+            'target-arrow-color': 'rgba(97, 175, 239, 0.45)',
+            'target-arrow-shape': 'triangle',
+            'curve-style': 'bezier',
+            'label': 'data(label)',
+            'color': '#abb2bf',
+            'font-family': 'Outfit, sans-serif',
+            'font-size': '9px',
+            'font-weight': 'bold',
+            'text-background-color': '#1e222b',
+            'text-background-opacity': 1,
+            'text-background-padding': '2px',
+            'text-background-shape': 'roundrectangle'
+          }
+        },
+        {
+          selector: 'node[?isSeed]',
+          style: {
+            'background-color': '#98c379',
+            'border-color': '#e5c07b',
+            'border-width': '3px',
+            'width': '46px',
+            'height': '46px',
+            'z-index': 9999
+          }
         }
       ],
-      layout: getLayoutOptions(showClusters, false)
+      layout: currentGraphMode === 'directory' ? {
+        name: 'cose',
+        animate: false,
+        nodeRepulsion: () => 90000,
+        idealEdgeLength: () => 180
+      } : getLayoutOptions(showClusters, false)
     });
 
     // Handle Layout button clicks
     document.getElementById('btn-layout-fcose')?.addEventListener('click', () => {
-      cyInstance.layout(getLayoutOptions(showClusters, true)).run();
+      if (currentGraphMode === 'directory') {
+        runLayout({ name: 'cose', animate: true, nodeRepulsion: () => 90000, idealEdgeLength: () => 180 });
+      } else if (currentGraphMode === 'focus') {
+        runLayout({ name: 'cose', animate: true, nodeRepulsion: () => 60000, idealEdgeLength: () => 120 });
+      } else {
+        runLayout(getLayoutOptions(showClusters, true));
+      }
     });
     document.getElementById('btn-layout-circle')?.addEventListener('click', () => {
-      cyInstance.layout({ name: 'circle', animate: true }).run();
+      runLayout({ name: 'circle', animate: true });
     });
     document.getElementById('btn-layout-grid')?.addEventListener('click', () => {
-      cyInstance.layout({ name: 'grid', animate: true }).run();
+      runLayout({ name: 'grid', animate: true });
+    });
+
+    // Graph Mode selector event listener
+    document.getElementById('select-graph-mode')?.addEventListener('change', (e) => {
+      const mode = (e.target as HTMLSelectElement).value as any;
+      currentGraphMode = mode;
+      
+      const focusSearchContainer = document.getElementById('focus-search-container');
+      if (focusSearchContainer) {
+        focusSearchContainer.style.display = mode === 'focus' ? 'inline-flex' : 'none';
+      }
+
+      updateGraphDisplay();
+    });
+
+    // Search input listener for Neighborhood Focus Mode
+    let searchDebounceTimeout: any = null;
+    const focusSearchInput = document.getElementById('focus-search-input') as HTMLInputElement;
+    focusSearchInput?.addEventListener('input', (e) => {
+      clearTimeout(searchDebounceTimeout);
+      const query = (e.target as HTMLInputElement).value.trim().toLowerCase();
+      if (!query) return;
+
+      searchDebounceTimeout = setTimeout(() => {
+        const match = rawGraphElements.find(el => 
+          el.data && 
+          el.data.type === 'file' && 
+          el.data.id.toLowerCase().includes(query)
+        );
+        if (match) {
+          focusSeedNode = match.data.id;
+          updateGraphDisplay();
+        }
+      }, 400);
+    });
+
+    focusSearchInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(searchDebounceTimeout);
+        const query = (e.target as HTMLInputElement).value.trim().toLowerCase();
+        if (!query) return;
+        const match = rawGraphElements.find(el => 
+          el.data && 
+          el.data.type === 'file' && 
+          el.data.id.toLowerCase().includes(query)
+        );
+        if (match) {
+          focusSeedNode = match.data.id;
+          updateGraphDisplay();
+        }
+      }
+    });
+
+    // Focus depth control
+    const btnFocusDepth = document.getElementById('btn-focus-depth');
+    btnFocusDepth?.addEventListener('click', () => {
+      focusDepth = focusDepth === 1 ? 2 : focusDepth === 2 ? 3 : 1;
+      btnFocusDepth.textContent = `Depth: ${focusDepth}`;
+      updateGraphDisplay();
+    });
+
+    // Focus clear control
+    const btnFocusClear = document.getElementById('btn-focus-clear');
+    btnFocusClear?.addEventListener('click', () => {
+      if (focusSearchInput) focusSearchInput.value = '';
+      const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
+      focusSeedNode = firstFile ? firstFile.data.id : null;
+      updateGraphDisplay();
+    });
+
+    // Register double click / double tap event to focus on a node
+    cyInstance.on('dbltap', 'node', (evt: any) => {
+      const node = evt.target;
+      const data = node.data();
+      if (currentGraphMode === 'focus' && data.type === 'file') {
+        focusSeedNode = data.id;
+        if (focusSearchInput) {
+          focusSearchInput.value = data.id;
+        }
+        updateGraphDisplay();
+      }
     });
 
     // Toggle clusters button listener
@@ -691,12 +1153,7 @@ async function loadGraph() {
         btn.classList.add('btn-secondary');
       }
 
-      cyInstance.batch(() => {
-        cyInstance.elements().remove();
-        cyInstance.add(buildGraphElements(rawGraphElements, showClusters));
-      });
-
-      cyInstance.layout(getLayoutOptions(showClusters, true)).run();
+      updateGraphDisplay();
     });
 
     // Filter by language dropdown listener
