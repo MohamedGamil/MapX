@@ -312,7 +312,7 @@ body {
   border-radius: 10px;
   border: 1px solid var(--border-color);
   backdrop-filter: blur(12px);
-  max-width: calc(100% - 385px);
+  max-width: calc(100% - 390px);
   box-sizing: border-box;
   align-items: center;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
