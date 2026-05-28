@@ -9,7 +9,7 @@ export interface ProviderTemplate {
 /**
  * MCP config definitions for agent tools.
  * Each entry generates a project-local JSON config file that auto-registers
- * mapx as an MCP server so the agent can discover all 25 tools on startup.
+ * mapx as an MCP server so the agent can discover all 26 tools on startup.
  *
  * Config files use the sentinel-block pattern (<!-- mapx --> markers are not
  * used — the entire file is owned by mapx and can safely be overwritten).
@@ -176,8 +176,8 @@ mapx -d /path/to/project scan
 - \`mapx export [--dir path]\` - Export compact graph summary
 - \`mapx export --format=<fmt>\` - Export as \`llm\`, \`json\`, \`dot\`, \`svg\`, or \`toon\`
 - \`mapx export --cluster <mode> --depth <n>\` - Cluster-aware DOT/SVG export
-- \`mapx query <symbol> [--dir path]\` - Search for symbols
-- \`mapx search <term> [--dir path] [--kind kind] [--file prefix] [--exact] [--limit limit]\` - Advanced search for symbols
+- \`mapx query <symbol> [--dir path]\` - Search for symbols (supports glob patterns: \`*Service\`, \`get*\`)
+- \`mapx search <term> [--dir path] [--kind kind] [--file prefix] [--exact] [--limit limit] [--format text|json]\` - Advanced filtered search with auto-expand and fuzzy fallback
 - \`mapx deps <file> [--dir path]\` - Show dependencies for a file
 - \`mapx summary [path]\` - Project summary
 - \`mapx clusters [--dir path]\` - List detected clusters/modules
@@ -185,10 +185,10 @@ mapx -d /path/to/project scan
 - \`mapx sources [--dir path]\` - Find entry points (data sources) in the codebase
 - \`mapx sinks [--dir path]\` - Find terminal consumers (data sinks) in the codebase
 - \`mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]\` - Generate task-specific workspace context
-- \`mapx callers <symbol> [--dir path] [--depth depth]\` - Trace callers of a symbol
-- \`mapx callees <symbol> [--dir path] [--depth depth]\` - Trace callees of a symbol
-- \`mapx impact <symbol> [--dir path] [--depth depth]\` - Perform change impact analysis
-- \`mapx node <symbol> [--dir path] [--source]\` - Inspect a symbol node and optionally view its source code
+- \`mapx callers <symbol> [--dir path] [--depth depth]\` - Trace callers of a symbol (fuzzy fallback on typos)
+- \`mapx callees <symbol> [--dir path] [--depth depth]\` - Trace callees of a symbol (fuzzy fallback on typos)
+- \`mapx impact <symbol> [--dir path] [--depth depth]\` - Change impact analysis with fuzzy pre-check
+- \`mapx node <symbol> [--dir path] [--source] [--format text|json]\` - Inspect a symbol node with optional source code
 - \`mapx files [--dir path] [--path prefix] [--lang language] [--sort sort] [--limit limit]\` - List and filter files
 - \`mapx lang list\` - List supported languages and status
 - \`mapx lang install <lang>\` - Install dynamic language support
@@ -225,18 +225,20 @@ When running as an MCP server, MapxGraph exposes these tools:
 - \`mapx_lang_list\` - List supported languages and status
 - \`mapx_lang_install\` - Install dynamic language support
 - \`mapx_lang_uninstall\` - Uninstall dynamic language support
+- \`mapx_batch\` - Execute multiple operations in a single call (search, node, callers, callees, deps)
 
 ## When to Use
 
 1. **Start of session**: Run \`mapx export\` to get a compact overview.
-2. **Need to find something**: Run \`mapx query <term>\` or \`mapx search\` instead of grepping.
+2. **Need to find something**: Run \`mapx query <term>\` or \`mapx search\` instead of grepping. Supports glob patterns like \`*Service\`, \`get*\`.
 3. **Need to understand a file**: Run \`mapx deps <file>\` to see relationships.
 4. **Files changed**: Run \`mapx sync\` (or \`mapx update\`) to incrementally update the graph.
 5. **Major changes**: Run \`mapx scan\` for a full re-scan.
 6. **Need a visual overview**: Run \`mapx export --format=svg -o graph.svg\`.
 7. **Trace data flow / call chains**: Run \`mapx trace <symbol>\`, \`mapx callers\`, or \`mapx callees\`.
 8. **Planning a modification**: Run \`mapx impact\` to determine the blast radius.
-9. **Building custom prompts / context**: Run \`mapx context\` to generate optimal context within a token budget.`
+9. **Building custom prompts / context**: Run \`mapx context\` to generate optimal context within a token budget.
+10. **Batch operations**: Use \`mapx_batch\` (MCP) to execute multiple operations in a single round-trip.`
   },
   claude: {
     filename: 'CLAUDE.md',
@@ -266,7 +268,7 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
 }
 \`\`\`
 
-## MCP Tools Available (25 total)
+## MCP Tools Available (26 total)
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
@@ -275,6 +277,7 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
+**Orchestration:** \`mapx_batch\`
 
 ## Workflows
 
@@ -297,7 +300,7 @@ alwaysApply: false
 
 Use MapxGraph commands or MCP tools to understand code structure.
 
-## Available MCP Tools (25 total)
+## Available MCP Tools (26 total)
 
 **Graph:** \`mapx_scan\`, \`mapx_sync\`
 **Search:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
@@ -306,6 +309,7 @@ Use MapxGraph commands or MCP tools to understand code structure.
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\`
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
+**Orchestration:** \`mapx_batch\`
 
 ## Workflow
 
@@ -320,20 +324,22 @@ Use MapxGraph commands or MCP tools to understand code structure.
     isAppend: true,
     content: `## MapxGraph Integration
 
-This project uses MapxGraph (22 languages, 25 MCP tools). You can run the following CLI commands to understand the codebase:
+This project uses MapxGraph (22 languages, 26 MCP tools). You can run the following CLI commands to understand the codebase:
 - \`mapx export\` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
-- \`mapx query <term>\` - Search symbols
-- \`mapx search <term> --kind class\` - Advanced filtered search
+- \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`)
+- \`mapx search <term> --kind class\` - Advanced filtered search (auto-expands if kind has 0 results)
+- \`mapx search <term> --format json\` - Structured JSON output with PageRank scores
 - \`mapx deps <file>\` - View file dependencies
-- \`mapx callers <symbol>\` - Trace callers
-- \`mapx callees <symbol>\` - Trace callees
+- \`mapx callers <symbol>\` - Trace callers (with fuzzy "Did you mean?" on typos)
+- \`mapx callees <symbol>\` - Trace callees (with fuzzy "Did you mean?" on typos)
 - \`mapx impact <symbol>\` - Change impact analysis
 - \`mapx clusters\` - View logical modules
 - \`mapx trace <symbol>\` - Trace data-flow paths
 - \`mapx sources\` - Find entry points
 - \`mapx sinks\` - Find terminal consumers
 - \`mapx context <task>\` - Generate task-specific context
-- \`mapx node <symbol> --source\` - Inspect symbol source code`
+- \`mapx node <symbol> --source\` - Inspect symbol source code
+- \`mapx node <symbol> --format json\` - Symbol details as JSON`
   },
   windsurf: {
     filename: '.windsurf/rules/mapx.md',
@@ -343,18 +349,19 @@ trigger: model_decided
 ---
 # MapxGraph Rules for Windsurf
 
-This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **25 MCP tools**.
+This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **26 MCP tools**.
 
 Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_export\` / \`mapx export\` on startup.
-- \`mapx_query\` / \`mapx query\` to locate definitions.
-- \`mapx_search\` / \`mapx search\` for advanced filtered search.
-- \`mapx_callers\` / \`mapx callers\` to trace call chains.
+- \`mapx_query\` / \`mapx query\` to locate definitions (supports glob: \`*Service\`, \`get*\`).
+- \`mapx_search\` / \`mapx search\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
+- \`mapx_callers\` / \`mapx callers\` to trace call chains (fuzzy "Did you mean?" on typos).
 - \`mapx_impact\` / \`mapx impact\` before refactoring.
 - \`mapx_trace\` / \`mapx trace\` to analyze data flow.
 - \`mapx_sources\` / \`mapx sources\` to find entry points.
 - \`mapx_sinks\` / \`mapx sinks\` to find terminal consumers.
 - \`mapx_context\` / \`mapx context\` to generate task-specific context.
+- \`mapx_batch\` to execute multiple operations in one call.
 - \`mapx_sync\` / \`mapx sync\` after edits.`
   },
   cline: {
@@ -362,16 +369,17 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
     isAppend: true,
     content: `## MapxGraph Rules for Cline
 
-This project is indexed by MapxGraph (22 languages, 25 MCP tools).
+This project is indexed by MapxGraph (22 languages, 26 MCP tools).
 Auto-start the MCP server with the configured directory \`{{PROJECT_DIR}}\`.
 Available tools:
 - \`mapx_export\` - Call this first to get the summary.
-- \`mapx_query\` / \`mapx_search\` - Find files or symbols.
+- \`mapx_query\` / \`mapx_search\` - Find files or symbols (supports glob: \`*Service\`, \`get*\`, fuzzy fallback).
 - \`mapx_callers\` / \`mapx_callees\` - Trace call chains.
 - \`mapx_impact\` - Assess blast radius before changes.
 - \`mapx_trace\` - Trace data-flow paths.
 - \`mapx_sources\` / \`mapx_sinks\` - Find entry points / terminal consumers.
-- \`mapx_context\` - Generate token-budgeted context.`
+- \`mapx_context\` - Generate token-budgeted context.
+- \`mapx_batch\` - Batch multiple operations in a single call.`
   },
   aider: {
     filename: 'AIDER.md',
@@ -384,17 +392,19 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
 
 - \`mapx export\`: Compact summary of the graph structure.
 - \`mapx export --format=svg -o graph.svg\`: Visual graph export.
-- \`mapx query <symbol>\`: Find locations and definitions.
-- \`mapx search <term> --kind class\`: Advanced filtered search.
+- \`mapx query <symbol>\`: Find locations and definitions (supports glob: \`*Service\`, \`get*\`).
+- \`mapx search <term> --kind class\`: Advanced filtered search (auto-expand, fuzzy fallback).
+- \`mapx search <term> --format json\`: Structured JSON output.
 - \`mapx deps <file>\`: Show dependencies.
-- \`mapx callers <symbol>\`: Show who calls a symbol.
-- \`mapx callees <symbol>\`: Show what a symbol calls.
+- \`mapx callers <symbol>\`: Show who calls a symbol (fuzzy fallback on typos).
+- \`mapx callees <symbol>\`: Show what a symbol calls (fuzzy fallback on typos).
 - \`mapx impact <symbol>\`: Change impact analysis.
 - \`mapx trace <symbol>\`: Show data-flow traversal.
 - \`mapx sources\`: Find entry points.
 - \`mapx sinks\`: Find terminal consumers.
 - \`mapx context <task>\`: Generate task-specific context.
 - \`mapx node <symbol> --source\`: View symbol source code.
+- \`mapx node <symbol> --format json\`: Symbol details as JSON.
 - \`mapx sync\` (or \`mapx update\`): Run after edits.`
   },
   gemini: {
@@ -407,21 +417,22 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages**.
 ## CLI Commands
 
 - Run \`mapx export\` to summarize the project (supports --format=llm/json/dot/svg/toon).
-- Run \`mapx query <symbol>\` to locate symbols.
-- Run \`mapx search <term>\` for advanced filtered search.
-- Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains.
+- Run \`mapx query <symbol>\` to locate symbols (supports glob patterns: \`*Service\`, \`get*\`).
+- Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
+- Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains (fuzzy fallback on typos).
 - Run \`mapx impact <symbol>\` to assess change blast radius.
 - Run \`mapx trace <symbol>\` to analyze data flow.
 - Run \`mapx sources\` to find entry points.
 - Run \`mapx sinks\` to find terminal consumers.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx node <symbol> --source\` to inspect a symbol's source code.
+- Run \`mapx node <symbol> --format json\` for structured JSON output.
 - Run \`mapx sync\` after file edits to update the graph.`
   },
   continue: {
     filename: '.continue/mapx.yaml',
     isAppend: false,
-    content: `# Continue configuration for MapxGraph (22 languages, 25 MCP tools)
+    content: `# Continue configuration for MapxGraph (22 languages, 26 MCP tools)
 contextProviders:
   - name: cmd
     args:
@@ -438,12 +449,12 @@ contextProviders:
     isAppend: false,
     content: `# Zed Assistant MapxGraph Instructions
 
-This project uses MapxGraph (22 languages, 25 MCP tools).
+This project uses MapxGraph (22 languages, 26 MCP tools).
 
 ## Key Commands
 - Run \`mapx export\` to retrieve a token-budgeted codebase summary.
-- Run \`mapx query <symbol>\` to find definitions.
-- Run \`mapx search <term>\` for advanced filtered search.
+- Run \`mapx query <symbol>\` to find definitions (supports glob: \`*Service\`, \`get*\`).
+- Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains.
 - Run \`mapx impact <symbol>\` to assess change risk before refactoring.
 - Run \`mapx trace <symbol>\` to trace data flow.
@@ -460,7 +471,7 @@ This project uses MapxGraph (22 languages, 25 MCP tools).
 ## Context
 
 Triggered when a new task is received, before any planning, reasoning, or execution steps begin.
-This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 25 MCP tools) that provides persistent, structured understanding of the codebase.
+This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 26 MCP tools) that provides persistent, structured understanding of the codebase.
 
 ## Requirements
 
@@ -499,6 +510,7 @@ After completing file writes:
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
+**Orchestration:** \`mapx_batch\`
 
 ## Key Principles
 
@@ -512,7 +524,7 @@ After completing file writes:
     isAppend: false,
     content: `# MapX MCP Server - Agent Instructions Guide
 
-MapX exposes a set of powerful Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase. 
+MapX exposes **26** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
 
 ---
 
@@ -521,6 +533,7 @@ MapX exposes a set of powerful Model Context Protocol (MCP) tools that allow AI 
 1. **Start of Session**: Call \`mapx_status\` to see if the index is up to date, followed by \`mapx_export\` (format: \`llm\` or \`toon\`) to quickly understand the overall workspace layout.
 2. **Before Searching or Querying**: If you or the user made any code changes, run \`mapx_sync\` first to incrementally update the graph index.
 3. **Smart Context Building**: Call \`mapx_context\` to automatically build a token-efficient context of relevant files and dependencies for a specific task.
+4. **Batch Operations**: Use \`mapx_batch\` to execute multiple operations (search, node, callers, callees, deps) in a single round-trip call.
 
 ---
 
@@ -536,37 +549,85 @@ Generates task-specific workspace context by running graph-expansion and keyword
   - \`depth\` (number): Graph traversal depth (default: \`2\`).
 
 ### 2. \`mapx_search\` (Advanced Symbol Search)
-Allows filtering and searching for code symbols (classes, methods, functions, etc.).
+Searches for code symbols with glob pattern support and fuzzy error recovery.
 - **Parameters**:
-  - \`term\` (string): The query string. To retrieve **all** symbols in a file, pass \`*\` (wildcard) as the term along with the \`file\` parameter.
+  - \`term\` (string): The query string. Supports wildcards (\`*\`), glob patterns (\`*Service\`, \`get?\`), and empty string to list all.
   - \`kind\` (string): Filter by symbol kind (case-insensitive). Valid kinds: \`class\`, \`method\`, \`function\`, \`interface\`, \`trait\`, \`constant\`, \`enum\`, \`property\`, \`namespace\`, \`struct\`, \`module\`.
   - \`file\` (string): Path prefix to restrict the search to a directory or specific file.
   - \`exact\` (boolean): Whether to match the name exactly (default: \`false\`).
   - \`limit\` (number): Maximum number of results to return (default: \`20\`).
+  - \`format\` (string): Output format: \`text\` (default) or \`json\`.
+- **Auto-expand**: When a \`kind\` filter yields 0 results, search automatically retries without the filter and notifies you.
+- **Fuzzy fallback**: When no results are found, suggests similar symbol names using Fuse.js.
+- **Examples**:
+  - \`{ "term": "*", "kind": "class" }\` → all classes
+  - \`{ "term": "*Service", "kind": "class" }\` → classes ending with "Service"
+  - \`{ "term": "get*", "file": "src/core/" }\` → symbols starting with "get" in src/core/
 
-### 3. \`mapx_status\` (Index Status & Breakdown)
+### 3. \`mapx_query\` (Quick Symbol Search)
+Simpler search by name pattern. Supports the same glob patterns as \`mapx_search\` but without filters.
+- **Parameters**:
+  - \`term\` (string): Search query with optional glob patterns.
+
+### 4. \`mapx_node\` (Symbol Details & Source Extraction)
+Fetches metadata for a single symbol (file path, line range, signature) and can optionally extract the exact source code.
+- Set \`source: true\` to view the symbol's implementation.
+- Set \`format: "json"\` for structured JSON output.
+- Shows related symbols: callers, callees, and sibling symbols in the same file.
+- **Fuzzy fallback**: Suggests similar names if symbol not found.
+
+### 5. \`mapx_batch\` (Batch Operations)
+Execute multiple operations in a single round-trip call to reduce latency.
+- **Parameters**:
+  - \`operations\` (array): Each operation has \`tool\` (search, node, callers, callees, deps) and \`args\`.
+  - \`maxItems\` (number): Maximum operations per batch (default: 10).
+- **Example**:
+  \`\`\`json
+  { "operations": [
+    { "tool": "search", "args": { "term": "*Controller", "kind": "class" } },
+    { "tool": "node", "args": { "symbol": "UserController", "source": true } }
+  ] }
+  \`\`\`
+
+### 6. \`mapx_status\` (Index Status & Breakdown)
 Checks indexing state, language counts, top files/symbols, and Git status.
 - Use this to check if index is stale and see PageRank rankings.
 
-### 4. \`mapx_sync\` (Incremental Indexing)
+### 7. \`mapx_sync\` (Incremental Indexing)
 Scans only modified/new files since the last scan and updates the graph index. Fast and efficient.
 - Call this immediately after modifying files.
 
-### 5. \`mapx_scan\` (Full Indexing)
+### 8. \`mapx_scan\` (Full Indexing)
 Performs a full clean re-scan of the codebase. Use only for major structural updates.
 
-### 6. \`mapx_impact\` (Change Impact Analysis)
+### 9. \`mapx_impact\` (Change Impact Analysis)
 Traces transitive callers of a symbol up to a certain depth and grades the change risk (\`HIGH\`, \`MEDIUM\`, or \`LOW\`).
 - Depth 1 is graded \`HIGH\`/\`MEDIUM\` risk, depth 2+ is \`MEDIUM\`/\`LOW\` risk.
 - Calling sites inside test files or wrapped in try/catch blocks are automatically labeled as \`LOW\` risk.
+- **Fuzzy pre-check**: Validates symbol existence before running analysis; suggests alternatives if not found.
 
-### 7. \`mapx_node\` (Symbol Details & Source Extraction)
-Fetches metadata for a single symbol (file path, line range, signature) and can optionally extract the exact source code.
-- Set \`source: true\` to view the symbol's implementation.
+### 10. \`mapx_callers\` / \`mapx_callees\` (Call Graph)
+Direct and nested callers/callees of a symbol.
+- \`depth\` (number): Max traversal depth (default: 1).
+- **Fuzzy fallback**: Suggests similar names if symbol not found.
 
-### 8. \`mapx_trace\` (Data-Flow Tracing)
+### 11. \`mapx_trace\` (Data-Flow Tracing)
 Follows data-bearing edges forward/backward through the graph to trace data propagation.
 - Use \`direction: "up"\` or \`direction: "down"\` to trace dependencies.
+
+### 12. \`mapx_dependencies\` / \`mapx_sources\` / \`mapx_sinks\`
+- \`mapx_dependencies\`: Get deps and reverse-deps for a file.
+- \`mapx_sources\`: Find entry points (data sources) in the codebase.
+- \`mapx_sinks\`: Find terminal consumers (data sinks) in the codebase.
+
+### 13. \`mapx_files\` / \`mapx_clusters\` / \`mapx_export\` / \`mapx_workspaces\`
+- \`mapx_files\`: List and filter files by path, language, and size or line counts.
+- \`mapx_clusters\`: List code clusters/modules.
+- \`mapx_export\`: Export compact graph summary (formats: llm, json, dot, svg, toon).
+- \`mapx_workspaces\`: Retrieve workspace configuration and repositories (list/discover).
+
+### 14. \`mapx_lang_list\` / \`mapx_lang_install\` / \`mapx_lang_uninstall\`
+Manage supported languages and dynamic grammar installation.
 
 ---
 
@@ -577,6 +638,10 @@ Follows data-bearing edges forward/backward through the graph to trace data prop
 2. Review the resulting context and list of files.
 3. Open and modify the required files.
 4. Call \`mapx_sync\` to update the index.
-5. Use \`mapx_impact\` on the modified symbols to make sure you didn't break callers elsewhere.`
+5. Use \`mapx_impact\` on the modified symbols to make sure you didn't break callers elsewhere.
+
+### Scenario: Batch investigation
+1. Use \`mapx_batch\` to search for multiple symbol patterns and fetch their details in one call.
+2. Review results, then use \`mapx_callers\` to trace upstream dependents.`
   }
 };

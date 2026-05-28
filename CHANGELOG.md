@@ -8,6 +8,25 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+
+- **Fuzzy Symbol Suggestions (CLI & MCP)** — When a symbol is not found, all symbol-accepting commands (`query`, `search`, `callers`, `callees`, `impact`, `node`) now use [Fuse.js](https://fusejs.io/) to suggest up to 5 similar symbol names ranked by edit distance. Created `src/core/fuzzy-matcher.ts` as a shared module for both CLI and MCP tools.
+- **`mapx_batch` MCP Tool** — New orchestration tool that executes multiple operations (`search`, `node`, `callers`, `callees`, `deps`) in a single round-trip call. Supports configurable `maxItems` limit (default: 10) with per-operation error isolation.
+- **JSON Output for `search` and `node` CLI Commands** — Added `--format json` option to `mapx search` and `mapx node` CLI commands, producing structured JSON output with symbol metadata, PageRank scores, and optional source code.
+- **Summary Headers (CLI & MCP)** — All search/query/caller/callee/files results now include a count summary header (e.g. `Found 20 symbols of kind "class":`), active filters, and broadening notices.
+- **GitHub Actions CI Workflow** — Added `.github/workflows/ci.yml` with 4 jobs: type check, unit tests with coverage, build verification, and integration tests exercising glob/fuzzy/batch features.
+- **Unit Test Suite (Vitest)** — Added `vitest` with `@vitest/coverage-v8` for unit testing. Created `tests/fuzzy-matcher.test.ts` (16 tests) and `tests/store-search.test.ts` (17 tests) covering glob patterns, wildcards, case-insensitive matching, fuzzy suggestions, kind filtering, and search-with-filter logic.
+
+### Changed
+
+- **Wildcard & Glob Pattern Support (CLI & MCP)** — `mapx query`, `mapx search`, `mapx_query`, and `mapx_search` now support wildcard (`*`, empty string) and glob patterns (`*Service`, `get?`, `*Controller*`). The original bug where `{ "term": "*", "kind": "enum" }` returned no results is fixed. Glob patterns are converted to SQL `LIKE` patterns (`*` → `%`, `?` → `_`).
+- **Case-Insensitive Symbol Search** — All symbol name matching across `searchSymbols()` and `searchSymbolsFiltered()` now uses `COLLATE NOCASE` for consistent case-insensitive behavior.
+- **Auto-Expand on Zero Results** — When a `--kind` filter yields zero results in `search`/`mapx_search`, the search automatically retries without the kind filter and notifies the user that results were broadened.
+- **Enhanced Staleness Warnings (CLI & MCP)** — Staleness warnings now list up to 5 changed file names (e.g. `Changed: src/mcp.ts, src/cli.ts (and 3 more)`) instead of just showing a count.
+- **Enriched MCP Tool Schemas** — All 9 major MCP tool descriptions rewritten with concrete JSON usage examples, search mode documentation, and `kind` field `enum` constraint. Tools: `mapx_search`, `mapx_query`, `mapx_node`, `mapx_callers`, `mapx_callees`, `mapx_impact`, `mapx_context`, `mapx_files`, `mapx_export`.
+- **Related Symbols in `mapx_node` / `mapx node`** — Node inspection now shows a "Related symbols" sidebar listing callers, callees, and sibling symbols in the same file.
+- **Updated Agent Templates** — All 12 agent integration templates (AGENTS.md, CLAUDE.md, Cursor, Windsurf, Copilot, Aider, Gemini, Zed, Continue, Cline, Antigravity, Instructions) updated to document glob patterns, fuzzy fallback, `--format json`, `mapx_batch`, and 26-tool count.
+
 ## [0.2.7] — 2026-05-28
 
 ### Added

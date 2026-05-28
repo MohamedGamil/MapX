@@ -94,7 +94,10 @@
     "workspaces:sync": "tsx src/main.ts workspaces sync",
     "bench": "tsx benchmarks/run.ts",
     "bench:json": "tsx benchmarks/run.ts --json",
-    "test": "tsx src/main.ts scan && tsx src/main.ts export"
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",
@@ -106,6 +109,7 @@
     "cytoscape-dagre": "^3.0.0",
     "cytoscape-elk": "^2.3.0",
     "cytoscape-fcose": "^2.2.0",
+    "fuse.js": "^7.3.0",
     "graphology": "^0.26.0",
     "graphology-metrics": "^2.4.0",
     "minimatch": "^10.2.5",
@@ -129,6 +133,7 @@
     "@types/cytoscape": "^3.21.9",
     "@types/cytoscape-dagre": "^2.3.4",
     "@types/node": "^22.19.19",
+    "@vitest/coverage-v8": "^4.1.7",
     "esbuild": "^0.28.0",
     "graphology-types": "^0.24.8",
     "tree-sitter-c": "^0.23.4",
@@ -141,7 +146,8 @@
     "tree-sitter-vue": "^0.2.1",
     "tsup": "^8.5.1",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.7"
   },
   "publishConfig": {
     "access": "public",

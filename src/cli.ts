@@ -25,6 +25,7 @@ import { isLanguageInstalled, installLanguage, uninstallLanguage } from './langu
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { VERSION } from './version.js';
+import { findSimilarSymbols } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
@@ -738,7 +739,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
   program
     .command('query <term>')
-    .description('Search for symbols by name')
+    .description('Search for symbols by name (supports glob patterns: *Service, get*)')
     .option('-d, --dir <path>', 'Target directory')
     .action(async (term: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
@@ -747,10 +748,21 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const results = store.searchSymbols(term);
       if (results.length === 0) {
+        // Fuzzy fallback: suggest similar symbol names
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(term, candidates);
         console.log(`No symbols matching "${term}"`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+          }
+        }
+        console.log(`\nTip: Use glob patterns like "${term.length > 3 ? term.slice(0, 4) : term}*" or "*" to list all.`);
         return;
       }
 
+      console.log(`Found ${results.length} symbol${results.length !== 1 ? 's' : ''} matching "${term}":\n`);
       for (const sym of results) {
         const scope = sym.scope ? `${sym.scope}::` : '';
         console.log(`  ${sym.kind} ${scope}${sym.name}`);
@@ -763,27 +775,55 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
   program
     .command('search <term>')
-    .description('Symbol search with kind/file/exact filters')
+    .description('Symbol search with kind/file/exact filters and glob patterns (*, ?)')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--kind <kind>', 'Filter by symbol kind (case-insensitive: class, method, function, interface, trait, constant, enum, property, namespace, struct, module)')
+    .option('--kind <kind>', 'Filter by symbol kind (class, method, function, interface, trait, constant, enum, property, namespace, struct, module)')
     .option('--file <prefix>', 'Filter by file path prefix')
-    .option('--exact', 'Only match exact name', false)
+    .option('--exact', 'Only match exact name (case-insensitive)', false)
     .option('--limit <limit>', 'Max results to return', '20')
+    .option('--format <format>', 'Output format: text | json', 'text')
     .action(async (term: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store, graph } = await loadContext(dir);
       checkAndPrintStaleness(store, dir);
 
-      const results = store.searchSymbolsFiltered({
-        term,
-        kind: opts.kind as string,
-        filePrefix: opts.file as string,
-        exact: !!opts.exact,
-        limit: parseInt(opts.limit as string, 10),
-      });
+      const kind = opts.kind as string | undefined;
+      const filePrefix = opts.file as string | undefined;
+      const exact = !!opts.exact;
+      const limit = parseInt(opts.limit as string, 10);
+      const format = (opts.format as string) || 'text';
+
+      let results = store.searchSymbolsFiltered({ term, kind, filePrefix, exact, limit });
+      let broadened = false;
+
+      // Auto-expand: if kind filter yields 0 results, retry without kind
+      if (results.length === 0 && kind && term !== '*' && term !== '') {
+        const withoutKind = store.searchSymbolsFiltered({ term, filePrefix, exact, limit });
+        if (withoutKind.length > 0) {
+          results = withoutKind;
+          broadened = true;
+        }
+      }
 
       if (results.length === 0) {
+        // Fuzzy fallback
         console.log(`No symbols matching "${term}"`);
+        if (kind) {
+          const kinds = store.listSymbolKinds();
+          console.log(`\nAvailable kinds:`);
+          for (const k of kinds) console.log(`  ${k.kind}: ${k.count} symbols`);
+        }
+        if (term !== '*' && term !== '') {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(term, candidates);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+          console.log(`\nTip: Use term="*" to list all, or glob patterns like "${term.length > 3 ? term.slice(0, 4) : term}*"`);
+        }
         return;
       }
 
@@ -792,6 +832,29 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const item of rankedAll) {
         rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
       }
+
+      // JSON format
+      if (format === 'json') {
+        const jsonResults = results.map(sym => ({
+          name: sym.name,
+          kind: sym.kind,
+          scope: sym.scope || null,
+          file: sym.file_path,
+          line: sym.start_line,
+          endLine: sym.end_line,
+          signature: sym.signature || '',
+          pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
+        }));
+        console.log(JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2));
+        return;
+      }
+
+      // Summary header
+      let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+      if (kind && !broadened) header += ` of kind "${kind}"`;
+      if (filePrefix) header += ` in ${filePrefix}`;
+      if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;
+      console.log(header + ':\n');
 
       for (const sym of results) {
         const scope = sym.scope ? `${sym.scope}::` : '';
@@ -847,11 +910,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (results.length === 0) {
-        console.log(`No callers found for "${symbol}"`);
+        // Fuzzy fallback: check if symbol exists
+        const sym = store.getSymbolByName(symbol);
+        if (!sym) {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbol, candidates);
+          console.log(`Symbol "${symbol}" not found.`);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+        } else {
+          console.log(`No callers found for "${symbol}"`);
+        }
         return;
       }
 
-      console.log(`Callers of "${symbol}":`);
+      console.log(`${results.length} caller${results.length !== 1 ? 's' : ''} of "${symbol}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:`);
       for (const res of results) {
         const indent = '  '.repeat(res.depth);
         console.log(`${indent}← ${res.caller} (calls ${res.callee})`);
@@ -900,11 +977,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (results.length === 0) {
-        console.log(`No callees found for "${symbol}"`);
+        // Fuzzy fallback: check if symbol exists
+        const sym = store.getSymbolByName(symbol);
+        if (!sym) {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbol, candidates);
+          console.log(`Symbol "${symbol}" not found.`);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+        } else {
+          console.log(`No callees found for "${symbol}"`);
+        }
         return;
       }
 
-      console.log(`Callees of "${symbol}":`);
+      console.log(`${results.length} callee${results.length !== 1 ? 's' : ''} of "${symbol}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:`);
       for (const res of results) {
         const indent = '  '.repeat(res.depth);
         console.log(`${indent}→ ${res.callee} (called by ${res.caller})`);
@@ -923,6 +1014,21 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const { store } = await loadContext(dir);
       checkAndPrintStaleness(store, dir);
       const maxDepth = parseInt(opts.depth as string, 10);
+
+      // Fuzzy pre-check: verify symbol exists before running analysis
+      const sym = store.getSymbolByName(symbol);
+      if (!sym) {
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(symbol, candidates);
+        console.error(`Error: Symbol "${symbol}" not found.`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+          }
+        }
+        process.exit(1);
+      }
 
       const analyzer = new ImpactAnalyzer(store);
       const result = analyzer.analyze(symbol, maxDepth, dir);
@@ -947,20 +1053,60 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Show full symbol details and optional source code')
     .option('-d, --dir <path>', 'Target directory')
     .option('--source', 'Extract and display source code', false)
+    .option('--format <format>', 'Output format: text | json', 'text')
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
       checkAndPrintStaleness(store, dir);
-      const { readFileSync } = await import('node:fs');
 
       const sym = store.getSymbolByName(symbol);
       if (!sym) {
-        console.error(`Error: Symbol "${symbol}" not found`);
+        // Fuzzy fallback
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(symbol, candidates);
+        console.error(`Error: Symbol "${symbol}" not found.`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+          }
+        }
+        console.log(`\nTip: Use mapx search to find symbols by pattern. Example: mapx search "${symbol.length > 3 ? symbol.slice(0, 4) : symbol}*"`);
         process.exit(1);
       }
 
       const callers = store.getCallersOfSymbol(symbol);
       const callees = store.getCalleesOfSymbol(symbol);
+      const format = (opts.format as string) || 'text';
+
+      // JSON format
+      if (format === 'json') {
+        const result: Record<string, any> = {
+          name: sym.name,
+          kind: sym.kind,
+          scope: sym.scope || null,
+          file: sym.file_path,
+          startLine: sym.start_line,
+          endLine: sym.end_line,
+          signature: sym.signature || '',
+          callerCount: callers.length,
+          calleeCount: callees.length,
+        };
+        if (opts.source) {
+          try {
+            const absolutePath = resolve(dir, sym.file_path as string);
+            const content = readFileSync(absolutePath, 'utf8');
+            const lines = content.split('\n');
+            const start = (sym.start_line as number) - 1;
+            const end = (sym.end_line as number);
+            result.source = lines.slice(start, end).join('\n');
+          } catch (err: any) {
+            result.sourceError = err.message;
+          }
+        }
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
 
       console.log(`Symbol: ${sym.scope ? `${sym.scope}::` : ''}${sym.name}`);
       console.log(`Kind:   ${sym.kind}`);
@@ -2512,7 +2658,24 @@ export function getStaleFilesCount(store: Store, dir: string): number {
 export function checkAndPrintStaleness(store: Store, dir: string): void {
   const staleCount = getStaleFilesCount(store, dir);
   if (staleCount > 0) {
-    console.warn(`⚠️  Warning: Graph index may be stale. ${staleCount} file(s) have changed on disk since the last scan. Run 'mapx update' to sync.\n`);
+    // Show up to 5 changed file names
+    const files = store.getAllFiles();
+    const changed: string[] = [];
+    for (const file of files) {
+      if (changed.length >= 5) break;
+      const absPath = resolve(dir, file.path as string);
+      if (existsSync(absPath)) {
+        const stats = statSync(absPath);
+        const dbTime = new Date(file.last_scanned as string).getTime();
+        if (stats.mtimeMs > dbTime) changed.push(file.path as string);
+      } else {
+        changed.push(`${file.path} (deleted)`);
+      }
+    }
+    const fileList = changed.length > 0
+      ? `\nChanged: ${changed.join(', ')}${staleCount > changed.length ? ` (and ${staleCount - changed.length} more)` : ''}`
+      : '';
+    console.warn(`⚠️  Warning: Graph index may be stale. ${staleCount} file(s) have changed on disk since the last scan. Run 'mapx update' to sync.${fileList}\n`);
   }
 }
 

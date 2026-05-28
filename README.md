@@ -2,7 +2,7 @@
 
 **Local code graph memory for LLMs.** Scan your codebase once — instantly query symbols, trace dependencies, analyze impact, and generate structured summaries without re-reading files.
 
-MapXGraph _-also known as MapX-_ uses [tree-sitter](https://tree-sitter.github.io/) to parse source files across **22 languages**, builds a PageRank-weighted dependency graph, and persists everything to a local SQLite database. Works as a standalone CLI or as an [MCP server](https://modelcontextprotocol.io/) with **25 tools** for Claude Desktop, Cursor, VS Code, and any other MCP-compatible client.
+MapXGraph _-also known as MapX-_ uses [tree-sitter](https://tree-sitter.github.io/) to parse source files across **22 languages**, builds a PageRank-weighted dependency graph, and persists everything to a local SQLite database. Works as a standalone CLI or as an [MCP server](https://modelcontextprotocol.io/) with **26 tools** for Claude Desktop, Cursor, VS Code, and any other MCP-compatible client.
 
 ---
 
@@ -13,7 +13,8 @@ MapXGraph _-also known as MapX-_ uses [tree-sitter](https://tree-sitter.github.i
 - **Incremental scans** — git-aware change detection; only re-parses files that changed
 - **Fast** — parallelised file reads, bounded WASM concurrency, batched SQLite writes
 - **Resumable** — scan progress is checkpointed; `Ctrl+C` and re-run picks up where it left off
-- **25 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, workspaces, and more
+- **26 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and more
+- **Flexible search** — wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON output
 - **Data flow tracing** — trace call chains, find sources/sinks, analyze change impact with blast radius scoring
 - **Multi-repo workspaces** — register multiple repos, discover submodules, track cross-repo dependencies
 - **Multiple export formats** — LLM summary (token-budgeted), JSON, GraphViz DOT, SVG, TOON
@@ -131,14 +132,14 @@ mapx -d /path/to/project export
 | `mapx scan [path]` | Full scan — builds the graph from scratch (supports `--force` to bypass cache) |
 | `mapx update [path]` | Incremental scan — only re-parses changed files |
 | `mapx status [path]` | Show graph metrics, language breakdown, PageRank rankings, git changes |
-| `mapx query <term>` | Search symbols by name (partial match) |
-| `mapx search <term>` | Advanced symbol search with `--kind`, `--file`, `--exact`, `--limit` filters |
+| `mapx query <term>` | Search symbols by name — supports glob patterns (`*Service`, `get*`) and fuzzy suggestions |
+| `mapx search <term>` | Advanced symbol search with `--kind`, `--file`, `--exact`, `--limit`, `--format` filters and auto-expand |
 | `mapx deps <file>` | Show dependencies and reverse-dependencies |
 | `mapx trace <symbol>` | Trace data flow paths from a symbol |
-| `mapx callers <symbol>` | Show direct and nested callers |
-| `mapx callees <symbol>` | Show direct and nested callees |
-| `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring |
-| `mapx node <symbol>` | Inspect a symbol with metadata and optional `--source` |
+| `mapx callers <symbol>` | Show direct and nested callers (with fuzzy fallback) |
+| `mapx callees <symbol>` | Show direct and nested callees (with fuzzy fallback) |
+| `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring (with fuzzy pre-check) |
+| `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, and `--format json` |
 | `mapx files` | List and filter files with `--path`, `--lang`, `--sort`, `--limit` |
 | `mapx clusters` | List detected code clusters/modules |
 | `mapx export` | Export graph (default: LLM summary, 8K tokens) |
@@ -226,7 +227,7 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 }
 ```
 
-### Available MCP tools (25 total)
+### Available MCP tools (26 total)
 
 | Category | Tools |
 |----------|-------|
@@ -235,6 +236,7 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 | **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks` |
 | **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status` |
 | **Export** | `mapx_export`, `mapx_context` |
+| **Orchestration** | `mapx_batch` |
 | **Workspaces** | `mapx_workspaces` |
 | **Language Management** | `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall` |
 
@@ -422,7 +424,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 |-----|-------------|
 | [Getting Started](docs/getting-started.md) | Installation, quick start, supported languages |
 | [CLI Reference](docs/cli-reference.md) | All 31 commands and their flags |
-| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 25 tools |
+| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 26 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |
