@@ -251,6 +251,9 @@ test-clean: ## Clean test: remove .mapx and re-test
 	rm -rf $(DIR)/.mapx
 	$(MAKE) test DIR=$(DIR)
 
+test-ci: ## Test using vitest
+	npm run test -- --coverage
+
 # ── Lint & Typecheck ──────────────────────────────────────────
 
 typecheck: ## Run TypeScript type checking

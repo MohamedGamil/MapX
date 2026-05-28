@@ -20,7 +20,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'text-summary', 'lcov'],
       reportsDirectory: './coverage',
-      include: ['src/core/**', 'src/mcp.ts', 'src/cli.ts'],
+      include: ['src/core/**', 'src/agents/**', 'src/mcp.ts', 'src/cli.ts'],
       exclude: [
         'src/ui/**',
         'src/**/*.d.ts',
