@@ -1,4 +1,4 @@
-<!-- mapx v0.2.8 -->
+<!-- mapx v0.3.0 -->
 ## MapxGraph Integration
 
 This project uses MapxGraph (22 languages, 26 MCP tools). You can run the following CLI commands to understand the codebase:
