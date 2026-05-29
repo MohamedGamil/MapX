@@ -187,6 +187,31 @@ export class ContextBuilder {
     }
 
     const candidates = Array.from(distances.keys());
+
+    const seedClusters = new Set<string>();
+    if (seedFiles.size > 0) {
+      try {
+        const placeholders = Array.from(seedFiles).map(() => '?').join(',');
+        const sql = `SELECT cluster_name FROM cluster_membership WHERE file_path IN (${placeholders}) AND is_primary = 1`;
+        const rows = this.store.raw.prepare(sql).all(...Array.from(seedFiles)) as Array<{ cluster_name: string }>;
+        for (const r of rows) {
+          seedClusters.add(r.cluster_name);
+        }
+      } catch (e) {}
+    }
+
+    const candidateClustersMap = new Map<string, string>();
+    if (candidates.length > 0) {
+      try {
+        const placeholders = candidates.map(() => '?').join(',');
+        const sql = `SELECT file_path, cluster_name FROM cluster_membership WHERE file_path IN (${placeholders}) AND is_primary = 1`;
+        const rows = this.store.raw.prepare(sql).all(...candidates) as Array<{ file_path: string; cluster_name: string }>;
+        for (const r of rows) {
+          candidateClustersMap.set(r.file_path, r.cluster_name);
+        }
+      } catch (e) {}
+    }
+
     const candidateScores = candidates.map(path => {
       const depth = distances.get(path)!;
       const dbFile = this.store.getFile(path);
@@ -230,6 +255,12 @@ export class ContextBuilder {
       // PageRank tie-breaker
       const pr = rankedMap.get(path) || 0;
       score += pr * 20;
+
+      // Cluster grouping boost
+      const fileCluster = candidateClustersMap.get(path);
+      if (fileCluster && seedClusters.has(fileCluster)) {
+        score += 150;
+      }
 
       return {
         path,

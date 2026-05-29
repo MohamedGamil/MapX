@@ -51,7 +51,11 @@ export const INSTALLABLE_LANGUAGES: Record<string, InstallableLanguageInfo> = {
 
 export function isLanguageInstalled(name: string): boolean {
   // Built-in/bundled languages are considered always installed (they are loaded from the package)
-  const builtins = ['php', 'javascript', 'typescript', 'python', 'go', 'rust', 'java', 'c-sharp'];
+  const builtins = [
+    'php', 'javascript', 'typescript', 'python', 'go', 'rust', 'java', 'c-sharp',
+    'ruby', 'c', 'cpp', 'swift', 'kotlin', 'scala', 'vue',
+    'svelte', 'lua', 'elixir', 'zig', 'bash', 'pascal', 'dart'
+  ];
   if (builtins.includes(name)) return true;
 
   const info = INSTALLABLE_LANGUAGES[name];

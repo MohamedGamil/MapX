@@ -2,7 +2,7 @@
 
 ## Overview
 
-MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **22 languages** across three tiers (built-in, bundled, installable) and provides **25 MCP tools** for LLM integration.
+MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **22 languages** across two tiers (built-in, bundled) and provides **26 MCP tools** for LLM integration.
 
 
 <!-- ![Architecture Diagram](./images/01-arch.png) -->
@@ -110,20 +110,19 @@ The `meta` table stores scan state including:
 
 ### Language Registry (`src/languages/registry.ts`)
 
-Central registry of all 22 supported languages with three tiers:
+Central registry of all 22 supported languages with two tiers:
 
 | Tier | Languages | WASM Path | Query Path |
 |------|-----------|-----------|------------|
 | **built-in** | PHP, JS, TS, Python, Go, Rust, Java, C# | `wasm/` (relative) | `queries/` (relative) |
-| **bundled** | Ruby, C, C++, Swift, Kotlin, Dart, Scala, Vue | `wasm/` (relative) | `queries/` (relative) |
-| **installable** | Svelte, Lua, Elixir, Zig, Bash, Pascal | `~/.mapx/grammars/` (absolute) | `~/.mapx/grammars/queries/` (absolute) |
+| **bundled** | Ruby, C, C++, Swift, Kotlin, Dart, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal | `wasm/` (relative) | `queries/` (relative) |
 
 Each language entry defines:
 - `extensions` — File extensions to match
 - `grammarWasm` — Path to tree-sitter WASM grammar
 - `queries` — Paths to `symbols.scm` and `references.scm` query files
 - `nodeMappings` — Maps `SymbolKind` values to AST node types for scope resolution and container detection
-- `tier` — `built-in`, `bundled`, or `installable`
+- `tier` — `built-in` or `bundled`
 
 ### Parsers (`src/parsers/`)
 

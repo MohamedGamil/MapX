@@ -48,7 +48,17 @@ specs/
 │   ├── F25-backend-frameworks.md   ← Feature 25: Backend framework routes (Rails, Spring, Go, Rust, ASP.NET, Vapor, Drupal, Laravel extended)
 │   ├── F26-php-cms-frameworks.md   ← Feature 26: PHP CMS/frameworks (Symfony, Yii2, Yii3, WordPress)
 │   ├── F27-toon-export.md           ← Feature 27: TOON (Token-Oriented Object Notation) export format
-│   └── F28-web-dashboard.md         ← Feature 28: Bundled lightweight web dashboard
+│   ├── F28-web-dashboard.md         ← Feature 28: Bundled lightweight web dashboard
+│   ├── F29-mcp-workspaces.md        ← Feature 29: mapx_workspaces MCP tool
+│   ├── F30-language-tier-alignment.md ← Feature 30: Language tier alignment
+│   ├── F31-cluster-export-flags.md   ← Feature 31: Cluster-aware export flags
+│   ├── F32-workspaces-discover.md    ← Feature 32: workspaces discover command
+│   ├── F33-language-syntax-coverage.md ← Feature 33: Language syntax coverage
+│   ├── F34-react-tsx-parser-fixes.md ← Feature 34: React & TSX parser fixes
+│   ├── F35-jsx-render-edges.md       ← Feature 35: JSX component rendering edges
+│   ├── F36-nestjs-decorators.md      ← Feature 36: NestJS decorator and DI parsing
+│   ├── F37-graph-resolution-filtering.md ← Feature 37: Graph resolution & noise reduction
+│   └── F38-mcp-usability-improvements.md ← Feature 38: MCP/CLI usability & context improvements
 │
 └── iterations/
     ├── I01.md                        ← Iteration 1: schema + parser labelling
@@ -65,7 +75,14 @@ specs/
     ├── I12.md                        ← Iteration 12: language expansion (19 languages)
     ├── I13.md                        ← Iteration 13: framework-aware parsing & route context
     ├── I14.md                        ← Iteration 14: TOON export format
-    └── I15.md                        ← Iteration 15: bundled web dashboard
+    ├── I15.md                        ← Iteration 15: bundled web dashboard
+    ├── I16.md                        ← Iteration 16: audit compliance fixes
+    ├── I17.md                        ← Iteration 17: comprehensive language syntax coverage
+    ├── I18.md                        ← Iteration 18: React & TSX parser fixes
+    ├── I19.md                        ← Iteration 19: JSX render edges
+    ├── I20.md                        ← Iteration 20: NestJS routes, hooks, & DI parsing
+    ├── I21.md                        ← Iteration 21: Graph resolution & noise reduction
+    └── I22.md                        ← Iteration 22: CLI/MCP search & context usability
 ```
 
 ---
@@ -107,6 +124,12 @@ specs/
 | F31 | Cluster-aware export flags (`--cluster`, `--depth`) | `done` | I16 | [F31](features/F31-cluster-export-flags.md) |
 | F32 | `mapx workspaces discover` CLI subcommand | `done` | I16 | [F32](features/F32-workspaces-discover.md) |
 | F33 | Comprehensive language syntax coverage (20 languages) | `done` | I17 | [F33](features/F33-language-syntax-coverage.md) |
+| F34 | React & TSX parser fixes | `done` | I18 | [F34](features/F34-react-tsx-parser-fixes.md) |
+| F35 | JSX component rendering edges | `done` | I19 | [F35](features/F35-jsx-render-edges.md) |
+| F36 | NestJS decorator and DI parsing | `done` | I20 | [F36](features/F36-nestjs-decorators.md) |
+| F37 | Graph resolution & noise reduction | `done` | I21 | [F37](features/F37-graph-resolution-filtering.md) |
+| F38 | MCP/CLI usability & context improvements | `done` | I22 | [F38](features/F38-mcp-usability-improvements.md) |
+
 
 **Status values:** `planned` · `in-progress` · `in-review` · `done` · `deferred` · `cancelled`
 
@@ -133,6 +156,12 @@ specs/
 | [I15](iterations/I15.md) | Bundled web dashboard (`mapx ui`) | `done` | F28 |
 | [I16](iterations/I16.md) | Audit compliance fixes | `done` | F29, F30, F31, F32 |
 | [I17](iterations/I17.md) | Comprehensive language syntax coverage | `done` | F33 |
+| [I18](iterations/I18.md) | React & TSX parser fixes | `done` | F34 |
+| [I19](iterations/I19.md) | JSX component rendering edges | `done` | F35 |
+| [I20](iterations/I20.md) | NestJS routes, hooks, & DI parsing | `done` | F36 |
+| [I21](iterations/I21.md) | Graph resolution & noise reduction | `done` | F37 |
+| [I22](iterations/I22.md) | CLI/MCP search & context usability | `done` | F38 |
+
 
 Iterations are intended to be **sequentially deliverable** but where features have no cross-dependency they can be parallelised. See each iteration doc for explicit dependency declarations.
 
@@ -229,4 +258,13 @@ I15 (F28: web dashboard)
  ├── Requires I07 (F13 npm dist) — dashboard assets must be shippable in the npm package
  ├── Richer with I08 (clusters), I10 (git), I11 (smart context), I13 (routes) — degrades gracefully without each
  └── MCP tool-call log requires mapx serve (any iteration) — standalone mapx ui still works without it
+
+I18 (F34: React & TSX parser fixes)
+ └── I19 depends on I18 (JSX rendering edges need component symbols to exist first)
+
+I20 (F36: NestJS routes, hooks, & DI parsing) — independent of React work, but requires I17 syntax coverage foundation
+
+I21 (F37: Graph resolution & noise reduction) — independent of React/NestJS work
+
+I22 (F38: CLI/MCP search & context usability) — independent, optimizes search/context tools and instructions
 ```

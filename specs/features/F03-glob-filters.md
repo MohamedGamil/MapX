@@ -50,7 +50,7 @@ mapx export [--dir <path>] [--exclude <glob,...>] [--include <glob,...>] [--form
 
 ### Pattern syntax
 
-- Patterns follow [minimatch](https://github.com/isaacs/minimatch) glob syntax (the same library already used by many Node.js tools).
+- Patterns follow [picomatch](https://github.com/micromatch/picomatch) glob syntax.
 - Multiple patterns are comma-separated or supplied via multiple flag repetitions:
   ```bash
   mapx scan --exclude="**/migrations/**,**/tests/**"
@@ -113,16 +113,31 @@ CLI flags **extend** (not replace) the config-level patterns unless `--no-config
 
 ### Pattern compilation
 
-Compile all active patterns into a single `(path: string) => boolean` predicate before the directory walk begins. Use [minimatch](https://github.com/isaacs/minimatch) (already a transitive dependency via npm; if not present, `micromatch` is an alternative with the same API).
+Compile all active patterns into a single `(path: string) => boolean` predicate before the directory walk begins. Use [picomatch](https://github.com/micromatch/picomatch).
 
 ```typescript
 // src/core/scanner.ts
-import { minimatch } from 'minimatch';
+import picomatch from 'picomatch';
 
 function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
   return (rel: string) => {
-    if (excludes.some(p => minimatch(rel, p, { dot: true }))) return false;
-    if (includes.length > 0 && !includes.some(p => minimatch(rel, p, { dot: true }))) return false;
+    if (excludes.some(p => {
+      if (picomatch.isMatch(rel, p, { dot: true })) return true;
+      const segments = rel.split('/');
+      if (segments.some(seg => seg === p)) return true;
+      return false;
+    })) {
+      return false;
+    }
+    if (includes.length > 0) {
+      const matched = includes.some(p => {
+        if (picomatch.isMatch(rel, p, { dot: true })) return true;
+        const segments = rel.split('/');
+        if (segments.some(seg => seg === p)) return true;
+        return false;
+      });
+      if (!matched) return false;
+    }
     return true;
   };
 }

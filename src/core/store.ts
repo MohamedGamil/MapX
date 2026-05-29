@@ -1,8 +1,10 @@
 import type { StoreBackend } from './store-interface.js';
-import { createRequire } from 'node:module';
 import type { MapxGraph } from './graph.js';
-
-const dynamicRequire = createRequire(import.meta.url);
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy-matcher.js';
+import { BunStore } from './store-bun.js';
+import { NodeStore } from './store-node.js';
 
 const CURRENT_SCHEMA_VERSION = 6;
 
@@ -139,10 +141,8 @@ const MIGRATIONS: Migration[] = [
 function createStoreBackend(dbPath: string): StoreBackend {
   const isBun = typeof (globalThis as any).Bun !== 'undefined';
   if (isBun) {
-    const { BunStore } = dynamicRequire('./store-bun.js');
     return new BunStore(dbPath);
   }
-  const { NodeStore } = dynamicRequire('./store-node.js');
   return new NodeStore(dbPath);
 }
 
@@ -150,6 +150,12 @@ export class Store {
   private backend: StoreBackend;
 
   constructor(dbPath: string) {
+    if (dbPath !== ':memory:') {
+      const parentDir = path.dirname(dbPath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+    }
     this.backend = createStoreBackend(dbPath);
     this.backend.exec(INITIAL_SCHEMA);
     this.runMigrations();
@@ -299,14 +305,24 @@ export class Store {
   }
 
   searchSymbols(namePattern: string, repo?: string): Record<string, unknown>[] {
+    // Support glob patterns: *Service → %Service, get* → get%
+    let likePattern: string;
+    if (isWildcardTerm(namePattern)) {
+      likePattern = '%';
+    } else if (isGlobPattern(namePattern)) {
+      likePattern = globToLike(namePattern);
+    } else {
+      likePattern = `%${namePattern}%`;
+    }
+
     if (repo) {
       return this.backend.prepare(
-        'SELECT * FROM symbols WHERE name LIKE ? AND repo = ? ORDER BY kind, name'
-      ).all(`%${namePattern}%`, repo);
+        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
+      ).all(likePattern, repo);
     }
     return this.backend.prepare(
-      'SELECT * FROM symbols WHERE name LIKE ? ORDER BY kind, name'
-    ).all(`%${namePattern}%`);
+      'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE ORDER BY kind, name'
+    ).all(likePattern);
   }
 
   getSymbolsForFile(filePath: string): Record<string, unknown>[] {
@@ -596,17 +612,30 @@ export class Store {
     let sql = 'SELECT * FROM symbols WHERE ';
     const params: any[] = [];
 
-    if (options.exact) {
-      sql += '(name = ? OR file_path = ?)';
+    const wildcard = isWildcardTerm(options.term);
+
+    if (wildcard) {
+      // Wildcard: match all symbols (no name filter)
+      // Works with or without a file prefix — the key behavioral fix
+      sql += '1=1';
+    } else if (options.exact) {
+      // Exact: case-insensitive exact name match
+      sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
       params.push(options.term, options.term);
+    } else if (isGlobPattern(options.term)) {
+      // Glob: convert * and ? to SQL LIKE wildcards, case-insensitive
+      const likePattern = globToLike(options.term);
+      sql += '(name LIKE ? COLLATE NOCASE)';
+      params.push(likePattern);
     } else {
-      sql += '(name LIKE ? OR file_path LIKE ?)';
+      // Default: substring match, case-insensitive
+      sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
       params.push(`%${options.term}%`, `%${options.term}%`);
     }
 
     if (options.kind) {
-      sql += ' AND kind = ?';
-      params.push(options.kind);
+      sql += ' AND LOWER(kind) = ?';
+      params.push(options.kind.toLowerCase());
     }
 
     if (options.filePrefix) {
@@ -623,6 +652,48 @@ export class Store {
     params.push(limit);
 
     return this.backend.prepare(sql).all(...params);
+  }
+
+  /**
+   * Return all distinct symbol names in the index.
+   * Used by the fuzzy matcher to generate suggestions when a search fails.
+   */
+  getAllSymbolNames(repo?: string): string[] {
+    const sql = repo
+      ? 'SELECT DISTINCT name FROM symbols WHERE repo = ? ORDER BY name'
+      : 'SELECT DISTINCT name FROM symbols ORDER BY name';
+    const rows = repo
+      ? this.backend.prepare(sql).all(repo)
+      : this.backend.prepare(sql).all();
+    return rows.map((r: any) => r.name as string);
+  }
+
+  /**
+   * Return all symbol kinds and their counts.
+   * Used to provide helpful error messages when a kind filter yields no results.
+   */
+  listSymbolKinds(repo?: string): { kind: string; count: number }[] {
+    const sql = repo
+      ? 'SELECT kind, COUNT(*) as count FROM symbols WHERE repo = ? GROUP BY kind ORDER BY count DESC'
+      : 'SELECT kind, COUNT(*) as count FROM symbols GROUP BY kind ORDER BY count DESC';
+    const rows = repo
+      ? this.backend.prepare(sql).all(repo)
+      : this.backend.prepare(sql).all();
+    return rows as { kind: string; count: number }[];
+  }
+
+  /**
+   * Return a lightweight candidates list for fuzzy matching.
+   * Only fetches name, kind, file_path — no full row scan.
+   */
+  getSymbolCandidatesForFuzzy(repo?: string): Array<{ name: string; kind: string; file_path: string }> {
+    const sql = repo
+      ? 'SELECT DISTINCT name, kind, file_path FROM symbols WHERE repo = ?'
+      : 'SELECT DISTINCT name, kind, file_path FROM symbols';
+    const rows = repo
+      ? this.backend.prepare(sql).all(repo)
+      : this.backend.prepare(sql).all();
+    return rows as Array<{ name: string; kind: string; file_path: string }>;
   }
 
   getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
@@ -705,7 +776,7 @@ export class Store {
 
     const results: Record<string, any>[] = [];
     for (const sym of symbols) {
-      let sql = 'SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?)';
+      let sql = "SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?) AND edge_type NOT IN ('import', 'require')";
       const params = [sym.file_path, sym.name, `${sym.scope}::${sym.name}`];
       if (repo) {
         sql += ' AND repo = ?';

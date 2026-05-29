@@ -1,6 +1,6 @@
 # MapxGraph — Implementation Checklist
 
-> 33 features · 17 iterations · schema v2 → v6 · ~37 CLI commands · 21 MCP tools  
+> 38 features · 22 iterations · schema v2 → v6 · ~37 CLI commands · 25 MCP tools  
 > Specs: [specs/README.md](specs/README.md) · Decisions: [specs/DECISIONS.md](specs/DECISIONS.md)
 
 ---
@@ -177,6 +177,40 @@
 - [x] **Bash**: Add variable assignment, alias symbols; add source/. includes, command substitution refs
 - [x] **Pascal**: Add class, record, interface, method, constant, unit, variable, enum symbols; add uses, extends, instantiation refs
 - [x] Update `nodeMappings` in `registry.ts` for all 20 languages
+
+---
+
+## Phase 9 — React & NestJS Deep Integration (I18–I20)
+
+### I18 · React & TSX Parser Fixes · F34 · Risk: Medium
+- [x] Fix TSX/TS parser to index default class/function exports and anonymous arrow exports (naming them based on filename)
+- [x] Fix file discovery/sync issue where `.tsx` files are silently omitted or missing from scans
+
+### I19 · JSX Component rendering edges · F35 · Risk: Medium · Requires: I18
+- [x] Extract JSX/TSX elements (e.g. `<LinksPage />`) to create `render` / `call` type edges from the rendering component/file to the target symbol
+
+### I20 · NestJS Routes, Hooks, & DI Parsing · F36 · Risk: Medium
+- [x] Extract NestJS route decorators (`@Controller`, `@Get`, `@Post`, `@Patch`, `@Delete`)
+- [x] Extract NestJS GraphQL resolvers (`@Resolver`, `@Query`, `@Mutation`)
+- [x] Parse implemented lifecycle hooks (`OnModuleInit`, `OnApplicationBootstrap`, etc.) and decorators (`@Injectable`, `@Inject`, `@UseGuards`, `@UseInterceptors`)
+- [x] Detect constructor parameter dependency injection to generate `param_type` / DI edges
+
+---
+
+## Phase 10 — Graph Accuracy & MCP Usability (I21–I22)
+
+### I21 · Graph Resolution & Noise Reduction · F37 · Risk: Medium
+- [x] Exclude built-in JS/TS globals (`Date`, `Error`, `Map`, `Set`, `Promise`, `Object`, etc.) from resolving to user-defined symbols during edge resolution
+- [x] Filter out or distinctively flag import-level `<top-level>` references to suppress caller noise in `mapx_callers`
+- [x] Enhance `mapx_impact` risk analysis with calling depth-based risk levels (HIGH/MEDIUM/LOW), test file flags, and try/catch checks
+- [x] Introduce a filesystem staleness warning when queries are run after modifications without syncing
+
+### I22 · CLI/MCP Search & Context Usability · F38 · Risk: Low
+- [x] Support wildcard `*` or empty string in `mapx_search` to list all symbols when a file filter is provided
+- [x] Case-insensitively map kinds (e.g. `interface`, `class`) in symbol queries and searches
+- [x] Fix required parameter `task` in `mapx_context` schema/docs and optimize token-budget relevance scoring
+- [x] Write detailed `instructions.md` with parameter and type documentation for the MCP server
+- [x] Add file-level summaries to `llm` export
 
 ---
 

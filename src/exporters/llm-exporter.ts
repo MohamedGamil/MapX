@@ -42,7 +42,14 @@ export class LLMExporter {
       parts.push(structureSection);
     }
 
-    const fileSection = this.buildFileSection(files, rankedFiles, edges);
+    const symsByFile = new Map<string, any[]>();
+    for (const s of symbols) {
+      const filePath = s.file_path as string;
+      if (!symsByFile.has(filePath)) symsByFile.set(filePath, []);
+      symsByFile.get(filePath)!.push(s);
+    }
+
+    const fileSection = this.buildFileSection(files, rankedFiles, edges, symsByFile);
     parts.push(fileSection);
 
     const symbolSection = this.buildSymbolSection(rankedSymbols, budget);
@@ -112,10 +119,35 @@ export class LLMExporter {
     return lines.join('\n');
   }
 
+  private getFileHeuristicSummary(fileSymbols: any[]): string {
+    if (!fileSymbols || fileSymbols.length === 0) return 'empty file';
+
+    const counts: Record<string, number> = {};
+    for (const s of fileSymbols) {
+      const kind = (s.kind as string).toLowerCase();
+      counts[kind] = (counts[kind] || 0) + 1;
+    }
+
+    // Sort counts by count descending, then kind name
+    const sortedKinds = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    
+    // Build dominant symbol types description
+    const parts: string[] = [];
+    for (const [kind, count] of sortedKinds.slice(0, 3)) {
+      parts.push(`${count} ${kind}${count > 1 ? (kind.endsWith('s') || kind.endsWith('ch') ? 'es' : 's') : ''}`);
+    }
+
+    const dominant = sortedKinds[0] ? sortedKinds[0][0] : '';
+    const dominantStr = dominant ? `, dominant: ${dominant}` : '';
+
+    return `contains ${parts.join(', ')}${dominantStr}`;
+  }
+
   private buildFileSection(
     files: Record<string, unknown>[],
     rankedFiles: Array<{ path: string; pagerank: number; language: string }>,
-    edges: Record<string, unknown>[]
+    edges: Record<string, unknown>[],
+    symsByFile: Map<string, any[]>
   ): string {
     const lines: string[] = [];
     lines.push(`## Files (${files.length})`);
@@ -142,7 +174,11 @@ export class LLMExporter {
       const lang = file.language as string;
       const deps = depMap.get(path);
       const depStr = deps ? ` → ${deps.join(', ')}` : '';
-      lines.push(`- ${path} [${lang}]${depStr}`);
+      
+      const fileSyms = symsByFile.get(path) || [];
+      const summary = this.getFileHeuristicSummary(fileSyms);
+      
+      lines.push(`- ${path} [${lang}] - ${summary}${depStr}`);
     }
 
     lines.push('');

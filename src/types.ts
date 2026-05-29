@@ -60,7 +60,8 @@ export type ReferenceType =
   | 'hook'
   | 'graphql_resolver'
   | 'message_handler'
-  | 'websocket_handler';
+  | 'websocket_handler'
+  | 'render';
 
 export interface ParseResult {
   symbols: ExtractedSymbol[];
@@ -191,7 +192,7 @@ export interface RepoSummary {
 export interface ScanContext {
   workspaceRoot: string;
   repoName: string;
-  resolveSymbolToFile: (symbolName: string) => string | null;
+  resolveSymbolToFile: (symbolName: string, sourcePath?: string) => string | null;
 }
 
 export interface RouteBinding {

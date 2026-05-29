@@ -117,35 +117,30 @@ The content is wrapped in markers:
 
 ## Supported Languages
 
-### Built-in (Tier 1) — Always available, shipped with the tool
+### Built-in (Tier 1) — Dedicated Parsers
 
 | Language | Extensions | Symbols Extracted |
 |----------|-----------|-------------------|
 | PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
 | JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
 | TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks) |
+
+### Bundled (Tier 2) — Generic WASM Parsers (Always Available)
+
+| Language | Extensions | Symbols Extracted |
+|----------|-----------|-------------------|
 | Python | `.py` | classes, functions, methods (auto-promoted), constants |
 | Go | `.go` | structs, interfaces, functions, methods, constants, packages, variables, type aliases |
 | Rust | `.rs` | structs, traits, enums, functions, impl blocks, constants, statics, modules, macros |
 | Java | `.java` | classes, interfaces, enums, methods, constructors, fields, constants, annotations, packages |
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, constants, namespaces, records, delegates |
-
-### Bundled (Tier 2) — Shipped with tool, available without install
-
-| Language | Extensions | Symbols Extracted |
-|----------|-----------|-------------------|
 | Ruby | `.rb` | classes, modules, methods, constants, properties (attr_*) |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros, unions |
 | C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties, extensions |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties, enum entries |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals, vars, packages |
-| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks) |
-
-### Installable (Tier 3) — Install via `mapx lang install <name>`
-
-| Language | Extensions | Symbols Extracted |
-|----------|-----------|-------------------|
 | Svelte | `.svelte` | functions, classes, methods, props, constants |
 | Lua | `.lua` | functions, methods, local functions, variables |
 | Elixir | `.ex`, `.exs` | modules, functions (def/defp), macros, structs, protocols |

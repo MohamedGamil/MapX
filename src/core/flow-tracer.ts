@@ -54,7 +54,8 @@ const DATA_BEARING_EDGES: string[] = [
   'relation',
   'dispatch',
   'notify',
-  'route'
+  'route',
+  'render'
 ];
 
 const STRUCTURAL_EDGES: string[] = [

@@ -1,6 +1,6 @@
 {
   "name": "@mgamil/mapx",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "license": "Apache-2.0",
   "description": "Multi-language code graph memory system for LLMs",
   "author": {
@@ -67,6 +67,9 @@
     "search": "tsx src/main.ts search",
     "deps": "tsx src/main.ts deps",
     "trace": "tsx src/main.ts trace",
+    "sources": "tsx src/main.ts sources",
+    "sinks": "tsx src/main.ts sinks",
+    "context": "tsx src/main.ts context",
     "callers": "tsx src/main.ts callers",
     "callees": "tsx src/main.ts callees",
     "impact": "tsx src/main.ts impact",
@@ -91,33 +94,48 @@
     "workspaces:sync": "tsx src/main.ts workspaces sync",
     "bench": "tsx benchmarks/run.ts",
     "bench:json": "tsx benchmarks/run.ts --json",
-    "test": "tsx src/main.ts scan && tsx src/main.ts export"
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@clack/prompts": "^1.4.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^12.10.0",
     "commander": "^13.1.0",
     "cytoscape": "^3.33.4",
+    "cytoscape-cola": "^2.5.1",
+    "cytoscape-dagre": "^3.0.0",
+    "cytoscape-elk": "^2.3.0",
+    "cytoscape-fcose": "^2.2.0",
+    "fuse.js": "^7.3.0",
     "graphology": "^0.26.0",
     "graphology-metrics": "^2.4.0",
-    "minimatch": "^10.2.5",
+    "picomatch": "^4.0.4",
     "tree-sitter-c-sharp": "0.23.5",
     "tree-sitter-go": "0.25.0",
     "tree-sitter-java": "0.23.5",
     "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-pascal": "^0.0.1",
     "tree-sitter-php": "^0.24.2",
     "tree-sitter-python": "0.25.0",
     "tree-sitter-rust": "0.24.0",
     "tree-sitter-typescript": "^0.23.2",
     "uplot": "^1.6.32",
     "web-tree-sitter": "^0.26.9",
-    "zod": "^3.25.0",
-    "@modelcontextprotocol/sdk": "^1.29.0"
+    "zod": "^3.25.0"
   },
-  "optionalDependencies": {},
+  "overrides": {
+    "prebuild-install": "github:prebuild/prebuild-install#v7.1.3"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/cytoscape": "^3.21.9",
+    "@types/cytoscape-dagre": "^2.3.4",
     "@types/node": "^22.19.19",
+    "@types/picomatch": "^4.0.3",
+    "@vitest/coverage-v8": "^4.1.7",
     "esbuild": "^0.28.0",
     "graphology-types": "^0.24.8",
     "tree-sitter-c": "^0.23.4",
@@ -130,7 +148,8 @@
     "tree-sitter-vue": "^0.2.1",
     "tsup": "^8.5.1",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.7"
   },
   "publishConfig": {
     "access": "public",

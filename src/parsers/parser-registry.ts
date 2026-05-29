@@ -37,6 +37,7 @@ function createParser(langDef: LanguageDefinition): LanguageParser {
     case 'javascript':
       return new JavaScriptParser(langDef);
     case 'typescript':
+    case 'tsx':
       return new TypeScriptParser(langDef);
     case 'vue':
       return new VueParser(langDef);

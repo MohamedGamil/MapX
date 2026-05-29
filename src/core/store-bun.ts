@@ -1,10 +1,13 @@
+import { createRequire } from 'node:module';
 import type { StoreBackend, PreparedStmt } from './store-interface.js';
+
+const _require = createRequire(import.meta.url);
 
 export class BunStore implements StoreBackend {
   private db: any;
 
   constructor(dbPath: string) {
-    const { Database } = require('bun:sqlite');
+    const { Database } = _require('bun:sqlite');
     this.db = new Database(dbPath, { create: true });
     this.pragma('journal_mode = WAL');
     this.pragma('busy_timeout = 5000');

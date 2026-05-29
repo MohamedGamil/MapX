@@ -38,7 +38,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   },
   javascript: {
     name: 'javascript',
-    extensions: ['.js', '.mjs', '.cjs'],
+    extensions: ['.js', '.mjs', '.cjs', '.jsx'],
     grammarWasm: 'wasm/tree-sitter-javascript.wasm',
     queries: {
       symbols: 'queries/javascript/symbols.scm',
@@ -64,6 +64,27 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     queries: {
       symbols: 'queries/typescript/symbols.scm',
       references: 'queries/typescript/references.scm',
+    },
+    nodeMappings: {
+      class: 'class_declaration',
+      method: 'method_definition',
+      function: 'function_declaration',
+      interface: 'interface_declaration',
+      constant: 'variable_declarator',
+      enum: 'enum_declaration',
+      property: 'property_identifier',
+      namespace: 'module',
+      trait: '',
+    },
+    tier: 'built-in',
+  },
+  tsx: {
+    name: 'tsx',
+    extensions: ['.tsx'],
+    grammarWasm: 'wasm/tree-sitter-tsx.wasm',
+    queries: {
+      symbols: 'queries/typescript/symbols.scm',
+      references: 'queries/typescript/references-tsx.scm',
     },
     nodeMappings: {
       class: 'class_declaration',
@@ -264,10 +285,10 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   svelte: {
     name: 'svelte',
     extensions: ['.svelte'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-svelte.wasm'),
+    grammarWasm: 'wasm/tree-sitter-svelte.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'svelte', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'svelte', 'references.scm'),
+      symbols: 'queries/svelte/symbols.scm',
+      references: 'queries/svelte/references.scm',
     },
     nodeMappings: {
       function: 'function_declaration',
@@ -276,7 +297,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       property: 'export_statement',
       constant: 'lexical_declaration',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   vue: {
     name: 'vue',
@@ -297,25 +318,25 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   lua: {
     name: 'lua',
     extensions: ['.lua'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-lua.wasm'),
+    grammarWasm: 'wasm/tree-sitter-lua.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'lua', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'lua', 'references.scm'),
+      symbols: 'queries/lua/symbols.scm',
+      references: 'queries/lua/references.scm',
     },
     nodeMappings: {
       function: 'function_definition',
       method: 'function_definition',
       constant: 'variable_assignment',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   elixir: {
     name: 'elixir',
     extensions: ['.ex', '.exs'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-elixir.wasm'),
+    grammarWasm: 'wasm/tree-sitter-elixir.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'elixir', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'elixir', 'references.scm'),
+      symbols: 'queries/elixir/symbols.scm',
+      references: 'queries/elixir/references.scm',
     },
     nodeMappings: {
       module: 'call',
@@ -324,15 +345,15 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       interface: 'call',
       constant: 'unary_operator',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   zig: {
     name: 'zig',
     extensions: ['.zig'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-zig.wasm'),
+    grammarWasm: 'wasm/tree-sitter-zig.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'zig', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'zig', 'references.scm'),
+      symbols: 'queries/zig/symbols.scm',
+      references: 'queries/zig/references.scm',
     },
     nodeMappings: {
       function: 'fn_proto',
@@ -340,29 +361,29 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       constant: 'variable_declaration',
       enum: 'error_set_declaration',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   bash: {
     name: 'bash',
     extensions: ['.sh', '.bash'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-bash.wasm'),
+    grammarWasm: 'wasm/tree-sitter-bash.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'bash', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'bash', 'references.scm'),
+      symbols: 'queries/bash/symbols.scm',
+      references: 'queries/bash/references.scm',
     },
     nodeMappings: {
       function: 'function_definition',
       constant: 'variable_assignment',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   pascal: {
     name: 'pascal',
     extensions: ['.pas', '.pp'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-pascal.wasm'),
+    grammarWasm: 'wasm/tree-sitter-pascal.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'pascal', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'pascal', 'references.scm'),
+      symbols: 'queries/pascal/symbols.scm',
+      references: 'queries/pascal/references.scm',
     },
     nodeMappings: {
       function: 'function_declaration',
@@ -375,15 +396,15 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       property: 'variable_declaration',
       enum: 'enum_type',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   dart: {
     name: 'dart',
     extensions: ['.dart'],
-    grammarWasm: join(homedir(), '.mapx', 'grammars', 'tree-sitter-dart.wasm'),
+    grammarWasm: 'wasm/tree-sitter-dart.wasm',
     queries: {
-      symbols: join(homedir(), '.mapx', 'grammars', 'queries', 'dart', 'symbols.scm'),
-      references: join(homedir(), '.mapx', 'grammars', 'queries', 'dart', 'references.scm'),
+      symbols: 'queries/dart/symbols.scm',
+      references: 'queries/dart/references.scm',
     },
     nodeMappings: {
       class: 'class_definition',
@@ -393,7 +414,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       trait: 'mixin_declaration',
       constant: 'top_level_definition',
     },
-    tier: 'installable',
+    tier: 'bundled',
   },
   scala: {
     name: 'scala',
@@ -441,4 +462,21 @@ export function getLanguageNames(): string[] {
 
 export function isBuiltInLanguage(name: string): boolean {
   return name in BUILTIN_LANGUAGES;
+}
+
+export function areLanguagesCompatible(lang1: string, lang2: string): boolean {
+  const l1 = lang1.toLowerCase();
+  const l2 = lang2.toLowerCase();
+  if (l1 === l2) return true;
+
+  const jsTsGroup = new Set(['javascript', 'typescript', 'tsx', 'vue', 'svelte', 'astro']);
+  if (jsTsGroup.has(l1) && jsTsGroup.has(l2)) return true;
+
+  const cppGroup = new Set(['c', 'cpp', 'c++', 'objective-c', 'objective-cpp']);
+  if (cppGroup.has(l1) && cppGroup.has(l2)) return true;
+
+  const jvmGroup = new Set(['java', 'kotlin', 'scala', 'groovy']);
+  if (jvmGroup.has(l1) && jvmGroup.has(l2)) return true;
+
+  return false;
 }

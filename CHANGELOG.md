@@ -8,6 +8,138 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+## [0.3.0] — 2026-05-29
+
+### Added
+
+- **Picomatch Glob Migration** — Migrated all glob pattern matching, testing, and filtering logic across the entire MapX codebase from `minimatch` to `picomatch`.
+- **Bundled Language & Dialect WASMs** — Bundled all 22 supported languages and dialect WASMs (including Svelte, Lua, Elixir, Zig, Bash, Pascal, and Dart) directly with the npm package under a `bundled` tier. This provides zero-install offline-first execution.
+- **Fuzzy Symbol Suggestions (CLI & MCP)** — When a symbol is not found, all symbol-accepting commands (`query`, `search`, `callers`, `callees`, `impact`, `node`) now use [Fuse.js](https://fusejs.io/) to suggest up to 5 similar symbol names ranked by edit distance. Created `src/core/fuzzy-matcher.ts` as a shared module for both CLI and MCP tools.
+- **`mapx_batch` MCP Tool** — New orchestration tool that executes multiple operations (`search`, `node`, `callers`, `callees`, `deps`) in a single round-trip call. Supports configurable `maxItems` limit (default: 10) with per-operation error isolation.
+- **JSON Output for `search` and `node` CLI Commands** — Added `--format json` option to `mapx search` and `mapx node` CLI commands, producing structured JSON output with symbol metadata, PageRank scores, and optional source code.
+- **Summary Headers (CLI & MCP)** — All search/query/caller/callee/files results now include a count summary header (e.g. `Found 20 symbols of kind "class":`), active filters, and broadening notices.
+- **GitHub Actions CI Workflow** — Added `.github/workflows/ci.yml` with 4 jobs: type check, unit tests with coverage, build verification, and integration tests exercising glob/fuzzy/batch features.
+- **Unit Test Suite (Vitest)** — Added `vitest` with `@vitest/coverage-v8` for unit testing. Created `tests/fuzzy-matcher.test.ts` (16 tests) and `tests/store-search.test.ts` (17 tests) covering glob patterns, wildcards, case-insensitive matching, fuzzy suggestions, kind filtering, and search-with-filter logic.
+- **CLI, MCP, and Bun Store Unit Test Suites** — Implemented comprehensive unit test suites for `cli.ts`, `mcp.ts`, and `store-bun.ts`. Tests CLI subcommands, global flags, and outputs. Tests MCP server tools, schema parsing, and command routing using an in-memory transport mock. Tests BunStore SQL backend using a mock SQLite registry over `better-sqlite3`.
+- **CI Test Coverage Expansion** — Expanded test coverage targets to include CLI, MCP, and BunStore, raising workspace statement coverage from 39.56% to 59.27% and lines coverage to 61.15%.
+
+### Changed
+
+- **Standalone Bun Binary Module Resolution Fix** — Refactored `store.ts` to statically import `store-bun.js` and `store-node.js` backends instead of using dynamic `createRequire`, resolving runtime `Cannot find module './store-bun.js'` crashes in compiled Bun standalone binaries.
+- **Standalone Bun Binary WASM Path Fix** — Patched `findAssetRoot()` in `wasm-parser.ts` and `parse-worker.ts` to filter out Bun virtual filesystem paths (`/$bunfs` and `bun:`) and added the `locateFile` option to `Parser.init` pointing to `web-tree-sitter.wasm` inside `PROJECT_ROOT/wasm/` directory to prevent runtime WebAssembly crashes.
+- **README Redesign** — Redesigned the main `README.md` with centered hero badges, a description tagline, an expandable Table of Contents, and structural parser tables matching the style of the picomatch README.
+- **Wildcard & Glob Pattern Support (CLI & MCP)** — `mapx query`, `mapx search`, `mapx_query`, and `mapx_search` now support wildcard (`*`, empty string) and glob patterns (`*Service`, `get?`, `*Controller*`). The original bug where `{ "term": "*", "kind": "enum" }` returned no results is fixed. Glob patterns are converted to SQL `LIKE` patterns (`*` → `%`, `?` → `_`).
+- **Case-Insensitive Symbol Search** — All symbol name matching across `searchSymbols()` and `searchSymbolsFiltered()` now uses `COLLATE NOCASE` for consistent case-insensitive behavior.
+- **Auto-Expand on Zero Results** — When a `--kind` filter yields zero results in `search`/`mapx_search`, the search automatically retries without the kind filter and notifies the user that results were broadened.
+- **Enhanced Staleness Warnings (CLI & MCP)** — Staleness warnings now list up to 5 changed file names (e.g. `Changed: src/mcp.ts, src/cli.ts (and 3 more)`) instead of just showing a count.
+- **Enriched MCP Tool Schemas** — All 9 major MCP tool descriptions rewritten with concrete JSON usage examples, search mode documentation, and `kind` field `enum` constraint. Tools: `mapx_search`, `mapx_query`, `mapx_node`, `mapx_callers`, `mapx_callees`, `mapx_impact`, `mapx_context`, `mapx_files`, `mapx_export`.
+- **Related Symbols in `mapx_node` / `mapx node`** — Node inspection now shows a "Related symbols" sidebar listing callers, callees, and sibling symbols in the same file.
+- **Updated Agent Templates** — All 12 agent integration templates (AGENTS.md, CLAUDE.md, Cursor, Windsurf, Copilot, Aider, Gemini, Zed, Continue, Cline, Antigravity, Instructions) updated to document glob patterns, fuzzy fallback, `--format json`, `mapx_batch`, and 26-tool count.
+
+## [0.2.7] — 2026-05-28
+
+### Added
+
+- **Proximity Clusters View Mode** — Added a new visualization mode designed specifically for large codebases (>1000 files). Files are grouped using community detection (LPA) into root-level cluster group nodes (styled as hexagons with wrapped labels showing file counts). Double-clicking or clicking root clusters zooms and expands them into focused drill-down views displaying cluster nodes and boundary nodes with dashed border formatting. Provides intuitive breadcrumb navigation to return to parent views.
+- **Concentric & Hierarchical Dagre Layouts** — Registered and integrated Cytoscape Concentric layout (ordering nodes by connections) and Dagre hierarchical layout (visualizing parent-child dependency trees within expanded clusters) to replace the old Circle layout option.
+- **Custom Grouping Strategies & Filtering** — Added support for grouping graph elements by Community Clusters, Directories, Programming Languages, or Custom User Tags.
+- **Interactive Graph Editing** — Added "Remove Node" and "Remove Edge" actions directly in the selection details panel. Hidden elements can be cleared using the "Reset Hidden" toolbar action.
+- **Custom Node Tagging** — Added a tag input and "Add Tag" button in the selection details panel to assign custom metadata tags, allowing custom-grouped graph visualization.
+- **Qualified Hook Entries** — Upgraded Laravel hook binding extraction to register fully-qualified namespace and class names as hook entries in the code graph database.
+- **UI Graph Selection Related Flows** — Added an interactive selection details panel component displaying related nodes and edges, organized by incoming/outgoing flow directions. Incoming and outgoing flows are wrapped in native details/summary collapsible elements (collapsed by default). Button elements use high-contrast color highlights to optimize legibility. Clicking any element in the list triggers programmatic graph centering, selection highlighting, and detail panel updates.
+- **Laravel Pre-scan & Routing Context** — Integrated pre-scan parsing of `app/Http/Kernel.php` to extract middleware groups and aliases, and `app/Providers/RouteServiceProvider.php` to capture global prefixes, namespaces, and middleware groups applied to route files. Implemented recursive workspace directory scanning to discover custom package service providers (`*ServiceProvider.php`) and register route files loaded via `$this->loadRoutesFrom(...)`.
+- **Laravel Middleware Resolution & Hook Extraction** — Enhanced route extraction to resolve and expand compound/alias middleware references to their concrete FQNs. Added hook bindings extraction to register discovered service providers (`service_provider`) and middlewares (`middleware`) as qualified entries in the code graph.
+- **CLI Command Alignment (Sources, Sinks, Context)** — Added top-level CLI commands `mapx sources`, `mapx sinks`, and `mapx context <task>` to achieve feature parity and align the CLI toolset with the MCP server tools and documentation.
+- **Automatic MCP Instructions Generation** — Integrated `instructions.md` (`.agents/rules/instructions.md`) into the central templates registry, so that it is automatically generated and updated during `mapx init`, `mapx agents generate`, and `mapx agents update` setups (while remaining hidden from CLI multiselect provider prompts).
+- **Detailed MCP Guide** — Created `.agents/rules/instructions.md` containing a comprehensive usage guide for MapX MCP server tools, schemas, query parameters, and best practices.
+- **LLM Exporter File Summaries** — Integrated heuristic summaries (class/method/function counts and dominant symbol types) for file nodes in the `llm` export format.
+- **Graph Layout Dropdown with 8 Algorithms** — Replaced the scattered layout button group (fCoSE, Concentric, Dagre, Grid) with a single unified dropdown selector supporting 8 layout algorithms: Force-Directed (fCoSE), Spring Embedded, Constraint-Based (Cola), Tree Hierarchy (Dagre), ELK Hierarchical (MrTree), Circular, Ring (Concentric), and Grid. Each layout has tuned parameters via a centralized `getLayoutConfigForName()` resolver.
+- **Custom Autocomplete for Neighborhood Focus** — Replaced the native HTML datalist with a fully custom autocomplete dropdown featuring fuzzy substring file matching, keyboard navigation (↑/↓/Enter/Escape), match text highlighting, language badges per result, file path display, and click-outside-to-close behavior.
+- **Segmented Depth Toggle** — Replaced the cycling depth button in focus mode with a 3-button segmented control (`1 | 2 | 3`) providing immediate visual feedback of the current traversal depth selection.
+- **Custom Tags Persistence** — Tags assigned to graph nodes are now saved to `localStorage` with a repo-scoped key (`mapx-custom-tags-{repoName}`) and automatically restored on page load. Tags can be removed individually via `✕` buttons on each tag badge.
+- **Reset All Toolbar Button** — Added a "Reset All" action button that restores all toolbar state to defaults: mode (proximity), layout (concentric), grouping (community), language filter (none), focus state, cluster state, and hidden elements.
+- **Enriched Selection Details Panel** — File node selection now displays a stat grid with: in/out degree, total connections, symbol count, PageRank score (×1000), and cluster membership. Edge selection shows verifiability badges (green for verified, yellow for inferred), edge weight, and clickable source/target links.
+- **`/api/graph/meta` Endpoint** — Added a new lightweight API endpoint returning `{ totalFiles, totalEdges, totalElements }` for the UI to check graph size before requesting full data.
+- **Graph API Pagination** — `/api/graph` now accepts `?limit=N&offset=M` query parameters. When pagination params are provided, the response is wrapped in `{ elements: [...], meta: { total, limit, offset } }`. Without pagination params, the flat array is returned for backward compatibility.
+- **Graph API Gzip Compression** — Responses larger than 1MB are automatically gzip-compressed via streaming when the client sends `Accept-Encoding: gzip`, removing the previous hard 10MB error limit for large codebases.
+- **Graph API Enriched Node/Edge Data** — `/api/graph` file nodes now include `symbolCount` (SQL aggregate from symbols table) and `pagerank` (computed via `MapxGraph.computePageRank()`). Edge elements now include `weight` from the database record.
+
+### Changed
+
+- **Graph Toolbar Contextual Visibility** — Mode-dependent controls now show/hide automatically: clusters toggle appears only in Full Codebase and Focus modes, grouping strategy dropdown only in Proximity mode, and focus panel only in Neighborhood Focus mode. This eliminates logical interference between mode-specific toggles.
+- **Unified Layout Resolution** — Consolidated all per-mode layout configuration into a single `getLayoutConfigForName()` resolver function, eliminating ~70 lines of duplicated layout config across mode handlers. `updateGraphDisplay()` now respects the user's layout dropdown selection and only overrides for proximity top-level view (which requires fCoSE for community grouping).
+- **fCoSE Node Spacing** — Increased `nodeRepulsion` from `60000` to `120000`, `idealEdgeLength` from `100` to `160`, enabled `nodeDimensionsIncludeLabels`, and added `nodeSeparation: 100` to prevent node overlap in force-directed layouts, especially for large graphs.
+- **Directory Node Text Overflow** — Fixed long directory path labels overflowing node boundaries by truncating to last 2 path segments (e.g., `…/components/ui`) and applying Cytoscape `text-wrap: ellipsis` with `text-max-width` constraints.
+- **Cluster Group Node Text Overflow** — Changed cluster group label rendering from `text-wrap: wrap` to `text-wrap: ellipsis` with dynamic `text-max-width` proportional to node size, preventing label spillover on compact hexagon nodes.
+- **Edge Selection Details** — Edge tap details now show: verifiability as a styled badge (green for `verified`, yellow for `inferred`), edge weight when available, and clickable source/target file links that navigate the graph. Removed the verbose Edge ID display.
+- **Laravel Route & Controller Mapping** — Upgraded the [LaravelDetector](./src/frameworks/detectors/laravel.ts) to support modular route structures (case-insensitive checking), group array attributes (prefix, namespace, middleware), `Route::controller` groups, `Route::match` and `Route::any` verbs, and inline comma-separated controller attributes. Added singularized resource route expansion (`resource`, `apiResource`, `resources`, `apiResources`) to generate actual individual routes with their controller action symbols rather than a single dummy `RESOURCE` route.
+- **Deep Laravel Controller Analysis** — Added parsing of controller files to extract path, query, and request body parameters, as well as constructor-defined middlewares (supporting `.only(...)` and `.except(...)` filters) using an asynchronous file cache.
+- **Route Registry Deduplication** — Updated the [RouteRegistry](./src/frameworks/route-registry.ts) `addRoute` method to check for and prevent duplicate route registrations.
+- **Updated Agent Templates** — Aligned all IDE/agent templates (GitHub Copilot, Windsurf, Cline, Aider, Gemini, Zed) in [templates.ts](./src/agents/templates.ts) to include references to the new `sources`, `sinks`, and `context` commands or MCP tools.
+- **Cross-Language Reference Prevention** — Constrained global symbol resolution to respect language compatibility groups. References from a source file (e.g. a PHP WordPress plugin) can no longer resolve to symbols in incompatible language files (e.g. TypeScript), preventing false edges.
+- **Search Wildcard & Case-Insensitivity** — Modified the symbol search command and MCP tool to support wildcard `*` and empty string `""` queries to list all symbols under a file path constraint. Standardized `kind` search filters to run case-insensitively.
+- **Logical Cluster Grouping Boost** — Refined the `mapx_context` token-budget relevance scoring heuristics to give an extra boost (+150 points) to files sharing logical clusters with the matched seed files.
+- **Centralized try/catch-Aware Impact Analysis** — Extracted and centralized BFS traversal and risk categorization logic to a new reusable `ImpactAnalyzer` module. Categorized callers at depth 2+ as `MEDIUM` or `LOW` risk, and calling sites inside test files or wrapped in try/catch blocks as `LOW` risk.
+
+- **Graph Resolution Blacklist** — Prevented standard built-in JavaScript/TypeScript globals (`Date`, `Error`, `Map`, `Set`, `Promise`, `Object`, `Array`, `String`, `Number`, `Boolean`, `Function`, `RegExp`, `Symbol`, `JSON`, `Math`, `console`, `Console`, etc.) from incorrectly resolving to user-defined symbols during database reference resolution.
+- **Import Caller Filtering** — Excluded named imports and require declarations (`import` and `require` edge types) from the standard `callers` query outputs, eliminating `<top-level>` import statement noise in call graphs.
+- **Enhanced Change Impact Risk Scoring** — Upgraded `mapx impact` and `mapx_impact` risk grading. Calls from test files (`.test.ts`, `.spec.ts`, etc.) are now classified as `LOW` risk, calls wrapped inside `try`/`catch` blocks are downgraded by one risk level, and callers at depth 2+ or inside test modules are classified as `MEDIUM` or `LOW` risk.
+- **Filesystem Staleness Detection** — Added file modification time checking to output a staleness warning header (`⚠️ Warning: Graph index may be stale...`) in all CLI and MCP query tools when modifications occur on disk without running `mapx update`.
+- **NestJS Decorator Routing** — Implemented decorator-based route extraction from class-level `@Controller` and method-level route handler decorators (`@Get`, `@Post`, `@Patch`, `@Delete`, etc.) supporting both string arguments (including template literals) and object configurations (e.g. `@Controller({ path: 'prefix' })`).
+
+- **NestJS GraphQL & WebSockets Integration** — Added resolver extraction from `@Resolver`, `@Query`, `@Mutation`, and `@Subscription` decorators, WebSocket event subscriptions from `@SubscribeMessage`, and microservice handlers from `@MessagePattern` and `@EventPattern` using a robust, comment-resilient method name discovery helper.
+- **NestJS Lifecycle & Custom Interfaces** — Cataloged class definitions implementing custom interfaces such as lifecycle hooks (`OnModuleInit`, `OnApplicationBootstrap`, etc.) and guard/pipe/interceptor definitions (`CanActivate`, `PipeTransform`, `NestInterceptor`) as queryable hooks.
+- **NestJS Constructor Dependency Injection** — Extended TS/TSX tree-sitter references queries to capture type annotations in constructor parameters (e.g. `constructor(private readonly service: Service)`) and map them as `param_type` dependency injection edges in the graph.
+- **AST-Based Parser Scope Resolution** — Fixed a critical scoping bug in the generic WASM parser that caused method/property symbols to incorrectly inherit the scope of the last-parsed class in file iteration, resolving them via AST ancestor symbol lookup instead.
+- **JSX Rendering Edges** — Added parsing and extraction of opening (`<Component>`) and self-closing (`<Component />`) JSX tags in `.tsx` and `.jsx` files as `render` edges.
+- **Native HTML Elements Filtering** — Implemented target name checking (`/^[A-Z]/`) to filter out native lowercase HTML tags (like `<div />`, `<span />`) and only emit edges for custom React component tags.
+- **TS/TSX Query Separation** — Separated references query configuration between standard TypeScript and TSX files (`references.scm` and `references-tsx.scm`) to prevent grammar syntax compilation errors in non-JSX files.
+- **JSX Extension Mapping** — Added `.jsx` file extension mapping to the JavaScript language registry for JSX file recognition and parsing.
+- **Exporter Rendering Edge Styling** — Added distinctive cyan styling (dotted/dashed) for `render` edges in both DOT and SVG exporter modules.
+- **CLI & MCP Sinks Filtering** — Added support for `render` type edges in data-bearing edges arrays in CLI and MCP server tools to ensure accurate terminal consumer/sink detection.
+- **React & TSX Parser Fixes** — Added support for scanning, indexing, and querying TSX files (`.tsx` extensions) using a dedicated TSX tree-sitter parser grammar.
+- **Default and Anonymous Export Parsing** — Enhanced TypeScript and JavaScript symbol extraction to query and match default class/function exports and anonymous arrow functions exported as default.
+- **Anonymous Default Export Auto-naming** — Implemented auto-naming logic in the generic WASM parser to resolve anonymous default exports using the file's base name (e.g., `export default () => {}` in `Home.tsx` is named `Home`).
+- **Duplicate Symbol Node Filtering** — Added a `seenNodeIds` lookup constraint during AST parse collection to prevent duplicate symbols from being extracted when matching multiple query patterns on the same node.
+- **TSX Import Path Resolution** — Updated the path resolution algorithm to recognize `/index.tsx` and `.tsx` candidate targets for relative and absolute imports.
+- **Exclusion Configuration Adjustments** — Extended JS/TS default ignore patterns in the configuration class to automatically exclude `**/*.test.tsx` and `**/*.spec.tsx` files.
+- **Layout Algorithm Shorthand Labels** — Each layout option in the dropdown now includes the algorithm shorthand after an em dash for quick identification (e.g., "Tidy — Cola", "Organic — fCoSE", "Layered — Dagre", "Tree — ELK", "Radial — Concentric", "Circular — Circle").
+- **Dedicated Layout Toolbar Group** — Separated the layout dropdown into its own `toolbar-group` with a "Layout" label, placed first in the toolbar for prominence.
+- **Focus Mode Controls Restoration** — Restored the Neighborhood Focus controls (file search autocomplete, clear button, depth segmented toggle) as the last toolbar group, with a "Focus" label. Controls appear only when focus mode is active.
+- **Breadcrumbs for Focus Mode** — Breadcrumbs now display in both Proximity Clusters drilldown (showing cluster name) and Neighborhood Focus mode (showing focused file name with "Focus →" prefix).
+- **HTTP Method Color Coding** — Route method badges are now color-coded by verb: GET (emerald), POST (blue), PUT (amber), PATCH (teal), DELETE (red), HEAD (indigo), OPTIONS (violet), ANY (purple), with a slate fallback for unknown methods.
+- **Hook Type Color Coding** — Hook type badges are now color-coded by keyword: middleware (indigo), event/listener (cyan), filter (amber), action (rose), lifecycle (teal), provider (violet), guard (red), pipe (cyan-light), interceptor (purple), resolver (blue), subscriber (pink).
+- **Metric Card Glassmorphism** — Metric cards now feature glassmorphism styling with `backdrop-filter: blur`, hover state with brighter border and shadow, uppercase small-caps headings with bottom dividers, and tighter typographic spacing.
+- **Global Monochromatic Scrollbars** — Replaced per-element scrollbar styles with a unified global `*` scrollbar using 5px monochromatic white-on-dark theme (`rgba(255,255,255, 0.12)` thumb, `rgba(255,255,255, 0.03)` track) applied consistently across all scrollable panels.
+
+### Changed
+
+- **Grouping Strategy Enable/Disable** — Changed grouping strategy dropdown from show/hide to always-visible with enabled/disabled state. Enabled only in Proximity Clusters mode at root level (no active drilldown). Disabled with 35% opacity and `not-allowed` cursor in all other modes or when drilled into a cluster/directory.
+- **Toolbar Separator Visibility Centralized** — Separator visibility is now managed exclusively by `updateToolbarVisibility()`, shown when either breadcrumbs or focus search panel are visible. Removed 5 scattered separator manipulation points.
+- **Cola Layout Vertical Drift Fix** — Added `randomize: true` to Cola config, position scrambling before each Cola run in `runLayout()`, tighter convergence threshold (0.001), explicit constraint iterations (`unconstrIter: 10`, `userConstIter: 20`, `allConstIter: 20`), increased `nodeSpacing` to 40, and `ungrabifyWhileSimulating: true` to prevent progressive vertical drift after view/grouping changes.
+
+### Fixed
+
+- **Silence prebuild-install Deprecation Warning** — Resolved the NPM deprecation warning for `prebuild-install` (transitive dependency of `better-sqlite3`) by adding a package-level override pointing directly to the tagged GitHub repository release. This preserves SQLite query/transaction integrity and prevents terminal noise during installation.
+- **Fix Bun SQLite Require Compilation Warning** — Replaced direct Node-style `require('bun:sqlite')` with dynamically constructed `createRequire` in `src/core/store-bun.ts`. This silences the compiler warning during ESM builds while preserving native Bun SQLite loader capability.
+- **Automatic Database Parent Directory Creation** — Updated the `Store` class constructor to check for and recursively create the target database's parent directory if it does not exist (excluding `:memory:` paths). This prevents `TypeError` crashes when programmatically instantiating the database store in new/nested directory structures.
+- **ESM-Only Programmatic Usage Documentation** — Added an alert to the programmatic usage section of `README.md` clarifying that MapX is ESM-only and requires consumer applications to declare `"type": "module"` in their `package.json` to avoid resolution crashes.
+
+---
+
+## [0.2.6] — 2026-05-24
+
+### Changed
+
+- **Interactive CLI Revamp with Clack** — Integrated `@clack/prompts` to replace old readline-based console prompts with beautiful, interactive terminal widgets. Revamped confirmation prompts, LLM tool multi-select setups (`selectProvidersInteractive`), and converted the text-based scanner progress rendering to premium animated spinner sequences.
+- **Default Exclude Patterns Expansion** — Significantly expanded the default file exclusion patterns in `src/core/config.ts` to automatically ignore build directories (`dist`, `build`, `.next`), virtual environments (`.venv`, `__pycache__`), package lockfiles (`yarn.lock`, `pnpm-lock.yaml`, `poetry.lock`, `go.sum`, etc.), package manifests, system/log files (`DS_Store`, `*.log`), and large third-party assets (Monaco editor files, Bootstrap scripts, React/Vue production builds). This drastically reduces token consumption and database size during scans by default.
+- **PULL_REQUEST_TEMPLATE.md Updates** — Updated the checklist to verify NPM dependency lock synchronization via `make version-sync`, local prebuilt packaging builds (e.g. `make package-linux`), and agentic integration rules (`.agents/rules/mapx.md`). Included testing guidelines for both native CLI running and zero-installation `npx` calls.
+
+
 ---
 
 ## [0.2.5] — 2026-05-24
@@ -257,7 +389,9 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/MohamedGamil/mapx/compare/v0.2.6...v0.2.7
+[0.2.6]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/MohamedGamil/mapx/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/MohamedGamil/mapx/compare/v0.2.2...v0.2.3

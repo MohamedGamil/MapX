@@ -43,18 +43,38 @@ export class GenericWasmParser implements LanguageParser {
       );
 
       let currentScope: string | null = null;
+      const seenNodeIds = new Set<number>();
 
       for (const [captureName, captures] of symCaptures) {
         if (captureName.startsWith('symbol.kind_')) {
           const baseKind = captureName.replace('symbol.kind_', '') as SymbolKind;
           for (const capture of captures) {
+            if (seenNodeIds.has(capture.node.id)) continue;
+            seenNodeIds.add(capture.node.id);
+
             let kind = baseKind;
-            const name = nameByNodeId.get(capture.node.id) || capture.node.text;
+            let name = nameByNodeId.get(capture.node.id);
+            if (!name) {
+              const isDefaultOrAnonymous =
+                capture.node.type === 'arrow_function' ||
+                capture.node.type === 'function_expression' ||
+                (capture.node.type === 'function_declaration' && !capture.node.childForFieldName('name')) ||
+                (capture.node.type === 'class_declaration' && !capture.node.childForFieldName('name')) ||
+                (capture.node.type === 'class' && !capture.node.childForFieldName('name'));
+
+              if (isDefaultOrAnonymous) {
+                const baseName = filePath.split('/').pop() || '';
+                name = baseName.replace(/\.[a-zA-Z0-9]+$/, '') || 'default';
+              } else {
+                name = capture.node.text;
+              }
+            }
+
             const startLine = capture.node.startPosition.row + 1;
             const endLine = capture.node.endPosition.row + 1;
 
             if (this.isContainerKind(kind)) {
-              currentScope = name;
+               currentScope = name;
             }
 
             let extractedScope: string | null = null;
@@ -86,7 +106,18 @@ export class GenericWasmParser implements LanguageParser {
             const signature = this.extractSignature(source, capture.node, name, kind, startLine);
 
             const explicitScope = scopeByNodeId.get(capture.node.id) || extractedScope;
-            const resolvedScope = explicitScope || (this.isMemberKind(kind) ? currentScope : null);
+            let resolvedScope = explicitScope;
+            if (!resolvedScope && this.isMemberKind(kind)) {
+              let curr = capture.node.parent;
+              while (curr) {
+                const parentName = nameByNodeId.get(curr.id);
+                if (parentName) {
+                  resolvedScope = parentName;
+                  break;
+                }
+                curr = curr.parent;
+              }
+            }
 
             if (options?.ignoredSymbols?.has(name)) {
               continue;
@@ -113,6 +144,12 @@ export class GenericWasmParser implements LanguageParser {
             if (!targetText || typeof targetText !== 'string') continue;
             const targetName = this.cleanTarget(targetText, refType);
             if (!targetName || typeof targetName !== 'string') continue;
+
+            if (refType === 'render') {
+              const isReactComponent = /^[A-Z]/.test(targetName);
+              if (!isReactComponent) continue;
+            }
+
             const startLine = capture.node.startPosition.row + 1;
             const referenceType = this.mapRefType(refType);
 
@@ -189,11 +226,15 @@ export class GenericWasmParser implements LanguageParser {
   protected mapRefType(refType: string): ExtractedReference['referenceType'] {
     const map: Record<string, ExtractedReference['referenceType']> = {
       import: 'import',
+      import_name: 'import',
       require: 'require',
       extends: 'extends',
       implements: 'implements',
       call: 'call',
       instantiation: 'instantiation',
+      render: 'render',
+      param_type: 'param_type',
+      return_type: 'return_type',
     };
     return map[refType] || 'call';
   }

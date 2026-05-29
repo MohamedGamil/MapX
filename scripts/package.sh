@@ -46,7 +46,8 @@ build_binary() {
     local outfile="$2"
 
     info "Building $outfile..."
-    if bun build --compile --minify --bytecode \
+    if bun build --compile --minify \
+        --define "MAPX_BUILD_VERSION='\"${VERSION}\"'" \
         --target="$target" \
         "$PROJECT_ROOT/src/main.ts" \
         --outfile "$PROJECT_ROOT/dist/$outfile" 2>/dev/null; then
@@ -245,26 +246,31 @@ main() {
                 _n="mapx-${VERSION}-linux-x64"
                 package_tarball "mapx-linux-x64" "$_n"
                 create_installer "$DIST_DIR/$_n.tar.gz" sh linux-x64 "$_n" || true
+                cp "$DIST_DIR/$_n-installer.sh" "$DIST_DIR/mapx-linux-x64-installer.sh" 2>/dev/null || true
             fi
             if [ -f "$PROJECT_ROOT/dist/mapx-linux-arm64" ]; then
                 _n="mapx-${VERSION}-linux-arm64"
                 package_tarball "mapx-linux-arm64" "$_n"
                 create_installer "$DIST_DIR/$_n.tar.gz" sh linux-arm64 "$_n" || true
+                cp "$DIST_DIR/$_n-installer.sh" "$DIST_DIR/mapx-linux-arm64-installer.sh" 2>/dev/null || true
             fi
             if [ -f "$PROJECT_ROOT/dist/mapx-darwin-arm64" ]; then
                 _n="mapx-${VERSION}-darwin-arm64"
                 package_tarball "mapx-darwin-arm64" "$_n"
                 create_installer "$DIST_DIR/$_n.tar.gz" sh darwin-arm64 "$_n" || true
+                cp "$DIST_DIR/$_n-installer.sh" "$DIST_DIR/mapx-darwin-arm64-installer.sh" 2>/dev/null || true
             fi
             if [ -f "$PROJECT_ROOT/dist/mapx-darwin-x64" ]; then
                 _n="mapx-${VERSION}-darwin-x64"
                 package_tarball "mapx-darwin-x64" "$_n"
                 create_installer "$DIST_DIR/$_n.tar.gz" sh darwin-x64 "$_n" || true
+                cp "$DIST_DIR/$_n-installer.sh" "$DIST_DIR/mapx-darwin-x64-installer.sh" 2>/dev/null || true
             fi
             if [ -f "$PROJECT_ROOT/dist/mapx-windows-x64.exe" ]; then
                 _n="mapx-${VERSION}-windows-x64"
                 package_zip "mapx-windows-x64.exe" "$_n"
                 create_installer "$DIST_DIR/$_n.zip" ps1 windows-x64 "$_n" || true
+                cp "$DIST_DIR/$_n-installer.ps1" "$DIST_DIR/mapx-windows-x64-installer.ps1" 2>/dev/null || true
             fi
             echo ""
             generate_checksums
@@ -276,6 +282,7 @@ main() {
             [ "$skip_build" = false ] && build_binary "bun-linux-x64" "mapx-linux-x64"
             package_tarball "mapx-linux-x64" "mapx-${VERSION}-linux-x64"
             create_installer "$DIST_DIR/mapx-${VERSION}-linux-x64.tar.gz" sh linux-x64 "mapx-${VERSION}-linux-x64" || true
+            cp "$DIST_DIR/mapx-${VERSION}-linux-x64-installer.sh" "$DIST_DIR/mapx-linux-x64-installer.sh" 2>/dev/null || true
             generate_checksums
             ;;
 
@@ -285,6 +292,7 @@ main() {
             [ "$skip_build" = false ] && build_binary "bun-linux-arm64" "mapx-linux-arm64"
             package_tarball "mapx-linux-arm64" "mapx-${VERSION}-linux-arm64"
             create_installer "$DIST_DIR/mapx-${VERSION}-linux-arm64.tar.gz" sh linux-arm64 "mapx-${VERSION}-linux-arm64" || true
+            cp "$DIST_DIR/mapx-${VERSION}-linux-arm64-installer.sh" "$DIST_DIR/mapx-linux-arm64-installer.sh" 2>/dev/null || true
             generate_checksums
             ;;
 
@@ -294,6 +302,7 @@ main() {
             [ "$skip_build" = false ] && build_binary "bun-darwin-arm64" "mapx-darwin-arm64"
             package_tarball "mapx-darwin-arm64" "mapx-${VERSION}-darwin-arm64"
             create_installer "$DIST_DIR/mapx-${VERSION}-darwin-arm64.tar.gz" sh darwin-arm64 "mapx-${VERSION}-darwin-arm64" || true
+            cp "$DIST_DIR/mapx-${VERSION}-darwin-arm64-installer.sh" "$DIST_DIR/mapx-darwin-arm64-installer.sh" 2>/dev/null || true
             generate_checksums
             ;;
 
@@ -303,6 +312,7 @@ main() {
             [ "$skip_build" = false ] && build_binary "bun-darwin-x64" "mapx-darwin-x64"
             package_tarball "mapx-darwin-x64" "mapx-${VERSION}-darwin-x64"
             create_installer "$DIST_DIR/mapx-${VERSION}-darwin-x64.tar.gz" sh darwin-x64 "mapx-${VERSION}-darwin-x64" || true
+            cp "$DIST_DIR/mapx-${VERSION}-darwin-x64-installer.sh" "$DIST_DIR/mapx-darwin-x64-installer.sh" 2>/dev/null || true
             generate_checksums
             ;;
 
@@ -312,6 +322,7 @@ main() {
             [ "$skip_build" = false ] && build_binary "bun-windows-x64" "mapx-windows-x64.exe"
             package_zip "mapx-windows-x64.exe" "mapx-${VERSION}-windows-x64"
             create_installer "$DIST_DIR/mapx-${VERSION}-windows-x64.zip" ps1 windows-x64 "mapx-${VERSION}-windows-x64" || true
+            cp "$DIST_DIR/mapx-${VERSION}-windows-x64-installer.ps1" "$DIST_DIR/mapx-windows-x64-installer.ps1" 2>/dev/null || true
             generate_checksums
             ;;
 
