@@ -7,8 +7,8 @@
 <a href="https://github.com/MohamedGamil/mapx/actions/workflows/ci.yml">
 <img src="https://github.com/MohamedGamil/mapx/actions/workflows/ci.yml/badge.svg" alt="test status">
 </a>
-<a href="https://coveralls.io/github/MohamedGamil/mapx">
-<img src="https://coveralls.io/repos/github/MohamedGamil/mapx/badge.svg?branch=develop" alt="coverage status">
+<a href="https://coveralls.io/github/MohamedGamil/MapX">
+<img src="https://coveralls.io/repos/github/MohamedGamil/MapX/badge.svg?branch=develop" alt="coverage status">
 </a>
 <a href="https://npmjs.org/package/@mgamil/mapx">
 <img src="https://img.shields.io/npm/dw/@mgamil/mapx.svg" alt="downloads">
