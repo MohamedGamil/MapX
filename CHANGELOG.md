@@ -16,6 +16,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **Summary Headers (CLI & MCP)** — All search/query/caller/callee/files results now include a count summary header (e.g. `Found 20 symbols of kind "class":`), active filters, and broadening notices.
 - **GitHub Actions CI Workflow** — Added `.github/workflows/ci.yml` with 4 jobs: type check, unit tests with coverage, build verification, and integration tests exercising glob/fuzzy/batch features.
 - **Unit Test Suite (Vitest)** — Added `vitest` with `@vitest/coverage-v8` for unit testing. Created `tests/fuzzy-matcher.test.ts` (16 tests) and `tests/store-search.test.ts` (17 tests) covering glob patterns, wildcards, case-insensitive matching, fuzzy suggestions, kind filtering, and search-with-filter logic.
+- **CLI, MCP, and Bun Store Unit Test Suites** — Implemented comprehensive unit test suites for `cli.ts`, `mcp.ts`, and `store-bun.ts`. Tests CLI subcommands, global flags, and outputs. Tests MCP server tools, schema parsing, and command routing using an in-memory transport mock. Tests BunStore SQL backend using a mock SQLite registry over `better-sqlite3`.
+- **CI Test Coverage Expansion** — Expanded test coverage targets to include CLI, MCP, and BunStore, raising workspace statement coverage from 39.56% to 59.27% and lines coverage to 61.15%.
 
 ### Changed
 
