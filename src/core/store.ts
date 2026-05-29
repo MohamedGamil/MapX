@@ -1,11 +1,10 @@
 import type { StoreBackend } from './store-interface.js';
-import { createRequire } from 'node:module';
 import type { MapxGraph } from './graph.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy-matcher.js';
-
-const dynamicRequire = createRequire(import.meta.url);
+import { BunStore } from './store-bun.js';
+import { NodeStore } from './store-node.js';
 
 const CURRENT_SCHEMA_VERSION = 6;
 
@@ -142,10 +141,8 @@ const MIGRATIONS: Migration[] = [
 function createStoreBackend(dbPath: string): StoreBackend {
   const isBun = typeof (globalThis as any).Bun !== 'undefined';
   if (isBun) {
-    const { BunStore } = dynamicRequire('./store-bun.js');
     return new BunStore(dbPath);
   }
-  const { NodeStore } = dynamicRequire('./store-node.js');
   return new NodeStore(dbPath);
 }
 

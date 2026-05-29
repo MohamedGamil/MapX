@@ -24,7 +24,7 @@ const __thisFile = fileURLToPath(import.meta.url);
  *      falls through to process.execPath-relative search
  */
 function findAssetRoot(): string {
-  if (existsSync(__thisFile)) {
+  if (existsSync(__thisFile) && !__thisFile.startsWith('/$bunfs') && !__thisFile.startsWith('bun:')) {
     // Source/dev or npm-installed transpiled: navigate up from dist/parsers/ or src/parsers/
     return resolve(dirname(__thisFile), '..', '..');
   }
@@ -33,7 +33,8 @@ function findAssetRoot(): string {
   const binDir = dirname(process.execPath);
   const candidates = [
     binDir,                                              // assets next to binary
-    resolve(binDir, '..', 'share', 'mapx'),         // XDG system: /usr/local/share/mapx
+    resolve(binDir, '..'),                               // dev build project root
+    resolve(binDir, '..', 'share', 'mapx'),              // XDG system: /usr/local/share/mapx
     join(process.env['HOME'] ?? '', '.local', 'share', 'mapx'), // XDG user
   ];
 
@@ -50,7 +51,14 @@ let initPromise: Promise<void> | null = null;
 
 function ensureInit(): Promise<void> {
   if (!initPromise) {
-    initPromise = Parser.init();
+    initPromise = Parser.init({
+      locateFile(path: string) {
+        if (path === 'web-tree-sitter.wasm') {
+          return resolve(PROJECT_ROOT, 'wasm', 'web-tree-sitter.wasm');
+        }
+        return path;
+      }
+    });
   }
   return initPromise;
 }

@@ -1,21 +1,3 @@
-import { vi } from 'vitest';
-
-vi.mock('node:module', async (importOriginal) => {
-  const original = await importOriginal<typeof import('node:module')>();
-  return {
-    ...original,
-    createRequire: (url: string) => {
-      const req = original.createRequire(url);
-      return (id: string) => {
-        if (id === './store-node.js') {
-          return req('./store-node.ts');
-        }
-        return req(id);
-      };
-    }
-  };
-});
-
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Store } from '../src/core/store.js';
 import * as fs from 'node:fs';

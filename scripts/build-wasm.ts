@@ -137,6 +137,15 @@ async function run() {
       }
     }
   }
+  // Copy web-tree-sitter.wasm
+  const wtsWasmSrc = join(PROJECT_ROOT, 'node_modules', 'web-tree-sitter', 'web-tree-sitter.wasm');
+  const wtsWasmDest = join(WASM_DIR, 'web-tree-sitter.wasm');
+  if (existsSync(wtsWasmSrc)) {
+    execSync(`cp "${wtsWasmSrc}" "${wtsWasmDest}"`, { cwd: PROJECT_ROOT });
+    console.log('  Copied web-tree-sitter.wasm from node_modules');
+  } else {
+    console.log('  Warning: web-tree-sitter.wasm not found in node_modules/web-tree-sitter');
+  }
 
   const existing = execSync(`ls -la ${WASM_DIR}`, { encoding: 'utf-8' });
   console.log(`\nWASM directory contents:\n${existing}`);
