@@ -11,7 +11,7 @@ import { getParserForFile } from '../parsers/parser-registry.js';
 import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
-import { minimatch } from 'minimatch';
+import picomatch from 'picomatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
@@ -50,7 +50,7 @@ interface DiscoveredFile extends FileInfo {
 export function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
   return (rel: string) => {
     if (excludes.some(p => {
-      if (minimatch(rel, p, { dot: true })) return true;
+      if (picomatch.isMatch(rel, p, { dot: true })) return true;
       const segments = rel.split('/');
       if (segments.some(seg => seg === p)) return true;
       return false;
@@ -59,7 +59,7 @@ export function buildMatcher(excludes: string[], includes: string[]): (rel: stri
     }
     if (includes.length > 0) {
       const matched = includes.some(p => {
-        if (minimatch(rel, p, { dot: true })) return true;
+        if (picomatch.isMatch(rel, p, { dot: true })) return true;
         const segments = rel.split('/');
         if (segments.some(seg => seg === p)) return true;
         return false;
@@ -988,8 +988,8 @@ export class Scanner {
   }
   private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
     return excludes.some(p => {
-      if (minimatch(relDir, p, { dot: true })) return true;
-      if (minimatch(relDir + '/**', p, { dot: true })) return true;
+      if (picomatch.isMatch(relDir, p, { dot: true })) return true;
+      if (picomatch.isMatch(relDir + '/**', p, { dot: true })) return true;
       const segments = relDir.split('/');
       if (segments.some(seg => seg === p)) return true;
       return false;

@@ -1,6 +1,6 @@
 {
   "name": "@mgamil/mapx",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "license": "Apache-2.0",
   "description": "Multi-language code graph memory system for LLMs",
   "author": {
@@ -112,7 +112,7 @@
     "fuse.js": "^7.3.0",
     "graphology": "^0.26.0",
     "graphology-metrics": "^2.4.0",
-    "minimatch": "^10.2.5",
+    "picomatch": "^4.0.4",
     "tree-sitter-c-sharp": "0.23.5",
     "tree-sitter-go": "0.25.0",
     "tree-sitter-java": "0.23.5",
@@ -133,6 +133,7 @@
     "@types/cytoscape": "^3.21.9",
     "@types/cytoscape-dagre": "^2.3.4",
     "@types/node": "^22.19.19",
+    "@types/picomatch": "^4.0.3",
     "@vitest/coverage-v8": "^4.1.7",
     "esbuild": "^0.28.0",
     "graphology-types": "^0.24.8",

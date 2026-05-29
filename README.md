@@ -1,10 +1,80 @@
-# MapX
+<h1 align="center">MapX</h1>
 
-**Local code graph memory for LLMs.** Scan your codebase once — instantly query symbols, trace dependencies, analyze impact, and generate structured summaries without re-reading files.
+<p align="center">
+<a href="https://npmjs.org/package/@mgamil/mapx">
+<img src="https://img.shields.io/npm/v/@mgamil/mapx.svg" alt="version">
+</a>
+<a href="https://github.com/MohamedGamil/mapx/actions/workflows/ci.yml">
+<img src="https://github.com/MohamedGamil/mapx/actions/workflows/ci.yml/badge.svg" alt="test status">
+</a>
+<a href="https://coveralls.io/github/MohamedGamil/mapx">
+<img src="https://coveralls.io/repos/github/MohamedGamil/mapx/badge.svg?branch=main" alt="coverage status">
+</a>
+<a href="https://npmjs.org/package/@mgamil/mapx">
+<img src="https://img.shields.io/npm/dw/@mgamil/mapx.svg" alt="downloads">
+</a>
+</p>
 
-MapXGraph _-also known as MapX-_ uses [tree-sitter](https://tree-sitter.github.io/) to parse source files across **22 languages**, builds a PageRank-weighted dependency graph, and persists everything to a local SQLite database. Works as a standalone CLI or as an [MCP server](https://modelcontextprotocol.io/) with **26 tools** for Claude Desktop, Cursor, VS Code, and any other MCP-compatible client.
+<br>
+<br>
 
----
+<p align="center">
+<strong>Local code graph memory for LLMs.</strong><br>
+<em>Scan your codebase once — instantly query symbols, trace dependencies, analyze impact, and generate structured summaries without re-reading files.</em>
+</p>
+
+<br>
+<br>
+
+## Why MapX?
+
+* **Lightweight & Fast** - Parses files in parallel with WebAssembly tree-sitter grammars and writes to a local SQLite database in milliseconds.
+* **87% LLM Cost Reduction** - Feeds exact signatures and dependency pathways to LLM agents rather than reading raw files, slashing token usage.
+* **Deep Symbol Extraction** - Automatically extracts classes, methods, functions, interfaces, traits, structs, modules, and namespaces with their reference lines and call graphs.
+* **Incremental & Resumable Scans** - Git-aware change tracker only scans modified files. Interrupted scans resume exactly where they left off.
+* **Framework Intelligent** - Auto-detects 21 web frameworks (Laravel, Next.js, Django, Spring, etc.) to map out routing paths and hook bindings.
+* **26 MCP Tools** - Seamlessly integrates with Claude Desktop, Cursor, VS Code, and other MCP clients to empower AI coding agents.
+* **Zero Cloud** - All parsed metadata and graphs stay completely local within the `.mapx/` directory of your project.
+
+<br>
+
+## Table of Contents
+
+<details>
+<summary>Click to expand</summary>
+
+- [Features](#features)
+- [Installation](#installation)
+  - [From npm (Global Installation)](#from-npm-global-installation)
+  - [Zero Installation (via npx)](#zero-installation-via-npx)
+  - [Pre-built binary](#pre-built-binary)
+  - [From source](#from-source)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Token Consumption Benchmarks](#token-consumption-benchmarks)
+- [MCP Integration](#mcp-integration)
+  - [Claude Desktop](#claude-desktop-claude_desktop_configjson)
+  - [Cursor / VS Code](#cursor--vs-code-cursor-mcpjson)
+  - [Available MCP tools (26 total)](#available-mcp-tools-26-total)
+- [Programmatic Usage](#programmatic-usage)
+- [Supported Languages](#supported-languages)
+  - [Built-in (Tier 1) — Always available](#built-in-tier-1--always-available)
+  - [Bundled (Tier 2) — Ships with the tool](#bundled-tier-2--ships-with-the-tool)
+  - [Installable (Tier 3) — mapx lang install name](#installable-tier-3--mapx-lang-install-name)
+- [Agentic Integration](#agentic-integration)
+- [Storage](#storage)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+- [Development](#development)
+  - [npm script shortcuts](#npm-script-shortcuts)
+  - [Makefile shortcuts](#makefile-shortcuts)
+  - [Building binaries](#building-binaries)
+- [License](#license)
+
+</details>
+
+<br>
+<hr>
 
 ## Features
 
@@ -360,8 +430,6 @@ mapx stores everything locally inside your project:
 ---
 
 ## Architecture
-
-<!-- ![Architecture Diagram](./docs/images/01-arch.png) -->
 
 ```mermaid
 graph TD
