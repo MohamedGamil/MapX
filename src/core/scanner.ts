@@ -1056,8 +1056,10 @@ export class Scanner {
 
           const localCtx: ScanContext = {
             ...ctx,
-            resolveSymbolToFile: (symName: string) => {
-              return this.resolveSymbolToFile(symName, this.workspaceFileMap, relPath);
+            resolveSymbolToFile: (symName: string, sourcePath?: string) => {
+              return sourcePath
+                ? this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath)
+                : ctx.resolveSymbolToFile(symName);
             }
           };
 
