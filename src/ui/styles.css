@@ -482,6 +482,16 @@ body {
   font-size: 12px;
 }
 
+#table-symbols tbody tr.selected-symbol-row {
+  background: rgba(96, 165, 250, 0.12);
+  outline: 1px solid rgba(96, 165, 250, 0.35);
+  outline-offset: -1px;
+}
+
+#table-symbols tbody tr {
+  cursor: pointer;
+}
+
 .split-right {
   overflow-y: auto;
   padding-left: 20px;

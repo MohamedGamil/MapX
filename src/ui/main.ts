@@ -2315,7 +2315,12 @@ async function loadSymbols(query: string = '') {
         <td>${s.kind}</td>
         <td style="color:#94a3b8; font-size:12px;">${s.file_path}</td>
       `;
-      tr.addEventListener('click', () => loadSymbolDetails(s.name));
+      tr.dataset.symbolName = s.name;
+      tr.addEventListener('click', () => {
+        document.querySelectorAll('#table-symbols tbody tr').forEach(r => r.classList.remove('selected-symbol-row'));
+        tr.classList.add('selected-symbol-row');
+        loadSymbolDetails(s.name);
+      });
       tbody.appendChild(tr);
     });
 
