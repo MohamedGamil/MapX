@@ -967,6 +967,11 @@ export class Scanner {
     let matches = this.store.searchSymbols(symbolName);
     matches = filterMatches(matches);
     if (matches.length > 0) {
+      // Prefer a definition in the same file as the caller to avoid false cross-file edges
+      if (sourcePath) {
+        const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === symbolName);
+        if (sameFileMatch) return sameFileMatch.file_path as string;
+      }
       const exactMatch = matches.find(m => m.name === symbolName);
       if (exactMatch) return exactMatch.file_path as string;
     }
@@ -977,11 +982,20 @@ export class Scanner {
       matches = this.store.searchSymbols(shortName);
       matches = filterMatches(matches);
       if (matches.length > 0) {
+        if (sourcePath) {
+          const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === shortName);
+          if (sameFileMatch) return sameFileMatch.file_path as string;
+        }
         const exactMatch = matches.find(m => m.name === shortName);
         if (exactMatch) return exactMatch.file_path as string;
         return matches[0].file_path as string;
       }
     } else if (matches.length > 0) {
+      // Multiple matches, none exact — prefer same-file over arbitrary first result
+      if (sourcePath) {
+        const sameFile = matches.find(m => m.file_path === sourcePath);
+        if (sameFile) return sameFile.file_path as string;
+      }
       return matches[0].file_path as string;
     }
     return null;

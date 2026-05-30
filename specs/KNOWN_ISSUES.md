@@ -1,8 +1,8 @@
 # MapX Known Issues & Improvements
 
 ## Scanner
-- [ ] Mapping and associating dependencies between files that are not directly releated in actuality like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
-- [ ] Improve indexed files by adding support for Markdown, HTML, CSS, and JSON files
+- [x] Mapping and associating dependencies between files that are not directly releated in actuality like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
+- [ ] Improve indexed files by adding support for Markdown, HTML, CSS, and JSON files without parsing their contents, only index them and extract their dependencies and dependants.
 - [ ] Improve all analysis tools and commands by allowing more relaxed file matching with wildcard patterns
 - [ ] Improve submodules and repos discovery under the same workspace by scanning all directories up to 3 levels in depth, finding any nested git repositories and prompting the user to track them
 - [ ] Discovery of nested apps under the same monorepo, for instance a monorepo typically contains `apps/*`, `lib/*` and `packages/*` varying based on its purpose, the idea is to support scanning nested different frameworks and codebased under the same monorepo correctly extracting each app correctly.

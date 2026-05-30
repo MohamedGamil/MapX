@@ -594,4 +594,114 @@ describe('Scanner module', () => {
     const result = await (scanner as any).getFileInfo('/workspace/unreadable.ts', 'unreadable.ts');
     expect(result).toBeNull();
   });
+
+  describe('resolveSymbolToFile — same-file preference (false-edge fix)', () => {
+    const makeConfig = () => ({
+      getWorkspaceRoot: () => '/workspace',
+      getResolvedUserLanguages: () => ({}),
+      repos: [{ name: 'repo1', path: '.' }],
+      settings: { excludePatterns: [], includePatterns: [] }
+    } as unknown as Config);
+    const graph = new MapxGraph('repo1');
+    const fileMap = new Map([
+      ['src/parsers/languages/php.ts', 'repo1'],
+      ['src/frameworks/detectors/express.ts', 'repo1'],
+      ['src/frameworks/detectors/flask.ts', 'repo1'],
+    ]);
+
+    it('returns same-file match when symbol exists in both source file and another file', () => {
+      // cleanQuotes is defined in php.ts (method) AND express.ts (function)
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+            { name: 'cleanQuotes', file_path: 'src/parsers/languages/php.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'cleanQuotes', fileMap, 'src/parsers/languages/php.ts'
+      );
+      // Must prefer the same-file definition, NOT express.ts
+      expect(result).toBe('src/parsers/languages/php.ts');
+    });
+
+    it('falls back to global match when symbol is not in the source file', () => {
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'cleanQuotes', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBe('src/frameworks/detectors/express.ts');
+    });
+
+    it('returns null when no matches exist', () => {
+      const store = createMockStore({ searchSymbols: () => [] });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'unknownSymbol', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBeNull();
+    });
+
+    it('prefers same-file match on namespace-stripped path', () => {
+      // Namespace like App\Parser\cleanQuotes — strips to cleanQuotes
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+            { name: 'cleanQuotes', file_path: 'src/parsers/languages/php.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'App\\Parser\\cleanQuotes', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBe('src/parsers/languages/php.ts');
+    });
+
+    it('prefers same-file match in first-result fallback (no exact name match)', () => {
+      // Multiple non-exact matches — same file should still win
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'helper') return [
+            { name: 'helperFn', file_path: 'src/frameworks/detectors/flask.ts' },
+            { name: 'helperFn', file_path: 'src/parsers/languages/php.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'helper', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBe('src/parsers/languages/php.ts');
+    });
+
+    it('does not create same-file bias when no sourcePath is provided', () => {
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      // No sourcePath → falls back to first match without same-file preference
+      const result = (scanner as any).resolveSymbolToFile('cleanQuotes', fileMap);
+      expect(result).toBe('src/frameworks/detectors/express.ts');
+    });
+  });
 });

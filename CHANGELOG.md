@@ -8,6 +8,14 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+- **False Cross-File Dependency Edges** — Fixed a symbol resolution bug in `resolveSymbolToFile` (`src/core/scanner.ts`) where a call to a locally-defined helper (e.g. `cleanQuotes` inside `php.ts`) could resolve to an identically-named symbol in a completely unrelated file (e.g. `express.ts`), creating phantom graph edges. The resolver now checks for a **same-file match first** at every resolution path (exact-name lookup, namespace-stripped fallback, and first-result fallback) before falling back to a global match.
+
 ## [0.3.1] — 2026-05-31
 
 ### Added
