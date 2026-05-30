@@ -643,6 +643,80 @@ describe('CLI module', () => {
       await runCLI(['files']);
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No files found'));
     });
+
+    it('passes plain path prefix to getFilesFiltered', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 }
+      ]);
+
+      await runCLI(['files', '--path', 'src/core/']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: 'src/core/' })
+      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('src/core/store.ts'));
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+    });
+
+    it('passes glob pattern to getFilesFiltered unchanged', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 },
+        { path: 'src/core/graph.ts', language: 'typescript', lines: 213, size_bytes: 7200 }
+      ]);
+
+      await runCLI(['files', '--path', 'src/core/*.ts']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: 'src/core/*.ts' })
+      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('src/core/store.ts'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('src/core/graph.ts'));
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+    });
+
+    it('passes double-star glob to getFilesFiltered unchanged', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 }
+      ]);
+
+      await runCLI(['files', '--path', '**/*.ts']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: '**/*.ts' })
+      );
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+    });
+
+    it('passes --lang filter to getFilesFiltered', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+
+      await runCLI(['files', '--lang', 'python']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ lang: 'python' })
+      );
+    });
+
+    it('passes --sort and --limit to getFilesFiltered', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+
+      await runCLI(['files', '--sort', 'lines', '--limit', '10']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'lines', limit: 10 })
+      );
+    });
+
+    it('combines glob path with lang filter', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 }
+      ]);
+
+      await runCLI(['files', '--path', '*.json', '--lang', 'json']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: '*.json', lang: 'json' })
+      );
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+    });
   });
 
   // ── deps command ──────────────────────────────────────────────────

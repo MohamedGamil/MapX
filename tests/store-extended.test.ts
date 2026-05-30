@@ -258,7 +258,18 @@ describe('Store — extended operations', () => {
       const limit = opts.limit ?? 50;
       let sql = 'SELECT * FROM files WHERE 1=1';
       const params: any[] = [];
-      if (opts.pathPrefix) { sql += ' AND path LIKE ?'; params.push(`${opts.pathPrefix}%`); }
+      if (opts.pathPrefix) {
+        const raw = opts.pathPrefix;
+        const isGlob = raw.includes('*') || raw.includes('?');
+        if (isGlob) {
+          const likePattern = raw.replace(/\*/g, '%').replace(/\?/g, '_');
+          sql += ' AND path LIKE ?';
+          params.push(likePattern);
+        } else {
+          sql += ' AND path LIKE ?';
+          params.push(`${raw}%`);
+        }
+      }
       if (opts.lang) { sql += ' AND LOWER(language) = ?'; params.push(opts.lang.toLowerCase()); }
       if (opts.repo) { sql += ' AND repo = ?'; params.push(opts.repo); }
       if (opts.sort === 'lines') { sql += ' ORDER BY lines DESC'; }
@@ -301,6 +312,44 @@ describe('Store — extended operations', () => {
     it('should combine path prefix + language', () => {
       const results = getFilesFiltered({ pathPrefix: 'src/core/', lang: 'typescript' });
       expect(results.every((f: any) => f.path.startsWith('src/core/') && f.language === 'typescript')).toBe(true);
+    });
+
+    it('should match *.ts glob (all TypeScript files)', () => {
+      const results = getFilesFiltered({ pathPrefix: '*.ts' }) as any[];
+      // *.ts matches only top-level *.ts (no slash), e.g. none if all are under subdirs
+      // The seeded top-level TS file is src/index.ts – but *.ts LIKE '%' expands to any path ending in .ts
+      // Actually *.ts → LIKE '%.ts' which matches any path ending in .ts
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((f: any) => f.path.endsWith('.ts'))).toBe(true);
+    });
+
+    it('should match src/core/*.ts glob', () => {
+      const results = getFilesFiltered({ pathPrefix: 'src/core/*.ts' }) as any[];
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((f: any) => f.path.startsWith('src/core/') && f.path.endsWith('.ts'))).toBe(true);
+    });
+
+    it('should match src/core/store?ts glob (? wildcard)', () => {
+      const results = getFilesFiltered({ pathPrefix: 'src/core/store?ts' }) as any[];
+      expect(results.length).toBe(1);
+      expect((results[0] as any).path).toBe('src/core/store.ts');
+    });
+
+    it('should match **/*.ts double-star glob', () => {
+      const results = getFilesFiltered({ pathPrefix: '**/*.ts' }) as any[];
+      // **/*.ts → LIKE '%%.ts' → matches any path ending in .ts
+      expect(results.length).toBeGreaterThan(0);
+      expect(results.every((f: any) => f.path.endsWith('.ts'))).toBe(true);
+    });
+
+    it('should return no results for non-matching glob', () => {
+      const results = getFilesFiltered({ pathPrefix: 'nonexistent/*.rb' });
+      expect(results.length).toBe(0);
+    });
+
+    it('should combine glob path with language filter', () => {
+      const results = getFilesFiltered({ pathPrefix: 'src/*.ts', lang: 'typescript' }) as any[];
+      expect(results.every((f: any) => f.path.endsWith('.ts') && f.language === 'typescript')).toBe(true);
     });
   });
 

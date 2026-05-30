@@ -1,4 +1,4 @@
-<!-- mapx v0.3.0 -->
+<!-- mapx v0.3.1 -->
 # MapxGraph - LLM Integration Guide
 
 This project uses **MapxGraph** — a local code graph memory system that provides persistent, structured understanding of the codebase across LLM sessions.
@@ -48,7 +48,7 @@ mapx -d /path/to/project scan
 - `mapx callees <symbol> [--dir path] [--depth depth]` - Trace callees of a symbol (fuzzy fallback on typos)
 - `mapx impact <symbol> [--dir path] [--depth depth]` - Change impact analysis with fuzzy pre-check
 - `mapx node <symbol> [--dir path] [--source] [--format text|json]` - Inspect a symbol node with optional source code
-- `mapx files [--dir path] [--path prefix] [--lang language] [--sort sort] [--limit limit]` - List and filter files
+- `mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
 - `mapx lang list` - List supported languages and status
 - `mapx lang install <lang>` - Install dynamic language support
 - `mapx lang uninstall <lang>` - Uninstall dynamic language support
@@ -68,7 +68,7 @@ When running as an MCP server, MapxGraph exposes these tools:
 - `mapx_query` - Search symbols by name pattern
 - `mapx_search` - Filtered semantic and regex-like symbol search
 - `mapx_node` - Deep inspection of a specific symbol and its source code
-- `mapx_files` - List and filter files by path, language, and size or line counts
+- `mapx_files` - List and filter files by path prefix or glob pattern, language, and size or line counts
 - `mapx_dependencies` - Get deps and reverse-deps for a file
 - `mapx_callers` - Direct and nested callers of a symbol
 - `mapx_callees` - Direct and nested callees of a symbol

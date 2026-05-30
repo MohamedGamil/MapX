@@ -785,8 +785,17 @@ export class Store {
     const params: any[] = [];
 
     if (options.pathPrefix) {
-      sql += ' AND path LIKE ?';
-      params.push(`${options.pathPrefix}%`);
+      const raw = options.pathPrefix;
+      // Glob pattern: convert to SQL LIKE (*, ? → %, _)
+      const isGlob = raw.includes('*') || raw.includes('?');
+      if (isGlob) {
+        const likePattern = raw.replace(/\*/g, '%').replace(/\?/g, '_');
+        sql += ' AND path LIKE ?';
+        params.push(likePattern);
+      } else {
+        sql += ' AND path LIKE ?';
+        params.push(`${raw}%`);
+      }
     }
 
     if (options.lang) {

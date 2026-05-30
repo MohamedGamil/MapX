@@ -485,12 +485,14 @@ EXAMPLES:
 EXAMPLES:
   • List all files: { }
   • Files in a directory: { "path": "src/core/" }
+  • Glob pattern: { "path": "src/core/*.ts" }
+  • Multi-level glob: { "path": "**/*.json" }
   • Only TypeScript files: { "lang": "typescript" }
   • Largest files first: { "sort": "lines", "limit": 20 }`,
         inputSchema: {
           type: 'object',
           properties: {
-            path: { type: 'string', description: 'Filter by path prefix (e.g. "src/core/" or "apps/dashboard/")' },
+            path: { type: 'string', description: 'Filter by path prefix or glob pattern (e.g. "src/core/", "src/core/*.ts", "**/*.json")' },
             lang: { type: 'string', description: 'Filter by language (e.g. "typescript", "python", "go")' },
             sort: { type: 'string', enum: ['lines', 'path'], description: 'Sort by line count (desc) or path (asc)', default: 'path' },
             limit: { type: 'number', description: 'Max files to return', default: 50 },
@@ -1311,7 +1313,10 @@ Callees: ${callees.length}`;
 
         // F43: Summary header
         let header = `${results.length} file${results.length !== 1 ? 's' : ''}`;
-        if (pathPrefix) header += ` under ${pathPrefix}`;
+        if (pathPrefix) {
+          const isGlob = pathPrefix.includes('*') || pathPrefix.includes('?');
+          header += isGlob ? ` matching ${pathPrefix}` : ` under ${pathPrefix}`;
+        }
         if (lang) header += ` (${lang})`;
         header += `:\n\n`;
 

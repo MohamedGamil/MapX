@@ -206,14 +206,22 @@ mapx node Store --source --format json  # JSON with embedded source
 List and filter project files.
 
 ```bash
-mapx files [--path <prefix>] [--lang <language>] [--sort <sort>] [--limit <n>]
+mapx files [--path <prefix_or_glob>] [--lang <language>] [--sort <sort>] [--limit <n>]
 ```
 
 Options:
-- `--path` — Filter by file path prefix
+- `--path` — Filter by file path prefix **or glob pattern** (e.g. `src/core/`, `src/core/*.ts`, `**/*.json`)
 - `--lang` — Filter by language
 - `--sort` — Sort by: `name`, `lines`, `size`, `pagerank` (default: `name`)
 - `--limit` — Max results (default: 100)
+
+Examples:
+```bash
+mapx files --path src/core/          # plain prefix
+mapx files --path 'src/core/*.ts'    # glob — quote to prevent shell expansion
+mapx files --path '**/*.json'        # double-star glob
+mapx files --lang typescript --sort lines --limit 20
+```
 
 ## `mapx clusters`
 

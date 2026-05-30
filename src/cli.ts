@@ -25,7 +25,7 @@ import { isLanguageInstalled, installLanguage, uninstallLanguage } from './langu
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { VERSION } from './version.js';
-import { findSimilarSymbols } from './core/fuzzy-matcher.js';
+import { findSimilarSymbols, isGlobPattern, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
@@ -37,6 +37,43 @@ function collectPatterns(val: string, memo: string[]): string[] {
 function resolveDir(cmdOpts: Record<string, unknown>, programOpts: Record<string, unknown>): string {
   const raw = (cmdOpts.dir as string) || (programOpts.dir as string) || process.cwd();
   return resolve(raw);
+}
+
+/**
+ * Resolve a file argument to one or more tracked file paths.
+ *
+ * Resolution order:
+ *  1. Exact match in the tracked file set.
+ *  2. Glob / wildcard match (*, ?) against all tracked paths — returns all matches.
+ *  3. Substring / prefix match — returns all paths containing the input as a substring.
+ *
+ * Returns `null` when no match is found so callers can print a helpful error.
+ */
+function resolveFilePaths(input: string, allFiles: Array<{ path: unknown }>): string[] | null {
+  const paths = allFiles.map(f => f.path as string);
+
+  // 1. Exact match
+  if (paths.includes(input)) return [input];
+
+  // 2. Glob wildcard: *, ?, **
+  if (isGlobPattern(input) || input.includes('/')) {
+    // Convert glob to regex: ** matches any path segment, * matches within segment
+    const regexStr = input
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex special chars (except * ?)
+      .replace(/\\\*\\\*/g, '.*')             // ** → .*
+      .replace(/\*/g, '[^/]*')                // * → [^/]*
+      .replace(/\?/g, '[^/]');                // ? → [^/]
+    const re = new RegExp(`(^|/)${regexStr}$`, 'i');
+    const matches = paths.filter(p => re.test(p) || p.endsWith(input) || p.includes(input));
+    if (matches.length > 0) return matches;
+  }
+
+  // 3. Substring fallback
+  const lower = input.toLowerCase();
+  const substr = paths.filter(p => p.toLowerCase().includes(lower));
+  if (substr.length > 0) return substr;
+
+  return null;
 }
 
 const PHASE_LABELS: Record<ScanProgress['phase'], { active: string; done: string }> = {
@@ -1138,7 +1175,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('files')
     .description('List indexed files with prefix/lang/sort filters')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--path <prefix>', 'Filter by path prefix')
+    .option('--path <pattern>', 'Filter by path prefix or glob (e.g. src/core/*.ts)')
     .option('--lang <lang>', 'Filter by language')
     .option('--sort <sort>', 'lines | path', 'path')
     .option('--limit <limit>', 'Max files to return', '50')
@@ -1173,22 +1210,35 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const { store, graph } = await loadContext(dir);
       checkAndPrintStaleness(store, dir);
 
-      const deps = graph.getDependencies(file);
-      const rdeps = graph.getReverseDependencies(file);
+      const allFiles = store.getAllFiles() as Array<{ path: unknown }>;
+      const resolved = resolveFilePaths(file, allFiles);
 
-      if (deps.length > 0) {
-        console.log('Dependencies:');
-        for (const dep of deps) {
-          console.log(`  → ${dep.target} (${dep.type})`);
-        }
-      } else {
-        console.log('No dependencies found');
+      if (!resolved) {
+        console.error(`File "${file}" not found in index.`);
+        console.log(`\nTip: Use globs (src/core/*.ts), partial names (scanner), or run mapx files to list all tracked files.`);
+        process.exit(1);
       }
 
-      if (rdeps.length > 0) {
-        console.log('\nDepended on by:');
-        for (const rdep of rdeps) {
-          console.log(`  ← ${rdep.source} (${rdep.type})`);
+      for (const filePath of resolved) {
+        if (resolved.length > 1) console.log(`\n── ${filePath} ──`);
+
+        const deps = graph.getDependencies(filePath);
+        const rdeps = graph.getReverseDependencies(filePath);
+
+        if (deps.length > 0) {
+          console.log('Dependencies:');
+          for (const dep of deps) {
+            console.log(`  → ${dep.target} (${dep.type})`);
+          }
+        } else {
+          console.log('No dependencies found');
+        }
+
+        if (rdeps.length > 0) {
+          console.log('\nDepended on by:');
+          for (const rdep of rdeps) {
+            console.log(`  ← ${rdep.source} (${rdep.type})`);
+          }
         }
       }
     });

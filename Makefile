@@ -109,8 +109,8 @@ node: ## Inspect symbol: make node s=SymbolName [src=1] DIR=/path
 	@test -n "$(s)" || (echo "Usage: make node s=SymbolName [src=1] [DIR=/path]" && exit 1)
 	$(CLI) node "$(s)" $(if $(src),--source,) --dir=$(DIR)
 
-files: ## List files: make files [p=prefix] [l=lang] DIR=/path
-	$(CLI) files $(if $(p),--path $(p),) $(if $(l),--lang $(l),) --dir=$(DIR)
+files: ## List files: make files [p=prefix_or_glob] [l=lang] DIR=/path
+	$(CLI) files $(if $(p),--path "$(p)",) $(if $(l),--lang $(l),) --dir=$(DIR)
 
 clusters: ## List code clusters (make clusters DIR=/path)
 	$(CLI) clusters --dir=$(DIR)

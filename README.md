@@ -209,7 +209,7 @@ mapx -d /path/to/project export
 | `mapx callees <symbol>` | Show direct and nested callees (with fuzzy fallback) |
 | `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring (with fuzzy pre-check) |
 | `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, and `--format json` |
-| `mapx files` | List and filter files with `--path`, `--lang`, `--sort`, `--limit` |
+| `mapx files` | List and filter files with `--path` (prefix or glob), `--lang`, `--sort`, `--limit` |
 | `mapx clusters` | List detected code clusters/modules |
 | `mapx export` | Export graph (default: LLM summary, 8K tokens) |
 | `mapx export --format=json` | Full graph as JSON |

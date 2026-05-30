@@ -887,6 +887,52 @@ describe('MCP module', () => {
       expect(text).toContain('under src/');
       expect(text).toContain('typescript');
     });
+
+    it('uses "matching" in header for glob path', async () => {
+      storeMocks.getFilesFiltered.mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 },
+        { path: 'src/core/graph.ts', language: 'typescript', lines: 213, size_bytes: 7200 }
+      ]);
+
+      const res = await callTool('mapx_files', { path: 'src/core/*.ts' });
+      const text = getText(res);
+      expect(text).toContain('matching src/core/*.ts');
+      expect(text).not.toContain('under src/core/*.ts');
+      expect(text).toContain('src/core/store.ts');
+    });
+
+    it('uses "matching" in header for double-star glob', async () => {
+      storeMocks.getFilesFiltered.mockReturnValue([
+        { path: 'package.json', language: 'json', lines: 42, size_bytes: 1100 }
+      ]);
+
+      const res = await callTool('mapx_files', { path: '**/*.json' });
+      const text = getText(res);
+      expect(text).toContain('matching **/*.json');
+    });
+
+    it('uses "under" in header for plain prefix', async () => {
+      storeMocks.getFilesFiltered.mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 }
+      ]);
+
+      const res = await callTool('mapx_files', { path: 'src/core/' });
+      const text = getText(res);
+      expect(text).toContain('under src/core/');
+      expect(text).not.toContain('matching');
+    });
+
+    it('shows no path header when path not provided', async () => {
+      storeMocks.getFilesFiltered.mockReturnValue([
+        { path: 'src/main.ts', language: 'typescript', lines: 100, size_bytes: 2000 }
+      ]);
+
+      const res = await callTool('mapx_files');
+      const text = getText(res);
+      expect(text).not.toContain('under');
+      expect(text).not.toContain('matching');
+      expect(text).toContain('1 file');
+    });
   });
 
   // ==================== MAPX_METRICS ====================

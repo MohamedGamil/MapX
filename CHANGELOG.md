@@ -17,6 +17,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Changed
 - `*.min.css` added to default `excludePatterns` to avoid indexing minified stylesheets as noise.
+- `mapx files --path` now accepts glob patterns (e.g. `src/core/*.ts`, `**/*parser*`) in addition to plain path prefixes.
+- `mapx deps <file>` now resolves file arguments via glob, wildcard, and substring matching — exact match is tried first, then glob patterns, then substring containment. Multiple matched files are all reported.
+- `FlowTracer.resolveStart` (used by `mapx trace`) now resolves file arguments via glob and substring matching in addition to exact/suffix match.
 
 ### Fixed
 
