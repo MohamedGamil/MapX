@@ -52,6 +52,10 @@ subtabs.forEach(sub => {
 
 // Track seen tool call IDs to avoid duplicates from SSE + history
 const seenToolCallIds = new Set<string>();
+const TOOL_LOG_PAGE_SIZE = 50;
+let toolLogOffset = 0;
+let toolLogTotal = 0;
+let toolLogLoading = false;
 
 function toolCallId(data: any): string {
   return `${data.tool}:${data.timestamp}:${data.durationMs || 0}`;
@@ -75,29 +79,41 @@ function renderToolCallEntry(data: any): HTMLElement {
   return entry;
 }
 
-// Load historical tool calls from persistent log
+// Load historical tool calls from persistent log (paginated)
 async function loadToolCallHistory() {
+  if (toolLogLoading) return;
+  toolLogLoading = true;
   const logContainer = document.getElementById('tool-log-container');
-  if (!logContainer) return;
-  
+  const sentinel = document.getElementById('tool-log-sentinel');
+  if (sentinel) sentinel.classList.add('loading');
   try {
-    const res = await fetch('/api/tool-calls');
+    const res = await fetch(`/api/tool-calls?limit=${TOOL_LOG_PAGE_SIZE}&offset=${toolLogOffset}`);
     if (!res.ok) return;
-    const events = await res.json();
-    
-    if (events.length > 0) {
+    const { events, total } = await res.json();
+    toolLogTotal = total;
+
+    if (events.length > 0 && logContainer) {
       const placeholder = logContainer.querySelector('.log-placeholder');
       if (placeholder) placeholder.remove();
-      
       for (const data of events) {
         const id = toolCallId(data);
         if (seenToolCallIds.has(id)) continue;
         seenToolCallIds.add(id);
-        logContainer.appendChild(renderToolCallEntry(data));
+        // insert before sentinel so older entries accumulate above it
+        logContainer.insertBefore(renderToolCallEntry(data), sentinel ?? null);
       }
+      toolLogOffset += events.length;
+    }
+
+    if (sentinel) {
+      sentinel.classList.remove('loading');
+      sentinel.style.display = toolLogOffset >= toolLogTotal ? 'none' : '';
     }
   } catch (err) {
     console.error('Failed to load tool call history:', err);
+    if (sentinel) sentinel.classList.remove('loading');
+  } finally {
+    toolLogLoading = false;
   }
 }
 
@@ -2687,14 +2703,14 @@ function setupContextBuilder() {
 // Poll endpoints periodically to keep the UI up-to-date in near-real-time (fallback/sync)
 function startPeriodicPolling() {
   setInterval(async () => {
-    // 1. Poll tool calls
+    // 1. Poll tool calls (fetch newest page only for new entries)
     const logContainer = document.getElementById('tool-log-container');
     if (logContainer) {
       try {
-        const res = await fetch('/api/tool-calls');
+        const res = await fetch(`/api/tool-calls?limit=${TOOL_LOG_PAGE_SIZE}&offset=0`);
         if (res.ok) {
-          const events = await res.json();
-          if (events.length > 0) {
+          const { events } = await res.json();
+          if (events && events.length > 0) {
             const placeholder = logContainer.querySelector('.log-placeholder');
             const reversedEvents = [...events].reverse();
             for (const data of reversedEvents) {
@@ -2767,6 +2783,21 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSSE();
   setupContextBuilder();
   startPeriodicPolling();
+
+  // Infinite scroll for Tool Call Log
+  const toolLogSentinel = document.getElementById('tool-log-sentinel');
+  const toolLogContainer = document.getElementById('tool-log-container');
+  if (toolLogSentinel && toolLogContainer) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && toolLogOffset < toolLogTotal && !toolLogLoading) {
+          loadToolCallHistory();
+        }
+      },
+      { root: toolLogContainer, threshold: 0.1 }
+    );
+    observer.observe(toolLogSentinel);
+  }
 
   // Search input listener for Symbol Explorer
   const symbolSearch = document.getElementById('symbol-search');

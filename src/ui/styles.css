@@ -677,6 +677,21 @@ body {
   opacity: 0.8;
 }
 
+.log-load-more {
+  text-align: center;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: default;
+  user-select: none;
+}
+
+.log-load-more.loading::after {
+  content: ' ⟳';
+  display: inline-block;
+  animation: graph-spin 1s linear infinite;
+}
+
 .log-status {
   margin-right: 4px;
   font-size: 12px;

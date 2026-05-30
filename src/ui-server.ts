@@ -559,20 +559,26 @@ export function startUiServer(opts: ServerOpts) {
       if (pathname === '/api/tool-calls') {
         const mapxDir = resolve(dir, '.mapx');
         const logPath = getToolCallsLogPath(mapxDir);
+        const qp = new URL(req.url!, 'http://localhost').searchParams;
+        const limit = Math.min(Math.max(1, parseInt(qp.get('limit') ?? '50', 10)), 200);
+        const offset = Math.max(0, parseInt(qp.get('offset') ?? '0', 10));
         const events: any[] = [];
+        let total = 0;
         if (existsSync(logPath)) {
           try {
             const content = readFileSync(logPath, 'utf-8');
             const lines = content.split('\n').filter(Boolean);
-            // Return most recent 100 entries, newest first
-            const recent = lines.slice(-100).reverse();
-            for (const line of recent) {
+            total = lines.length;
+            // newest-first pagination: offset 0 = most recent entries
+            const end = Math.max(0, total - offset);
+            const start = Math.max(0, end - limit);
+            for (const line of lines.slice(start, end).reverse()) {
               try { events.push(JSON.parse(line)); } catch { /* skip malformed */ }
             }
           } catch { /* ignore read errors */ }
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(events));
+        res.end(JSON.stringify({ events, total }));
         return;
       }
 

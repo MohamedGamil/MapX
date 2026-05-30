@@ -1,7 +1,7 @@
 # MapX Known Issues & Improvements
 
 ## Scanner
-- [ ] Mapping actually unrelated files like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
+- [ ] Mapping and associating dependencies between files that are not directly releated in actuality like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
 - [ ] Improve indexed files by adding support for Markdown, HTML, CSS, and JSON files
 - [ ] Improve all analysis tools and commands by allowing more relaxed file matching with wildcard patterns
 - [ ] Improve submodules and repos discovery under the same workspace by scanning all directories up to 3 levels in depth, finding any nested git repositories and prompting the user to track them
@@ -12,10 +12,10 @@
 - [x] Use fCoSE as default graph layout for performance
 - [x] Fix layout changing modes issue
 - [x] fCoSE layout nodes seem to stack on top of each other without proper spacing
-- [ ] Improve visualization of clusters in ui graph
+- [ ] Improve visualization of clusters in ui graph, this requires clustering improvements by logical breakdown and restructering of files, introducing the concept of layers to auto assign layers to files based on their role in the system
 - [x] Issue with graph not loading or taking too long to load propably due to large number of symbols 1.5k+ and edges 5k+
 - [x] No pagination support for Symbol Explorer (loads limited number of items)
-- [ ] No infinite scroll (auto load more) for Tool Call Log
+- [x] No infinite scroll (auto load more) for Tool Call Log
 - [x] Issue with UI server
 ```bash
 # $ mapx ui
