@@ -1914,6 +1914,14 @@ Callees: ${callees.length}`;
         }
         discovered.push(...vscodeFolders);
 
+        // Deep-scan nested git repos (up to 3 levels)
+        const nestedGitRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+        for (const n of nestedGitRepos) {
+          if (!registeredPaths.has(resolve(dir, n.path))) {
+            discovered.push({ name: n.name, path: n.path, source: 'nested-git', isInitialized: true });
+          }
+        }
+
         if (action === 'discover') {
           return {
             content: [{

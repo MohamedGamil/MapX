@@ -57,7 +57,7 @@ mapx -d /path/to/project scan
 - `mapx ui [--port <port>]` - Open web dashboard for interactive visualization
 - `mapx workspaces list` - List registered repositories
 - `mapx workspaces add <path>` - Register a new repository
-- `mapx workspaces discover` - Discover unregistered submodules, peers, VS Code folders
+- `mapx workspaces discover` - Discover unregistered submodules, peers, VS Code folders, and nested git repos (up to 3 levels deep)
 - `mapx workspaces sync` - Auto-register discovered repositories
 
 ## MCP Tools

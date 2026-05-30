@@ -2392,6 +2392,17 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           }
         }
       }
+
+      // Deep-scan for nested git repos (up to 3 levels)
+      const nested = WorkspaceManager.discoverNestedGitRepos(dir);
+      const uninitNested = nested.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (uninitNested.length > 0) {
+        console.log('\nNested git repositories (deep scan):');
+        for (const n of uninitNested) {
+          console.log(`  - ${n.name.padEnd(15)} -> ${n.path} (available)`);
+        }
+      }
+
       console.log('');
     });
 
@@ -2524,6 +2535,17 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         found += vsEntries.length;
       }
 
+      // Deep-scan for nested git repos (up to 3 levels)
+      const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+      const uninitNestedDiscover = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (uninitNestedDiscover.length > 0) {
+        console.log('\nNested git repositories (deep scan ≤3 levels):');
+        for (const n of uninitNestedDiscover) {
+          console.log(`  - ${n.name.padEnd(20)} -> ${n.path} (available)`);
+        }
+        found += uninitNestedDiscover.length;
+      }
+
       if (found === 0) {
         console.log('No unregistered repositories discovered.');
       } else {
@@ -2577,6 +2599,27 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             toAdd.push({ name: p.name, path: p.path });
             registeredPaths.add(abs);
           }
+        }
+      }
+
+      // 4. Nested git repositories — prompt user to select which to add
+      const nestedReposSync = WorkspaceManager.discoverNestedGitRepos(dir);
+      const newNestedRepos = nestedReposSync.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (newNestedRepos.length > 0) {
+        clack.log.step(`Found ${newNestedRepos.length} nested git repositor${newNestedRepos.length === 1 ? 'y' : 'ies'} via deep scan (up to 3 levels):`);
+        const chosen = await clack.multiselect({
+          message: 'Select nested repositories to register and scan:',
+          options: newNestedRepos.map(n => ({ value: n.path, label: `${n.name}  (${n.path})` })),
+          required: false,
+        });
+        if (clack.isCancel(chosen)) {
+          clack.cancel('Sync cancelled.');
+          process.exit(0);
+        }
+        for (const chosenPath of chosen as string[]) {
+          const nested = newNestedRepos.find(n => n.path === chosenPath)!;
+          toAdd.push({ name: nested.name, path: nested.path });
+          registeredPaths.add(resolve(dir, nested.path));
         }
       }
 

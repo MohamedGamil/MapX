@@ -224,7 +224,7 @@ mapx -d /path/to/project export
 | `mapx ui` | Open the web dashboard for interactive visualization |
 | `mapx workspaces list` | List registered repositories |
 | `mapx workspaces add <path>` | Register a new repository |
-| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders |
+| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders, and nested git repos (up to 3 levels deep) |
 | `mapx workspaces sync` | Auto-register discovered repositories |
 | `mapx agents mcp` | Auto-detect agent tools and generate MCP config files |
 | `mapx serve --dir <path>` | Start MCP server (stdio) |

@@ -14,12 +14,20 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - New `StaticFileParser` (`src/parsers/static-file-parser.ts`) with per-language regex extraction. Markdown links are restricted to markdown-only targets to avoid spurious cross-type edges.
 - New `Store.resetRepoForScan()` method — wipes files, symbols, outgoing edges, and clusters for a repo in a single transaction while preserving incoming cross-repo edges and scan-time meta keys.
 - New `StaticFileParser` test suite (`tests/static-file-parser.test.ts`) — 59 tests covering all four file types, extension variants, edge-case filtering, and registry integration.
+- **Nested git repository discovery** — `WorkspaceManager.discoverNestedGitRepos(root, maxDepth=3)` recursively walks the workspace directory up to 3 levels deep, finding any subdirectory that contains a `.git` entry. Common noise paths (`node_modules`, `dist`, `build`, `.cache`, `coverage`, `vendor`, `target`, `.mapx`, etc.) are automatically skipped. Recursion stops at each discovered boundary so inner repos of an already-found repo are not double-reported.
+- `mapx workspaces list` now includes a **"Nested git repositories (deep scan)"** section listing any discovered nested repos not yet registered.
+- `mapx workspaces discover` includes nested git repos in its output with a `nested-git` source label, and counts them in the total.
+- `mapx workspaces sync` prompts the user with an interactive `multiselect` to choose which newly discovered nested repositories to register and scan (submodules/peer repos are still auto-added silently as before).
+- `mapx_workspaces` MCP tool `discover` action now includes `{ source: 'nested-git' }` entries for nested repos found by the deep scan.
+- New `discoverNestedGitRepos` test suite in `tests/workspace-manager.test.ts` — 10 tests covering depth limits, custom `maxDepth`, skip lists, boundary non-recursion, multi-repo at same level, empty roots, and nonexistent paths.
 
 ### Changed
 - `*.min.css` added to default `excludePatterns` to avoid indexing minified stylesheets as noise.
-- `mapx files --path` now accepts glob patterns (e.g. `src/core/*.ts`, `**/*parser*`) in addition to plain path prefixes.
+- `mapx files --path` now accepts glob patterns (e.g. `src/core/*.ts`, `**/*.json`) in addition to plain path prefixes.
 - `mapx deps <file>` now resolves file arguments via glob, wildcard, and substring matching — exact match is tried first, then glob patterns, then substring containment. Multiple matched files are all reported.
 - `FlowTracer.resolveStart` (used by `mapx trace`) now resolves file arguments via glob and substring matching in addition to exact/suffix match.
+- `mapx_files` MCP tool `path` parameter now accepts glob patterns; the response header says `"matching <glob>"` for glob inputs and `"under <prefix>"` for plain prefix inputs.
+- Makefile `files` target now quotes the `--path` argument (`"$(p)"`) to prevent shell glob expansion before the CLI receives it.
 
 ### Fixed
 

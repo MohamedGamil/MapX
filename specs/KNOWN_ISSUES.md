@@ -4,7 +4,7 @@
 - [x] Mapping and associating dependencies between files that are not directly releated in actuality like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
 - [x] Improve indexed files by adding support for Markdown, HTML, CSS, and JSON files without parsing their contents, only index them and extract their dependencies and dependants.
 - [x] Improve all analysis tools and commands by allowing more relaxed file matching with enhanced wildcard patterns support.
-- [ ] Improve submodules and repos discovery under the same workspace by scanning all directories up to 3 levels in depth, finding any nested git repositories and prompting the user to track them
+- [x] Improve submodules and repos discovery under the same workspace by scanning all directories up to 3 levels in depth, finding any nested git repositories and prompting the user to track them
 - [ ] Discovery of nested apps under the same monorepo, for instance a monorepo typically contains `apps/*`, `lib/*` and `packages/*` varying based on its purpose, the idea is to support scanning nested different frameworks and codebased under the same monorepo correctly extracting each app correctly.
 - [ ] In some projects like MapX itself .ts files may import symbols from other .ts files while using .js file extension, we need a method to support this edgecase.
 

@@ -125,6 +125,7 @@ vi.mock('../src/core/workspace-manager.js', () => ({
     discoverSubmodules: vi.fn().mockReturnValue([]),
     discoverPeerRepos: vi.fn().mockReturnValue([]),
     discoverVSCodeWorkspace: vi.fn().mockReturnValue([]),
+    discoverNestedGitRepos: vi.fn().mockReturnValue([]),
     listWorkspaces: vi.fn().mockReturnValue([]),
     discoverWorkspaces: vi.fn().mockReturnValue([]),
     syncWorkspaces: vi.fn().mockReturnValue([])

@@ -346,17 +346,23 @@ mapx workspaces remove my-repo
 
 ### `mapx workspaces discover`
 
-Discover unregistered submodules, peer repos, and VS Code workspace folders (read-only).
+Discover unregistered submodules, peer repos, VS Code workspace folders, and **nested git repositories** (read-only).
 
 ```bash
 mapx workspaces discover
 ```
 
-Outputs grouped results by source type (submodules, peer repos, VS Code folders) with status indicators. Suggests `mapx workspaces add <path>` for registration.
+Outputs grouped results by source type with status indicators:
+- **Submodules** — declared in `.gitmodules`
+- **Peer repositories** — sibling directories in the parent folder
+- **VS Code workspace folders** — folders listed in `.code-workspace` files
+- **Nested git repositories** — any directory up to 3 levels deep that contains a `.git` entry (common noise paths like `node_modules`, `dist`, `build`, `.cache` are skipped automatically)
+
+Suggests `mapx workspaces add <path>` for registration.
 
 ### `mapx workspaces sync`
 
-Sync all discovered submodules, peer repos, and VS Code workspace folders (auto-registers them).
+Sync all discovered submodules, peer repos, and VS Code workspace folders (auto-registers them). For newly discovered **nested git repositories**, an interactive prompt lets you choose which ones to register and scan.
 
 ```bash
 mapx workspaces sync
