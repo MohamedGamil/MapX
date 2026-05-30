@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-05-31
+
 ### Added
 
 - **Expanded Core Test Coverage** — Expanded unit test coverage to 80%+ across five key core modules:
