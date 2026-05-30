@@ -219,6 +219,15 @@ export class Scanner {
     const workspaceRoot = this.config.getWorkspaceRoot();
     const repoRoot = resolve(workspaceRoot, repo.path);
 
+    if (force) {
+      // Clear stale resume state so a previously-interrupted scan cannot
+      // cause --force to silently skip files it considers "already completed".
+      this.clearResumeState(repo.name);
+      // Wipe all DB data for this repo before re-scanning so that symbols,
+      // edges, files, and clusters from a prior run cannot become stale.
+      this.store.resetRepoForScan(repo.name);
+    }
+
     const discovered = await this.discoverFiles(repoRoot, repo.name);
     this.onProgress?.({ phase: 'discover', current: discovered.length, total: discovered.length });
 

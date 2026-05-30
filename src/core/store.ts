@@ -591,6 +591,23 @@ export class Store {
     });
   }
 
+  /**
+   * Wipe all data owned by a repo in preparation for a fresh forced re-scan.
+   * Unlike deleteRepo(), this intentionally preserves:
+   *   - Cross-repo edges where this repo is only the TARGET (those belong to
+   *     other repos' scans and will be cleaned up when those repos are re-scanned).
+   *   - last_scan_commit / last_scan_time meta keys (updated once scan completes).
+   */
+  resetRepoForScan(repoName: string): void {
+    this.inTransaction(() => {
+      this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM edges WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_membership WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM clusters WHERE repo = ?').run(repoName);
+    });
+  }
+
   deleteRepo(repoName: string): void {
     this.inTransaction(() => {
       this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);

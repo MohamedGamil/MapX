@@ -46,7 +46,7 @@ uninit: ## Remove .mapx/ directory and reverse integrations (make uninit DIR=/pa
 	$(CLI) uninit $(DIR) --force
 
 scan: ## Full scan of all source files (make scan DIR=/path)
-	$(CLI) scan $(DIR)
+	$(CLI) scan --force $(DIR)
 
 update: ## Incremental scan (only changed files) (make update DIR=/path)
 	$(CLI) update $(DIR)

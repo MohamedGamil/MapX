@@ -118,6 +118,7 @@ describe('Scanner module', () => {
     insertEdge: vi.fn(),
     updateFileMetadata: vi.fn(),
     deleteFrameworkEdgesForRepo: vi.fn(),
+    resetRepoForScan: vi.fn(),
     clearClusters: vi.fn(),
     insertCluster: vi.fn(),
     insertClusterMembership: vi.fn(),
@@ -702,6 +703,70 @@ describe('Scanner module', () => {
       // No sourcePath → falls back to first match without same-file preference
       const result = (scanner as any).resolveSymbolToFile('cleanQuotes', fileMap);
       expect(result).toBe('src/frameworks/detectors/express.ts');
+    });
+  });
+
+  describe('scanFull with --force: DB reset and resume-state clearing', () => {
+    const makeConfig = () => ({
+      getWorkspaceRoot: () => '/workspace',
+      getResolvedUserLanguages: () => ({}),
+      repos: [{ name: 'repo1', path: '.' }],
+      settings: { excludePatterns: [], includePatterns: [] }
+    } as unknown as Config);
+
+    it('calls resetRepoForScan when force=true', async () => {
+      const mockStore = createMockStore();
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: true });
+      expect(mockStore.resetRepoForScan).toHaveBeenCalledWith('repo1');
+    });
+
+    it('does NOT call resetRepoForScan when force=false', async () => {
+      const mockStore = createMockStore();
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: false });
+      expect(mockStore.resetRepoForScan).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call resetRepoForScan on a plain scanFull (default)', async () => {
+      const mockStore = createMockStore();
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1']);
+      expect(mockStore.resetRepoForScan).not.toHaveBeenCalled();
+    });
+
+    it('clears stale resume state before scanning when force=true', async () => {
+      const mockStore = createMockStore({
+        // Simulate a stale interrupted resume state
+        getMeta: vi.fn().mockImplementation((key: string) => {
+          if (key.startsWith('scan_resume_state:')) {
+            return JSON.stringify({ totalFiles: 5, completedFiles: ['src/old.ts'], totalSymbols: 2, totalEdges: 1 });
+          }
+          return null;
+        }),
+      });
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: true });
+      // setMeta should have been called to clear the resume state (sets it to '')
+      const clearCalls = (mockStore.setMeta as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([key, val]: [string, string]) => key.startsWith('scan_resume_state:') && val === ''
+      );
+      expect(clearCalls.length).toBeGreaterThan(0);
+    });
+
+    it('resetRepoForScan is called before files are upserted', async () => {
+      const callOrder: string[] = [];
+      const mockStore = createMockStore({
+        resetRepoForScan: vi.fn().mockImplementation(() => { callOrder.push('reset'); }),
+        upsertFile: vi.fn().mockImplementation(() => { callOrder.push('upsert'); }),
+      });
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: true });
+      const resetIdx = callOrder.indexOf('reset');
+      const firstUpsertIdx = callOrder.indexOf('upsert');
+      expect(resetIdx).toBeGreaterThanOrEqual(0);
+      expect(firstUpsertIdx).toBeGreaterThanOrEqual(0);
+      expect(resetIdx).toBeLessThan(firstUpsertIdx);
     });
   });
 });

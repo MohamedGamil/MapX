@@ -9,12 +9,19 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- **Static file indexing**: Markdown (`.md`, `.mdx`, `.markdown`), HTML (`.html`, `.htm`, `.xhtml`), CSS/SCSS/Sass/Less (`.css`, `.scss`, `.sass`, `.less`), and JSON/JSONC (`.json`, `.jsonc`, `.json5`) files are now indexed and included in the dependency graph. No symbol extraction is performed; only outgoing path references (links, `@import`, `url()`, `href`, `src`, `$ref`) are recorded as edges.
+- New `'static'` tier in `LanguageDefinition` for index-only languages with no WASM grammar.
+- New `StaticFileParser` (`src/parsers/static-file-parser.ts`) with per-language regex extraction. Markdown links are restricted to markdown-only targets to avoid spurious cross-type edges.
+- New `Store.resetRepoForScan()` method — wipes files, symbols, outgoing edges, and clusters for a repo in a single transaction while preserving incoming cross-repo edges and scan-time meta keys.
+- New `StaticFileParser` test suite (`tests/static-file-parser.test.ts`) — 59 tests covering all four file types, extension variants, edge-case filtering, and registry integration.
 
 ### Changed
+- `*.min.css` added to default `excludePatterns` to avoid indexing minified stylesheets as noise.
 
 ### Fixed
 
 - **False Cross-File Dependency Edges** — Fixed a symbol resolution bug in `resolveSymbolToFile` (`src/core/scanner.ts`) where a call to a locally-defined helper (e.g. `cleanQuotes` inside `php.ts`) could resolve to an identically-named symbol in a completely unrelated file (e.g. `express.ts`), creating phantom graph edges. The resolver now checks for a **same-file match first** at every resolution path (exact-name lookup, namespace-stripped fallback, and first-result fallback) before falling back to a global match.
+- **`scan --force` stale data**: A forced full re-scan now wipes all existing DB data for the target repo (symbols, edges, files, clusters) and clears any stale interrupted-scan resume state **before** discovery begins. Previously, an interrupted prior scan could cause `--force` to silently skip files it considered already completed, and symbols/edges from deleted or renamed files could persist indefinitely.
 
 ## [0.3.1] — 2026-05-31
 

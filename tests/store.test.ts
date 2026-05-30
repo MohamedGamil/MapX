@@ -849,4 +849,74 @@ describe('Store core class', () => {
     const exists = (store as any).columnExists('invalid; syntax', 'col');
     expect(exists).toBe(false);
   });
+
+  describe('resetRepoForScan', () => {
+    const REPO = 'reset-test-repo';
+    const OTHER_REPO = 'other-repo';
+
+    function seedRepo(s: Store, repo: string, filePath: string) {
+      s.upsertFile({ path: filePath, repo, language: 'typescript', gitBlobHash: null, contentHash: 'h', lastScanned: '', sizeBytes: 10, lines: 1 });
+      s.insertSymbol({ filePath, repo, name: 'Sym', kind: 'class', scope: null, signature: '', startLine: 1, endLine: 2, metadata: '{}' });
+      s.insertEdge({ sourceFile: filePath, targetFile: 'other/dep.ts', sourceSymbol: 'Sym', targetSymbol: null, edgeType: 'import', repo, weight: 1 });
+      s.insertCluster({ repo, name: `cluster:${repo}`, label: 'Cluster', source: 'dir', parentName: null, depth: 1, fileCount: 1 });
+      s.insertClusterMembership({ filePath, clusterName: `cluster:${repo}`, repo, isPrimary: 1 });
+    }
+
+    it('clears files, symbols, edges, and clusters for the target repo', () => {
+      const s = new Store(':memory:');
+      seedRepo(s, REPO, 'src/reset.ts');
+
+      s.resetRepoForScan(REPO);
+
+      expect(s.getAllFiles(REPO)).toHaveLength(0);
+      expect(s.getSymbolsForFile('src/reset.ts')).toHaveLength(0);
+      expect(s.getEdgesForFile('src/reset.ts')).toHaveLength(0);
+      expect(s.getClusters(REPO)).toHaveLength(0);
+      expect(s.getClusterMemberships(REPO)).toHaveLength(0);
+    });
+
+    it('does NOT touch files, symbols, or edges belonging to other repos', () => {
+      const s = new Store(':memory:');
+      seedRepo(s, REPO, 'src/reset.ts');
+      seedRepo(s, OTHER_REPO, 'src/other.ts');
+
+      s.resetRepoForScan(REPO);
+
+      expect(s.getAllFiles(OTHER_REPO)).toHaveLength(1);
+      expect(s.getSymbolsForFile('src/other.ts')).toHaveLength(1);
+    });
+
+    it('preserves cross-repo incoming edges (target_repo of another repo)', () => {
+      const s = new Store(':memory:');
+      // Edge from OTHER_REPO pointing INTO REPO (as target_repo)
+      s.upsertFile({ path: 'src/other.ts', repo: OTHER_REPO, language: 'typescript', gitBlobHash: null, contentHash: null, lastScanned: '', sizeBytes: 10, lines: 1 });
+      s.insertEdge({ sourceFile: 'src/other.ts', targetFile: 'src/reset.ts', sourceSymbol: null, targetSymbol: null, edgeType: 'import', repo: OTHER_REPO, weight: 1, targetRepo: REPO });
+
+      s.resetRepoForScan(REPO);
+
+      // The incoming edge from OTHER_REPO should still exist
+      const edges = s.getReverseEdges('src/reset.ts');
+      expect(edges).toHaveLength(1);
+      expect(edges[0].repo).toBe(OTHER_REPO);
+    });
+
+    it('preserves last_scan_commit and last_scan_time meta keys', () => {
+      const s = new Store(':memory:');
+      s.setMeta(`last_scan_commit:${REPO}`, 'abc123');
+      s.setMeta(`last_scan_time:${REPO}`, '2026-01-01T00:00:00Z');
+
+      s.resetRepoForScan(REPO);
+
+      expect(s.getMeta(`last_scan_commit:${REPO}`)).toBe('abc123');
+      expect(s.getMeta(`last_scan_time:${REPO}`)).toBe('2026-01-01T00:00:00Z');
+    });
+
+    it('is idempotent — calling twice on empty repo does not throw', () => {
+      const s = new Store(':memory:');
+      expect(() => {
+        s.resetRepoForScan(REPO);
+        s.resetRepoForScan(REPO);
+      }).not.toThrow();
+    });
+  });
 });
