@@ -390,6 +390,32 @@ describe('Scanner module', () => {
     const impRes3 = (scanner as any).resolveImportPath('./nonexistent', 'src/main.ts', fileMap);
     expect(impRes3).toBeNull();
 
+    // .js extension → .ts source fallback (TypeScript "import with .js" convention)
+    const jsFileMap = new Map([
+      ['src/utils.ts', 'repo1'],
+      ['src/components/button.tsx', 'repo1'],
+      ['src/index.ts', 'repo1'],
+    ]);
+    // import './utils.js' → resolves to src/utils.ts
+    const jsToTs = (scanner as any).resolveImportPath('./utils.js', 'src/main.ts', jsFileMap);
+    expect(jsToTs).toBe('src/utils.ts');
+    // import './components/button.jsx' → resolves to src/components/button.tsx
+    const jsxToTsx = (scanner as any).resolveImportPath('./components/button.jsx', 'src/main.ts', jsFileMap);
+    expect(jsxToTsx).toBe('src/components/button.tsx');
+    // import './index.js' → resolves to src/index.ts
+    const indexJsToTs = (scanner as any).resolveImportPath('./index.js', 'src/main.ts', jsFileMap);
+    expect(indexJsToTs).toBe('src/index.ts');
+    // explicit .js import that also has a real .js file — real .js takes priority
+    const mixedMap = new Map([
+      ['src/utils.js', 'repo1'],
+      ['src/utils.ts', 'repo1'],
+    ]);
+    const jsWins = (scanner as any).resolveImportPath('./utils.js', 'src/main.ts', mixedMap);
+    expect(jsWins).toBe('src/utils.js');
+    // non-.js extension still works (no regression)
+    const plainTs = (scanner as any).resolveImportPath('./utils', 'src/main.ts', jsFileMap);
+    expect(plainTs).toBe('src/utils.ts');
+
     // 1. Symbol with '\\' and exact match
     const symRes = (scanner as any).resolveSymbolToFile('App\\Controller\\UserController', fileMap, 'src/main.php');
     expect(symRes).toBe('src/controllers/UserController.php');

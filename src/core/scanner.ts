@@ -930,8 +930,20 @@ export class Scanner {
     }
     const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
 
+    // When a .ts file imports with an explicit .js extension (TypeScript "use .js for .ts"
+    // convention), we must also try the .ts/.tsx source equivalents.
+    const jsToTsCandidates: string[] = [];
+    if (normalizedTarget.endsWith('.js')) {
+      const base = normalizedTarget.slice(0, -3);
+      jsToTsCandidates.push(base + '.ts', base + '.tsx');
+    } else if (normalizedTarget.endsWith('.jsx')) {
+      const base = normalizedTarget.slice(0, -4);
+      jsToTsCandidates.push(base + '.tsx', base + '.ts');
+    }
+
     const candidates = [
       normalizedTarget,
+      ...jsToTsCandidates,
       normalizedTarget + '/index.js',
       normalizedTarget + '/index.ts',
       normalizedTarget + '/index.tsx',

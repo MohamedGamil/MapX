@@ -6,7 +6,7 @@
 - [x] Improve all analysis tools and commands by allowing more relaxed file matching with enhanced wildcard patterns support.
 - [x] Improve submodules and repos discovery under the same workspace by scanning all directories up to 3 levels in depth, finding any nested git repositories and prompting the user to track them
 - [ ] Discovery of nested apps under the same monorepo, for instance a monorepo typically contains `apps/*`, `lib/*` and `packages/*` varying based on its purpose, the idea is to support scanning nested different frameworks and codebased under the same monorepo correctly extracting each app correctly.
-- [ ] In some projects like MapX itself .ts files may import symbols from other .ts files while using .js file extension, we need a method to support this edgecase.
+- [x] In some projects like MapX itself .ts files may import symbols from other .ts files while using .js file extension, we need a method to support this edgecase.
 
 ## MapX UI:
 - [ ] Create MapX 3d graph mode
