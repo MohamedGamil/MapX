@@ -217,6 +217,11 @@
         </div>
         <div class="panel-body split-view">
           <div class="split-left">
+            <div class="table-pagination">
+              <button id="symbol-page-prev-top" class="btn btn-secondary btn-sm" disabled>&#8592; Prev</button>
+              <span id="symbol-page-info-top" class="pagination-info">—</span>
+              <button id="symbol-page-next-top" class="btn btn-secondary btn-sm" disabled>Next &#8594;</button>
+            </div>
             <table class="data-table" id="table-symbols">
               <thead>
                 <tr>
@@ -229,6 +234,11 @@
                 <!-- Symbols will be populated here -->
               </tbody>
             </table>
+            <div class="table-pagination">
+              <button id="symbol-page-prev" class="btn btn-secondary btn-sm" disabled>&#8592; Prev</button>
+              <span id="symbol-page-info" class="pagination-info">—</span>
+              <button id="symbol-page-next" class="btn btn-secondary btn-sm" disabled>Next &#8594;</button>
+            </div>
           </div>
           <div class="split-right" id="symbol-detail-view">
             <div class="details-placeholder">Select a symbol to view callers, callees, and source code.</div>

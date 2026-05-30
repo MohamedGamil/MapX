@@ -606,9 +606,11 @@ export class Store {
     filePrefix?: string;
     exact?: boolean;
     limit?: number;
+    offset?: number;
     repo?: string;
   }): Record<string, any>[] {
     const limit = options.limit ?? 20;
+    const offset = options.offset ?? 0;
     let sql = 'SELECT * FROM symbols WHERE ';
     const params: any[] = [];
 
@@ -648,10 +650,53 @@ export class Store {
       params.push(options.repo);
     }
 
-    sql += ' ORDER BY kind, name LIMIT ?';
-    params.push(limit);
+    sql += ' ORDER BY kind, name LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     return this.backend.prepare(sql).all(...params);
+  }
+
+  countSymbolsFiltered(options: {
+    term: string;
+    kind?: string;
+    filePrefix?: string;
+    exact?: boolean;
+    repo?: string;
+  }): number {
+    let sql = 'SELECT COUNT(*) as cnt FROM symbols WHERE ';
+    const params: any[] = [];
+
+    const wildcard = isWildcardTerm(options.term);
+
+    if (wildcard) {
+      sql += '1=1';
+    } else if (options.exact) {
+      sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
+      params.push(options.term, options.term);
+    } else if (isGlobPattern(options.term)) {
+      const likePattern = globToLike(options.term);
+      sql += '(name LIKE ? COLLATE NOCASE)';
+      params.push(likePattern);
+    } else {
+      sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
+      params.push(`%${options.term}%`, `%${options.term}%`);
+    }
+
+    if (options.kind) {
+      sql += ' AND LOWER(kind) = ?';
+      params.push(options.kind.toLowerCase());
+    }
+    if (options.filePrefix) {
+      sql += ' AND file_path LIKE ?';
+      params.push(`${options.filePrefix}%`);
+    }
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+
+    const row = this.backend.prepare(sql).get(...params) as { cnt: number };
+    return row?.cnt ?? 0;
   }
 
   /**

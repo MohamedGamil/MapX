@@ -14,9 +14,9 @@
 - [x] fCoSE layout nodes seem to stack on top of each other without proper spacing
 - [ ] Improve visualization of clusters in ui graph
 - [x] Issue with graph not loading or taking too long to load propably due to large number of symbols 1.5k+ and edges 5k+
-- [ ] No pagination support for Symbol Explorer (loads limited number of items)
+- [x] No pagination support for Symbol Explorer (loads limited number of items)
 - [ ] No infinite scroll (auto load more) for Tool Call Log
-- [ ] Issue with UI server
+- [x] Issue with UI server
 ```bash
 # $ mapx ui
 Mapx Web Dashboard started at http://127.0.0.1:45124

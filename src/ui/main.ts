@@ -193,6 +193,10 @@ let focusDepth = 1;
 let activeLayout: any = null;
 let activeLayoutName: 'fcose' | 'cose' | 'cola' | 'dagre' | 'elk' | 'concentric' | 'circle' | 'grid' = 'fcose';
 
+// Symbol Explorer pagination state
+let symbolPage = 0;
+let symbolSearchQuery = '';
+
 // New states for Proximity Clusters Mode & Groupings & Modifications
 let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
 let activeClusterId: string | null = null;
@@ -2279,11 +2283,15 @@ async function loadGraph() {
 
 // Fetch symbols
 async function loadSymbols(query: string = '') {
+  const PAGE_SIZE = 50;
   try {
-    const res = await fetch(`/api/symbols?q=${encodeURIComponent(query)}`);
+    const offset = symbolPage * PAGE_SIZE;
+    const res = await fetch(`/api/symbols?q=${encodeURIComponent(query)}&limit=${PAGE_SIZE}&offset=${offset}`);
     if (!res.ok) return;
-    const symbols = await res.json();
-    
+    const data = await res.json();
+    const symbols: any[] = data.results ?? [];
+    const total: number = data.total ?? symbols.length;
+
     const tbody = document.querySelector('#table-symbols tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
@@ -2296,6 +2304,7 @@ async function loadSymbols(query: string = '') {
         </td>
       `;
       tbody.appendChild(tr);
+      updateSymbolPagination(0, 0, 0, PAGE_SIZE);
       return;
     }
 
@@ -2309,8 +2318,25 @@ async function loadSymbols(query: string = '') {
       tr.addEventListener('click', () => loadSymbolDetails(s.name));
       tbody.appendChild(tr);
     });
+
+    updateSymbolPagination(offset, symbols.length, total, PAGE_SIZE);
   } catch (err) {
     console.error(err);
+  }
+}
+
+function updateSymbolPagination(offset: number, count: number, total: number, pageSize: number) {
+  const atStart = symbolPage === 0;
+  const atEnd = offset + count >= total;
+  const text = total === 0 ? 'No results' : `${offset + 1}–${offset + count} of ${total}`;
+
+  for (const suffix of ['', '-top']) {
+    const info = document.getElementById(`symbol-page-info${suffix}`);
+    const prevBtn = document.getElementById(`symbol-page-prev${suffix}`) as HTMLButtonElement | null;
+    const nextBtn = document.getElementById(`symbol-page-next${suffix}`) as HTMLButtonElement | null;
+    if (info) info.textContent = text;
+    if (prevBtn) prevBtn.disabled = atStart;
+    if (nextBtn) nextBtn.disabled = atEnd;
   }
 }
 
@@ -2714,7 +2740,7 @@ function startPeriodicPolling() {
           
           // Reload graph and Explorer components to reflect changes
           loadGraph();
-          loadSymbols();
+          loadSymbols(symbolSearchQuery);
           loadRoutes();
           loadMetrics();
         }
@@ -2741,8 +2767,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const symbolSearch = document.getElementById('symbol-search');
   symbolSearch?.addEventListener('input', (e) => {
     const query = (e.target as HTMLInputElement).value;
+    // Reset to first page on new search
+    symbolPage = 0;
+    symbolSearchQuery = query;
     loadSymbols(query);
   });
+
+  // Pagination button listeners for Symbol Explorer (top + bottom)
+  for (const suffix of ['', '-top']) {
+    document.getElementById(`symbol-page-prev${suffix}`)?.addEventListener('click', () => {
+      if (symbolPage > 0) { symbolPage--; loadSymbols(symbolSearchQuery); }
+    });
+    document.getElementById(`symbol-page-next${suffix}`)?.addEventListener('click', () => {
+      symbolPage++;
+      loadSymbols(symbolSearchQuery);
+    });
+  }
 
   // Click delegation for symbol explorer callers/callees links
   const symbolDetailView = document.getElementById('symbol-detail-view');

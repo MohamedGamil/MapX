@@ -338,11 +338,13 @@ export function startUiServer(opts: ServerOpts) {
         const store = new Store(dbPath);
         try {
           const term = parsedUrl.searchParams.get('q') || '';
-          const limit = parseInt(parsedUrl.searchParams.get('limit') || '100', 10);
-          const results = store.searchSymbolsFiltered({ term, limit });
+          const limit = Math.min(Math.max(1, parseInt(parsedUrl.searchParams.get('limit') || '50', 10)), 200);
+          const offset = Math.max(0, parseInt(parsedUrl.searchParams.get('offset') || '0', 10));
+          const results = store.searchSymbolsFiltered({ term, limit, offset });
+          const total = store.countSymbolsFiltered({ term });
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(results));
+          res.end(JSON.stringify({ results, total, limit, offset }));
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }
