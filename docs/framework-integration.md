@@ -5,7 +5,7 @@ MapxGraph features built-in framework detection and automatic route/hook extract
 ## How It Works
 
 During a codebase scan (via `mapx scan` or `mapx update`), MapxGraph executes framework-specific detectors to:
-1. **Detect Active Frameworks**: Checks project configuration files (e.g., `package.json`, `composer.json`, `requirements.txt`, `Gemfile`) and matches file extension patterns or directory structures.
+1. **Detect Active Frameworks**: Checks project configuration files (e.g., `package.json`, `composer.json`, `requirements.txt`, `Gemfile`) and matches file extension patterns or directory structures. This detector scan is **monorepo-aware**; it searches both the workspace root and nested subdirectories (such as `apps/backend/package.json` or `packages/api/package.json`) to register nested applications automatically.
 2. **Extract API Routes**: Parses routing configurations to map HTTP verbs (GET, POST, PUT, DELETE, etc.) and URL path patterns to their handler files and controller symbols.
 3. **Extract Hooks & Events**: Maps event listener bindings (e.g., WordPress actions/filters, Laravel event listeners) to their respective handler functions.
 4. **Persist Registry**: Saves findings to `.mapx/routes.json` and `.mapx/hooks.json` to keep them queryable.

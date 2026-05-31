@@ -552,6 +552,31 @@ make serve-sse PORT=3456       # SSE server
 make ui PORT=8080              # Web dashboard
 ```
 
+### Testing
+
+MapxGraph contains a comprehensive test suite of 950+ tests that verify core logic, language parsers, and framework routing/hook extraction.
+
+> [!IMPORTANT]
+> The parser integration tests run against real Tree-sitter WASM grammars. Ensure that WASM binaries are compiled and present in the `wasm/` directory before running parser integration tests:
+> ```bash
+> npm run build:wasm  # or 'make wasm'
+> ```
+
+To execute the test suite, run:
+```bash
+# Run all tests (unit + integration)
+npm test
+
+# Run all tests with coverage reports
+npm run test:coverage
+
+# Run language parser integration tests only (verifies symbol/reference extraction)
+npx vitest run tests/parsers-integration.test.ts
+
+# Run framework extractor tests only (verifies route/hook mapping)
+npx vitest run tests/framework-extractors.test.ts
+```
+
 ### Building binaries
 
 Requires [Bun](https://bun.sh/) for binary compilation.

@@ -11,6 +11,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [0.3.3] — 2026-05-31
 
 ### Added
+- **Expanded Test Coverage**: Dramatically increased automated test coverage by adding integration tests for all supported languages and web frameworks.
+  - Added `tests/parsers-integration.test.ts` to verify parsing, AST queries, symbol extraction, and reference extraction using real WASM binaries for all 23 supported languages.
+  - Added `tests/framework-extractors.test.ts` to cover route and hook extraction across all 22 web frameworks, ensuring zero regressions in routing/hooks mappings.
 - **Monorepo Framework Detection**: Enabled framework routing and hooks detection for applications inside monorepo subdirectories.
   - Implemented shared utility helpers `hasPackageJsonDependency` and `hasComposerDependency` in `src/frameworks/utils.ts` to inspect all project configuration files in the workspace (including those in nested subdirectories like `apps/backend/package.json`).
   - Refactored JS/TS detectors (`NestJSDetector`, `ExpressDetector`, `NextJSDetector`, `ReactRouterDetector`, `SvelteKitDetector`, `TanstackRouterDetector`, `VueRouterDetector`) to utilize the package dependency helper.
