@@ -33,6 +33,7 @@ const DEFAULT_CONFIG: MapxConfig = {
       'build/**',
       '**/build/**',
       '*.min.js',
+      '*.min.css',
       'monaco/vs/**/*.js',
       'bootstrap-*/bootstrap.js',
       'bootstrap-*/bootstrap.min.js',

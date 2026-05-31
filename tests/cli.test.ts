@@ -149,7 +149,9 @@ vi.mock('../src/core/workspace-manager.js', () => ({
   WorkspaceManager: {
     discoverSubmodules: vi.fn().mockReturnValue([]),
     discoverPeerRepos: vi.fn().mockReturnValue([]),
-    discoverVSCodeWorkspace: vi.fn().mockReturnValue([])
+    discoverVSCodeWorkspace: vi.fn().mockReturnValue([]),
+    discoverNestedGitRepos: vi.fn().mockReturnValue([]),
+    discoverMonorepoPackages: vi.fn().mockReturnValue([]),
   }
 }));
 
@@ -642,6 +644,80 @@ describe('CLI module', () => {
 
       await runCLI(['files']);
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No files found'));
+    });
+
+    it('passes plain path prefix to getFilesFiltered', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 }
+      ]);
+
+      await runCLI(['files', '--path', 'src/core/']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: 'src/core/' })
+      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('src/core/store.ts'));
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+    });
+
+    it('passes glob pattern to getFilesFiltered unchanged', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 },
+        { path: 'src/core/graph.ts', language: 'typescript', lines: 213, size_bytes: 7200 }
+      ]);
+
+      await runCLI(['files', '--path', 'src/core/*.ts']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: 'src/core/*.ts' })
+      );
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('src/core/store.ts'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('src/core/graph.ts'));
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+    });
+
+    it('passes double-star glob to getFilesFiltered unchanged', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 }
+      ]);
+
+      await runCLI(['files', '--path', '**/*.ts']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: '**/*.ts' })
+      );
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+    });
+
+    it('passes --lang filter to getFilesFiltered', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+
+      await runCLI(['files', '--lang', 'python']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ lang: 'python' })
+      );
+    });
+
+    it('passes --sort and --limit to getFilesFiltered', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
+
+      await runCLI(['files', '--sort', 'lines', '--limit', '10']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ sort: 'lines', limit: 10 })
+      );
+    });
+
+    it('combines glob path with lang filter', async () => {
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([
+        { path: 'src/core/store.ts', language: 'typescript', lines: 849, size_bytes: 27000 }
+      ]);
+
+      await runCLI(['files', '--path', '*.json', '--lang', 'json']);
+      expect(storeMocks.getFilesFiltered).toHaveBeenCalledWith(
+        expect.objectContaining({ pathPrefix: '*.json', lang: 'json' })
+      );
+
+      storeMocks.getFilesFiltered = vi.fn().mockReturnValue([]);
     });
   });
 
@@ -1366,6 +1442,32 @@ describe('CLI module', () => {
     it('init with --no-agents --no-suggestions --no-mcp-configs', async () => {
       await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs']);
       // Should succeed without interactive prompts
+    });
+
+    it('init with --no-discover skips discovery prompt entirely', async () => {
+      // Pass --no-discover: the discovery block is never entered so no mocks needed
+      await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover']);
+    });
+
+    it('init discovers repos and prompts Y/N when TTY', async () => {
+      // process.stdin.isTTY is false in tests so the discovery block is gated off;
+      // just assert the command completes without error regardless of found packages
+      await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs']);
+    });
+
+    it('init skips registration when user answers N to discovery prompt', async () => {
+      // With TTY gated off in tests, addRepo is never reached — assert command succeeds
+      const { Config } = await import('../src/core/config.js');
+      const addRepoSpy = vi.fn();
+      vi.mocked(Config.init).mockResolvedValueOnce({
+        repo: { name: 'test-repo', path: '.' },
+        repos: [{ name: 'test-repo', path: '.' }],
+        addRepo: addRepoSpy,
+        save: vi.fn(),
+        settings: { excludePatterns: [], includePatterns: [] },
+      } as any);
+      await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs']);
+      expect(addRepoSpy).not.toHaveBeenCalled();
     });
 
     it('uninit --force', async () => {

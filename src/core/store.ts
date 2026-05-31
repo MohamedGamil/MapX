@@ -6,7 +6,7 @@ import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy
 import { BunStore } from './store-bun.js';
 import { NodeStore } from './store-node.js';
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 8;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -134,6 +134,55 @@ const MIGRATIONS: Migration[] = [
     up: [
       `ALTER TABLE edges ADD COLUMN target_repo TEXT`,
       `CREATE INDEX IF NOT EXISTS idx_edges_target_repo ON edges(target_repo)`,
+    ],
+  },
+  {
+    version: 7,
+    description: 'Add layer column to clusters table for architectural layer assignments',
+    up: [
+      `ALTER TABLE clusters ADD COLUMN layer TEXT DEFAULT 'other'`,
+    ],
+  },
+  {
+    version: 8,
+    description: 'Add codebase classification role columns, classification_signals, cluster_metrics, and arch_smells tables',
+    up: [
+      `ALTER TABLE files ADD COLUMN role TEXT DEFAULT 'other'`,
+      `ALTER TABLE files ADD COLUMN role_confidence REAL DEFAULT 0.0`,
+      `CREATE TABLE IF NOT EXISTS classification_signals (
+        file_path TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        source TEXT NOT NULL,
+        role TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        reason TEXT NOT NULL,
+        PRIMARY KEY (file_path, repo, source)
+      )`,
+      `CREATE TABLE IF NOT EXISTS cluster_metrics (
+        cluster_name TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        file_count INTEGER NOT NULL,
+        afferent_coupling REAL NOT NULL,
+        efferent_coupling REAL NOT NULL,
+        instability REAL NOT NULL,
+        internal_edges INTEGER NOT NULL,
+        external_edges INTEGER NOT NULL,
+        cohesion_ratio REAL NOT NULL,
+        abstractness REAL NOT NULL,
+        distance_from_main_seq REAL NOT NULL,
+        PRIMARY KEY (cluster_name, repo)
+      )`,
+      `CREATE TABLE IF NOT EXISTS arch_smells (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repo TEXT NOT NULL,
+        type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        description TEXT NOT NULL,
+        involved_files TEXT NOT NULL,
+        involved_clusters TEXT NOT NULL,
+        suggestion TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_arch_smells_repo ON arch_smells(repo)`,
     ],
   },
 ];
@@ -484,10 +533,11 @@ export class Store {
     parentName: string | null;
     depth: number;
     fileCount: number;
+    layer?: string;
   }): void {
     this.backend.prepare(`
-      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count, layer)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       cluster.repo,
       cluster.name,
@@ -495,7 +545,8 @@ export class Store {
       cluster.source,
       cluster.parentName,
       cluster.depth,
-      cluster.fileCount
+      cluster.fileCount,
+      cluster.layer ?? 'other'
     );
   }
 
@@ -591,11 +642,34 @@ export class Store {
     });
   }
 
+  /**
+   * Wipe all data owned by a repo in preparation for a fresh forced re-scan.
+   * Unlike deleteRepo(), this intentionally preserves:
+   *   - Cross-repo edges where this repo is only the TARGET (those belong to
+   *     other repos' scans and will be cleaned up when those repos are re-scanned).
+   *   - last_scan_commit / last_scan_time meta keys (updated once scan completes).
+   */
+  resetRepoForScan(repoName: string): void {
+    this.inTransaction(() => {
+      this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM edges WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_membership WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM clusters WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
+    });
+  }
+
   deleteRepo(repoName: string): void {
     this.inTransaction(() => {
       this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM edges WHERE repo = ? OR target_repo = ?').run(repoName, repoName);
       this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM meta WHERE key LIKE ? OR key LIKE ?').run(`last_scan_commit:${repoName}`, `last_scan_time:${repoName}`);
     });
   }
@@ -768,8 +842,17 @@ export class Store {
     const params: any[] = [];
 
     if (options.pathPrefix) {
-      sql += ' AND path LIKE ?';
-      params.push(`${options.pathPrefix}%`);
+      const raw = options.pathPrefix;
+      // Glob pattern: convert to SQL LIKE (*, ? → %, _)
+      const isGlob = raw.includes('*') || raw.includes('?');
+      if (isGlob) {
+        const likePattern = raw.replace(/\*/g, '%').replace(/\?/g, '_');
+        sql += ' AND path LIKE ?';
+        params.push(likePattern);
+      } else {
+        sql += ' AND path LIKE ?';
+        params.push(`${raw}%`);
+      }
     }
 
     if (options.lang) {
@@ -878,6 +961,88 @@ export class Store {
 
   getTopSymbolsByPageRank(graph: MapxGraph, limit: number = 5): any[] {
     return graph.getRankedSymbols().slice(0, limit);
+  }
+
+  updateFileRole(filePath: string, role: string, confidence: number): void {
+    this.backend.prepare('UPDATE files SET role = ?, role_confidence = ? WHERE path = ?')
+      .run(role, confidence, filePath);
+  }
+
+  insertClassificationSignal(signal: { filePath: string; repo: string; source: string; role: string; confidence: number; reason: string }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO classification_signals (file_path, repo, source, role, confidence, reason)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(signal.filePath, signal.repo, signal.source, signal.role, signal.confidence, signal.reason);
+  }
+
+  getClassificationSignals(filePath: string): Record<string, any>[] {
+    return this.backend.prepare('SELECT * FROM classification_signals WHERE file_path = ?').all(filePath) as any[];
+  }
+
+  deleteClassificationSignalsForFile(filePath: string): void {
+    this.backend.prepare('DELETE FROM classification_signals WHERE file_path = ?').run(filePath);
+  }
+
+  insertClusterMetrics(m: {
+    clusterName: string;
+    repo: string;
+    fileCount: number;
+    afferentCoupling: number;
+    efferentCoupling: number;
+    instability: number;
+    internalEdges: number;
+    externalEdges: number;
+    cohesionRatio: number;
+    abstractness: number;
+    distanceFromMainSeq: number;
+  }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO cluster_metrics (
+        cluster_name, repo, file_count, afferent_coupling, efferent_coupling,
+        instability, internal_edges, external_edges, cohesion_ratio,
+        abstractness, distance_from_main_seq
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      m.clusterName, m.repo, m.fileCount, m.afferentCoupling, m.efferentCoupling,
+      m.instability, m.internalEdges, m.externalEdges, m.cohesionRatio,
+      m.abstractness, m.distanceFromMainSeq
+    );
+  }
+
+  getClusterMetrics(repo: string): Record<string, any>[] {
+    return this.backend.prepare('SELECT * FROM cluster_metrics WHERE repo = ?').all(repo) as any[];
+  }
+
+  insertArchSmell(smell: {
+    repo: string;
+    type: string;
+    severity: string;
+    description: string;
+    involvedFiles: string[];
+    involvedClusters?: string[];
+    suggestion: string;
+  }): void {
+    this.backend.prepare(`
+      INSERT INTO arch_smells (repo, type, severity, description, involved_files, involved_clusters, suggestion)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      smell.repo,
+      smell.type,
+      smell.severity,
+      smell.description,
+      JSON.stringify(smell.involvedFiles),
+      JSON.stringify(smell.involvedClusters ?? []),
+      smell.suggestion
+    );
+  }
+
+  getArchSmells(repo: string): Record<string, any>[] {
+    const rows = this.backend.prepare('SELECT * FROM arch_smells WHERE repo = ?').all(repo) as any[];
+    return rows.map(r => ({
+      ...r,
+      involvedFiles: JSON.parse(r.involved_files),
+      involvedClusters: JSON.parse(r.involved_clusters),
+    }));
   }
 
   inTransaction<T>(fn: () => T): T {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **22 languages** across two tiers (built-in, bundled) and provides **26 MCP tools** for LLM integration.
+MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **22 languages** across two tiers (built-in, bundled) and provides **32 MCP tools** for LLM integration.
 
 
 <!-- ![Architecture Diagram](./images/01-arch.png) -->
@@ -180,12 +180,10 @@ Manages multi-repository workspaces:
   - `delimiter: 'comma' | 'tab' | 'pipe'`
   - `keyFolding: boolean` — collapse single-key chains into dotted paths
 
-### MCP Server (`src/mcp.ts`)
-
-Model Context Protocol server with 25 tools:
+Model Context Protocol server with 32 tools:
 
 - **Transports**: stdio (default) and SSE (HTTP)
-- **Tools**: scan, sync, query, search, node, files, dependencies, callers, callees, trace, sources, sinks, impact, clusters, status, export, context, workspaces, lang_list, lang_install, lang_uninstall
+- **Tools**: scan, sync, query, search, node, files, dependencies, callers, callees, trace, sources, sinks, impact, clusters, status, export, context, workspaces, lang_list, lang_install, lang_uninstall, profile, explain, smells, dsm, layers, routes, hooks, edges, metrics, agents_generate, batch
 - Configuration snippet generation for Claude Desktop, Cursor, VS Code, and opencode
 
 ### CLI Progress Display (`src/cli.ts`)
@@ -196,6 +194,74 @@ Visual progress for scan operations:
 - **Parse phase**: Progress bar with percentage and file name
 - **Update command**: Change detection + parse progress for changed files
 - Phase transitions marked with checkmarks
+
+## Smart Architecture Classification Subsystem
+
+To move beyond simple path-only layer classification, MapxGraph implements a smart, dynamic classification and analysis subsystem that automatically profiles the project architecture, scores file roles using multiple signals, partitions components using community detection, and detects architectural design smells.
+
+```mermaid
+graph TD
+    subgraph "Adaptive Classification"
+        A[CodebaseProfiler] --> B[AdaptiveTaxonomy]
+        B --> C[MultiSignalClassifier]
+        C --> D[LayerResult per file]
+    end
+
+    subgraph "Graph Intelligence"
+        E[LeidenCommunityDetector] --> F[HierarchicalClusters]
+        F --> G[ClusterMetrics]
+    end
+
+    subgraph "Architecture Analysis"
+        H[SmellDetector] --> I[CycleDetector]
+        H --> J[HubDetector]
+        H --> K[LayerViolationDetector]
+        G --> L[DependencyMatrix / DSM]
+    end
+
+    subgraph "Surfaces"
+        D --> M[Enhanced MCP Tools]
+        D --> N[UI Views]
+        D --> O[Context Builder]
+        L --> M
+        L --> N
+        H --> M
+    end
+```
+
+### 1. Codebase Profiler (`src/core/codebase-profiler.ts`)
+Analyzes the overall composition of the project on a full scan to identify its **archetype** and active architectural patterns.
+* **Archetypes**: `cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, `mobile-app`, or `mixed`.
+* **Heuristics**: Scans directory layouts, file extensions, framework imports, entry points, and workspace package structures.
+
+### 2. Adaptive Layer Taxonomy & Multi-Signal Classifier (`src/core/role-classifier.ts`)
+Replaces rigid category sets with composable, archetype-aware **File Roles** scored using a weighted multi-signal engine:
+* **Taxonomy Groups**:
+  * *Universal*: `entry`, `config`, `types`, `shared`, `test`, `docs`, `other`.
+  * *Backend*: `api`, `middleware`, `service`, `data`, `integration`, `auth`.
+  * *Frontend*: `pages`, `components`, `state`, `hooks`, `styles`, `assets`.
+  * *Tool/Library*: `cli`, `core`, `parsers`, `plugins`.
+* **Weighted Signals**:
+  * **Path Analysis** (30% weight) - Matches file paths to archetype-specific directory structures.
+  * **Symbol Naming** (25% weight) - Analyzes prefix and suffix patterns (e.g. `*Controller` $\rightarrow$ `api`, `use*` $\rightarrow$ `hooks`).
+  * **Dependency Topology** (20% weight) - Examines fan-in, fan-out, leaf dependencies, and centrality.
+  * **Framework Bindings** (15% weight) - Correlates files to route and hook bindings.
+  * **Import Direction** (10% weight) - Analyzes library dependencies (e.g. ORM imports $\rightarrow$ `data`).
+
+### 3. Leiden Community Detector (`src/core/leiden.ts`)
+Identifies logical modular clusters in pure TypeScript based on the **Leiden algorithm**:
+* **Connectivity Guarantee**: Ensures all returned communities are strictly connected.
+* **Deterministic Refinement**: Modularity optimization with configurable resolution control.
+* **Hierarchical Zooming**: Supports nested parent-child communities for multi-level graph navigation.
+
+### 4. Architecture Analyzer & Flow Validator (`src/core/architecture-analyzer.ts`, `src/core/flow-validator.ts`)
+Inspects structural health and warns of anti-patterns:
+* **Architectural Smells**:
+  * `cyclic-dependency` - Detects circular references using Tarjan's SCC.
+  * `hub-component` - Identifies high fan-in / high fan-out god files.
+  * `layer-violation` - Highlights dependencies violating expected hierarchical flow (e.g., `data` layer importing `api`).
+  * `unstable-dependency` - Flags stable components depending on unstable ones.
+* **Dependency Structure Matrix (DSM)**: Computes a cluster-to-cluster dependency heatmap to surface coupling, cohesion ratios, and Martin's package metrics (Abstractness, Instability, Distance from Main Sequence).
 
 ## Data Flow
 

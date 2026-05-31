@@ -8,6 +8,87 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- **Architecture & Health UI Revamp**: Re-architected the layout of the Architecture & Health panel.
+  - Arranged the panel as a flat grid with top-row side-by-side cards (Codebase Profile and Smells) and a full-width bottom card (DSM matrix), completely eliminating horizontal page overflow.
+  - Made the top row cards stretch to equal height for a clean layout, while maintaining responsiveness by auto-stacking on narrower viewports (<1000px).
+  - Replaced the static, raw-text codebase profile details with glassmorphic pills/badges (`.profile-pill`) for dominant languages, frameworks, and architectural patterns, and color-coded status badges for boolean flags.
+  - Added a premium, dynamic SVG circular progress ring (health gauge) to the system health card.
+  - Styled involved files in architectural smells as clickable badges (`.involved-file-badge`) that trigger programmatic graph navigation.
+  - Implemented a global click listener for node navigation (`data-go-id`) that automatically switches graph mode to Neighborhood focus at depth 1 with the clicked node as the focus seed, handles Cytoscape animation/resize, and transitions active tabs to the Graph Explorer.
+  - Unified badge styling and solved spacing issues by replacing inline styles with `.selection-badge` and `.smell-badge-mini` CSS classes with proper padding, typography, and margins (`margin-right: 8px`).
+- **Markdown Files Classification**: Configured markdown files (`.md`, `.markdown`, `.mdx`) to always be classified as `'docs'` (documentation) with 100% confidence by default.
+- **Selected File Details Enrichment**: Tapping a file node in the Graph Explorer now dynamically loads and displays its Smart Architecture Classification signals and a summary of any architectural smells it is involved in (including suggestions to resolve them).
+- **/api/explain API Endpoint**: Exposes classification signals for a specific file path.
+- **Smart Architecture Classification**: Replaced the hardcoded path-only layer heuristic with an adaptive, multi-signal classification engine.
+  - **Codebase Profiler**: Dynamic archetype detection (`cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, etc.) and pattern recognition.
+  - **Multi-Signal Role Classifier**: Combines 5 signals (path structure, exported symbol naming suffixes, topology, framework bindings, and import directions) to dynamically classify files into Universal, Backend, Frontend, and Tool taxonomy roles.
+  - **Leiden Community Detection**: Pure TypeScript implementation of the Leiden algorithm, yielding connected, deterministic, and resolution-controlled clusters.
+  - **Architectural Smell Detector & Flow Validator**: Identifies design smells (`cyclic-dependency` via Tarjan's SCC, `hub-component`, `layer-violation` based on allowed direction flow, and `unstable-dependency`).
+  - **Dependency Structure Matrix (DSM)**: Heatmap matrix of cluster coupling and Martin's stability metrics (Afferent/Efferent coupling, Instability, Abstractness, and Distance from Main Sequence).
+- **New CLI Commands**:
+  - `mapx profile` — Shows detected archetype, patterns, and language breakdown.
+  - `mapx arch` — Full architectural report (profile, active layers, smells, and DSM).
+  - `mapx explain <file>` — Explains classification signals and confidence scores for a file.
+  - `mapx layers` — Lists files grouped by their architectural role.
+- **New MCP Tools**: Added `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, and `mapx_layers` to support agentic architectural audits.
+- **Web Dashboard "Architecture & Health" Tab**:
+  - Interactive DSM heatmap matrix table showing cluster-level dependencies.
+  - Health dashboard with gauges for circular dependencies, god clusters, and layer violations.
+  - Smell annotations in the Graph View (enlarged hub nodes, dashed red circular edge paths, and highlighted violation arrows).
+- **Static file indexing**: Markdown (`.md`, `.mdx`, `.markdown`), HTML (`.html`, `.htm`, `.xhtml`), CSS/SCSS/Sass/Less (`.css`, `.scss`, `.sass`, `.less`), and JSON/JSONC (`.json`, `.jsonc`, `.json5`) files are now indexed and included in the dependency graph. No symbol extraction is performed; only outgoing path references (links, `@import`, `url()`, `href`, `src`, `$ref`) are recorded as edges.
+- New `'static'` tier in `LanguageDefinition` for index-only languages with no WASM grammar.
+- New `StaticFileParser` (`src/parsers/static-file-parser.ts`) with per-language regex extraction. Markdown links are restricted to markdown-only targets to avoid spurious cross-type edges.
+- New `Store.resetRepoForScan()` method — wipes files, symbols, outgoing edges, and clusters for a repo in a single transaction while preserving incoming cross-repo edges and scan-time meta keys.
+- New `StaticFileParser` test suite (`tests/static-file-parser.test.ts`) — 69 tests covering all four file types, extension variants, edge-case filtering, and registry integration.
+- **Architectural layer clusters** — `ClusterEngine` now detects a fourth cluster source: `'layer'`. Every file in a repo is automatically assigned one of 16 architectural layer categories (`entry`, `api`, `core`, `parsers`, `exporters`, `agents`, `frameworks`, `ui`, `data`, `utils`, `types`, `config`, `scripts`, `test`, `docs`, `other`) via `ClusterEngine.assignFileLayer(filePath)`, which applies path-pattern and filename heuristics in priority order. Each non-empty layer becomes a secondary cluster (stored with `is_primary = 0` so files can belong to both a structural cluster and a layer cluster). A new `layer` TEXT column (`DEFAULT 'other'`) has been added to the `clusters` DB table (migration v7).
+- New **"Group: Arch Layer"** option in the UI graph proximity view grouping dropdown — selecting it visualises all nodes grouped by architectural layer with distinct per-layer border colours.
+- Each layer cluster node in the graph carries a `layerColor` data property; a new cytoscape stylesheet rule (`node[type="cluster-group"][?layerColor]`) uses it to render per-layer border and background tints, making architectural structure immediately visible.
+- `mapx clusters --source layer` now works as a filter. The summary line at the bottom of `mapx clusters` output includes the layer count when layer clusters are present (e.g. `… 16 layer`).
+- New `ArchLayer` union type exported from `src/types.ts`.
+- 17 new tests in `tests/cluster-engine.test.ts`: 15 unit tests for `assignFileLayer` covering every layer category (entry, api, core, parsers, exporters, agents, frameworks, ui, data, utils, types, config, scripts, test, docs, fallback), plus 2 integration tests confirming layer clusters are correctly persisted and wired to memberships.
+- **`mapx init` monorepo/nested-repo discovery step** — after init completes, when a TTY is present, mapx now checks for monorepo packages and nested git repositories. If any are found a Y/N prompt (default Y) asks whether to register them, followed by individual `multiselect` lists for nested repos and monorepo packages separately. Pass `--no-discover` to skip entirely (useful for non-interactive CI environments).
+- **Monorepo package discovery** — `WorkspaceManager.discoverMonorepoPackages(rootDir)` detects packages/apps within a monorepo and returns them as registerable repos. Detection reads workspace manifests in priority order: `pnpm-workspace.yaml` → `package.json` workspaces (npm/yarn) → `lerna.json` → `rush.json` → `Cargo.toml` `[workspace]` members → `go.work` `use` block → `turbo.json`/`nx.json` (uses default dirs). Falls back to scanning `apps/`, `packages/`, `libs/`, `services/`, `modules/`, `clients/`, `backend/`, `frontend/` when no manifest is found. Each directory must contain a package manifest (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `composer.json`, `build.gradle`, `pom.xml`) and must not have its own `.git` entry (those are handled by `discoverNestedGitRepos`). Package names are resolved from manifests with `@scope/` prefix stripping.
+- `mapx workspaces list` now includes a **"Monorepo packages"** section showing unregistered packages with their detected package manager.
+- `mapx workspaces discover` includes monorepo packages in its output.
+- `mapx workspaces sync` prompts with an interactive `multiselect` to choose which monorepo packages to register and scan.
+- `mapx_workspaces` MCP tool `discover` action now includes `{ source: 'monorepo' }` entries for discovered packages.
+- New `MonorepoPackageInfo` type exported from `src/types.ts`.
+- 14 new tests in `tests/workspace-manager.test.ts` covering: npm/yarn/pnpm/lerna/cargo/go manifests, fallback scan, skip dirs without manifests, skip `.git` dirs, `@scope/` strip, directory name fallback, deduplication, and noise dir skipping.
+- **Nested git repository discovery** — `WorkspaceManager.discoverNestedGitRepos(root, maxDepth=3)` recursively walks the workspace directory up to 3 levels deep, finding any subdirectory that contains a `.git` entry. Common noise paths (`node_modules`, `dist`, `build`, `.cache`, `coverage`, `vendor`, `target`, `.mapx`, etc.) are automatically skipped. Recursion stops at each discovered boundary so inner repos of an already-found repo are not double-reported.
+- `mapx workspaces list` now includes a **"Nested git repositories (deep scan)"** section listing any discovered nested repos not yet registered.
+- `mapx workspaces discover` includes nested git repos in its output with a `nested-git` source label, and counts them in the total.
+- `mapx workspaces sync` prompts the user with an interactive `multiselect` to choose which newly discovered nested repositories to register and scan (submodules/peer repos are still auto-added silently as before).
+- `mapx_workspaces` MCP tool `discover` action now includes `{ source: 'nested-git' }` entries for nested repos found by the deep scan.
+- New `discoverNestedGitRepos` test suite in `tests/workspace-manager.test.ts` — 10 tests covering depth limits, custom `maxDepth`, skip lists, boundary non-recursion, multi-repo at same level, empty roots, and nonexistent paths.
+
+### Changed
+- **Default View & Reset View settings**: Configured the dashboard to load by default into the "Clusters Map" (proximity mode) with "Group: Architecture" (layer grouping) enabled. Standardized the "Reset All" button to restore these view settings.
+- `*.min.css` added to default `excludePatterns` to avoid indexing minified stylesheets as noise.
+- `mapx files --path` now accepts glob patterns (e.g. `src/core/*.ts`, `**/*.json`) in addition to plain path prefixes.
+- `mapx deps <file>` now resolves file arguments via glob, wildcard, and substring matching — exact match is tried first, then glob patterns, then substring containment. Multiple matched files are all reported.
+- `FlowTracer.resolveStart` (used by `mapx trace`) now resolves file arguments via glob and substring matching in addition to exact/suffix match.
+- `mapx_files` MCP tool `path` parameter now accepts glob patterns; the response header says `"matching <glob>"` for glob inputs and `"under <prefix>"` for plain prefix inputs.
+- Makefile `files` target now quotes the `--path` argument (`"$(p)"`) to prevent shell glob expansion before the CLI receives it.
+- Makefile has new targets for all missing CLI commands: `context`, `profile`, `arch`, `explain`, and `layers`, aligning Makefile shortcuts with all available CLI commands.
+- **Leiden community detection parameters**: Tuned resolution from `1.0` to `1.3` and lowered minimum community size from `3` to `2` to split large monolithic clusters and capture small component pairs (e.g. source-test relationships).
+- **Proximity View unassigned file grouping**: Instead of a flat global `community_unassigned` bucket, files without community clusters are grouped dynamically by their parent directory paths as fallback folder clusters.
+- **Enhanced Proximity Cluster Styling and Visuals**: Dynamically styled community clusters, folder fallbacks, orphans, and singulars in the graph using distinct shapes, border colors, and border styles (e.g. dashed borders for folder and orphan nodes, solid bronze hexagons for tight community groups) to significantly improve visibility and readability.
+
+### Fixed
+
+- **Proximity mapping collision**: Filtered membership inputs in `communityMap` to only map community clusters (names starting with `community_`), preventing directory/namespace memberships from overwriting proximity groupings.
+- **Leiden community overlap discarding**: Removed strict overlap filtering that skipped community clusters matching directory file sets, preserving topological groupings in the Proximity view.
+- **Proximity unassigned cluster labels**: Labeled unassigned directory fallback clusters dynamically as `Folder: <directory_path> (<count> files)` with correct drill-down capabilities, removing the repetitive "Unassigned" prefix.
+- **UI Tab Panel Layout Nesting**: Fixed a layout bug in `src/ui/index.html` where missing closing tags (`</div>` and `</section>`) for the Metrics tab caused subsequent tabs (Architecture, Context, and Tool Call Log) to be incorrectly nested inside it, resulting in a blank screen.
+- **ELK layout horizontal spread** — The ELK "Layered" graph layout now uses `elk.separateConnectedComponents: true` so disconnected file groups (e.g. standalone `.md`, `.json`, or `.scm` files) no longer bleed into the same horizontal bands as connected TypeScript/JavaScript trees, eliminating excessive left-right spread. File nodes are additionally partitioned by extension (`ts/tsx` → band 1, `js/jsx` → 2, `json/yaml` → 3, `html/css/vue/svelte` → 4, `md` → 5, `sh` → 6, `scm` → 7) via a `nodeLayoutOptions` callback, so files of the same type land in the same vertical cut of the tree and form separate compact sub-structures when unconnected to other groups. Spacing, compaction strategy (`LEFT_RIGHT_CONSTRAINT_LOCKING`), and aspect ratio (`1.7`) are tuned to reduce horizontal bloat.
+- **Cytoscape self-loop edge warnings** — Edges where `source === target` (scanner artifacts where a file references itself) are now filtered out of `rawGraphElements` at load time. These caused `Edge 'edge-X-X' has invalid endpoints` console warnings in Cytoscape because source and target nodes overlap.
+- **`.js`-extension imports resolving to `.ts` sources**: TypeScript projects that use the `"moduleResolution": "bundler"` / `"nodenext"` convention of writing `import './utils.js'` when the actual source file is `utils.ts` now resolve correctly. `resolveImportPath` now checks `<stem>.ts` and `<stem>.tsx` as immediate fallback candidates whenever the import specifier ends with `.js` or `.jsx`, **before** trying generic extension appending. A real `.js` file (if present) still takes priority.
+- **False Cross-File Dependency Edges** — Fixed a symbol resolution bug in `resolveSymbolToFile` (`src/core/scanner.ts`) where a call to a locally-defined helper (e.g. `cleanQuotes` inside `php.ts`) could resolve to an identically-named symbol in a completely unrelated file (e.g. `express.ts`), creating phantom graph edges. The resolver now checks for a **same-file match first** at every resolution path (exact-name lookup, namespace-stripped fallback, and first-result fallback) before falling back to a global match.
+- **`scan --force` stale data**: A forced full re-scan now wipes all existing DB data for the target repo (symbols, edges, files, clusters) and clears any stale interrupted-scan resume state **before** discovery begins. Previously, an interrupted prior scan could cause `--force` to silently skip files it considered already completed, and symbols/edges from deleted or renamed files could persist indefinitely.
+- **Layer memberships overriding community grouping** — The UI proximity view's default "Group: Community" strategy built a `communityMap` from all memberships without filtering by source. Since every file also receives a `layer:*` membership and `Map.set` overwrites, layer entries appearing after community entries silently replaced community assignments for connected files, collapsing the view into `cluster:layer:*` pseudo-communities. The `communityMap` builder now skips memberships whose `clusterName` starts with `layer:` — the layer grouping strategy already has its own dedicated code path.
+- **JSONC/JSON5 config files returning no references** — `StaticFileParser.extractJsonRefs` used `JSON.parse` directly, which rejects JSONC/JSON5 syntax (comments, trailing commas, unquoted keys, single-quoted strings). Files with `.jsonc` or `.json5` extensions — and common configs like `tsconfig.json` with comments — silently returned zero `$ref`/`extends` references. Added a `stripJsoncSyntax()` normaliser that handles line/block comments, trailing commas, single-quoted strings, and unquoted object keys before parsing. Includes 10 new test cases.
+
 ## [0.3.1] — 2026-05-31
 
 ### Added

@@ -1,5 +1,6 @@
 import { Store } from './store.js';
 import { ReferenceType } from '../types.js';
+import { isGlobPattern, globToLike } from './fuzzy-matcher.js';
 
 export type TraceDirection = 'down' | 'up' | 'both';
 
@@ -269,9 +270,29 @@ export class FlowTracer {
 
   resolveStart(input: string, repo?: string): { file: string; symbol: string | null } | null {
     const allFiles = this.store.getAllFiles(repo);
-    const matchedFile = allFiles.find(f => f.path === input || (f.path as string).endsWith(input));
-    if (matchedFile) {
-      return { file: matchedFile.path as string, symbol: null };
+    const paths = allFiles.map(f => f.path as string);
+
+    // 1. Exact match
+    let matchedPath = paths.find(p => p === input);
+
+    // 2. Glob / wildcard
+    if (!matchedPath && isGlobPattern(input)) {
+      const regexStr = input
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\\\*\\\*/g, '.*')
+        .replace(/\*/g, '[^/]*')
+        .replace(/\?/g, '[^/]');
+      const re = new RegExp(`(^|/)${regexStr}$`, 'i');
+      matchedPath = paths.find(p => re.test(p));
+    }
+
+    // 3. Suffix / substring fallback
+    if (!matchedPath) {
+      matchedPath = paths.find(p => p.endsWith(input) || p.includes(input));
+    }
+
+    if (matchedPath) {
+      return { file: matchedPath, symbol: null };
     }
 
     let scope: string | null = null;

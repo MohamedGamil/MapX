@@ -103,6 +103,36 @@ mapx lang list
 | `excludePatterns` | string[] | (see above) | Glob patterns for files to exclude from scanning |
 | `includePatterns` | string[] | [] | If set, only include matching files |
 
+## Architecture & Role Classification
+
+MapxGraph dynamically profiles your codebase and classifies files into architectural roles. You can customize the classifier archetype, custom roles, and specific file classification overrides by adding an `architecture` section to the `settings` block in `.mapx/config.json`:
+
+```json
+{
+  "settings": {
+    "architecture": {
+      "archetype": "web-api",
+      "customRoles": [
+        { "name": "billing", "paths": ["src/billing/**", "src/payments/**"] },
+        { "name": "notifications", "paths": ["src/notifications/**"] }
+      ],
+      "overrides": {
+        "src/legacy/**": "other",
+        "src/graphql/resolvers/**": "api"
+      }
+    }
+  }
+}
+```
+
+### Architecture Settings Reference
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `archetype` | string | Override the codebase archetype detection. Supported archetypes: `cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, `mobile-app`, `mixed`. |
+| `customRoles` | object[] | Define new custom roles mapped to path patterns. Each entry has a `name` string and `paths` (string or array of strings). |
+| `overrides` | record<string, string> | Map precise file/directory glob patterns directly to a specific dynamic role (e.g. `api`, `service`, `data`, `shared`, `other`). |
+
 ## .gitignore
 
 The `.mapx/` directory is a local development artifact and should not be committed. During `mapx init`, the tool automatically adds `.mapx/` to `.gitignore` if:

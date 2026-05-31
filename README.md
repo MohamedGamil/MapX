@@ -33,7 +33,7 @@
 * **Deep Symbol Extraction** - Automatically extracts classes, methods, functions, interfaces, traits, structs, modules, and namespaces with their reference lines and call graphs.
 * **Incremental & Resumable Scans** - Git-aware change tracker only scans modified files. Interrupted scans resume exactly where they left off.
 * **Framework Intelligent** - Auto-detects 21 web frameworks (Laravel, Next.js, Django, Spring, etc.) to map out routing paths and hook bindings.
-* **26 MCP Tools** - Seamlessly integrates with Claude Desktop, Cursor, VS Code, and other MCP clients to empower AI coding agents.
+* **32 MCP Tools** - Seamlessly integrates with Claude Desktop, Cursor, VS Code, and other MCP clients to empower AI coding agents.
 * **Zero Cloud** - All parsed metadata and graphs stay completely local within the `.mapx/` directory of your project.
 
 <br>
@@ -55,11 +55,12 @@
 - [MCP Integration](#mcp-integration)
   - [Claude Desktop](#claude-desktop-claude_desktop_configjson)
   - [Cursor / VS Code](#cursor--vs-code-cursor-mcpjson)
-  - [Available MCP tools (26 total)](#available-mcp-tools-26-total)
+  - [Available MCP tools (32 total)](#available-mcp-tools-32-total)
 - [Programmatic Usage](#programmatic-usage)
 - [Supported Languages](#supported-languages)
   - [Built-in (Tier 1) — Dedicated Parsers](#built-in-tier-1--dedicated-parsers)
   - [Bundled (Tier 2) — Generic WASM Parsers (Always Available)](#bundled-tier-2--generic-wasm-parsers-always-available)
+  - [Static (Index-only) — Dependency Tracking Without Symbol Extraction](#static-index-only--dependency-tracking-without-symbol-extraction)
 - [Agentic Integration](#agentic-integration)
 - [Storage](#storage)
 - [Architecture](#architecture)
@@ -77,12 +78,12 @@
 
 ## Features
 
-- **22 languages** — all built-in or bundled with the package out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart)
+- **22 languages + static file indexing** — all built-in or bundled with the package out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart) plus dependency-only indexing for Markdown, HTML, CSS/SCSS/Sass/Less, and JSON/JSONC/JSON5 files
 - **Deep symbol extraction** — classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, namespaces — with full import/inheritance/instantiation reference tracking
 - **Incremental scans** — git-aware change detection; only re-parses files that changed
 - **Fast** — parallelised file reads, bounded WASM concurrency, batched SQLite writes
 - **Resumable** — scan progress is checkpointed; `Ctrl+C` and re-run picks up where it left off
-- **26 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and more
+- **32 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and more
 - **Flexible search** — wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON output
 - **Data flow tracing** — trace call chains, find sources/sinks, analyze change impact with blast radius scoring
 - **Multi-repo workspaces** — register multiple repos, discover submodules, track cross-repo dependencies
@@ -196,21 +197,32 @@ mapx -d /path/to/project export
 
 | Command | Description |
 |---------|-------------|
-| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs |
+| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs, discover monorepo packages & nested repos |
 | `mapx uninit [path]` | Remove mapx; delete `.mapx/`, reverse LLM integration changes, clean MCP configs |
 | `mapx scan [path]` | Full scan — builds the graph from scratch (supports `--force` to bypass cache) |
 | `mapx update [path]` | Incremental scan — only re-parses changed files |
 | `mapx status [path]` | Show graph metrics, language breakdown, PageRank rankings, git changes |
 | `mapx query <term>` | Search symbols by name — supports glob patterns (`*Service`, `get*`) and fuzzy suggestions |
 | `mapx search <term>` | Advanced symbol search with `--kind`, `--file`, `--exact`, `--limit`, `--format` filters and auto-expand |
-| `mapx deps <file>` | Show dependencies and reverse-dependencies |
+| `mapx deps <file>` | Show dependencies and reverse-dependencies (supports glob/wildcard/substring matching) |
 | `mapx trace <symbol>` | Trace data flow paths from a symbol |
 | `mapx callers <symbol>` | Show direct and nested callers (with fuzzy fallback) |
 | `mapx callees <symbol>` | Show direct and nested callees (with fuzzy fallback) |
 | `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring (with fuzzy pre-check) |
+| `mapx sources` | Find entry points (data sources) in the codebase |
+| `mapx sinks` | Find terminal consumers (data sinks) in the codebase |
+| `mapx context <task>` | Generate task-specific workspace context within a token budget |
+| `mapx metrics` | Show coupling and instability metrics for files |
+| `mapx edges` | Granular query of dependency edges |
+| `mapx routes` | Show routes from all detected frameworks |
+| `mapx hooks` | Show hooks from all detected frameworks |
 | `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, and `--format json` |
-| `mapx files` | List and filter files with `--path`, `--lang`, `--sort`, `--limit` |
-| `mapx clusters` | List detected code clusters/modules |
+| `mapx files` | List and filter files with `--path` (prefix or glob), `--lang`, `--sort`, `--limit` |
+| `mapx clusters` | List detected code clusters/modules (filter with `--source layer\|community\|namespace\|directory`) |
+| `mapx profile` | Show codebase profile details (archetype, frameworks, active taxonomy) |
+| `mapx arch` | Full architecture report: profile, active layers/roles, smells, and DSM matrix |
+| `mapx explain` | Explain file dynamic role classification and weights |
+| `mapx layers` | List project files grouped by architectural roles/layers |
 | `mapx export` | Export graph (default: LLM summary, 8K tokens) |
 | `mapx export --format=json` | Full graph as JSON |
 | `mapx export --format=dot` | GraphViz DOT (with `--cluster` and `--depth`) |
@@ -224,8 +236,8 @@ mapx -d /path/to/project export
 | `mapx ui` | Open the web dashboard for interactive visualization |
 | `mapx workspaces list` | List registered repositories |
 | `mapx workspaces add <path>` | Register a new repository |
-| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders |
-| `mapx workspaces sync` | Auto-register discovered repositories |
+| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders, nested git repos, and monorepo packages |
+| `mapx workspaces sync` | Auto-register discovered repositories; interactive prompts for nested repos and monorepo packages |
 | `mapx agents mcp` | Auto-detect agent tools and generate MCP config files |
 | `mapx serve --dir <path>` | Start MCP server (stdio) |
 | `mapx serve --sse --port 3456` | Start MCP server (SSE/HTTP) |
@@ -296,16 +308,16 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 }
 ```
 
-### Available MCP tools (26 total)
+### Available MCP tools (32 total)
 
 | Category | Tools |
 |----------|-------|
 | **Graph Building** | `mapx_scan`, `mapx_sync` |
 | **Symbol Discovery** | `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files` |
-| **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks` |
-| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status` |
+| **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` |
+| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics`, `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers` |
 | **Export** | `mapx_export`, `mapx_context` |
-| **Orchestration** | `mapx_batch` |
+| **Orchestration** | `mapx_batch`, `mapx_agents_generate` |
 | **Workspaces** | `mapx_workspaces` |
 | **Language Management** | `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall` |
 
@@ -375,6 +387,15 @@ See [docs/getting-started.md](docs/getting-started.md#programmatic-usage) for a 
 | Bash | `.sh`, `.bash` | functions, variables, aliases |
 | Pascal | `.pas`, `.pp` | classes, records, interfaces, methods, functions, constants, units |
 | Dart | `.dart` | classes, functions, enums, mixins, extensions |
+
+### Static (Index-only) — Dependency Tracking Without Symbol Extraction
+
+| File Type | Extensions | Tracked References |
+|-----------|-----------|-------------------|
+| Markdown | `.md`, `.mdx`, `.markdown` | Links to other markdown files |
+| HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
+| CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
+| JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
 
 All languages track **imports**, **inheritance/implementation**, **instantiation**, and **calls** where applicable. See [docs/adding-languages.md](docs/adding-languages.md) to add your own.
 
@@ -485,8 +506,8 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | Doc | Description |
 |-----|-------------|
 | [Getting Started](docs/getting-started.md) | Installation, quick start, supported languages |
-| [CLI Reference](docs/cli-reference.md) | All 31 commands and their flags |
-| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 26 tools |
+| [CLI Reference](docs/cli-reference.md) | All commands and their flags |
+| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 32 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |

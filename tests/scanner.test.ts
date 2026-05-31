@@ -46,6 +46,8 @@ vi.mock('../src/frameworks/route-registry.js', () => ({
     addRoute = vi.fn();
     addHook = vi.fn();
     save = vi.fn().mockResolvedValue(undefined);
+    getRoutes = vi.fn().mockReturnValue([]);
+    getHooks = vi.fn().mockReturnValue([]);
   }
 }));
 
@@ -118,12 +120,18 @@ describe('Scanner module', () => {
     insertEdge: vi.fn(),
     updateFileMetadata: vi.fn(),
     deleteFrameworkEdgesForRepo: vi.fn(),
+    resetRepoForScan: vi.fn(),
     clearClusters: vi.fn(),
     insertCluster: vi.fn(),
     insertClusterMembership: vi.fn(),
+    deleteClassificationSignalsForFile: vi.fn(),
+    updateFileRole: vi.fn(),
+    insertClassificationSignal: vi.fn(),
+    insertClusterMetrics: vi.fn(),
+    insertArchSmell: vi.fn(),
     inTransaction: vi.fn().mockImplementation((fn: () => void) => fn()),
     raw: {
-      prepare: vi.fn().mockReturnValue({ all: vi.fn().mockReturnValue([]) })
+      prepare: vi.fn().mockReturnValue({ all: vi.fn().mockReturnValue([]), run: vi.fn(), get: vi.fn() })
     },
     ...overrides
   } as unknown as Store);
@@ -389,6 +397,32 @@ describe('Scanner module', () => {
     const impRes3 = (scanner as any).resolveImportPath('./nonexistent', 'src/main.ts', fileMap);
     expect(impRes3).toBeNull();
 
+    // .js extension → .ts source fallback (TypeScript "import with .js" convention)
+    const jsFileMap = new Map([
+      ['src/utils.ts', 'repo1'],
+      ['src/components/button.tsx', 'repo1'],
+      ['src/index.ts', 'repo1'],
+    ]);
+    // import './utils.js' → resolves to src/utils.ts
+    const jsToTs = (scanner as any).resolveImportPath('./utils.js', 'src/main.ts', jsFileMap);
+    expect(jsToTs).toBe('src/utils.ts');
+    // import './components/button.jsx' → resolves to src/components/button.tsx
+    const jsxToTsx = (scanner as any).resolveImportPath('./components/button.jsx', 'src/main.ts', jsFileMap);
+    expect(jsxToTsx).toBe('src/components/button.tsx');
+    // import './index.js' → resolves to src/index.ts
+    const indexJsToTs = (scanner as any).resolveImportPath('./index.js', 'src/main.ts', jsFileMap);
+    expect(indexJsToTs).toBe('src/index.ts');
+    // explicit .js import that also has a real .js file — real .js takes priority
+    const mixedMap = new Map([
+      ['src/utils.js', 'repo1'],
+      ['src/utils.ts', 'repo1'],
+    ]);
+    const jsWins = (scanner as any).resolveImportPath('./utils.js', 'src/main.ts', mixedMap);
+    expect(jsWins).toBe('src/utils.js');
+    // non-.js extension still works (no regression)
+    const plainTs = (scanner as any).resolveImportPath('./utils', 'src/main.ts', jsFileMap);
+    expect(plainTs).toBe('src/utils.ts');
+
     // 1. Symbol with '\\' and exact match
     const symRes = (scanner as any).resolveSymbolToFile('App\\Controller\\UserController', fileMap, 'src/main.php');
     expect(symRes).toBe('src/controllers/UserController.php');
@@ -593,5 +627,179 @@ describe('Scanner module', () => {
     // Call getFileInfo with a path that will fail stat or readFile
     const result = await (scanner as any).getFileInfo('/workspace/unreadable.ts', 'unreadable.ts');
     expect(result).toBeNull();
+  });
+
+  describe('resolveSymbolToFile — same-file preference (false-edge fix)', () => {
+    const makeConfig = () => ({
+      getWorkspaceRoot: () => '/workspace',
+      getResolvedUserLanguages: () => ({}),
+      repos: [{ name: 'repo1', path: '.' }],
+      settings: { excludePatterns: [], includePatterns: [] }
+    } as unknown as Config);
+    const graph = new MapxGraph('repo1');
+    const fileMap = new Map([
+      ['src/parsers/languages/php.ts', 'repo1'],
+      ['src/frameworks/detectors/express.ts', 'repo1'],
+      ['src/frameworks/detectors/flask.ts', 'repo1'],
+    ]);
+
+    it('returns same-file match when symbol exists in both source file and another file', () => {
+      // cleanQuotes is defined in php.ts (method) AND express.ts (function)
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+            { name: 'cleanQuotes', file_path: 'src/parsers/languages/php.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'cleanQuotes', fileMap, 'src/parsers/languages/php.ts'
+      );
+      // Must prefer the same-file definition, NOT express.ts
+      expect(result).toBe('src/parsers/languages/php.ts');
+    });
+
+    it('falls back to global match when symbol is not in the source file', () => {
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'cleanQuotes', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBe('src/frameworks/detectors/express.ts');
+    });
+
+    it('returns null when no matches exist', () => {
+      const store = createMockStore({ searchSymbols: () => [] });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'unknownSymbol', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBeNull();
+    });
+
+    it('prefers same-file match on namespace-stripped path', () => {
+      // Namespace like App\Parser\cleanQuotes — strips to cleanQuotes
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+            { name: 'cleanQuotes', file_path: 'src/parsers/languages/php.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'App\\Parser\\cleanQuotes', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBe('src/parsers/languages/php.ts');
+    });
+
+    it('prefers same-file match in first-result fallback (no exact name match)', () => {
+      // Multiple non-exact matches — same file should still win
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'helper') return [
+            { name: 'helperFn', file_path: 'src/frameworks/detectors/flask.ts' },
+            { name: 'helperFn', file_path: 'src/parsers/languages/php.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      const result = (scanner as any).resolveSymbolToFile(
+        'helper', fileMap, 'src/parsers/languages/php.ts'
+      );
+      expect(result).toBe('src/parsers/languages/php.ts');
+    });
+
+    it('does not create same-file bias when no sourcePath is provided', () => {
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'cleanQuotes') return [
+            { name: 'cleanQuotes', file_path: 'src/frameworks/detectors/express.ts' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      // No sourcePath → falls back to first match without same-file preference
+      const result = (scanner as any).resolveSymbolToFile('cleanQuotes', fileMap);
+      expect(result).toBe('src/frameworks/detectors/express.ts');
+    });
+  });
+
+  describe('scanFull with --force: DB reset and resume-state clearing', () => {
+    const makeConfig = () => ({
+      getWorkspaceRoot: () => '/workspace',
+      getResolvedUserLanguages: () => ({}),
+      repos: [{ name: 'repo1', path: '.' }],
+      settings: { excludePatterns: [], includePatterns: [] }
+    } as unknown as Config);
+
+    it('calls resetRepoForScan when force=true', async () => {
+      const mockStore = createMockStore();
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: true });
+      expect(mockStore.resetRepoForScan).toHaveBeenCalledWith('repo1');
+    });
+
+    it('does NOT call resetRepoForScan when force=false', async () => {
+      const mockStore = createMockStore();
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: false });
+      expect(mockStore.resetRepoForScan).not.toHaveBeenCalled();
+    });
+
+    it('does NOT call resetRepoForScan on a plain scanFull (default)', async () => {
+      const mockStore = createMockStore();
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1']);
+      expect(mockStore.resetRepoForScan).not.toHaveBeenCalled();
+    });
+
+    it('clears stale resume state before scanning when force=true', async () => {
+      const mockStore = createMockStore({
+        // Simulate a stale interrupted resume state
+        getMeta: vi.fn().mockImplementation((key: string) => {
+          if (key.startsWith('scan_resume_state:')) {
+            return JSON.stringify({ totalFiles: 5, completedFiles: ['src/old.ts'], totalSymbols: 2, totalEdges: 1 });
+          }
+          return null;
+        }),
+      });
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: true });
+      // setMeta should have been called to clear the resume state (sets it to '')
+      const clearCalls = (mockStore.setMeta as ReturnType<typeof vi.fn>).mock.calls.filter(
+        ([key, val]: [string, string]) => key.startsWith('scan_resume_state:') && val === ''
+      );
+      expect(clearCalls.length).toBeGreaterThan(0);
+    });
+
+    it('resetRepoForScan is called before files are upserted', async () => {
+      const callOrder: string[] = [];
+      const mockStore = createMockStore({
+        resetRepoForScan: vi.fn().mockImplementation(() => { callOrder.push('reset'); }),
+        upsertFile: vi.fn().mockImplementation(() => { callOrder.push('upsert'); }),
+      });
+      const scanner = new Scanner(mockStore, makeConfig(), new MapxGraph('repo1'));
+      await scanner.scanFull(['repo1'], { force: true });
+      const resetIdx = callOrder.indexOf('reset');
+      const firstUpsertIdx = callOrder.indexOf('upsert');
+      expect(resetIdx).toBeGreaterThanOrEqual(0);
+      expect(firstUpsertIdx).toBeGreaterThanOrEqual(0);
+      expect(resetIdx).toBeLessThan(firstUpsertIdx);
+    });
   });
 });

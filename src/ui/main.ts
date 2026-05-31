@@ -19,18 +19,20 @@ tabs.forEach(tab => {
   tab.addEventListener('click', () => {
     tabs.forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    
+
     const target = tab.getAttribute('data-tab') || 'graph';
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-    
+
     const targetPane = document.getElementById(`tab-${target}`);
     if (targetPane) targetPane.classList.add('active');
-    
+
     currentTab = target;
     if (currentTab === 'graph') {
       setTimeout(() => {
         if (cyInstance) cyInstance.resize();
       }, 50);
+    } else if (currentTab === 'architecture') {
+      loadArchitecture();
     }
   });
 });
@@ -64,11 +66,11 @@ function toolCallId(data: any): string {
 function renderToolCallEntry(data: any): HTMLElement {
   const entry = document.createElement('div');
   entry.className = 'log-entry';
-  
+
   const timeStr = new Date(data.timestamp || Date.now()).toLocaleTimeString();
   const durationStr = data.durationMs != null ? ` <span class="log-duration">${data.durationMs}ms</span>` : '';
   const statusIcon = data.success === false ? '❌' : '✅';
-  
+
   entry.innerHTML = `
     <span class="log-time">[${timeStr}]</span>
     <span class="log-status">${statusIcon}</span>
@@ -128,7 +130,7 @@ function setupSSE() {
       const id = toolCallId(data);
       if (seenToolCallIds.has(id)) return; // Skip duplicates
       seenToolCallIds.add(id);
-      
+
       if (logContainer) {
         const placeholder = logContainer.querySelector('.log-placeholder');
         if (placeholder) placeholder.remove();
@@ -144,7 +146,7 @@ function setupSSE() {
       const data = JSON.parse(event.data);
       const indicator = document.getElementById('repo-name');
       if (indicator) {
-        indicator.textContent = `Scanning: ${data.current}/${data.total} (${Math.round((data.current/data.total)*100)}%)`;
+        indicator.textContent = `Scanning: ${data.current}/${data.total} (${Math.round((data.current / data.total) * 100)}%)`;
       }
     } catch (err) {
       console.error(err);
@@ -175,11 +177,11 @@ async function loadStatus() {
     const res = await fetch('/api/status');
     if (!res.ok) return;
     const status = await res.json();
-    
+
     lastFileCount = status.fileCount || 0;
     lastSymbolCount = status.symbolCount || 0;
     lastEdgeCount = status.edgeCount || 0;
-    
+
     document.getElementById('repo-name')!.textContent = status.repoName || 'MapX Project';
     document.getElementById('stat-files')!.textContent = String(lastFileCount);
     document.getElementById('stat-symbols')!.textContent = String(lastSymbolCount);
@@ -215,8 +217,9 @@ let symbolSearchQuery = '';
 
 // New states for Proximity Clusters Mode & Groupings & Modifications
 let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
+let rawSmellsData: any[] = [];
 let activeClusterId: string | null = null;
-let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' = 'community';
+let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' | 'layer' = 'layer';
 const removedNodes = new Set<string>();
 const removedEdges = new Set<string>();
 const customTags = new Map<string, string[]>(); // node ID -> tags array
@@ -227,6 +230,49 @@ function getTagsStorageKey(): string {
   const repoName = repoEl?.textContent || 'mapx';
   return `mapx-custom-tags:${repoName}`;
 }
+
+// Architectural layer color palette (matches LAYER_LABELS in cluster-engine.ts)
+// Architectural layer color palette (expanded for role classification, resolved collisions)
+const LAYER_COLORS: Record<string, string> = {
+  // Universal roles
+  'layer:entry': '#e06c75',       // soft red
+  'layer:config': '#5c6370',      // slate gray
+  'layer:types': '#56b6c2',       // teal/cyan
+  'layer:shared': '#abb2bf',      // light gray
+  'layer:test': '#98c379',        // sage green
+  'layer:docs': '#7a8394',        // steel blue
+  'layer:other': '#4b5263',       // dark gray
+
+  // Backend roles
+  'layer:api': '#61afef',         // light blue
+  'layer:middleware': '#4db5ff',  // sky blue
+  'layer:service': '#c678dd',     // purple
+  'layer:data': '#e5c07b',        // gold/yellow
+  'layer:integration': '#ff7b00', // vibrant orange
+  'layer:auth': '#ff4a8b',        // rose pink
+
+  // Frontend roles
+  'layer:pages': '#ff5e00',       // deep orange
+  'layer:components': '#bf55ec',  // bright violet
+  'layer:state': '#2ecc71',       // emerald green
+  'layer:hooks': '#3498db',       // dodger blue
+  'layer:styles': '#f39c12',      // amber
+  'layer:assets': '#1abc9c',      // turquoise
+
+  // Tool roles
+  'layer:cli': '#e74c3c',         // red
+  'layer:core': '#00ffff',        // cyan
+  'layer:parsers': '#d19a66',     // light brown/orange
+  'layer:plugins': '#9b59b6',     // amethyst purple
+
+  // Legacy fallback roles
+  'layer:utils': '#95a5a6',       // asbestos gray
+  'layer:ui': '#a29bfe',          // medium purple
+  'layer:exporters': '#e84393',   // prunus pink
+  'layer:agents': '#fdcb6e',      // warm yellow
+  'layer:frameworks': '#27ae60',  // nephritis green
+  'layer:scripts': '#2d3436',     // very dark gray
+};
 
 function saveCustomTags() {
   try {
@@ -261,31 +307,31 @@ function getAllUsedTags(): string[] {
 // Color mapping for HTTP route method badges
 function getRouteMethodColor(method: string): string {
   switch ((method || '').toUpperCase()) {
-    case 'GET':     return '#10b981'; // emerald
-    case 'POST':    return '#3b82f6'; // blue
-    case 'PUT':     return '#f59e0b'; // amber
-    case 'PATCH':   return '#14b8a6'; // teal
-    case 'DELETE':  return '#ef4444'; // red
-    case 'HEAD':    return '#6366f1'; // indigo
+    case 'GET': return '#10b981'; // emerald
+    case 'POST': return '#3b82f6'; // blue
+    case 'PUT': return '#f59e0b'; // amber
+    case 'PATCH': return '#14b8a6'; // teal
+    case 'DELETE': return '#ef4444'; // red
+    case 'HEAD': return '#6366f1'; // indigo
     case 'OPTIONS': return '#8b5cf6'; // violet
-    case 'ANY':     return '#a855f7'; // purple
-    case 'MATCH':   return '#ec4899'; // pink
-    default:        return '#64748b'; // slate
+    case 'ANY': return '#a855f7'; // purple
+    case 'MATCH': return '#ec4899'; // pink
+    default: return '#64748b'; // slate
   }
 }
 
 // Color mapping for hook type badges
 function getHookTypeColor(hookType: string): string {
   const t = (hookType || '').toLowerCase();
-  if (t.includes('middleware'))         return '#6366f1'; // indigo
+  if (t.includes('middleware')) return '#6366f1'; // indigo
   if (t.includes('event') || t.includes('listener')) return '#06b6d4'; // cyan
-  if (t.includes('filter'))            return '#f59e0b'; // amber
-  if (t.includes('action'))            return '#f43f5e'; // rose
+  if (t.includes('filter')) return '#f59e0b'; // amber
+  if (t.includes('action')) return '#f43f5e'; // rose
   if (t.includes('lifecycle') || t.includes('init') || t.includes('boot') || t.includes('destroy')) return '#14b8a6'; // teal
   if (t.includes('service_provider') || t.includes('provider')) return '#8b5cf6'; // violet
-  if (t.includes('guard'))             return '#ef4444'; // red
-  if (t.includes('pipe'))              return '#22d3ee'; // cyan-light
-  if (t.includes('interceptor'))       return '#a855f7'; // purple
+  if (t.includes('guard')) return '#ef4444'; // red
+  if (t.includes('pipe')) return '#22d3ee'; // cyan-light
+  if (t.includes('interceptor')) return '#a855f7'; // purple
   if (t.includes('resolver') || t.includes('query') || t.includes('mutation')) return '#3b82f6'; // blue
   if (t.includes('subscriber') || t.includes('subscription')) return '#ec4899'; // pink
   return '#64748b'; // slate fallback
@@ -302,8 +348,8 @@ function getLayoutConfigForName(layoutName: string, elementCount?: number): any 
       // 'draft' skips fCoSE's overlap-removal pass which is the main cause of
       // nodes stacking on top of each other.
       const fcoseIter = (elementCount || 0) > 500 ? 500
-                      : (elementCount || 0) > 200 ? 1000
-                      : 2500;
+        : (elementCount || 0) > 200 ? 1000
+          : 2500;
       // Node separation scales up for denser graphs so there is always enough
       // space between nodes regardless of how many edges share a region.
       const fcoseSep = (elementCount || 0) > 200 ? 160 : 120;
@@ -379,24 +425,52 @@ function getLayoutConfigForName(layoutName: string, elementCount?: number): any 
         rankDir: 'TB',
         nodeDimensionsIncludeLabels: true,
       };
-    case 'elk':
+    case 'elk': {
+      // Partition numbers define vertical bands (lower = higher in DOWN layout).
+      // Files with the same extension land in the same horizontal layer; unrelated
+      // file-type groups that share no edges form fully separate tree structures.
+      const EXT_PARTITION: Record<string, number> = {
+        ts: 1, tsx: 1, mts: 1, cts: 1,
+        js: 2, jsx: 2, mjs: 2, cjs: 2,
+        json: 3, yaml: 3, yml: 3, toml: 3,
+        html: 4, css: 4, scss: 4, sass: 4, less: 4, svelte: 4, vue: 4,
+        md: 5, mdx: 5, txt: 5,
+        sh: 6, bash: 6, zsh: 6,
+        scm: 7,
+      };
       return {
         name: 'elk',
         animate: baseAnimate,
         fit: true,
-        padding: 50,
+        padding: 60,
         nodeDimensionsIncludeLabels: true,
+        nodeLayoutOptions: (node: any) => {
+          // Only partition file nodes; leave cluster/compound nodes unassigned
+          if (node.data('type') !== 'file') return {};
+          const id: string = node.data('id') || '';
+          const ext = id.includes('.') ? (id.split('.').pop()?.toLowerCase() ?? '') : '';
+          return { 'elk.partitioning.partition': EXT_PARTITION[ext] ?? 0 };
+        },
         elk: {
-          algorithm: 'mrtree',
-          'nodeDimensionsIncludeLabels': true,
+          algorithm: 'layered',
           'elk.direction': 'DOWN',
-          'spacing.nodeNode': 50,
-          'spacing.edgeNode': 25,
-          'spacing.nodeNodeBetweenLayers': 60,
-          'layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-          'layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+          'elk.nodeDimensionsIncludeLabels': true,
+          'elk.partitioning.activate': true,
+          'elk.layered.spacing.nodeNodeBetweenLayers': 60,
+          'elk.spacing.nodeNode': 25,
+          'elk.spacing.edgeNode': 20,
+          'elk.spacing.edgeEdge': 10,
+          'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+          'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+          'elk.layered.compaction.postCompaction.strategy': 'LEFT_RIGHT_CONSTRAINT_LOCKING',
+          'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+          'elk.separateConnectedComponents': true,
+          'elk.spacing.componentComponent': 40,
+          'elk.edgeRouting': 'ORTHOGONAL',
+          'elk.aspectRatio': 1.7,
         },
       };
+    }
     case 'concentric':
       return {
         name: 'concentric',
@@ -482,7 +556,7 @@ function buildDirectoryAggregatedElements(rawElements: any[], useClusters: boole
       const isRoot = dir === 'root';
       const hasParent = !isRoot && dir.includes('/');
       const parentId = hasParent ? `dir:${dir.substring(0, dir.lastIndexOf('/'))}` : (isRoot ? null : 'dir:root');
-      
+
       const nodeEl: any = {
         data: {
           id: `dir:${dir}`,
@@ -654,8 +728,8 @@ function buildFocusModeElements(rawElements: any[], seedId: string, depth: numbe
 function buildProximityClusterElements(): any[] {
   // 1. Get filtered nodes and edges
   const fileNodes = rawGraphElements.filter(el => el.data && el.data.type === 'file' && !removedNodes.has(el.data.id));
-  const edges = rawGraphElements.filter(el => 
-    el.data && el.data.source && el.data.target && 
+  const edges = rawGraphElements.filter(el =>
+    el.data && el.data.source && el.data.target &&
     !removedEdges.has(el.data.id) &&
     !removedNodes.has(el.data.source) && !removedNodes.has(el.data.target)
   );
@@ -672,12 +746,15 @@ function buildProximityClusterElements(): any[] {
 
   // Determine file-to-cluster assignment based on grouping strategy
   const fileToCluster = new Map<string, string>();
-  
-  // Community map
+
+  // Community map — only map to community clusters (starts with 'community_')
+  // to avoid collisions with directory or namespace cluster memberships.
   const communityMap = new Map<string, string>();
   if (rawClustersData && rawClustersData.memberships) {
     rawClustersData.memberships.forEach((m: any) => {
-      communityMap.set(m.filePath, m.clusterName);
+      if (typeof m.clusterName === 'string' && m.clusterName.startsWith('community_')) {
+        communityMap.set(m.filePath, m.clusterName);
+      }
     });
   }
 
@@ -696,12 +773,30 @@ function buildProximityClusterElements(): any[] {
     }
 
     if (groupingStrategy === 'community') {
-      const comm = communityMap.get(fId) || 'community_unassigned';
-      fileToCluster.set(fId, `cluster:${comm}`);
+      const comm = communityMap.get(fId);
+      if (comm) {
+        fileToCluster.set(fId, `cluster:${comm}`);
+      } else {
+        // Fallback: group by directory to avoid a flat global unassigned cluster
+        const parts = fId.split('/');
+        const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
+        fileToCluster.set(fId, `cluster:unassigned:${dir}`);
+      }
     } else if (groupingStrategy === 'directory') {
       const parts = fId.split('/');
       const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
       fileToCluster.set(fId, `dir:${dir}`);
+    } else if (groupingStrategy === 'layer') {
+      const fileRole = node.data.role;
+      if (fileRole) {
+        fileToCluster.set(fId, `layer:${fileRole}`);
+      } else {
+        const layerMembership = rawClustersData.memberships?.find(
+          (m: any) => m.filePath === fId && typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:')
+        );
+        const layerClusterId = layerMembership ? layerMembership.clusterName : 'layer:other';
+        fileToCluster.set(fId, layerClusterId);
+      }
     } else if (groupingStrategy === 'language') {
       const lang = node.data.language || 'unknown';
       fileToCluster.set(fId, `lang:${lang}`);
@@ -775,10 +870,23 @@ function buildProximityClusterElements(): any[] {
       else if (clustId === 'cluster:singulars') label = `Singular Connected (${cnt})`;
       else if (clustId.startsWith('cluster:')) {
         const commId = clustId.replace('cluster:', '');
-        const commObj = rawClustersData.clusters?.find(c => c.name === commId);
-        label = `${commObj ? commObj.label : commId} (${cnt} files)`;
+        if (commId.startsWith('unassigned:')) {
+          const dirPath = commId.replace('unassigned:', '');
+          label = `Folder: ${dirPath === 'root' ? 'root' : dirPath} (${cnt} files)`;
+        } else {
+          const commObj = rawClustersData.clusters?.find(c => c.name === commId);
+          label = `${commObj ? commObj.label : commId} (${cnt} files)`;
+        }
       } else if (clustId.startsWith('dir:')) {
         label = `${clustId.replace('dir:', '')} (${cnt} files)`;
+      } else if (clustId.startsWith('layer:')) {
+        const layerCluster = rawClustersData.clusters?.find(c => c.name === clustId);
+        let layerLabel = layerCluster ? layerCluster.label : '';
+        if (!layerLabel) {
+          const raw = clustId.replace('layer:', '');
+          layerLabel = raw.charAt(0).toUpperCase() + raw.slice(1);
+        }
+        label = `${layerLabel} (${cnt})`;
       } else if (clustId.startsWith('lang:')) {
         label = `${clustId.replace('lang:', '').toUpperCase()} (${cnt} files)`;
       } else if (clustId.startsWith('tag:')) {
@@ -792,7 +900,9 @@ function buildProximityClusterElements(): any[] {
           type: 'cluster-group',
           fileCount: cnt,
           isOrphans: clustId === 'cluster:orphans',
-          isSingulars: clustId === 'cluster:singulars'
+          isSingulars: clustId === 'cluster:singulars',
+          isFolderFallback: clustId.startsWith('cluster:unassigned:'),
+          layerColor: LAYER_COLORS[clustId] ?? null,
         }
       });
     });
@@ -829,27 +939,46 @@ function buildProximityClusterElements(): any[] {
 }
 
 function buildGraphElementsForMode(): any[] {
-  if (currentGraphMode === 'proximity') {
-    return buildProximityClusterElements();
-  } else if (currentGraphMode === 'directory') {
-    return buildDirectoryAggregatedElements(rawGraphElements, showClusters);
-  } else if (currentGraphMode === 'focus') {
-    if (!focusSeedNode) {
-      const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
-      focusSeedNode = firstFile ? firstFile.data.id : null;
+  const elements = (() => {
+    if (currentGraphMode === 'proximity') {
+      return buildProximityClusterElements();
+    } else if (currentGraphMode === 'directory') {
+      return buildDirectoryAggregatedElements(rawGraphElements, showClusters);
+    } else if (currentGraphMode === 'focus') {
+      if (!focusSeedNode) {
+        const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
+        focusSeedNode = firstFile ? firstFile.data.id : null;
+      }
+      if (focusSeedNode) {
+        return buildFocusModeElements(rawGraphElements, focusSeedNode, focusDepth, showClusters);
+      }
+      return [];
+    } else {
+      const filteredRaw = rawGraphElements.filter(el => {
+        if (el.data && el.data.id && removedNodes.has(el.data.id)) return false;
+        if (el.data && el.data.source && (removedNodes.has(el.data.source) || removedNodes.has(el.data.target) || removedEdges.has(el.data.id))) return false;
+        return true;
+      });
+      return buildGraphElements(filteredRaw, showClusters);
     }
-    if (focusSeedNode) {
-      return buildFocusModeElements(rawGraphElements, focusSeedNode, focusDepth, showClusters);
+  })();
+
+  // Annotate elements with smell indicators (isHub, isCycle)
+  elements.forEach(el => {
+    if (el.data) {
+      if (el.data.type === 'file' && hubNodes.has(el.data.id)) {
+        el.data.isHub = true;
+      }
+      if (el.data.source && el.data.target) {
+        const edgeKey = `edge-${el.data.source}-${el.data.target}`;
+        if (cycleEdges.has(edgeKey)) {
+          el.data.isCycle = true;
+        }
+      }
     }
-    return [];
-  } else {
-    const filteredRaw = rawGraphElements.filter(el => {
-      if (el.data && el.data.id && removedNodes.has(el.data.id)) return false;
-      if (el.data && el.data.source && (removedNodes.has(el.data.source) || removedNodes.has(el.data.target) || removedEdges.has(el.data.id))) return false;
-      return true;
-    });
-    return buildGraphElements(filteredRaw, showClusters);
-  }
+  });
+
+  return elements;
 }
 
 function updateGraphDisplay() {
@@ -962,7 +1091,7 @@ function runLayout(layoutConfig: any) {
 
 function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
   let processed: any[] = [];
-  
+
   if (!useClusters) {
     // Return copy of elements without parent fields
     processed = rawElements.map(el => {
@@ -975,7 +1104,7 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
     });
   } else {
     const filesByDirectory: { [dirId: string]: any[] } = {};
-    
+
     const getParentId = (filePath: string): string => {
       const parts = filePath.split('/');
       return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : 'dir:root';
@@ -997,7 +1126,7 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
     // Get and sort directory IDs
     const dirIds = Object.keys(filesByDirectory).sort();
     const N = dirIds.length;
-    
+
     // Calculate grid layout parameters for clear separation
     const cols = 3;
     const W = 550;
@@ -1082,7 +1211,7 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
             };
           }
         }
-        
+
         // Push files to elements list
         processed.push(...files);
       }
@@ -1171,11 +1300,10 @@ function updateToolbarVisibility(mode: string) {
     groupingSelect.disabled = !(mode === 'proximity' && !activeClusterId);
   }
 
-  const clustersBtn = document.getElementById('btn-toggle-clusters');
+  const clustersBtn = document.getElementById('btn-toggle-clusters') as HTMLButtonElement;
   if (clustersBtn) {
-    // Clusters toggle only relevant in full and focus modes
-    // (proximity has its own clustering, directory has its own)
-    clustersBtn.style.display = (mode === 'full' || mode === 'focus') ? 'inline-flex' : 'none';
+    // Clusters toggle only relevant in full codebase mode
+    clustersBtn.disabled = mode !== 'full';
   }
 
   const breadcrumb = document.getElementById('cluster-breadcrumb');
@@ -1210,7 +1338,12 @@ async function loadGraph() {
   try {
     const res = await fetch('/api/graph');
     if (!res.ok) { hideOverlay(); return; }
-    rawGraphElements = await res.json();
+    rawGraphElements = (await res.json()).filter((el: any) => {
+      // Drop self-loop edges (source === target) — they are scanner artifacts
+      // and produce an "invalid endpoints" warning in cytoscape
+      if (el.data && el.data.source && el.data.target && el.data.source === el.data.target) return false;
+      return true;
+    });
 
     const container = document.getElementById('cy');
     if (!container) return;
@@ -1218,19 +1351,10 @@ async function loadGraph() {
     // Load clusters mapping for Proximity Clusters Mode
     await loadClusters();
 
-    // Decide default mode based on file count and edge count.
-    // Proximity (cluster) mode is far cheaper to render for large graphs.
-    const fileCount = rawGraphElements.filter(el => el.data && !el.data.source && !el.data.target && el.data.type === 'file').length;
-    const edgeCount = rawGraphElements.filter(el => el.data && el.data.source && el.data.target).length;
-    if (fileCount > 200 || edgeCount > 500) {
-      currentGraphMode = 'proximity';
-      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
-      if (modeSelect) modeSelect.value = 'proximity';
-    } else {
-      currentGraphMode = 'full';
-      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
-      if (modeSelect) modeSelect.value = 'full';
-    }
+    // Default mode is Proximity Clusters Map.
+    currentGraphMode = 'proximity';
+    const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+    if (modeSelect) modeSelect.value = 'proximity';
 
     const focusSearchContainer = document.getElementById('focus-search-container');
     if (focusSearchContainer) {
@@ -1362,6 +1486,15 @@ async function loadGraph() {
         { selector: 'node[language="scala"]', style: { 'background-color': '#e06c75' } },
         { selector: 'node[language="dart"]', style: { 'background-color': '#56b6c2' } },
         {
+          selector: 'node[type="file"][?role]',
+          style: {
+            'background-color': (node: any) => {
+              const r = node.data('role');
+              return LAYER_COLORS[`layer:${r}`] || '#5c6370';
+            }
+          }
+        },
+        {
           selector: 'edge',
           style: {
             'width': 1,
@@ -1382,6 +1515,25 @@ async function loadGraph() {
             'line-color': 'rgba(152, 195, 121, 0.7)',
             'target-arrow-color': 'rgba(152, 195, 121, 0.7)'
           }
+        },
+        {
+          selector: 'edge[source = target]',
+          style: {
+            // Self-edges should not use taxi/straight/segments.
+            'curve-style': 'bezier',
+
+            // Makes the self-loop visible instead of collapsed.
+            'loop-direction': '45deg',
+            'loop-sweep': '120deg',
+
+            // Gives the loop enough size to avoid invalid endpoints.
+            'control-point-step-size': 70,
+
+            'source-endpoint': 'outside-to-node',
+            'target-endpoint': 'outside-to-node',
+
+            'target-arrow-shape': 'triangle',
+          },
         },
         {
           selector: 'edge[type="cluster-dependency"]',
@@ -1590,6 +1742,65 @@ async function loadGraph() {
             'z-index': 15,
             'transition-property': 'background-color, border-color, border-width, width, height',
             'transition-duration': 0.2
+          }
+        },
+        {
+          // Layer-colored cluster nodes: use the layerColor data property for border + glow
+          selector: 'node[type="cluster-group"][?layerColor]',
+          style: {
+            'border-color': (node: any) => node.data('layerColor') || '#d19a66',
+            'background-color': (node: any) => {
+              const c = node.data('layerColor') as string | null;
+              if (!c) return '#1e222b';
+              // Darken the layer color to use as background fill
+              return c + '22'; // 13% opacity hex
+            },
+          }
+        },
+        {
+          selector: 'node[type="cluster-group"][?isFolderFallback]',
+          style: {
+            'shape': 'round-rectangle',
+            'border-style': 'dashed',
+            'border-color': '#e5c07b', // Folder yellow
+            'background-color': '#232520', // Toned-down dark background
+          }
+        },
+        {
+          selector: 'node[type="cluster-group"][?isOrphans]',
+          style: {
+            'shape': 'ellipse',
+            'border-style': 'dashed',
+            'border-color': '#e06c75', // Crimson red
+            'background-color': '#251c1e', // Toned-down dark red background
+          }
+        },
+        {
+          selector: 'node[type="cluster-group"][?isSingulars]',
+          style: {
+            'shape': 'ellipse',
+            'border-style': 'dashed',
+            'border-color': '#98c379', // Green
+            'background-color': '#1a231b', // Toned-down dark green background
+          }
+        },
+        {
+          selector: 'node[?isHub]',
+          style: {
+            'width': 52,
+            'height': 52,
+            'border-color': '#ef4444',
+            'border-width': 2.5,
+            'border-style': 'solid'
+          }
+        },
+        {
+          selector: 'edge[?isCycle]',
+          style: {
+            'line-color': '#ef4444',
+            'target-arrow-color': '#ef4444',
+            'width': 3,
+            'line-style': 'dashed'
           }
         },
         {
@@ -1854,7 +2065,7 @@ async function loadGraph() {
             <rect x="14" y="12" width="7" height="9"></rect>
             <rect x="3" y="16" width="7" height="5"></rect>
           </svg>
-          <span>Hide Clusters</span>
+          <span>Toggle Clusters</span>
         `;
         btn.classList.add('btn-primary');
         btn.classList.remove('btn-secondary');
@@ -1866,7 +2077,7 @@ async function loadGraph() {
             <rect x="14" y="12" width="7" height="9"></rect>
             <rect x="3" y="16" width="7" height="5"></rect>
           </svg>
-          <span>Show Clusters</span>
+          <span>Toggle Clusters</span>
         `;
         btn.classList.remove('btn-primary');
         btn.classList.add('btn-secondary');
@@ -1894,13 +2105,13 @@ async function loadGraph() {
       const id = node.id();
       const isCluster = node.data('type') === 'parent';
       const label = isCluster ? id.replace('dir:', '') : id;
-      
+
       const outgoingEdges = node.outgoers('edge');
       const incomingEdges = node.incomers('edge');
-      
+
       let html = `<div class="flows-section">`;
       html += `<div class="flows-title">Related Flows</div>`;
-      
+
       // Outgoing Group (Collapsible details, collapsed by default)
       html += `<details class="flow-details-el">`;
       html += `<summary class="flow-summary-el">`;
@@ -1908,7 +2119,7 @@ async function loadGraph() {
       html += `<span class="flow-group-title outgoing" style="margin: 0; display: inline-flex;">Outgoing (Dependencies)</span>`;
       html += `</summary>`;
       html += `<div class="flow-content-el">`;
-      
+
       if (outgoingEdges && outgoingEdges.length > 0) {
         html += `<ul class="flow-list">`;
         outgoingEdges.forEach((edge: any) => {
@@ -1917,7 +2128,7 @@ async function loadGraph() {
           const targetNode = edge.target();
           const targetId = targetNode.id();
           const targetLabel = targetNode.data('type') === 'parent' ? targetId.replace('dir:', '') : targetId;
-          
+
           html += `
             <li class="flow-item">
               <span class="flow-current">${label}</span>
@@ -1933,7 +2144,7 @@ async function loadGraph() {
       }
       html += `</div>`;
       html += `</details>`;
-      
+
       // Incoming Group (Collapsible details, collapsed by default)
       html += `<details class="flow-details-el">`;
       html += `<summary class="flow-summary-el">`;
@@ -1941,7 +2152,7 @@ async function loadGraph() {
       html += `<span class="flow-group-title incoming" style="margin: 0; display: inline-flex;">Incoming (Dependents)</span>`;
       html += `</summary>`;
       html += `<div class="flow-content-el">`;
-      
+
       if (incomingEdges && incomingEdges.length > 0) {
         html += `<ul class="flow-list">`;
         incomingEdges.forEach((edge: any) => {
@@ -1950,7 +2161,7 @@ async function loadGraph() {
           const sourceNode = edge.source();
           const sourceId = sourceNode.id();
           const sourceLabel = sourceNode.data('type') === 'parent' ? sourceId.replace('dir:', '') : sourceId;
-          
+
           html += `
             <li class="flow-item">
               <button type="button" class="flow-clickable-node incoming-node" data-go-id="${sourceId}">${sourceLabel}</button>
@@ -1967,7 +2178,7 @@ async function loadGraph() {
       }
       html += `</div>`;
       html += `</details>`;
-      
+
       html += `</div>`;
       return html;
     }
@@ -2005,7 +2216,7 @@ async function loadGraph() {
       const node = evt.target;
       const data = node.data();
       const details = document.getElementById('details-content');
-      
+
       // If tapping a collapsed cluster-group node, enter drill-down view
       if (data.type === 'cluster-group') {
         activeClusterId = data.id;
@@ -2057,7 +2268,64 @@ async function loadGraph() {
             const parentData = node.parent().data();
             clusterLabel = parentData?.label || parentData?.id || '';
           }
-          
+
+          // Compute smells details
+          const fileSmells = rawSmellsData.filter((s: any) => {
+            if (Array.isArray(s.involvedFiles)) {
+              return s.involvedFiles.includes(data.id);
+            }
+            if (typeof s.involved_files === 'string') {
+              try {
+                const files = JSON.parse(s.involved_files);
+                return Array.isArray(files) && files.includes(data.id);
+              } catch {
+                return false;
+              }
+            }
+            return false;
+          });
+
+          let smellsHtml = '';
+          if (fileSmells.length > 0) {
+            smellsHtml = `
+              <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+                <span class="detail-stat-label" style="color: #ef4444; font-weight: bold;">Smells & Health</span>
+                  ${fileSmells.map((s: any) => `
+                    <li style="margin-bottom: 4px;">
+                      <span class="smell-badge-mini ${s.severity.toLowerCase()}">${s.severity.toUpperCase()}</span>
+                      <strong>${s.type.toUpperCase()}</strong>: ${s.description}
+                      <div style="color: #94a3b8; font-style: italic; margin-top: 2px; margin-left: 8px;">💡 Suggestion: ${s.suggestion}</div>
+                    </li>
+                  `).join('')}
+                </ul>
+              </div>
+            `;
+          } else {
+            smellsHtml = `
+              <div style="padding-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+                <span class="detail-stat-label">Smells & Health</span>
+                <span style="color: var(--syntax-green); font-size: 11px; padding-left: 4px;">🟢 Clean — No design smells detected</span>
+              </div>
+            `;
+          }
+
+          const fileRole = data.role || 'other';
+          const roleConf = typeof data.roleConfidence === 'number' ? data.roleConfidence : (typeof data.role_confidence === 'number' ? data.role_confidence : 1.0);
+          const roleColor = LAYER_COLORS[`layer:${fileRole}`] || '#5c6370';
+
+          const classificationHtml = `
+            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+              <span class="detail-stat-label">Smart Classification</span>
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <span class="selection-badge" style="background: ${roleColor};">${fileRole.toUpperCase()}</span>
+                <span style="color: var(--text-muted); font-size: 11px;">(conf: ${roleConf.toFixed(2)})</span>
+              </div>
+              <div id="classification-signals-container" style="color: var(--text-muted); font-size: 11px;">
+                <div style="font-style: italic;">Loading classification signals...</div>
+              </div>
+            </div>
+          `;
+
           details.innerHTML = `
             <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
@@ -2088,6 +2356,7 @@ async function loadGraph() {
                   <span class="detail-stat-mini-value" style="color: var(--syntax-blue);">${totalDeg}</span>
                 </div>
                 ${symbolCount > 0 ? `
+                <div class="detail-stat-grid-item" style="display: none;"></div>
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">Symbols</span>
                   <span class="detail-stat-mini-value">${symbolCount}</span>
@@ -2112,7 +2381,13 @@ async function loadGraph() {
                 <span class="detail-stat-value" style="color: var(--syntax-cyan);">${clusterLabel}</span>
               </div>
               ` : ''}
-              
+
+              <!-- Classification & Smells Sections -->
+              <div class="file-details-section">
+                ${classificationHtml}
+                ${smellsHtml}
+              </div>
+
               <!-- Custom Tags Section -->
               <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
                 <span class="detail-stat-label">Custom Tags</span>
@@ -2122,7 +2397,7 @@ async function loadGraph() {
                   <button id="btn-add-tag" class="btn" style="padding: 4px 10px; font-size: 11px; height: 26px; border-radius: 4px; flex-shrink: 0;">Add</button>
                 </div>
               </div>
-              
+
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
                 <button class="btn btn-secondary btn-action-remove-node" data-node-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
@@ -2131,6 +2406,36 @@ async function loadGraph() {
               </div>
             </div>
           ` + buildRelatedFlowsHTML(node);
+
+          // Fetch signals explanation asynchronously
+          fetch(`/api/explain?file=${encodeURIComponent(data.id)}`)
+            .then(res => res.json())
+            .then(expData => {
+              const sigContainer = document.getElementById('classification-signals-container');
+              if (!sigContainer) return;
+              const signals = expData.signals || [];
+              if (signals.length === 0) {
+                sigContainer.innerHTML = '<div style="font-style: italic; color: var(--text-muted); padding-left: 4px;">No signals recorded</div>';
+                return;
+              }
+              sigContainer.innerHTML = `
+                <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: circle; color: #abb2bf;">
+                  ${signals.map((s: any) => `
+                    <li style="margin-bottom: 4px;">
+                      <strong>[${s.source}]</strong> 
+                      <span style="color: ${LAYER_COLORS[`layer:${s.role}`] || '#cbd5e1'}; font-weight: 500;">${s.role}</span> 
+                      <span style="color: var(--text-muted); font-size: 10px;">(conf: ${s.confidence.toFixed(2)})</span>
+                      <div style="margin-top: 2px; color: #94a3b8;">${s.reason}</div>
+                    </li>
+                  `).join('')}
+                </ul>
+              `;
+            })
+            .catch(err => {
+              console.error('Failed to fetch classification details:', err);
+              const sigContainer = document.getElementById('classification-signals-container');
+              if (sigContainer) sigContainer.innerHTML = '<div style="color: #ef4444; padding-left: 4px;">Failed to load signals</div>';
+            });
         }
       }
 
@@ -2206,7 +2511,7 @@ async function loadGraph() {
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
                 <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge Type</span>
-                <span style="text-align: right;"><span class="badge" style="background:#2563eb; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">CLUSTER DEPENDENCY</span></span>
+                <span style="text-align: right;"><span class="selection-badge" style="background:#2563eb;">CLUSTER DEPENDENCY</span></span>
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
                 <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Count</span>
@@ -2234,7 +2539,7 @@ async function loadGraph() {
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Edge Type</span>
-                <span class="detail-stat-value"><span class="badge" style="background:#8b5cf6; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">${data.type}</span></span>
+                <span class="detail-stat-value"><span class="selection-badge" style="background:#8b5cf6;">${data.type.toUpperCase()}</span></span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Verifiability</span>
@@ -2401,12 +2706,12 @@ async function loadSymbolDetails(name: string) {
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callers (${data.callers.length})</span>
           <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
             ${data.callers.map((c: any) => {
-              const name = c.source_symbol;
-              if (name && name !== '<top-level>') {
-                return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.source_file}</span></li>`;
-              }
-              return `<li style="margin-bottom: 4px; color: #5c6370;"><span style="color: #5c6370;">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
-            }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
+      const name = c.source_symbol;
+      if (name && name !== '<top-level>') {
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.source_file}</span></li>`;
+      }
+      return `<li style="margin-bottom: 4px; color: #5c6370;"><span style="color: #5c6370;">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
+    }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
@@ -2414,12 +2719,12 @@ async function loadSymbolDetails(name: string) {
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callees (${data.callees.length})</span>
           <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
             ${data.callees.map((c: any) => {
-              const name = c.target_symbol;
-              if (name) {
-                return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.target_file}</span></li>`;
-              }
-              return `<li style="margin-bottom: 4px; color: #5c6370;">in ${c.target_file}</li>`;
-            }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
+      const name = c.target_symbol;
+      if (name) {
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.target_file}</span></li>`;
+      }
+      return `<li style="margin-bottom: 4px; color: #5c6370;">in ${c.target_file}</li>`;
+    }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
@@ -2573,7 +2878,7 @@ async function loadMetrics() {
     if (gitStorageDiv) {
       const dbSizeKB = metrics.dbSize != null ? (metrics.dbSize / 1024).toFixed(1) : '0';
       const git = metrics.git || {};
-      
+
       let gitStatusHTML = '';
       if (!git.isGit) {
         gitStatusHTML = '<div><strong>Git Repository:</strong> No git repository detected</div>';
@@ -2662,33 +2967,33 @@ function setupContextBuilder() {
             <div>
               <strong>Key Context Files:</strong>
               <ul style="padding-left:20px; margin-top:5px; display: flex; flex-direction: column; gap: 4px;">
-                ${context.files && context.files.length > 0 
-                  ? context.files.map((f: any) => `
+                ${context.files && context.files.length > 0
+            ? context.files.map((f: any) => `
                       <li>
                         <code>${f.path || f}</code> 
                         <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
                           (${f.language || 'unknown'} • ${f.lineCount || 0} lines)
                         </span>
                       </li>
-                    `).join('') 
-                  : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
-                }
+                    `).join('')
+            : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
+          }
               </ul>
             </div>
             <div>
               <strong>Relevant Entry Symbols:</strong>
               <ul style="padding-left:20px; margin-top:5px; display: flex; flex-direction: column; gap: 4px;">
-                ${context.symbols && context.symbols.length > 0 
-                  ? context.symbols.map((s: any) => `
+                ${context.symbols && context.symbols.length > 0
+            ? context.symbols.map((s: any) => `
                       <li>
                         <code>${s.name || s}</code> 
                         <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
                           (${s.kind || 'unknown'} • <code>${s.filePath || ''}</code>)
                         </span>
                       </li>
-                    `).join('') 
-                  : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
-                }
+                    `).join('')
+            : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
+          }
               </ul>
             </div>
           </div>
@@ -2735,17 +3040,17 @@ function startPeriodicPolling() {
         const fileCount = status.fileCount || 0;
         const symbolCount = status.symbolCount || 0;
         const edgeCount = status.edgeCount || 0;
-        
+
         if (fileCount !== lastFileCount || symbolCount !== lastSymbolCount || edgeCount !== lastEdgeCount) {
           lastFileCount = fileCount;
           lastSymbolCount = symbolCount;
           lastEdgeCount = edgeCount;
-          
+
           document.getElementById('repo-name')!.textContent = status.repoName || 'MapX Project';
           document.getElementById('stat-files')!.textContent = String(fileCount);
           document.getElementById('stat-symbols')!.textContent = String(symbolCount);
           document.getElementById('stat-edges')!.textContent = String(edgeCount);
-          
+
           const filterSelect = document.getElementById('filter-lang') as HTMLSelectElement;
           if (filterSelect && status.languages) {
             const currentVal = filterSelect.value;
@@ -2758,7 +3063,7 @@ function startPeriodicPolling() {
             });
             filterSelect.value = currentVal;
           }
-          
+
           // Reload graph and Explorer components to reflect changes
           loadGraph();
           loadSymbols(symbolSearchQuery);
@@ -2774,6 +3079,83 @@ function startPeriodicPolling() {
 
 // Initialise everything
 document.addEventListener('DOMContentLoaded', () => {
+  // Helper to programmatically switch tabs
+  const switchTab = (tabName: string) => {
+    const tabBtn = document.querySelector(`.nav-item[data-tab="${tabName}"]`) as HTMLElement;
+    if (tabBtn) {
+      tabBtn.click();
+    }
+  };
+
+  // Global Click listener for Node/Edge navigation using [data-go-id]
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const clickable = target.closest('[data-go-id]');
+    if (clickable && cyInstance) {
+      e.preventDefault();
+      const id = clickable.getAttribute('data-go-id');
+      if (id) {
+        const isOutsideGraph = currentTab !== 'graph';
+        const isSmellBadge = clickable.classList.contains('involved-file-badge');
+
+        if (isOutsideGraph) {
+          switchTab('graph');
+        }
+
+        if (isSmellBadge) {
+          // Switch to Focus Mode (Neighborhood)
+          currentGraphMode = 'focus';
+          const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+          if (modeSelect) {
+            modeSelect.value = 'focus';
+          }
+
+          // Set focus seed node to clicked file and depth to 1
+          focusSeedNode = id;
+          focusDepth = 1;
+
+          // Sync the depth buttons UI so button '1' is active
+          const depthButtons = document.querySelectorAll('.depth-btn');
+          depthButtons.forEach(btn => {
+            if (btn.getAttribute('data-depth') === '1') {
+              btn.classList.add('active');
+            } else {
+              btn.classList.remove('active');
+            }
+          });
+
+          updateToolbarVisibility('focus');
+          updateGraphDisplay();
+        }
+
+        const focusOnNode = () => {
+          const ele = cyInstance.getElementById(id);
+          if (ele && ele.length > 0) {
+            ele.trigger('tap');
+            cyInstance.animate({
+              center: { eles: ele }
+            }, {
+              duration: 350
+            });
+          }
+        };
+
+        if (isSmellBadge) {
+          // If we run a layout (smell badge clicked), wait for layoutstop to ensure final coordinates are centered
+          cyInstance.one('layoutstop', () => {
+            setTimeout(focusOnNode, 50);
+          });
+        } else if (isOutsideGraph) {
+          // Just wait for tab switch fade-in/resize to complete
+          setTimeout(focusOnNode, 150);
+        } else {
+          // Immediate focus if we are already on graph tab and layout is stable
+          focusOnNode();
+        }
+      }
+    }
+  });
+
   loadStatus();
   loadGraph();
   loadSymbols();
@@ -2783,6 +3165,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSSE();
   setupContextBuilder();
   startPeriodicPolling();
+  loadArchitecture();
 
   // Infinite scroll for Tool Call Log
   const toolLogSentinel = document.getElementById('tool-log-sentinel');
@@ -2837,7 +3220,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailsContent = document.getElementById('details-content');
   detailsContent?.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
-    
+
     // 1. Remove Node action
     const removeNodeBtn = target.closest('.btn-action-remove-node');
     if (removeNodeBtn) {
@@ -2886,7 +3269,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (input) input.value = '';
           // Re-trigger selection to update details panel HTML
           selectedNode.trigger('tap');
-          
+
           // If current grouping strategy is custom, update graph display
           if (groupingStrategy === 'custom') {
             updateGraphDisplay();
@@ -2925,25 +3308,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // 5. Clickable Node/Edge navigation
-    const clickable = target.closest('[data-go-id]');
-    if (clickable && cyInstance) {
-      e.preventDefault();
-      const id = clickable.getAttribute('data-go-id');
-      if (id) {
-        const ele = cyInstance.getElementById(id);
-        if (ele && ele.length > 0) {
-          ele.trigger('tap');
-          
-          // Focus/center the graph on the clicked element
-          cyInstance.animate({
-            center: { eles: ele }
-          }, {
-            duration: 350
-          });
-        }
-      }
-    }
+    // 5. Removed local Navigation handler since global click listener handles [data-go-id] globally
   });
 
   // Load custom tags from localStorage
@@ -2971,9 +3336,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (layoutSelect) layoutSelect.value = 'fcose';
 
     // Reset grouping
-    groupingStrategy = 'community';
+    groupingStrategy = 'layer';
     const groupingSelect = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
-    if (groupingSelect) groupingSelect.value = 'community';
+    if (groupingSelect) groupingSelect.value = 'layer';
 
     // Reset language filter
     const langFilter = document.getElementById('filter-lang') as HTMLSelectElement;
@@ -3003,8 +3368,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (focusPanel) focusPanel.style.display = 'none';
     const groupingEl = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
     if (groupingEl) groupingEl.disabled = false;
-    const clustersBtn = document.getElementById('btn-toggle-clusters');
-    if (clustersBtn) clustersBtn.style.display = 'none';
+    const clustersBtn = document.getElementById('btn-toggle-clusters') as HTMLButtonElement;
+    if (clustersBtn) clustersBtn.disabled = true;
     const breadcrumb = document.getElementById('cluster-breadcrumb');
     if (breadcrumb) breadcrumb.style.display = 'none';
     updateToolbarVisibility(currentGraphMode);
@@ -3012,3 +3377,280 @@ document.addEventListener('DOMContentLoaded', () => {
     updateGraphDisplay();
   });
 });
+
+// Architecture Tab Data Fetching and Rendering
+const cycleEdges = new Set<string>();
+const hubNodes = new Set<string>();
+
+async function loadArchitecture() {
+  try {
+    // 1. Fetch smells to populate annotations before drawing/re-drawing the graph
+    await loadSmells();
+    
+    // 2. Fetch profile
+    const profileRes = await fetch('/api/profile');
+    const profileData = profileRes.ok ? await profileRes.json() : null;
+    renderProfile(profileData?.profile);
+
+    // 3. Fetch DSM
+    const dsmRes = await fetch('/api/dsm');
+    const dsmData = dsmRes.ok ? await dsmRes.json() : null;
+    renderDSM(dsmData);
+  } catch (err) {
+    console.error('Failed to load architecture data:', err);
+  }
+}
+
+async function loadSmells() {
+  try {
+    const res = await fetch('/api/smells');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    cycleEdges.clear();
+    hubNodes.clear();
+    
+    const smellsListEl = document.getElementById('arch-smells-list');
+    if (!smellsListEl) return;
+    
+    const smells = data.smells || [];
+    rawSmellsData = smells;
+    if (smells.length === 0) {
+      smellsListEl.innerHTML = '<div class="details-placeholder">No architectural smells detected! Your system health is excellent.</div>';
+      
+      const badge = document.getElementById('arch-health-badge');
+      const score = document.getElementById('arch-health-score');
+      if (badge) {
+        badge.textContent = 'A+';
+        badge.style.color = 'var(--syntax-green)';
+      }
+      if (score) score.textContent = '100%';
+
+      // Update SVG gauge ring
+      const ring = document.getElementById('arch-health-ring');
+      if (ring) {
+        ring.style.strokeDashoffset = '0';
+        ring.style.stroke = 'var(--syntax-green)';
+      }
+      return;
+    }
+    
+    let criticalCount = 0;
+    let warningCount = 0;
+    let infoCount = 0;
+    
+    let html = '';
+    for (const smell of smells) {
+      const severity = (smell.severity || 'warning').toLowerCase();
+      if (severity === 'critical') criticalCount++;
+      else if (severity === 'warning') warningCount++;
+      else infoCount++;
+      
+      let involvedFilesStr = '';
+      if (smell.involved_files) {
+        try {
+          const files = Array.isArray(smell.involved_files)
+            ? smell.involved_files
+            : (typeof smell.involved_files === 'string' ? JSON.parse(smell.involved_files) : []);
+          if (Array.isArray(files) && files.length > 0) {
+            involvedFilesStr = files.map((f: string) => {
+              const name = f.split('/').pop() || f;
+              return `<span class="involved-file-badge" data-go-id="${f}" title="Click to view in Graph Explorer">${name}</span>`;
+            }).join('');
+          }
+        } catch (e) {
+          const fallbackName = typeof smell.involved_files === 'string' ? smell.involved_files.split('/').pop() : 'file';
+          involvedFilesStr = `<span class="involved-file-badge" data-go-id="${smell.involved_files}" title="Click to view in Graph Explorer">${fallbackName}</span>`;
+        }
+      }
+      
+      html += `
+        <div class="smell-item-card severity-${severity}">
+          <div class="smell-header">
+            <span class="smell-badge ${severity}">${severity}</span>
+            <span class="smell-title">${smell.type.toUpperCase()} SMELL</span>
+          </div>
+          <div class="smell-desc">${smell.description}</div>
+          ${smell.suggestion ? `<div class="smell-suggestion">💡 Suggestion: ${smell.suggestion}</div>` : ''}
+          ${involvedFilesStr ? `<div class="smell-involved">📍 Involved: ${involvedFilesStr}</div>` : ''}
+        </div>
+      `;
+    }
+    
+    smellsListEl.innerHTML = html;
+    
+    // Dynamically calculate health score: 100 - (critical * 15) - (warning * 5) - (info * 1)
+    const rawScore = Math.max(30, 100 - (criticalCount * 15) - (warningCount * 5) - (infoCount * 1));
+    const healthScore = Math.round(rawScore);
+    
+    let healthGrade = 'A';
+    let healthColor = 'var(--syntax-green)';
+    if (healthScore >= 95) { healthGrade = 'A+'; }
+    else if (healthScore >= 90) { healthGrade = 'A'; }
+    else if (healthScore >= 85) { healthGrade = 'A-'; healthColor = '#a3d685'; }
+    else if (healthScore >= 80) { healthGrade = 'B+'; healthColor = '#e5c07b'; }
+    else if (healthScore >= 75) { healthGrade = 'B'; healthColor = '#e5c07b'; }
+    else if (healthScore >= 70) { healthGrade = 'B-'; healthColor = '#e5c07b'; }
+    else if (healthScore >= 60) { healthGrade = 'C'; healthColor = '#d19a66'; }
+    else if (healthScore >= 50) { healthGrade = 'D'; healthColor = '#e06c75'; }
+    else { healthGrade = 'F'; healthColor = '#ef4444'; }
+    
+    const badge = document.getElementById('arch-health-badge');
+    const score = document.getElementById('arch-health-score');
+    if (badge) {
+      badge.textContent = healthGrade;
+      badge.style.color = healthColor;
+    }
+    if (score) {
+      score.textContent = `${healthScore}%`;
+    }
+
+    // Update SVG gauge ring
+    const ring = document.getElementById('arch-health-ring');
+    if (ring) {
+      const radius = 42;
+      const circumference = 2 * Math.PI * radius; // 263.89
+      const offset = circumference - (healthScore / 100) * circumference;
+      ring.style.strokeDashoffset = String(offset);
+      ring.style.stroke = healthColor;
+    }
+  } catch (err) {
+    console.error('Failed to load smells:', err);
+  }
+}
+
+function renderProfile(profile: any) {
+  const container = document.getElementById('arch-profile-details');
+  if (!container) return;
+  
+  if (!profile) {
+    container.innerHTML = '<div class="details-placeholder">No codebase profile available. Scan the project to profile archetype.</div>';
+    return;
+  }
+  
+  const dominantLangs = profile.dominantLanguages || [];
+  const frameworks = profile.detectedFrameworks || [];
+  const patterns = profile.detectedPatterns || [];
+  
+  const renderPills = (items: string[]) => {
+    if (!items || items.length === 0) return '<span class="profile-pill-empty">none</span>';
+    return items.map(item => `<span class="profile-pill">${item}</span>`).join('');
+  };
+
+  const renderYesNo = (val: boolean) => {
+    return val 
+      ? '<span class="profile-pill-bool yes">Yes</span>' 
+      : '<span class="profile-pill-bool no">No</span>';
+  };
+
+  const arch = profile.archetype || 'mixed';
+  const conf = typeof profile.archetypeConfidence === 'number' ? profile.archetypeConfidence : 1.0;
+  const archBadge = `<span class="profile-pill-arch archetype-${arch}">${arch.toUpperCase()} <span style="opacity:0.6;font-size:9px;margin-left:4px;">${conf.toFixed(2)}</span></span>`;
+
+  container.innerHTML = `
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Archetype</span>
+      <span class="profile-detail-value">${archBadge}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Dominant Languages</span>
+      <span class="profile-detail-value">${renderPills(dominantLangs)}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Detected Frameworks</span>
+      <span class="profile-detail-value">${renderPills(frameworks)}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Architecture Patterns</span>
+      <span class="profile-detail-value">${renderPills(patterns)}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Has Backend</span>
+      <span class="profile-detail-value">${renderYesNo(profile.hasBackend)}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Has Frontend</span>
+      <span class="profile-detail-value">${renderYesNo(profile.hasFrontend)}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Is Monorepo</span>
+      <span class="profile-detail-value">${renderYesNo(profile.isMonorepo)}</span>
+    </div>
+  `;
+}
+
+function renderDSM(dsm: any) {
+  const container = document.getElementById('arch-dsm-matrix');
+  if (!container) return;
+  
+  if (!dsm || !dsm.clusterNames || dsm.clusterNames.length === 0) {
+    container.innerHTML = '<div class="details-placeholder">No clusters found to generate DSM matrix.</div>';
+    return;
+  }
+  
+  const names: string[] = dsm.clusterNames;
+  const matrix: number[][] = dsm.matrix;
+  const dominantTypes: string[][] = dsm.dominantTypes || [];
+  
+  let html = '<table class="dsm-table">';
+  
+  // Headers
+  html += '<thead><tr><th></th>';
+  for (let j = 0; j < names.length; j++) {
+    html += `<th title="${names[j]}">C${j + 1}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  
+  // Rows
+  for (let i = 0; i < names.length; i++) {
+    html += `<tr><th class="dsm-row-hdr" title="${names[i]}">C${i + 1}: ${names[i]}</th>`;
+    for (let j = 0; j < names.length; j++) {
+      if (i === j) {
+        html += `<td class="dsm-cell dsm-diagonal" title="${names[i]} self-coupling">—</td>`;
+      } else {
+        const val = matrix[i][j] || 0;
+        const domType = (dominantTypes[i] && dominantTypes[i][j]) || '';
+        
+        let bgStyle = '';
+        let cellClass = 'dsm-cell';
+        let textVal = '';
+        
+        if (val > 0) {
+          textVal = String(val);
+          const alpha = Math.min(0.15 + (val * 0.08), 0.9);
+          bgStyle = `style="background-color: rgba(97, 175, 239, ${alpha}); color: #fff; font-weight: bold;"`;
+        } else {
+          cellClass += ' dsm-empty';
+          textVal = '0';
+        }
+        
+        const cellTitle = `${names[i]} calls ${names[j]}: ${val} times${domType ? ` (dominant type: ${domType})` : ''}`;
+        html += `<td class="${cellClass}" ${bgStyle} title="${cellTitle}" data-src="${names[i]}" data-tgt="${names[j]}" data-val="${val}" data-type="${domType}">${textVal}</td>`;
+      }
+    }
+    html += '</tr>';
+  }
+  
+  html += '</tbody></table>';
+  container.innerHTML = html;
+  
+  // Cell click listener
+  container.querySelectorAll('.dsm-cell:not(.dsm-diagonal)').forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      const el = e.currentTarget as HTMLElement;
+      const src = el.getAttribute('data-src') || '';
+      const tgt = el.getAttribute('data-tgt') || '';
+      const val = el.getAttribute('data-val') || '0';
+      const domType = el.getAttribute('data-type') || '';
+      
+      const detailEl = document.getElementById('dsm-legend-detail');
+      if (detailEl) {
+        if (parseInt(val, 10) > 0) {
+          detailEl.innerHTML = `<strong>${src}</strong> depends on <strong>${tgt}</strong> (weight: <strong>${val}</strong>, primary: <em>${domType}</em>)`;
+        } else {
+          detailEl.innerHTML = `No direct dependencies from <strong>${src}</strong> to <strong>${tgt}</strong>`;
+        }
+      }
+    });
+  });
+}

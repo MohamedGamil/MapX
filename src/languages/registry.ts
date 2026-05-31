@@ -11,7 +11,7 @@ export interface LanguageDefinition {
     references: string;
   };
   nodeMappings: Partial<Record<SymbolKind, string>>;
-  tier: 'built-in' | 'bundled' | 'installable' | 'user';
+  tier: 'built-in' | 'bundled' | 'installable' | 'user' | 'static';
 }
 
 const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
@@ -433,6 +433,39 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
       namespace: 'package_clause',
     },
     tier: 'bundled',
+  },
+  // Static file types: indexed for dependency tracking only, no symbol extraction
+  markdown: {
+    name: 'markdown',
+    extensions: ['.md', '.mdx', '.markdown'],
+    grammarWasm: '',
+    queries: { symbols: '', references: '' },
+    nodeMappings: {},
+    tier: 'static',
+  },
+  html: {
+    name: 'html',
+    extensions: ['.html', '.htm', '.xhtml'],
+    grammarWasm: '',
+    queries: { symbols: '', references: '' },
+    nodeMappings: {},
+    tier: 'static',
+  },
+  css: {
+    name: 'css',
+    extensions: ['.css', '.scss', '.sass', '.less'],
+    grammarWasm: '',
+    queries: { symbols: '', references: '' },
+    nodeMappings: {},
+    tier: 'static',
+  },
+  json: {
+    name: 'json',
+    extensions: ['.json', '.jsonc', '.json5'],
+    grammarWasm: '',
+    queries: { symbols: '', references: '' },
+    nodeMappings: {},
+    tier: 'static',
   },
 };
 

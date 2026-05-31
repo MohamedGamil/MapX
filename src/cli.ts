@@ -17,7 +17,7 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
-import { calculateMetrics } from './core/metrics.js';
+import { calculateMetrics, calculateDSM } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
@@ -25,7 +25,7 @@ import { isLanguageInstalled, installLanguage, uninstallLanguage } from './langu
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { VERSION } from './version.js';
-import { findSimilarSymbols } from './core/fuzzy-matcher.js';
+import { findSimilarSymbols, isGlobPattern, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
@@ -37,6 +37,43 @@ function collectPatterns(val: string, memo: string[]): string[] {
 function resolveDir(cmdOpts: Record<string, unknown>, programOpts: Record<string, unknown>): string {
   const raw = (cmdOpts.dir as string) || (programOpts.dir as string) || process.cwd();
   return resolve(raw);
+}
+
+/**
+ * Resolve a file argument to one or more tracked file paths.
+ *
+ * Resolution order:
+ *  1. Exact match in the tracked file set.
+ *  2. Glob / wildcard match (*, ?) against all tracked paths — returns all matches.
+ *  3. Substring / prefix match — returns all paths containing the input as a substring.
+ *
+ * Returns `null` when no match is found so callers can print a helpful error.
+ */
+function resolveFilePaths(input: string, allFiles: Array<{ path: unknown }>): string[] | null {
+  const paths = allFiles.map(f => f.path as string);
+
+  // 1. Exact match
+  if (paths.includes(input)) return [input];
+
+  // 2. Glob wildcard: *, ?, **
+  if (isGlobPattern(input) || input.includes('/')) {
+    // Convert glob to regex: ** matches any path segment, * matches within segment
+    const regexStr = input
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex special chars (except * ?)
+      .replace(/\\\*\\\*/g, '.*')             // ** → .*
+      .replace(/\*/g, '[^/]*')                // * → [^/]*
+      .replace(/\?/g, '[^/]');                // ? → [^/]
+    const re = new RegExp(`(^|/)${regexStr}$`, 'i');
+    const matches = paths.filter(p => re.test(p) || p.endsWith(input) || p.includes(input));
+    if (matches.length > 0) return matches;
+  }
+
+  // 3. Substring fallback
+  const lower = input.toLowerCase();
+  const substr = paths.filter(p => p.toLowerCase().includes(lower));
+  if (substr.length > 0) return substr;
+
+  return null;
 }
 
 const PHASE_LABELS: Record<ScanProgress['phase'], { active: string; done: string }> = {
@@ -332,6 +369,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--no-agents', 'Skip AGENTS.md creation')
     .option('--no-suggestions', 'Skip interactive framework suggestions')
     .option('--no-mcp-configs', 'Skip auto-generating MCP config files for detected agent tools')
+    .option('--no-discover', 'Skip monorepo / nested-repo discovery step')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const isLaravel = detectLaravel(dir);
@@ -388,6 +426,67 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           clack.log.success(`Added .mapx/ to .gitignore`);
         }
       }
+
+      // Monorepo / nested-repo discovery step (default on, disable with --no-discover)
+      if (opts.discover !== false && process.stdin.isTTY) {
+        const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+        const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+        const registeredPaths = new Set(config.repos.map(r => resolve(dir, r.path)));
+        const newNested = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+        const newMono   = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+
+        if (newNested.length > 0 || newMono.length > 0) {
+          const totalFound = newNested.length + newMono.length;
+          clack.log.info(`Found ${totalFound} additional package${totalFound === 1 ? '' : 's'} / nested repo${totalFound === 1 ? '' : 's'} in this workspace.`);
+
+          const shouldDiscover = await clack.confirm({
+            message: `Discover and register them now?`,
+            initialValue: true,
+          });
+
+          if (!clack.isCancel(shouldDiscover) && shouldDiscover) {
+            const toRegister: Array<{ name: string; path: string }> = [];
+
+            if (newNested.length > 0) {
+              const chosenNested = await clack.multiselect({
+                message: `Select nested git repositories to register (${newNested.length} found):`,
+                options: newNested.map(n => ({ value: n.path, label: `${n.name}  (${n.path})` })),
+                required: false,
+              });
+              if (!clack.isCancel(chosenNested)) {
+                for (const p of chosenNested as string[]) {
+                  const n = newNested.find(x => x.path === p)!;
+                  toRegister.push({ name: n.name, path: n.path });
+                }
+              }
+            }
+
+            if (newMono.length > 0) {
+              const mgr = newMono[0].packageManager;
+              const chosenMono = await clack.multiselect({
+                message: `Select monorepo packages to register [${mgr}] (${newMono.length} found):`,
+                options: newMono.map(p => ({ value: p.path, label: `${p.name}  (${p.path})` })),
+                required: false,
+              });
+              if (!clack.isCancel(chosenMono)) {
+                for (const p of chosenMono as string[]) {
+                  const pkg = newMono.find(x => x.path === p);
+                  if (pkg) toRegister.push({ name: pkg.name, path: pkg.path });
+                }
+              }
+            }
+
+            if (toRegister.length > 0) {
+              for (const item of toRegister) {
+                config.addRepo(item.name, item.path);
+                clack.log.success(`Registered: ${item.name} -> ${item.path}`);
+              }
+              await config.save();
+            }
+          }
+        }
+      }
+
       clack.log.success(`Initialized mapx in ${dir}/.mapx/`);
       clack.log.info(`Repo: ${config.repo.name}`);
     });
@@ -1138,7 +1237,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('files')
     .description('List indexed files with prefix/lang/sort filters')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--path <prefix>', 'Filter by path prefix')
+    .option('--path <pattern>', 'Filter by path prefix or glob (e.g. src/core/*.ts)')
     .option('--lang <lang>', 'Filter by language')
     .option('--sort <sort>', 'lines | path', 'path')
     .option('--limit <limit>', 'Max files to return', '50')
@@ -1173,22 +1272,35 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const { store, graph } = await loadContext(dir);
       checkAndPrintStaleness(store, dir);
 
-      const deps = graph.getDependencies(file);
-      const rdeps = graph.getReverseDependencies(file);
+      const allFiles = store.getAllFiles() as Array<{ path: unknown }>;
+      const resolved = resolveFilePaths(file, allFiles);
 
-      if (deps.length > 0) {
-        console.log('Dependencies:');
-        for (const dep of deps) {
-          console.log(`  → ${dep.target} (${dep.type})`);
-        }
-      } else {
-        console.log('No dependencies found');
+      if (!resolved) {
+        console.error(`File "${file}" not found in index.`);
+        console.log(`\nTip: Use globs (src/core/*.ts), partial names (scanner), or run mapx files to list all tracked files.`);
+        process.exit(1);
       }
 
-      if (rdeps.length > 0) {
-        console.log('\nDepended on by:');
-        for (const rdep of rdeps) {
-          console.log(`  ← ${rdep.source} (${rdep.type})`);
+      for (const filePath of resolved) {
+        if (resolved.length > 1) console.log(`\n── ${filePath} ──`);
+
+        const deps = graph.getDependencies(filePath);
+        const rdeps = graph.getReverseDependencies(filePath);
+
+        if (deps.length > 0) {
+          console.log('Dependencies:');
+          for (const dep of deps) {
+            console.log(`  → ${dep.target} (${dep.type})`);
+          }
+        } else {
+          console.log('No dependencies found');
+        }
+
+        if (rdeps.length > 0) {
+          console.log('\nDepended on by:');
+          for (const rdep of rdeps) {
+            console.log(`  ← ${rdep.source} (${rdep.type})`);
+          }
         }
       }
     });
@@ -1843,7 +1955,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('List detected code clusters/modules')
     .argument('[clusterOrPath]', 'Target directory or a specific cluster name to inspect')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--source <source>', 'Filter by cluster source: namespace, directory, community, or all', 'all')
+    .option('--source <source>', 'Filter by cluster source: namespace, directory, community, layer, or all', 'all')
     .option('--json', 'Output results as JSON')
     .action(async (clusterOrPath: string | undefined, opts: Record<string, unknown>) => {
       let dir = resolveDir(opts, program.opts());
@@ -1964,7 +2076,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const nsCount = filtered.filter((c: any) => c.source === 'namespace').length;
       const dirCount = filtered.filter((c: any) => c.source === 'directory').length;
       const commCount = filtered.filter((c: any) => c.source === 'community').length;
-      console.log(`\n${filtered.length} clusters detected (${nsCount} namespace, ${dirCount} directory, ${commCount} community)\n`);
+      const layerCount = filtered.filter((c: any) => c.source === 'layer').length;
+      const layerSuffix = layerCount > 0 ? `, ${layerCount} layer` : '';
+      console.log(`\n${filtered.length} clusters detected (${nsCount} namespace, ${dirCount} directory, ${commCount} community${layerSuffix})\n`);
     });
 
   program
@@ -2082,6 +2196,199 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log(`${h.framework.padEnd(12)} | ${h.hookType.padEnd(15)} | ${h.hookName.padEnd(25)} | ${handler}`);
       }
       console.log(''.padEnd(80, '-'));
+      console.log('');
+    });
+
+  program
+    .command('profile')
+    .description('Show codebase profile: archetype, frameworks, and patterns')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+      const profileStr = store.getMeta('codebase_profile:' + repo);
+      if (!profileStr) {
+        console.log(`No codebase profile found for repo "${repo}". Run a scan first.`);
+        return;
+      }
+      const profile = JSON.parse(profileStr);
+      console.log('\n── Codebase Profile ───────────────────────────────────');
+      console.log(`  Archetype:             ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`);
+      console.log(`  Detected Frameworks:   ${profile.detectedFrameworks.join(', ') || 'none'}`);
+      console.log(`  Architecture Patterns: ${profile.detectedPatterns.join(', ') || 'none'}`);
+      console.log(`  Dominant Languages:    ${profile.dominantLanguages.join(', ')}`);
+      console.log(`  Has Backend:           ${profile.hasBackend}`);
+      console.log(`  Has Frontend:          ${profile.hasFrontend}`);
+      console.log(`  Is Monorepo:           ${profile.isMonorepo}`);
+      console.log('');
+    });
+
+  program
+    .command('arch')
+    .description('Show full architecture report: profile, layers, smells, and DSM')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--smells', 'Show only architectural smells')
+    .option('--dsm', 'Show only Dependency Structure Matrix (DSM)')
+    .option('--violations', 'Show only layer violations')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+
+      const showAll = !opts.smells && !opts.dsm && !opts.violations;
+
+      if (showAll || opts.smells || opts.violations) {
+        const smells = store.getArchSmells(repo);
+        const filtered = opts.violations ? smells.filter((s: any) => s.type === 'layer-violation') : smells;
+        
+        console.log(`\n── Architectural Smells & Violations (${filtered.length}) ─────────────────`);
+        if (filtered.length === 0) {
+          console.log('🟢 Clean! No architectural smells detected.');
+        } else {
+          for (const s of filtered) {
+            console.log(`\n  [${s.severity.toUpperCase()}] ${s.type}`);
+            console.log(`    Description: ${s.description}`);
+            if (s.involvedFiles.length > 0) {
+              console.log(`    Files:       ${s.involvedFiles.join(', ')}`);
+            }
+            if (s.involvedClusters && s.involvedClusters.length > 0) {
+              console.log(`    Clusters:    ${s.involvedClusters.join(', ')}`);
+            }
+            console.log(`    Suggestion:  ${s.suggestion}`);
+          }
+        }
+        console.log('');
+        if (!showAll) return;
+      }
+
+      if (showAll || opts.dsm) {
+        const dsm = calculateDSM(store, repo);
+        if (dsm.clusterNames.length === 0) {
+          console.log('No clusters found to build DSM.');
+        } else {
+          console.log('\n── Dependency Structure Matrix (DSM) ──────────────────');
+          const maxLength = Math.max(...dsm.clusterNames.map((n: string) => n.length), 5);
+          const headers = [''.padEnd(maxLength), ...dsm.clusterNames.map((_, idx) => `C${idx + 1}`.padStart(4))].join(' ');
+          console.log(headers);
+          console.log('-'.repeat(headers.length));
+          dsm.clusterNames.forEach((name, i) => {
+            const cells = dsm.matrix[i].map((val, j) => {
+              if (i === j) return '   *';
+              if (val === 0) return '   .';
+              return val.toString().padStart(4);
+            }).join(' ');
+            console.log(`${`C${i + 1} ${name}`.padEnd(maxLength)} ${cells}`);
+          });
+          console.log(`\nLegend:\n  * = self\n  . = no dependency\n  number = edge count from row cluster to column cluster`);
+          console.log('\nCluster Key:');
+          dsm.clusterNames.forEach((name, idx) => {
+            console.log(`  C${idx + 1}: ${name}`);
+          });
+        }
+        console.log('');
+        if (!showAll) return;
+      }
+
+      if (showAll) {
+        const profileStr = store.getMeta('codebase_profile:' + repo);
+        if (profileStr) {
+          const profile = JSON.parse(profileStr);
+          console.log('── Codebase Profile Summary ───────────────────────────');
+          console.log(`  Archetype:  ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`);
+          console.log(`  Languages:  ${profile.dominantLanguages.join(', ')}`);
+          console.log('');
+        }
+
+        const smells = store.getArchSmells(repo);
+        console.log('── Architecture Health ────────────────────────────────');
+        if (smells.length === 0) {
+          console.log('🟢 Clean! No smells detected.');
+        } else {
+          console.log(`⚠️  Detected ${smells.length} architectural smell(s). Run 'mapx arch --smells' for details.`);
+        }
+        console.log('');
+      }
+    });
+
+  program
+    .command('explain <file>')
+    .description('Explain why a file was classified with a specific role')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (file: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      
+      const fileRecord = store.getFile(file);
+      if (!fileRecord) {
+        console.log(`File "${file}" not found in graph.`);
+        return;
+      }
+
+      const signals = store.getClassificationSignals(file);
+      const role = fileRecord.role || 'other';
+      const confidence = typeof fileRecord.role_confidence === 'number' ? fileRecord.role_confidence : 0.5;
+
+      console.log(`\n── Classification Explanation: ${file} ──`);
+      console.log(`  Role:       ${role} (confidence: ${confidence.toFixed(2)})`);
+      console.log(`\n  Signals:`);
+      for (const s of signals) {
+        console.log(`    [${s.source.padEnd(9)}] ${s.role.padEnd(12)} (conf: ${s.confidence.toFixed(2)}) - ${s.reason}`);
+      }
+      if (signals.length === 0) {
+        console.log('    (none)');
+      }
+      console.log('');
+    });
+
+  program
+    .command('layers')
+    .description('List files grouped by architectural roles/layers')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--json', 'Output results as JSON')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+
+      const files = store.getAllFiles(repo);
+      const roleGroups = new Map<string, string[]>();
+      for (const f of files) {
+        const role = (f.role as string) || 'other';
+        if (!roleGroups.has(role)) {
+          roleGroups.set(role, []);
+        }
+        roleGroups.get(role)!.push(f.path as string);
+      }
+
+      if (opts.json) {
+        const out: Record<string, string[]> = {};
+        for (const [r, paths] of roleGroups.entries()) {
+          out[r] = paths;
+        }
+        console.log(JSON.stringify(out, null, 2));
+        return;
+      }
+
+      console.log(`\n── Architectural Layers / Roles for "${repo}" ─────────`);
+      const sortedRoles = Array.from(roleGroups.keys()).sort();
+      for (const role of sortedRoles) {
+        const list = roleGroups.get(role)!;
+        console.log(`\n  ${role.toUpperCase()} (${list.length} files):`);
+        for (const f of list.slice(0, 10)) {
+          console.log(`    • ${f}`);
+        }
+        if (list.length > 10) {
+          console.log(`    • ...and ${list.length - 10} more`);
+        }
+      }
       console.log('');
     });
 
@@ -2342,6 +2649,27 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           }
         }
       }
+
+      // Deep-scan for nested git repos (up to 3 levels)
+      const nested = WorkspaceManager.discoverNestedGitRepos(dir);
+      const uninitNested = nested.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (uninitNested.length > 0) {
+        console.log('\nNested git repositories (deep scan):');
+        for (const n of uninitNested) {
+          console.log(`  - ${n.name.padEnd(15)} -> ${n.path} (available)`);
+        }
+      }
+
+      // Monorepo packages discovered via workspace manifests or common dirs
+      const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+      const uninitMono = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitMono.length > 0) {
+        console.log('\nMonorepo packages:');
+        for (const p of uninitMono) {
+          console.log(`  - ${p.name.padEnd(15)} -> ${p.path} [${p.packageManager}]`);
+        }
+      }
+
       console.log('');
     });
 
@@ -2474,6 +2802,28 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         found += vsEntries.length;
       }
 
+      // Deep-scan for nested git repos (up to 3 levels)
+      const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+      const uninitNestedDiscover = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (uninitNestedDiscover.length > 0) {
+        console.log('\nNested git repositories (deep scan ≤3 levels):');
+        for (const n of uninitNestedDiscover) {
+          console.log(`  - ${n.name.padEnd(20)} -> ${n.path} (available)`);
+        }
+        found += uninitNestedDiscover.length;
+      }
+
+      // Monorepo packages
+      const monoDiscover = WorkspaceManager.discoverMonorepoPackages(dir);
+      const uninitMonoDiscover = monoDiscover.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitMonoDiscover.length > 0) {
+        console.log('\nMonorepo packages:');
+        for (const p of uninitMonoDiscover) {
+          console.log(`  - ${p.name.padEnd(20)} -> ${p.path} [${p.packageManager}]`);
+        }
+        found += uninitMonoDiscover.length;
+      }
+
       if (found === 0) {
         console.log('No unregistered repositories discovered.');
       } else {
@@ -2526,6 +2876,51 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           if (!registeredPaths.has(abs)) {
             toAdd.push({ name: p.name, path: p.path });
             registeredPaths.add(abs);
+          }
+        }
+      }
+
+      // 4. Nested git repositories — prompt user to select which to add
+      const nestedReposSync = WorkspaceManager.discoverNestedGitRepos(dir);
+      const newNestedRepos = nestedReposSync.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (newNestedRepos.length > 0) {
+        clack.log.step(`Found ${newNestedRepos.length} nested git repositor${newNestedRepos.length === 1 ? 'y' : 'ies'} via deep scan (up to 3 levels):`);
+        const chosen = await clack.multiselect({
+          message: 'Select nested repositories to register and scan:',
+          options: newNestedRepos.map(n => ({ value: n.path, label: `${n.name}  (${n.path})` })),
+          required: false,
+        });
+        if (clack.isCancel(chosen)) {
+          clack.cancel('Sync cancelled.');
+          process.exit(0);
+        }
+        for (const chosenPath of chosen as string[]) {
+          const nested = newNestedRepos.find(n => n.path === chosenPath)!;
+          toAdd.push({ name: nested.name, path: nested.path });
+          registeredPaths.add(resolve(dir, nested.path));
+        }
+      }
+
+      // 5. Monorepo packages — prompt user to select which to register
+      const monoPkgsSync = WorkspaceManager.discoverMonorepoPackages(dir);
+      const newMonoPkgs = monoPkgsSync.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (newMonoPkgs.length > 0) {
+        const mgr = newMonoPkgs[0].packageManager;
+        clack.log.step(`Found ${newMonoPkgs.length} monorepo package${newMonoPkgs.length === 1 ? '' : 's'} [${mgr}]:`);
+        const chosenMono = await clack.multiselect({
+          message: 'Select monorepo packages to register and scan:',
+          options: newMonoPkgs.map(p => ({ value: p.path, label: `${p.name}  (${p.path})` })),
+          required: false,
+        });
+        if (clack.isCancel(chosenMono)) {
+          clack.cancel('Sync cancelled.');
+          process.exit(0);
+        }
+        for (const chosenPath of chosenMono as string[]) {
+          const pkg = newMonoPkgs.find(p => p.path === chosenPath);
+          if (pkg) {
+            toAdd.push({ name: pkg.name, path: pkg.path });
+            registeredPaths.add(resolve(dir, pkg.path));
           }
         }
       }
