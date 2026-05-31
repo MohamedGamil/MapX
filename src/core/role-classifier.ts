@@ -171,7 +171,9 @@ export class RoleClassifier {
     }
 
     // Universal generic
-    if (parts.some(p => p === 'utils' || p === 'util' || p === 'helpers' || p === 'helper' || p === 'shared' || p === 'common' || p === 'lib' || p === 'libs')) {
+    // For Flutter/mobile apps, `lib/` is the main source root (equivalent to `src/`), not a shared folder.
+    const isFlutterSourceRoot = profile.archetype === 'mobile-app' && parts[0] === 'lib' && lower.endsWith('.dart');
+    if (!isFlutterSourceRoot && parts.some(p => p === 'utils' || p === 'util' || p === 'helpers' || p === 'helper' || p === 'shared' || p === 'common' || p === 'lib' || p === 'libs')) {
       return { source: 'path', role: 'shared', confidence: 0.8, reason: 'Matched shared/utilities folder' };
     }
 

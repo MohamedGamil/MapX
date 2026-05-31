@@ -4,6 +4,7 @@
 
 - [x] Improved codebase profiling and architectural analysis
 - [x] Poor support for Dart and Mobile apps
+- [ ] Poor support for Dart dependency resolution
 - [ ] Poor support for CSharp and ASP.NET
 
 ## Scanner
