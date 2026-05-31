@@ -1088,6 +1088,26 @@ export class Scanner {
   private resolveImportPath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
     if (!target || typeof target !== 'string') return null;
     let resolvedTarget = target;
+
+    // ── Dart: skip stdlib (`dart:core`, `dart:async`, etc.) ─────────────────
+    if (target.startsWith('dart:')) return null;
+
+    // ── Dart: resolve package: URIs ──────────────────────────────────────────
+    // `package:my_app/src/services/auth.dart` → try `lib/src/services/auth.dart`
+    // We don't know the package name ahead of time so we strip the first path
+    // segment (the package name) and prepend `lib/`. This works for same-project
+    // imports; cross-package imports will simply not match and return null.
+    if (target.startsWith('package:')) {
+      const withoutScheme = target.slice('package:'.length);
+      const slashIdx = withoutScheme.indexOf('/');
+      if (slashIdx !== -1) {
+        const packagePath = withoutScheme.slice(slashIdx + 1);
+        const dartCandidate = 'lib/' + packagePath;
+        if (fileMap.has(dartCandidate)) return dartCandidate;
+      }
+      return null;
+    }
+
     if (sourcePath.endsWith('.vue') && target.startsWith('@/')) {
       resolvedTarget = 'src/' + target.substring(2);
     } else {

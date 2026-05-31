@@ -8,6 +8,18 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-05-31
+
+### Added
+- **Flutter / Dart framework support**: Full first-class support for Flutter cross-platform mobile apps.
+  - New `FlutterDetector` (`src/frameworks/detectors/flutter.ts`) — detects Flutter projects via `pubspec.yaml` (`sdk: flutter`) or the presence of `lib/main.dart`. Extracts routes from `Navigator.pushNamed`, `MaterialApp` routes map, `GoRouter` (`GoRoute(path: '...')`), and `auto_route` (`@RoutePage()`) annotations. Extracts widget lifecycle hooks (`initState`, `dispose`, `build`, `didChangeDependencies`, etc.) and state-management bindings for Provider/Riverpod (`context.watch`, `ref.watch`), BLoC (`BlocBuilder`, `BlocListener`, `BlocConsumer`), and GetX (`Obx`, `GetBuilder`).
+  - **Expanded Dart symbol extraction** — `queries/dart/symbols.scm` now captures concrete functions (`function_declaration`), concrete methods (`method_declaration`), getters and setters (both concrete and abstract `*_signature` forms), factory and named constructors, `type_alias` / `function_type_alias` typedefs, `extension_type_declaration` (Dart 3.3+), enum member constants, and library declarations as namespaces.
+  - **Improved Dart dependency resolution** — `queries/dart/references.scm` now captures `part` and `part of` directives, `function_invocation` (direct calls), named constructor invocations (`Foo.fromJson`), `mixin on` clauses, and generic type arguments (`Future<AuthResult>`). Removed the incorrect `function_expression_body` call rule.
+  - **`package:` URI resolution in scanner** — `import 'package:my_app/src/auth.dart'` is now resolved to `lib/src/auth.dart` inside the project. `dart:` stdlib URIs are immediately short-circuited (no resolution attempt).
+  - **Fixed Dart `nodeMappings`** — `method` now correctly maps to `method_declaration`, `function` to `function_declaration`. Added `property`, `namespace`, and `interface` entries.
+  - **Flutter archetype detection** — `CodebaseProfiler` now recognises Flutter projects (`.dart` files under `lib/`) as `mobile-app`. `pubspec.yaml` is recognised as a package boundary for monorepo component detection.
+  - **Flutter-aware role classification** — `RoleClassifier` path signals for `blocs/`, `cubits/`, `providers/`, `notifiers/`, `repositories/`, `datasources/`, `routes/`, and `navigation/` directories. Naming signals for `*Bloc`, `*Cubit`, `*Notifier`, `*Screen`, `*Page` class suffixes. `main.dart` classified as `entry`.
+
 ## [0.3.2] — 2026-05-31
 
 ### Added
@@ -498,7 +510,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...HEAD
+[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MohamedGamil/mapx/compare/v0.2.7...v0.3.0

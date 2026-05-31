@@ -408,11 +408,17 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     },
     nodeMappings: {
       class: 'class_definition',
-      method: 'method_signature',
-      function: 'function_signature',
+      // method_declaration = concrete method; method_signature = abstract method
+      method: 'method_declaration',
+      // function_declaration = concrete top-level function
+      function: 'function_declaration',
+      interface: 'abstract_class_declaration',
       enum: 'enum_declaration',
       trait: 'mixin_declaration',
-      constant: 'top_level_definition',
+      // type_alias covers Dart 2.13+ typedef; function_type_alias covers legacy
+      constant: 'type_alias',
+      property: 'getter_declaration',
+      namespace: 'library_declaration',
     },
     tier: 'bundled',
   },

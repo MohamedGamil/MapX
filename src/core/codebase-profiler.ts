@@ -62,6 +62,11 @@ export class CodebaseProfiler {
       if (parts.includes('android') || parts.includes('ios') || parts.includes('cordova') || parts.includes('capacitor')) {
         hasMobile = true;
       }
+      // Flutter: lib/main.dart is the canonical entry point; also detect
+      // android/ or ios/ sibling directories that Flutter scaffolds
+      if (p.endsWith('lib/main.dart') || parts.includes('flutter') || (parts.includes('lib') && p.endsWith('.dart'))) {
+        hasMobile = true;
+      }
       if (parts.includes('src')) {
         hasSrc = true;
       }
@@ -135,7 +140,7 @@ export class CodebaseProfiler {
       const boundaries = new Set<string>();
       for (const p of filePaths) {
         const parts = p.split('/');
-        if (parts.length > 2 && (parts[parts.length - 1] === 'package.json' || parts[parts.length - 1] === 'cargo.toml')) {
+        if (parts.length > 2 && (parts[parts.length - 1] === 'package.json' || parts[parts.length - 1] === 'cargo.toml' || parts[parts.length - 1] === 'pubspec.yaml')) {
           boundaries.add(parts.slice(0, -1).join('/'));
         }
       }

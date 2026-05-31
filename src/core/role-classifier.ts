@@ -233,10 +233,30 @@ export class RoleClassifier {
       if (parts.some(p => p === 'assets' || p === 'images' || p === 'fonts' || p === 'icons' || p === 'public')) {
         return { source: 'path', role: 'assets', confidence: 0.85, reason: 'Frontend static assets directory' };
       }
+
+      // Flutter-specific directories
+      if (parts.some(p => p === 'blocs' || p === 'bloc' || p === 'cubits' || p === 'cubit')) {
+        return { source: 'path', role: 'state', confidence: 0.92, reason: 'Flutter BLoC/Cubit state management directory' };
+      }
+      if (parts.some(p => p === 'providers' || p === 'provider' || p === 'notifiers' || p === 'notifier')) {
+        return { source: 'path', role: 'state', confidence: 0.9, reason: 'Flutter Provider/Riverpod state directory' };
+      }
+      if (parts.some(p => p === 'controllers' || p === 'controller') && lower.endsWith('.dart')) {
+        return { source: 'path', role: 'state', confidence: 0.85, reason: 'Flutter GetX controller directory' };
+      }
+      if (parts.some(p => p === 'repositories' || p === 'repository' || p === 'datasources' || p === 'datasource')) {
+        return { source: 'path', role: 'data', confidence: 0.9, reason: 'Flutter data/repository layer directory' };
+      }
+      if (parts.some(p => p === 'models' || p === 'model' || p === 'entities' || p === 'entity') && lower.endsWith('.dart')) {
+        return { source: 'path', role: 'data', confidence: 0.85, reason: 'Flutter data model/entity directory' };
+      }
+      if (parts.some(p => p === 'routes' || p === 'router' || p === 'navigation') && lower.endsWith('.dart')) {
+        return { source: 'path', role: 'api', confidence: 0.88, reason: 'Flutter routing/navigation directory' };
+      }
     }
 
     // Default main/index
-    if (basename === 'main.ts' || basename === 'main.js' || basename === 'index.ts' || basename === 'index.js' || basename === 'app.ts' || basename === 'app.js') {
+    if (basename === 'main.ts' || basename === 'main.js' || basename === 'main.dart' || basename === 'index.ts' || basename === 'index.js' || basename === 'app.ts' || basename === 'app.js') {
       return { source: 'path', role: 'entry', confidence: 0.8, reason: 'Entry point filename' };
     }
 
@@ -265,8 +285,11 @@ export class RoleClassifier {
       } else if (name.endsWith('Middleware') || name.endsWith('Guard') || name.endsWith('Interceptor')) {
         roleScores['middleware'] = (roleScores['middleware'] || 0) + 1;
         matches.push(name);
-      } else if (name.endsWith('Component') || name.endsWith('Widget') || name.endsWith('View')) {
+      } else if (name.endsWith('Component') || name.endsWith('Widget') || name.endsWith('View') || name.endsWith('Screen') || name.endsWith('Page')) {
         roleScores['components'] = (roleScores['components'] || 0) + 1;
+        matches.push(name);
+      } else if (name.endsWith('Bloc') || name.endsWith('Cubit') || name.endsWith('Notifier') || name.endsWith('ChangeNotifier') || name.endsWith('Provider') || name.endsWith('Controller') && /^[A-Z]/.test(name)) {
+        roleScores['state'] = (roleScores['state'] || 0) + 1;
         matches.push(name);
       } else if (name.startsWith('use') && sym.kind === 'function') {
         roleScores['hooks'] = (roleScores['hooks'] || 0) + 1;
