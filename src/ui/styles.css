@@ -1713,6 +1713,12 @@ body {
   margin-right: 4px;
 }
 
+.selection-badge[style="background: #00ffff;"],
+.selection-badge[style="background: #e5c07b;"],
+.selection-badge[style="background: #56b6c2;"] {
+  color: #000;
+}
+
 .involved-file-badge {
   display: inline-block;
   font-family: 'JetBrains Mono', monospace;

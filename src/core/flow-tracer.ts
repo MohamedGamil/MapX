@@ -285,7 +285,9 @@ export class FlowTracer {
       paths: allPaths,
       sources: traceSources,
       sinks: traceSinks,
-      cycles: detectedCycles,
+      cycles: Array.from(
+        new Map(detectedCycles.map(c => [`${c.fromFile}→${c.toFile}:${c.cycleLength}`, c])).values()
+      ),
       nodeCount: uniqueNodes.size,
       edgeCount: traceEdges.size,
       maxDepthReached,
@@ -438,7 +440,15 @@ export class FlowTracer {
         });
       }
     }
-    return sinks;
+    // Filter out leaf-library files: high structural in-degree means
+    // the file is a stable foundation, not a true data sink.
+    const structuralEdges = edges.filter(e => STRUCTURAL_EDGES.includes(e.edge_type as string));
+    const structuralIncoming = new Map<string, number>();
+    for (const e of structuralEdges) {
+      const tgt = e.target_file as string;
+      structuralIncoming.set(tgt, (structuralIncoming.get(tgt) || 0) + 1);
+    }
+    return sinks.filter(s => (structuralIncoming.get(s.file) || 0) < 3);
   }
 
   findCriticalPath(from: string, to: string, repo?: string): TracePath | null {

@@ -361,6 +361,14 @@ export class Store {
     return this.backend.prepare('SELECT * FROM files').all();
   }
 
+  /**
+   * Get files matching a path suffix pattern (e.g., 'pubspec.yaml').
+   * Uses SQL LIKE for efficient filtering without loading all files.
+   */
+  getFilesByPattern(pathSuffix: string): Record<string, unknown>[] {
+    return this.backend.prepare('SELECT * FROM files WHERE path LIKE ?').all(`%${pathSuffix}`);
+  }
+
   insertSymbol(sym: {
     filePath: string;
     repo: string;

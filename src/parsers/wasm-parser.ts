@@ -78,6 +78,22 @@ export interface ParsedCaptures {
   scopeByNodeId: Map<number, string>;
 }
 
+/**
+ * Parser pool: reuses Parser instances per Language to avoid WASM re-init overhead.
+ * Each language gets its own parser to prevent language-switching races.
+ */
+const parserPool = new Map<Language, Parser>();
+
+function getPooledParser(language: Language): Parser {
+  let parser = parserPool.get(language);
+  if (!parser) {
+    parser = new Parser();
+    parser.setLanguage(language);
+    parserPool.set(language, parser);
+  }
+  return parser;
+}
+
 export async function parseWithQueries(
   source: string,
   language: Language,
@@ -85,10 +101,9 @@ export async function parseWithQueries(
   referencesQuery: string
 ): Promise<ParsedCaptures> {
   await ensureInit();
-  // Use a fresh parser instance per call to avoid language-switching races
-  // when multiple concurrent parses share the same instance.
-  const parser = new Parser();
-  parser.setLanguage(language);
+  // Pool parsers per language to avoid re-creating WASM instances on every parse.
+  // Each language gets its own parser to avoid language-switching races.
+  const parser = getPooledParser(language);
   const tree = parser.parse(source);
   if (!tree) {
     return { symbols: new Map(), references: new Map(), nameByNodeId: new Map(), scopeByNodeId: new Map() };

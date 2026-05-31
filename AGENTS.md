@@ -42,7 +42,7 @@ mapx -d /path/to/project scan
 - `mapx clusters [--dir path] [--source source] [--json]` - List detected clusters/modules (filter by source: namespace, directory, community, layer)
 - `mapx trace <symbol> [--dir path]` - Trace data flow
 - `mapx sources [--dir path]` - Find entry points (data sources) in the codebase
-- `mapx sinks [--dir path]` - Find terminal consumers (data sinks) in the codebase
+- `mapx sinks [--dir path] [--include-leaf-libraries]` - Find terminal consumers (data sinks) in the codebase
 - `mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]` - Generate task-specific workspace context
 - `mapx callers <symbol> [--dir path] [--depth depth]` - Trace callers of a symbol (fuzzy fallback on typos)
 - `mapx callees <symbol> [--dir path] [--depth depth]` - Trace callees of a symbol (fuzzy fallback on typos)
@@ -55,7 +55,7 @@ mapx -d /path/to/project scan
 - `mapx explain <file> [--reclassify]` - Explain file role classification signals and weights
 - `mapx layers [path] [--json]` - List files grouped by architectural roles/layers
 - `mapx impact <symbol> [--dir path] [--depth depth]` - Change impact analysis with fuzzy pre-check
-- `mapx node <symbol> [--dir path] [--source] [--format text|json]` - Inspect a symbol node with optional source code
+- `mapx node <symbol> [--dir path] [--source] [--format text|json] [--include-members]` - Inspect a symbol node with optional source code and member listing
 - `mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
 - `mapx lang list` - List supported languages and status
 - `mapx lang install <lang>` - Install dynamic language support
@@ -75,14 +75,14 @@ When running as an MCP server, MapxGraph exposes these tools:
 - `mapx_sync` - Sync changed files to update the graph (incremental scan)
 - `mapx_query` - Search symbols by name pattern
 - `mapx_search` - Filtered semantic and regex-like symbol search
-- `mapx_node` - Deep inspection of a specific symbol and its source code
+- `mapx_node` - Deep inspection of a specific symbol and its source code (supports `include_members` to list class/interface members)
 - `mapx_files` - List and filter files by path prefix or glob pattern, language, and size or line counts
 - `mapx_dependencies` - Get deps and reverse-deps for a file
 - `mapx_callers` - Direct and nested callers of a symbol
 - `mapx_callees` - Direct and nested callees of a symbol
 - `mapx_trace` - Trace data flow paths from a starting symbol or file
 - `mapx_sources` - Find entry points (sources) in the codebase
-- `mapx_sinks` - Find terminal consumers (sinks) in the codebase
+- `mapx_sinks` - Find terminal consumers (sinks) in the codebase (supports `include_leaf_libraries` to show filtered leaf libraries)
 - `mapx_routes` - Show framework routes
 - `mapx_hooks` - Show framework hooks
 - `mapx_edges` - Granular query of graph dependency edges

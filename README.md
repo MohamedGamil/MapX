@@ -80,8 +80,8 @@
 
 - **22 languages + static file indexing** — all built-in or bundled with the package out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart) plus dependency-only indexing for Markdown, HTML, CSS/SCSS/Sass/Less, and JSON/JSONC/JSON5 files
 - **Deep symbol extraction** — classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, namespaces — with full import/inheritance/instantiation reference tracking
-- **Incremental scans** — git-aware change detection; only re-parses files that changed
-- **Fast** — parallelised file reads, bounded WASM concurrency, batched SQLite writes
+- **Incremental scans** — git-aware change detection; only re-parses files that changed. Non-git projects use content-hash based change detection for `mapx sync`
+- **Fast** — parallelised file reads, parser pooling for WASM reuse, bounded concurrency, batched SQLite writes
 - **Resumable** — scan progress is checkpointed; `Ctrl+C` and re-run picks up where it left off
 - **32 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and more
 - **Flexible search** — wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON output
@@ -92,6 +92,7 @@
 - **Web dashboard** — built-in `mapx ui` for interactive graph visualization
 - **Zero cloud** — everything stays on disk in `.mapx/` inside your project
 - **87% LLM cost reduction** — drops context token consumption by 87% vs baseline workspace reads by feeding exact signatures and transitive impact summaries
+- **Graph-level exclusions** — `graphExcludePatterns` setting to exclude test/scratch files from PageRank rankings while keeping them indexed
 
 ---
 
@@ -210,13 +211,13 @@ mapx -d /path/to/project export
 | `mapx callees <symbol>` | Show direct and nested callees (with fuzzy fallback) |
 | `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring (with fuzzy pre-check) |
 | `mapx sources` | Find entry points (data sources) in the codebase |
-| `mapx sinks` | Find terminal consumers (data sinks) in the codebase |
+| `mapx sinks` | Find terminal consumers (data sinks) in the codebase (supports `--include-leaf-libraries` to show filtered leaf libraries) |
 | `mapx context <task>` | Generate task-specific workspace context within a token budget |
 | `mapx metrics` | Show coupling and instability metrics for files |
 | `mapx edges` | Granular query of dependency edges |
 | `mapx routes` | Show routes from all detected frameworks |
 | `mapx hooks` | Show hooks from all detected frameworks |
-| `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, and `--format json` |
+| `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, `--format json`, and `--include-members` to list class/interface members |
 | `mapx files` | List and filter files with `--path` (prefix or glob), `--lang`, `--sort`, `--limit` |
 | `mapx clusters` | List detected code clusters/modules (filter with `--source layer\|community\|namespace\|directory`) |
 | `mapx profile` | Show codebase profile details (archetype, frameworks, active taxonomy) |
@@ -441,6 +442,17 @@ mapx stores everything locally inside your project:
 ```
 
 `.mapx/` is automatically added to `.gitignore` during `mapx init`.
+
+### Configuration
+
+The `.mapx/config.json` file supports the following key settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `excludePatterns` | `["node_modules/**", ...]` | Glob patterns for files to exclude from scanning entirely |
+| `graphExcludePatterns` | `["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]` | Glob patterns for files to exclude from PageRank rankings and graph analysis (files are still indexed but deprioritized) |
+
+`graphExcludePatterns` is useful for keeping test and scratch files out of importance rankings while still tracking their dependencies. Files matching these patterns are scanned and queryable but excluded from PageRank computation, framework detection, and archetype scoring.
 
 ---
 

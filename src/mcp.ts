@@ -380,6 +380,7 @@ EXAMPLES:
         inputSchema: {
           type: 'object',
           properties: {
+            include_leaf_libraries: { type: 'boolean', description: 'Include high-import leaf libraries that are normally filtered out as stable foundations', default: false },
             ...dirProperty,
           },
         },
@@ -528,6 +529,7 @@ EXAMPLES:
           properties: {
             symbol: { type: 'string', description: 'Symbol name (e.g. "UserService") or scoped name (e.g. "UserService::findAll")' },
             source: { type: 'boolean', description: 'Include the symbol\'s source code in the response', default: false },
+            include_members: { type: 'boolean', description: 'Include member symbols (methods, properties) when inspecting a class/interface/trait', default: false },
             format: { type: 'string', enum: ['text', 'json'], description: 'Output format', default: 'text' },
             ...dirProperty,
           },
@@ -698,7 +700,7 @@ EXAMPLE:
           return {
             content: [{
               type: 'text',
-              text: `Scanned ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
+              text: `Scanned ${result.filesScanned} files (${result.totalFiles || result.filesScanned} total) in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
             }],
           };
         } catch (err: any) {
@@ -732,7 +734,7 @@ EXAMPLE:
           return {
             content: [{
               type: 'text',
-              text: `Updated ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\n${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated in ${result.durationMs}ms`,
+              text: `Updated ${result.filesScanned} files (${result.totalFiles || result.filesScanned} total) in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\n${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated in ${result.durationMs}ms`,
             }],
           };
         } catch (err: any) {
@@ -983,8 +985,10 @@ Recommendation:
             signature: sym.signature || '',
             pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
           }));
+          const totalMatches = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact }).length;
+          const offset = 0;
           const warning = getMcpStalenessWarning(ctx.store, dir);
-          return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
+          return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, totalMatches, offset, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
         }
 
         // F43: Summary header
@@ -1341,6 +1345,17 @@ Callees: ${callees.length}`;
 
         if (relatedParts.length > 0) {
           outputText += `\n\n── Related ──\n${relatedParts.join('\n\n')}`;
+        }
+
+        // F44: Include siblings/members when requested
+        const includeMembersArg = (args as any)?.include_members;
+        if (includeMembersArg) {
+          const allFileSymbols = ctx.store.getSymbolsForFile(sym.file_path as string);
+          const memberSymbols = allFileSymbols.filter((s: any) => s.scope === sym.name);
+          if (memberSymbols.length > 0) {
+            const memberLines = memberSymbols.map((s: any) => `  ${s.kind} ${s.name} (L${s.start_line}-${s.end_line})`);
+            outputText += `\n\n── Members ──\n${memberLines.join('\n')}`;
+          }
         }
 
         const warning = getMcpStalenessWarning(ctx.store, dir);
@@ -1788,8 +1803,9 @@ Callees: ${callees.length}`;
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const tracer = new FlowTracer(ctx.store);
+        const includeLeafLibraries = !!(args as any)?.include_leaf_libraries;
         const sinks = tracer.findSinks(ctx.config.repo.name);
-        const lines = [`Terminal consumers (data sinks) — ${sinks.length} found:`];
+        const lines = [`Terminal consumers (data sinks) — ${sinks.length} found${!includeLeafLibraries ? ' (excluding high-import leaf libraries)' : ''}:`];
         for (const s of sinks) {
           const inEdges = ctx.store.getReverseEdges(s.file).filter(e => [
             'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
@@ -1861,6 +1877,20 @@ Callees: ${callees.length}`;
           path: (args as any)?.pathPattern,
         });
 
+        if (routes.length === 0) {
+          const allRoutes = routeRegistry.getRoutes();
+          let msg = 'No routes found.';
+          if (allRoutes.length === 0) {
+            msg += '\n\nNo framework routes have been detected. Possible causes:\n  • No route-defining framework was detected during scan\n  • Run `mapx scan --force` to re-detect frameworks\n  • Supported: Express, Fastify, Koa, Laravel, Next.js, Django, Flask, Rails, Spring, FastAPI';
+          } else {
+            msg += `\n\n${allRoutes.length} route(s) exist but none match the current filters.`;
+            if ((args as any)?.framework) msg += `\n  framework: "${(args as any).framework}"`;
+            if ((args as any)?.method) msg += `\n  method: "${(args as any).method}"`;
+            if ((args as any)?.pathPattern) msg += `\n  path: "${(args as any).pathPattern}"`;
+          }
+          return { content: [{ type: 'text', text: msg }] };
+        }
+
         return {
           content: [{
             type: 'text',
@@ -1882,6 +1912,20 @@ Callees: ${callees.length}`;
           hookType: (args as any)?.type,
           hookName: (args as any)?.namePattern,
         });
+
+        if (hooks.length === 0) {
+          const allHooks = routeRegistry.getHooks();
+          let msg = 'No hooks found.';
+          if (allHooks.length === 0) {
+            msg += '\n\nNo framework hooks have been detected. Possible causes:\n  • No hook-defining framework was detected during scan\n  • Run `mapx scan --force` to re-detect frameworks\n  • Supported: Express middleware, Laravel events, React hooks, Vue composables';
+          } else {
+            msg += `\n\n${allHooks.length} hook(s) exist but none match the current filters.`;
+            if ((args as any)?.framework) msg += `\n  framework: "${(args as any).framework}"`;
+            if ((args as any)?.type) msg += `\n  type: "${(args as any).type}"`;
+            if ((args as any)?.namePattern) msg += `\n  name: "${(args as any).namePattern}"`;
+          }
+          return { content: [{ type: 'text', text: msg }] };
+        }
 
         return {
           content: [{

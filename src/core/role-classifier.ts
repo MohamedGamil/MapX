@@ -356,6 +356,16 @@ export class RoleClassifier {
       };
     }
 
+    // Hub/orchestrator files: high fan-in AND high fan-out
+    if (fanIn >= 5 && fanOut >= 10) {
+      return {
+        source: 'topology',
+        role: 'core',
+        confidence: 0.7,
+        reason: `High fan-in (${fanIn}) and fan-out (${fanOut}) suggests core orchestrator`,
+      };
+    }
+
     return null;
   }
 

@@ -263,6 +263,8 @@ vi.mock('../src/frameworks/route-registry.js', () => ({
     load = vi.fn().mockResolvedValue(undefined);
     queryRoutes = vi.fn().mockReturnValue([]);
     queryHooks = vi.fn().mockReturnValue([]);
+    getRoutes = vi.fn().mockReturnValue([]);
+    getHooks = vi.fn().mockReturnValue([]);
   }
 }));
 
@@ -1146,12 +1148,12 @@ describe('MCP module', () => {
   describe('mapx_routes and mapx_hooks', () => {
     it('executes mapx_routes', async () => {
       const res = await callTool('mapx_routes');
-      expect(getText(res)).toBeDefined();
+      expect(getText(res)).toContain('No routes found');
     });
 
     it('executes mapx_hooks', async () => {
       const res = await callTool('mapx_hooks');
-      expect(getText(res)).toBeDefined();
+      expect(getText(res)).toContain('No hooks found');
     });
   });
 

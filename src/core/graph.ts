@@ -1,5 +1,6 @@
 import Graph from 'graphology';
 import pagerank from 'graphology-metrics/centrality/pagerank.js';
+import picomatch from 'picomatch';
 import type { GraphEdge, SymbolKind } from '../types.js';
 
 export class MapxGraph {
@@ -42,6 +43,7 @@ export class MapxGraph {
   }
 
   addDependencyEdge(edge: GraphEdge): void {
+    if (edge.sourceFile === edge.targetFile) return;
     const sourceId = this.fileNodeId(edge.sourceFile);
     const targetId = this.fileNodeId(edge.targetFile);
 
@@ -66,7 +68,7 @@ export class MapxGraph {
     }
   }
 
-  computePageRank(): Map<string, number> {
+  computePageRank(excludePatterns?: string[]): Map<string, number> {
     try {
       const scores = pagerank(this.graph, { alpha: 0.85 } as any);
       for (const [node, score] of Object.entries(scores)) {
@@ -74,7 +76,18 @@ export class MapxGraph {
           this.graph.mergeNodeAttributes(node, { pagerank: score });
         }
       }
-      return new Map(Object.entries(scores));
+      let result = new Map(Object.entries(scores));
+      if (excludePatterns && excludePatterns.length > 0) {
+        const matchers = excludePatterns.map(p => picomatch(p, { dot: true, nocase: true }));
+        result = new Map(
+          [...result.entries()].filter(([nodeId]) => {
+            const attrs = this.graph.getNodeAttributes(nodeId);
+            if (attrs.type !== 'file') return true;
+            return !matchers.some(m => m(attrs.path));
+          })
+        );
+      }
+      return result;
     } catch {
       return new Map();
     }
@@ -130,6 +143,7 @@ export class MapxGraph {
       if (attrs.type !== 'contains') {
         const target = this.graph.getNodeAttributes(this.graph.target(edge));
         if (target.type === 'file') {
+          if (target.path === filePath) continue;  // skip self-edges
           deps.push({ target: target.path, type: attrs.type });
         }
       }
@@ -147,6 +161,7 @@ export class MapxGraph {
       if (attrs.type !== 'contains') {
         const source = this.graph.getNodeAttributes(this.graph.source(edge));
         if (source.type === 'file') {
+          if (source.path === filePath) continue;  // skip self-edges
           rdeps.push({ source: source.path, type: attrs.type });
         }
       }

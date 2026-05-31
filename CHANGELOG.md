@@ -8,6 +8,31 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- **`graphExcludePatterns` configuration**: New setting to exclude test/scratch files from PageRank rankings, framework detection, and archetype scoring while keeping them indexed and queryable. Default patterns: `scratch/**`, `benchmarks/**`, `tests/**`, `**/*.test.*`, `**/*.spec.*`.
+- **Intra-class call tracking**: `this.method()` calls within TypeScript and JavaScript classes are now tracked as call edges in the dependency graph, enabling accurate callers/callees tracing for internal class method references.
+- **`include_members` option for `mapx_node`**: New boolean parameter for the `mapx_node` MCP tool (and `--include-members` CLI flag) to list class, interface, or trait member symbols (methods, properties) alongside the inspected symbol's metadata.
+- **`include_leaf_libraries` option for `mapx_sinks`**: New boolean parameter for the `mapx_sinks` MCP tool (and `--include-leaf-libraries` CLI flag) to include high-import leaf-library files that are normally filtered out as stable foundations.
+- **Content-hash based incremental scanning**: Non-git projects can now use `mapx sync` for incremental updates. File changes are detected via content hashing (SHA-256) instead of requiring a Git working tree.
+- **Pre-scan symbol index**: Built a pre-scan O(1) symbol lookup index to accelerate reference resolution during scanning, replacing repeated linear searches.
+- **Parser pooling**: WASM `Parser` instances are now pooled and reused per language, eliminating redundant parser creation and WASM instantiation overhead during scans.
+- **Hub/orchestrator classification signal**: Files with high fan-in combined with high fan-out are now classified with a hub/orchestrator signal in the role classifier, improving architectural layer accuracy.
+- **Contextual error messages for routes/hooks**: `mapx routes` and `mapx hooks` (CLI and MCP) now return descriptive, context-aware error messages when no routes or hooks are found, including suggestions for supported frameworks and troubleshooting steps.
+
+### Changed
+- Community clusters now use directory-prefix labels (e.g., `src/core (12 files)`) instead of generic `community_N` names, making cluster names immediately meaningful.
+- Scan/sync output now shows total file count alongside changed file count (e.g., `Scanned 42 changed files (1,203 total)`).
+- Search JSON format includes `totalMatches` and `offset` fields for pagination awareness.
+- Leaf-library files (those with ≥3 structural importers) are filtered from sinks output by default; use `include_leaf_libraries` to restore them.
+
+### Fixed
+- Self-edge guard prevents files from depending on themselves in the graph, eliminating spurious self-referential edges.
+- Trace cycles deduplicated on `(fromFile→toFile:cycleLength)` tuple to avoid reporting the same cycle multiple times at different entry points.
+- Architecture smells deduplicated on `(type, involvedFiles)` to prevent redundant smell reports.
+- Scratch/test files (matching `graphExcludePatterns`) excluded from framework detection and archetype scoring, preventing test fixtures from influencing project classification.
+- Duplicate framework detection calls eliminated with caching, reducing scan time for multi-framework projects.
+- Post-scan analysis pipeline extracted into a shared function, eliminating ~85 lines of duplicated code between full scan and incremental sync paths.
+
 ## [0.3.3] — 2026-05-31
 
 ### Added

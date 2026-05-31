@@ -16,6 +16,7 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
 - Run `mapx context <task>` to generate task-specific context.
 - Run `mapx node <symbol> --source` to inspect a symbol's source code.
 - Run `mapx node <symbol> --format json` for structured JSON output.
+- Run `mapx node <symbol> --include-members` to list class/interface member symbols.
 - Run `mapx profile` to show codebase profile details.
 - Run `mapx arch` to audit architecture design smells and structural quality.
 - Run `mapx explain <file>` to explain file layer/role classification signals.

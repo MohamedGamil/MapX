@@ -158,6 +158,7 @@ export interface MapxConfig {
     maxTokenBudget: number;
     excludePatterns: string[];
     includePatterns: string[];
+    graphExcludePatterns?: string[];
     php?: {
       facadeMap?: Record<string, string>;
     };
