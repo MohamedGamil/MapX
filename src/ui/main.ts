@@ -3089,8 +3089,7 @@ document.addEventListener('DOMContentLoaded', () => {
           updateGraphDisplay();
         }
 
-        // Timeout to let the tab container render, graph rebuild, and cyInstance resize
-        setTimeout(() => {
+        const focusOnNode = () => {
           const ele = cyInstance.getElementById(id);
           if (ele && ele.length > 0) {
             ele.trigger('tap');
@@ -3100,7 +3099,20 @@ document.addEventListener('DOMContentLoaded', () => {
               duration: 350
             });
           }
-        }, isOutsideGraph || isSmellBadge ? 150 : 0);
+        };
+
+        if (isSmellBadge) {
+          // If we run a layout (smell badge clicked), wait for layoutstop to ensure final coordinates are centered
+          cyInstance.one('layoutstop', () => {
+            setTimeout(focusOnNode, 50);
+          });
+        } else if (isOutsideGraph) {
+          // Just wait for tab switch fade-in/resize to complete
+          setTimeout(focusOnNode, 150);
+        } else {
+          // Immediate focus if we are already on graph tab and layout is stable
+          focusOnNode();
+        }
       }
     }
   });
