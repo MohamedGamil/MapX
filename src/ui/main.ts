@@ -721,10 +721,13 @@ function buildProximityClusterElements(): any[] {
   // Determine file-to-cluster assignment based on grouping strategy
   const fileToCluster = new Map<string, string>();
 
-  // Community map
+  // Community map — exclude layer memberships so they don't overwrite
+  // community or primary cluster assignments (layers have their own
+  // dedicated grouping strategy handled in the 'layer' branch below).
   const communityMap = new Map<string, string>();
   if (rawClustersData && rawClustersData.memberships) {
     rawClustersData.memberships.forEach((m: any) => {
+      if (typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:')) return;
       communityMap.set(m.filePath, m.clusterName);
     });
   }

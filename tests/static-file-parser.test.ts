@@ -284,6 +284,105 @@ describe('StaticFileParser — JSON', () => {
 });
 
 // ---------------------------------------------------------------------------
+// JSONC / JSON5 syntax handling
+// ---------------------------------------------------------------------------
+
+describe('StaticFileParser — JSONC / JSON5 syntax', () => {
+  it('strips line comments', async () => {
+    const src = `{
+  // This is a comment
+  "extends": "./tsconfig.base.json"
+}`;
+    const result = await parse('tsconfig.jsonc', src);
+    expect(targets(result)).toContain('./tsconfig.base.json');
+  });
+
+  it('strips block comments', async () => {
+    const src = `{
+  /* multi
+     line
+     comment */
+  "$ref": "./schema/base.json"
+}`;
+    const result = await parse('schema.jsonc', src);
+    expect(targets(result)).toContain('./schema/base.json');
+  });
+
+  it('strips inline block comments', async () => {
+    const src = `{
+  "extends": /* override */ "./base.json"
+}`;
+    const result = await parse('tsconfig.json', src);
+    expect(targets(result)).toContain('./base.json');
+  });
+
+  it('handles trailing commas', async () => {
+    const src = `{
+  "extends": "./base.json",
+  "$ref": "./other.json",
+}`;
+    const result = await parse('config.jsonc', src);
+    expect(targets(result)).toContain('./base.json');
+    expect(targets(result)).toContain('./other.json');
+  });
+
+  it('handles trailing comma in arrays', async () => {
+    const src = `{
+  "extends": [
+    "./base.json",
+    "./overrides.json",
+  ]
+}`;
+    const result = await parse('tsconfig.json', src);
+    expect(targets(result)).toContain('./base.json');
+    expect(targets(result)).toContain('./overrides.json');
+  });
+
+  it('handles single-quoted strings (JSON5)', async () => {
+    const src = `{
+  'extends': './base.json'
+}`;
+    const result = await parse('config.json5', src);
+    expect(targets(result)).toContain('./base.json');
+  });
+
+  it('handles unquoted keys (JSON5)', async () => {
+    const src = `{
+  extends: "./base.json"
+}`;
+    const result = await parse('config.json5', src);
+    expect(targets(result)).toContain('./base.json');
+  });
+
+  it('handles combined JSONC features', async () => {
+    const src = `{
+  // Project config
+  "extends": "./tsconfig.base.json",
+  /* Schema reference */
+  "$ref": "./schemas/project.json",
+}`;
+    const result = await parse('tsconfig.json', src);
+    expect(targets(result)).toContain('./tsconfig.base.json');
+    expect(targets(result)).toContain('./schemas/project.json');
+  });
+
+  it('preserves strings containing // that are not comments', async () => {
+    const src = `{
+  "$ref": "./schemas/my-ref.json"
+}`;
+    const result = await parse('config.json', src);
+    expect(targets(result)).toContain('./schemas/my-ref.json');
+  });
+
+  it('does not break on deeply invalid content', async () => {
+    const src = `this is completely invalid {{{`;
+    const result = await parse('broken.jsonc', src);
+    expect(result.references).toHaveLength(0);
+    expect(result.errors).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Unknown / fallback extension
 // ---------------------------------------------------------------------------
 

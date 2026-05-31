@@ -75,10 +75,89 @@ function extractCssRefs(source: string): ExtractedReference[] {
   return refs;
 }
 
+/**
+ * Normalise JSONC / JSON5 text into strict JSON that `JSON.parse` accepts.
+ *
+ * Handles the most common deviations found in tsconfig.json, VS Code settings,
+ * and JSON5 config files:
+ *   1. Line comments (`// …`)
+ *   2. Block comments (`/* … *​/`)
+ *   3. Trailing commas before `}` or `]`
+ *   4. Single-quoted strings → double-quoted
+ *   5. Unquoted object keys
+ */
+function stripJsoncSyntax(raw: string): string {
+  let result = '';
+  let i = 0;
+  const len = raw.length;
+
+  while (i < len) {
+    const ch = raw[i];
+
+    // --- Double-quoted string: copy verbatim (preserving escapes) ---
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < len && raw[j] !== '"') {
+        if (raw[j] === '\\') j++; // skip escaped char
+        j++;
+      }
+      result += raw.slice(i, j + 1);
+      i = j + 1;
+      continue;
+    }
+
+    // --- Single-quoted string → double-quoted ----------------------
+    if (ch === "'") {
+      let j = i + 1;
+      let inner = '';
+      while (j < len && raw[j] !== "'") {
+        if (raw[j] === '\\') {
+          inner += raw[j] + raw[j + 1];
+          j += 2;
+        } else {
+          // Escape embedded double-quotes so the result stays valid
+          inner += raw[j] === '"' ? '\\"' : raw[j];
+          j++;
+        }
+      }
+      result += '"' + inner + '"';
+      i = j + 1;
+      continue;
+    }
+
+    // --- Line comment: skip to EOL --------------------------------
+    if (ch === '/' && i + 1 < len && raw[i + 1] === '/') {
+      i += 2;
+      while (i < len && raw[i] !== '\n') i++;
+      continue;
+    }
+
+    // --- Block comment: skip to closing *​/ -------------------------
+    if (ch === '/' && i + 1 < len && raw[i + 1] === '*') {
+      i += 2;
+      while (i + 1 < len && !(raw[i] === '*' && raw[i + 1] === '/')) i++;
+      i += 2; // skip closing */
+      continue;
+    }
+
+    result += ch;
+    i++;
+  }
+
+  // Remove trailing commas before } or ]
+  result = result.replace(/,\s*([}\]])/g, '$1');
+
+  // Wrap unquoted object keys:  { foo: … }  →  { "foo": … }
+  // Matches a word at a position where a JSON key is expected (after { or ,).
+  result = result.replace(/([\{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
+
+  return result;
+}
+
 function extractJsonRefs(source: string): ExtractedReference[] {
   const refs: ExtractedReference[] = [];
   let parsed: any;
-  try { parsed = JSON.parse(source); } catch { return refs; }
+  try { parsed = JSON.parse(stripJsoncSyntax(source)); } catch { return refs; }
 
   const check = (val: unknown, line: number) => {
     if (typeof val === 'string' && isRelativeLike(val) && val.includes('/')) {
