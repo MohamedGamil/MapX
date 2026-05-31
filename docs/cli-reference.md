@@ -86,6 +86,12 @@ mapx update [/path]
 mapx sync [/path]
 ```
 
+Options:
+- `--exclude` — Exclude glob patterns (repeatable)
+- `--include` — Include glob patterns (repeatable)
+- `--repo` — Update only a specific registered repository
+- `--all` — Update all registered repositories
+
 ## `mapx status`
 
 Show scan metrics, collected data, graph statistics, and git changes since the last scan.
@@ -151,12 +157,48 @@ Show dependencies (what the file depends on) and reverse dependencies (what depe
 mapx deps <file> [--dir /path]
 ```
 
-## `mapx trace <symbol>`
+The file argument supports multiple matching strategies:
+1. **Exact path** — matches an indexed file directly
+2. **Glob/wildcard** — `*`, `?`, `**` patterns against all tracked paths (returns all matches)
+3. **Substring** — partial path match as fallback
 
-Trace data flow paths from a symbol or file.
+Multiple matched files are all reported.
+
+Examples:
+```bash
+mapx deps src/app.ts                # Exact match
+mapx deps 'src/core/*.ts'           # Glob — all .ts files in src/core/
+mapx deps scanner                   # Substring — any file containing "scanner"
+```
+
+## `mapx trace [symbol-or-file]`
+
+Trace data flow paths from a starting symbol or file.
 
 ```bash
-mapx trace <symbol> [--dir /path] [--depth <n>]
+mapx trace [symbol-or-file] [--dir /path] [--direction <dir>] [--depth <n>] [--max-depth <n>]
+                            [--format <fmt>] [--include-structural] [--sources] [--sinks]
+                            [--to <target>]
+```
+
+Options:
+- `--direction` — Trace direction: `up`, `down`, `both` (default: `both`)
+- `--depth` — Maximum traversal depth (default: 3)
+- `--max-depth` — Alias for `--depth`
+- `--format` — Output format: `text` (default), `dot`, `json`
+- `--include-structural` — Include import/extends edges in trace (default: false)
+- `--sources` — Show entry points instead of tracing a symbol
+- `--sinks` — Show terminal consumers instead of tracing a symbol
+- `--to` — Find the shortest critical path from the start to a target symbol/file
+
+Examples:
+```bash
+mapx trace handleRequest               # Bidirectional trace
+mapx trace handleRequest --direction up # Upstream only
+mapx trace --sources                    # List all entry points
+mapx trace --sinks                      # List all terminal consumers
+mapx trace Store --to FlowTracer        # Shortest path between symbols
+mapx trace Store --format json          # JSON output
 ```
 
 ## `mapx callers <symbol>`
@@ -214,8 +256,8 @@ mapx files [--path <prefix_or_glob>] [--lang <language>] [--sort <sort>] [--limi
 Options:
 - `--path` — Filter by file path prefix **or glob pattern** (e.g. `src/core/`, `src/core/*.ts`, `**/*.json`)
 - `--lang` — Filter by language
-- `--sort` — Sort by: `name`, `lines`, `size`, `pagerank` (default: `name`)
-- `--limit` — Max results (default: 100)
+- `--sort` — Sort by: `path`, `lines` (default: `path`)
+- `--limit` — Max results (default: 50)
 
 Examples:
 ```bash
@@ -230,7 +272,22 @@ mapx files --lang typescript --sort lines --limit 20
 List detected code clusters/modules.
 
 ```bash
-mapx clusters [--dir /path]
+mapx clusters [clusterOrPath] [--dir /path] [--source <source>] [--json]
+```
+
+Options:
+- `[clusterOrPath]` — Target directory or a specific cluster name to inspect
+- `--source` — Filter by cluster source: `namespace`, `directory`, `community`, `layer`, or `all` (default: `all`)
+- `--json` — Output results as JSON
+
+When a specific cluster name is given, shows detailed information including member files, dependencies ("depends on"), and reverse dependencies ("depended on by").
+
+Examples:
+```bash
+mapx clusters                          # List all clusters
+mapx clusters --source layer           # Only architectural layer clusters
+mapx clusters --source community       # Only community-detected clusters
+mapx clusters core --json              # Inspect a specific cluster as JSON
 ```
 
 ## `mapx export`
@@ -251,7 +308,7 @@ Options:
 - `-o, --output <file>` — Write output to file instead of stdout
 - `--exclude` — Exclude glob patterns
 - `--include` — Include glob patterns
-- `--cluster` — Cluster rendering for DOT/SVG: `none` (flat) or `auto` (default, with subgraph blocks)
+- `--cluster` — Cluster rendering for DOT/SVG: `none` (default, flat) or `auto` (with subgraph blocks)
 - `--depth` — Maximum cluster nesting depth for DOT/SVG
 - `--delimiter` — Delimiter for TOON format: `comma`, `tab`, `pipe` (default: `comma`)
 - `--key-folding` — Collapse single-key chains into dotted paths for TOON
@@ -315,8 +372,14 @@ mapx lang uninstall python
 Start the bundled lightweight web dashboard for interactive graph visualization.
 
 ```bash
-mapx ui [--port <port>] [--dir /path]
+mapx ui [path] [--port <port>] [--host <host>] [--token <token>] [--no-open] [--dir /path]
 ```
+
+Options:
+- `--port` — Port to run UI on (default: 45124)
+- `--host` — Host to bind to (default: 127.0.0.1)
+- `--token` — Bearer token for authorization
+- `--no-open` — Do not open the dashboard in the browser automatically
 
 ## `mapx workspaces`
 
@@ -418,6 +481,10 @@ Options:
 - `--sse` — Enable SSE (HTTP) transport instead of stdio
 - `--port <port>` — Port for SSE transport (default: 45123)
 - `--debug` — Enable verbose debug logging of MCP calls to stderr (logs request names, parameters, durations, and status)
+- `--ui` — Enable UI dashboard alongside MCP server
+- `--ui-port <port>` — Port to run UI on (default: 45124)
+- `--ui-host <host>` — Host to run UI on (default: 127.0.0.1)
+- `--ui-token <token>` — Bearer token for UI authorization
 
 On startup, prints ready-to-copy configuration snippets for Claude Desktop, Cursor, and VS Code. SSE mode additionally prints the connection URL and messages endpoint.
 
@@ -430,6 +497,153 @@ mapx serve --sse --port 3456 --dir /path/to/project  # SSE on port 3456
 ```
 
 See [MCP Integration](mcp-integration.md) for full client configuration details.
+
+## `mapx sources`
+
+Find entry points (data sources) in the codebase.
+
+```bash
+mapx sources [--dir /path]
+```
+
+Identifies files with no incoming data-bearing edges — route files, queue workers, event listeners, and middleware entry points.
+
+## `mapx sinks`
+
+Find terminal consumers (data sinks) in the codebase.
+
+```bash
+mapx sinks [--dir /path]
+```
+
+Identifies files with no outgoing data-bearing edges — database facades, cache managers, mail senders, and queue dispatchers.
+
+## `mapx context <task>`
+
+Generate task-specific workspace context within a token budget.
+
+```bash
+mapx context <task> [--dir /path] [--seeds <list>] [--tokens <budget>] [--depth <n>] [--format <format>]
+```
+
+Options:
+- `--seeds` — Comma-separated list of seed symbols or file paths to anchor the context around
+- `--tokens` — Maximum estimated token budget (default: 8192)
+- `--depth` — Graph traversal depth (default: 2)
+- `--format` — Output format: `text` (default) or `json`
+
+Examples:
+```bash
+mapx context 'Add validation to the signup flow'                       # Basic
+mapx context 'Refactor scanner' --seeds Scanner,Store --tokens 16384   # Seeded with higher budget
+mapx context 'Fix auth bug' --format json                              # JSON output
+```
+
+## `mapx metrics`
+
+Show coupling and instability metrics for files.
+
+```bash
+mapx metrics [path] [--dir /path] [--lang <language>] [--verified-only]
+```
+
+Options:
+- `--lang` — Filter metrics by language
+- `--verified-only` — Only compute metrics using verified edges
+
+Outputs a table with afferent coupling (Ca), efferent coupling (Ce), and instability index for each file.
+
+## `mapx edges`
+
+Granular query of dependency edges.
+
+```bash
+mapx edges [path] [--dir /path] [--type <type>] [--from <file>] [--to <file>]
+```
+
+Options:
+- `--type` — Filter edges by type (e.g. `call`, `import`, `instantiation`)
+- `--from` — Filter edges originating from a file pattern
+- `--to` — Filter edges targeting a file pattern
+
+## `mapx routes`
+
+Show routes from all detected frameworks.
+
+```bash
+mapx routes [path] [--dir /path] [--framework <name>] [--method <verb>] [--path-pattern <pattern>] [--json]
+```
+
+Options:
+- `--framework` — Filter by framework name
+- `--method` — Filter by HTTP method (GET, POST, etc.)
+- `--path-pattern` — Filter by route path pattern
+- `--json` — Output routes as JSON
+
+## `mapx hooks`
+
+Show hooks from all detected frameworks.
+
+```bash
+mapx hooks [path] [--dir /path] [--framework <name>] [--type <type>] [--name <pattern>] [--json]
+```
+
+Options:
+- `--framework` — Filter by framework name
+- `--type` — Filter by hook type
+- `--name` — Filter by hook name pattern
+- `--json` — Output hooks as JSON
+
+## `mapx agents list`
+
+List all supported LLM integration providers.
+
+```bash
+mapx agents list
+```
+
+## `mapx agents generate`
+
+Generate or overwrite LLM integration files.
+
+```bash
+mapx agents generate [--providers <list>] [--all] [--dry-run] [--force] [--mcp-port <number>]
+```
+
+Options:
+- `--providers` — Comma-separated list of providers to generate
+- `--all` — Generate integration files for all supported providers
+- `--dry-run` — Show actions without writing files
+- `--force` — Force overwrite of existing files without prompt
+- `--mcp-port` — Port for the MCP SSE transport server (default: 3456)
+
+When run interactively without flags, presents a multi-select prompt to choose providers.
+
+## `mapx agents update`
+
+Update existing LLM integration files to the current MapxGraph version.
+
+```bash
+mapx agents update [--dry-run] [--force] [--mcp-port <number>]
+```
+
+Options:
+- `--dry-run` — Show updates without writing files
+- `--force` — Force overwrite of customized blocks without prompt
+- `--mcp-port` — Port for the MCP SSE transport server (default: 3456)
+
+Only updates files that already exist; does not create new ones.
+
+## Static File Indexing
+
+MapX indexes static files (Markdown, HTML, CSS, JSON) for dependency tracking without symbol extraction:
+
+| File Type | Extensions | Extracted References |
+|-----------|-----------|---------------------|
+| Markdown | `.md`, `.mdx`, `.markdown` | Links (`[text](path)`) to other markdown files |
+| HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
+| CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
+| JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
 
 ## Installing GraphViz
 

@@ -146,7 +146,7 @@ This project uses **MapxGraph** — a local code graph memory system that provid
 
 ## What MapxGraph Does
 
-MapxGraph scans source files across **22 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`.
+MapxGraph scans source files across **22 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
 
 This means you (the LLM) can quickly understand the codebase structure without reading every file.
 
@@ -170,7 +170,7 @@ mapx -d /path/to/project scan
 
 - \`mapx init [path]\` - First-time setup (auto-adds .mapx/ to .gitignore, discovers monorepo packages & nested repos)
 - \`mapx uninit [path]\` - Remove .mapx/ and reverse integration changes
-- \`mapx scan [path]\` - Full scan
+- \`mapx scan [path]\` - Full scan (use \`--force\` to bypass cache)
 - \`mapx update [path]\` (alias: \`sync\`) - Incremental update (fast)
 - \`mapx status [path]\` - Check what changed since last scan
 - \`mapx export [--dir path]\` - Export compact graph summary
@@ -178,15 +178,19 @@ mapx -d /path/to/project scan
 - \`mapx export --cluster <mode> --depth <n>\` - Cluster-aware DOT/SVG export
 - \`mapx query <symbol> [--dir path]\` - Search for symbols (supports glob patterns: \`*Service\`, \`get*\`)
 - \`mapx search <term> [--dir path] [--kind kind] [--file prefix] [--exact] [--limit limit] [--format text|json]\` - Advanced filtered search with auto-expand and fuzzy fallback
-- \`mapx deps <file> [--dir path]\` - Show dependencies for a file
+- \`mapx deps <file> [--dir path]\` - Show dependencies for a file (supports glob/wildcard/substring matching)
 - \`mapx summary [path]\` - Project summary
-- \`mapx clusters [--dir path]\` - List detected clusters/modules
+- \`mapx clusters [--dir path] [--source source] [--json]\` - List detected clusters/modules (filter by source: namespace, directory, community, layer)
 - \`mapx trace <symbol> [--dir path]\` - Trace data flow
 - \`mapx sources [--dir path]\` - Find entry points (data sources) in the codebase
 - \`mapx sinks [--dir path]\` - Find terminal consumers (data sinks) in the codebase
 - \`mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]\` - Generate task-specific workspace context
 - \`mapx callers <symbol> [--dir path] [--depth depth]\` - Trace callers of a symbol (fuzzy fallback on typos)
 - \`mapx callees <symbol> [--dir path] [--depth depth]\` - Trace callees of a symbol (fuzzy fallback on typos)
+- \`mapx metrics [path]\` - Show coupling and instability metrics
+- \`mapx edges [path] [--type type] [--from file] [--to file]\` - Query dependency edges
+- \`mapx routes [path] [--framework name] [--method verb] [--json]\` - Show framework routes
+- \`mapx hooks [path] [--framework name] [--type type] [--json]\` - Show framework hooks
 - \`mapx impact <symbol> [--dir path] [--depth depth]\` - Change impact analysis with fuzzy pre-check
 - \`mapx node <symbol> [--dir path] [--source] [--format text|json]\` - Inspect a symbol node with optional source code
 - \`mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]\` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)

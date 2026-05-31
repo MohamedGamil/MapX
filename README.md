@@ -60,6 +60,7 @@
 - [Supported Languages](#supported-languages)
   - [Built-in (Tier 1) — Dedicated Parsers](#built-in-tier-1--dedicated-parsers)
   - [Bundled (Tier 2) — Generic WASM Parsers (Always Available)](#bundled-tier-2--generic-wasm-parsers-always-available)
+  - [Static (Index-only) — Dependency Tracking Without Symbol Extraction](#static-index-only--dependency-tracking-without-symbol-extraction)
 - [Agentic Integration](#agentic-integration)
 - [Storage](#storage)
 - [Architecture](#architecture)
@@ -77,7 +78,7 @@
 
 ## Features
 
-- **22 languages** — all built-in or bundled with the package out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart)
+- **22 languages + static file indexing** — all built-in or bundled with the package out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart) plus dependency-only indexing for Markdown, HTML, CSS/SCSS/Sass/Less, and JSON/JSONC/JSON5 files
 - **Deep symbol extraction** — classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, namespaces — with full import/inheritance/instantiation reference tracking
 - **Incremental scans** — git-aware change detection; only re-parses files that changed
 - **Fast** — parallelised file reads, bounded WASM concurrency, batched SQLite writes
@@ -203,14 +204,21 @@ mapx -d /path/to/project export
 | `mapx status [path]` | Show graph metrics, language breakdown, PageRank rankings, git changes |
 | `mapx query <term>` | Search symbols by name — supports glob patterns (`*Service`, `get*`) and fuzzy suggestions |
 | `mapx search <term>` | Advanced symbol search with `--kind`, `--file`, `--exact`, `--limit`, `--format` filters and auto-expand |
-| `mapx deps <file>` | Show dependencies and reverse-dependencies |
+| `mapx deps <file>` | Show dependencies and reverse-dependencies (supports glob/wildcard/substring matching) |
 | `mapx trace <symbol>` | Trace data flow paths from a symbol |
 | `mapx callers <symbol>` | Show direct and nested callers (with fuzzy fallback) |
 | `mapx callees <symbol>` | Show direct and nested callees (with fuzzy fallback) |
 | `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring (with fuzzy pre-check) |
+| `mapx sources` | Find entry points (data sources) in the codebase |
+| `mapx sinks` | Find terminal consumers (data sinks) in the codebase |
+| `mapx context <task>` | Generate task-specific workspace context within a token budget |
+| `mapx metrics` | Show coupling and instability metrics for files |
+| `mapx edges` | Granular query of dependency edges |
+| `mapx routes` | Show routes from all detected frameworks |
+| `mapx hooks` | Show hooks from all detected frameworks |
 | `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, and `--format json` |
 | `mapx files` | List and filter files with `--path` (prefix or glob), `--lang`, `--sort`, `--limit` |
-| `mapx clusters` | List detected code clusters/modules |
+| `mapx clusters` | List detected code clusters/modules (filter with `--source layer\|community\|namespace\|directory`) |
 | `mapx export` | Export graph (default: LLM summary, 8K tokens) |
 | `mapx export --format=json` | Full graph as JSON |
 | `mapx export --format=dot` | GraphViz DOT (with `--cluster` and `--depth`) |
@@ -376,6 +384,15 @@ See [docs/getting-started.md](docs/getting-started.md#programmatic-usage) for a 
 | Pascal | `.pas`, `.pp` | classes, records, interfaces, methods, functions, constants, units |
 | Dart | `.dart` | classes, functions, enums, mixins, extensions |
 
+### Static (Index-only) — Dependency Tracking Without Symbol Extraction
+
+| File Type | Extensions | Tracked References |
+|-----------|-----------|-------------------|
+| Markdown | `.md`, `.mdx`, `.markdown` | Links to other markdown files |
+| HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
+| CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
+| JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
+
 All languages track **imports**, **inheritance/implementation**, **instantiation**, and **calls** where applicable. See [docs/adding-languages.md](docs/adding-languages.md) to add your own.
 
 ---
@@ -485,7 +502,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | Doc | Description |
 |-----|-------------|
 | [Getting Started](docs/getting-started.md) | Installation, quick start, supported languages |
-| [CLI Reference](docs/cli-reference.md) | All 31 commands and their flags |
+| [CLI Reference](docs/cli-reference.md) | All commands and their flags |
 | [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 26 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
