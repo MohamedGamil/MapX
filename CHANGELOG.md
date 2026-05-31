@@ -10,8 +10,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Added
 - **Architecture & Health UI Revamp**: Re-architected the layout of the Architecture & Health panel.
-  - Sized columns to a more balanced ratio (`1.4fr 1.6fr`) and constrained grid cards with `min-width: 0` to completely eliminate horizontal page overflow.
-  - Made left-side cards responsive by allowing flex items to wrap vertically on very narrow screens.
+  - Arranged the panel as a flat grid with top-row side-by-side cards (Codebase Profile and Smells) and a full-width bottom card (DSM matrix), completely eliminating horizontal page overflow.
+  - Made the top row cards stretch to equal height for a clean layout, while maintaining responsiveness by auto-stacking on narrower viewports (<1000px).
   - Replaced the static, raw-text codebase profile details with glassmorphic pills/badges (`.profile-pill`) for dominant languages, frameworks, and architectural patterns, and color-coded status badges for boolean flags.
   - Added a premium, dynamic SVG circular progress ring (health gauge) to the system health card.
   - Styled involved files in architectural smells as clickable badges (`.involved-file-badge`) that trigger programmatic graph navigation.

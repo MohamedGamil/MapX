@@ -1351,24 +1351,23 @@ body {
 /* Architecture Tab Styles */
 .grid-architecture {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.6fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
-  align-items: start;
   width: 100%;
   max-width: 100%;
 }
 
-@media (max-width: 1200px) {
+.card-dsm {
+  grid-column: span 2;
+}
+
+@media (max-width: 1000px) {
   .grid-architecture {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.arch-col-left, .arch-col-right {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  .card-dsm {
+    grid-column: span 1;
+  }
 }
 
 .arch-card {
