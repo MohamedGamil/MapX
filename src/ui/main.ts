@@ -19,13 +19,13 @@ tabs.forEach(tab => {
   tab.addEventListener('click', () => {
     tabs.forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    
+
     const target = tab.getAttribute('data-tab') || 'graph';
     document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
-    
+
     const targetPane = document.getElementById(`tab-${target}`);
     if (targetPane) targetPane.classList.add('active');
-    
+
     currentTab = target;
     if (currentTab === 'graph') {
       setTimeout(() => {
@@ -64,11 +64,11 @@ function toolCallId(data: any): string {
 function renderToolCallEntry(data: any): HTMLElement {
   const entry = document.createElement('div');
   entry.className = 'log-entry';
-  
+
   const timeStr = new Date(data.timestamp || Date.now()).toLocaleTimeString();
   const durationStr = data.durationMs != null ? ` <span class="log-duration">${data.durationMs}ms</span>` : '';
   const statusIcon = data.success === false ? '❌' : '✅';
-  
+
   entry.innerHTML = `
     <span class="log-time">[${timeStr}]</span>
     <span class="log-status">${statusIcon}</span>
@@ -128,7 +128,7 @@ function setupSSE() {
       const id = toolCallId(data);
       if (seenToolCallIds.has(id)) return; // Skip duplicates
       seenToolCallIds.add(id);
-      
+
       if (logContainer) {
         const placeholder = logContainer.querySelector('.log-placeholder');
         if (placeholder) placeholder.remove();
@@ -144,7 +144,7 @@ function setupSSE() {
       const data = JSON.parse(event.data);
       const indicator = document.getElementById('repo-name');
       if (indicator) {
-        indicator.textContent = `Scanning: ${data.current}/${data.total} (${Math.round((data.current/data.total)*100)}%)`;
+        indicator.textContent = `Scanning: ${data.current}/${data.total} (${Math.round((data.current / data.total) * 100)}%)`;
       }
     } catch (err) {
       console.error(err);
@@ -175,11 +175,11 @@ async function loadStatus() {
     const res = await fetch('/api/status');
     if (!res.ok) return;
     const status = await res.json();
-    
+
     lastFileCount = status.fileCount || 0;
     lastSymbolCount = status.symbolCount || 0;
     lastEdgeCount = status.edgeCount || 0;
-    
+
     document.getElementById('repo-name')!.textContent = status.repoName || 'MapX Project';
     document.getElementById('stat-files')!.textContent = String(lastFileCount);
     document.getElementById('stat-symbols')!.textContent = String(lastSymbolCount);
@@ -230,22 +230,22 @@ function getTagsStorageKey(): string {
 
 // Architectural layer color palette (matches LAYER_LABELS in cluster-engine.ts)
 const LAYER_COLORS: Record<string, string> = {
-  'layer:entry':      '#e06c75',  // red   — entry points / CLI
-  'layer:api':        '#61afef',  // blue  — API / routes
-  'layer:core':       '#56b6c2',  // cyan  — core logic
-  'layer:parsers':    '#d19a66',  // amber — parsers
-  'layer:exporters':  '#c678dd',  // purple — exporters
-  'layer:agents':     '#e5c07b',  // gold  — agents
+  'layer:entry': '#e06c75',  // red   — entry points / CLI
+  'layer:api': '#61afef',  // blue  — API / routes
+  'layer:core': '#56b6c2',  // cyan  — core logic
+  'layer:parsers': '#d19a66',  // amber — parsers
+  'layer:exporters': '#c678dd',  // purple — exporters
+  'layer:agents': '#e5c07b',  // gold  — agents
   'layer:frameworks': '#98c379',  // green — frameworks
-  'layer:ui':         '#c678dd',  // purple — UI/frontend
-  'layer:data':       '#e5c07b',  // yellow — data layer
-  'layer:utils':      '#abb2bf',  // gray  — utilities
-  'layer:types':      '#56b6c2',  // teal  — types
-  'layer:config':     '#5c6370',  // dark-gray — config
-  'layer:scripts':    '#4b5263',  // darker — scripts
-  'layer:test':       '#98c379',  // green — tests
-  'layer:docs':       '#7a8394',  // muted — docs
-  'layer:other':      '#4b5263',  // darkest — other
+  'layer:ui': '#c678dd',  // purple — UI/frontend
+  'layer:data': '#e5c07b',  // yellow — data layer
+  'layer:utils': '#abb2bf',  // gray  — utilities
+  'layer:types': '#56b6c2',  // teal  — types
+  'layer:config': '#5c6370',  // dark-gray — config
+  'layer:scripts': '#4b5263',  // darker — scripts
+  'layer:test': '#98c379',  // green — tests
+  'layer:docs': '#7a8394',  // muted — docs
+  'layer:other': '#4b5263',  // darkest — other
 };
 
 function saveCustomTags() {
@@ -281,31 +281,31 @@ function getAllUsedTags(): string[] {
 // Color mapping for HTTP route method badges
 function getRouteMethodColor(method: string): string {
   switch ((method || '').toUpperCase()) {
-    case 'GET':     return '#10b981'; // emerald
-    case 'POST':    return '#3b82f6'; // blue
-    case 'PUT':     return '#f59e0b'; // amber
-    case 'PATCH':   return '#14b8a6'; // teal
-    case 'DELETE':  return '#ef4444'; // red
-    case 'HEAD':    return '#6366f1'; // indigo
+    case 'GET': return '#10b981'; // emerald
+    case 'POST': return '#3b82f6'; // blue
+    case 'PUT': return '#f59e0b'; // amber
+    case 'PATCH': return '#14b8a6'; // teal
+    case 'DELETE': return '#ef4444'; // red
+    case 'HEAD': return '#6366f1'; // indigo
     case 'OPTIONS': return '#8b5cf6'; // violet
-    case 'ANY':     return '#a855f7'; // purple
-    case 'MATCH':   return '#ec4899'; // pink
-    default:        return '#64748b'; // slate
+    case 'ANY': return '#a855f7'; // purple
+    case 'MATCH': return '#ec4899'; // pink
+    default: return '#64748b'; // slate
   }
 }
 
 // Color mapping for hook type badges
 function getHookTypeColor(hookType: string): string {
   const t = (hookType || '').toLowerCase();
-  if (t.includes('middleware'))         return '#6366f1'; // indigo
+  if (t.includes('middleware')) return '#6366f1'; // indigo
   if (t.includes('event') || t.includes('listener')) return '#06b6d4'; // cyan
-  if (t.includes('filter'))            return '#f59e0b'; // amber
-  if (t.includes('action'))            return '#f43f5e'; // rose
+  if (t.includes('filter')) return '#f59e0b'; // amber
+  if (t.includes('action')) return '#f43f5e'; // rose
   if (t.includes('lifecycle') || t.includes('init') || t.includes('boot') || t.includes('destroy')) return '#14b8a6'; // teal
   if (t.includes('service_provider') || t.includes('provider')) return '#8b5cf6'; // violet
-  if (t.includes('guard'))             return '#ef4444'; // red
-  if (t.includes('pipe'))              return '#22d3ee'; // cyan-light
-  if (t.includes('interceptor'))       return '#a855f7'; // purple
+  if (t.includes('guard')) return '#ef4444'; // red
+  if (t.includes('pipe')) return '#22d3ee'; // cyan-light
+  if (t.includes('interceptor')) return '#a855f7'; // purple
   if (t.includes('resolver') || t.includes('query') || t.includes('mutation')) return '#3b82f6'; // blue
   if (t.includes('subscriber') || t.includes('subscription')) return '#ec4899'; // pink
   return '#64748b'; // slate fallback
@@ -322,8 +322,8 @@ function getLayoutConfigForName(layoutName: string, elementCount?: number): any 
       // 'draft' skips fCoSE's overlap-removal pass which is the main cause of
       // nodes stacking on top of each other.
       const fcoseIter = (elementCount || 0) > 500 ? 500
-                      : (elementCount || 0) > 200 ? 1000
-                      : 2500;
+        : (elementCount || 0) > 200 ? 1000
+          : 2500;
       // Node separation scales up for denser graphs so there is always enough
       // space between nodes regardless of how many edges share a region.
       const fcoseSep = (elementCount || 0) > 200 ? 160 : 120;
@@ -399,24 +399,52 @@ function getLayoutConfigForName(layoutName: string, elementCount?: number): any 
         rankDir: 'TB',
         nodeDimensionsIncludeLabels: true,
       };
-    case 'elk':
+    case 'elk': {
+      // Partition numbers define vertical bands (lower = higher in DOWN layout).
+      // Files with the same extension land in the same horizontal layer; unrelated
+      // file-type groups that share no edges form fully separate tree structures.
+      const EXT_PARTITION: Record<string, number> = {
+        ts: 1, tsx: 1, mts: 1, cts: 1,
+        js: 2, jsx: 2, mjs: 2, cjs: 2,
+        json: 3, yaml: 3, yml: 3, toml: 3,
+        html: 4, css: 4, scss: 4, sass: 4, less: 4, svelte: 4, vue: 4,
+        md: 5, mdx: 5, txt: 5,
+        sh: 6, bash: 6, zsh: 6,
+        scm: 7,
+      };
       return {
         name: 'elk',
         animate: baseAnimate,
         fit: true,
-        padding: 50,
+        padding: 60,
         nodeDimensionsIncludeLabels: true,
+        nodeLayoutOptions: (node: any) => {
+          // Only partition file nodes; leave cluster/compound nodes unassigned
+          if (node.data('type') !== 'file') return {};
+          const id: string = node.data('id') || '';
+          const ext = id.includes('.') ? (id.split('.').pop()?.toLowerCase() ?? '') : '';
+          return { 'elk.partitioning.partition': EXT_PARTITION[ext] ?? 0 };
+        },
         elk: {
-          algorithm: 'mrtree',
-          'nodeDimensionsIncludeLabels': true,
+          algorithm: 'layered',
           'elk.direction': 'DOWN',
-          'spacing.nodeNode': 50,
-          'spacing.edgeNode': 25,
-          'spacing.nodeNodeBetweenLayers': 60,
-          'layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-          'layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+          'elk.nodeDimensionsIncludeLabels': true,
+          'elk.partitioning.activate': true,
+          'elk.layered.spacing.nodeNodeBetweenLayers': 60,
+          'elk.spacing.nodeNode': 25,
+          'elk.spacing.edgeNode': 20,
+          'elk.spacing.edgeEdge': 10,
+          'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+          'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+          'elk.layered.compaction.postCompaction.strategy': 'LEFT_RIGHT_CONSTRAINT_LOCKING',
+          'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+          'elk.separateConnectedComponents': true,
+          'elk.spacing.componentComponent': 40,
+          'elk.edgeRouting': 'ORTHOGONAL',
+          'elk.aspectRatio': 1.7,
         },
       };
+    }
     case 'concentric':
       return {
         name: 'concentric',
@@ -502,7 +530,7 @@ function buildDirectoryAggregatedElements(rawElements: any[], useClusters: boole
       const isRoot = dir === 'root';
       const hasParent = !isRoot && dir.includes('/');
       const parentId = hasParent ? `dir:${dir.substring(0, dir.lastIndexOf('/'))}` : (isRoot ? null : 'dir:root');
-      
+
       const nodeEl: any = {
         data: {
           id: `dir:${dir}`,
@@ -674,8 +702,8 @@ function buildFocusModeElements(rawElements: any[], seedId: string, depth: numbe
 function buildProximityClusterElements(): any[] {
   // 1. Get filtered nodes and edges
   const fileNodes = rawGraphElements.filter(el => el.data && el.data.type === 'file' && !removedNodes.has(el.data.id));
-  const edges = rawGraphElements.filter(el => 
-    el.data && el.data.source && el.data.target && 
+  const edges = rawGraphElements.filter(el =>
+    el.data && el.data.source && el.data.target &&
     !removedEdges.has(el.data.id) &&
     !removedNodes.has(el.data.source) && !removedNodes.has(el.data.target)
   );
@@ -692,7 +720,7 @@ function buildProximityClusterElements(): any[] {
 
   // Determine file-to-cluster assignment based on grouping strategy
   const fileToCluster = new Map<string, string>();
-  
+
   // Community map
   const communityMap = new Map<string, string>();
   if (rawClustersData && rawClustersData.memberships) {
@@ -994,7 +1022,7 @@ function runLayout(layoutConfig: any) {
 
 function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
   let processed: any[] = [];
-  
+
   if (!useClusters) {
     // Return copy of elements without parent fields
     processed = rawElements.map(el => {
@@ -1007,7 +1035,7 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
     });
   } else {
     const filesByDirectory: { [dirId: string]: any[] } = {};
-    
+
     const getParentId = (filePath: string): string => {
       const parts = filePath.split('/');
       return parts.length > 1 ? `dir:${parts.slice(0, -1).join('/')}` : 'dir:root';
@@ -1029,7 +1057,7 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
     // Get and sort directory IDs
     const dirIds = Object.keys(filesByDirectory).sort();
     const N = dirIds.length;
-    
+
     // Calculate grid layout parameters for clear separation
     const cols = 3;
     const W = 550;
@@ -1114,7 +1142,7 @@ function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
             };
           }
         }
-        
+
         // Push files to elements list
         processed.push(...files);
       }
@@ -1242,7 +1270,12 @@ async function loadGraph() {
   try {
     const res = await fetch('/api/graph');
     if (!res.ok) { hideOverlay(); return; }
-    rawGraphElements = await res.json();
+    rawGraphElements = (await res.json()).filter((el: any) => {
+      // Drop self-loop edges (source === target) — they are scanner artifacts
+      // and produce an "invalid endpoints" warning in cytoscape
+      if (el.data && el.data.source && el.data.target && el.data.source === el.data.target) return false;
+      return true;
+    });
 
     const container = document.getElementById('cy');
     if (!container) return;
@@ -1414,6 +1447,25 @@ async function loadGraph() {
             'line-color': 'rgba(152, 195, 121, 0.7)',
             'target-arrow-color': 'rgba(152, 195, 121, 0.7)'
           }
+        },
+        {
+          selector: 'edge[source = target]',
+          style: {
+            // Self-edges should not use taxi/straight/segments.
+            'curve-style': 'bezier',
+
+            // Makes the self-loop visible instead of collapsed.
+            'loop-direction': '45deg',
+            'loop-sweep': '120deg',
+
+            // Gives the loop enough size to avoid invalid endpoints.
+            'control-point-step-size': 70,
+
+            'source-endpoint': 'outside-to-node',
+            'target-endpoint': 'outside-to-node',
+
+            'target-arrow-shape': 'triangle',
+          },
         },
         {
           selector: 'edge[type="cluster-dependency"]',
@@ -1939,13 +1991,13 @@ async function loadGraph() {
       const id = node.id();
       const isCluster = node.data('type') === 'parent';
       const label = isCluster ? id.replace('dir:', '') : id;
-      
+
       const outgoingEdges = node.outgoers('edge');
       const incomingEdges = node.incomers('edge');
-      
+
       let html = `<div class="flows-section">`;
       html += `<div class="flows-title">Related Flows</div>`;
-      
+
       // Outgoing Group (Collapsible details, collapsed by default)
       html += `<details class="flow-details-el">`;
       html += `<summary class="flow-summary-el">`;
@@ -1953,7 +2005,7 @@ async function loadGraph() {
       html += `<span class="flow-group-title outgoing" style="margin: 0; display: inline-flex;">Outgoing (Dependencies)</span>`;
       html += `</summary>`;
       html += `<div class="flow-content-el">`;
-      
+
       if (outgoingEdges && outgoingEdges.length > 0) {
         html += `<ul class="flow-list">`;
         outgoingEdges.forEach((edge: any) => {
@@ -1962,7 +2014,7 @@ async function loadGraph() {
           const targetNode = edge.target();
           const targetId = targetNode.id();
           const targetLabel = targetNode.data('type') === 'parent' ? targetId.replace('dir:', '') : targetId;
-          
+
           html += `
             <li class="flow-item">
               <span class="flow-current">${label}</span>
@@ -1978,7 +2030,7 @@ async function loadGraph() {
       }
       html += `</div>`;
       html += `</details>`;
-      
+
       // Incoming Group (Collapsible details, collapsed by default)
       html += `<details class="flow-details-el">`;
       html += `<summary class="flow-summary-el">`;
@@ -1986,7 +2038,7 @@ async function loadGraph() {
       html += `<span class="flow-group-title incoming" style="margin: 0; display: inline-flex;">Incoming (Dependents)</span>`;
       html += `</summary>`;
       html += `<div class="flow-content-el">`;
-      
+
       if (incomingEdges && incomingEdges.length > 0) {
         html += `<ul class="flow-list">`;
         incomingEdges.forEach((edge: any) => {
@@ -1995,7 +2047,7 @@ async function loadGraph() {
           const sourceNode = edge.source();
           const sourceId = sourceNode.id();
           const sourceLabel = sourceNode.data('type') === 'parent' ? sourceId.replace('dir:', '') : sourceId;
-          
+
           html += `
             <li class="flow-item">
               <button type="button" class="flow-clickable-node incoming-node" data-go-id="${sourceId}">${sourceLabel}</button>
@@ -2012,7 +2064,7 @@ async function loadGraph() {
       }
       html += `</div>`;
       html += `</details>`;
-      
+
       html += `</div>`;
       return html;
     }
@@ -2050,7 +2102,7 @@ async function loadGraph() {
       const node = evt.target;
       const data = node.data();
       const details = document.getElementById('details-content');
-      
+
       // If tapping a collapsed cluster-group node, enter drill-down view
       if (data.type === 'cluster-group') {
         activeClusterId = data.id;
@@ -2102,7 +2154,7 @@ async function loadGraph() {
             const parentData = node.parent().data();
             clusterLabel = parentData?.label || parentData?.id || '';
           }
-          
+
           details.innerHTML = `
             <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
@@ -2446,12 +2498,12 @@ async function loadSymbolDetails(name: string) {
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callers (${data.callers.length})</span>
           <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
             ${data.callers.map((c: any) => {
-              const name = c.source_symbol;
-              if (name && name !== '<top-level>') {
-                return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.source_file}</span></li>`;
-              }
-              return `<li style="margin-bottom: 4px; color: #5c6370;"><span style="color: #5c6370;">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
-            }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
+      const name = c.source_symbol;
+      if (name && name !== '<top-level>') {
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.source_file}</span></li>`;
+      }
+      return `<li style="margin-bottom: 4px; color: #5c6370;"><span style="color: #5c6370;">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
+    }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
@@ -2459,12 +2511,12 @@ async function loadSymbolDetails(name: string) {
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callees (${data.callees.length})</span>
           <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
             ${data.callees.map((c: any) => {
-              const name = c.target_symbol;
-              if (name) {
-                return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.target_file}</span></li>`;
-              }
-              return `<li style="margin-bottom: 4px; color: #5c6370;">in ${c.target_file}</li>`;
-            }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
+      const name = c.target_symbol;
+      if (name) {
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.target_file}</span></li>`;
+      }
+      return `<li style="margin-bottom: 4px; color: #5c6370;">in ${c.target_file}</li>`;
+    }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
@@ -2618,7 +2670,7 @@ async function loadMetrics() {
     if (gitStorageDiv) {
       const dbSizeKB = metrics.dbSize != null ? (metrics.dbSize / 1024).toFixed(1) : '0';
       const git = metrics.git || {};
-      
+
       let gitStatusHTML = '';
       if (!git.isGit) {
         gitStatusHTML = '<div><strong>Git Repository:</strong> No git repository detected</div>';
@@ -2707,33 +2759,33 @@ function setupContextBuilder() {
             <div>
               <strong>Key Context Files:</strong>
               <ul style="padding-left:20px; margin-top:5px; display: flex; flex-direction: column; gap: 4px;">
-                ${context.files && context.files.length > 0 
-                  ? context.files.map((f: any) => `
+                ${context.files && context.files.length > 0
+            ? context.files.map((f: any) => `
                       <li>
                         <code>${f.path || f}</code> 
                         <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
                           (${f.language || 'unknown'} • ${f.lineCount || 0} lines)
                         </span>
                       </li>
-                    `).join('') 
-                  : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
-                }
+                    `).join('')
+            : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
+          }
               </ul>
             </div>
             <div>
               <strong>Relevant Entry Symbols:</strong>
               <ul style="padding-left:20px; margin-top:5px; display: flex; flex-direction: column; gap: 4px;">
-                ${context.symbols && context.symbols.length > 0 
-                  ? context.symbols.map((s: any) => `
+                ${context.symbols && context.symbols.length > 0
+            ? context.symbols.map((s: any) => `
                       <li>
                         <code>${s.name || s}</code> 
                         <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
                           (${s.kind || 'unknown'} • <code>${s.filePath || ''}</code>)
                         </span>
                       </li>
-                    `).join('') 
-                  : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
-                }
+                    `).join('')
+            : '<li style="color: var(--text-muted); list-style-type: none; margin-left: -20px;">None found</li>'
+          }
               </ul>
             </div>
           </div>
@@ -2780,17 +2832,17 @@ function startPeriodicPolling() {
         const fileCount = status.fileCount || 0;
         const symbolCount = status.symbolCount || 0;
         const edgeCount = status.edgeCount || 0;
-        
+
         if (fileCount !== lastFileCount || symbolCount !== lastSymbolCount || edgeCount !== lastEdgeCount) {
           lastFileCount = fileCount;
           lastSymbolCount = symbolCount;
           lastEdgeCount = edgeCount;
-          
+
           document.getElementById('repo-name')!.textContent = status.repoName || 'MapX Project';
           document.getElementById('stat-files')!.textContent = String(fileCount);
           document.getElementById('stat-symbols')!.textContent = String(symbolCount);
           document.getElementById('stat-edges')!.textContent = String(edgeCount);
-          
+
           const filterSelect = document.getElementById('filter-lang') as HTMLSelectElement;
           if (filterSelect && status.languages) {
             const currentVal = filterSelect.value;
@@ -2803,7 +2855,7 @@ function startPeriodicPolling() {
             });
             filterSelect.value = currentVal;
           }
-          
+
           // Reload graph and Explorer components to reflect changes
           loadGraph();
           loadSymbols(symbolSearchQuery);
@@ -2882,7 +2934,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailsContent = document.getElementById('details-content');
   detailsContent?.addEventListener('click', (e) => {
     const target = e.target as HTMLElement;
-    
+
     // 1. Remove Node action
     const removeNodeBtn = target.closest('.btn-action-remove-node');
     if (removeNodeBtn) {
@@ -2931,7 +2983,7 @@ document.addEventListener('DOMContentLoaded', () => {
           if (input) input.value = '';
           // Re-trigger selection to update details panel HTML
           selectedNode.trigger('tap');
-          
+
           // If current grouping strategy is custom, update graph display
           if (groupingStrategy === 'custom') {
             updateGraphDisplay();
@@ -2979,7 +3031,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const ele = cyInstance.getElementById(id);
         if (ele && ele.length > 0) {
           ele.trigger('tap');
-          
+
           // Focus/center the graph on the clicked element
           cyInstance.animate({
             center: { eles: ele }
