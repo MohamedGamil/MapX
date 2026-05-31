@@ -9,6 +9,14 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- **Architecture & Health UI Revamp**: Re-architected the layout of the Architecture & Health panel.
+  - Sized columns to a more balanced ratio (`1.4fr 1.6fr`) and constrained grid cards with `min-width: 0` to completely eliminate horizontal page overflow.
+  - Made left-side cards responsive by allowing flex items to wrap vertically on very narrow screens.
+  - Replaced the static, raw-text codebase profile details with glassmorphic pills/badges (`.profile-pill`) for dominant languages, frameworks, and architectural patterns, and color-coded status badges for boolean flags.
+  - Added a premium, dynamic SVG circular progress ring (health gauge) to the system health card.
+  - Styled involved files in architectural smells as clickable badges (`.involved-file-badge`) that trigger programmatic graph navigation.
+  - Implemented a global click listener for node navigation (`data-go-id`) that automatically handles Cytoscape animation and switches active tabs to the Graph Explorer.
+  - Unified badge styling and solved spacing issues by replacing inline styles with `.selection-badge` and `.smell-badge-mini` CSS classes with proper padding, typography, and margins (`margin-right: 8px`).
 - **Markdown Files Classification**: Configured markdown files (`.md`, `.markdown`, `.mdx`) to always be classified as `'docs'` (documentation) with 100% confidence by default.
 - **Selected File Details Enrichment**: Tapping a file node in the Graph Explorer now dynamically loads and displays its Smart Architecture Classification signals and a summary of any architectural smells it is involved in (including suggestions to resolve them).
 - **/api/explain API Endpoint**: Exposes classification signals for a specific file path.

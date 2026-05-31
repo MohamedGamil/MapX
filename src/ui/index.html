@@ -350,8 +350,16 @@
               <h3>Codebase Profile & Health</h3>
               <div class="profile-health-container">
                 <div class="health-gauge-card">
-                  <div class="health-badge-large" id="arch-health-badge">A-</div>
-                  <div class="health-score-val" id="arch-health-score">92%</div>
+                  <div class="gauge-ring-wrapper">
+                    <svg class="gauge-ring-svg" viewBox="0 0 100 100">
+                      <circle class="gauge-ring-bg" cx="50" cy="50" r="42" stroke-width="8"></circle>
+                      <circle class="gauge-ring-fill" id="arch-health-ring" cx="50" cy="50" r="42" stroke-width="8"></circle>
+                    </svg>
+                    <div class="gauge-center-content">
+                      <div class="health-badge-large" id="arch-health-badge">A-</div>
+                      <div class="health-score-val" id="arch-health-score">92%</div>
+                    </div>
+                  </div>
                   <span class="health-label">System Health Score</span>
                 </div>
                 <div class="profile-details-list" id="arch-profile-details">

@@ -2251,12 +2251,11 @@ async function loadGraph() {
             smellsHtml = `
               <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
                 <span class="detail-stat-label" style="color: #ef4444; font-weight: bold;">Smells & Health</span>
-                <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf; font-size: 11px;">
                   ${fileSmells.map((s: any) => `
                     <li style="margin-bottom: 4px;">
-                      <span class="smell-badge ${s.severity.toLowerCase()}" style="font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; margin-right: 4px;">${s.severity.toUpperCase()}</span>
+                      <span class="smell-badge-mini ${s.severity.toLowerCase()}">${s.severity.toUpperCase()}</span>
                       <strong>${s.type.toUpperCase()}</strong>: ${s.description}
-                      <div style="color: #94a3b8; font-style: italic; margin-top: 2px;">💡 Suggestion: ${s.suggestion}</div>
+                      <div style="color: #94a3b8; font-style: italic; margin-top: 2px; margin-left: 8px;">💡 Suggestion: ${s.suggestion}</div>
                     </li>
                   `).join('')}
                 </ul>
@@ -2279,7 +2278,7 @@ async function loadGraph() {
             <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
               <span class="detail-stat-label">Smart Classification</span>
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                <span class="badge" style="background: ${roleColor}; padding: 3px 6px; border-radius: 4px; font-size: 10px; color: #fff; font-weight: bold;">${fileRole.toUpperCase()}</span>
+                <span class="selection-badge" style="background: ${roleColor};">${fileRole.toUpperCase()}</span>
                 <span style="color: var(--text-muted); font-size: 11px;">(conf: ${roleConf.toFixed(2)})</span>
               </div>
               <div id="classification-signals-container" style="color: var(--text-muted); font-size: 11px;">
@@ -2473,7 +2472,7 @@ async function loadGraph() {
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
                 <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge Type</span>
-                <span style="text-align: right;"><span class="badge" style="background:#2563eb; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">CLUSTER DEPENDENCY</span></span>
+                <span style="text-align: right;"><span class="selection-badge" style="background:#2563eb;">CLUSTER DEPENDENCY</span></span>
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
                 <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Count</span>
@@ -2501,7 +2500,7 @@ async function loadGraph() {
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Edge Type</span>
-                <span class="detail-stat-value"><span class="badge" style="background:#8b5cf6; padding:3px 6px; border-radius:4px; font-size:10px; color:#fff; font-family:inherit;">${data.type}</span></span>
+                <span class="detail-stat-value"><span class="selection-badge" style="background:#8b5cf6;">${data.type.toUpperCase()}</span></span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Verifiability</span>
@@ -3041,6 +3040,43 @@ function startPeriodicPolling() {
 
 // Initialise everything
 document.addEventListener('DOMContentLoaded', () => {
+  // Helper to programmatically switch tabs
+  const switchTab = (tabName: string) => {
+    const tabBtn = document.querySelector(`.nav-item[data-tab="${tabName}"]`) as HTMLElement;
+    if (tabBtn) {
+      tabBtn.click();
+    }
+  };
+
+  // Global Click listener for Node/Edge navigation using [data-go-id]
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const clickable = target.closest('[data-go-id]');
+    if (clickable && cyInstance) {
+      e.preventDefault();
+      const id = clickable.getAttribute('data-go-id');
+      if (id) {
+        const isOutsideGraph = currentTab !== 'graph';
+        if (isOutsideGraph) {
+          switchTab('graph');
+        }
+        
+        // Timeout to let the tab container render and cyInstance resize
+        setTimeout(() => {
+          const ele = cyInstance.getElementById(id);
+          if (ele && ele.length > 0) {
+            ele.trigger('tap');
+            cyInstance.animate({
+              center: { eles: ele }
+            }, {
+              duration: 350
+            });
+          }
+        }, isOutsideGraph ? 120 : 0);
+      }
+    }
+  });
+
   loadStatus();
   loadGraph();
   loadSymbols();
@@ -3193,25 +3229,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // 5. Clickable Node/Edge navigation
-    const clickable = target.closest('[data-go-id]');
-    if (clickable && cyInstance) {
-      e.preventDefault();
-      const id = clickable.getAttribute('data-go-id');
-      if (id) {
-        const ele = cyInstance.getElementById(id);
-        if (ele && ele.length > 0) {
-          ele.trigger('tap');
-
-          // Focus/center the graph on the clicked element
-          cyInstance.animate({
-            center: { eles: ele }
-          }, {
-            duration: 350
-          });
-        }
-      }
-    }
+    // 5. Removed local Navigation handler since global click listener handles [data-go-id] globally
   });
 
   // Load custom tags from localStorage
@@ -3328,6 +3346,13 @@ async function loadSmells() {
         badge.style.color = 'var(--syntax-green)';
       }
       if (score) score.textContent = '100%';
+
+      // Update SVG gauge ring
+      const ring = document.getElementById('arch-health-ring');
+      if (ring) {
+        ring.style.strokeDashoffset = '0';
+        ring.style.stroke = 'var(--syntax-green)';
+      }
       return;
     }
     
@@ -3345,22 +3370,19 @@ async function loadSmells() {
       let involvedFilesStr = '';
       if (smell.involved_files) {
         try {
-          const files = JSON.parse(smell.involved_files);
-          involvedFilesStr = files.map((f: string) => f.split('/').pop()).join(', ');
-          
-          if (smell.type === 'cycle') {
-            for (let i = 0; i < files.length; i++) {
-              const src = files[i];
-              const tgt = files[(i + 1) % files.length];
-              cycleEdges.add(`edge-${src}-${tgt}`);
-              cycleEdges.add(`edge-${tgt}-${src}`);
-            }
-          } else if (smell.type === 'hub') {
-            for (const f of files) {
-              hubNodes.add(f);
-            }
+          const files = Array.isArray(smell.involved_files)
+            ? smell.involved_files
+            : (typeof smell.involved_files === 'string' ? JSON.parse(smell.involved_files) : []);
+          if (Array.isArray(files) && files.length > 0) {
+            involvedFilesStr = files.map((f: string) => {
+              const name = f.split('/').pop() || f;
+              return `<span class="involved-file-badge" data-go-id="${f}" title="Click to view in Graph Explorer">${name}</span>`;
+            }).join('');
           }
-        } catch (e) {}
+        } catch (e) {
+          const fallbackName = typeof smell.involved_files === 'string' ? smell.involved_files.split('/').pop() : 'file';
+          involvedFilesStr = `<span class="involved-file-badge" data-go-id="${smell.involved_files}" title="Click to view in Graph Explorer">${fallbackName}</span>`;
+        }
       }
       
       html += `
@@ -3403,6 +3425,16 @@ async function loadSmells() {
     if (score) {
       score.textContent = `${healthScore}%`;
     }
+
+    // Update SVG gauge ring
+    const ring = document.getElementById('arch-health-ring');
+    if (ring) {
+      const radius = 42;
+      const circumference = 2 * Math.PI * radius; // 263.89
+      const offset = circumference - (healthScore / 100) * circumference;
+      ring.style.strokeDashoffset = String(offset);
+      ring.style.stroke = healthColor;
+    }
   } catch (err) {
     console.error('Failed to load smells:', err);
   }
@@ -3421,34 +3453,49 @@ function renderProfile(profile: any) {
   const frameworks = profile.detectedFrameworks || [];
   const patterns = profile.detectedPatterns || [];
   
+  const renderPills = (items: string[]) => {
+    if (!items || items.length === 0) return '<span class="profile-pill-empty">none</span>';
+    return items.map(item => `<span class="profile-pill">${item}</span>`).join('');
+  };
+
+  const renderYesNo = (val: boolean) => {
+    return val 
+      ? '<span class="profile-pill-bool yes">Yes</span>' 
+      : '<span class="profile-pill-bool no">No</span>';
+  };
+
+  const arch = profile.archetype || 'mixed';
+  const conf = typeof profile.archetypeConfidence === 'number' ? profile.archetypeConfidence : 1.0;
+  const archBadge = `<span class="profile-pill-arch archetype-${arch}">${arch.toUpperCase()} <span style="opacity:0.6;font-size:9px;margin-left:4px;">${conf.toFixed(2)}</span></span>`;
+
   container.innerHTML = `
     <div class="profile-detail-item">
       <span class="profile-detail-label">Archetype</span>
-      <span class="profile-detail-value">${profile.archetype || 'mixed'} (conf: ${(profile.archetypeConfidence || 0).toFixed(2)})</span>
+      <span class="profile-detail-value">${archBadge}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Dominant Languages</span>
-      <span class="profile-detail-value">${dominantLangs.join(', ') || 'unknown'}</span>
+      <span class="profile-detail-value">${renderPills(dominantLangs)}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Detected Frameworks</span>
-      <span class="profile-detail-value">${frameworks.join(', ') || 'none'}</span>
+      <span class="profile-detail-value">${renderPills(frameworks)}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Architecture Patterns</span>
-      <span class="profile-detail-value">${patterns.join(', ') || 'none'}</span>
+      <span class="profile-detail-value">${renderPills(patterns)}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Has Backend</span>
-      <span class="profile-detail-value">${profile.hasBackend ? 'Yes' : 'No'}</span>
+      <span class="profile-detail-value">${renderYesNo(profile.hasBackend)}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Has Frontend</span>
-      <span class="profile-detail-value">${profile.hasFrontend ? 'Yes' : 'No'}</span>
+      <span class="profile-detail-value">${renderYesNo(profile.hasFrontend)}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Is Monorepo</span>
-      <span class="profile-detail-value">${profile.isMonorepo ? 'Yes' : 'No'}</span>
+      <span class="profile-detail-value">${renderYesNo(profile.isMonorepo)}</span>
     </div>
   `;
 }
