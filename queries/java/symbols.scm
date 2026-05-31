@@ -22,11 +22,11 @@
 
 ; Constant declarations (static final)
 (field_declaration
-  (modifiers (modifier) @_static (modifier) @_final)
+  (modifiers) @_mods
   declarator: (variable_declarator
     name: (identifier) @symbol.name)
-  (#eq? @_static "static")
-  (#eq? @_final "final")) @symbol.kind_constant
+  (#match? @_mods "static")
+  (#match? @_mods "final")) @symbol.kind_constant
 
 ; Annotation type declarations
 (annotation_type_declaration

@@ -5,10 +5,7 @@
 
 ; Class/struct inheritance: class Foo : Bar
 (base_list
-  (simple_base_type (identifier) @ref.target_extends)) @ref.type_extends
-
-(base_list
-  (simple_base_type (generic_name (identifier) @ref.target_extends))) @ref.type_extends
+  (_) @ref.target_extends) @ref.type_extends
 
 ; Method calls
 (invocation_expression

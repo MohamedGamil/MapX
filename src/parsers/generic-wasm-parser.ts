@@ -60,7 +60,8 @@ export class GenericWasmParser implements LanguageParser {
                 capture.node.type === 'function_expression' ||
                 (capture.node.type === 'function_declaration' && !capture.node.childForFieldName('name')) ||
                 (capture.node.type === 'class_declaration' && !capture.node.childForFieldName('name')) ||
-                (capture.node.type === 'class' && !capture.node.childForFieldName('name'));
+                (capture.node.type === 'class' && !capture.node.childForFieldName('name')) ||
+                capture.node.type === 'script_element';
 
               if (isDefaultOrAnonymous) {
                 const baseName = filePath.split('/').pop() || '';
@@ -219,7 +220,13 @@ export class GenericWasmParser implements LanguageParser {
   }
 
   protected cleanTarget(name: string, refType: string): string {
-    if (refType === 'import' || refType === 'require') return name.replace(/^['"]|['"]$/g, '');
+    if (refType === 'import' || refType === 'require') {
+      let cleaned = name.trim();
+      if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+        cleaned = cleaned.slice(1, -1).trim();
+      }
+      return cleaned.replace(/^['"]|['"]$/g, '');
+    }
     return name;
   }
 

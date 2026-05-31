@@ -37,6 +37,18 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ### Fixed
 - **WASM grammar ABI compatibility**: Rebuilt the compiled `tree-sitter-dart.wasm` binary from source using the local tree-sitter CLI to resolve compatibility errors (e.g. `failIf` errors inside `Language.load`) with the runtime `web-tree-sitter` package.
 - **Dart Tree-sitter query compile errors**: Corrected AST patterns in `symbols.scm` and `references.scm` to be compatible with tree-sitter-dart v1.0.0 grammar. Commented out unsupported rules (`extension_type_declaration`, `mixin_on_clause`, `method_invocation`, `function_invocation`, `named_constructor_invocation`) and removed invalid field names. Explicitly traced parent-child AST paths for imports/exports through intermediate `configurable_uri` and `uri` nodes.
+- **Language Grammar Query and WASM Parser Compatibility**: Resolved critical AST schema compatibility issues across multiple tree-sitter languages by correcting and updating query `.scm` files:
+  - **Java**: Updated modifiers query to match static/final predicates against `(modifiers)` child nodes instead of the non-existent `(modifier)` node type.
+  - **Swift**: Commented out the non-existent `extension_declaration` query.
+  - **Bash**: Changed `name: (word)` to `name: (command_name)` in `command` queries to match the correct AST structure.
+  - **Elixir**: Removed invalid `arguments:` field name in `call` queries, matching the `(arguments)` child node directly.
+  - **Zig**: Updated symbols query to use `function_declaration` and `assignment_statement` instead of `fn_proto` and `variable_declaration`. Corrected references query to use `field_identifier` and `call_expression` inside `field_expression` without invalid fields.
+  - **Ruby**: Updated superclass query to use a generic wildcard expression (`superclass: (_)`) and updated instantiation query to use separate non-field calls.
+  - **Lua**: Rewrote `require` calls to match `(variable)` function names and use a version-agnostic arguments query `(_) @ref.target_require` to prevent syntax crashes.
+  - **Pascal**: Replaced invalid query node types with actual AST nodes (`declProc` and `unit` for symbols, `uses_clause` and `exprCall` for references).
+  - **Scala**: Simplified import reference query to capture the entire `(import_declaration)` node directly.
+- **Svelte Symbol Extraction**: Added matching for the Svelte `<script>` tag (`script_element` mapped as `class`) to extract Svelte components as symbols, since modern tree-sitter-svelte parses script blocks as `raw_text`.
+- **Parser Resiliency**: Enhanced `GenericWasmParser.cleanTarget` to strip outer parenthesized arguments (e.g., `('module')` -> `module`), ensuring robust dependency extraction when wildcard arguments are captured.
 
 ## [0.3.2] — 2026-05-31
 

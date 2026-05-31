@@ -15,7 +15,7 @@
 
 ; Protocol conformance / inheritance: class Foo: Bar, Protocol
 (inheritance_specifier
-  (type_identifier) @ref.target_extends) @ref.type_extends
+  (_) @ref.target_extends) @ref.type_extends
 
 ; Instantiation: ClassName()
 (call_expression

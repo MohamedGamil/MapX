@@ -55,6 +55,7 @@ Error [ERR_HTTP_HEADERS_SENT]: Cannot write headers after they are sent to the c
 
 ## Performance
 - [ ] Improve scanning and analysis for large codebases (need to investigate issues with very large code bases consisting of 2k+ to 10k+ files)
+- [ ] Implement a C-based compiled blazing fast scanner sidecar which MapX scanner itself could rely on for quickly scanning codebases and large codebases.
 
 ## Building and Packaging
 - [ ] Fix build stages that always include ui builds at prepare step, instead it should be invoked when needed such that any package or installer steps should invoke it once for any of target OS platforms, before release, or before serving UI in development environment
