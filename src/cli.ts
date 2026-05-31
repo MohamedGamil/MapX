@@ -26,6 +26,7 @@ import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { VERSION } from './version.js';
 import { findSimilarSymbols, isGlobPattern, globToLike } from './core/fuzzy-matcher.js';
+import picomatch from 'picomatch';
 import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
@@ -57,14 +58,9 @@ function resolveFilePaths(input: string, allFiles: Array<{ path: unknown }>): st
 
   // 2. Glob wildcard: *, ?, **
   if (isGlobPattern(input) || input.includes('/')) {
-    // Convert glob to regex: ** matches any path segment, * matches within segment
-    const regexStr = input
-      .replace(/[.+^${}()|[\]\\]/g, '\\$&') // escape regex special chars (except * ?)
-      .replace(/\\\*\\\*/g, '.*')             // ** → .*
-      .replace(/\*/g, '[^/]*')                // * → [^/]*
-      .replace(/\?/g, '[^/]');                // ? → [^/]
-    const re = new RegExp(`(^|/)${regexStr}$`, 'i');
-    const matches = paths.filter(p => re.test(p) || p.endsWith(input) || p.includes(input));
+    const matchBase = !input.includes('/');
+    const isMatch = picomatch(input, { dot: true, nocase: true, matchBase });
+    const matches = paths.filter(p => isMatch(p) || p.endsWith(input) || p.includes(input));
     if (matches.length > 0) return matches;
   }
 

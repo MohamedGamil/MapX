@@ -1,6 +1,7 @@
 import { Store } from './store.js';
 import { ReferenceType } from '../types.js';
 import { isGlobPattern, globToLike } from './fuzzy-matcher.js';
+import picomatch from 'picomatch';
 
 export type TraceDirection = 'down' | 'up' | 'both';
 
@@ -277,13 +278,9 @@ export class FlowTracer {
 
     // 2. Glob / wildcard
     if (!matchedPath && isGlobPattern(input)) {
-      const regexStr = input
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\\\*\\\*/g, '.*')
-        .replace(/\*/g, '[^/]*')
-        .replace(/\?/g, '[^/]');
-      const re = new RegExp(`(^|/)${regexStr}$`, 'i');
-      matchedPath = paths.find(p => re.test(p));
+      const matchBase = !input.includes('/');
+      const isMatch = picomatch(input, { dot: true, nocase: true, matchBase });
+      matchedPath = paths.find(p => isMatch(p));
     }
 
     // 3. Suffix / substring fallback
