@@ -36,6 +36,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
     - **25 new tests** — Comprehensive `tests/dart-resolution.test.ts` covering: `dart:` stdlib skipping, `package:` URI resolution (basic and monorepo), `discoverDartPackages` (single and multi-pubspec), relative imports, bare-path part directives, and JS/TS non-regression.
 
 ### Changed
+- **ASP.NET Route Extraction Improvements**: Upgraded `AspNetDetector` to support class-level `[Route]` back-scanning, resolving issues where multiple classes in a single file or complex class modifier layouts caused route associations to fail. Added support for C# `[action]` routing placeholder token replacements, and expanded route parameter constraint stripping to handle complex patterns like `{id:min(1)}` or `{id:int}`.
 - **Picomatch Glob Migration**: Migrated remaining manual RegExp path/glob matching inside `resolveFilePaths` (`src/cli.ts`) and `resolveStart` (`src/core/flow-tracer.ts`) to use `picomatch` directly. Included dynamic `matchBase` configuration to correctly handle patterns with or without directory boundary slashes.
 - **Test coverage improvements**: Increased statement/branch/function/line coverage across `src/cli.ts` and `src/mcp.ts`.
   - `cli.ts`: 70% → 74% statements, 58% → 62% branches, 57% → 62% functions.

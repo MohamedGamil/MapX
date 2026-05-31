@@ -21,40 +21,85 @@ export class AspNetDetector implements FrameworkDetector {
       return [];
     }
 
-    // 1. Class name extraction
-    const classMatch = content.match(/\bclass\s+([a-zA-Z0-9_]+)\b/);
-    if (!classMatch) return [];
-    const className = classMatch[1];
+    // 1. Find all classes and their class-level Route attributes
+    const classRegex = /\bclass\s+([a-zA-Z0-9_]+)/g;
+    const classes: Array<{ name: string; prefix: string; index: number }> = [];
+    let classMatch;
+    while ((classMatch = classRegex.exec(content)) !== null) {
+      const className = classMatch[1];
+      const classIndex = classMatch.index;
 
-    // Compute controller name from class name
-    const controllerName = className.endsWith('Controller')
-      ? className.substring(0, className.length - 10).toLowerCase()
-      : className.toLowerCase();
+      // Look backward from classIndex to find the nearest [Route("...")] attribute applied to the class
+      const startIdx = Math.max(0, classIndex - 200);
+      const preText = content.substring(startIdx, classIndex);
+      const routeMatches = [...preText.matchAll(/\[Route\s*\(\s*['"]([^'"]+)['"]\s*\)\]/g)];
+      const prefix = routeMatches.length > 0 ? routeMatches[routeMatches.length - 1][1] : '';
 
-    // 2. Class Route prefix extraction
-    let classRoutePrefix = '';
-    const classRouteMatch = content.match(/\[Route\s*\(\s*['"]([^'"]+)['"]\s*\)\]/);
-    if (classRouteMatch) {
-      classRoutePrefix = classRouteMatch[1];
-      // Replace token [controller] with our computed controllerName
-      classRoutePrefix = classRoutePrefix.replace(/\[controller\]/gi, controllerName);
+      classes.push({
+        name: className,
+        prefix,
+        index: classIndex,
+      });
     }
 
-    // 3. Method routing extraction
-    // Match HttpGet, HttpPost, HttpPut, HttpDelete, HttpPatch with optional route template parameter
-    const methodRouteRegex = /\[Http(Get|Post|Put|Delete|Patch)(?:\s*\(\s*['"]([^'"]+)['"]\s*\))?\][^({]*?\b([a-zA-Z0-9_]+)\s*\(/g;
-    let match;
-    while ((match = methodRouteRegex.exec(content)) !== null) {
-      const verb = match[1].toUpperCase();
-      const methodTemplate = match[2] || '';
-      const methodName = match[3];
+    if (classes.length === 0) return [];
+
+    // 2. Find all method declarations preceded by routing attributes
+    // Matches one or more attributes (HttpGet/Post/Put/Delete/Patch/Route) followed by a method signature
+    const methodRouteRegex = /((?:\[(?:HttpGet|HttpPost|HttpPut|HttpDelete|HttpPatch|Route)[^\]]*\]\s*)+)[^{;]*\b([a-zA-Z0-9_]+)\s*\(/g;
+    let methodMatch;
+    while ((methodMatch = methodRouteRegex.exec(content)) !== null) {
+      const attributeBlock = methodMatch[1];
+      const methodName = methodMatch[2];
+      const methodIndex = methodMatch.index;
+
+      // Find the class that immediately precedes this method
+      const parentClass = classes
+        .filter(c => c.index < methodIndex)
+        .sort((a, b) => b.index - a.index)[0];
+      if (!parentClass) continue;
+
+      // Extract verb and template from the attribute block
+      const attrRegex = /\[(HttpGet|HttpPost|HttpPut|HttpDelete|HttpPatch|Route)(?:\s*\(\s*['"]([^'"]+)['"]\s*\))?[^\]]*\]/g;
+      let attrMatch;
+      let verb = 'GET';
+      let methodTemplate = '';
+
+      while ((attrMatch = attrRegex.exec(attributeBlock)) !== null) {
+        const attrName = attrMatch[1];
+        const templateVal = attrMatch[2] || '';
+
+        if (attrName.startsWith('Http')) {
+          verb = attrName.substring(4).toUpperCase();
+          if (templateVal) {
+            methodTemplate = templateVal;
+          }
+        } else if (attrName === 'Route') {
+          if (templateVal) {
+            methodTemplate = templateVal;
+          }
+        }
+      }
+
+      // Compute controller name from class name
+      const className = parentClass.name;
+      const controllerName = className.endsWith('Controller')
+        ? className.substring(0, className.length - 10).toLowerCase()
+        : className.toLowerCase();
+
+      // Resolve class prefix
+      let classRoutePrefix = parentClass.prefix;
+      classRoutePrefix = classRoutePrefix.replace(/\[controller\]/gi, controllerName);
 
       const cleanClassPrefix = classRoutePrefix.replace(/^\/|\/$/g, '');
       const cleanMethodTemplate = methodTemplate.replace(/^\/|\/$/g, '');
       let combinedPath = '/' + [cleanClassPrefix, cleanMethodTemplate].filter(Boolean).join('/');
 
-      // ASP.NET route parameter format: {id} or {id:int} or {*slug} -> we match and map to {id}
-      combinedPath = combinedPath.replace(/\{([a-zA-Z0-9_?*]+)(?::[a-zA-Z0-9_]+)?\}/g, '{$1}');
+      // Replace [action] token with the lowercase method name
+      combinedPath = combinedPath.replace(/\[action\]/gi, methodName.toLowerCase());
+
+      // ASP.NET route parameter format: {id} or {id:int} or {*slug} or {id:min(1)} -> we match and map to {id}
+      combinedPath = combinedPath.replace(/\{([a-zA-Z0-9_?*]+)(?::[^}]+)?\}/g, '{$1}');
 
       routes.push({
         framework: this.name,

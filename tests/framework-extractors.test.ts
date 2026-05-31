@@ -338,11 +338,34 @@ mymodule.info:
           [HttpGet]
           public IActionResult GetAll() {}
       }
+
+      [Route("api/[controller]/[action]")]
+      public class TasksController : ControllerBase {
+          [HttpPost("{id:min(1)}")]
+          public IActionResult Complete(int id) {}
+
+          [Route("custom-route")]
+          [HttpGet]
+          public IActionResult Custom() {}
+      }
     `;
     const routes = await d.extractRoutes('UsersController.cs', content, makeCtx(tmpDir));
-    expect(routes).toHaveLength(1);
+    expect(routes).toHaveLength(3);
+
+    // UsersController.GetAll
     expect(routes[0].path).toBe('/api/users');
     expect(routes[0].method).toBe('GET');
+    expect(routes[0].handlerSymbol).toBe('UsersController.GetAll');
+
+    // TasksController.Complete
+    expect(routes[1].path).toBe('/api/tasks/complete/{id}');
+    expect(routes[1].method).toBe('POST');
+    expect(routes[1].handlerSymbol).toBe('TasksController.Complete');
+
+    // TasksController.Custom
+    expect(routes[2].path).toBe('/api/tasks/custom/custom-route');
+    expect(routes[2].method).toBe('GET');
+    expect(routes[2].handlerSymbol).toBe('TasksController.Custom');
   });
 
   it('FlutterDetector - extracts GoRouter route definitions', async () => {
