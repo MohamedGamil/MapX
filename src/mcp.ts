@@ -1922,6 +1922,14 @@ Callees: ${callees.length}`;
           }
         }
 
+        // Monorepo packages (same git repo, separate apps/packages dirs)
+        const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+        for (const p of monoPkgs) {
+          if (!registeredPaths.has(resolve(dir, p.path))) {
+            discovered.push({ name: p.name, path: p.path, source: 'monorepo', isInitialized: true });
+          }
+        }
+
         if (action === 'discover') {
           return {
             content: [{

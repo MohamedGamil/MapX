@@ -168,7 +168,7 @@ mapx -d /path/to/project scan
 
 ### Available Commands
 
-- \`mapx init [path]\` - First-time setup (auto-adds .mapx/ to .gitignore)
+- \`mapx init [path]\` - First-time setup (auto-adds .mapx/ to .gitignore, discovers monorepo packages & nested repos)
 - \`mapx uninit [path]\` - Remove .mapx/ and reverse integration changes
 - \`mapx scan [path]\` - Full scan
 - \`mapx update [path]\` (alias: \`sync\`) - Incremental update (fast)
@@ -198,8 +198,8 @@ mapx -d /path/to/project scan
 - \`mapx ui [--port <port>]\` - Open web dashboard for interactive visualization
 - \`mapx workspaces list\` - List registered repositories
 - \`mapx workspaces add <path>\` - Register a new repository
-- \`mapx workspaces discover\` - Discover unregistered submodules, peers, VS Code folders, and nested git repos (up to 3 levels deep)
-- \`mapx workspaces sync\` - Auto-register discovered repositories (prompts for nested git repos)
+- \`mapx workspaces discover\` - Discover unregistered submodules, peers, VS Code folders, nested git repos (up to 3 levels deep), and monorepo packages
+- \`mapx workspaces sync\` - Auto-register discovered repositories (prompts for nested git repos and monorepo packages)
 
 ## MCP Tools
 

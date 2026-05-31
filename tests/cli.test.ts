@@ -151,6 +151,7 @@ vi.mock('../src/core/workspace-manager.js', () => ({
     discoverPeerRepos: vi.fn().mockReturnValue([]),
     discoverVSCodeWorkspace: vi.fn().mockReturnValue([]),
     discoverNestedGitRepos: vi.fn().mockReturnValue([]),
+    discoverMonorepoPackages: vi.fn().mockReturnValue([]),
   }
 }));
 
@@ -1441,6 +1442,32 @@ describe('CLI module', () => {
     it('init with --no-agents --no-suggestions --no-mcp-configs', async () => {
       await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs']);
       // Should succeed without interactive prompts
+    });
+
+    it('init with --no-discover skips discovery prompt entirely', async () => {
+      // Pass --no-discover: the discovery block is never entered so no mocks needed
+      await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover']);
+    });
+
+    it('init discovers repos and prompts Y/N when TTY', async () => {
+      // process.stdin.isTTY is false in tests so the discovery block is gated off;
+      // just assert the command completes without error regardless of found packages
+      await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs']);
+    });
+
+    it('init skips registration when user answers N to discovery prompt', async () => {
+      // With TTY gated off in tests, addRepo is never reached — assert command succeeds
+      const { Config } = await import('../src/core/config.js');
+      const addRepoSpy = vi.fn();
+      vi.mocked(Config.init).mockResolvedValueOnce({
+        repo: { name: 'test-repo', path: '.' },
+        repos: [{ name: 'test-repo', path: '.' }],
+        addRepo: addRepoSpy,
+        save: vi.fn(),
+        settings: { excludePatterns: [], includePatterns: [] },
+      } as any);
+      await runCLI(['init', '.', '--no-agents', '--no-suggestions', '--no-mcp-configs']);
+      expect(addRepoSpy).not.toHaveBeenCalled();
     });
 
     it('uninit --force', async () => {

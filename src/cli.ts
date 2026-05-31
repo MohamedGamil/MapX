@@ -369,6 +369,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--no-agents', 'Skip AGENTS.md creation')
     .option('--no-suggestions', 'Skip interactive framework suggestions')
     .option('--no-mcp-configs', 'Skip auto-generating MCP config files for detected agent tools')
+    .option('--no-discover', 'Skip monorepo / nested-repo discovery step')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const isLaravel = detectLaravel(dir);
@@ -425,6 +426,67 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           clack.log.success(`Added .mapx/ to .gitignore`);
         }
       }
+
+      // Monorepo / nested-repo discovery step (default on, disable with --no-discover)
+      if (opts.discover !== false && process.stdin.isTTY) {
+        const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+        const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+        const registeredPaths = new Set(config.repos.map(r => resolve(dir, r.path)));
+        const newNested = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+        const newMono   = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+
+        if (newNested.length > 0 || newMono.length > 0) {
+          const totalFound = newNested.length + newMono.length;
+          clack.log.info(`Found ${totalFound} additional package${totalFound === 1 ? '' : 's'} / nested repo${totalFound === 1 ? '' : 's'} in this workspace.`);
+
+          const shouldDiscover = await clack.confirm({
+            message: `Discover and register them now?`,
+            initialValue: true,
+          });
+
+          if (!clack.isCancel(shouldDiscover) && shouldDiscover) {
+            const toRegister: Array<{ name: string; path: string }> = [];
+
+            if (newNested.length > 0) {
+              const chosenNested = await clack.multiselect({
+                message: `Select nested git repositories to register (${newNested.length} found):`,
+                options: newNested.map(n => ({ value: n.path, label: `${n.name}  (${n.path})` })),
+                required: false,
+              });
+              if (!clack.isCancel(chosenNested)) {
+                for (const p of chosenNested as string[]) {
+                  const n = newNested.find(x => x.path === p)!;
+                  toRegister.push({ name: n.name, path: n.path });
+                }
+              }
+            }
+
+            if (newMono.length > 0) {
+              const mgr = newMono[0].packageManager;
+              const chosenMono = await clack.multiselect({
+                message: `Select monorepo packages to register [${mgr}] (${newMono.length} found):`,
+                options: newMono.map(p => ({ value: p.path, label: `${p.name}  (${p.path})` })),
+                required: false,
+              });
+              if (!clack.isCancel(chosenMono)) {
+                for (const p of chosenMono as string[]) {
+                  const pkg = newMono.find(x => x.path === p);
+                  if (pkg) toRegister.push({ name: pkg.name, path: pkg.path });
+                }
+              }
+            }
+
+            if (toRegister.length > 0) {
+              for (const item of toRegister) {
+                config.addRepo(item.name, item.path);
+                clack.log.success(`Registered: ${item.name} -> ${item.path}`);
+              }
+              await config.save();
+            }
+          }
+        }
+      }
+
       clack.log.success(`Initialized mapx in ${dir}/.mapx/`);
       clack.log.info(`Repo: ${config.repo.name}`);
     });
@@ -2403,6 +2465,16 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
       }
 
+      // Monorepo packages discovered via workspace manifests or common dirs
+      const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+      const uninitMono = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitMono.length > 0) {
+        console.log('\nMonorepo packages:');
+        for (const p of uninitMono) {
+          console.log(`  - ${p.name.padEnd(15)} -> ${p.path} [${p.packageManager}]`);
+        }
+      }
+
       console.log('');
     });
 
@@ -2546,6 +2618,17 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         found += uninitNestedDiscover.length;
       }
 
+      // Monorepo packages
+      const monoDiscover = WorkspaceManager.discoverMonorepoPackages(dir);
+      const uninitMonoDiscover = monoDiscover.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitMonoDiscover.length > 0) {
+        console.log('\nMonorepo packages:');
+        for (const p of uninitMonoDiscover) {
+          console.log(`  - ${p.name.padEnd(20)} -> ${p.path} [${p.packageManager}]`);
+        }
+        found += uninitMonoDiscover.length;
+      }
+
       if (found === 0) {
         console.log('No unregistered repositories discovered.');
       } else {
@@ -2620,6 +2703,30 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const nested = newNestedRepos.find(n => n.path === chosenPath)!;
           toAdd.push({ name: nested.name, path: nested.path });
           registeredPaths.add(resolve(dir, nested.path));
+        }
+      }
+
+      // 5. Monorepo packages — prompt user to select which to register
+      const monoPkgsSync = WorkspaceManager.discoverMonorepoPackages(dir);
+      const newMonoPkgs = monoPkgsSync.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (newMonoPkgs.length > 0) {
+        const mgr = newMonoPkgs[0].packageManager;
+        clack.log.step(`Found ${newMonoPkgs.length} monorepo package${newMonoPkgs.length === 1 ? '' : 's'} [${mgr}]:`);
+        const chosenMono = await clack.multiselect({
+          message: 'Select monorepo packages to register and scan:',
+          options: newMonoPkgs.map(p => ({ value: p.path, label: `${p.name}  (${p.path})` })),
+          required: false,
+        });
+        if (clack.isCancel(chosenMono)) {
+          clack.cancel('Sync cancelled.');
+          process.exit(0);
+        }
+        for (const chosenPath of chosenMono as string[]) {
+          const pkg = newMonoPkgs.find(p => p.path === chosenPath);
+          if (pkg) {
+            toAdd.push({ name: pkg.name, path: pkg.path });
+            registeredPaths.add(resolve(dir, pkg.path));
+          }
         }
       }
 

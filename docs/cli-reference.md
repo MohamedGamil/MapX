@@ -23,7 +23,7 @@ mapx -d /path/to/project scan
 Initialize MapxGraph in the current project. Creates `.mapx/` directory, `AGENTS.md`, and auto-adds `.mapx/` to `.gitignore`.
 
 ```bash
-mapx init [/path] [--name <repo-name>] [--no-agents] [--no-suggestions] [--no-mcp-configs]
+mapx init [/path] [--name <repo-name>] [--no-agents] [--no-suggestions] [--no-mcp-configs] [--no-discover]
 ```
 
 Options:
@@ -32,11 +32,13 @@ Options:
 - `--no-agents` — Skip AGENTS.md creation
 - `--no-suggestions` — Skip interactive framework suggestions
 - `--no-mcp-configs` — Skip auto-generating MCP config files for detected agent tools
+- `--no-discover` — Skip the monorepo / nested-repo discovery step
 
 The init command also:
 - Detects Laravel projects and offers to add framework-specific exclusions
 - Prompts for LLM provider selection (generic, Claude, Cursor, VS Code, opencode)
 - **Auto-detects installed agent tools** (opencode, Gemini CLI, Cursor, VS Code, Antigravity) and generates MCP server config files so mapx is immediately available as an MCP server
+- **Discovers monorepo packages and nested git repositories** — prompts (Y/N, default Y) to register them immediately after init. Individual multi-select lets you choose exactly which packages / repos to track. Pass `--no-discover` to skip.
 - Auto-adds `.mapx/` to `.gitignore` if a `.gitignore` file exists or the project is a git repository
 
 ## `mapx uninit`
@@ -346,7 +348,7 @@ mapx workspaces remove my-repo
 
 ### `mapx workspaces discover`
 
-Discover unregistered submodules, peer repos, VS Code workspace folders, and **nested git repositories** (read-only).
+Discover unregistered submodules, peer repos, VS Code workspace folders, **nested git repositories**, and **monorepo packages** (read-only).
 
 ```bash
 mapx workspaces discover
@@ -357,12 +359,13 @@ Outputs grouped results by source type with status indicators:
 - **Peer repositories** — sibling directories in the parent folder
 - **VS Code workspace folders** — folders listed in `.code-workspace` files
 - **Nested git repositories** — any directory up to 3 levels deep that contains a `.git` entry (common noise paths like `node_modules`, `dist`, `build`, `.cache` are skipped automatically)
+- **Monorepo packages** — packages/apps declared in `pnpm-workspace.yaml`, `package.json` workspaces, `lerna.json`, `rush.json`, `Cargo.toml` `[workspace]`, `go.work`, or inferred from `apps/`, `packages/`, `libs/`, `services/` directories
 
 Suggests `mapx workspaces add <path>` for registration.
 
 ### `mapx workspaces sync`
 
-Sync all discovered submodules, peer repos, and VS Code workspace folders (auto-registers them). For newly discovered **nested git repositories**, an interactive prompt lets you choose which ones to register and scan.
+Sync all discovered submodules, peer repos, and VS Code workspace folders (auto-registers them). For newly discovered **nested git repositories** and **monorepo packages**, interactive prompts let you choose which ones to register and scan.
 
 ```bash
 mapx workspaces sync

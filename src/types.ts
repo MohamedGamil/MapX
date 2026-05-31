@@ -172,6 +172,15 @@ export interface SubmoduleInfo {
   isInitialized: boolean;
 }
 
+export interface MonorepoPackageInfo {
+  /** Friendly name derived from the package manifest (e.g. package.json `name`). */
+  name: string;
+  /** Path relative to the workspace root (e.g. `apps/web`, `packages/shared`). */
+  path: string;
+  /** Package manager / build tool that declared this package (e.g. `npm`, `pnpm`, `cargo`). */
+  packageManager: string;
+}
+
 export interface WorkspaceInfo {
   path: string;
   repos: RepoConfig[];

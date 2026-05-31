@@ -196,7 +196,7 @@ mapx -d /path/to/project export
 
 | Command | Description |
 |---------|-------------|
-| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs |
+| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs, discover monorepo packages & nested repos |
 | `mapx uninit [path]` | Remove mapx; delete `.mapx/`, reverse LLM integration changes, clean MCP configs |
 | `mapx scan [path]` | Full scan — builds the graph from scratch (supports `--force` to bypass cache) |
 | `mapx update [path]` | Incremental scan — only re-parses changed files |
@@ -224,8 +224,8 @@ mapx -d /path/to/project export
 | `mapx ui` | Open the web dashboard for interactive visualization |
 | `mapx workspaces list` | List registered repositories |
 | `mapx workspaces add <path>` | Register a new repository |
-| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders, and nested git repos (up to 3 levels deep) |
-| `mapx workspaces sync` | Auto-register discovered repositories |
+| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders, nested git repos, and monorepo packages |
+| `mapx workspaces sync` | Auto-register discovered repositories; interactive prompts for nested repos and monorepo packages |
 | `mapx agents mcp` | Auto-detect agent tools and generate MCP config files |
 | `mapx serve --dir <path>` | Start MCP server (stdio) |
 | `mapx serve --sse --port 3456` | Start MCP server (SSE/HTTP) |
