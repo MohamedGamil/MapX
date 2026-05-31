@@ -756,6 +756,42 @@ describe('Store core class', () => {
       metadata: '{}'
     });
 
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'getEffectiveLimits',
+      kind: 'method',
+      scope: 'BillingService',
+      signature: '',
+      startLine: 12,
+      endLine: 15,
+      metadata: '{}'
+    });
+
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'deepMethod',
+      kind: 'method',
+      scope: 'NamespaceA::NamespaceB::ClassC',
+      signature: '',
+      startLine: 20,
+      endLine: 25,
+      metadata: '{}'
+    });
+
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'dotteddeepMethod',
+      kind: 'method',
+      scope: 'NamespaceA.NamespaceB.ClassC',
+      signature: '',
+      startLine: 20,
+      endLine: 25,
+      metadata: '{}'
+    });
+
     // 1. scope and name with repo
     const s1 = store.getSymbolByName('MyScope::MyClass', 'mapx');
     expect(s1).toBeDefined();
@@ -770,6 +806,36 @@ describe('Store core class', () => {
     const s3 = store.getSymbolByName('MyClass');
     expect(s3).toBeDefined();
     expect(s3?.name).toBe('MyClass');
+
+    // 4. Dot notation (C# / Java style)
+    const s4 = store.getSymbolByName('BillingService.getEffectiveLimits', 'mapx');
+    expect(s4).toBeDefined();
+    expect(s4?.name).toBe('getEffectiveLimits');
+
+    // 5. Double colon notation (PHP/C++ style)
+    const s5 = store.getSymbolByName('BillingService::getEffectiveLimits', 'mapx');
+    expect(s5).toBeDefined();
+    expect(s5?.name).toBe('getEffectiveLimits');
+
+    // 6. Multi-level namespace using double colons
+    const s6 = store.getSymbolByName('NamespaceA::NamespaceB::ClassC::deepMethod', 'mapx');
+    expect(s6).toBeDefined();
+    expect(s6?.name).toBe('deepMethod');
+
+    // 7. Multi-level namespace using dot notation
+    const s7 = store.getSymbolByName('NamespaceA.NamespaceB.ClassC.deepMethod', 'mapx');
+    expect(s7).toBeDefined();
+    expect(s7?.name).toBe('deepMethod');
+
+    // 8. Mixed notation fallback (e.g. query with dots when DB has colons)
+    const s8 = store.getSymbolByName('NamespaceA.NamespaceB.ClassC::deepMethod', 'mapx');
+    expect(s8).toBeDefined();
+    expect(s8?.name).toBe('deepMethod');
+
+    // 9. Mixed notation fallback (e.g. query with colons when DB has dots)
+    const s9 = store.getSymbolByName('NamespaceA::NamespaceB::ClassC::dotteddeepMethod', 'mapx');
+    expect(s9).toBeDefined();
+    expect(s9?.name).toBe('dotteddeepMethod');
   });
 
   it('performs getFilesFiltered with sort lines', () => {

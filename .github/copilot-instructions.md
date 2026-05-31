@@ -1,9 +1,9 @@
-<!-- mapx v0.3.2 -->
+<!-- mapx v0.3.3 -->
 ## MapxGraph Integration
 
 This project uses MapxGraph (22 languages, 32 MCP tools). You can run the following CLI commands to understand the codebase:
 - `mapx export` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
-- `mapx query <term>` - Search symbols (supports glob patterns: `*Service`, `get*`)
+- `mapx query <term>` - Search symbols (supports glob patterns: `*Service`, `get*`, and flexible namespace notations: `BillingService::getEffectiveLimits` or `BillingService.getEffectiveLimits`)
 - `mapx search <term> --kind class` - Advanced filtered search (auto-expands if kind has 0 results)
 - `mapx search <term> --format json` - Structured JSON output with PageRank scores
 - `mapx deps <file>` - View file dependencies

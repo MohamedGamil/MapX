@@ -1,4 +1,4 @@
-<!-- mapx v0.3.2 -->
+<!-- mapx v0.3.3 -->
 # MapxGraph Gemini Integration
 
 Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** with **32 MCP tools**.
@@ -6,7 +6,7 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
 ## CLI Commands
 
 - Run `mapx export` to summarize the project (supports --format=llm/json/dot/svg/toon).
-- Run `mapx query <symbol>` to locate symbols (supports glob patterns: `*Service`, `get*`).
+- Run `mapx query <symbol>` to locate symbols (supports glob patterns: `*Service`, `get*`, and flexible namespace notations: `BillingService::getEffectiveLimits` or `BillingService.getEffectiveLimits`).
 - Run `mapx search <term>` for advanced filtered search (auto-expand, fuzzy fallback, `--format json`).
 - Run `mapx callers <symbol>` / `mapx callees <symbol>` to trace call chains (fuzzy fallback on typos).
 - Run `mapx impact <symbol>` to assess change blast radius.

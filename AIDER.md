@@ -1,4 +1,4 @@
-<!-- mapx v0.3.2 -->
+<!-- mapx v0.3.3 -->
 # MapxGraph Aider Integration
 
 Use MapxGraph commands in this repository to analyze code across **22 languages**.
@@ -7,7 +7,7 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
 
 - `mapx export`: Compact summary of the graph structure.
 - `mapx export --format=svg -o graph.svg`: Visual graph export.
-- `mapx query <symbol>`: Find locations and definitions (supports glob: `*Service`, `get*`).
+- `mapx query <symbol>`: Find locations and definitions (supports glob: `*Service`, `get*`, and flexible namespace notations: `BillingService::getEffectiveLimits` or `BillingService.getEffectiveLimits`).
 - `mapx search <term> --kind class`: Advanced filtered search (auto-expand, fuzzy fallback).
 - `mapx search <term> --format json`: Structured JSON output.
 - `mapx deps <file>`: Show dependencies.

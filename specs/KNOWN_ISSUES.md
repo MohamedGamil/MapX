@@ -9,7 +9,7 @@
 - [x] Rebuild all WASM files to resolve any similar potential comptability issues.
 - [x] Nested apps (NestJS for example) under monorepos like `apps/backend|apps/api` routes and hooks are not parsed correctly.
 - [x] Replace RegEx path patterns matching with picomatch implementation.
-- [ ] Poor support for CSharp and ASP.NET needs a double check
+- [x] Poor support for CSharp and ASP.NET needs a double check
 
 ## Scanner
 - [x] Mapping and associating dependencies between files that are not directly releated in actuality like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
@@ -18,7 +18,7 @@
 - [x] Improve submodules and repos discovery under the same workspace by scanning all directories up to 3 levels in depth, finding any nested git repositories and prompting the user to track them
 - [x] Discovery of nested apps under the same monorepo, for instance a monorepo typically contains `apps/*`, `lib/*` and `packages/*` varying based on its purpose, the idea is to support scanning nested different frameworks and codebased under the same monorepo correctly extracting each app correctly.
 - [x] In some projects like MapX itself .ts files may import symbols from other .ts files while using .js file extension, we need a method to support this edgecase.
-- [ ] Allow querying symbols using standard notations for example:
+- [x] Allow flexible querying and searching for symbols using standard notations for example:
 ```bash
 {
   "symbol": "BillingService::getEffectiveLimits"

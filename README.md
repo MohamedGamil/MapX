@@ -202,7 +202,7 @@ mapx -d /path/to/project export
 | `mapx scan [path]` | Full scan — builds the graph from scratch (supports `--force` to bypass cache) |
 | `mapx update [path]` | Incremental scan — only re-parses changed files |
 | `mapx status [path]` | Show graph metrics, language breakdown, PageRank rankings, git changes |
-| `mapx query <term>` | Search symbols by name — supports glob patterns (`*Service`, `get*`) and fuzzy suggestions |
+| `mapx query <term>` | Search symbols by name — supports glob patterns (`*Service`, `get*`), double-colon/dot namespace separators (e.g. `BillingService::getEffectiveLimits`, `BillingService.getEffectiveLimits`), and fuzzy suggestions |
 | `mapx search <term>` | Advanced symbol search with `--kind`, `--file`, `--exact`, `--limit`, `--format` filters and auto-expand |
 | `mapx deps <file>` | Show dependencies and reverse-dependencies (supports glob/wildcard/substring matching) |
 | `mapx trace <symbol>` | Trace data flow paths from a symbol |

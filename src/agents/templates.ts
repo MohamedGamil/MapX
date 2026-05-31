@@ -176,7 +176,7 @@ mapx -d /path/to/project scan
 - \`mapx export [--dir path]\` - Export compact graph summary
 - \`mapx export --format=<fmt>\` - Export as \`llm\`, \`json\`, \`dot\`, \`svg\`, or \`toon\`
 - \`mapx export --cluster <mode> --depth <n>\` - Cluster-aware DOT/SVG export
-- \`mapx query <symbol> [--dir path]\` - Search for symbols (supports glob patterns: \`*Service\`, \`get*\`)
+- \`mapx query <symbol> [--dir path]\` - Search for symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`)
 - \`mapx search <term> [--dir path] [--kind kind] [--file prefix] [--exact] [--limit limit] [--format text|json]\` - Advanced filtered search with auto-expand and fuzzy fallback
 - \`mapx deps <file> [--dir path]\` - Show dependencies for a file (supports glob/wildcard/substring matching)
 - \`mapx summary [path]\` - Project summary
@@ -344,7 +344,7 @@ Use MapxGraph commands or MCP tools to understand code structure.
 
 This project uses MapxGraph (22 languages, 32 MCP tools). You can run the following CLI commands to understand the codebase:
 - \`mapx export\` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
-- \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`)
+- \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`)
 - \`mapx search <term> --kind class\` - Advanced filtered search (auto-expands if kind has 0 results)
 - \`mapx search <term> --format json\` - Structured JSON output with PageRank scores
 - \`mapx deps <file>\` - View file dependencies
@@ -417,7 +417,7 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
 
 - \`mapx export\`: Compact summary of the graph structure.
 - \`mapx export --format=svg -o graph.svg\`: Visual graph export.
-- \`mapx query <symbol>\`: Find locations and definitions (supports glob: \`*Service\`, \`get*\`).
+- \`mapx query <symbol>\`: Find locations and definitions (supports glob: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 - \`mapx search <term> --kind class\`: Advanced filtered search (auto-expand, fuzzy fallback).
 - \`mapx search <term> --format json\`: Structured JSON output.
 - \`mapx deps <file>\`: Show dependencies.
@@ -442,7 +442,7 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
 ## CLI Commands
 
 - Run \`mapx export\` to summarize the project (supports --format=llm/json/dot/svg/toon).
-- Run \`mapx query <symbol>\` to locate symbols (supports glob patterns: \`*Service\`, \`get*\`).
+- Run \`mapx query <symbol>\` to locate symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains (fuzzy fallback on typos).
 - Run \`mapx impact <symbol>\` to assess change blast radius.
@@ -482,7 +482,7 @@ This project uses MapxGraph (22 languages, 32 MCP tools).
 
 ## Key Commands
 - Run \`mapx export\` to retrieve a token-budgeted codebase summary.
-- Run \`mapx query <symbol>\` to find definitions (supports glob: \`*Service\`, \`get*\`).
+- Run \`mapx query <symbol>\` to find definitions (supports glob: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains.
 - Run \`mapx impact <symbol>\` to assess change risk before refactoring.
@@ -596,7 +596,7 @@ Searches for code symbols with glob pattern support and fuzzy error recovery.
 ### 3. \`mapx_query\` (Quick Symbol Search)
 Simpler search by name pattern. Supports the same glob patterns as \`mapx_search\` but without filters.
 - **Parameters**:
-  - \`term\` (string): Search query with optional glob patterns.
+  - \`term\` (string): Search query with optional glob patterns. Supports flexible namespace notations (e.g. \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`).
 
 ### 4. \`mapx_node\` (Symbol Details & Source Extraction)
 Fetches metadata for a single symbol (file path, line range, signature) and can optionally extract the exact source code.

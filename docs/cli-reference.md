@@ -110,7 +110,7 @@ Outputs:
 
 ## `mapx query <term>`
 
-Search for symbols by name. Supports partial matching, glob patterns (`*Service`, `get*`, `*Controller*`), and wildcard (`*` to list all). When no matches are found, suggests similar symbols via fuzzy matching.
+Search for symbols by name. Supports partial matching, glob patterns (`*Service`, `get*`, `*Controller*`), wildcard (`*` to list all), and flexible namespace querying using double-colons or dots (e.g. `BillingService::getEffectiveLimits` or `BillingService.getEffectiveLimits`). When no matches are found, suggests similar symbols via fuzzy matching.
 
 ```bash
 mapx query <term> [--dir /path]
@@ -122,6 +122,8 @@ mapx query UserService           # Partial match
 mapx query '*Service'            # Glob: all symbols ending with "Service"
 mapx query 'get*'                # Glob: all symbols starting with "get"
 mapx query '*'                   # List all symbols
+mapx query BillingService::getEffectiveLimits # Double-colon namespace query
+mapx query BillingService.getEffectiveLimits  # Dot namespace query
 mapx query Stor                  # Typo: fuzzy suggestions → Store, StoreBackend
 ```
 

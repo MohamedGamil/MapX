@@ -8,6 +8,12 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- **Flexible Symbol Querying**: Support querying and searching for symbols using both double-colon `::` and dot `.` notations natively.
+  - Handled multi-level scopes (e.g. `Namespace::Class::Method` or `Namespace.Class.Method`).
+  - Added fallback normalized scope matching for mixed notation lookups in `getSymbolByName`, `getCallersOfSymbol`, `getCalleesOfSymbol`, and `resolveStart` in `FlowTracer`.
+  - Added unit test cases covering dot and double-colon nested namespace formats.
+
 ## [0.3.3] — 2026-05-31
 
 ### Added

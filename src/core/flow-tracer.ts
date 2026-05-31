@@ -73,10 +73,31 @@ function matchesSymbol(nodeSymbol: string | null, edgeSymbol: string | null): bo
   if (!nodeSymbol) return true;
   if (!edgeSymbol) return true;
   if (nodeSymbol === edgeSymbol) return true;
+
+  const normNode = nodeSymbol.replace(/\./g, '::').toLowerCase();
+  const normEdge = edgeSymbol.replace(/\./g, '::').toLowerCase();
+  if (normNode === normEdge) return true;
+
   if (nodeSymbol.includes('::')) {
-    const [, name] = nodeSymbol.split('::');
-    if (edgeSymbol === name) return true;
+    const parts = nodeSymbol.split('::');
+    const name = parts[parts.length - 1];
+    if (edgeSymbol.toLowerCase() === name.toLowerCase()) return true;
   }
+
+  if (nodeSymbol.includes('.')) {
+    const parts = nodeSymbol.split('.');
+    const last = parts[parts.length - 1].toLowerCase();
+    const commonExtensions = new Set([
+      'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+      'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+      'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+    ]);
+    if (!commonExtensions.has(last)) {
+      const name = parts[parts.length - 1];
+      if (edgeSymbol.toLowerCase() === name.toLowerCase()) return true;
+    }
+  }
+
   return false;
 }
 
@@ -241,7 +262,9 @@ export class FlowTracer {
     const traceSinks: TraceNode[] = [];
 
     for (const key of uniqueNodes) {
-      const [file, symbol] = key.split('::');
+      const firstColon = key.indexOf('::');
+      const file = firstColon !== -1 ? key.substring(0, firstColon) : key;
+      const symbol = firstColon !== -1 ? key.substring(firstColon + 2) : '';
       const nodeSym = symbol || null;
       const node: TraceNode = { file, symbol: nodeSym, depth: 0, incomingEdgeType: 'start' };
 
@@ -296,14 +319,30 @@ export class FlowTracer {
     let name = input;
     if (input.includes('::')) {
       const parts = input.split('::');
-      scope = parts[0];
-      name = parts[1];
+      name = parts.pop()!;
+      scope = parts.join('::');
+    } else if (input.includes('.')) {
+      const parts = input.split('.');
+      const last = parts[parts.length - 1].toLowerCase();
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      if (!commonExtensions.has(last)) {
+        name = parts.pop()!;
+        scope = parts.join('.');
+      }
     }
 
     const allSymbols = this.store.getAllSymbols(repo);
     let matchedSymbol: any = null;
     if (scope) {
       matchedSymbol = allSymbols.find(s => s.name === name && s.scope === scope);
+      if (!matchedSymbol) {
+        const normScope = scope.replace(/\./g, '::').toLowerCase();
+        matchedSymbol = allSymbols.find(s => s.name === name && s.scope && s.scope.replace(/\./g, '::').toLowerCase() === normScope);
+      }
     } else {
       matchedSymbol = allSymbols.find(s => s.name === name || s.scope === name);
     }

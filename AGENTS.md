@@ -1,4 +1,4 @@
-<!-- mapx v0.3.2 -->
+<!-- mapx v0.3.3 -->
 # MapxGraph - LLM Integration Guide
 
 This project uses **MapxGraph** — a local code graph memory system that provides persistent, structured understanding of the codebase across LLM sessions.
@@ -35,7 +35,7 @@ mapx -d /path/to/project scan
 - `mapx export [--dir path]` - Export compact graph summary
 - `mapx export --format=<fmt>` - Export as `llm`, `json`, `dot`, `svg`, or `toon`
 - `mapx export --cluster <mode> --depth <n>` - Cluster-aware DOT/SVG export
-- `mapx query <symbol> [--dir path]` - Search for symbols (supports glob patterns: `*Service`, `get*`)
+- `mapx query <symbol> [--dir path]` - Search for symbols (supports glob patterns: `*Service`, `get*`, and flexible namespace notations: `BillingService::getEffectiveLimits` or `BillingService.getEffectiveLimits`)
 - `mapx search <term> [--dir path] [--kind kind] [--file prefix] [--exact] [--limit limit] [--format text|json]` - Advanced filtered search with auto-expand and fuzzy fallback
 - `mapx deps <file> [--dir path]` - Show dependencies for a file (supports glob/wildcard/substring matching)
 - `mapx summary [path]` - Project summary
