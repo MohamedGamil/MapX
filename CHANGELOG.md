@@ -10,14 +10,12 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [0.3.3] — 2026-05-31
 
-### Changed
-- **Test coverage improvements**: Increased statement/branch/function/line coverage across `src/cli.ts` and `src/mcp.ts`.
-  - `cli.ts`: 70% → 74% statements, 58% → 62% branches, 57% → 62% functions.
-  - `mcp.ts`: 71% → 77% statements, 56% → 62% branches, 55% → 69% functions.
-  - New tests cover: `resolveFilePaths` glob/substring branches, fuzzy "Did you mean?" suggestions in `query`/`search`/`callers`/`callees`/`impact`/`node`, `trace` JSON/DOT/text with real paths (including cycle markers), `sources`/`sinks` route/queue/event/db/cache/mail annotations, `node --format json --source` error path, `profile` command with and without data, and staleness helper branches.
-  - Fixed `vi.mock('../src/core/fuzzy-matcher.js')` to export `isGlobPattern` so `resolveFilePaths` glob detection works in the test environment.
-
 ### Added
+- **Monorepo Framework Detection**: Enabled framework routing and hooks detection for applications inside monorepo subdirectories.
+  - Implemented shared utility helpers `hasPackageJsonDependency` and `hasComposerDependency` in `src/frameworks/utils.ts` to inspect all project configuration files in the workspace (including those in nested subdirectories like `apps/backend/package.json`).
+  - Refactored JS/TS detectors (`NestJSDetector`, `ExpressDetector`, `NextJSDetector`, `ReactRouterDetector`, `SvelteKitDetector`, `TanstackRouterDetector`, `VueRouterDetector`) to utilize the package dependency helper.
+  - Refactored other detectors (`LaravelDetector`, `SymfonyDetector`, `YiiDetector`, `SpringDetector`, `RailsDetector`, `GoDetector`, `RustDetector`, `VaporDetector`, `WordPressDetector`) to check both project root and subdirectory configurations.
+  - Added comprehensive test suite `tests/framework-detectors.test.ts` to verify detectors under both standard root and nested monorepo folder layouts.
 - **Static YAML file support**: Registered `.yaml` and `.yml` as static tier languages and implemented path extraction in `StaticFileParser` to trace relative references between YAML files (establishing correlation only between each other). This also indexes files like `pubspec.yaml`, enabling the package mapper to resolve Dart package imports.
 - **Flutter / Dart framework support**: Full first-class support for Flutter cross-platform mobile apps.
   - New `FlutterDetector` (`src/frameworks/detectors/flutter.ts`) — detects Flutter projects via `pubspec.yaml` (`sdk: flutter`) or the presence of `lib/main.dart`. Extracts routes from `Navigator.pushNamed`, `MaterialApp` routes map, `GoRouter` (`GoRoute(path: '...')`), and `auto_route` (`@RoutePage()`) annotations. Extracts widget lifecycle hooks (`initState`, `dispose`, `build`, `didChangeDependencies`, etc.) and state-management bindings for Provider/Riverpod (`context.watch`, `ref.watch`), BLoC (`BlocBuilder`, `BlocListener`, `BlocConsumer`), and GetX (`Obx`, `GetBuilder`).
@@ -33,6 +31,13 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
     - **Distinct `part`/`part of` tree-sitter captures** — `queries/dart/references.scm` now captures `part_directive` as `ref.target_part`/`ref.type_part` and `part_of_directive` as `ref.target_part_of`/`ref.type_part_of` (previously both used `ref.type_import`), enabling the scanner to distinguish part file relationships from regular imports.
     - **Dart/Flutter import signal for role classification** — `RoleClassifier.getImportsSignal` now recognises Flutter/Dart libraries: `flutter_bloc`/`bloc`/`riverpod`/`provider` → `state` role, `flutter/material`/`flutter/cupertino`/`flutter/widgets` → `components` role, `sqflite`/`hive`/`drift`/`isar` → `data` role.
     - **25 new tests** — Comprehensive `tests/dart-resolution.test.ts` covering: `dart:` stdlib skipping, `package:` URI resolution (basic and monorepo), `discoverDartPackages` (single and multi-pubspec), relative imports, bare-path part directives, and JS/TS non-regression.
+
+### Changed
+- **Test coverage improvements**: Increased statement/branch/function/line coverage across `src/cli.ts` and `src/mcp.ts`.
+  - `cli.ts`: 70% → 74% statements, 58% → 62% branches, 57% → 62% functions.
+  - `mcp.ts`: 71% → 77% statements, 56% → 62% branches, 55% → 69% functions.
+  - New tests cover: `resolveFilePaths` glob/substring branches, fuzzy "Did you mean?" suggestions in `query`/`search`/`callers`/`callees`/`impact`/`node`, `trace` JSON/DOT/text with real paths (including cycle markers), `sources`/`sinks` route/queue/event/db/cache/mail annotations, `node --format json --source` error path, `profile` command with and without data, and staleness helper branches.
+  - Fixed `vi.mock('../src/core/fuzzy-matcher.js')` to export `isGlobPattern` so `resolveFilePaths` glob detection works in the test environment.
 
 ### Fixed
 - **WASM grammar ABI compatibility**: Rebuilt the compiled `tree-sitter-dart.wasm` binary from source using the local tree-sitter CLI to resolve compatibility errors (e.g. `failIf` errors inside `Language.load`) with the runtime `web-tree-sitter` package.

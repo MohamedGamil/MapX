@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../../types.js';
+import { hasPackageJsonDependency } from '../utils.js';
 
 export class NestJSDetector implements FrameworkDetector {
   readonly name = 'nestjs';
@@ -9,19 +10,7 @@ export class NestJSDetector implements FrameworkDetector {
   readonly filePattern = /\.(ts|js)$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    const packageJsonPath = join(projectRoot, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        if (deps && (deps['@nestjs/core'] || deps['@nestjs/common'])) {
-          return true;
-        }
-      } catch {
-        // Ignored
-      }
-    }
-    return false;
+    return hasPackageJsonDependency(projectRoot, files, ['@nestjs/core', '@nestjs/common']);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

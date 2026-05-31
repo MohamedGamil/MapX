@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
+import { hasPackageJsonDependency } from '../utils.js';
 
 export class ExpressDetector implements FrameworkDetector {
   readonly name = 'express';
@@ -11,21 +12,7 @@ export class ExpressDetector implements FrameworkDetector {
   private routerPrefixes = new Map<string, string>(); // router variable -> prefix
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    let isExpress = false;
-
-    // Check project dependencies
-    const packageJsonPath = join(projectRoot, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        if (deps && deps.express) {
-          isExpress = true;
-        }
-      } catch {
-        // Ignored
-      }
-    }
+    const isExpress = await hasPackageJsonDependency(projectRoot, files, ['express']);
 
     if (isExpress) {
       // Pre-scan all JS/TS files to map router variable use to prefixes

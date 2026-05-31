@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../../types.js';
+import { hasComposerDependency } from '../utils.js';
 
 interface ChainedCall {
   name: string;
@@ -370,19 +371,7 @@ export class LaravelDetector implements FrameworkDetector {
     const hasArtisan = files.some(f => f.endsWith('artisan'));
     if (hasArtisan) return true;
 
-    const composerPath = join(projectRoot, 'composer.json');
-    if (existsSync(composerPath)) {
-      try {
-        const composerContent = JSON.parse(await readFile(composerPath, 'utf-8'));
-        const deps = { ...composerContent.require, ...composerContent['require-dev'] };
-        if (deps && deps['laravel/framework']) {
-          return true;
-        }
-      } catch {
-        // Ignored
-      }
-    }
-    return false;
+    return hasComposerDependency(projectRoot, files, ['laravel/framework', 'laravel/lumen-framework']);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

@@ -2,29 +2,22 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../../types.js';
+import { hasComposerDependency } from '../utils.js';
 
 export class SymfonyDetector implements FrameworkDetector {
   readonly name = 'symfony';
   readonly language = 'php';
-  readonly filePattern = /\.(php|yaml|yml)$/;
+  readonly filePattern = /\.php$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    const lockPath = join(projectRoot, 'symfony.lock');
-    if (existsSync(lockPath)) return true;
-
-    const composerPath = join(projectRoot, 'composer.json');
-    if (existsSync(composerPath)) {
-      try {
-        const pkg = JSON.parse(await readFile(composerPath, 'utf-8'));
-        const reqs = { ...pkg.require, ...pkg['require-dev'] };
-        if (reqs && Object.keys(reqs).some(k => k.startsWith('symfony/'))) {
-          return true;
-        }
-      } catch {
-        // Ignored
-      }
+    if (files.some(f => f === 'symfony.lock' || f.endsWith('/symfony.lock'))) {
+      return true;
     }
-    return files.some(f => f.includes('config/routes.yaml') || f.includes('src/Controller/'));
+    const lockPath = join(projectRoot, 'symfony.lock');
+    if (existsSync(lockPath)) {
+      return true;
+    }
+    return hasComposerDependency(projectRoot, files, ['symfony/framework-bundle', 'symfony/symfony']);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

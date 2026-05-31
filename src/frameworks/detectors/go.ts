@@ -4,13 +4,16 @@ import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
 
 export class GoDetector implements FrameworkDetector {
-  readonly name = 'go-web';
+  readonly name = 'go';
   readonly language = 'go';
   readonly filePattern = /\.go$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
+    if (files.some(f => f === 'go.mod' || f.endsWith('/go.mod'))) {
+      return true;
+    }
     const modPath = join(projectRoot, 'go.mod');
-    return existsSync(modPath) || files.some(f => f.endsWith('.go'));
+    return existsSync(modPath);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

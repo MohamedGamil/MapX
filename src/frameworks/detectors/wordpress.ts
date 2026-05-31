@@ -24,6 +24,11 @@ export class WordPressDetector implements FrameworkDetector {
   ]);
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
+    const hasWpDir = files.some(f => f.startsWith('wp-content/') || f.includes('/wp-content/'));
+    if (hasWpDir) return true;
+    if (files.some(f => f === 'wp-config.php' || f.endsWith('/wp-config.php'))) {
+      return true;
+    }
     const wpConfig = join(projectRoot, 'wp-config.php');
     if (existsSync(wpConfig)) return true;
 

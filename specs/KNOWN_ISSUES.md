@@ -6,8 +6,8 @@
 - [x] Poor support for Dart and Mobile apps
 - [x] Poor support for Dart dependency resolution
 - [x] Add support for static YAML files with no correlation except each other
-- [ ] Rebuild all WASM files to resolve any similar potential comptability issues.
-- [ ] Nested apps (NestJS for example) under monorepos like `apps/backend|apps/api` routes and hooks are not parsed correctly.
+- [x] Rebuild all WASM files to resolve any similar potential comptability issues.
+- [x] Nested apps (NestJS for example) under monorepos like `apps/backend|apps/api` routes and hooks are not parsed correctly.
 - [ ] Replace RegEx path patterns matching with picomatch implementation.
 - [ ] Poor support for CSharp and ASP.NET
 
