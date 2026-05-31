@@ -1008,7 +1008,7 @@ export class Store {
         }
         const candidates = this.backend.prepare(fallbackSql).all(...fallbackParams);
         const normScope = scope.replace(/\./g, '::');
-        symbols = candidates.filter(cand => cand.scope && cand.scope.replace(/\./g, '::') === normScope);
+        symbols = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
       }
     } else {
       let sql = 'SELECT * FROM symbols WHERE name = ?';
@@ -1080,7 +1080,7 @@ export class Store {
         }
         const candidates = this.backend.prepare(fallbackSql).all(...fallbackParams);
         const normScope = scope.replace(/\./g, '::');
-        symbols = candidates.filter(cand => cand.scope && cand.scope.replace(/\./g, '::') === normScope);
+        symbols = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
       }
     } else {
       let sql = 'SELECT * FROM symbols WHERE name = ?';

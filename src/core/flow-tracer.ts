@@ -341,7 +341,7 @@ export class FlowTracer {
       matchedSymbol = allSymbols.find(s => s.name === name && s.scope === scope);
       if (!matchedSymbol) {
         const normScope = scope.replace(/\./g, '::').toLowerCase();
-        matchedSymbol = allSymbols.find(s => s.name === name && s.scope && s.scope.replace(/\./g, '::').toLowerCase() === normScope);
+        matchedSymbol = allSymbols.find(s => s.name === name && s.scope && (s.scope as string).replace(/\./g, '::').toLowerCase() === normScope);
       }
     } else {
       matchedSymbol = allSymbols.find(s => s.name === name || s.scope === name);

@@ -8,15 +8,15 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-05-31
+
 ### Added
 - **Flexible Symbol Querying**: Support querying and searching for symbols using both double-colon `::` and dot `.` notations natively.
   - Handled multi-level scopes (e.g. `Namespace::Class::Method` or `Namespace.Class.Method`).
   - Added fallback normalized scope matching for mixed notation lookups in `getSymbolByName`, `getCallersOfSymbol`, `getCalleesOfSymbol`, and `resolveStart` in `FlowTracer`.
   - Added unit test cases covering dot and double-colon nested namespace formats.
-
-## [0.3.3] — 2026-05-31
-
-### Added
+- **Symbol Explorer Graph Navigation**: Added support in the Web Dashboard's Symbol Explorer details view to navigate directly to and focus the symbol's file node on the Cytoscape graph.
+  - Rendered the file path in the Symbol Explorer details panel as an interactive `involved-file-badge` that automatically switches tabs, changes to focus layout mode, and centers on the file node.
 - **Expanded Test Coverage**: Dramatically increased automated test coverage by adding integration tests for all supported languages and web frameworks.
   - Added `tests/parsers-integration.test.ts` to verify parsing, AST queries, symbol extraction, and reference extraction using real WASM binaries for all 23 supported languages.
   - Added `tests/framework-extractors.test.ts` to cover route and hook extraction across all 22 web frameworks, ensuring zero regressions in routing/hooks mappings.
@@ -51,6 +51,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - Fixed `vi.mock('../src/core/fuzzy-matcher.js')` to export `isGlobPattern` so `resolveFilePaths` glob detection works in the test environment.
 
 ### Fixed
+- **TypeScript Compilation & Declaration Emission**: Fixed `TS2339` error during `dts` emission by asserting type compatibility (`cand.scope as string` and `s.scope as string`) during scope filtering and matching.
 - **WASM grammar ABI compatibility**: Rebuilt the compiled `tree-sitter-dart.wasm` binary from source using the local tree-sitter CLI to resolve compatibility errors (e.g. `failIf` errors inside `Language.load`) with the runtime `web-tree-sitter` package.
 - **Dart Tree-sitter query compile errors**: Corrected AST patterns in `symbols.scm` and `references.scm` to be compatible with tree-sitter-dart v1.0.0 grammar. Commented out unsupported rules (`extension_type_declaration`, `mixin_on_clause`, `method_invocation`, `function_invocation`, `named_constructor_invocation`) and removed invalid field names. Explicitly traced parent-child AST paths for imports/exports through intermediate `configurable_uri` and `uri` nodes.
 - **Language Grammar Query and WASM Parser Compatibility**: Resolved critical AST schema compatibility issues across multiple tree-sitter languages by correcting and updating query `.scm` files:

@@ -2692,9 +2692,9 @@ async function loadSymbolDetails(name: string) {
           <span style="background: rgba(229, 192, 123, 0.1); color: #e5c07b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${data.symbol.kind}</span>
         </div>
 
-        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start; flex-shrink: 0;">
+        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: center; flex-shrink: 0;">
           <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">File</span>
-          <span style="word-break: break-all; text-align: right;">${data.symbol.file_path}</span>
+          <span class="involved-file-badge" data-go-id="${data.symbol.file_path}" title="Click to view in Graph Explorer" style="margin: 0; word-break: break-all; text-align: right;">${data.symbol.file_path}</span>
         </div>
 
         <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start; flex-shrink: 0;">

@@ -27,6 +27,7 @@
 
 ## MapX UI:
 - [ ] Create MapX 3d graph mode
+- [x] Add support in symbol explorer to view file node on graph, similar to behavior of view node action in architecture & health screen.
 - [x] Use fCoSE as default graph layout for performance
 - [x] Fix layout changing modes issue
 - [x] fCoSE layout nodes seem to stack on top of each other without proper spacing
