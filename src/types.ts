@@ -181,6 +181,28 @@ export interface MonorepoPackageInfo {
   packageManager: string;
 }
 
+/**
+ * Architectural layer a file belongs to, automatically inferred from its path,
+ * name, and role in the system.  Used to add vertical depth to cluster views.
+ */
+export type ArchLayer =
+  | 'entry'        // CLI / binary entry points, main.ts, index.ts at root
+  | 'api'          // HTTP routes, controllers, handlers, endpoints
+  | 'core'         // Core business logic, domain services
+  | 'parsers'      // Language parsers, tree-sitter integrations
+  | 'exporters'    // Exporters and output formatters
+  | 'agents'       // Agent definitions, stubs, skills
+  | 'frameworks'   // Framework detectors / adapters
+  | 'ui'           // UI components, frontend files
+  | 'data'         // Stores, databases, persistence
+  | 'utils'        // Utilities, helpers, shared code
+  | 'types'        // Type definitions, interfaces
+  | 'config'       // Configuration files
+  | 'scripts'      // Build scripts, tools, automation
+  | 'test'         // Tests and specs
+  | 'docs'         // Documentation
+  | 'other';       // Uncategorised
+
 export interface WorkspaceInfo {
   path: string;
   repos: RepoConfig[];

@@ -6,7 +6,7 @@ import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy
 import { BunStore } from './store-bun.js';
 import { NodeStore } from './store-node.js';
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -134,6 +134,13 @@ const MIGRATIONS: Migration[] = [
     up: [
       `ALTER TABLE edges ADD COLUMN target_repo TEXT`,
       `CREATE INDEX IF NOT EXISTS idx_edges_target_repo ON edges(target_repo)`,
+    ],
+  },
+  {
+    version: 7,
+    description: 'Add layer column to clusters table for architectural layer assignments',
+    up: [
+      `ALTER TABLE clusters ADD COLUMN layer TEXT DEFAULT 'other'`,
     ],
   },
 ];
@@ -484,10 +491,11 @@ export class Store {
     parentName: string | null;
     depth: number;
     fileCount: number;
+    layer?: string;
   }): void {
     this.backend.prepare(`
-      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count, layer)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       cluster.repo,
       cluster.name,
@@ -495,7 +503,8 @@ export class Store {
       cluster.source,
       cluster.parentName,
       cluster.depth,
-      cluster.fileCount
+      cluster.fileCount,
+      cluster.layer ?? 'other'
     );
   }
 

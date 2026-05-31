@@ -10,7 +10,7 @@ describe('Store core class', () => {
   });
 
   it('initializes the database and runs migrations', () => {
-    expect(store.getMeta('schema_version')).toBe('6');
+    expect(store.getMeta('schema_version')).toBe('7');
   });
 
   it('performs meta operations correctly', () => {
@@ -288,6 +288,8 @@ describe('Store core class', () => {
     backend.exec('DROP TABLE IF EXISTS edges');
     backend.exec('DROP TABLE IF EXISTS snapshots');
     backend.exec('DROP TABLE IF EXISTS meta');
+    backend.exec('DROP TABLE IF EXISTS clusters');
+    backend.exec('DROP TABLE IF EXISTS cluster_membership');
     backend.exec(`
       CREATE TABLE files (
         path TEXT PRIMARY KEY,
@@ -339,7 +341,7 @@ describe('Store core class', () => {
 
     // Now open via Store. It should detect schema version 1, apply migrations up to 6
     const storeV1 = new Store(testPath);
-    expect(storeV1.getMeta('schema_version')).toBe('6');
+    expect(storeV1.getMeta('schema_version')).toBe('7');
     // Verify content_hash and target_repo columns exist
     const filesInfo = storeV1.raw.prepare("PRAGMA table_info(files)").all();
     expect(filesInfo.some((c: any) => c.name === 'content_hash')).toBe(true);
@@ -363,6 +365,8 @@ describe('Store core class', () => {
     backend.exec('DROP TABLE IF EXISTS edges');
     backend.exec('DROP TABLE IF EXISTS snapshots');
     backend.exec('DROP TABLE IF EXISTS meta');
+    backend.exec('DROP TABLE IF EXISTS clusters');
+    backend.exec('DROP TABLE IF EXISTS cluster_membership');
     backend.exec(`
       CREATE TABLE files (
         path TEXT PRIMARY KEY,
@@ -415,7 +419,7 @@ describe('Store core class', () => {
 
     // Now open via Store. It should detect schema version 2, apply migrations up to 6
     const storeV2 = new Store(testPath);
-    expect(storeV2.getMeta('schema_version')).toBe('6');
+    expect(storeV2.getMeta('schema_version')).toBe('7');
     storeV2.close();
     fs.unlinkSync(testPath);
   });

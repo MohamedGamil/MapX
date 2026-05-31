@@ -1,6 +1,7 @@
 import { Store } from './store.js';
+import type { ArchLayer } from '../types.js';
 
-export type ClusterSource = 'namespace' | 'directory' | 'community';
+export type ClusterSource = 'namespace' | 'directory' | 'community' | 'layer';
 
 export interface Cluster {
   name: string;
@@ -9,6 +10,7 @@ export interface Cluster {
   parentName: string | null;
   depth: number;
   fileCount: number;
+  layer?: ArchLayer;
 }
 
 export interface ClusterResult {
@@ -16,6 +18,7 @@ export interface ClusterResult {
   namespaceClusters: number;
   directoryClusters: number;
   communityClusters: number;
+  layerClusters: number;
   filesAssigned: number;
   durationMs: number;
 }
@@ -90,6 +93,9 @@ export class ClusterEngine {
     const edges = this.store.getAllEdges(repo);
     const commRes = this.detectCommunityClusters(repo, files, edges, clusterFileSets);
 
+    // 4. Detect Layer clusters (Source 4)
+    const layerRes = this.detectLayerClusters(repo, files);
+
     // Save all to database
     this.store.inTransaction(() => {
       this.store.clearClusters(repo);
@@ -139,16 +145,42 @@ export class ClusterEngine {
           isPrimary: 0,
         });
       }
+
+      // Persist layer clusters
+      for (const c of layerRes.clusters) {
+        this.store.insertCluster({
+          repo,
+          name: c.name,
+          label: c.label,
+          source: c.source,
+          parentName: c.parentName,
+          depth: c.depth,
+          fileCount: c.fileCount,
+          layer: c.layer,
+        });
+      }
+
+      // Persist layer memberships (secondary — allow files to appear in both a
+      // primary cluster and a layer cluster simultaneously)
+      for (const m of layerRes.memberships) {
+        this.store.insertClusterMembership({
+          filePath: m.filePath,
+          clusterName: m.clusterName,
+          repo,
+          isPrimary: 0,
+        });
+      }
     });
 
     const namespaceCount = primaryClusters.filter(c => c.source === 'namespace').length;
     const directoryCount = primaryClusters.filter(c => c.source === 'directory').length;
 
     return {
-      clustersFound: primaryClusters.length + commRes.clusters.length,
+      clustersFound: primaryClusters.length + commRes.clusters.length + layerRes.clusters.length,
       namespaceClusters: namespaceCount,
       directoryClusters: directoryCount,
       communityClusters: commRes.clusters.length,
+      layerClusters: layerRes.clusters.length,
       filesAssigned: allPrimaryMemberships.size,
       durationMs: Date.now() - startTime,
     };
@@ -389,6 +421,200 @@ export class ClusterEngine {
         for (const f of filePaths) {
           memberships.push({ filePath: f, clusterName: commName });
         }
+      }
+    }
+
+    return { clusters, memberships };
+  }
+
+  /**
+   * Assign an architectural layer to a file based on its path and filename.
+   *
+   * The rules are applied in priority order; the first match wins.
+   */
+  static assignFileLayer(filePath: string): ArchLayer {
+    const lower = filePath.toLowerCase();
+    const basename = lower.split('/').pop() ?? lower;
+    const parts = lower.split('/');
+
+    // Tests — highest priority so spec files are never mis-classified
+    if (
+      parts.some(p => p === 'tests' || p === 'test' || p === '__tests__' || p === 'spec' || p === 'specs') ||
+      /\.(test|spec)\.[a-z]+$/.test(lower)
+    ) return 'test';
+
+    // Agents (checked before docs so e.g. agents.stub.md is not mis-classified)
+    if (
+      parts.some(p => p === 'agents' || p === 'agent') ||
+      basename.startsWith('agent') || basename.endsWith('.agent.ts') ||
+      basename.startsWith('agents.')
+    ) return 'agents';
+
+    // Docs
+    if (
+      parts.some(p => p === 'docs' || p === 'documentation') ||
+      basename.endsWith('.md') || basename.endsWith('.mdx')
+    ) return 'docs';
+
+    // Config files
+    if (
+      parts.some(p => p === 'config' || p === 'configs' || p === 'configuration') ||
+      /\.(config|env|rc)\.[a-z]+$/.test(lower) ||
+      basename.endsWith('.env') ||
+      [
+        'tsconfig.json', 'jsconfig.json', 'vite.config.ts', 'vitest.config.ts',
+        'webpack.config.js', 'rollup.config.js', 'jest.config.js',
+        'babel.config.js', '.eslintrc', 'turbo.json', 'nx.json',
+        'package.json', 'cargo.toml', 'go.mod', 'pyproject.toml',
+        'composer.json', 'build.gradle', 'pom.xml', 'makefile',
+      ].includes(basename)
+    ) return 'config';
+
+    // Type definitions
+    if (
+      parts.some(p => p === 'types' || p === 'interfaces' || p === 'typings') ||
+      basename.endsWith('.d.ts') ||
+      basename === 'types.ts' || basename === 'interfaces.ts' ||
+      /\.types\.[a-z]+$/.test(lower) || /\.interface\.[a-z]+$/.test(lower)
+    ) return 'types';
+
+    // Scripts / build tools
+    if (
+      parts.some(p => p === 'scripts' || p === 'tools' || p === 'build' || p === 'tasks') ||
+      parts[0] === 'scripts'
+    ) return 'scripts';
+
+    // UI / Frontend
+    if (
+      parts.some(p =>
+        p === 'ui' || p === 'frontend' || p === 'web' || p === 'client' ||
+        p === 'views' || p === 'pages' || p === 'components' || p === 'widgets' ||
+        p === 'app' || p === 'public' || p === 'assets' || p === 'static'
+      ) ||
+      /\.(vue|svelte|jsx|tsx)$/.test(lower) ||
+      basename.endsWith('.html') || basename.endsWith('.css')
+    ) return 'ui';
+
+    // Exporters
+    if (
+      parts.some(p => p === 'exporters' || p === 'export' || p === 'exports') ||
+      basename.includes('exporter') || basename.includes('export')
+    ) return 'exporters';
+
+    // Parsers / language support
+    if (
+      parts.some(p => p === 'parsers' || p === 'parser' || p === 'languages' || p === 'language') ||
+      basename.includes('parser') || basename.includes('-parser')
+    ) return 'parsers';
+
+    // Framework adapters
+    if (
+      parts.some(p => p === 'frameworks' || p === 'framework' || p === 'plugins' || p === 'adapters') ||
+      basename.includes('framework') || basename.includes('detector')
+    ) return 'frameworks';
+
+    // API / Routes / Controllers
+    if (
+      parts.some(p =>
+        p === 'api' || p === 'routes' || p === 'route' || p === 'controllers' ||
+        p === 'controller' || p === 'handlers' || p === 'handler' || p === 'endpoints'
+      ) ||
+      basename.includes('route') || basename.includes('controller') || basename.includes('handler')
+    ) return 'api';
+
+    // Data layer
+    if (
+      parts.some(p =>
+        p === 'stores' || p === 'store' || p === 'db' || p === 'database' ||
+        p === 'models' || p === 'model' || p === 'data' || p === 'repositories' ||
+        p === 'repository' || p === 'migrations' || p === 'seeds'
+      ) ||
+      basename.startsWith('store') || basename.includes('repository') || basename.includes('migration')
+    ) return 'data';
+
+    // Utilities / helpers
+    if (
+      parts.some(p =>
+        p === 'utils' || p === 'util' || p === 'helpers' || p === 'helper' ||
+        p === 'shared' || p === 'common' || p === 'lib' || p === 'libs'
+      ) ||
+      basename.startsWith('util') || basename.startsWith('helper') ||
+      basename.includes('utils') || basename.includes('helpers')
+    ) return 'utils';
+
+    // Core business logic
+    if (
+      parts.some(p => p === 'core' || p === 'domain' || p === 'services' || p === 'service') ||
+      basename.includes('service') || basename.includes('engine') || basename.includes('manager')
+    ) return 'core';
+
+    // CLI / entry points
+    if (
+      basename === 'cli.ts' || basename === 'cli.js' ||
+      basename === 'main.ts' || basename === 'main.js' ||
+      basename === 'index.ts' || basename === 'index.js' ||
+      parts.some(p => p === 'cli' || p === 'bin' || p === 'commands' || p === 'cmd') ||
+      basename.includes('command') || basename.startsWith('cmd')
+    ) return 'entry';
+
+    return 'other';
+  }
+
+  /**
+   * Layer labels surfaced in the UI (ordered from high-level entry points down
+   * to foundational infrastructure).
+   */
+  private static readonly LAYER_LABELS: Record<ArchLayer, string> = {
+    entry:      'Entry Points',
+    api:        'API / Routes',
+    core:       'Core Logic',
+    parsers:    'Parsers',
+    exporters:  'Exporters',
+    agents:     'Agents',
+    frameworks: 'Frameworks',
+    ui:         'UI / Frontend',
+    data:       'Data / Store',
+    utils:      'Utilities',
+    types:      'Types / Interfaces',
+    config:     'Configuration',
+    scripts:    'Scripts / Build',
+    test:       'Tests',
+    docs:       'Documentation',
+    other:      'Other',
+  };
+
+  private detectLayerClusters(
+    repo: string,
+    files: any[]
+  ): { clusters: Cluster[]; memberships: { filePath: string; clusterName: string }[] } {
+    const layerGroups = new Map<ArchLayer, string[]>();
+
+    for (const f of files) {
+      const filePath = f.path as string;
+      const layer = ClusterEngine.assignFileLayer(filePath);
+      if (!layerGroups.has(layer)) {
+        layerGroups.set(layer, []);
+      }
+      layerGroups.get(layer)!.push(filePath);
+    }
+
+    const clusters: Cluster[] = [];
+    const memberships: { filePath: string; clusterName: string }[] = [];
+
+    for (const [layer, filePaths] of layerGroups.entries()) {
+      if (filePaths.length === 0) continue;
+      const clusterName = `layer:${layer}`;
+      clusters.push({
+        name: clusterName,
+        label: ClusterEngine.LAYER_LABELS[layer],
+        source: 'layer',
+        parentName: null,
+        depth: 0,
+        fileCount: filePaths.length,
+        layer,
+      });
+      for (const fp of filePaths) {
+        memberships.push({ filePath: fp, clusterName });
       }
     }
 

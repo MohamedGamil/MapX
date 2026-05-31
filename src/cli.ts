@@ -1955,7 +1955,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('List detected code clusters/modules')
     .argument('[clusterOrPath]', 'Target directory or a specific cluster name to inspect')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--source <source>', 'Filter by cluster source: namespace, directory, community, or all', 'all')
+    .option('--source <source>', 'Filter by cluster source: namespace, directory, community, layer, or all', 'all')
     .option('--json', 'Output results as JSON')
     .action(async (clusterOrPath: string | undefined, opts: Record<string, unknown>) => {
       let dir = resolveDir(opts, program.opts());
@@ -2076,7 +2076,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const nsCount = filtered.filter((c: any) => c.source === 'namespace').length;
       const dirCount = filtered.filter((c: any) => c.source === 'directory').length;
       const commCount = filtered.filter((c: any) => c.source === 'community').length;
-      console.log(`\n${filtered.length} clusters detected (${nsCount} namespace, ${dirCount} directory, ${commCount} community)\n`);
+      const layerCount = filtered.filter((c: any) => c.source === 'layer').length;
+      const layerSuffix = layerCount > 0 ? `, ${layerCount} layer` : '';
+      console.log(`\n${filtered.length} clusters detected (${nsCount} namespace, ${dirCount} directory, ${commCount} community${layerSuffix})\n`);
     });
 
   program

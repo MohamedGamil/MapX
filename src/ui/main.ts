@@ -216,7 +216,7 @@ let symbolSearchQuery = '';
 // New states for Proximity Clusters Mode & Groupings & Modifications
 let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
 let activeClusterId: string | null = null;
-let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' = 'community';
+let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' | 'layer' = 'community';
 const removedNodes = new Set<string>();
 const removedEdges = new Set<string>();
 const customTags = new Map<string, string[]>(); // node ID -> tags array
@@ -227,6 +227,26 @@ function getTagsStorageKey(): string {
   const repoName = repoEl?.textContent || 'mapx';
   return `mapx-custom-tags:${repoName}`;
 }
+
+// Architectural layer color palette (matches LAYER_LABELS in cluster-engine.ts)
+const LAYER_COLORS: Record<string, string> = {
+  'layer:entry':      '#e06c75',  // red   — entry points / CLI
+  'layer:api':        '#61afef',  // blue  — API / routes
+  'layer:core':       '#56b6c2',  // cyan  — core logic
+  'layer:parsers':    '#d19a66',  // amber — parsers
+  'layer:exporters':  '#c678dd',  // purple — exporters
+  'layer:agents':     '#e5c07b',  // gold  — agents
+  'layer:frameworks': '#98c379',  // green — frameworks
+  'layer:ui':         '#c678dd',  // purple — UI/frontend
+  'layer:data':       '#e5c07b',  // yellow — data layer
+  'layer:utils':      '#abb2bf',  // gray  — utilities
+  'layer:types':      '#56b6c2',  // teal  — types
+  'layer:config':     '#5c6370',  // dark-gray — config
+  'layer:scripts':    '#4b5263',  // darker — scripts
+  'layer:test':       '#98c379',  // green — tests
+  'layer:docs':       '#7a8394',  // muted — docs
+  'layer:other':      '#4b5263',  // darkest — other
+};
 
 function saveCustomTags() {
   try {
@@ -702,6 +722,13 @@ function buildProximityClusterElements(): any[] {
       const parts = fId.split('/');
       const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
       fileToCluster.set(fId, `dir:${dir}`);
+    } else if (groupingStrategy === 'layer') {
+      // Look up the layer membership from the clusters data
+      const layerMembership = rawClustersData.memberships?.find(
+        (m: any) => m.filePath === fId && typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:')
+      );
+      const layerClusterId = layerMembership ? layerMembership.clusterName : 'layer:other';
+      fileToCluster.set(fId, layerClusterId);
     } else if (groupingStrategy === 'language') {
       const lang = node.data.language || 'unknown';
       fileToCluster.set(fId, `lang:${lang}`);
@@ -779,6 +806,10 @@ function buildProximityClusterElements(): any[] {
         label = `${commObj ? commObj.label : commId} (${cnt} files)`;
       } else if (clustId.startsWith('dir:')) {
         label = `${clustId.replace('dir:', '')} (${cnt} files)`;
+      } else if (clustId.startsWith('layer:')) {
+        const layerCluster = rawClustersData.clusters?.find(c => c.name === clustId);
+        const layerLabel = layerCluster ? layerCluster.label : clustId.replace('layer:', '');
+        label = `${layerLabel} (${cnt})`;
       } else if (clustId.startsWith('lang:')) {
         label = `${clustId.replace('lang:', '').toUpperCase()} (${cnt} files)`;
       } else if (clustId.startsWith('tag:')) {
@@ -792,7 +823,8 @@ function buildProximityClusterElements(): any[] {
           type: 'cluster-group',
           fileCount: cnt,
           isOrphans: clustId === 'cluster:orphans',
-          isSingulars: clustId === 'cluster:singulars'
+          isSingulars: clustId === 'cluster:singulars',
+          layerColor: LAYER_COLORS[clustId] ?? null,
         }
       });
     });
@@ -1590,6 +1622,19 @@ async function loadGraph() {
             'z-index': 15,
             'transition-property': 'background-color, border-color, border-width, width, height',
             'transition-duration': 0.2
+          }
+        },
+        {
+          // Layer-colored cluster nodes: use the layerColor data property for border + glow
+          selector: 'node[type="cluster-group"][?layerColor]',
+          style: {
+            'border-color': (node: any) => node.data('layerColor') || '#d19a66',
+            'background-color': (node: any) => {
+              const c = node.data('layerColor') as string | null;
+              if (!c) return '#1e222b';
+              // Darken the layer color to use as background fill
+              return c + '22'; // 13% opacity hex
+            },
           }
         },
         {
