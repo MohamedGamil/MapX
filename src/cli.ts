@@ -561,6 +561,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--repo <name>', 'Scan only a specific registered repository')
     .option('--all', 'Scan all registered repositories')
     .option('--force', 'Force re-parsing of all files (bypass cache)', false)
+    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -569,6 +570,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const scanner = new Scanner(store, config, graph, onProgress, {
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
+        parallel: opts.parallel as boolean | undefined,
       });
 
       const onSigInt = () => {
@@ -615,6 +617,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--repo <name>', 'Update only a specific registered repository')
     .option('--all', 'Update all registered repositories')
+    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -638,6 +641,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const scanner = new Scanner(store, config, graph, onProgress, {
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
+        parallel: opts.parallel as boolean | undefined,
       });
       const onSigInt = () => {
         scanner.abort();

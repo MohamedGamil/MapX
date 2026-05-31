@@ -36,6 +36,7 @@ interface ParseResult {
     targetName: string;
     referenceType: string;
     startLine: number;
+    verifiability?: string;
   }>;
   errors: Array<{ message: string; line?: number }>;
 }
@@ -48,28 +49,11 @@ let loadedLanguages: Map<string, { language: any; symbolsQuery: string; referenc
 let langDefs: Map<string, any>;
 let assetRoot: string;
 let nameByNodeId: Map<number, string>;
-
-function findAssetRoot(): string {
-  const thisFile = fileURLToPath(import.meta.url);
-  if (existsSync(thisFile) && !thisFile.startsWith('/$bunfs') && !thisFile.startsWith('bun:')) {
-    return resolve(dirname(thisFile), '..', '..');
-  }
-  const binDir = dirname(process.execPath);
-  const candidates = [
-    binDir,
-    resolve(binDir, '..'),                               // dev build project root
-    resolve(binDir, '..', 'share', 'mapx'),              // XDG system: /usr/local/share/mapx
-    join(process.env['HOME'] ?? '', '.local', 'share', 'mapx'), // XDG user
-  ];
-  for (const dir of candidates) {
-    if (existsSync(join(dir, 'wasm'))) return dir;
-  }
-  return binDir;
-}
+let ignoredSymbols: Set<string> | undefined;
 
 async function initParser(): Promise<void> {
   if (parserReady) return;
-  assetRoot = findAssetRoot();
+  assetRoot = workerData.assetRoot;
   const mod = await import('web-tree-sitter');
   Parser = mod.Parser;
   Language = mod.Language;
@@ -83,6 +67,60 @@ async function initParser(): Promise<void> {
     }
   });
   parserReady = true;
+}
+
+const COMMON_FRAMEWORK_METHODS = new Set([
+  'useState', 'useEffect', 'useContext', 'useReducer', 'useCallback', 'useMemo', 'useRef', 'useImperativeHandle', 'useLayoutEffect', 'useDebugValue',
+  'ref', 'computed', 'watch', 'watchEffect', 'provide', 'inject', 'onMounted', 'onUpdated', 'onUnmounted',
+  'get', 'post', 'put', 'delete', 'patch', 'options', 'head', 'any', 'all', 'use',
+]);
+
+function isContainerKind(kind: string): boolean {
+  return kind === 'class' || kind === 'interface' || kind === 'trait' || kind === 'enum' || kind === 'struct' || kind === 'module';
+}
+
+function isMemberKind(kind: string): boolean {
+  return kind === 'method' || kind === 'property' || kind === 'constant' || kind === 'field';
+}
+
+function extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {
+  const lines = source.split('\n');
+  const lineIdx = startLine - 1;
+  if (lineIdx >= lines.length) return name;
+  const line = lines[lineIdx].trim();
+
+  if (kind === 'function') {
+    const match = line.match(/(?:export\s+)?(?:async\s+)?function\s+\w+[^{]*/);
+    if (match) return match[0].trim();
+  }
+  if (kind === 'method') {
+    const match = line.match(/(?:abstract\s+)?(?:private|protected|public)?\s*(?:async\s+)?(?:get\s+|set\s+)?\w+\s*\([^)]*\)(\s*:\s*[^{;]+)?/);
+    if (match) return match[0].trim();
+  }
+  if (kind === 'class') {
+    const match = line.match(/(?:export\s+)?(?:abstract\s+)?class\s+\w+[^{]*/);
+    if (match) return match[0].trim();
+  }
+  if (kind === 'interface') {
+    const match = line.match(/(?:export\s+)?interface\s+\w+[^{]*/);
+    if (match) return match[0].trim();
+  }
+  if (kind === 'enum') {
+    const match = line.match(/(?:export\s+)?enum\s+\w+/);
+    if (match) return match[0].trim();
+  }
+  return name;
+}
+
+function cleanTarget(name: string, refType: string): string {
+  if (refType === 'import' || refType === 'require') {
+    let cleaned = name.trim();
+    if (cleaned.startsWith('(') && cleaned.endsWith(')')) {
+      cleaned = cleaned.slice(1, -1).trim();
+    }
+    return cleaned.replace(/^['"]|['"]$/g, '');
+  }
+  return name;
 }
 
 async function parseFile(job: ParseJob): Promise<ParseResult> {
@@ -141,6 +179,8 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
       const symQuery = langCtx.compiledSymQuery;
       const allSymCaptures = symQuery.captures(tree.rootNode);
       const kindNodeIds = new Set<number>();
+      const scopeByNodeId = new Map<number, string>();
+
       for (const capture of allSymCaptures) {
         if (capture.name.startsWith('symbol.kind_')) {
           kindNodeIds.add(capture.node.id);
@@ -156,19 +196,93 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
             }
             node = node.parent;
           }
+        } else if (capture.name === 'symbol.scope') {
+          let node: any = capture.node.parent;
+          while (node) {
+            if (kindNodeIds.has(node.id)) {
+              scopeByNodeId.set(node.id, capture.node.text);
+              break;
+            }
+            node = node.parent;
+          }
         }
       }
+
+      const seenNodeIds = new Set<number>();
       for (const capture of allSymCaptures) {
         if (capture.name.startsWith('symbol.kind_')) {
-          const kind = capture.name.replace('symbol.kind_', '');
-          const name = nameByNodeId.get(capture.node.id) || capture.node.text;
+          if (seenNodeIds.has(capture.node.id)) continue;
+          seenNodeIds.add(capture.node.id);
+
+          let kind = capture.name.replace('symbol.kind_', '');
+          let name = nameByNodeId.get(capture.node.id) || capture.node.text;
+
+          const isDefaultOrAnonymous =
+            capture.node.type === 'arrow_function' ||
+            capture.node.type === 'function_expression' ||
+            (capture.node.type === 'function_declaration' && !capture.node.childForFieldName('name')) ||
+            (capture.node.type === 'class_declaration' && !capture.node.childForFieldName('name')) ||
+            (capture.node.type === 'class' && !capture.node.childForFieldName('name')) ||
+            capture.node.type === 'script_element';
+
+          if (isDefaultOrAnonymous) {
+            const baseName = job.filePath.split('/').pop() || '';
+            name = baseName.replace(/\.[a-zA-Z0-9]+$/, '') || 'default';
+          }
+
+          const startLine = capture.node.startPosition.row + 1;
+          const endLine = capture.node.endPosition.row + 1;
+
+          let extractedScope: string | null = null;
+          if (kind === 'function') {
+            let curr = capture.node.parent;
+            while (curr) {
+              if (
+                curr.type === 'class_definition' ||
+                curr.type === 'class_declaration' ||
+                curr.type === 'struct_specifier' ||
+                curr.type === 'impl_item' ||
+                curr.type === 'interface_declaration'
+              ) {
+                kind = 'method';
+                if (curr.type === 'impl_item') {
+                  const typeChild = curr.childForFieldName ? curr.childForFieldName('type') : null;
+                  if (typeChild) {
+                    extractedScope = typeChild.text;
+                  }
+                }
+                break;
+              }
+              curr = curr.parent;
+            }
+          }
+
+          const signature = extractSignature(source, capture.node, name, kind, startLine);
+          const explicitScope = scopeByNodeId.get(capture.node.id) || extractedScope;
+          let resolvedScope = explicitScope || null;
+          if (!resolvedScope && isMemberKind(kind)) {
+            let curr = capture.node.parent;
+            while (curr) {
+              const parentName = nameByNodeId.get(curr.id);
+              if (parentName) {
+                resolvedScope = parentName;
+                break;
+              }
+              curr = curr.parent;
+            }
+          }
+
+          if (ignoredSymbols?.has(name)) {
+            continue;
+          }
+
           symbols.push({
             name,
             kind,
-            scope: null,
-            signature: name,
-            startLine: capture.node.startPosition.row + 1,
-            endLine: capture.node.endPosition.row + 1,
+            scope: resolvedScope,
+            signature,
+            startLine,
+            endLine,
             metadata: {},
           });
         }
@@ -182,16 +296,33 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
 
         if (capture.name.startsWith('ref.target_')) {
           const rawType = capture.name.replace('ref.target_', '');
-          const refType = REF_TYPE_MAP[rawType] || 'call';
-          let targetName = capture.node.text;
-          if (rawType === 'import') {
-            targetName = targetName.replace(/^['"]|['"]$/g, '');
+          const targetText = capture.node.text;
+          if (!targetText || typeof targetText !== 'string') continue;
+          const targetName = cleanTarget(targetText, rawType);
+          if (!targetName || typeof targetName !== 'string') continue;
+
+          if (rawType === 'render') {
+            const isReactComponent = /^[A-Z]/.test(targetName);
+            if (!isReactComponent) continue;
           }
+
+          const refType = REF_TYPE_MAP[rawType] || 'call';
+
+          let verifiability: 'verified' | 'inferred' = 'verified';
+          if (refType === 'call' && COMMON_FRAMEWORK_METHODS.has(targetName)) {
+            verifiability = 'inferred';
+          }
+
+          if (ignoredSymbols?.has(targetName)) {
+            continue;
+          }
+
           references.push({
             sourceSymbol: null,
             targetName,
             referenceType: refType,
             startLine,
+            verifiability,
           });
         }
       }
@@ -228,6 +359,9 @@ async function initLanguages(): Promise<void> {
 
 async function main() {
   langDefs = new Map(Object.entries(workerData.languages));
+  if (workerData.ignoredSymbols) {
+    ignoredSymbols = workerData.ignoredSymbols;
+  }
 
   await initParser();
   await initLanguages();

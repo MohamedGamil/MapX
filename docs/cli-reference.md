@@ -67,7 +67,7 @@ Perform a full scan of all source files. Builds the graph from scratch.
 - Survives interruptions: progress is saved per-file, re-run to resume
 
 ```bash
-mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--force]
+mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--force] [--no-parallel]
 ```
 
 Options:
@@ -76,14 +76,15 @@ Options:
 - `--repo` — Scan only a specific registered repository
 - `--all` — Scan all registered repositories
 - `--force` — Force re-parsing of all files (bypasses file caching and rebuilds all symbols and edges)
+- `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
 
 ## `mapx update` / `mapx sync`
 
 Incremental scan. Detects changed files via git and only re-scans those.
 
 ```bash
-mapx update [/path]
-mapx sync [/path]
+mapx update [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--no-parallel]
+mapx sync [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--no-parallel]
 ```
 
 Options:
@@ -91,6 +92,7 @@ Options:
 - `--include` — Include glob patterns (repeatable)
 - `--repo` — Update only a specific registered repository
 - `--all` — Update all registered repositories
+- `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
 
 ## `mapx status`
 

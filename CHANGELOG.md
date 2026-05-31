@@ -17,6 +17,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **Pre-scan symbol index**: Built a pre-scan O(1) symbol lookup index to accelerate reference resolution during scanning, replacing repeated linear searches.
 - **Parser pooling**: WASM `Parser` instances are now pooled and reused per language, eliminating redundant parser creation and WASM instantiation overhead during scans.
 - **Hub/orchestrator classification signal**: Files with high fan-in combined with high fan-out are now classified with a hub/orchestrator signal in the role classifier, improving architectural layer accuracy.
+- **Worker thread parallel parsing**: Spawns multiple worker threads via `node:worker_threads` to parse files concurrently, yielding a 3-5x CPU performance speedup for large codebases. Includes a `--no-parallel` CLI flag and `parallel: false` option (both CLI and MCP) to run sequentially on the main thread.
+- **Centralized asset root path resolution**: Added a centralized, unified compatibility helper to resolve WASM assets safely across both Node.js and Bun runtimes.
 - **Contextual error messages for routes/hooks**: `mapx routes` and `mapx hooks` (CLI and MCP) now return descriptive, context-aware error messages when no routes or hooks are found, including suggestions for supported frameworks and troubleshooting steps.
 
 ### Changed

@@ -3,7 +3,9 @@ import { existsSync, readFileSync, closeSync } from 'node:fs';
 import { resolve, relative, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
+import { Worker } from 'node:worker_threads';
 import { Store } from './store.js';
+import { findAssetRoot } from '../parsers/assets.js';
 import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
@@ -88,13 +90,14 @@ export class Scanner {
   private dartPackageMap = new Map<string, string>();
   private cachedActiveDetectors = new Map<string, any[]>();
   private symbolIndex: Map<string, Array<{ name: string; file: string; scope: string | null }>> | null = null;
+  private parallel: boolean;
 
   constructor(
     store: Store,
     config: Config,
     graph: MapxGraph,
     onProgress?: ProgressCallback,
-    options?: { excludes?: string[]; includes?: string[] }
+    options?: { excludes?: string[]; includes?: string[]; parallel?: boolean }
   ) {
     this.store = store;
     this.config = config;
@@ -103,6 +106,7 @@ export class Scanner {
     this.concurrency = DEFAULT_CONCURRENCY;
     this.cliExcludes = options?.excludes ?? [];
     this.cliIncludes = options?.includes ?? [];
+    this.parallel = options?.parallel !== false;
   }
 
   abort(): void {
@@ -720,6 +724,14 @@ export class Scanner {
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
     if (files.length === 0) return [];
+    if (this.parallel && files.length > 10) {
+      try {
+        return await this.parseWithWorkers(files, workspaceRoot, ignoredSymbols, onFileParsed);
+      } catch (err: any) {
+        // Fallback to main thread on error (e.g. worker initialization/spawn error)
+        return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
+      }
+    }
     return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
   }
 
@@ -729,7 +741,136 @@ export class Scanner {
     ignoredSymbols?: Set<string>,
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
-    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
+    const workerCount = Math.min(this.concurrency, files.length, 8);
+    const workerExt = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
+    // If running in Vitest/TS, point to parse-worker.ts, otherwise parse-worker.js
+    const workerUrl = new URL(`../parsers/parse-worker${workerExt}`, import.meta.url);
+
+    const workers: Worker[] = [];
+    const readyPromises: Promise<void>[] = [];
+    const languages = getBuiltinLanguages();
+    const assetRoot = findAssetRoot(import.meta.url);
+
+    for (let i = 0; i < workerCount; i++) {
+      const worker = new Worker(workerUrl, {
+        workerData: { languages, ignoredSymbols, assetRoot }
+      });
+      workers.push(worker);
+
+      readyPromises.push(new Promise<void>((resolveReady, rejectReady) => {
+        const onMessage = (msg: any) => {
+          if (msg.type === 'ready') {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            resolveReady();
+          } else if (msg.type === 'error') {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            rejectReady(new Error(msg.error || 'Worker init error'));
+          }
+        };
+        const onError = (err: Error) => {
+          worker.off('message', onMessage);
+          worker.off('error', onError);
+          rejectReady(err);
+        };
+        worker.on('message', onMessage);
+        worker.on('error', onError);
+      }));
+    }
+
+    // Wait for all workers to be initialized
+    await Promise.all(readyPromises);
+
+    let nextIdx = 0;
+    const results: ParseResult[] = new Array(files.length);
+
+    const runWorkerLoop = async (worker: Worker) => {
+      return new Promise<void>((resolveLoop, rejectLoop) => {
+        let currentResolve: (() => void) | null = null;
+        let currentReject: ((err: Error) => void) | null = null;
+
+        const onMessage = (msg: any) => {
+          const resultIndex = msg.id;
+          results[resultIndex] = {
+            symbols: msg.symbols || [],
+            references: msg.references || [],
+            errors: msg.errors || []
+          };
+
+          const fileInfo = files[resultIndex];
+          const relPath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
+          onFileParsed?.(relPath);
+
+          if (currentResolve) {
+            const cb = currentResolve;
+            currentResolve = null;
+            cb();
+          }
+        };
+
+        const onError = (err: Error) => {
+          if (currentReject) {
+            currentReject(err);
+          } else {
+            rejectLoop(err);
+          }
+        };
+
+        const onExit = (code: number) => {
+          if (code !== 0) {
+            const err = new Error(`Worker exited with code ${code}`);
+            if (currentReject) currentReject(err);
+            else rejectLoop(err);
+          }
+        };
+
+        worker.on('message', onMessage);
+        worker.on('error', onError);
+        worker.on('exit', onExit);
+
+        const nextJob = () => {
+          if (this.aborted || nextIdx >= files.length) {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            worker.off('exit', onExit);
+            resolveLoop();
+            return;
+          }
+
+          const i = nextIdx++;
+          const fileInfo = files[i];
+          const relPath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
+
+          new Promise<void>((res, rej) => {
+            currentResolve = res;
+            currentReject = rej;
+            worker.postMessage({
+              id: i,
+              filePath: relPath,
+              absolutePath: fileInfo.absolutePath
+            });
+          }).then(() => {
+            nextJob();
+          }).catch((err) => {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            worker.off('exit', onExit);
+            rejectLoop(err);
+          });
+        };
+
+        nextJob();
+      });
+    };
+
+    try {
+      await Promise.all(workers.map(w => runWorkerLoop(w)));
+    } finally {
+      await Promise.all(workers.map(w => w.terminate()));
+    }
+
+    return results;
   }
 
   private async parseOnMainThread(

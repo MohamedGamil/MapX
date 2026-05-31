@@ -118,6 +118,8 @@ export function buildServer(options?: ServeOptions): Server {
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
             repo: { type: 'string', description: 'Scan only a specific registered repository' },
             all: { type: 'boolean', description: 'Scan all registered repositories' },
+            force: { type: 'boolean', description: 'Force re-parsing of all files (bypass cache)' },
+            parallel: { type: 'boolean', description: 'Enable parallel parsing via worker threads (default: true)' },
             ...dirProperty,
           },
         },
@@ -132,6 +134,7 @@ export function buildServer(options?: ServeOptions): Server {
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
             repo: { type: 'string', description: 'Update/sync only a specific registered repository' },
             all: { type: 'boolean', description: 'Update/sync all registered repositories' },
+            parallel: { type: 'boolean', description: 'Enable parallel parsing via worker threads (default: true)' },
             ...dirProperty,
           },
         },
@@ -694,9 +697,12 @@ EXAMPLE:
           repoNames = ['all'];
         }
 
+        const force = !!(args as any)?.force;
+        const parallel = (args as any)?.parallel;
+
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
-          const result = await scanner.scanFull(repoNames);
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel });
+          const result = await scanner.scanFull(repoNames, { force });
           return {
             content: [{
               type: 'text',
@@ -728,8 +734,10 @@ EXAMPLE:
           repoNames = ['all'];
         }
 
+        const parallel = (args as any)?.parallel;
+
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel });
           const result = await scanner.scanIncremental(repoNames);
           return {
             content: [{
@@ -973,6 +981,8 @@ Recommendation:
           rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
         }
 
+        const totalMatches = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact }).length;
+
         // F43: JSON format support
         if (format === 'json') {
           const jsonResults = results.map(sym => ({
@@ -985,14 +995,18 @@ Recommendation:
             signature: sym.signature || '',
             pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
           }));
-          const totalMatches = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact }).length;
           const offset = 0;
           const warning = getMcpStalenessWarning(ctx.store, dir);
           return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, totalMatches, offset, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
         }
 
         // F43: Summary header
-        let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+        let header = '';
+        if (limit !== undefined && results.length < totalMatches) {
+          header = `Found ${results.length} of ${totalMatches} symbols`;
+        } else {
+          header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+        }
         if (kind && !broadened) header += ` of kind "${kind}"`;
         if (filePrefix) header += ` in ${filePrefix}`;
         if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;

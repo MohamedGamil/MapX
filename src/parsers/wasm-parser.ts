@@ -5,47 +5,9 @@ import { resolve, dirname, join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LanguageDefinition } from '../languages/registry.js';
 
-const __thisFile = fileURLToPath(import.meta.url);
+import { findAssetRoot } from './assets.js';
 
-/**
- * Find the root directory that contains wasm/ and queries/ subdirectories.
- *
- * Three execution contexts:
- *   1. Source/dev (tsx or bun run src/main.ts):
- *      __thisFile = /path/to/mapx/src/parsers/wasm-parser.ts  → exists
- *      asset root  = resolve(dir, '..', '..')  →  /path/to/mapx/
- *
- *   2. npm-installed (node dist/main.js via npm bin symlink):
- *      __thisFile = /path/to/node_modules/mapx/dist/parsers/wasm-parser.js  → exists
- *      asset root  = resolve(dir, '..', '..')  →  /path/to/node_modules/mapx/
- *
- *   3. Compiled native binary (bun build --compile):
- *      __thisFile = virtual bun:// path  → does NOT exist
- *      falls through to process.execPath-relative search
- */
-function findAssetRoot(): string {
-  if (existsSync(__thisFile) && !__thisFile.startsWith('/$bunfs') && !__thisFile.startsWith('bun:')) {
-    // Source/dev or npm-installed transpiled: navigate up from dist/parsers/ or src/parsers/
-    return resolve(dirname(__thisFile), '..', '..');
-  }
-
-  // Compiled binary: search candidate directories for the wasm/ subdir
-  const binDir = dirname(process.execPath);
-  const candidates = [
-    binDir,                                              // assets next to binary
-    resolve(binDir, '..'),                               // dev build project root
-    resolve(binDir, '..', 'share', 'mapx'),              // XDG system: /usr/local/share/mapx
-    join(process.env['HOME'] ?? '', '.local', 'share', 'mapx'), // XDG user
-  ];
-
-  for (const dir of candidates) {
-    if (existsSync(join(dir, 'wasm'))) return dir;
-  }
-
-  return binDir; // fallback — will produce a clear "file not found" on first use
-}
-
-const PROJECT_ROOT = findAssetRoot();
+const PROJECT_ROOT = findAssetRoot(import.meta.url);
 
 let initPromise: Promise<void> | null = null;
 
