@@ -51,6 +51,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - Fixed `vi.mock('../src/core/fuzzy-matcher.js')` to export `isGlobPattern` so `resolveFilePaths` glob detection works in the test environment.
 
 ### Fixed
+- **CI Dependency Native Compilation**: Added `nan` override (`^2.22.0`) to root `package.json` to resolve native addon compilation errors for `tree-sitter-pascal` (and other tree-sitter packages using old `nan` bindings) under Node.js 20+ in CI workflows.
 - **TypeScript Compilation & Declaration Emission**: Fixed `TS2339` error during `dts` emission by asserting type compatibility (`cand.scope as string` and `s.scope as string`) during scope filtering and matching.
 - **WASM grammar ABI compatibility**: Rebuilt the compiled `tree-sitter-dart.wasm` binary from source using the local tree-sitter CLI to resolve compatibility errors (e.g. `failIf` errors inside `Language.load`) with the runtime `web-tree-sitter` package.
 - **Dart Tree-sitter query compile errors**: Corrected AST patterns in `symbols.scm` and `references.scm` to be compatible with tree-sitter-dart v1.0.0 grammar. Commented out unsupported rules (`extension_type_declaration`, `mixin_on_clause`, `method_invocation`, `function_invocation`, `named_constructor_invocation`) and removed invalid field names. Explicitly traced parent-child AST paths for imports/exports through intermediate `configurable_uri` and `uri` nodes.
