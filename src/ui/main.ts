@@ -1289,9 +1289,8 @@ function updateToolbarVisibility(mode: string) {
 
   const clustersBtn = document.getElementById('btn-toggle-clusters');
   if (clustersBtn) {
-    // Clusters toggle only relevant in full and focus modes
-    // (proximity has its own clustering, directory has its own)
-    clustersBtn.style.display = (mode === 'full' || mode === 'focus') ? 'inline-flex' : 'none';
+    // Clusters toggle only relevant in full codebase mode
+    clustersBtn.style.display = (mode === 'full') ? 'inline-flex' : 'none';
   }
 
   const breadcrumb = document.getElementById('cluster-breadcrumb');
