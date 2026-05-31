@@ -872,7 +872,7 @@ function buildProximityClusterElements(): any[] {
         const commId = clustId.replace('cluster:', '');
         if (commId.startsWith('unassigned:')) {
           const dirPath = commId.replace('unassigned:', '');
-          label = `Unassigned in ${dirPath === 'root' ? 'root' : dirPath} (${cnt} files)`;
+          label = `Folder: ${dirPath === 'root' ? 'root' : dirPath} (${cnt} files)`;
         } else {
           const commObj = rawClustersData.clusters?.find(c => c.name === commId);
           label = `${commObj ? commObj.label : commId} (${cnt} files)`;
@@ -901,6 +901,7 @@ function buildProximityClusterElements(): any[] {
           fileCount: cnt,
           isOrphans: clustId === 'cluster:orphans',
           isSingulars: clustId === 'cluster:singulars',
+          isFolderFallback: clustId.startsWith('cluster:unassigned:'),
           layerColor: LAYER_COLORS[clustId] ?? null,
         }
       });
@@ -1754,6 +1755,33 @@ async function loadGraph() {
               // Darken the layer color to use as background fill
               return c + '22'; // 13% opacity hex
             },
+          }
+        },
+        {
+          selector: 'node[type="cluster-group"][?isFolderFallback]',
+          style: {
+            'shape': 'round-rectangle',
+            'border-style': 'dashed',
+            'border-color': '#e5c07b', // Folder yellow
+            'background-color': '#232520', // Toned-down dark background
+          }
+        },
+        {
+          selector: 'node[type="cluster-group"][?isOrphans]',
+          style: {
+            'shape': 'ellipse',
+            'border-style': 'dashed',
+            'border-color': '#e06c75', // Crimson red
+            'background-color': '#251c1e', // Toned-down dark red background
+          }
+        },
+        {
+          selector: 'node[type="cluster-group"][?isSingulars]',
+          style: {
+            'shape': 'ellipse',
+            'border-style': 'dashed',
+            'border-color': '#98c379', // Green
+            'background-color': '#1a231b', // Toned-down dark green background
           }
         },
         {
