@@ -8,8 +8,6 @@
 - [ ] Poor support for CSharp and ASP.NET
 - [ ] Nested apps (NestJS for example) under monorepos like `apps/backend|apps/api` routes and hooks are not parsed correctly.
 
-document changes to readme and docs, then update generators templates as needed
-
 ## Scanner
 - [x] Mapping and associating dependencies between files that are not directly releated in actuality like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
 - [x] Improve indexed files by adding support for Markdown, HTML, CSS, and JSON files without parsing their contents, only index them and extract their dependencies and dependants.

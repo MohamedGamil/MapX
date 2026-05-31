@@ -173,12 +173,40 @@ class ProfileScreen extends StatelessWidget {}
     const home = routes.find(r => r.handlerSymbol === 'HomeScreen');
     expect(home).toBeDefined();
     expect(home?.metadata?.routeType).toBe('auto-route');
-    expect(home?.path).toContain('/');
+    // The path should be kebab-cased from the class name (minus Page/Screen/View suffix)
+    expect(home?.path).toBe('/home');
+
+    const profile = routes.find(r => r.handlerSymbol === 'ProfileScreen');
+    expect(profile).toBeDefined();
+    expect(profile?.path).toBe('/profile');
   });
 
-  it('returns empty array when content lacks "dart"', async () => {
-    const routes = await d.extractRoutes(filePath, 'const x = 1;', ctx);
+  it('returns empty array when filePath is not a .dart file', async () => {
+    const content = `Navigator.pushNamed(context, '/home');`;
+    const routes = await d.extractRoutes('lib/app.js', content, ctx);
     expect(routes).toHaveLength(0);
+  });
+
+  it('extracts routes from .dart file even without "dart" in content', async () => {
+    const content = `
+void navigate(BuildContext context) {
+  Navigator.pushNamed(context, '/settings');
+}
+`;
+    const routes = await d.extractRoutes(filePath, content, ctx);
+    expect(routes.length).toBeGreaterThanOrEqual(1);
+    expect(routes.some(r => r.path === '/settings')).toBe(true);
+  });
+
+  it('infers hyphenated paths for multi-word auto_route classes', async () => {
+    const content = `
+@RoutePage()
+class UserProfileSettingsScreen extends StatelessWidget {}
+`;
+    const routes = await d.extractRoutes(filePath, content, ctx);
+    const route = routes.find(r => r.handlerSymbol === 'UserProfileSettingsScreen');
+    expect(route).toBeDefined();
+    expect(route?.path).toBe('/user-profile-settings');
   });
 });
 
@@ -302,9 +330,21 @@ Widget build(BuildContext context) {
     expect(hooks.some(h => h.hookName === 'MultiBlocProvider')).toBe(true);
   });
 
-  it('returns empty array when content lacks ".dart"', async () => {
-    const hooks = await d.extractHooks('lib/foo.dart', 'const x = 1;', ctx);
+  it('returns empty array when filePath is not a .dart file', async () => {
+    const content = fileHeader + 'BlocBuilder<AuthBloc, AuthState>();';
+    const hooks = await d.extractHooks('lib/foo.js', content, ctx);
     expect(hooks).toHaveLength(0);
+  });
+
+  it('extracts hooks from .dart file even without ".dart" in content', async () => {
+    const content = `
+class MyState extends State<MyWidget> {
+  @override
+  void initState() { super.initState(); }
+}
+`;
+    const hooks = await d.extractHooks('lib/my_widget.dart', content, ctx);
+    expect(hooks.some(h => h.hookName === 'initState')).toBe(true);
   });
 });
 

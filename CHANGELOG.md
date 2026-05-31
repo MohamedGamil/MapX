@@ -10,6 +10,13 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [0.3.3] — 2026-05-31
 
+### Changed
+- **Test coverage improvements**: Increased statement/branch/function/line coverage across `src/cli.ts` and `src/mcp.ts`.
+  - `cli.ts`: 70% → 74% statements, 58% → 62% branches, 57% → 62% functions.
+  - `mcp.ts`: 71% → 77% statements, 56% → 62% branches, 55% → 69% functions.
+  - New tests cover: `resolveFilePaths` glob/substring branches, fuzzy "Did you mean?" suggestions in `query`/`search`/`callers`/`callees`/`impact`/`node`, `trace` JSON/DOT/text with real paths (including cycle markers), `sources`/`sinks` route/queue/event/db/cache/mail annotations, `node --format json --source` error path, `profile` command with and without data, and staleness helper branches.
+  - Fixed `vi.mock('../src/core/fuzzy-matcher.js')` to export `isGlobPattern` so `resolveFilePaths` glob detection works in the test environment.
+
 ### Added
 - **Flutter / Dart framework support**: Full first-class support for Flutter cross-platform mobile apps.
   - New `FlutterDetector` (`src/frameworks/detectors/flutter.ts`) — detects Flutter projects via `pubspec.yaml` (`sdk: flutter`) or the presence of `lib/main.dart`. Extracts routes from `Navigator.pushNamed`, `MaterialApp` routes map, `GoRouter` (`GoRoute(path: '...')`), and `auto_route` (`@RoutePage()`) annotations. Extracts widget lifecycle hooks (`initState`, `dispose`, `build`, `didChangeDependencies`, etc.) and state-management bindings for Provider/Riverpod (`context.watch`, `ref.watch`), BLoC (`BlocBuilder`, `BlocListener`, `BlocConsumer`), and GetX (`Obx`, `GetBuilder`).

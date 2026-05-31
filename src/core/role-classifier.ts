@@ -290,7 +290,7 @@ export class RoleClassifier {
       } else if (name.endsWith('Component') || name.endsWith('Widget') || name.endsWith('View') || name.endsWith('Screen') || name.endsWith('Page')) {
         roleScores['components'] = (roleScores['components'] || 0) + 1;
         matches.push(name);
-      } else if (name.endsWith('Bloc') || name.endsWith('Cubit') || name.endsWith('Notifier') || name.endsWith('ChangeNotifier') || name.endsWith('Provider') || name.endsWith('Controller') && /^[A-Z]/.test(name)) {
+      } else if (name.endsWith('Bloc') || name.endsWith('Cubit') || name.endsWith('Notifier') || name.endsWith('ChangeNotifier') || name.endsWith('Provider')) {
         roleScores['state'] = (roleScores['state'] || 0) + 1;
         matches.push(name);
       } else if (name.startsWith('use') && sym.kind === 'function') {

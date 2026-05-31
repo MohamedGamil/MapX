@@ -147,7 +147,7 @@ The content is wrapped in markers:
 | Zig | `.zig` | functions, structs, constants, tests, error sets |
 | Bash | `.sh`, `.bash` | functions, variables, aliases |
 | Pascal | `.pas`, `.pp` | procedures, functions, classes, records, interfaces, methods, constants, units |
-| Dart | `.dart` | classes, functions, methods, enums, mixins, extensions, constants |
+| Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types (Dart 3.3+), constants, library namespaces |
 
 ## Dependencies Tracked
 

@@ -99,6 +99,6 @@ When running as an MCP server, MapxGraph exposes these tools:
 
 ## Supported Languages
 
-- **PHP** (built-in): classes, methods, functions, interfaces, traits, enums, constants
-- **JavaScript** (built-in): classes, methods, functions, arrow functions
-- **TypeScript** (built-in): classes, methods, functions, interfaces, enums, type aliases, properties
+- **PHP** (built-in): classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces
+- **JavaScript** (built-in): classes, methods, functions, interfaces, enums, properties, namespaces
+- **TypeScript** (built-in): classes, methods, functions, interfaces, enums, type aliases, properties, namespaces

@@ -32,7 +32,7 @@
 * **87% LLM Cost Reduction** - Feeds exact signatures and dependency pathways to LLM agents rather than reading raw files, slashing token usage.
 * **Deep Symbol Extraction** - Automatically extracts classes, methods, functions, interfaces, traits, structs, modules, and namespaces with their reference lines and call graphs.
 * **Incremental & Resumable Scans** - Git-aware change tracker only scans modified files. Interrupted scans resume exactly where they left off.
-* **Framework Intelligent** - Auto-detects 21 web frameworks (Laravel, Next.js, Django, Spring, etc.) to map out routing paths and hook bindings.
+* **Framework Intelligent** - Auto-detects 22 frameworks (Laravel, Next.js, Django, Spring, Flutter, and more) to map out routing paths, hook bindings, and mobile navigation patterns.
 * **32 MCP Tools** - Seamlessly integrates with Claude Desktop, Cursor, VS Code, and other MCP clients to empower AI coding agents.
 * **Zero Cloud** - All parsed metadata and graphs stay completely local within the `.mapx/` directory of your project.
 
@@ -88,7 +88,7 @@
 - **Data flow tracing** — trace call chains, find sources/sinks, analyze change impact with blast radius scoring
 - **Multi-repo workspaces** — register multiple repos, discover submodules, track cross-repo dependencies
 - **Multiple export formats** — LLM summary (token-budgeted), JSON, GraphViz DOT, SVG, TOON
-- **Framework detection** — 21 frameworks recognized (Laravel, Express, Next.js, Django, Flask, FastAPI, Spring, Rails, and more)
+- **Framework detection** — 22 frameworks recognized (Laravel, Express, Next.js, Django, Flask, FastAPI, Spring, Rails, Flutter, and more)
 - **Web dashboard** — built-in `mapx ui` for interactive graph visualization
 - **Zero cloud** — everything stays on disk in `.mapx/` inside your project
 - **87% LLM cost reduction** — drops context token consumption by 87% vs baseline workspace reads by feeding exact signatures and transitive impact summaries
@@ -386,7 +386,7 @@ See [docs/getting-started.md](docs/getting-started.md#programmatic-usage) for a 
 | Zig | `.zig` | functions, structs, constants, tests |
 | Bash | `.sh`, `.bash` | functions, variables, aliases |
 | Pascal | `.pas`, `.pp` | classes, records, interfaces, methods, functions, constants, units |
-| Dart | `.dart` | classes, functions, enums, mixins, extensions |
+| Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types, constants, library namespaces |
 
 ### Static (Index-only) — Dependency Tracking Without Symbol Extraction
 

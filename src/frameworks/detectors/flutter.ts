@@ -39,7 +39,7 @@ export class FlutterDetector implements FrameworkDetector {
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {
     const routes: RouteBinding[] = [];
 
-    if (!content.includes('dart')) return routes;
+    if (!filePath.endsWith('.dart')) return routes;
 
     // ── 1. Navigator.pushNamed / pushReplacementNamed / pushNamedAndRemoveUntil ──
     // e.g. Navigator.pushNamed(context, '/home')
@@ -107,7 +107,7 @@ export class FlutterDetector implements FrameworkDetector {
       // Convert WidgetName → /widget-name for path inference
       const inferredPath = '/' + widgetName
         .replace(/Page$|Screen$|View$/, '')
-        .replace(/([A-Z])/g, (c, i) => (i > 0 ? '-' : '') + c.toLowerCase());
+        .replace(/([A-Z])/g, (match, _p1, offset) => (offset > 0 ? '-' : '') + match.toLowerCase());
 
       routes.push({
         framework: this.name,
@@ -125,7 +125,7 @@ export class FlutterDetector implements FrameworkDetector {
   async extractHooks(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]> {
     const hooks: HookBinding[] = [];
 
-    if (!content.includes('.dart')) return hooks;
+    if (!filePath.endsWith('.dart')) return hooks;
 
     // ── 1. StatefulWidget lifecycle methods ──────────────────────────────────
     const lifecycleMethods = [
