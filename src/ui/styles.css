@@ -1711,12 +1711,18 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.3px;
   margin-right: 4px;
+  color: #000;
 }
 
-.selection-badge[style="background: #00ffff;"],
-.selection-badge[style="background: #e5c07b;"],
-.selection-badge[style="background: #56b6c2;"] {
-  color: #000;
+.selection-badge[style="background: #5c6370;"],
+.selection-badge[style="background: #4b5263;"],
+.selection-badge[style="background: #e74c3c;"],
+.selection-badge[style="background: #9b59b6;"],
+.selection-badge[style="background: #e84393;"],
+.selection-badge[style="background: #27ae60;"],
+.selection-badge[style="background: #c76dee;"],
+.selection-badge[style="background: #2d3436;"] {
+    color: #fff
 }
 
 .involved-file-badge {

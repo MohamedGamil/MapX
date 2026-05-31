@@ -253,7 +253,7 @@ const LAYER_COLORS: Record<string, string> = {
 
   // Frontend roles
   'layer:pages': '#ff5e00',       // deep orange
-  'layer:components': '#bf55ec',  // bright violet
+  'layer:components': '#c76dee',  // bright violet
   'layer:state': '#2ecc71',       // emerald green
   'layer:hooks': '#3498db',       // dodger blue
   'layer:styles': '#f39c12',      // amber
