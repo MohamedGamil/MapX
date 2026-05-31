@@ -473,6 +473,14 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     nodeMappings: {},
     tier: 'static',
   },
+  yaml: {
+    name: 'yaml',
+    extensions: ['.yaml', '.yml'],
+    grammarWasm: '',
+    queries: { symbols: '', references: '' },
+    nodeMappings: {},
+    tier: 'static',
+  },
 };
 
 export function getBuiltinLanguages(): Record<string, LanguageDefinition> {

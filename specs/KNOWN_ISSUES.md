@@ -5,8 +5,11 @@
 - [x] Improved codebase profiling and architectural analysis
 - [x] Poor support for Dart and Mobile apps
 - [x] Poor support for Dart dependency resolution
-- [ ] Poor support for CSharp and ASP.NET
+- [x] Add support for static YAML files with no correlation except each other
+- [ ] Rebuild all WASM files to resolve any similar potential comptability issues.
 - [ ] Nested apps (NestJS for example) under monorepos like `apps/backend|apps/api` routes and hooks are not parsed correctly.
+- [ ] Replace RegEx path patterns matching with picomatch implementation.
+- [ ] Poor support for CSharp and ASP.NET
 
 ## Scanner
 - [x] Mapping and associating dependencies between files that are not directly releated in actuality like for example in mapx source itself, the graph shows dependents of `src/framework/detectors/express.ts` to `src/parsers/languages/php.ts` and etc. Likely cause similarity of internal logic of php parser and express detector.
