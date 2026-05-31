@@ -19,7 +19,7 @@ import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
-import { calculateMetrics } from './core/metrics.js';
+import { calculateMetrics, calculateClusterMetrics, calculateDSM } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
@@ -241,8 +241,64 @@ EXAMPLES:
         inputSchema: {
           type: 'object',
           properties: {
-            source: { type: 'string', enum: ['all', 'namespace', 'directory', 'community'], description: 'Filter clusters by source type' },
+            source: { type: 'string', enum: ['all', 'namespace', 'directory', 'community', 'layer'], description: 'Filter clusters by source type' },
             cluster: { type: 'string', description: 'Specific cluster name to inspect' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_profile',
+        description: 'Get the codebase profile including detected archetype, frameworks, patterns, and active taxonomy.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_explain',
+        description: 'Explain the role classification for a file, showing all signal sources, confidence scores, and reasons.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: { type: 'string', description: 'File path to explain (relative to project root)' },
+            ...dirProperty,
+          },
+          required: ['file'],
+        },
+      },
+      {
+        name: 'mapx_smells',
+        description: 'Run architectural smell detection on the codebase, returning a list of cycles, hubs, unstable dependencies, or layer violations.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_dsm',
+        description: 'Get the Dependency Structure Matrix (DSM) showing coupling and edge counts between codebase clusters/modules.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_layers',
+        description: 'Get all files grouped by their architectural role/layer, including file counts and basic stats.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
             ...dirProperty,
           },
         },
@@ -2084,6 +2140,161 @@ Callees: ${callees.length}`;
         }
 
         return { content: [{ type: 'text', text: warning + sections.join('\n\n') }] };
+      }
+
+      case 'mapx_profile': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        const profileStr = ctx.store.getMeta('codebase_profile:' + repo);
+        if (!profileStr) {
+          return { content: [{ type: 'text', text: `No codebase profile found for repo "${repo}". Run a scan first.` }] };
+        }
+        const profile = JSON.parse(profileStr);
+        const text = [
+          `Codebase Profile for repo "${repo}":`,
+          `  Archetype: ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`,
+          `  Detected Frameworks: ${profile.detectedFrameworks.join(', ') || 'none'}`,
+          `  Architecture Patterns: ${profile.detectedPatterns.join(', ') || 'none'}`,
+          `  Dominant Languages: ${profile.dominantLanguages.join(', ')}`,
+          `  Has Backend: ${profile.hasBackend}`,
+          `  Has Frontend: ${profile.hasFrontend}`,
+          `  Is Monorepo: ${profile.isMonorepo}`,
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_explain': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const file = (args as any)?.file;
+        if (!file) return { content: [{ type: 'text', text: 'Missing required parameter: file' }] };
+
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const fileRecord = ctx.store.getFile(file);
+        if (!fileRecord) {
+          return { content: [{ type: 'text', text: `File "${file}" not found in graph.` }] };
+        }
+
+        const signals = ctx.store.getClassificationSignals(file);
+        const role = fileRecord.role || 'other';
+        const confidence = typeof fileRecord.role_confidence === 'number' ? fileRecord.role_confidence : 0.5;
+
+        const text = [
+          `File Classification Explanation for: ${file}`,
+          `Role: ${role} (confidence: ${confidence.toFixed(2)})`,
+          `\nSignals:`,
+          ...signals.map((s: any) => `  [${s.source}] ${s.role.padEnd(12)} (conf: ${s.confidence.toFixed(2)}) - ${s.reason}`),
+          signals.length === 0 ? '  (none)' : '',
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_smells': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        const smells = ctx.store.getArchSmells(repo);
+
+        if (smells.length === 0) {
+          return { content: [{ type: 'text', text: `🟢 Clean! No architectural smells detected for repo "${repo}".` }] };
+        }
+
+        const text = [
+          `Architectural Smells for repo "${repo}":`,
+          ...smells.map((s: any) => {
+            const filesStr = s.involvedFiles.length > 0 ? `\n    Files: ${s.involvedFiles.join(', ')}` : '';
+            const clustersStr = s.involvedClusters && s.involvedClusters.length > 0 ? `\n    Clusters: ${s.involvedClusters.join(', ')}` : '';
+            return `\n  [${s.severity.toUpperCase()}] ${s.type}\n    Description: ${s.description}${filesStr}${clustersStr}\n    Suggestion: ${s.suggestion}`;
+          }),
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_dsm': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        const dsm = calculateDSM(ctx.store, repo);
+
+        if (dsm.clusterNames.length === 0) {
+          return { content: [{ type: 'text', text: `No clusters found to build Dependency Structure Matrix (DSM).` }] };
+        }
+
+        const maxLength = Math.max(...dsm.clusterNames.map((n: string) => n.length), 5);
+        const headers = [''.padEnd(maxLength), ...dsm.clusterNames.map((_, idx) => `C${idx + 1}`.padStart(4))].join(' ');
+        const rows = dsm.clusterNames.map((name, i) => {
+          const cells = dsm.matrix[i].map((val, j) => {
+            if (i === j) return '   *';
+            if (val === 0) return '   .';
+            return val.toString().padStart(4);
+          }).join(' ');
+          return `${`C${i + 1} ${name}`.padEnd(maxLength)} ${cells}`;
+        });
+
+        const key = dsm.clusterNames.map((name, idx) => `  C${idx + 1}: ${name}`).join('\n');
+        const text = [
+          `Dependency Structure Matrix (DSM) for "${repo}":`,
+          headers,
+          ...rows,
+          `\nLegend:\n  * = self\n  . = no dependency\n  number = edge count from row cluster to column cluster`,
+          `\nCluster Key:\n${key}`
+        ].join('\n');
+
+        return { content: [{ type: 'text', text }] };
+      }
+
+      case 'mapx_layers': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
+        const dir = resolved.dir;
+        const ctx = await loadCtx(dir);
+        if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
+
+        const repo = (args as any)?.repo || ctx.config.repo.name;
+        const files = ctx.store.getAllFiles(repo);
+        
+        const roleGroups = new Map<string, string[]>();
+        for (const f of files) {
+          const role = (f.role as string) || 'other';
+          if (!roleGroups.has(role)) {
+            roleGroups.set(role, []);
+          }
+          roleGroups.get(role)!.push(f.path as string);
+        }
+
+        const lines = [`Architectural Layers / Roles for "${repo}":`];
+        const sortedRoles = Array.from(roleGroups.keys()).sort();
+        for (const role of sortedRoles) {
+          const list = roleGroups.get(role)!;
+          lines.push(`\n  ${role.toUpperCase()} (${list.length} files):`);
+          for (const f of list.slice(0, 10)) {
+            lines.push(`    • ${f}`);
+          }
+          if (list.length > 10) {
+            lines.push(`    • ...and ${list.length - 10} more`);
+          }
+        }
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
 
       default:

@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
  * tool count, new feature references, and structural integrity.
  */
 describe('Agent Templates', () => {
-  const EXPECTED_TOOL_COUNT = 26;
+  const EXPECTED_TOOL_COUNT = 32;
 
   describe('Template registry', () => {
     it('should have all expected templates', () => {

@@ -1337,3 +1337,256 @@ body {
   background: rgba(229, 192, 123, 0.2);
   color: #e5c07b;
 }
+
+/* Architecture Tab Styles */
+.grid-architecture {
+  display: grid;
+  grid-template-columns: 1.2fr 1.8fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.arch-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.arch-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-white);
+}
+
+.profile-health-container {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.health-gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 15px;
+  min-width: 120px;
+}
+
+.health-badge-large {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--syntax-green);
+  line-height: 1;
+}
+
+.health-score-val {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-white);
+  margin-top: 4px;
+}
+
+.health-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 6px;
+  letter-spacing: 0.5px;
+  text-align: center;
+}
+
+.profile-details-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-detail-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding-bottom: 4px;
+}
+
+.profile-detail-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.profile-detail-value {
+  color: var(--text-white);
+  font-weight: 600;
+}
+
+/* Smells styling */
+.smells-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.smell-item-card {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+  transition: background-color 0.2s ease;
+}
+
+.smell-item-card.severity-warning {
+  background: rgba(229, 192, 123, 0.05);
+  border-color: rgba(229, 192, 123, 0.2);
+}
+
+.smell-item-card.severity-info {
+  background: rgba(97, 175, 239, 0.05);
+  border-color: rgba(97, 175, 239, 0.2);
+}
+
+.smell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.smell-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #fff;
+}
+
+.smell-badge.critical {
+  background: #ef4444;
+}
+
+.smell-badge.warning {
+  background: #e5c07b;
+}
+
+.smell-badge.info {
+  background: #61afef;
+}
+
+.smell-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-white);
+}
+
+.smell-desc {
+  font-size: 11px;
+  color: var(--text-main);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.smell-suggestion {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--syntax-green);
+  border-left: 2px solid var(--syntax-green);
+  padding-left: 6px;
+  margin-top: 4px;
+}
+
+.smell-involved {
+  font-size: 9px;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin-top: 4px;
+}
+
+/* DSM styling */
+.dsm-scroll-container {
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.dsm-matrix-wrapper {
+  padding: 10px;
+  min-width: max-content;
+}
+
+.dsm-table {
+  border-collapse: collapse;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.dsm-table th, .dsm-table td {
+  width: 32px;
+  height: 32px;
+  text-align: center;
+  vertical-align: middle;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dsm-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dsm-table th.dsm-row-hdr {
+  width: auto;
+  padding-left: 10px;
+  padding-right: 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dsm-cell {
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.dsm-cell:hover {
+  filter: brightness(1.2);
+  transform: scale(1.05);
+  outline: 1px solid #fff;
+  z-index: 10;
+}
+
+.dsm-cell.dsm-diagonal {
+  background: rgba(255, 255, 255, 0.08);
+  cursor: not-allowed;
+}
+
+.dsm-cell.dsm-empty {
+  color: rgba(255, 255, 255, 0.1);
+}
+
+.dsm-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 10px;
+}

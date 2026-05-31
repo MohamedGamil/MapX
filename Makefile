@@ -1,6 +1,6 @@
 .PHONY: help init uninit scan update sync status export export-wide export-json export-dot export-svg export-svg-grid export-toon \
        query search deps summary trace callers callees impact node files clusters metrics edges \
-       routes hooks \
+       routes hooks profile arch explain layers context \
        agents-list agents-generate agents-update agents-mcp agents-mcp-detect \
        serve serve-sse ui workspaces-list workspaces-discover workspaces-sync workspaces-add workspaces-remove lang-list lang-install lang-uninstall \
        bench bench-json \
@@ -112,6 +112,10 @@ node: ## Inspect symbol: make node s=SymbolName [src=1] DIR=/path
 files: ## List files: make files [p=prefix_or_glob] [l=lang] DIR=/path
 	$(CLI) files $(if $(p),--path "$(p)",) $(if $(l),--lang $(l),) --dir=$(DIR)
 
+context: ## Generate task-specific context (make context t="Task description" [s=seeds] [b=budget] DIR=/path)
+	@test -n "$(t)" || (echo "Usage: make context t=\"Task description\" [s=seeds] [b=budget] [DIR=/path]" && exit 1)
+	$(CLI) context "$(t)" $(if $(s),--seeds="$(s)",) $(if $(b),--tokens=$(b),) --dir=$(DIR)
+
 clusters: ## List code clusters (make clusters DIR=/path)
 	$(CLI) clusters --dir=$(DIR)
 
@@ -167,6 +171,19 @@ routes: ## Show detected framework routes (make routes DIR=/path)
 
 hooks: ## Show detected framework hooks (make hooks DIR=/path)
 	$(CLI) hooks $(DIR)
+
+profile: ## Show codebase profile (make profile DIR=/path)
+	$(CLI) profile $(DIR)
+
+arch: ## Show full architecture report (make arch [smells=1] [dsm=1] [violations=1] [json=1] DIR=/path)
+	$(CLI) arch $(if $(smells),--smells,) $(if $(dsm),--dsm,) $(if $(violations),--violations,) $(if $(json),--json,) $(DIR)
+
+explain: ## Explain classification signals for a file (make explain f=path/to/file [reclassify=1] DIR=/path)
+	@test -n "$(f)" || (echo "Usage: make explain f=path/to/file [reclassify=1] [DIR=/path]" && exit 1)
+	$(CLI) explain "$(f)" $(if $(reclassify),--reclassify,) --dir=$(DIR)
+
+layers: ## List files grouped by architectural roles (make layers [json=1] DIR=/path)
+	$(CLI) layers $(if $(json),--json,) --dir=$(DIR)
 
 # ── Agent Integration ─────────────────────────────────────────
 

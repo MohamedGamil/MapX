@@ -17,7 +17,7 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
-import { calculateMetrics } from './core/metrics.js';
+import { calculateMetrics, calculateDSM } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
@@ -2196,6 +2196,199 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log(`${h.framework.padEnd(12)} | ${h.hookType.padEnd(15)} | ${h.hookName.padEnd(25)} | ${handler}`);
       }
       console.log(''.padEnd(80, '-'));
+      console.log('');
+    });
+
+  program
+    .command('profile')
+    .description('Show codebase profile: archetype, frameworks, and patterns')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+      const profileStr = store.getMeta('codebase_profile:' + repo);
+      if (!profileStr) {
+        console.log(`No codebase profile found for repo "${repo}". Run a scan first.`);
+        return;
+      }
+      const profile = JSON.parse(profileStr);
+      console.log('\n── Codebase Profile ───────────────────────────────────');
+      console.log(`  Archetype:             ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`);
+      console.log(`  Detected Frameworks:   ${profile.detectedFrameworks.join(', ') || 'none'}`);
+      console.log(`  Architecture Patterns: ${profile.detectedPatterns.join(', ') || 'none'}`);
+      console.log(`  Dominant Languages:    ${profile.dominantLanguages.join(', ')}`);
+      console.log(`  Has Backend:           ${profile.hasBackend}`);
+      console.log(`  Has Frontend:          ${profile.hasFrontend}`);
+      console.log(`  Is Monorepo:           ${profile.isMonorepo}`);
+      console.log('');
+    });
+
+  program
+    .command('arch')
+    .description('Show full architecture report: profile, layers, smells, and DSM')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--smells', 'Show only architectural smells')
+    .option('--dsm', 'Show only Dependency Structure Matrix (DSM)')
+    .option('--violations', 'Show only layer violations')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+
+      const showAll = !opts.smells && !opts.dsm && !opts.violations;
+
+      if (showAll || opts.smells || opts.violations) {
+        const smells = store.getArchSmells(repo);
+        const filtered = opts.violations ? smells.filter((s: any) => s.type === 'layer-violation') : smells;
+        
+        console.log(`\n── Architectural Smells & Violations (${filtered.length}) ─────────────────`);
+        if (filtered.length === 0) {
+          console.log('🟢 Clean! No architectural smells detected.');
+        } else {
+          for (const s of filtered) {
+            console.log(`\n  [${s.severity.toUpperCase()}] ${s.type}`);
+            console.log(`    Description: ${s.description}`);
+            if (s.involvedFiles.length > 0) {
+              console.log(`    Files:       ${s.involvedFiles.join(', ')}`);
+            }
+            if (s.involvedClusters && s.involvedClusters.length > 0) {
+              console.log(`    Clusters:    ${s.involvedClusters.join(', ')}`);
+            }
+            console.log(`    Suggestion:  ${s.suggestion}`);
+          }
+        }
+        console.log('');
+        if (!showAll) return;
+      }
+
+      if (showAll || opts.dsm) {
+        const dsm = calculateDSM(store, repo);
+        if (dsm.clusterNames.length === 0) {
+          console.log('No clusters found to build DSM.');
+        } else {
+          console.log('\n── Dependency Structure Matrix (DSM) ──────────────────');
+          const maxLength = Math.max(...dsm.clusterNames.map((n: string) => n.length), 5);
+          const headers = [''.padEnd(maxLength), ...dsm.clusterNames.map((_, idx) => `C${idx + 1}`.padStart(4))].join(' ');
+          console.log(headers);
+          console.log('-'.repeat(headers.length));
+          dsm.clusterNames.forEach((name, i) => {
+            const cells = dsm.matrix[i].map((val, j) => {
+              if (i === j) return '   *';
+              if (val === 0) return '   .';
+              return val.toString().padStart(4);
+            }).join(' ');
+            console.log(`${`C${i + 1} ${name}`.padEnd(maxLength)} ${cells}`);
+          });
+          console.log(`\nLegend:\n  * = self\n  . = no dependency\n  number = edge count from row cluster to column cluster`);
+          console.log('\nCluster Key:');
+          dsm.clusterNames.forEach((name, idx) => {
+            console.log(`  C${idx + 1}: ${name}`);
+          });
+        }
+        console.log('');
+        if (!showAll) return;
+      }
+
+      if (showAll) {
+        const profileStr = store.getMeta('codebase_profile:' + repo);
+        if (profileStr) {
+          const profile = JSON.parse(profileStr);
+          console.log('── Codebase Profile Summary ───────────────────────────');
+          console.log(`  Archetype:  ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`);
+          console.log(`  Languages:  ${profile.dominantLanguages.join(', ')}`);
+          console.log('');
+        }
+
+        const smells = store.getArchSmells(repo);
+        console.log('── Architecture Health ────────────────────────────────');
+        if (smells.length === 0) {
+          console.log('🟢 Clean! No smells detected.');
+        } else {
+          console.log(`⚠️  Detected ${smells.length} architectural smell(s). Run 'mapx arch --smells' for details.`);
+        }
+        console.log('');
+      }
+    });
+
+  program
+    .command('explain <file>')
+    .description('Explain why a file was classified with a specific role')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (file: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      
+      const fileRecord = store.getFile(file);
+      if (!fileRecord) {
+        console.log(`File "${file}" not found in graph.`);
+        return;
+      }
+
+      const signals = store.getClassificationSignals(file);
+      const role = fileRecord.role || 'other';
+      const confidence = typeof fileRecord.role_confidence === 'number' ? fileRecord.role_confidence : 0.5;
+
+      console.log(`\n── Classification Explanation: ${file} ──`);
+      console.log(`  Role:       ${role} (confidence: ${confidence.toFixed(2)})`);
+      console.log(`\n  Signals:`);
+      for (const s of signals) {
+        console.log(`    [${s.source.padEnd(9)}] ${s.role.padEnd(12)} (conf: ${s.confidence.toFixed(2)}) - ${s.reason}`);
+      }
+      if (signals.length === 0) {
+        console.log('    (none)');
+      }
+      console.log('');
+    });
+
+  program
+    .command('layers')
+    .description('List files grouped by architectural roles/layers')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--json', 'Output results as JSON')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+
+      const files = store.getAllFiles(repo);
+      const roleGroups = new Map<string, string[]>();
+      for (const f of files) {
+        const role = (f.role as string) || 'other';
+        if (!roleGroups.has(role)) {
+          roleGroups.set(role, []);
+        }
+        roleGroups.get(role)!.push(f.path as string);
+      }
+
+      if (opts.json) {
+        const out: Record<string, string[]> = {};
+        for (const [r, paths] of roleGroups.entries()) {
+          out[r] = paths;
+        }
+        console.log(JSON.stringify(out, null, 2));
+        return;
+      }
+
+      console.log(`\n── Architectural Layers / Roles for "${repo}" ─────────`);
+      const sortedRoles = Array.from(roleGroups.keys()).sort();
+      for (const role of sortedRoles) {
+        const list = roleGroups.get(role)!;
+        console.log(`\n  ${role.toUpperCase()} (${list.length} files):`);
+        for (const f of list.slice(0, 10)) {
+          console.log(`    • ${f}`);
+        }
+        if (list.length > 10) {
+          console.log(`    • ...and ${list.length - 10} more`);
+        }
+      }
       console.log('');
     });
 

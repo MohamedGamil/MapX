@@ -46,10 +46,14 @@ mapx -d /path/to/project scan
 - `mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]` - Generate task-specific workspace context
 - `mapx callers <symbol> [--dir path] [--depth depth]` - Trace callers of a symbol (fuzzy fallback on typos)
 - `mapx callees <symbol> [--dir path] [--depth depth]` - Trace callees of a symbol (fuzzy fallback on typos)
-- `mapx metrics [path]` - Show coupling and instability metrics
+- `mapx metrics [path]` - Show coupling and instability metrics for files
 - `mapx edges [path] [--type type] [--from file] [--to file]` - Query dependency edges
 - `mapx routes [path] [--framework name] [--method verb] [--json]` - Show framework routes
 - `mapx hooks [path] [--framework name] [--type type] [--json]` - Show framework hooks
+- `mapx profile [path]` - Show codebase profile (archetype, frameworks, active taxonomy)
+- `mapx arch [path] [--smells] [--dsm] [--violations] [--json]` - Full architecture and health report
+- `mapx explain <file> [--reclassify]` - Explain file role classification signals and weights
+- `mapx layers [path] [--json]` - List files grouped by architectural roles/layers
 - `mapx impact <symbol> [--dir path] [--depth depth]` - Change impact analysis with fuzzy pre-check
 - `mapx node <symbol> [--dir path] [--source] [--format text|json]` - Inspect a symbol node with optional source code
 - `mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
@@ -79,9 +83,18 @@ When running as an MCP server, MapxGraph exposes these tools:
 - `mapx_trace` - Trace data flow paths from a starting symbol or file
 - `mapx_sources` - Find entry points (sources) in the codebase
 - `mapx_sinks` - Find terminal consumers (sinks) in the codebase
+- `mapx_routes` - Show framework routes
+- `mapx_hooks` - Show framework hooks
+- `mapx_edges` - Granular query of graph dependency edges
 - `mapx_impact` - Multi-depth blast radius and change risk analysis for a symbol
 - `mapx_clusters` - List code clusters/modules
 - `mapx_status` - Check scan status, languages breakdown, top PageRank files/symbols, and index recommendations
+- `mapx_metrics` - Compute file coupling and instability metrics
+- `mapx_profile` - Retrieve codebase profile (archetype, frameworks, active taxonomy)
+- `mapx_explain` - Explain file dynamic role classification and weights
+- `mapx_smells` - Detect design smells and architectural violations
+- `mapx_dsm` - Generate cluster Dependency Structure Matrix (DSM)
+- `mapx_layers` - List files grouped by architectural roles/layers
 - `mapx_export` - Export compact graph summary (formats: llm, json, dot, svg, toon)
 - `mapx_context` - Intelligent, token-budgeted workspace context builder
 - `mapx_workspaces` - Retrieve workspace configuration and repositories (list/discover)
@@ -89,6 +102,7 @@ When running as an MCP server, MapxGraph exposes these tools:
 - `mapx_lang_install` - Install dynamic language support
 - `mapx_lang_uninstall` - Uninstall dynamic language support
 - `mapx_batch` - Execute multiple operations in a single call (search, node, callers, callees, deps)
+- `mapx_agents_generate` - Generate/update agent integration instructions and rules
 
 ## When to Use
 

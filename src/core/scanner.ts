@@ -7,6 +7,10 @@ import { Store } from './store.js';
 import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
+import { CodebaseProfiler } from './codebase-profiler.js';
+import { RoleClassifier } from './role-classifier.js';
+import { ArchitectureAnalyzer } from './architecture-analyzer.js';
+import { calculateClusterMetrics } from './metrics.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
 import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
@@ -377,11 +381,92 @@ export class Scanner {
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
       this.clearResumeState(repo.name);
 
+      // 1. Scan Framework Routes and Hooks
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+
+      // 2. Profile Codebase
+      const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+      let activeFrameworks: string[] = [];
+      if (existsSync(frameworksPath)) {
+        try {
+          activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
+        } catch {}
+      }
+      const profiler = new CodebaseProfiler(this.store);
+      const profile = profiler.profile(repo.name, activeFrameworks);
+      this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
+
+      // 3. Classify all files
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(workspaceRoot);
+      const routes = routeRegistry.getRoutes();
+      const hooks = routeRegistry.getHooks();
+
+      const classifier = new RoleClassifier(this.store, this.config);
+      const files = this.store.getAllFiles(repo.name);
+      
+      this.store.inTransaction(() => {
+        for (const f of files) {
+          const filePath = f.path as string;
+          this.store.deleteClassificationSignalsForFile(filePath);
+          const result = classifier.classify(filePath, repo.name, profile, routes, hooks);
+          this.store.updateFileRole(filePath, result.role, result.confidence);
+          for (const sig of result.signals) {
+            this.store.insertClassificationSignal({
+              filePath,
+              repo: repo.name,
+              source: sig.source,
+              role: sig.role,
+              confidence: sig.confidence,
+              reason: sig.reason,
+            });
+          }
+        }
+      });
+
+      // 4. Detect clusters & run communities
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
 
-      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+      // 5. Calculate and persist cluster metrics
+      const metricsList = calculateClusterMetrics(this.store, repo.name);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repo.name);
+        for (const m of metricsList) {
+          this.store.insertClusterMetrics({
+            clusterName: m.clusterName,
+            repo: repo.name,
+            fileCount: m.fileCount,
+            afferentCoupling: m.afferentCoupling,
+            efferentCoupling: m.efferentCoupling,
+            instability: m.instability,
+            internalEdges: m.internalEdges,
+            externalEdges: m.externalEdges,
+            cohesionRatio: m.cohesionRatio,
+            abstractness: m.abstractness,
+            distanceFromMainSeq: m.distanceFromMainSeq,
+          });
+        }
+      });
+
+      // 6. Run Architectural Smell Detection and persist smells
+      const analyzer = new ArchitectureAnalyzer(this.store);
+      const smellsList = analyzer.analyze(repo.name, profile);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repo.name);
+        for (const smell of smellsList) {
+          this.store.insertArchSmell({
+            repo: repo.name,
+            type: smell.type,
+            severity: smell.severity,
+            description: smell.description,
+            involvedFiles: smell.involvedFiles,
+            involvedClusters: smell.involvedClusters,
+            suggestion: smell.suggestion,
+          });
+        }
+      });
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -577,11 +662,92 @@ export class Scanner {
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
 
+      // 1. Scan Framework Routes and Hooks
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+
+      // 2. Profile Codebase
+      const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+      let activeFrameworks: string[] = [];
+      if (existsSync(frameworksPath)) {
+        try {
+          activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
+        } catch {}
+      }
+      const profiler = new CodebaseProfiler(this.store);
+      const profile = profiler.profile(repo.name, activeFrameworks);
+      this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
+
+      // 3. Classify all files
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(workspaceRoot);
+      const routes = routeRegistry.getRoutes();
+      const hooks = routeRegistry.getHooks();
+
+      const classifier = new RoleClassifier(this.store, this.config);
+      const files = this.store.getAllFiles(repo.name);
+      
+      this.store.inTransaction(() => {
+        for (const f of files) {
+          const filePath = f.path as string;
+          this.store.deleteClassificationSignalsForFile(filePath);
+          const result = classifier.classify(filePath, repo.name, profile, routes, hooks);
+          this.store.updateFileRole(filePath, result.role, result.confidence);
+          for (const sig of result.signals) {
+            this.store.insertClassificationSignal({
+              filePath,
+              repo: repo.name,
+              source: sig.source,
+              role: sig.role,
+              confidence: sig.confidence,
+              reason: sig.reason,
+            });
+          }
+        }
+      });
+
+      // 4. Detect clusters & run communities
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
 
-      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+      // 5. Calculate and persist cluster metrics
+      const metricsList = calculateClusterMetrics(this.store, repo.name);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repo.name);
+        for (const m of metricsList) {
+          this.store.insertClusterMetrics({
+            clusterName: m.clusterName,
+            repo: repo.name,
+            fileCount: m.fileCount,
+            afferentCoupling: m.afferentCoupling,
+            efferentCoupling: m.efferentCoupling,
+            instability: m.instability,
+            internalEdges: m.internalEdges,
+            externalEdges: m.externalEdges,
+            cohesionRatio: m.cohesionRatio,
+            abstractness: m.abstractness,
+            distanceFromMainSeq: m.distanceFromMainSeq,
+          });
+        }
+      });
+
+      // 6. Run Architectural Smell Detection and persist smells
+      const analyzer = new ArchitectureAnalyzer(this.store);
+      const smellsList = analyzer.analyze(repo.name, profile);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repo.name);
+        for (const smell of smellsList) {
+          this.store.insertArchSmell({
+            repo: repo.name,
+            type: smell.type,
+            severity: smell.severity,
+            description: smell.description,
+            involvedFiles: smell.involvedFiles,
+            involvedClusters: smell.involvedClusters,
+            suggestion: smell.suggestion,
+          });
+        }
+      });
     }
 
     return {

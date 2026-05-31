@@ -33,7 +33,7 @@
 * **Deep Symbol Extraction** - Automatically extracts classes, methods, functions, interfaces, traits, structs, modules, and namespaces with their reference lines and call graphs.
 * **Incremental & Resumable Scans** - Git-aware change tracker only scans modified files. Interrupted scans resume exactly where they left off.
 * **Framework Intelligent** - Auto-detects 21 web frameworks (Laravel, Next.js, Django, Spring, etc.) to map out routing paths and hook bindings.
-* **26 MCP Tools** - Seamlessly integrates with Claude Desktop, Cursor, VS Code, and other MCP clients to empower AI coding agents.
+* **32 MCP Tools** - Seamlessly integrates with Claude Desktop, Cursor, VS Code, and other MCP clients to empower AI coding agents.
 * **Zero Cloud** - All parsed metadata and graphs stay completely local within the `.mapx/` directory of your project.
 
 <br>
@@ -55,7 +55,7 @@
 - [MCP Integration](#mcp-integration)
   - [Claude Desktop](#claude-desktop-claude_desktop_configjson)
   - [Cursor / VS Code](#cursor--vs-code-cursor-mcpjson)
-  - [Available MCP tools (26 total)](#available-mcp-tools-26-total)
+  - [Available MCP tools (32 total)](#available-mcp-tools-32-total)
 - [Programmatic Usage](#programmatic-usage)
 - [Supported Languages](#supported-languages)
   - [Built-in (Tier 1) — Dedicated Parsers](#built-in-tier-1--dedicated-parsers)
@@ -83,7 +83,7 @@
 - **Incremental scans** — git-aware change detection; only re-parses files that changed
 - **Fast** — parallelised file reads, bounded WASM concurrency, batched SQLite writes
 - **Resumable** — scan progress is checkpointed; `Ctrl+C` and re-run picks up where it left off
-- **26 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and more
+- **32 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and more
 - **Flexible search** — wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON output
 - **Data flow tracing** — trace call chains, find sources/sinks, analyze change impact with blast radius scoring
 - **Multi-repo workspaces** — register multiple repos, discover submodules, track cross-repo dependencies
@@ -219,6 +219,10 @@ mapx -d /path/to/project export
 | `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, and `--format json` |
 | `mapx files` | List and filter files with `--path` (prefix or glob), `--lang`, `--sort`, `--limit` |
 | `mapx clusters` | List detected code clusters/modules (filter with `--source layer\|community\|namespace\|directory`) |
+| `mapx profile` | Show codebase profile details (archetype, frameworks, active taxonomy) |
+| `mapx arch` | Full architecture report: profile, active layers/roles, smells, and DSM matrix |
+| `mapx explain` | Explain file dynamic role classification and weights |
+| `mapx layers` | List project files grouped by architectural roles/layers |
 | `mapx export` | Export graph (default: LLM summary, 8K tokens) |
 | `mapx export --format=json` | Full graph as JSON |
 | `mapx export --format=dot` | GraphViz DOT (with `--cluster` and `--depth`) |
@@ -304,16 +308,16 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 }
 ```
 
-### Available MCP tools (26 total)
+### Available MCP tools (32 total)
 
 | Category | Tools |
 |----------|-------|
 | **Graph Building** | `mapx_scan`, `mapx_sync` |
 | **Symbol Discovery** | `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files` |
-| **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks` |
-| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status` |
+| **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` |
+| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics`, `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers` |
 | **Export** | `mapx_export`, `mapx_context` |
-| **Orchestration** | `mapx_batch` |
+| **Orchestration** | `mapx_batch`, `mapx_agents_generate` |
 | **Workspaces** | `mapx_workspaces` |
 | **Language Management** | `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall` |
 
@@ -503,7 +507,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 |-----|-------------|
 | [Getting Started](docs/getting-started.md) | Installation, quick start, supported languages |
 | [CLI Reference](docs/cli-reference.md) | All commands and their flags |
-| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 26 tools |
+| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 32 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |

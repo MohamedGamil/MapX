@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { calculateMetrics, calculateGraphMetrics } from './core/metrics.js';
+import { calculateMetrics, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { UiEventBus, getToolCallsLogPath } from './ui-events.js';
@@ -231,7 +231,9 @@ export function startUiServer(opts: ServerOpts) {
                 size: f.size_bytes,
                 lines: f.lines,
                 symbolCount: symbolCountMap.get(fPath) || 0,
-                pagerank: pageRankScores.get(fPath) || 0
+                pagerank: pageRankScores.get(fPath) || 0,
+                role: f.role,
+                roleConfidence: f.role_confidence
               }
             });
           }
@@ -327,6 +329,52 @@ export function startUiServer(opts: ServerOpts) {
           const memberships = store.getClusterMemberships(repo);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ clusters, memberships }));
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/profile') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const config = await Config.load(dir);
+          const repo = config.repo.name;
+          const profileStr = store.getMeta('codebase_profile:' + repo);
+          const profile = profileStr ? JSON.parse(profileStr) : null;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ profile }));
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/smells') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const config = await Config.load(dir);
+          const repo = config.repo.name;
+          const smells = store.getArchSmells(repo);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ smells }));
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      if (pathname === '/api/dsm') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const config = await Config.load(dir);
+          const repo = config.repo.name;
+          const dsm = calculateDSM(store, repo);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(dsm));
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }

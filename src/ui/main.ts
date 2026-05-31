@@ -31,6 +31,8 @@ tabs.forEach(tab => {
       setTimeout(() => {
         if (cyInstance) cyInstance.resize();
       }, 50);
+    } else if (currentTab === 'architecture') {
+      loadArchitecture();
     }
   });
 });
@@ -229,23 +231,46 @@ function getTagsStorageKey(): string {
 }
 
 // Architectural layer color palette (matches LAYER_LABELS in cluster-engine.ts)
+// Architectural layer color palette (expanded for role classification, resolved collisions)
 const LAYER_COLORS: Record<string, string> = {
-  'layer:entry': '#e06c75',  // red   — entry points / CLI
-  'layer:api': '#61afef',  // blue  — API / routes
-  'layer:core': '#56b6c2',  // cyan  — core logic
-  'layer:parsers': '#d19a66',  // amber — parsers
-  'layer:exporters': '#c678dd',  // purple — exporters
-  'layer:agents': '#e5c07b',  // gold  — agents
-  'layer:frameworks': '#98c379',  // green — frameworks
-  'layer:ui': '#c678dd',  // purple — UI/frontend
-  'layer:data': '#e5c07b',  // yellow — data layer
-  'layer:utils': '#abb2bf',  // gray  — utilities
-  'layer:types': '#56b6c2',  // teal  — types
-  'layer:config': '#5c6370',  // dark-gray — config
-  'layer:scripts': '#4b5263',  // darker — scripts
-  'layer:test': '#98c379',  // green — tests
-  'layer:docs': '#7a8394',  // muted — docs
-  'layer:other': '#4b5263',  // darkest — other
+  // Universal roles
+  'layer:entry': '#e06c75',       // soft red
+  'layer:config': '#5c6370',      // slate gray
+  'layer:types': '#56b6c2',       // teal/cyan
+  'layer:shared': '#abb2bf',      // light gray
+  'layer:test': '#98c379',        // sage green
+  'layer:docs': '#7a8394',        // steel blue
+  'layer:other': '#4b5263',       // dark gray
+
+  // Backend roles
+  'layer:api': '#61afef',         // light blue
+  'layer:middleware': '#4db5ff',  // sky blue
+  'layer:service': '#c678dd',     // purple
+  'layer:data': '#e5c07b',        // gold/yellow
+  'layer:integration': '#ff7b00', // vibrant orange
+  'layer:auth': '#ff4a8b',        // rose pink
+
+  // Frontend roles
+  'layer:pages': '#ff5e00',       // deep orange
+  'layer:components': '#bf55ec',  // bright violet
+  'layer:state': '#2ecc71',       // emerald green
+  'layer:hooks': '#3498db',       // dodger blue
+  'layer:styles': '#f39c12',      // amber
+  'layer:assets': '#1abc9c',      // turquoise
+
+  // Tool roles
+  'layer:cli': '#e74c3c',         // red
+  'layer:core': '#00ffff',        // cyan
+  'layer:parsers': '#d19a66',     // light brown/orange
+  'layer:plugins': '#9b59b6',     // amethyst purple
+
+  // Legacy fallback roles
+  'layer:utils': '#95a5a6',       // asbestos gray
+  'layer:ui': '#a29bfe',          // medium purple
+  'layer:exporters': '#e84393',   // prunus pink
+  'layer:agents': '#fdcb6e',      // warm yellow
+  'layer:frameworks': '#27ae60',  // nephritis green
+  'layer:scripts': '#2d3436',     // very dark gray
 };
 
 function saveCustomTags() {
@@ -754,12 +779,16 @@ function buildProximityClusterElements(): any[] {
       const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
       fileToCluster.set(fId, `dir:${dir}`);
     } else if (groupingStrategy === 'layer') {
-      // Look up the layer membership from the clusters data
-      const layerMembership = rawClustersData.memberships?.find(
-        (m: any) => m.filePath === fId && typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:')
-      );
-      const layerClusterId = layerMembership ? layerMembership.clusterName : 'layer:other';
-      fileToCluster.set(fId, layerClusterId);
+      const fileRole = node.data.role;
+      if (fileRole) {
+        fileToCluster.set(fId, `layer:${fileRole}`);
+      } else {
+        const layerMembership = rawClustersData.memberships?.find(
+          (m: any) => m.filePath === fId && typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:')
+        );
+        const layerClusterId = layerMembership ? layerMembership.clusterName : 'layer:other';
+        fileToCluster.set(fId, layerClusterId);
+      }
     } else if (groupingStrategy === 'language') {
       const lang = node.data.language || 'unknown';
       fileToCluster.set(fId, `lang:${lang}`);
@@ -839,7 +868,11 @@ function buildProximityClusterElements(): any[] {
         label = `${clustId.replace('dir:', '')} (${cnt} files)`;
       } else if (clustId.startsWith('layer:')) {
         const layerCluster = rawClustersData.clusters?.find(c => c.name === clustId);
-        const layerLabel = layerCluster ? layerCluster.label : clustId.replace('layer:', '');
+        let layerLabel = layerCluster ? layerCluster.label : '';
+        if (!layerLabel) {
+          const raw = clustId.replace('layer:', '');
+          layerLabel = raw.charAt(0).toUpperCase() + raw.slice(1);
+        }
         label = `${layerLabel} (${cnt})`;
       } else if (clustId.startsWith('lang:')) {
         label = `${clustId.replace('lang:', '').toUpperCase()} (${cnt} files)`;
@@ -892,27 +925,46 @@ function buildProximityClusterElements(): any[] {
 }
 
 function buildGraphElementsForMode(): any[] {
-  if (currentGraphMode === 'proximity') {
-    return buildProximityClusterElements();
-  } else if (currentGraphMode === 'directory') {
-    return buildDirectoryAggregatedElements(rawGraphElements, showClusters);
-  } else if (currentGraphMode === 'focus') {
-    if (!focusSeedNode) {
-      const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
-      focusSeedNode = firstFile ? firstFile.data.id : null;
+  const elements = (() => {
+    if (currentGraphMode === 'proximity') {
+      return buildProximityClusterElements();
+    } else if (currentGraphMode === 'directory') {
+      return buildDirectoryAggregatedElements(rawGraphElements, showClusters);
+    } else if (currentGraphMode === 'focus') {
+      if (!focusSeedNode) {
+        const firstFile = rawGraphElements.find(el => el.data && el.data.type === 'file');
+        focusSeedNode = firstFile ? firstFile.data.id : null;
+      }
+      if (focusSeedNode) {
+        return buildFocusModeElements(rawGraphElements, focusSeedNode, focusDepth, showClusters);
+      }
+      return [];
+    } else {
+      const filteredRaw = rawGraphElements.filter(el => {
+        if (el.data && el.data.id && removedNodes.has(el.data.id)) return false;
+        if (el.data && el.data.source && (removedNodes.has(el.data.source) || removedNodes.has(el.data.target) || removedEdges.has(el.data.id))) return false;
+        return true;
+      });
+      return buildGraphElements(filteredRaw, showClusters);
     }
-    if (focusSeedNode) {
-      return buildFocusModeElements(rawGraphElements, focusSeedNode, focusDepth, showClusters);
+  })();
+
+  // Annotate elements with smell indicators (isHub, isCycle)
+  elements.forEach(el => {
+    if (el.data) {
+      if (el.data.type === 'file' && hubNodes.has(el.data.id)) {
+        el.data.isHub = true;
+      }
+      if (el.data.source && el.data.target) {
+        const edgeKey = `edge-${el.data.source}-${el.data.target}`;
+        if (cycleEdges.has(edgeKey)) {
+          el.data.isCycle = true;
+        }
+      }
     }
-    return [];
-  } else {
-    const filteredRaw = rawGraphElements.filter(el => {
-      if (el.data && el.data.id && removedNodes.has(el.data.id)) return false;
-      if (el.data && el.data.source && (removedNodes.has(el.data.source) || removedNodes.has(el.data.target) || removedEdges.has(el.data.id))) return false;
-      return true;
-    });
-    return buildGraphElements(filteredRaw, showClusters);
-  }
+  });
+
+  return elements;
 }
 
 function updateGraphDisplay() {
@@ -1430,6 +1482,15 @@ async function loadGraph() {
         { selector: 'node[language="scala"]', style: { 'background-color': '#e06c75' } },
         { selector: 'node[language="dart"]', style: { 'background-color': '#56b6c2' } },
         {
+          selector: 'node[type="file"][?role]',
+          style: {
+            'background-color': (node: any) => {
+              const r = node.data('role');
+              return LAYER_COLORS[`layer:${r}`] || '#5c6370';
+            }
+          }
+        },
+        {
           selector: 'edge',
           style: {
             'width': 1,
@@ -1690,6 +1751,25 @@ async function loadGraph() {
               // Darken the layer color to use as background fill
               return c + '22'; // 13% opacity hex
             },
+          }
+        },
+        {
+          selector: 'node[?isHub]',
+          style: {
+            'width': 52,
+            'height': 52,
+            'border-color': '#ef4444',
+            'border-width': 2.5,
+            'border-style': 'solid'
+          }
+        },
+        {
+          selector: 'edge[?isCycle]',
+          style: {
+            'line-color': '#ef4444',
+            'target-arrow-color': '#ef4444',
+            'width': 3,
+            'line-style': 'dashed'
           }
         },
         {
@@ -2883,6 +2963,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupSSE();
   setupContextBuilder();
   startPeriodicPolling();
+  loadArchitecture();
 
   // Infinite scroll for Tool Call Log
   const toolLogSentinel = document.getElementById('tool-log-sentinel');
@@ -3112,3 +3193,250 @@ document.addEventListener('DOMContentLoaded', () => {
     updateGraphDisplay();
   });
 });
+
+// Architecture Tab Data Fetching and Rendering
+const cycleEdges = new Set<string>();
+const hubNodes = new Set<string>();
+
+async function loadArchitecture() {
+  try {
+    // 1. Fetch smells to populate annotations before drawing/re-drawing the graph
+    await loadSmells();
+    
+    // 2. Fetch profile
+    const profileRes = await fetch('/api/profile');
+    const profileData = profileRes.ok ? await profileRes.json() : null;
+    renderProfile(profileData?.profile);
+
+    // 3. Fetch DSM
+    const dsmRes = await fetch('/api/dsm');
+    const dsmData = dsmRes.ok ? await dsmRes.json() : null;
+    renderDSM(dsmData);
+  } catch (err) {
+    console.error('Failed to load architecture data:', err);
+  }
+}
+
+async function loadSmells() {
+  try {
+    const res = await fetch('/api/smells');
+    if (!res.ok) return;
+    const data = await res.json();
+    
+    cycleEdges.clear();
+    hubNodes.clear();
+    
+    const smellsListEl = document.getElementById('arch-smells-list');
+    if (!smellsListEl) return;
+    
+    const smells = data.smells || [];
+    if (smells.length === 0) {
+      smellsListEl.innerHTML = '<div class="details-placeholder">No architectural smells detected! Your system health is excellent.</div>';
+      
+      const badge = document.getElementById('arch-health-badge');
+      const score = document.getElementById('arch-health-score');
+      if (badge) {
+        badge.textContent = 'A+';
+        badge.style.color = 'var(--syntax-green)';
+      }
+      if (score) score.textContent = '100%';
+      return;
+    }
+    
+    let criticalCount = 0;
+    let warningCount = 0;
+    let infoCount = 0;
+    
+    let html = '';
+    for (const smell of smells) {
+      const severity = (smell.severity || 'warning').toLowerCase();
+      if (severity === 'critical') criticalCount++;
+      else if (severity === 'warning') warningCount++;
+      else infoCount++;
+      
+      let involvedFilesStr = '';
+      if (smell.involved_files) {
+        try {
+          const files = JSON.parse(smell.involved_files);
+          involvedFilesStr = files.map((f: string) => f.split('/').pop()).join(', ');
+          
+          if (smell.type === 'cycle') {
+            for (let i = 0; i < files.length; i++) {
+              const src = files[i];
+              const tgt = files[(i + 1) % files.length];
+              cycleEdges.add(`edge-${src}-${tgt}`);
+              cycleEdges.add(`edge-${tgt}-${src}`);
+            }
+          } else if (smell.type === 'hub') {
+            for (const f of files) {
+              hubNodes.add(f);
+            }
+          }
+        } catch (e) {}
+      }
+      
+      html += `
+        <div class="smell-item-card severity-${severity}">
+          <div class="smell-header">
+            <span class="smell-badge ${severity}">${severity}</span>
+            <span class="smell-title">${smell.type.toUpperCase()} SMELL</span>
+          </div>
+          <div class="smell-desc">${smell.description}</div>
+          ${smell.suggestion ? `<div class="smell-suggestion">💡 Suggestion: ${smell.suggestion}</div>` : ''}
+          ${involvedFilesStr ? `<div class="smell-involved">📍 Involved: ${involvedFilesStr}</div>` : ''}
+        </div>
+      `;
+    }
+    
+    smellsListEl.innerHTML = html;
+    
+    // Dynamically calculate health score: 100 - (critical * 15) - (warning * 5) - (info * 1)
+    const rawScore = Math.max(30, 100 - (criticalCount * 15) - (warningCount * 5) - (infoCount * 1));
+    const healthScore = Math.round(rawScore);
+    
+    let healthGrade = 'A';
+    let healthColor = 'var(--syntax-green)';
+    if (healthScore >= 95) { healthGrade = 'A+'; }
+    else if (healthScore >= 90) { healthGrade = 'A'; }
+    else if (healthScore >= 85) { healthGrade = 'A-'; healthColor = '#a3d685'; }
+    else if (healthScore >= 80) { healthGrade = 'B+'; healthColor = '#e5c07b'; }
+    else if (healthScore >= 75) { healthGrade = 'B'; healthColor = '#e5c07b'; }
+    else if (healthScore >= 70) { healthGrade = 'B-'; healthColor = '#e5c07b'; }
+    else if (healthScore >= 60) { healthGrade = 'C'; healthColor = '#d19a66'; }
+    else if (healthScore >= 50) { healthGrade = 'D'; healthColor = '#e06c75'; }
+    else { healthGrade = 'F'; healthColor = '#ef4444'; }
+    
+    const badge = document.getElementById('arch-health-badge');
+    const score = document.getElementById('arch-health-score');
+    if (badge) {
+      badge.textContent = healthGrade;
+      badge.style.color = healthColor;
+    }
+    if (score) {
+      score.textContent = `${healthScore}%`;
+    }
+  } catch (err) {
+    console.error('Failed to load smells:', err);
+  }
+}
+
+function renderProfile(profile: any) {
+  const container = document.getElementById('arch-profile-details');
+  if (!container) return;
+  
+  if (!profile) {
+    container.innerHTML = '<div class="details-placeholder">No codebase profile available. Scan the project to profile archetype.</div>';
+    return;
+  }
+  
+  const dominantLangs = profile.dominantLanguages || [];
+  const frameworks = profile.detectedFrameworks || [];
+  const patterns = profile.detectedPatterns || [];
+  
+  container.innerHTML = `
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Archetype</span>
+      <span class="profile-detail-value">${profile.archetype || 'mixed'} (conf: ${(profile.archetypeConfidence || 0).toFixed(2)})</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Dominant Languages</span>
+      <span class="profile-detail-value">${dominantLangs.join(', ') || 'unknown'}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Detected Frameworks</span>
+      <span class="profile-detail-value">${frameworks.join(', ') || 'none'}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Architecture Patterns</span>
+      <span class="profile-detail-value">${patterns.join(', ') || 'none'}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Has Backend</span>
+      <span class="profile-detail-value">${profile.hasBackend ? 'Yes' : 'No'}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Has Frontend</span>
+      <span class="profile-detail-value">${profile.hasFrontend ? 'Yes' : 'No'}</span>
+    </div>
+    <div class="profile-detail-item">
+      <span class="profile-detail-label">Is Monorepo</span>
+      <span class="profile-detail-value">${profile.isMonorepo ? 'Yes' : 'No'}</span>
+    </div>
+  `;
+}
+
+function renderDSM(dsm: any) {
+  const container = document.getElementById('arch-dsm-matrix');
+  if (!container) return;
+  
+  if (!dsm || !dsm.clusterNames || dsm.clusterNames.length === 0) {
+    container.innerHTML = '<div class="details-placeholder">No clusters found to generate DSM matrix.</div>';
+    return;
+  }
+  
+  const names: string[] = dsm.clusterNames;
+  const matrix: number[][] = dsm.matrix;
+  const dominantTypes: string[][] = dsm.dominantTypes || [];
+  
+  let html = '<table class="dsm-table">';
+  
+  // Headers
+  html += '<thead><tr><th></th>';
+  for (let j = 0; j < names.length; j++) {
+    html += `<th title="${names[j]}">C${j + 1}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  
+  // Rows
+  for (let i = 0; i < names.length; i++) {
+    html += `<tr><th class="dsm-row-hdr" title="${names[i]}">C${i + 1}: ${names[i]}</th>`;
+    for (let j = 0; j < names.length; j++) {
+      if (i === j) {
+        html += `<td class="dsm-cell dsm-diagonal" title="${names[i]} self-coupling">—</td>`;
+      } else {
+        const val = matrix[i][j] || 0;
+        const domType = (dominantTypes[i] && dominantTypes[i][j]) || '';
+        
+        let bgStyle = '';
+        let cellClass = 'dsm-cell';
+        let textVal = '';
+        
+        if (val > 0) {
+          textVal = String(val);
+          const alpha = Math.min(0.15 + (val * 0.08), 0.9);
+          bgStyle = `style="background-color: rgba(97, 175, 239, ${alpha}); color: #fff; font-weight: bold;"`;
+        } else {
+          cellClass += ' dsm-empty';
+          textVal = '0';
+        }
+        
+        const cellTitle = `${names[i]} calls ${names[j]}: ${val} times${domType ? ` (dominant type: ${domType})` : ''}`;
+        html += `<td class="${cellClass}" ${bgStyle} title="${cellTitle}" data-src="${names[i]}" data-tgt="${names[j]}" data-val="${val}" data-type="${domType}">${textVal}</td>`;
+      }
+    }
+    html += '</tr>';
+  }
+  
+  html += '</tbody></table>';
+  container.innerHTML = html;
+  
+  // Cell click listener
+  container.querySelectorAll('.dsm-cell:not(.dsm-diagonal)').forEach(cell => {
+    cell.addEventListener('click', (e) => {
+      const el = e.currentTarget as HTMLElement;
+      const src = el.getAttribute('data-src') || '';
+      const tgt = el.getAttribute('data-tgt') || '';
+      const val = el.getAttribute('data-val') || '0';
+      const domType = el.getAttribute('data-type') || '';
+      
+      const detailEl = document.getElementById('dsm-legend-detail');
+      if (detailEl) {
+        if (parseInt(val, 10) > 0) {
+          detailEl.innerHTML = `<strong>${src}</strong> depends on <strong>${tgt}</strong> (weight: <strong>${val}</strong>, primary: <em>${domType}</em>)`;
+        } else {
+          detailEl.innerHTML = `No direct dependencies from <strong>${src}</strong> to <strong>${tgt}</strong>`;
+        }
+      }
+    });
+  });
+}

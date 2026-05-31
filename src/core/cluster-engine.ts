@@ -1,5 +1,6 @@
 import { Store } from './store.js';
-import type { ArchLayer } from '../types.js';
+import type { ArchLayer, FileRole } from '../types.js';
+import { detectLeidenCommunities } from './leiden.js';
 
 export type ClusterSource = 'namespace' | 'directory' | 'community' | 'layer';
 
@@ -299,95 +300,37 @@ export class ClusterEngine {
     existingClusterFileSets: Map<string, Set<string>>
   ): { clusters: Cluster[]; memberships: { filePath: string; clusterName: string }[] } {
     const filesList = files.map(f => f.path as string).sort();
-    const weights = new Map<string, Map<string, number>>();
-    const addWeight = (u: string, v: string, w: number) => {
-      if (!weights.has(u)) weights.set(u, new Map());
-      const uMap = weights.get(u)!;
-      uMap.set(v, (uMap.get(v) || 0) + w);
-    };
+    const leidenEdges: { source: string; target: string; weight: number }[] = [];
 
     for (const e of edges) {
       const src = e.source_file as string;
       const tgt = e.target_file as string;
       if (src === tgt) continue;
-      addWeight(src, tgt, 1);
-      addWeight(tgt, src, 1);
+
+      let weight = 1;
+      const type = (e.edge_type || '').toLowerCase();
+      if (type === 'call') weight = 3;
+      else if (type === 'import' || type === 'require') weight = 2;
+      else if (type === 'extends' || type === 'implements') weight = 2;
+      else if (type === 'relation') weight = 2;
+      else if (type === 'type_reference' || type === 'return_type' || type === 'param_type') weight = 1;
+
+      leidenEdges.push({ source: src, target: tgt, weight });
     }
 
-    const labels = new Map<string, string>();
-    for (const node of filesList) {
-      labels.set(node, node);
-    }
-
-    const seededShuffle = <T>(array: T[], seed: number): T[] => {
-      const result = [...array];
-      let currentSeed = seed;
-      const random = () => {
-        currentSeed = (currentSeed * 9301 + 49297) % 233280;
-        return currentSeed / 233280;
-      };
-      for (let i = result.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        const temp = result[i];
-        result[i] = result[j];
-        result[j] = temp;
-      }
-      return result;
-    };
-
-    const maxIterations = 10;
-    let changed = true;
-    for (let iter = 0; iter < maxIterations && changed; iter++) {
-      changed = false;
-      const shuffledNodes = seededShuffle(filesList, 42 + iter);
-      for (const node of shuffledNodes) {
-        const neighbors = weights.get(node);
-        if (!neighbors || neighbors.size === 0) continue;
-
-        const labelWeights = new Map<string, number>();
-        for (const [neighbor, weight] of neighbors.entries()) {
-          const nLabel = labels.get(neighbor)!;
-          labelWeights.set(nLabel, (labelWeights.get(nLabel) || 0) + weight);
-        }
-
-        let maxLabel = labels.get(node)!;
-        let maxW = 0;
-
-        const sortedLabels = Array.from(labelWeights.keys()).sort();
-        for (const label of sortedLabels) {
-          const w = labelWeights.get(label)!;
-          if (w > maxW) {
-            maxW = w;
-            maxLabel = label;
-          } else if (w === maxW) {
-            if (label < maxLabel) {
-              maxLabel = label;
-            }
-          }
-        }
-
-        if (labels.get(node) !== maxLabel) {
-          labels.set(node, maxLabel);
-          changed = true;
-        }
-      }
-    }
-
-    const communityGroups = new Map<string, string[]>();
-    for (const [node, label] of labels.entries()) {
-      if (!communityGroups.has(label)) {
-        communityGroups.set(label, []);
-      }
-      communityGroups.get(label)!.push(node);
-    }
+    const communities = detectLeidenCommunities(filesList, leidenEdges, {
+      resolution: 1.0,
+      minCommunitySize: 3,
+      maxIterations: 20
+    });
 
     const clusters: Cluster[] = [];
     const memberships: { filePath: string; clusterName: string }[] = [];
     let communityIndex = 1;
 
-    const sortedGroupKeys = Array.from(communityGroups.keys()).sort();
+    const sortedGroupKeys = Object.keys(communities).sort();
     for (const key of sortedGroupKeys) {
-      const filePaths = communityGroups.get(key)!;
+      const filePaths = communities[key];
       if (filePaths.length < 3) continue;
 
       const commFileSet = new Set(filePaths);
@@ -564,34 +507,52 @@ export class ClusterEngine {
    * Layer labels surfaced in the UI (ordered from high-level entry points down
    * to foundational infrastructure).
    */
-  private static readonly LAYER_LABELS: Record<ArchLayer, string> = {
+  private static readonly LAYER_LABELS: Record<FileRole, string> = {
+    // Universal
     entry:      'Entry Points',
-    api:        'API / Routes',
-    core:       'Core Logic',
-    parsers:    'Parsers',
-    exporters:  'Exporters',
-    agents:     'Agents',
-    frameworks: 'Frameworks',
-    ui:         'UI / Frontend',
-    data:       'Data / Store',
-    utils:      'Utilities',
-    types:      'Types / Interfaces',
     config:     'Configuration',
-    scripts:    'Scripts / Build',
+    types:      'Types / Interfaces',
+    shared:     'Shared / Utilities',
     test:       'Tests',
     docs:       'Documentation',
     other:      'Other',
+    // Backend
+    api:        'API / Routes',
+    middleware: 'Middleware',
+    service:    'Services / Use Cases',
+    data:       'Data / Persistence',
+    integration:'Integrations / SDKs',
+    auth:       'Authentication / Security',
+    // Frontend
+    pages:      'Pages / Views',
+    components: 'Components',
+    state:      'State Management',
+    hooks:      'Custom Hooks',
+    styles:     'Styles / Themes',
+    assets:     'Static Assets',
+    // Tool/Library
+    cli:        'CLI / Commands',
+    core:       'Core Library Logic',
+    parsers:    'Parsers / Translators',
+    plugins:    'Plugins / Adapters',
+    // Legacy aliases
+    utils:      'Utilities',
+    ui:         'UI / Frontend',
+    exporters:  'Exporters',
+    agents:     'Agents',
+    frameworks: 'Frameworks',
+    scripts:    'Scripts / Build',
   };
 
   private detectLayerClusters(
     repo: string,
     files: any[]
   ): { clusters: Cluster[]; memberships: { filePath: string; clusterName: string }[] } {
-    const layerGroups = new Map<ArchLayer, string[]>();
+    const layerGroups = new Map<FileRole, string[]>();
 
     for (const f of files) {
       const filePath = f.path as string;
-      const layer = ClusterEngine.assignFileLayer(filePath);
+      const layer = (f.role as FileRole) || ClusterEngine.assignFileLayer(filePath);
       if (!layerGroups.has(layer)) {
         layerGroups.set(layer, []);
       }
@@ -606,7 +567,7 @@ export class ClusterEngine {
       const clusterName = `layer:${layer}`;
       clusters.push({
         name: clusterName,
-        label: ClusterEngine.LAYER_LABELS[layer],
+        label: ClusterEngine.LAYER_LABELS[layer] || String(layer),
         source: 'layer',
         parentName: null,
         depth: 0,

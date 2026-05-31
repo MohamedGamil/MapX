@@ -212,6 +212,40 @@ export class ContextBuilder {
       } catch (e) {}
     }
 
+    // Role-to-keyword map for task-based boosting
+    const roleKeywordMap: Record<string, string[]> = {
+      api: ['api', 'route', 'router', 'controller', 'endpoint', 'handler', 'resolver', 'graphql', 'rest', 'serve', 'server'],
+      middleware: ['middleware', 'guard', 'interceptor', 'cors', 'auth-middleware', 'filter'],
+      service: ['service', 'logic', 'usecase', 'manager', 'handler', 'workflow', 'processor'],
+      data: ['data', 'db', 'database', 'sql', 'repository', 'dao', 'model', 'schema', 'entity', 'migration', 'seed', 'query', 'orm', 'prisma', 'mongoose'],
+      integration: ['integration', 'client', 'sdk', 'api-client', 'http-client', 'external', 'fetch', 'axios', 'message-producer', 'kafka', 'rabbitmq', 'sqs'],
+      auth: ['auth', 'login', 'signup', 'register', 'signin', 'logout', 'identity', 'jwt', 'token', 'passport', 'session', 'role', 'permission'],
+      pages: ['page', 'pages', 'view', 'views', 'screen', 'screens', 'route-page', 'navigation'],
+      components: ['component', 'components', 'widget', 'widgets', 'ui', 'button', 'input', 'modal', 'card', 'dialog', 'form', 'control'],
+      state: ['state', 'store', 'stores', 'reducer', 'redux', 'vuex', 'pinia', 'context', 'atom', 'recoil', 'zustand', 'signal'],
+      hooks: ['hook', 'hooks', 'composable', 'composables', 'mixin', 'mixins', 'use-effect', 'use-state'],
+      styles: ['style', 'styles', 'stylesheet', 'css', 'scss', 'sass', 'less', 'theme', 'themes', 'tailwind', 'bootstrap', 'design-token'],
+      assets: ['asset', 'assets', 'image', 'images', 'font', 'fonts', 'icon', 'icons', 'logo', 'svg', 'png', 'jpg'],
+      cli: ['cli', 'command', 'commands', 'arg', 'args', 'argument', 'arguments', 'flag', 'flags', 'terminal', 'console', 'stdin', 'stdout', 'bin'],
+      core: ['core', 'engine', 'kernel', 'algorithm', 'algorithms', 'main'],
+      parsers: ['parser', 'parsers', 'parse', 'lexer', 'tokenizer', 'ast', 'compiler', 'interpreter', 'deserializer', 'serializer'],
+      plugins: ['plugin', 'plugins', 'addon', 'addons', 'extension', 'extensions', 'adapter', 'adapters'],
+      test: ['test', 'tests', 'spec', 'specs', 'unit', 'e2e', 'integration-test', 'mock', 'mocks', 'stub', 'spy', 'expect', 'assert', 'jest', 'vitest', 'mocha', 'chai'],
+      config: ['config', 'configs', 'configuration', 'env', 'dotenv', 'package.json', 'tsconfig', 'manifest', 'setting', 'settings', 'options'],
+      docs: ['doc', 'docs', 'documentation', 'readme', 'changelog', 'guide', 'tutorial', 'api-doc'],
+      shared: ['shared', 'util', 'utils', 'utility', 'utilities', 'helper', 'helpers', 'common', 'lib', 'library']
+    };
+
+    const targetRoles = new Set<string>();
+    for (const kw of keywords) {
+      const kwLower = kw.toLowerCase();
+      for (const [role, kwList] of Object.entries(roleKeywordMap)) {
+        if (kwList.some(k => kwLower.includes(k) || k.includes(kwLower))) {
+          targetRoles.add(role);
+        }
+      }
+    }
+
     const candidateScores = candidates.map(path => {
       const depth = distances.get(path)!;
       const dbFile = this.store.getFile(path);
@@ -260,6 +294,12 @@ export class ContextBuilder {
       const fileCluster = candidateClustersMap.get(path);
       if (fileCluster && seedClusters.has(fileCluster)) {
         score += 150;
+      }
+
+      // Role-aware context boosting
+      const role = dbFile ? (dbFile.role as string) : 'other';
+      if (targetRoles.has(role)) {
+        score += 250;
       }
 
       return {

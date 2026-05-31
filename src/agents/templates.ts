@@ -9,7 +9,7 @@ export interface ProviderTemplate {
 /**
  * MCP config definitions for agent tools.
  * Each entry generates a project-local JSON config file that auto-registers
- * mapx as an MCP server so the agent can discover all 26 tools on startup.
+ * mapx as an MCP server so the agent can discover all 32 tools on startup.
  *
  * Config files use the sentinel-block pattern (<!-- mapx --> markers are not
  * used — the entire file is owned by mapx and can safely be overwritten).
@@ -187,10 +187,14 @@ mapx -d /path/to/project scan
 - \`mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]\` - Generate task-specific workspace context
 - \`mapx callers <symbol> [--dir path] [--depth depth]\` - Trace callers of a symbol (fuzzy fallback on typos)
 - \`mapx callees <symbol> [--dir path] [--depth depth]\` - Trace callees of a symbol (fuzzy fallback on typos)
-- \`mapx metrics [path]\` - Show coupling and instability metrics
+- \`mapx metrics [path]\` - Show coupling and instability metrics for files
 - \`mapx edges [path] [--type type] [--from file] [--to file]\` - Query dependency edges
 - \`mapx routes [path] [--framework name] [--method verb] [--json]\` - Show framework routes
 - \`mapx hooks [path] [--framework name] [--type type] [--json]\` - Show framework hooks
+- \`mapx profile [path]\` - Show codebase profile (archetype, frameworks, active taxonomy)
+- \`mapx arch [path] [--smells] [--dsm] [--violations] [--json]\` - Full architecture and health report
+- \`mapx explain <file> [--reclassify]\` - Explain file role classification signals and weights
+- \`mapx layers [path] [--json]\` - List files grouped by architectural roles/layers
 - \`mapx impact <symbol> [--dir path] [--depth depth]\` - Change impact analysis with fuzzy pre-check
 - \`mapx node <symbol> [--dir path] [--source] [--format text|json]\` - Inspect a symbol node with optional source code
 - \`mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]\` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
@@ -220,9 +224,18 @@ When running as an MCP server, MapxGraph exposes these tools:
 - \`mapx_trace\` - Trace data flow paths from a starting symbol or file
 - \`mapx_sources\` - Find entry points (sources) in the codebase
 - \`mapx_sinks\` - Find terminal consumers (sinks) in the codebase
+- \`mapx_routes\` - Show framework routes
+- \`mapx_hooks\` - Show framework hooks
+- \`mapx_edges\` - Granular query of graph dependency edges
 - \`mapx_impact\` - Multi-depth blast radius and change risk analysis for a symbol
 - \`mapx_clusters\` - List code clusters/modules
 - \`mapx_status\` - Check scan status, languages breakdown, top PageRank files/symbols, and index recommendations
+- \`mapx_metrics\` - Compute file coupling and instability metrics
+- \`mapx_profile\` - Retrieve codebase profile (archetype, frameworks, active taxonomy)
+- \`mapx_explain\` - Explain file dynamic role classification and weights
+- \`mapx_smells\` - Detect design smells and architectural violations
+- \`mapx_dsm\` - Generate cluster Dependency Structure Matrix (DSM)
+- \`mapx_layers\` - List files grouped by architectural roles/layers
 - \`mapx_export\` - Export compact graph summary (formats: llm, json, dot, svg, toon)
 - \`mapx_context\` - Intelligent, token-budgeted workspace context builder
 - \`mapx_workspaces\` - Retrieve workspace configuration and repositories (list/discover)
@@ -230,6 +243,7 @@ When running as an MCP server, MapxGraph exposes these tools:
 - \`mapx_lang_install\` - Install dynamic language support
 - \`mapx_lang_uninstall\` - Uninstall dynamic language support
 - \`mapx_batch\` - Execute multiple operations in a single call (search, node, callers, callees, deps)
+- \`mapx_agents_generate\` - Generate/update agent integration instructions and rules
 
 ## When to Use
 
@@ -272,16 +286,16 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
 }
 \`\`\`
 
-## MCP Tools Available (26 total)
+## MCP Tools Available (32 total)
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
-**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`
+**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
-**Orchestration:** \`mapx_batch\`
+**Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Workflows
 
@@ -304,16 +318,16 @@ alwaysApply: false
 
 Use MapxGraph commands or MCP tools to understand code structure.
 
-## Available MCP Tools (26 total)
+## Available MCP Tools (32 total)
 
 **Graph:** \`mapx_scan\`, \`mapx_sync\`
 **Search:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
-**Deps:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`
+**Deps:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\`
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
-**Orchestration:** \`mapx_batch\`
+**Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Workflow
 
@@ -328,7 +342,7 @@ Use MapxGraph commands or MCP tools to understand code structure.
     isAppend: true,
     content: `## MapxGraph Integration
 
-This project uses MapxGraph (22 languages, 26 MCP tools). You can run the following CLI commands to understand the codebase:
+This project uses MapxGraph (22 languages, 32 MCP tools). You can run the following CLI commands to understand the codebase:
 - \`mapx export\` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
 - \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`)
 - \`mapx search <term> --kind class\` - Advanced filtered search (auto-expands if kind has 0 results)
@@ -343,7 +357,11 @@ This project uses MapxGraph (22 languages, 26 MCP tools). You can run the follow
 - \`mapx sinks\` - Find terminal consumers
 - \`mapx context <task>\` - Generate task-specific context
 - \`mapx node <symbol> --source\` - Inspect symbol source code
-- \`mapx node <symbol> --format json\` - Symbol details as JSON`
+- \`mapx node <symbol> --format json\` - Symbol details as JSON
+- \`mapx profile\` - Show codebase profile
+- \`mapx arch\` - Show comprehensive architecture and design smells report
+- \`mapx explain <file>\` - Explain file role classification signals
+- \`mapx layers\` - List files grouped by architectural roles`
   },
   windsurf: {
     filename: '.windsurf/rules/mapx.md',
@@ -353,7 +371,7 @@ trigger: model_decided
 ---
 # MapxGraph Rules for Windsurf
 
-This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **26 MCP tools**.
+This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **32 MCP tools**.
 
 Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_export\` / \`mapx export\` on startup.
@@ -366,6 +384,8 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_sinks\` / \`mapx sinks\` to find terminal consumers.
 - \`mapx_context\` / \`mapx context\` to generate task-specific context.
 - \`mapx_batch\` to execute multiple operations in one call.
+- \`mapx_profile\` / \`mapx profile\` to inspect codebase profile.
+- \`mapx_smells\` / \`mapx arch\` to analyze smells and design health.
 - \`mapx_sync\` / \`mapx sync\` after edits.`
   },
   cline: {
@@ -373,7 +393,7 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
     isAppend: true,
     content: `## MapxGraph Rules for Cline
 
-This project is indexed by MapxGraph (22 languages, 26 MCP tools).
+This project is indexed by MapxGraph (22 languages, 32 MCP tools).
 Auto-start the MCP server with the configured directory \`{{PROJECT_DIR}}\`.
 Available tools:
 - \`mapx_export\` - Call this first to get the summary.
@@ -383,6 +403,7 @@ Available tools:
 - \`mapx_trace\` - Trace data-flow paths.
 - \`mapx_sources\` / \`mapx_sinks\` - Find entry points / terminal consumers.
 - \`mapx_context\` - Generate token-budgeted context.
+- \`mapx_profile\` / \`mapx_smells\` - Profile codebase and audit design quality / code smells.
 - \`mapx_batch\` - Batch multiple operations in a single call.`
   },
   aider: {
@@ -416,7 +437,7 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
     isAppend: false,
     content: `# MapxGraph Gemini Integration
 
-Utilize MapxGraph to obtain codebase context for Gemini across **22 languages**.
+Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** with **32 MCP tools**.
 
 ## CLI Commands
 
@@ -431,12 +452,16 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages**.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx node <symbol> --source\` to inspect a symbol's source code.
 - Run \`mapx node <symbol> --format json\` for structured JSON output.
+- Run \`mapx profile\` to show codebase profile details.
+- Run \`mapx arch\` to audit architecture design smells and structural quality.
+- Run \`mapx explain <file>\` to explain file layer/role classification signals.
+- Run \`mapx layers\` to view files grouped by architectural roles.
 - Run \`mapx sync\` after file edits to update the graph.`
   },
   continue: {
     filename: '.continue/mapx.yaml',
     isAppend: false,
-    content: `# Continue configuration for MapxGraph (22 languages, 26 MCP tools)
+    content: `# Continue configuration for MapxGraph (22 languages, 32 MCP tools)
 contextProviders:
   - name: cmd
     args:
@@ -453,7 +478,7 @@ contextProviders:
     isAppend: false,
     content: `# Zed Assistant MapxGraph Instructions
 
-This project uses MapxGraph (22 languages, 26 MCP tools).
+This project uses MapxGraph (22 languages, 32 MCP tools).
 
 ## Key Commands
 - Run \`mapx export\` to retrieve a token-budgeted codebase summary.
@@ -475,7 +500,7 @@ This project uses MapxGraph (22 languages, 26 MCP tools).
 ## Context
 
 Triggered when a new task is received, before any planning, reasoning, or execution steps begin.
-This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 26 MCP tools) that provides persistent, structured understanding of the codebase.
+This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 32 MCP tools) that provides persistent, structured understanding of the codebase.
 
 ## Requirements
 
@@ -509,12 +534,12 @@ After completing file writes:
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
-**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`
+**Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
-**Orchestration:** \`mapx_batch\`
+**Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Key Principles
 
@@ -528,7 +553,7 @@ After completing file writes:
     isAppend: false,
     content: `# MapX MCP Server - Agent Instructions Guide
 
-MapX exposes **26** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
+MapX exposes **32** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
 
 ---
 
@@ -622,16 +647,29 @@ Follows data-bearing edges forward/backward through the graph to trace data prop
 ### 12. \`mapx_dependencies\` / \`mapx_sources\` / \`mapx_sinks\`
 - \`mapx_dependencies\`: Get deps and reverse-deps for a file.
 - \`mapx_sources\`: Find entry points (data sources) in the codebase.
-- \`mapx_sinks\`: Find terminal consumers (data sinks) in the codebase.
+- \`mapx_sinks\`: Find terminal consumers (sinks) in the codebase.
 
 ### 13. \`mapx_files\` / \`mapx_clusters\` / \`mapx_export\` / \`mapx_workspaces\`
 - \`mapx_files\`: List and filter files by path prefix or glob pattern, language, and size or line counts.
-- \`mapx_clusters\`: List code clusters/modules.
+- \`mapx_clusters\`: List code clusters/modules (supports \`source\` filter).
 - \`mapx_export\`: Export compact graph summary (formats: llm, json, dot, svg, toon).
 - \`mapx_workspaces\`: Retrieve workspace configuration and repositories (list/discover).
 
 ### 14. \`mapx_lang_list\` / \`mapx_lang_install\` / \`mapx_lang_uninstall\`
 Manage supported languages and dynamic grammar installation.
+
+### 15. \`mapx_routes\` / \`mapx_hooks\` / \`mapx_edges\` / \`mapx_metrics\`
+- \`mapx_routes\`: List HTTP routes parsed from controllers.
+- \`mapx_hooks\`: List framework hooks and lifecycle bindings.
+- \`mapx_edges\`: Granular graph dependency edges query.
+- \`mapx_metrics\`: Get coupling and instability metrics for codebase files.
+
+### 16. \`mapx_profile\` / \`mapx_explain\` / \`mapx_smells\` / \`mapx_dsm\` / \`mapx_layers\`
+- \`mapx_profile\`: Retrieve high-level codebase profile (archetype, patterns, active taxonomy).
+- \`mapx_explain\`: View detailed signal weights for a file's architectural role classification.
+- \`mapx_smells\`: Run architectural and design smell detection audit.
+- \`mapx_dsm\`: Generate the cluster Dependency Structure Matrix (DSM) matrix.
+- \`mapx_layers\`: List project files grouped by their dynamically classified architectural roles.
 
 ---
 

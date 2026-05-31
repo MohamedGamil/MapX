@@ -181,27 +181,98 @@ export interface MonorepoPackageInfo {
   packageManager: string;
 }
 
+// Universal roles — always active (7)
+export type UniversalRole =
+  | 'entry'          // Program entry points, CLI commands
+  | 'config'         // Configuration files, env, manifests
+  | 'types'          // Type definitions, interfaces, schemas, DTOs
+  | 'shared'         // Utilities, helpers, common code
+  | 'test'           // Tests, specs, fixtures
+  | 'docs'           // Documentation
+  | 'other';         // Uncategorised fallback
+
+// Backend roles — activated when hasBackend (6)
+export type BackendRole =
+  | 'api'            // Routes, controllers, handlers, GraphQL resolvers
+  | 'middleware'     // Request/response middleware, interceptors, guards
+  | 'service'        // Business logic, domain services, use cases
+  | 'data'           // Repositories, DAOs, models, migrations, seeds
+  | 'integration'    // External API clients, SDK wrappers, message producers
+  | 'auth';          // Authentication, authorization, identity
+
+// Frontend roles — activated when hasFrontend (6)
+export type FrontendRole =
+  | 'pages'          // Page-level components, views, screens
+  | 'components'     // Reusable UI components, widgets
+  | 'state'          // State management, stores, reducers, atoms
+  | 'hooks'          // Custom hooks, composables, mixins
+  | 'styles'         // Stylesheets, themes, design tokens
+  | 'assets';        // Static assets, images, fonts, icons
+
+// Tool/Library roles — activated for cli-tool/library (4)
+export type ToolRole =
+  | 'cli'            // CLI interface, commands, argument parsing
+  | 'core'           // Core library logic, main algorithms
+  | 'parsers'        // Input parsing, deserialization
+  | 'plugins';       // Plugin/extension system, adapters
+
+// The effective taxonomy for a project is the union of universal + applicable domain roles
+// (Also includes legacy layers for backward compatibility)
+export type FileRole =
+  | UniversalRole
+  | BackendRole
+  | FrontendRole
+  | ToolRole
+  | 'utils'
+  | 'ui'
+  | 'exporters'
+  | 'agents'
+  | 'frameworks'
+  | 'scripts';
+
 /**
  * Architectural layer a file belongs to, automatically inferred from its path,
- * name, and role in the system.  Used to add vertical depth to cluster views.
+ * name, and role in the system. Used to add vertical depth to cluster views.
+ * Aliased to FileRole for backward compatibility.
  */
-export type ArchLayer =
-  | 'entry'        // CLI / binary entry points, main.ts, index.ts at root
-  | 'api'          // HTTP routes, controllers, handlers, endpoints
-  | 'core'         // Core business logic, domain services
-  | 'parsers'      // Language parsers, tree-sitter integrations
-  | 'exporters'    // Exporters and output formatters
-  | 'agents'       // Agent definitions, stubs, skills
-  | 'frameworks'   // Framework detectors / adapters
-  | 'ui'           // UI components, frontend files
-  | 'data'         // Stores, databases, persistence
-  | 'utils'        // Utilities, helpers, shared code
-  | 'types'        // Type definitions, interfaces
-  | 'config'       // Configuration files
-  | 'scripts'      // Build scripts, tools, automation
-  | 'test'         // Tests and specs
-  | 'docs'         // Documentation
-  | 'other';       // Uncategorised
+export type ArchLayer = FileRole;
+
+export type CodebaseArchetype =
+  | 'cli-tool' | 'web-api' | 'web-app' | 'full-stack'
+  | 'library' | 'monorepo' | 'mobile-app' | 'mixed';
+
+export type ArchPattern =
+  | 'layered' | 'mvc' | 'mvvm' | 'hexagonal'
+  | 'clean' | 'microkernel' | 'modular' | 'flat';
+
+export interface CodebaseProfile {
+  archetype: CodebaseArchetype;
+  archetypeConfidence: number;       // 0.0–1.0
+  detectedFrameworks: string[];      // ['express', 'react']
+  detectedPatterns: ArchPattern[];   // ['mvc', 'layered']
+  dominantLanguages: string[];       // ['typescript', 'javascript']
+  hasBackend: boolean;
+  hasFrontend: boolean;
+  isMonorepo: boolean;
+  componentBoundaries: string[];     // workspace package paths
+}
+
+export type SignalSource = 'path' | 'naming' | 'topology' | 'framework' | 'imports';
+
+export interface ClassificationSignal {
+  source: SignalSource;      // which signal produced this
+  role: FileRole;            // suggested role
+  confidence: number;        // 0.0–1.0
+  reason: string;            // human-readable explanation
+}
+
+export interface ClassificationResult {
+  filePath: string;
+  role: FileRole;              // final classification
+  confidence: number;          // overall confidence
+  signals: ClassificationSignal[];  // all signals for explainability
+  alternateRoles: FileRole[];  // runner-up roles
+}
 
 export interface WorkspaceInfo {
   path: string;

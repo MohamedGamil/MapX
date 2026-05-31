@@ -594,6 +594,75 @@ Options:
 - `--name` — Filter by hook name pattern
 - `--json` — Output hooks as JSON
 
+## `mapx profile`
+
+Show codebase profile details, including the detected archetype, frameworks, active taxonomy, and language composition.
+
+```bash
+mapx profile [path] [--dir /path]
+```
+
+Examples:
+```bash
+mapx profile
+mapx profile /path/to/project
+```
+
+## `mapx arch`
+
+Generate a comprehensive architecture and design quality report, with sections for codebase profile, active layers, architectural smells, and the cluster Dependency Structure Matrix (DSM).
+
+```bash
+mapx arch [path] [--dir /path] [--smells] [--dsm] [--violations] [--json]
+```
+
+Options:
+- `--smells` — Show only detected architectural smells
+- `--dsm` — Show only the cluster dependency matrix (DSM)
+- `--violations` — Show only layer dependency flow violations
+- `--json` — Output the architecture report as structured JSON
+
+Examples:
+```bash
+mapx arch                           # Full text report
+mapx arch --smells                  # Show only code smells
+mapx arch --violations --json       # Show violations as JSON
+```
+
+## `mapx explain <file>`
+
+Explain the automatic file role/layer classification result for a given file. Shows all evaluated signals (path, naming, topology, framework, imports) with confidence weights and alternate role scores.
+
+```bash
+mapx explain <file> [--dir /path] [--reclassify]
+```
+
+Options:
+- `--reclassify` — Re-run the role classifier engine for this file on-the-fly instead of reading cached DB results
+
+Examples:
+```bash
+mapx explain src/core/scanner.ts
+mapx explain src/api/users.ts --reclassify
+```
+
+## `mapx layers`
+
+List files grouped by their dynamically classified architectural roles/layers.
+
+```bash
+mapx layers [path] [--dir /path] [--json]
+```
+
+Options:
+- `--json` — Output the layer groups and file lists as structured JSON
+
+Examples:
+```bash
+mapx layers
+mapx layers --json
+```
+
 ## `mapx agents list`
 
 List all supported LLM integration providers.

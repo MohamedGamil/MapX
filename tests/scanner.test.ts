@@ -46,6 +46,8 @@ vi.mock('../src/frameworks/route-registry.js', () => ({
     addRoute = vi.fn();
     addHook = vi.fn();
     save = vi.fn().mockResolvedValue(undefined);
+    getRoutes = vi.fn().mockReturnValue([]);
+    getHooks = vi.fn().mockReturnValue([]);
   }
 }));
 
@@ -122,9 +124,14 @@ describe('Scanner module', () => {
     clearClusters: vi.fn(),
     insertCluster: vi.fn(),
     insertClusterMembership: vi.fn(),
+    deleteClassificationSignalsForFile: vi.fn(),
+    updateFileRole: vi.fn(),
+    insertClassificationSignal: vi.fn(),
+    insertClusterMetrics: vi.fn(),
+    insertArchSmell: vi.fn(),
     inTransaction: vi.fn().mockImplementation((fn: () => void) => fn()),
     raw: {
-      prepare: vi.fn().mockReturnValue({ all: vi.fn().mockReturnValue([]) })
+      prepare: vi.fn().mockReturnValue({ all: vi.fn().mockReturnValue([]), run: vi.fn(), get: vi.fn() })
     },
     ...overrides
   } as unknown as Store);

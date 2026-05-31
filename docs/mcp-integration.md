@@ -296,7 +296,7 @@ When active, the MCP server prints all incoming JSON-RPC calls and their outcome
 
 This is highly useful when debugging integrations with clients like Claude Desktop, Cursor, or custom LLM frameworks.
 
-## Available Tools (25 total)
+## Available Tools (32 total)
 
 ### Graph Building
 
@@ -332,7 +332,7 @@ Deep inspection of a specific symbol node.
 
 #### `mapx_files`
 List and filter project files.
-- `path` (string, optional): Filter by path prefix
+- `path` (string, optional): Filter by path prefix or glob pattern
 - `lang` (string, optional): Filter by language
 - `sort` (string, optional): Sort by `name`, `lines`, `size`, `pagerank`
 - `limit` (number, optional): Max results
@@ -371,6 +371,25 @@ Find entry points (sources) in the codebase.
 Find terminal consumers (sinks) in the codebase.
 - `dir` (string, optional): Target project directory
 
+#### `mapx_routes`
+Show routes extracted from framework controllers or configuration.
+- `framework` (string, optional): Filter by framework name
+- `method` (string, optional): Filter by HTTP method (GET, POST, etc.)
+- `dir` (string, optional): Target project directory
+
+#### `mapx_hooks`
+Show hooks from detected frameworks.
+- `framework` (string, optional): Filter by framework name
+- `type` (string, optional): Filter by hook type
+- `dir` (string, optional): Target project directory
+
+#### `mapx_edges`
+Granular query of graph dependency edges.
+- `type` (string, optional): Filter by edge type
+- `from` (string, optional): Originating file path pattern
+- `to` (string, optional): Target file path pattern
+- `dir` (string, optional): Target project directory
+
 ### Analysis
 
 #### `mapx_impact`
@@ -381,13 +400,41 @@ Change impact analysis — blast radius and risk for modifying a symbol.
 
 #### `mapx_clusters`
 List detected code clusters/modules.
+- `source` (string, optional): Filter by source (`layer`, `community`, `namespace`, `directory`, `all`)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_status`
 Check scan status, language breakdown, PageRank rankings, and index recommendations.
 - `dir` (string, optional): Target project directory
 
-### Export
+#### `mapx_metrics`
+Compute afferent/efferent coupling and instability metrics for codebase files.
+- `lang` (string, optional): Filter by language
+- `dir` (string, optional): Target project directory
+
+#### `mapx_profile`
+Retrieve codebase profile (archetype, frameworks, active taxonomy).
+- `dir` (string, optional): Target project directory
+
+#### `mapx_explain`
+Explain file architectural role classification details and signal weights.
+- `file` (string, required): File path to analyze
+- `reclassify` (boolean, optional): Re-run classification on-the-fly
+- `dir` (string, optional): Target project directory
+
+#### `mapx_smells`
+Detect design smells and potential architectural violations.
+- `dir` (string, optional): Target project directory
+
+#### `mapx_dsm`
+Generate the cluster-level Dependency Structure Matrix (DSM).
+- `dir` (string, optional): Target project directory
+
+#### `mapx_layers`
+List files grouped by active dynamic architectural roles.
+- `dir` (string, optional): Target project directory
+
+### Export & LLM Prompts
 
 #### `mapx_export`
 Export compact graph summary.
@@ -398,8 +445,10 @@ Export compact graph summary.
 
 #### `mapx_context`
 Intelligent, token-budgeted workspace context builder for LLM prompts.
-- `budget` (number, optional): Token budget
-- `focus` (string, optional): Focus symbol or file
+- `task` (string, required): Describe your prompt target
+- `seeds` (array of strings, optional): Seed files/symbols to expand around
+- `tokens` (number, optional): Estimated token limit
+- `depth` (number, optional): Graph depth traversal limit
 - `dir` (string, optional): Target project directory
 
 ### Workspace Management
@@ -426,3 +475,17 @@ Install a dynamic language grammar.
 #### `mapx_lang_uninstall`
 Uninstall a previously installed language grammar.
 - `lang` (string, required): Language name to uninstall
+
+### Orchestration & LLM Helpers
+
+#### `mapx_batch`
+Execute multiple operations in a single round-trip.
+- `operations` (array, required): Operations list containing `{ tool, args }`
+- `maxItems` (number, optional): Max operations limit
+
+#### `mapx_agents_generate`
+Generate or update project-level agent integration instructions and rule files.
+- `providers` (array of strings, optional): Specific integration providers
+- `all` (boolean, optional): Generate configs for all providers
+- `force` (boolean, optional): Overwrite files without prompting
+- `dir` (string, optional): Target project directory

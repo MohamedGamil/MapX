@@ -59,6 +59,15 @@
           </svg>
           Metrics
         </button>
+        <button class="nav-item" data-tab="architecture">
+          <svg class="nav-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="9"></rect>
+            <rect x="14" y="3" width="7" height="5"></rect>
+            <rect x="14" y="12" width="7" height="9"></rect>
+            <rect x="3" y="16" width="7" height="5"></rect>
+          </svg>
+          Architecture & Health
+        </button>
         <button class="nav-item" data-tab="context">
           <svg class="nav-svg-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -123,7 +132,7 @@
             <div class="toolbar-group" id="toolbar-group-mode">
               <span class="toolbar-group-label">View</span>
               <select id="select-graph-mode" class="form-select">
-                <option value="proximity">Proximity Clusters</option>
+                <option value="proximity">Clusters Map</option>
                 <option value="directory">Directory Aggregated</option>
                 <option value="focus">Neighborhood Focus</option>
                 <option value="full">Full Codebase</option>
@@ -144,9 +153,9 @@
               </button>
 
               <select id="select-grouping-strategy" class="form-select" disabled>
+                <option value="layer">Group: Architecture</option>
                 <option value="community">Group: Proximity</option>
                 <option value="directory">Group: Directory</option>
-                <option value="layer">Group: Arch Layer</option>
                 <option value="language">Group: Language</option>
                 <option value="custom">Group: Custom Tags</option>
               </select>
@@ -325,6 +334,51 @@
           <div class="metric-card">
             <h3>Top Symbols (PageRank)</h3>
             <ol id="top-symbols-list"></ol>
+          </div>
+      <!-- Tab: Architecture & Health -->
+      <section id="tab-architecture" class="tab-pane">
+        <div class="panel-header">
+          <h2>Architecture & Health Analysis</h2>
+          <p class="subtitle">Smart Archetype Profile, Coupling metrics, and Smell detection</p>
+        </div>
+        <div class="panel-body grid-architecture">
+          <div class="arch-col-left">
+            <div class="arch-card">
+              <h3>Codebase Profile & Health</h3>
+              <div class="profile-health-container">
+                <div class="health-gauge-card">
+                  <div class="health-badge-large" id="arch-health-badge">A-</div>
+                  <div class="health-score-val" id="arch-health-score">92%</div>
+                  <span class="health-label">System Health Score</span>
+                </div>
+                <div class="profile-details-list" id="arch-profile-details">
+                  Loading codebase profile...
+                </div>
+              </div>
+            </div>
+            
+            <div class="arch-card">
+              <h3>Architectural Smells & Recommendations</h3>
+              <div class="smells-list-container" id="arch-smells-list">
+                Loading architectural smells...
+              </div>
+            </div>
+          </div>
+
+          <div class="arch-col-right">
+            <div class="arch-card">
+              <h3>Dependency Structure Matrix (DSM)</h3>
+              <p class="section-desc">Rows depend on Columns. Darker cells indicate stronger coupling.</p>
+              <div class="dsm-scroll-container">
+                <div class="dsm-matrix-wrapper" id="arch-dsm-matrix">
+                  Loading DSM matrix...
+                </div>
+              </div>
+              <div class="dsm-legend">
+                <span><strong>C1..Cn</strong>: Cluster references</span>
+                <span id="dsm-legend-detail">Hover or click cell for details</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>

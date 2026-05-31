@@ -9,6 +9,22 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- **Smart Architecture Classification**: Replaced the hardcoded path-only layer heuristic with an adaptive, multi-signal classification engine.
+  - **Codebase Profiler**: Dynamic archetype detection (`cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, etc.) and pattern recognition.
+  - **Multi-Signal Role Classifier**: Combines 5 signals (path structure, exported symbol naming suffixes, topology, framework bindings, and import directions) to dynamically classify files into Universal, Backend, Frontend, and Tool taxonomy roles.
+  - **Leiden Community Detection**: Pure TypeScript implementation of the Leiden algorithm, yielding connected, deterministic, and resolution-controlled clusters.
+  - **Architectural Smell Detector & Flow Validator**: Identifies design smells (`cyclic-dependency` via Tarjan's SCC, `hub-component`, `layer-violation` based on allowed direction flow, and `unstable-dependency`).
+  - **Dependency Structure Matrix (DSM)**: Heatmap matrix of cluster coupling and Martin's stability metrics (Afferent/Efferent coupling, Instability, Abstractness, and Distance from Main Sequence).
+- **New CLI Commands**:
+  - `mapx profile` — Shows detected archetype, patterns, and language breakdown.
+  - `mapx arch` — Full architectural report (profile, active layers, smells, and DSM).
+  - `mapx explain <file>` — Explains classification signals and confidence scores for a file.
+  - `mapx layers` — Lists files grouped by their architectural role.
+- **New MCP Tools**: Added `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, and `mapx_layers` to support agentic architectural audits.
+- **Web Dashboard "Architecture & Health" Tab**:
+  - Interactive DSM heatmap matrix table showing cluster-level dependencies.
+  - Health dashboard with gauges for circular dependencies, god clusters, and layer violations.
+  - Smell annotations in the Graph View (enlarged hub nodes, dashed red circular edge paths, and highlighted violation arrows).
 - **Static file indexing**: Markdown (`.md`, `.mdx`, `.markdown`), HTML (`.html`, `.htm`, `.xhtml`), CSS/SCSS/Sass/Less (`.css`, `.scss`, `.sass`, `.less`), and JSON/JSONC (`.json`, `.jsonc`, `.json5`) files are now indexed and included in the dependency graph. No symbol extraction is performed; only outgoing path references (links, `@import`, `url()`, `href`, `src`, `$ref`) are recorded as edges.
 - New `'static'` tier in `LanguageDefinition` for index-only languages with no WASM grammar.
 - New `StaticFileParser` (`src/parsers/static-file-parser.ts`) with per-language regex extraction. Markdown links are restricted to markdown-only targets to avoid spurious cross-type edges.
@@ -42,6 +58,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `FlowTracer.resolveStart` (used by `mapx trace`) now resolves file arguments via glob and substring matching in addition to exact/suffix match.
 - `mapx_files` MCP tool `path` parameter now accepts glob patterns; the response header says `"matching <glob>"` for glob inputs and `"under <prefix>"` for plain prefix inputs.
 - Makefile `files` target now quotes the `--path` argument (`"$(p)"`) to prevent shell glob expansion before the CLI receives it.
+- Makefile has new targets for all missing CLI commands: `context`, `profile`, `arch`, `explain`, and `layers`, aligning Makefile shortcuts with all available CLI commands.
 
 ### Fixed
 
