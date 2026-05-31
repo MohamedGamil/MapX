@@ -15,7 +15,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - Replaced the static, raw-text codebase profile details with glassmorphic pills/badges (`.profile-pill`) for dominant languages, frameworks, and architectural patterns, and color-coded status badges for boolean flags.
   - Added a premium, dynamic SVG circular progress ring (health gauge) to the system health card.
   - Styled involved files in architectural smells as clickable badges (`.involved-file-badge`) that trigger programmatic graph navigation.
-  - Implemented a global click listener for node navigation (`data-go-id`) that automatically handles Cytoscape animation and switches active tabs to the Graph Explorer.
+  - Implemented a global click listener for node navigation (`data-go-id`) that automatically switches graph mode to Neighborhood focus at depth 1 with the clicked node as the focus seed, handles Cytoscape animation/resize, and transitions active tabs to the Graph Explorer.
   - Unified badge styling and solved spacing issues by replacing inline styles with `.selection-badge` and `.smell-badge-mini` CSS classes with proper padding, typography, and margins (`margin-right: 8px`).
 - **Markdown Files Classification**: Configured markdown files (`.md`, `.markdown`, `.mdx`) to always be classified as `'docs'` (documentation) with 100% confidence by default.
 - **Selected File Details Enrichment**: Tapping a file node in the Graph Explorer now dynamically loads and displays its Smart Architecture Classification signals and a summary of any architectural smells it is involved in (including suggestions to resolve them).

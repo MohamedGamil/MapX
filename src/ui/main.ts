@@ -3057,11 +3057,39 @@ document.addEventListener('DOMContentLoaded', () => {
       const id = clickable.getAttribute('data-go-id');
       if (id) {
         const isOutsideGraph = currentTab !== 'graph';
+        const isSmellBadge = clickable.classList.contains('involved-file-badge');
+
         if (isOutsideGraph) {
           switchTab('graph');
         }
-        
-        // Timeout to let the tab container render and cyInstance resize
+
+        if (isSmellBadge) {
+          // Switch to Focus Mode (Neighborhood)
+          currentGraphMode = 'focus';
+          const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+          if (modeSelect) {
+            modeSelect.value = 'focus';
+          }
+
+          // Set focus seed node to clicked file and depth to 1
+          focusSeedNode = id;
+          focusDepth = 1;
+
+          // Sync the depth buttons UI so button '1' is active
+          const depthButtons = document.querySelectorAll('.depth-btn');
+          depthButtons.forEach(btn => {
+            if (btn.getAttribute('data-depth') === '1') {
+              btn.classList.add('active');
+            } else {
+              btn.classList.remove('active');
+            }
+          });
+
+          updateToolbarVisibility('focus');
+          updateGraphDisplay();
+        }
+
+        // Timeout to let the tab container render, graph rebuild, and cyInstance resize
         setTimeout(() => {
           const ele = cyInstance.getElementById(id);
           if (ele && ele.length > 0) {
@@ -3072,7 +3100,7 @@ document.addEventListener('DOMContentLoaded', () => {
               duration: 350
             });
           }
-        }, isOutsideGraph ? 120 : 0);
+        }, isOutsideGraph || isSmellBadge ? 150 : 0);
       }
     }
   });
