@@ -381,6 +381,20 @@ export function startUiServer(opts: ServerOpts) {
         return;
       }
 
+      if (pathname === '/api/explain') {
+        const dbPath = resolve(dir, '.mapx', 'mapx.db');
+        const store = new Store(dbPath);
+        try {
+          const file = parsedUrl.searchParams.get('file') || '';
+          const signals = store.getClassificationSignals(file);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ signals }));
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
       if (pathname === '/api/symbols') {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);

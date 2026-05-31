@@ -77,4 +77,13 @@ describe('RoleClassifier', () => {
 
     expect(result.role).toBe('core');
   });
+
+  it('classifies markdown files as docs', () => {
+    const classifier = new RoleClassifier(mockStore);
+    const result = classifier.classify('docs/README.md', 'test-repo', mockProfile);
+
+    expect(result.role).toBe('docs');
+    expect(result.confidence).toBe(1.0);
+    expect(result.signals[0].reason).toContain('Markdown files are always classified');
+  });
 });

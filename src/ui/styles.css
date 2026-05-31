@@ -712,6 +712,16 @@ body {
   min-height: 200px;
 }
 
+.file-details-section {
+  display: flex;
+  flex-direction: column;
+  text-align: start;
+  background: #15181d;
+  border-radius: 4px;
+  padding: 8px;
+  gap: 18px;
+}
+
 /* Sticky Symbol Explorer Right Panel */
 #tab-symbols .split-right {
   position: sticky;

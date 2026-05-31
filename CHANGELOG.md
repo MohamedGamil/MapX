@@ -9,6 +9,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- **Markdown Files Classification**: Configured markdown files (`.md`, `.markdown`, `.mdx`) to always be classified as `'docs'` (documentation) with 100% confidence by default.
+- **Selected File Details Enrichment**: Tapping a file node in the Graph Explorer now dynamically loads and displays its Smart Architecture Classification signals and a summary of any architectural smells it is involved in (including suggestions to resolve them).
+- **/api/explain API Endpoint**: Exposes classification signals for a specific file path.
 - **Smart Architecture Classification**: Replaced the hardcoded path-only layer heuristic with an adaptive, multi-signal classification engine.
   - **Codebase Profiler**: Dynamic archetype detection (`cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, etc.) and pattern recognition.
   - **Multi-Signal Role Classifier**: Combines 5 signals (path structure, exported symbol naming suffixes, topology, framework bindings, and import directions) to dynamically classify files into Universal, Backend, Frontend, and Tool taxonomy roles.
@@ -52,6 +55,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - New `discoverNestedGitRepos` test suite in `tests/workspace-manager.test.ts` — 10 tests covering depth limits, custom `maxDepth`, skip lists, boundary non-recursion, multi-repo at same level, empty roots, and nonexistent paths.
 
 ### Changed
+- **Default View & Reset View settings**: Configured the dashboard to load by default into the "Clusters Map" (proximity mode) with "Group: Architecture" (layer grouping) enabled. Standardized the "Reset All" button to restore these view settings.
 - `*.min.css` added to default `excludePatterns` to avoid indexing minified stylesheets as noise.
 - `mapx files --path` now accepts glob patterns (e.g. `src/core/*.ts`, `**/*.json`) in addition to plain path prefixes.
 - `mapx deps <file>` now resolves file arguments via glob, wildcard, and substring matching — exact match is tried first, then glob patterns, then substring containment. Multiple matched files are all reported.
@@ -62,6 +66,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Fixed
 
+- **UI Tab Panel Layout Nesting**: Fixed a layout bug in `src/ui/index.html` where missing closing tags (`</div>` and `</section>`) for the Metrics tab caused subsequent tabs (Architecture, Context, and Tool Call Log) to be incorrectly nested inside it, resulting in a blank screen.
 - **ELK layout horizontal spread** — The ELK "Layered" graph layout now uses `elk.separateConnectedComponents: true` so disconnected file groups (e.g. standalone `.md`, `.json`, or `.scm` files) no longer bleed into the same horizontal bands as connected TypeScript/JavaScript trees, eliminating excessive left-right spread. File nodes are additionally partitioned by extension (`ts/tsx` → band 1, `js/jsx` → 2, `json/yaml` → 3, `html/css/vue/svelte` → 4, `md` → 5, `sh` → 6, `scm` → 7) via a `nodeLayoutOptions` callback, so files of the same type land in the same vertical cut of the tree and form separate compact sub-structures when unconnected to other groups. Spacing, compaction strategy (`LEFT_RIGHT_CONSTRAINT_LOCKING`), and aspect ratio (`1.7`) are tuned to reduce horizontal bloat.
 - **Cytoscape self-loop edge warnings** — Edges where `source === target` (scanner artifacts where a file references itself) are now filtered out of `rawGraphElements` at load time. These caused `Edge 'edge-X-X' has invalid endpoints` console warnings in Cytoscape because source and target nodes overlap.
 - **`.js`-extension imports resolving to `.ts` sources**: TypeScript projects that use the `"moduleResolution": "bundler"` / `"nodenext"` convention of writing `import './utils.js'` when the actual source file is `utils.ts` now resolve correctly. `resolveImportPath` now checks `<stem>.ts` and `<stem>.tsx` as immediate fallback candidates whenever the import specifier ends with `.js` or `.jsx`, **before** trying generic extension appending. A real `.js` file (if present) still takes priority.

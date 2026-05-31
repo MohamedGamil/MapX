@@ -39,6 +39,25 @@ export class RoleClassifier {
       };
     }
 
+    // Markdown files are always classified as docs
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext === '.md' || ext === '.markdown' || ext === '.mdx') {
+      return {
+        filePath,
+        role: 'docs',
+        confidence: 1.0,
+        signals: [
+          {
+            source: 'path',
+            role: 'docs',
+            confidence: 1.0,
+            reason: 'Markdown files are always classified as documentation (docs)',
+          },
+        ],
+        alternateRoles: [],
+      };
+    }
+
     const signals: ClassificationSignal[] = [];
 
     // Signal 1: Path Analysis (weight: 0.30)

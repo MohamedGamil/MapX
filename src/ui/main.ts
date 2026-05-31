@@ -217,6 +217,7 @@ let symbolSearchQuery = '';
 
 // New states for Proximity Clusters Mode & Groupings & Modifications
 let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
+let rawSmellsData: any[] = [];
 let activeClusterId: string | null = null;
 let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' | 'layer' = 'layer';
 const removedNodes = new Set<string>();
@@ -2229,6 +2230,64 @@ async function loadGraph() {
             clusterLabel = parentData?.label || parentData?.id || '';
           }
 
+          // Compute smells details
+          const fileSmells = rawSmellsData.filter((s: any) => {
+            if (Array.isArray(s.involvedFiles)) {
+              return s.involvedFiles.includes(data.id);
+            }
+            if (typeof s.involved_files === 'string') {
+              try {
+                const files = JSON.parse(s.involved_files);
+                return Array.isArray(files) && files.includes(data.id);
+              } catch {
+                return false;
+              }
+            }
+            return false;
+          });
+
+          let smellsHtml = '';
+          if (fileSmells.length > 0) {
+            smellsHtml = `
+              <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+                <span class="detail-stat-label" style="color: #ef4444; font-weight: bold;">Smells & Health</span>
+                <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf; font-size: 11px;">
+                  ${fileSmells.map((s: any) => `
+                    <li style="margin-bottom: 4px;">
+                      <span class="smell-badge ${s.severity.toLowerCase()}" style="font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: bold; margin-right: 4px;">${s.severity.toUpperCase()}</span>
+                      <strong>${s.type.toUpperCase()}</strong>: ${s.description}
+                      <div style="color: #94a3b8; font-style: italic; margin-top: 2px;">💡 Suggestion: ${s.suggestion}</div>
+                    </li>
+                  `).join('')}
+                </ul>
+              </div>
+            `;
+          } else {
+            smellsHtml = `
+              <div style="padding-bottom: 8px; display: flex; flex-direction: column; gap: 4px;">
+                <span class="detail-stat-label">Smells & Health</span>
+                <span style="color: var(--syntax-green); font-size: 11px; padding-left: 4px;">🟢 Clean — No design smells detected</span>
+              </div>
+            `;
+          }
+
+          const fileRole = data.role || 'other';
+          const roleConf = typeof data.roleConfidence === 'number' ? data.roleConfidence : (typeof data.role_confidence === 'number' ? data.role_confidence : 1.0);
+          const roleColor = LAYER_COLORS[`layer:${fileRole}`] || '#5c6370';
+
+          const classificationHtml = `
+            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+              <span class="detail-stat-label">Smart Classification</span>
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <span class="badge" style="background: ${roleColor}; padding: 3px 6px; border-radius: 4px; font-size: 10px; color: #fff; font-weight: bold;">${fileRole.toUpperCase()}</span>
+                <span style="color: var(--text-muted); font-size: 11px;">(conf: ${roleConf.toFixed(2)})</span>
+              </div>
+              <div id="classification-signals-container" style="color: var(--text-muted); font-size: 11px;">
+                <div style="font-style: italic;">Loading classification signals...</div>
+              </div>
+            </div>
+          `;
+
           details.innerHTML = `
             <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
@@ -2259,6 +2318,7 @@ async function loadGraph() {
                   <span class="detail-stat-mini-value" style="color: var(--syntax-blue);">${totalDeg}</span>
                 </div>
                 ${symbolCount > 0 ? `
+                <div class="detail-stat-grid-item" style="display: none;"></div>
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">Symbols</span>
                   <span class="detail-stat-mini-value">${symbolCount}</span>
@@ -2283,7 +2343,13 @@ async function loadGraph() {
                 <span class="detail-stat-value" style="color: var(--syntax-cyan);">${clusterLabel}</span>
               </div>
               ` : ''}
-              
+
+              <!-- Classification & Smells Sections -->
+              <div class="file-details-section">
+                ${classificationHtml}
+                ${smellsHtml}
+              </div>
+
               <!-- Custom Tags Section -->
               <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
                 <span class="detail-stat-label">Custom Tags</span>
@@ -2293,7 +2359,7 @@ async function loadGraph() {
                   <button id="btn-add-tag" class="btn" style="padding: 4px 10px; font-size: 11px; height: 26px; border-radius: 4px; flex-shrink: 0;">Add</button>
                 </div>
               </div>
-              
+
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
                 <button class="btn btn-secondary btn-action-remove-node" data-node-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
@@ -2302,6 +2368,36 @@ async function loadGraph() {
               </div>
             </div>
           ` + buildRelatedFlowsHTML(node);
+
+          // Fetch signals explanation asynchronously
+          fetch(`/api/explain?file=${encodeURIComponent(data.id)}`)
+            .then(res => res.json())
+            .then(expData => {
+              const sigContainer = document.getElementById('classification-signals-container');
+              if (!sigContainer) return;
+              const signals = expData.signals || [];
+              if (signals.length === 0) {
+                sigContainer.innerHTML = '<div style="font-style: italic; color: var(--text-muted); padding-left: 4px;">No signals recorded</div>';
+                return;
+              }
+              sigContainer.innerHTML = `
+                <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: circle; color: #abb2bf;">
+                  ${signals.map((s: any) => `
+                    <li style="margin-bottom: 4px;">
+                      <strong>[${s.source}]</strong> 
+                      <span style="color: ${LAYER_COLORS[`layer:${s.role}`] || '#cbd5e1'}; font-weight: 500;">${s.role}</span> 
+                      <span style="color: var(--text-muted); font-size: 10px;">(conf: ${s.confidence.toFixed(2)})</span>
+                      <div style="margin-top: 2px; color: #94a3b8;">${s.reason}</div>
+                    </li>
+                  `).join('')}
+                </ul>
+              `;
+            })
+            .catch(err => {
+              console.error('Failed to fetch classification details:', err);
+              const sigContainer = document.getElementById('classification-signals-container');
+              if (sigContainer) sigContainer.innerHTML = '<div style="color: #ef4444; padding-left: 4px;">Failed to load signals</div>';
+            });
         }
       }
 
@@ -3221,6 +3317,7 @@ async function loadSmells() {
     if (!smellsListEl) return;
     
     const smells = data.smells || [];
+    rawSmellsData = smells;
     if (smells.length === 0) {
       smellsListEl.innerHTML = '<div class="details-placeholder">No architectural smells detected! Your system health is excellent.</div>';
       
