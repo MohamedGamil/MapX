@@ -1,4 +1,4 @@
-<!-- mapx v0.3.1 -->
+<!-- mapx v0.3.2 -->
 # MapxGraph Gemini Integration
 
 Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** with **32 MCP tools**.

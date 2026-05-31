@@ -1,4 +1,4 @@
-<!-- mapx v0.3.1 -->
+<!-- mapx v0.3.2 -->
 # MapxGraph Aider Integration
 
 Use MapxGraph commands in this repository to analyze code across **22 languages**.

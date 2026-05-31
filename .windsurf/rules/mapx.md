@@ -1,4 +1,4 @@
-<!-- mapx v0.3.1 -->
+<!-- mapx v0.3.2 -->
 ---
 trigger: model_decided
 ---

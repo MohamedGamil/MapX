@@ -1,4 +1,4 @@
-<!-- mapx v0.3.1 -->
+<!-- mapx v0.3.2 -->
 # MapxGraph - Claude Integration Guide
 
 This project is configured with **MapxGraph** for codebase navigation and graph query support across **22 languages**.

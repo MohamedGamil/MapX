@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-05-31
+
 ### Added
 - **Architecture & Health UI Revamp**: Re-architected the layout of the Architecture & Health panel.
   - Arranged the panel as a flat grid with top-row side-by-side cards (Codebase Profile and Smells) and a full-width bottom card (DSM matrix), completely eliminating horizontal page overflow.
@@ -496,7 +498,9 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...HEAD
+[0.3.0]: https://github.com/MohamedGamil/mapx/compare/v0.3.1...v0.3.2
+[0.3.0]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MohamedGamil/mapx/compare/v0.2.7...v0.3.0
 [0.2.7]: https://github.com/MohamedGamil/mapx/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...v0.2.6
