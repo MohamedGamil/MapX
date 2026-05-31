@@ -228,6 +228,8 @@ export class GenericWasmParser implements LanguageParser {
       import: 'import',
       import_name: 'import',
       require: 'require',
+      part: 'import',
+      part_of: 'import',
       extends: 'extends',
       implements: 'implements',
       call: 'call',

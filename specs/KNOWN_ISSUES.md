@@ -4,7 +4,7 @@
 
 - [x] Improved codebase profiling and architectural analysis
 - [x] Poor support for Dart and Mobile apps
-- [ ] Poor support for Dart dependency resolution
+- [x] Poor support for Dart dependency resolution
 - [ ] Poor support for CSharp and ASP.NET
 - [ ] Nested apps (NestJS for example) under monorepos like `apps/backend|apps/api` routes and hooks are not parsed correctly.
 

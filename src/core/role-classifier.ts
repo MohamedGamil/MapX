@@ -405,6 +405,12 @@ export class RoleClassifier {
         roleScores['state'] = (roleScores['state'] || 0) + 1;
       } else if (target.includes('vitest') || target.includes('jest') || target.includes('mocha') || target.includes('chai')) {
         roleScores['test'] = (roleScores['test'] || 0) + 1;
+      } else if (target.includes('flutter_bloc') || target.includes('bloc/') || target.includes('riverpod') || target.includes('provider')) {
+        roleScores['state'] = (roleScores['state'] || 0) + 1;
+      } else if (target.includes('flutter/material') || target.includes('flutter/cupertino') || target.includes('flutter/widgets')) {
+        roleScores['components'] = (roleScores['components'] || 0) + 1;
+      } else if (target.includes('sqflite') || target.includes('hive') || target.includes('drift') || target.includes('isar')) {
+        roleScores['data'] = (roleScores['data'] || 0) + 1;
       }
     }
 

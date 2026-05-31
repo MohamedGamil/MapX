@@ -11,12 +11,12 @@
 ; ─── Part directives: `part 'filename.dart'` ─────────────────────────────────
 ; Creates a strong dependency edge from the library file to its part files
 (part_directive
-  (string_literal) @ref.target_import) @ref.type_import
+  (string_literal) @ref.target_part) @ref.type_part
 
 ; ─── Part-of directives: `part of 'filename.dart'` ──────────────────────────
 ; Creates a reverse dependency from the part back to the library
 (part_of_directive
-  (string_literal) @ref.target_import) @ref.type_import
+  (string_literal) @ref.target_part_of) @ref.type_part_of
 
 ; ─── Class extends: `class Foo extends Bar` ──────────────────────────────────
 (superclass

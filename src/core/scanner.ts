@@ -84,6 +84,7 @@ export class Scanner {
   private cliExcludes: string[] = [];
   private cliIncludes: string[] = [];
   private workspaceFileMap = new Map<string, string>();
+  private dartPackageMap = new Map<string, string>();
 
   constructor(
     store: Store,
@@ -307,6 +308,9 @@ export class Scanner {
       const activeDetectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
       const activeFrameworks = activeDetectors.map(d => d.name);
       const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+
+      // Discover Dart packages for accurate package: URI resolution
+      this.discoverDartPackages(workspaceRoot);
 
       let parsedFilesCount = 0;
       const parseResults = await this.parseFilesParallel(
@@ -623,6 +627,9 @@ export class Scanner {
     const activeDetectors = await registry.detectActiveFrameworks(repoRoot, allFilePaths);
     const activeFrameworks = activeDetectors.map(d => d.name);
     const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+
+    // Discover Dart packages for accurate package: URI resolution
+    this.discoverDartPackages(workspaceRoot);
 
     let parsedFilesCount = 0;
     const parseResults = await this.parseFilesParallel(
@@ -1094,17 +1101,38 @@ export class Scanner {
 
     // ── Dart: resolve package: URIs ──────────────────────────────────────────
     // `package:my_app/src/services/auth.dart` → try `lib/src/services/auth.dart`
-    // We don't know the package name ahead of time so we strip the first path
-    // segment (the package name) and prepend `lib/`. This works for same-project
-    // imports; cross-package imports will simply not match and return null.
+    // First checks the pubspec-derived package map for monorepo support, then
+    // falls back to stripping the package name and prepending `lib/`.
     if (target.startsWith('package:')) {
       const withoutScheme = target.slice('package:'.length);
       const slashIdx = withoutScheme.indexOf('/');
       if (slashIdx !== -1) {
-        const packagePath = withoutScheme.slice(slashIdx + 1);
-        const dartCandidate = 'lib/' + packagePath;
+        const pkgName = withoutScheme.slice(0, slashIdx);
+        const pkgPath = withoutScheme.slice(slashIdx + 1);
+
+        // 1. Try known package map (monorepo-aware)
+        const pkgRoot = this.dartPackageMap.get(pkgName);
+        if (pkgRoot) {
+          const candidate = pkgRoot + pkgPath;
+          if (fileMap.has(candidate)) return candidate;
+        }
+
+        // 2. Fallback: strip package name, prepend lib/ (same-project)
+        const dartCandidate = 'lib/' + pkgPath;
         if (fileMap.has(dartCandidate)) return dartCandidate;
       }
+      return null;
+    }
+
+    // ── Dart: relative imports always use explicit .dart extension ───────────
+    // Fast-path that avoids trying JS/TS/Vue extension candidates for Dart files.
+    // In Dart, all non-scheme imports (including bare paths like 'user.g.dart'
+    // from part directives) are relative to the source file's directory.
+    if (sourcePath.endsWith('.dart')) {
+      const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
+      resolvedTarget = dir ? join(dir, target) : target;
+      const normalized = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+      if (fileMap.has(normalized)) return normalized;
       return null;
     }
 
@@ -1114,7 +1142,7 @@ export class Scanner {
       const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
       resolvedTarget = target.startsWith('.') ? join(dir, target) : target;
     }
-    const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+    const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//,  '').replace(/^\//, '');
 
     // When a .ts file imports with an explicit .js extension (TypeScript "use .js for .ts"
     // convention), we must also try the .ts/.tsx source equivalents.
@@ -1148,6 +1176,37 @@ export class Scanner {
       }
     }
     return null;
+  }
+
+  /**
+   * Discovers Dart packages by walking the workspace for pubspec.yaml files
+   * and extracting the `name:` field. Populates `dartPackageMap` with
+   * `packageName → relative/path/to/lib/` mappings.
+   */
+  private discoverDartPackages(workspaceRoot: string): void {
+    this.dartPackageMap.clear();
+    const allFiles = this.store.getAllFiles();
+    for (const f of allFiles) {
+      const filePath = f.path as string;
+      if (!filePath.endsWith('pubspec.yaml')) continue;
+
+      try {
+        const absPath = resolve(workspaceRoot, filePath);
+        const content = readFileSync(absPath, 'utf-8');
+        // Extract the `name:` field from pubspec.yaml (simple regex, no YAML lib)
+        const nameMatch = content.match(/^name:\s*([^\s#]+)/m);
+        if (nameMatch) {
+          const pkgName = nameMatch[1];
+          // The lib/ directory is relative to the pubspec.yaml directory
+          const pkgDir = filePath.includes('/')
+            ? filePath.substring(0, filePath.lastIndexOf('/') + 1)
+            : '';
+          this.dartPackageMap.set(pkgName, pkgDir + 'lib/');
+        }
+      } catch {
+        // Skip unreadable pubspec files
+      }
+    }
   }
 
   private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string): string | null {
