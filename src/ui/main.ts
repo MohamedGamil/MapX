@@ -218,7 +218,7 @@ let symbolSearchQuery = '';
 // New states for Proximity Clusters Mode & Groupings & Modifications
 let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
 let activeClusterId: string | null = null;
-let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' | 'layer' = 'community';
+let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' | 'layer' = 'layer';
 const removedNodes = new Set<string>();
 const removedEdges = new Set<string>();
 const customTags = new Map<string, string[]>(); // node ID -> tags array
@@ -1338,19 +1338,10 @@ async function loadGraph() {
     // Load clusters mapping for Proximity Clusters Mode
     await loadClusters();
 
-    // Decide default mode based on file count and edge count.
-    // Proximity (cluster) mode is far cheaper to render for large graphs.
-    const fileCount = rawGraphElements.filter(el => el.data && !el.data.source && !el.data.target && el.data.type === 'file').length;
-    const edgeCount = rawGraphElements.filter(el => el.data && el.data.source && el.data.target).length;
-    if (fileCount > 200 || edgeCount > 500) {
-      currentGraphMode = 'proximity';
-      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
-      if (modeSelect) modeSelect.value = 'proximity';
-    } else {
-      currentGraphMode = 'full';
-      const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
-      if (modeSelect) modeSelect.value = 'full';
-    }
+    // Default mode is Proximity Clusters Map.
+    currentGraphMode = 'proximity';
+    const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
+    if (modeSelect) modeSelect.value = 'proximity';
 
     const focusSearchContainer = document.getElementById('focus-search-container');
     if (focusSearchContainer) {
@@ -3152,9 +3143,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (layoutSelect) layoutSelect.value = 'fcose';
 
     // Reset grouping
-    groupingStrategy = 'community';
+    groupingStrategy = 'layer';
     const groupingSelect = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
-    if (groupingSelect) groupingSelect.value = 'community';
+    if (groupingSelect) groupingSelect.value = 'layer';
 
     // Reset language filter
     const langFilter = document.getElementById('filter-lang') as HTMLSelectElement;
