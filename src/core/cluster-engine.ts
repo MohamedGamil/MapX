@@ -319,8 +319,8 @@ export class ClusterEngine {
     }
 
     const communities = detectLeidenCommunities(filesList, leidenEdges, {
-      resolution: 1.0,
-      minCommunitySize: 3,
+      resolution: 1.3,
+      minCommunitySize: 2,
       maxIterations: 20
     });
 
@@ -331,39 +331,19 @@ export class ClusterEngine {
     const sortedGroupKeys = Object.keys(communities).sort();
     for (const key of sortedGroupKeys) {
       const filePaths = communities[key];
-      if (filePaths.length < 3) continue;
+      if (filePaths.length < 2) continue;
 
-      const commFileSet = new Set(filePaths);
-      let overlaps = false;
-      for (const fileSet of existingClusterFileSets.values()) {
-        if (fileSet.size === commFileSet.size) {
-          let allMatch = true;
-          for (const f of filePaths) {
-            if (!fileSet.has(f)) {
-              allMatch = false;
-              break;
-            }
-          }
-          if (allMatch) {
-            overlaps = true;
-            break;
-          }
-        }
-      }
-
-      if (!overlaps) {
-        const commName = `community_${communityIndex++}`;
-        clusters.push({
-          name: commName,
-          label: `Community ${commName.split('_')[1]}`,
-          source: 'community',
-          parentName: null,
-          depth: 0,
-          fileCount: filePaths.length,
-        });
-        for (const f of filePaths) {
-          memberships.push({ filePath: f, clusterName: commName });
-        }
+      const commName = `community_${communityIndex++}`;
+      clusters.push({
+        name: commName,
+        label: `Community ${commName.split('_')[1]}`,
+        source: 'community',
+        parentName: null,
+        depth: 0,
+        fileCount: filePaths.length,
+      });
+      for (const f of filePaths) {
+        memberships.push({ filePath: f, clusterName: commName });
       }
     }
 

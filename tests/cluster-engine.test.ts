@@ -53,6 +53,50 @@ describe('ClusterEngine module', () => {
     expect(insertedMemberships.some(m => m.filePath === 'src/core/a.ts' && m.clusterName === 'MapX.Core')).toBe(true);
     expect(insertedMemberships.some(m => m.filePath === 'src/utils/c.ts' && m.clusterName === 'src.utils')).toBe(true);
   });
+
+  it('detects community clusters matching directory sets and retains size 2 communities', () => {
+    const insertedClusters: any[] = [];
+    const insertedMemberships: any[] = [];
+
+    const mockStore = {
+      getAllFiles: (repo?: string) => [
+        // Two files in src/utils forming a community of size 2
+        { path: 'src/utils/a.ts', namespace: null, metadata: '{}' },
+        { path: 'src/utils/b.ts', namespace: null, metadata: '{}' }
+      ],
+      getAllEdges: (repo?: string) => [
+        // Connected pair forming a community of size 2
+        { source_file: 'src/utils/a.ts', target_file: 'src/utils/b.ts' }
+      ],
+      inTransaction: (fn: () => void) => fn(),
+      clearClusters: (repo?: string) => {},
+      insertCluster: (c: any) => {
+        insertedClusters.push(c);
+      },
+      insertClusterMembership: (m: any) => {
+        insertedMemberships.push(m);
+      }
+    } as unknown as Store;
+
+    const engine = new ClusterEngine(mockStore);
+    const result = engine.detect('test-repo');
+
+    // Should have directory cluster for src.utils (size >= 2)
+    expect(result.directoryClusters).toBe(2);
+    expect(insertedClusters.some(c => c.name === 'src.utils')).toBe(true);
+
+    // Should have community cluster as well, even though files are exactly identical to src.utils (a.ts, b.ts)
+    // and community size is 2.
+    expect(result.communityClusters).toBe(1);
+    expect(insertedClusters.some(c => c.source === 'community' && c.fileCount === 2)).toBe(true);
+
+    // Verify community memberships exist
+    const comm = insertedClusters.find(c => c.source === 'community');
+    expect(comm).toBeDefined();
+    const commName = comm!.name;
+    expect(insertedMemberships.some(m => m.filePath === 'src/utils/a.ts' && m.clusterName === commName && m.isPrimary === 0)).toBe(true);
+    expect(insertedMemberships.some(m => m.filePath === 'src/utils/b.ts' && m.clusterName === commName && m.isPrimary === 0)).toBe(true);
+  });
 });
 
 describe('ClusterEngine.assignFileLayer', () => {

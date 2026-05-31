@@ -747,14 +747,14 @@ function buildProximityClusterElements(): any[] {
   // Determine file-to-cluster assignment based on grouping strategy
   const fileToCluster = new Map<string, string>();
 
-  // Community map — exclude layer memberships so they don't overwrite
-  // community or primary cluster assignments (layers have their own
-  // dedicated grouping strategy handled in the 'layer' branch below).
+  // Community map — only map to community clusters (starts with 'community_')
+  // to avoid collisions with directory or namespace cluster memberships.
   const communityMap = new Map<string, string>();
   if (rawClustersData && rawClustersData.memberships) {
     rawClustersData.memberships.forEach((m: any) => {
-      if (typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:')) return;
-      communityMap.set(m.filePath, m.clusterName);
+      if (typeof m.clusterName === 'string' && m.clusterName.startsWith('community_')) {
+        communityMap.set(m.filePath, m.clusterName);
+      }
     });
   }
 
@@ -773,8 +773,15 @@ function buildProximityClusterElements(): any[] {
     }
 
     if (groupingStrategy === 'community') {
-      const comm = communityMap.get(fId) || 'community_unassigned';
-      fileToCluster.set(fId, `cluster:${comm}`);
+      const comm = communityMap.get(fId);
+      if (comm) {
+        fileToCluster.set(fId, `cluster:${comm}`);
+      } else {
+        // Fallback: group by directory to avoid a flat global unassigned cluster
+        const parts = fId.split('/');
+        const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
+        fileToCluster.set(fId, `cluster:unassigned:${dir}`);
+      }
     } else if (groupingStrategy === 'directory') {
       const parts = fId.split('/');
       const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : 'root';
@@ -863,8 +870,13 @@ function buildProximityClusterElements(): any[] {
       else if (clustId === 'cluster:singulars') label = `Singular Connected (${cnt})`;
       else if (clustId.startsWith('cluster:')) {
         const commId = clustId.replace('cluster:', '');
-        const commObj = rawClustersData.clusters?.find(c => c.name === commId);
-        label = `${commObj ? commObj.label : commId} (${cnt} files)`;
+        if (commId.startsWith('unassigned:')) {
+          const dirPath = commId.replace('unassigned:', '');
+          label = `Unassigned in ${dirPath === 'root' ? 'root' : dirPath} (${cnt} files)`;
+        } else {
+          const commObj = rawClustersData.clusters?.find(c => c.name === commId);
+          label = `${commObj ? commObj.label : commId} (${cnt} files)`;
+        }
       } else if (clustId.startsWith('dir:')) {
         label = `${clustId.replace('dir:', '')} (${cnt} files)`;
       } else if (clustId.startsWith('layer:')) {
