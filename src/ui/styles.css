@@ -722,6 +722,12 @@ body {
   gap: 18px;
 }
 
+#btn-toggle-clusters[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  /* pointer-events: none; */
+}
+
 /* Sticky Symbol Explorer Right Panel */
 #tab-symbols .split-right {
   position: sticky;

@@ -1287,10 +1287,10 @@ function updateToolbarVisibility(mode: string) {
     groupingSelect.disabled = !(mode === 'proximity' && !activeClusterId);
   }
 
-  const clustersBtn = document.getElementById('btn-toggle-clusters');
+  const clustersBtn = document.getElementById('btn-toggle-clusters') as HTMLButtonElement;
   if (clustersBtn) {
     // Clusters toggle only relevant in full codebase mode
-    clustersBtn.style.display = (mode === 'full') ? 'inline-flex' : 'none';
+    clustersBtn.disabled = mode !== 'full';
   }
 
   const breadcrumb = document.getElementById('cluster-breadcrumb');
@@ -2025,7 +2025,7 @@ async function loadGraph() {
             <rect x="14" y="12" width="7" height="9"></rect>
             <rect x="3" y="16" width="7" height="5"></rect>
           </svg>
-          <span>Hide Clusters</span>
+          <span>Toggle Clusters</span>
         `;
         btn.classList.add('btn-primary');
         btn.classList.remove('btn-secondary');
@@ -2037,7 +2037,7 @@ async function loadGraph() {
             <rect x="14" y="12" width="7" height="9"></rect>
             <rect x="3" y="16" width="7" height="5"></rect>
           </svg>
-          <span>Show Clusters</span>
+          <span>Toggle Clusters</span>
         `;
         btn.classList.remove('btn-primary');
         btn.classList.add('btn-secondary');
@@ -3328,8 +3328,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (focusPanel) focusPanel.style.display = 'none';
     const groupingEl = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
     if (groupingEl) groupingEl.disabled = false;
-    const clustersBtn = document.getElementById('btn-toggle-clusters');
-    if (clustersBtn) clustersBtn.style.display = 'none';
+    const clustersBtn = document.getElementById('btn-toggle-clusters') as HTMLButtonElement;
+    if (clustersBtn) clustersBtn.disabled = true;
     const breadcrumb = document.getElementById('cluster-breadcrumb');
     if (breadcrumb) breadcrumb.style.display = 'none';
     updateToolbarVisibility(currentGraphMode);
