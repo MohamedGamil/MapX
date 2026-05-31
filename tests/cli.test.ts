@@ -156,7 +156,8 @@ vi.mock('../src/core/workspace-manager.js', () => ({
 }));
 
 vi.mock('../src/core/fuzzy-matcher.js', () => ({
-  findSimilarSymbols: vi.fn().mockReturnValue([])
+  findSimilarSymbols: vi.fn().mockReturnValue([]),
+  isGlobPattern: vi.fn().mockImplementation((term: string) => term.includes('*') || term.includes('?')),
 }));
 
 const impactMocks = {
@@ -1940,6 +1941,293 @@ describe('CLI module', () => {
 
     it('lang uninstall', async () => {
       await runCLI(['lang', 'uninstall', 'python']);
+    });
+  });
+
+  // ── fuzzy suggestions ────────────────────────────────────────────────
+
+  describe('fuzzy suggestions in commands', () => {
+    let findSimilarSymbolsMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      const fuzzyModule = await import('../src/core/fuzzy-matcher.js');
+      findSimilarSymbolsMock = vi.mocked(fuzzyModule.findSimilarSymbols);
+      findSimilarSymbolsMock.mockReturnValue([
+        { name: 'MySimilarClass', kind: 'class', filePath: 'src/other.ts' }
+      ]);
+    });
+
+    afterEach(() => {
+      findSimilarSymbolsMock.mockReturnValue([]);
+    });
+
+    it('query shows fuzzy suggestions when no exact match', async () => {
+      storeMocks.searchSymbols.mockReturnValue([]);
+      await runCLI(['query', 'MySClass']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Did you mean'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('MySimilarClass'));
+      storeMocks.searchSymbols.mockReturnValue([]);
+    });
+
+    it('search shows fuzzy suggestions when no results', async () => {
+      storeMocks.searchSymbolsFiltered.mockReturnValue([]);
+      await runCLI(['search', 'MySClass']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Did you mean'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('MySimilarClass'));
+    });
+
+    it('callers shows fuzzy suggestions when symbol not found', async () => {
+      storeMocks.getCallersOfSymbol.mockReturnValue([]);
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+      await runCLI(['callers', 'MySClass']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Did you mean'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('MySimilarClass'));
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+    });
+
+    it('callees shows fuzzy suggestions when symbol not found', async () => {
+      storeMocks.getCalleesOfSymbol.mockReturnValue([]);
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+      await runCLI(['callees', 'MySClass']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Did you mean'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('MySimilarClass'));
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+    });
+
+    it('impact shows fuzzy suggestions when symbol not found', async () => {
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+      await expect(runCLI(['impact', 'MySClass'])).rejects.toThrow('exit: 1');
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Did you mean'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('MySimilarClass'));
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+    });
+
+    it('node shows fuzzy suggestions when symbol not found', async () => {
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+      await expect(runCLI(['node', 'MySClass'])).rejects.toThrow('exit: 1');
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Did you mean'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('MySimilarClass'));
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+    });
+  });
+
+  // ── resolveFilePaths branches via deps command ───────────────────────
+
+  describe('resolveFilePaths via deps command', () => {
+    it('deps with glob pattern resolves matching files', async () => {
+      storeMocks.getAllFiles.mockReturnValue([
+        { path: 'src/core/store.ts', last_scanned: new Date().toISOString() },
+        { path: 'src/core/graph.ts', last_scanned: new Date().toISOString() },
+      ]);
+      await runCLI(['deps', 'src/core/*.ts']);
+      expect(logSpy).toHaveBeenCalled();
+      storeMocks.getAllFiles.mockReturnValue([{ path: 'src/main.ts', last_scanned: new Date().toISOString() }]);
+    });
+
+    it('deps with substring match resolves files (no slash, no glob)', async () => {
+      storeMocks.getAllFiles.mockReturnValue([
+        { path: 'src/core/store.ts', last_scanned: new Date().toISOString() },
+      ]);
+      // 'store' is a substring of 'src/core/store.ts', no slash, no glob → hits substring fallback branch
+      await runCLI(['deps', 'store']);
+      expect(logSpy).toHaveBeenCalled();
+      storeMocks.getAllFiles.mockReturnValue([{ path: 'src/main.ts', last_scanned: new Date().toISOString() }]);
+    });
+
+    it('deps with unresolvable file shows error and exits', async () => {
+      storeMocks.getAllFiles.mockReturnValue([
+        { path: 'src/main.ts', last_scanned: new Date().toISOString() },
+      ]);
+      await expect(runCLI(['deps', 'completely-nonexistent-xyz123.ts'])).rejects.toThrow('exit: 1');
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('not found in index'));
+      storeMocks.getAllFiles.mockReturnValue([{ path: 'src/main.ts', last_scanned: new Date().toISOString() }]);
+    });
+  });
+
+  // ── trace command with actual paths ─────────────────────────────────
+
+  describe('trace command with non-empty paths', () => {
+    const traceResult = {
+      start: { file: 'src/main.ts', symbol: 'main' },
+      direction: 'down' as const,
+      paths: [{
+        nodes: [
+          { file: 'src/main.ts', symbol: 'main', depth: 0, incomingEdgeType: 'start' },
+          { file: 'src/utils.ts', symbol: 'helper', depth: 1, incomingEdgeType: 'call' },
+        ]
+      }],
+      sources: [{ file: 'src/entry.ts', symbol: 'entry' }],
+      sinks: [{ file: 'src/utils.ts', symbol: 'helper' }],
+      cycles: [],
+      nodeCount: 2,
+      edgeCount: 1,
+      maxDepthReached: false,
+    };
+
+    beforeEach(() => {
+      flowTracerMocks.trace.mockReturnValue(traceResult);
+    });
+
+    afterEach(() => {
+      flowTracerMocks.trace.mockReturnValue({
+        start: { file: 'src/main.ts', symbol: 'main' },
+        direction: 'both',
+        paths: [],
+        nodeCount: 0,
+        edgeCount: 0,
+        maxDepthReached: false,
+        sources: [],
+        sinks: [],
+        cycles: [],
+      });
+    });
+
+    it('trace --format json outputs JSON with nodes and edges', async () => {
+      await runCLI(['trace', 'main', '--format', 'json']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"nodeCount": 2'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"file": "src/main.ts"'));
+    });
+
+    it('trace --format dot outputs digraph', async () => {
+      await runCLI(['trace', 'main', '--format', 'dot']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('digraph'));
+    });
+
+    it('trace text format with nodes shows tree output', async () => {
+      await runCLI(['trace', 'main']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('main'));
+    });
+
+    it('trace with cycle node marks cycle in output', async () => {
+      const resultWithCycle = {
+        ...traceResult,
+        cycles: [{ fromFile: 'src/utils.ts', fromSymbol: 'helper', toFile: 'src/main.ts', toSymbol: 'main' }],
+      };
+      flowTracerMocks.trace.mockReturnValue(resultWithCycle);
+      await runCLI(['trace', 'main']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('cycle'));
+    });
+  });
+
+  // ── sources/sinks with special file annotations ──────────────────────
+
+  describe('sources command with special file types', () => {
+    it('shows route file annotation for routes/ file', async () => {
+      flowTracerMocks.findSources.mockReturnValue([
+        { file: 'routes/web.php', symbol: null }
+      ]);
+      storeMocks.getEdgesForFile.mockReturnValue([
+        { edge_type: 'route' },
+        { edge_type: 'route' },
+      ]);
+      await runCLI(['sources']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('route file'));
+      flowTracerMocks.findSources.mockReturnValue([]);
+    });
+
+    it('shows queue worker annotation for app/Jobs/ file', async () => {
+      flowTracerMocks.findSources.mockReturnValue([
+        { file: 'app/Jobs/SendEmail.php', symbol: null }
+      ]);
+      await runCLI(['sources']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('queue worker'));
+      flowTracerMocks.findSources.mockReturnValue([]);
+    });
+
+    it('shows event listener annotation for app/Listeners/ file', async () => {
+      flowTracerMocks.findSources.mockReturnValue([
+        { file: 'app/Listeners/UserListener.php', symbol: null }
+      ]);
+      await runCLI(['sources']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('event listener'));
+      flowTracerMocks.findSources.mockReturnValue([]);
+    });
+  });
+
+  describe('sinks command with special file types', () => {
+    it('shows database annotation for database file', async () => {
+      flowTracerMocks.findSinks.mockReturnValue([
+        { file: 'app/database/Manager.ts', symbol: null }
+      ]);
+      storeMocks.getReverseEdges.mockReturnValue([]);
+      await runCLI(['sinks']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('DB facade'));
+      flowTracerMocks.findSinks.mockReturnValue([]);
+    });
+
+    it('shows cache annotation for cache file', async () => {
+      flowTracerMocks.findSinks.mockReturnValue([
+        { file: 'app/CacheManager.ts', symbol: null }
+      ]);
+      storeMocks.getReverseEdges.mockReturnValue([]);
+      await runCLI(['sinks']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Cache facade'));
+      flowTracerMocks.findSinks.mockReturnValue([]);
+    });
+
+    it('shows mail annotation for mail file', async () => {
+      flowTracerMocks.findSinks.mockReturnValue([
+        { file: 'app/Mailer.ts', symbol: null }
+      ]);
+      storeMocks.getReverseEdges.mockReturnValue([]);
+      await runCLI(['sinks']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Mail facade'));
+      flowTracerMocks.findSinks.mockReturnValue([]);
+    });
+  });
+
+  // ── node command --format json --source ──────────────────────────────
+
+  describe('node command with json format and source', () => {
+    it('node --format json --source outputs JSON with sourceError when file unreadable', async () => {
+      storeMocks.getSymbolByName.mockReturnValue({
+        name: 'MyClass',
+        kind: 'class',
+        scope: null,
+        file_path: 'src/nonexistent-file-xyz.ts',
+        start_line: 1,
+        end_line: 5,
+        signature: 'class MyClass',
+      });
+      storeMocks.getCallersOfSymbol.mockReturnValue([]);
+      storeMocks.getCalleesOfSymbol.mockReturnValue([]);
+      await runCLI(['node', 'MyClass', '--format', 'json', '--source']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"name": "MyClass"'));
+      storeMocks.getSymbolByName.mockReturnValue(undefined);
+      storeMocks.getCallersOfSymbol.mockReturnValue([]);
+      storeMocks.getCalleesOfSymbol.mockReturnValue([]);
+    });
+  });
+
+  // ── profile command ──────────────────────────────────────────────────
+
+  describe('profile command', () => {
+    it('shows no profile message when no scan done', async () => {
+      storeMocks.getMeta.mockReturnValue(null);
+      await runCLI(['profile', '.']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No codebase profile'));
+      storeMocks.getMeta.mockReturnValue('6');
+    });
+
+    it('displays profile when data exists', async () => {
+      storeMocks.getMeta.mockImplementation((key: string) => {
+        if (key.includes('codebase_profile')) {
+          return JSON.stringify({
+            archetype: 'library',
+            archetypeConfidence: 0.85,
+            detectedFrameworks: ['react'],
+            detectedPatterns: ['mvc'],
+            dominantLanguages: ['typescript'],
+            hasBackend: false,
+            hasFrontend: true,
+            isMonorepo: false,
+          });
+        }
+        return '6';
+      });
+      await runCLI(['profile', '.']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('library'));
+      storeMocks.getMeta.mockReturnValue('6');
     });
   });
 });
