@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
+import { hasPackageJsonDependency } from '../utils.js';
 
 export class SvelteKitDetector implements FrameworkDetector {
   readonly name = 'sveltekit';
@@ -9,23 +10,14 @@ export class SvelteKitDetector implements FrameworkDetector {
   readonly filePattern = /\.(svelte|ts|js)$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
+    if (files.some(f => f === 'svelte.config.js' || f.endsWith('/svelte.config.js'))) {
+      return true;
+    }
     const svelteConfigPath = join(projectRoot, 'svelte.config.js');
     if (existsSync(svelteConfigPath)) {
       return true;
     }
-    const packageJsonPath = join(projectRoot, 'package.json');
-    if (existsSync(packageJsonPath)) {
-      try {
-        const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8'));
-        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-        if (deps && (deps['@sveltejs/kit'] || deps['svelte'])) {
-          return true;
-        }
-      } catch {
-        // Ignored
-      }
-    }
-    return false;
+    return hasPackageJsonDependency(projectRoot, files, ['@sveltejs/kit', 'svelte']);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

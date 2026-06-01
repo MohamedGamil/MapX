@@ -5,52 +5,22 @@ import { resolve, dirname, join, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LanguageDefinition } from '../languages/registry.js';
 
-const __thisFile = fileURLToPath(import.meta.url);
+import { findAssetRoot } from './assets.js';
 
-/**
- * Find the root directory that contains wasm/ and queries/ subdirectories.
- *
- * Three execution contexts:
- *   1. Source/dev (tsx or bun run src/main.ts):
- *      __thisFile = /path/to/mapx/src/parsers/wasm-parser.ts  → exists
- *      asset root  = resolve(dir, '..', '..')  →  /path/to/mapx/
- *
- *   2. npm-installed (node dist/main.js via npm bin symlink):
- *      __thisFile = /path/to/node_modules/mapx/dist/parsers/wasm-parser.js  → exists
- *      asset root  = resolve(dir, '..', '..')  →  /path/to/node_modules/mapx/
- *
- *   3. Compiled native binary (bun build --compile):
- *      __thisFile = virtual bun:// path  → does NOT exist
- *      falls through to process.execPath-relative search
- */
-function findAssetRoot(): string {
-  if (existsSync(__thisFile)) {
-    // Source/dev or npm-installed transpiled: navigate up from dist/parsers/ or src/parsers/
-    return resolve(dirname(__thisFile), '..', '..');
-  }
-
-  // Compiled binary: search candidate directories for the wasm/ subdir
-  const binDir = dirname(process.execPath);
-  const candidates = [
-    binDir,                                              // assets next to binary
-    resolve(binDir, '..', 'share', 'mapx'),         // XDG system: /usr/local/share/mapx
-    join(process.env['HOME'] ?? '', '.local', 'share', 'mapx'), // XDG user
-  ];
-
-  for (const dir of candidates) {
-    if (existsSync(join(dir, 'wasm'))) return dir;
-  }
-
-  return binDir; // fallback — will produce a clear "file not found" on first use
-}
-
-const PROJECT_ROOT = findAssetRoot();
+const PROJECT_ROOT = findAssetRoot(import.meta.url);
 
 let initPromise: Promise<void> | null = null;
 
 function ensureInit(): Promise<void> {
   if (!initPromise) {
-    initPromise = Parser.init();
+    initPromise = Parser.init({
+      locateFile(path: string) {
+        if (path === 'web-tree-sitter.wasm') {
+          return resolve(PROJECT_ROOT, 'wasm', 'web-tree-sitter.wasm');
+        }
+        return path;
+      }
+    });
   }
   return initPromise;
 }
@@ -70,6 +40,22 @@ export interface ParsedCaptures {
   scopeByNodeId: Map<number, string>;
 }
 
+/**
+ * Parser pool: reuses Parser instances per Language to avoid WASM re-init overhead.
+ * Each language gets its own parser to prevent language-switching races.
+ */
+const parserPool = new Map<Language, Parser>();
+
+function getPooledParser(language: Language): Parser {
+  let parser = parserPool.get(language);
+  if (!parser) {
+    parser = new Parser();
+    parser.setLanguage(language);
+    parserPool.set(language, parser);
+  }
+  return parser;
+}
+
 export async function parseWithQueries(
   source: string,
   language: Language,
@@ -77,10 +63,9 @@ export async function parseWithQueries(
   referencesQuery: string
 ): Promise<ParsedCaptures> {
   await ensureInit();
-  // Use a fresh parser instance per call to avoid language-switching races
-  // when multiple concurrent parses share the same instance.
-  const parser = new Parser();
-  parser.setLanguage(language);
+  // Pool parsers per language to avoid re-creating WASM instances on every parse.
+  // Each language gets its own parser to avoid language-switching races.
+  const parser = getPooledParser(language);
   const tree = parser.parse(source);
   if (!tree) {
     return { symbols: new Map(), references: new Map(), nameByNodeId: new Map(), scopeByNodeId: new Map() };

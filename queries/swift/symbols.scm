@@ -1,20 +1,12 @@
 ; Swift Symbol Extraction Queries
 
-; Classes
+; Classes, Structs, Enums
 (class_declaration
   name: (type_identifier) @symbol.name) @symbol.kind_class
-
-; Structs
-(struct_declaration
-  name: (type_identifier) @symbol.name) @symbol.kind_struct
 
 ; Protocols (Swift's interface equivalent)
 (protocol_declaration
   name: (type_identifier) @symbol.name) @symbol.kind_interface
-
-; Enums
-(enum_declaration
-  name: (type_identifier) @symbol.name) @symbol.kind_enum
 
 ; Functions (using simple_identifier for name)
 (function_declaration
@@ -33,5 +25,5 @@
   name: (type_identifier) @symbol.name) @symbol.kind_constant
 
 ; Extensions
-(extension_declaration
-  (type_identifier) @symbol.name) @symbol.kind_class
+;(extension_declaration
+;  (type_identifier) @symbol.name) @symbol.kind_class

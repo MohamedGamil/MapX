@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { resolve, join, dirname, relative, basename } from 'node:path';
-import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import * as readline from 'node:readline';
@@ -9,6 +9,7 @@ import { MapxGraph } from './core/graph.js';
 import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
+import { ContextBuilder } from './core/context-builder.js';
 import { AgentGenerator } from './agents/generator.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
@@ -16,25 +17,19 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
-import { calculateMetrics } from './core/metrics.js';
+import { calculateMetrics, calculateDSM } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
+import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
+import { VERSION } from './version.js';
+import { findSimilarSymbols, isGlobPattern, globToLike } from './core/fuzzy-matcher.js';
+import picomatch from 'picomatch';
 import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
-
-function readVersion(): string {
-  const base = dirname(fileURLToPath(import.meta.url));
-  // Compiled binary: VERSION is in the same directory as the binary
-  // Development (tsx): VERSION is one level up from src/
-  for (const candidate of [join(base, 'VERSION'), join(base, '..', 'VERSION')]) {
-    if (existsSync(candidate)) return readFileSync(candidate, 'utf-8').trim();
-  }
-  return '0.1.0';
-}
 
 function collectPatterns(val: string, memo: string[]): string[] {
   return memo.concat(val.split(',').map(s => s.trim()));
@@ -43,6 +38,38 @@ function collectPatterns(val: string, memo: string[]): string[] {
 function resolveDir(cmdOpts: Record<string, unknown>, programOpts: Record<string, unknown>): string {
   const raw = (cmdOpts.dir as string) || (programOpts.dir as string) || process.cwd();
   return resolve(raw);
+}
+
+/**
+ * Resolve a file argument to one or more tracked file paths.
+ *
+ * Resolution order:
+ *  1. Exact match in the tracked file set.
+ *  2. Glob / wildcard match (*, ?) against all tracked paths — returns all matches.
+ *  3. Substring / prefix match — returns all paths containing the input as a substring.
+ *
+ * Returns `null` when no match is found so callers can print a helpful error.
+ */
+function resolveFilePaths(input: string, allFiles: Array<{ path: unknown }>): string[] | null {
+  const paths = allFiles.map(f => f.path as string);
+
+  // 1. Exact match
+  if (paths.includes(input)) return [input];
+
+  // 2. Glob wildcard: *, ?, **
+  if (isGlobPattern(input) || input.includes('/')) {
+    const matchBase = !input.includes('/');
+    const isMatch = picomatch(input, { dot: true, nocase: true, matchBase });
+    const matches = paths.filter(p => isMatch(p) || p.endsWith(input) || p.includes(input));
+    if (matches.length > 0) return matches;
+  }
+
+  // 3. Substring fallback
+  const lower = input.toLowerCase();
+  const substr = paths.filter(p => p.toLowerCase().includes(lower));
+  if (substr.length > 0) return substr;
+
+  return null;
 }
 
 const PHASE_LABELS: Record<ScanProgress['phase'], { active: string; done: string }> = {
@@ -264,7 +291,7 @@ export function buildCLI(): Command {
   program
     .name('mapx')
     .description('Multi-language code graph memory system for LLMs')
-    .version(readVersion())
+    .version(VERSION)
     .option('-d, --dir <path>', 'Target project directory (default: current directory)');
 
 function detectLaravel(workspaceRoot: string): boolean {
@@ -338,6 +365,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--no-agents', 'Skip AGENTS.md creation')
     .option('--no-suggestions', 'Skip interactive framework suggestions')
     .option('--no-mcp-configs', 'Skip auto-generating MCP config files for detected agent tools')
+    .option('--no-discover', 'Skip monorepo / nested-repo discovery step')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const isLaravel = detectLaravel(dir);
@@ -394,6 +422,67 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           clack.log.success(`Added .mapx/ to .gitignore`);
         }
       }
+
+      // Monorepo / nested-repo discovery step (default on, disable with --no-discover)
+      if (opts.discover !== false && process.stdin.isTTY) {
+        const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+        const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+        const registeredPaths = new Set(config.repos.map(r => resolve(dir, r.path)));
+        const newNested = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+        const newMono   = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+
+        if (newNested.length > 0 || newMono.length > 0) {
+          const totalFound = newNested.length + newMono.length;
+          clack.log.info(`Found ${totalFound} additional package${totalFound === 1 ? '' : 's'} / nested repo${totalFound === 1 ? '' : 's'} in this workspace.`);
+
+          const shouldDiscover = await clack.confirm({
+            message: `Discover and register them now?`,
+            initialValue: true,
+          });
+
+          if (!clack.isCancel(shouldDiscover) && shouldDiscover) {
+            const toRegister: Array<{ name: string; path: string }> = [];
+
+            if (newNested.length > 0) {
+              const chosenNested = await clack.multiselect({
+                message: `Select nested git repositories to register (${newNested.length} found):`,
+                options: newNested.map(n => ({ value: n.path, label: `${n.name}  (${n.path})` })),
+                required: false,
+              });
+              if (!clack.isCancel(chosenNested)) {
+                for (const p of chosenNested as string[]) {
+                  const n = newNested.find(x => x.path === p)!;
+                  toRegister.push({ name: n.name, path: n.path });
+                }
+              }
+            }
+
+            if (newMono.length > 0) {
+              const mgr = newMono[0].packageManager;
+              const chosenMono = await clack.multiselect({
+                message: `Select monorepo packages to register [${mgr}] (${newMono.length} found):`,
+                options: newMono.map(p => ({ value: p.path, label: `${p.name}  (${p.path})` })),
+                required: false,
+              });
+              if (!clack.isCancel(chosenMono)) {
+                for (const p of chosenMono as string[]) {
+                  const pkg = newMono.find(x => x.path === p);
+                  if (pkg) toRegister.push({ name: pkg.name, path: pkg.path });
+                }
+              }
+            }
+
+            if (toRegister.length > 0) {
+              for (const item of toRegister) {
+                config.addRepo(item.name, item.path);
+                clack.log.success(`Registered: ${item.name} -> ${item.path}`);
+              }
+              await config.save();
+            }
+          }
+        }
+      }
+
       clack.log.success(`Initialized mapx in ${dir}/.mapx/`);
       clack.log.info(`Repo: ${config.repo.name}`);
     });
@@ -472,6 +561,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--repo <name>', 'Scan only a specific registered repository')
     .option('--all', 'Scan all registered repositories')
     .option('--force', 'Force re-parsing of all files (bypass cache)', false)
+    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -480,6 +570,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const scanner = new Scanner(store, config, graph, onProgress, {
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
+        parallel: opts.parallel as boolean | undefined,
       });
 
       const onSigInt = () => {
@@ -526,6 +617,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--repo <name>', 'Update only a specific registered repository')
     .option('--all', 'Update all registered repositories')
+    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -549,6 +641,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const scanner = new Scanner(store, config, graph, onProgress, {
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
+        parallel: opts.parallel as boolean | undefined,
       });
       const onSigInt = () => {
         scanner.abort();
@@ -745,18 +838,30 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
   program
     .command('query <term>')
-    .description('Search for symbols by name')
+    .description('Search for symbols by name (supports glob patterns: *Service, get*)')
     .option('-d, --dir <path>', 'Target directory')
     .action(async (term: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
       const results = store.searchSymbols(term);
       if (results.length === 0) {
+        // Fuzzy fallback: suggest similar symbol names
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(term, candidates);
         console.log(`No symbols matching "${term}"`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+          }
+        }
+        console.log(`\nTip: Use glob patterns like "${term.length > 3 ? term.slice(0, 4) : term}*" or "*" to list all.`);
         return;
       }
 
+      console.log(`Found ${results.length} symbol${results.length !== 1 ? 's' : ''} matching "${term}":\n`);
       for (const sym of results) {
         const scope = sym.scope ? `${sym.scope}::` : '';
         console.log(`  ${sym.kind} ${scope}${sym.name}`);
@@ -769,34 +874,95 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
   program
     .command('search <term>')
-    .description('Symbol search with kind/file/exact filters')
+    .description('Symbol search with kind/file/exact filters and glob patterns (*, ?)')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--kind <kind>', 'Filter by symbol kind (e.g. class, method)')
+    .option('--kind <kind>', 'Filter by symbol kind (class, method, function, interface, trait, constant, enum, property, namespace, struct, module)')
     .option('--file <prefix>', 'Filter by file path prefix')
-    .option('--exact', 'Only match exact name', false)
+    .option('--exact', 'Only match exact name (case-insensitive)', false)
     .option('--limit <limit>', 'Max results to return', '20')
+    .option('--format <format>', 'Output format: text | json', 'text')
     .action(async (term: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store, graph } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
-      const results = store.searchSymbolsFiltered({
-        term,
-        kind: opts.kind as string,
-        filePrefix: opts.file as string,
-        exact: !!opts.exact,
-        limit: parseInt(opts.limit as string, 10),
-      });
+      const kind = opts.kind as string | undefined;
+      const filePrefix = opts.file as string | undefined;
+      const exact = !!opts.exact;
+      const limit = parseInt(opts.limit as string, 10);
+      const format = (opts.format as string) || 'text';
+
+      let results = store.searchSymbolsFiltered({ term, kind, filePrefix, exact, limit });
+      let broadened = false;
+
+      // Auto-expand: if kind filter yields 0 results, retry without kind
+      if (results.length === 0 && kind && term !== '*' && term !== '') {
+        const withoutKind = store.searchSymbolsFiltered({ term, filePrefix, exact, limit });
+        if (withoutKind.length > 0) {
+          results = withoutKind;
+          broadened = true;
+        }
+      }
 
       if (results.length === 0) {
+        // Fuzzy fallback
         console.log(`No symbols matching "${term}"`);
+        if (kind) {
+          const kinds = store.listSymbolKinds();
+          console.log(`\nAvailable kinds:`);
+          for (const k of kinds) console.log(`  ${k.kind}: ${k.count} symbols`);
+        }
+        if (term !== '*' && term !== '') {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(term, candidates);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+          console.log(`\nTip: Use term="*" to list all, or glob patterns like "${term.length > 3 ? term.slice(0, 4) : term}*"`);
+        }
         return;
       }
 
-      const rankedAll = graph.getRankedSymbols();
       const rankMap = new Map<string, number>();
-      for (const item of rankedAll) {
-        rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
+      if (results.length > 0) {
+        const filePaths = Array.from(new Set(results.map(r => r.file_path)));
+        const placeholders = filePaths.map(() => '?').join(',');
+        const fileRanks = store.raw.prepare(`
+          SELECT path, pagerank FROM files WHERE path IN (${placeholders})
+        `).all(...filePaths) as any[];
+        const fileRankMap = new Map<string, number>(fileRanks.map(f => [f.path, f.pagerank]));
+        for (const sym of results) {
+          const parentFileRank = fileRankMap.get(sym.file_path) || 0;
+          const symbolRank = parentFileRank * (1 + (sym.scope ? 2 : 1) * 0.1);
+          rankMap.set(`${sym.file_path}::${sym.name}`, symbolRank);
+        }
       }
+
+      // JSON format
+      if (format === 'json') {
+        const jsonResults = results.map(sym => ({
+          name: sym.name,
+          kind: sym.kind,
+          scope: sym.scope || null,
+          file: sym.file_path,
+          line: sym.start_line,
+          endLine: sym.end_line,
+          signature: sym.signature || '',
+          pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
+        }));
+        console.log(JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2));
+        return;
+      }
+
+      // Summary header
+      let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+      if (kind && !broadened) header += ` of kind "${kind}"`;
+      if (filePrefix) header += ` in ${filePrefix}`;
+      if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;
+      console.log(header + ':\n');
 
       for (const sym of results) {
         const scope = sym.scope ? `${sym.scope}::` : '';
@@ -818,6 +984,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const maxDepth = parseInt(opts.depth as string, 10);
 
       const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
@@ -851,11 +1018,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (results.length === 0) {
-        console.log(`No callers found for "${symbol}"`);
+        // Fuzzy fallback: check if symbol exists
+        const sym = store.getSymbolByName(symbol);
+        if (!sym) {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbol, candidates);
+          console.log(`Symbol "${symbol}" not found.`);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+        } else {
+          console.log(`No callers found for "${symbol}"`);
+        }
         return;
       }
 
-      console.log(`Callers of "${symbol}":`);
+      console.log(`${results.length} caller${results.length !== 1 ? 's' : ''} of "${symbol}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:`);
       for (const res of results) {
         const indent = '  '.repeat(res.depth);
         console.log(`${indent}← ${res.caller} (calls ${res.callee})`);
@@ -871,6 +1052,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const maxDepth = parseInt(opts.depth as string, 10);
 
       const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
@@ -903,11 +1085,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (results.length === 0) {
-        console.log(`No callees found for "${symbol}"`);
+        // Fuzzy fallback: check if symbol exists
+        const sym = store.getSymbolByName(symbol);
+        if (!sym) {
+          const candidates = store.getSymbolCandidatesForFuzzy();
+          const suggestions = findSimilarSymbols(symbol, candidates);
+          console.log(`Symbol "${symbol}" not found.`);
+          if (suggestions.length > 0) {
+            console.log(`\nDid you mean:`);
+            for (const s of suggestions) {
+              console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+            }
+          }
+        } else {
+          console.log(`No callees found for "${symbol}"`);
+        }
         return;
       }
 
-      console.log(`Callees of "${symbol}":`);
+      console.log(`${results.length} callee${results.length !== 1 ? 's' : ''} of "${symbol}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:`);
       for (const res of results) {
         const indent = '  '.repeat(res.depth);
         console.log(`${indent}→ ${res.callee} (called by ${res.caller})`);
@@ -924,76 +1120,39 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const maxDepth = parseInt(opts.depth as string, 10);
 
-      const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
-      const visited = new Set<string>([symbol]);
-      const items: Array<{ symbol: string; file: string; depth: number; edgeType: string; risk: 'HIGH' | 'MEDIUM' | 'LOW' }> = [];
-
-      while (queue.length > 0) {
-        const { symName, depth } = queue.shift()!;
-        if (depth >= maxDepth) continue;
-
-        const callers = store.getCallersOfSymbol(symName);
-        for (const edge of callers) {
-          const callerName = edge.source_symbol || '<top-level>';
-          const key = `${edge.source_file}::${callerName}`;
-          if (visited.has(key)) continue;
-          visited.add(key);
-
-          let risk: 'HIGH' | 'MEDIUM' | 'LOW' = 'LOW';
-          const isStructural = ['import', 'require', 'extends', 'implements'].includes(edge.edge_type);
-          const curDepth = depth + 1;
-
-          if (curDepth === 1) {
-            risk = isStructural ? 'MEDIUM' : 'HIGH';
-          } else if (curDepth === 2) {
-            risk = isStructural ? 'LOW' : 'MEDIUM';
-          } else {
-            risk = 'LOW';
-          }
-
-          items.push({
-            symbol: callerName,
-            file: edge.source_file,
-            depth: curDepth,
-            edgeType: edge.edge_type,
-            risk
-          });
-
-          if (edge.source_symbol) {
-            queue.push({ symName: edge.source_symbol, depth: curDepth });
+      // Fuzzy pre-check: verify symbol exists before running analysis
+      const sym = store.getSymbolByName(symbol);
+      if (!sym) {
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(symbol, candidates);
+        console.error(`Error: Symbol "${symbol}" not found.`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
           }
         }
+        process.exit(1);
       }
 
-      let recommendation = 'No callers found — safe to change';
-      if (items.some(x => x.risk === 'HIGH')) {
-        recommendation = 'Treat as BREAKING CHANGE — update all HIGH-risk callers';
-      } else if (items.length > 0) {
-        recommendation = 'Low blast radius — proceed with caution';
-      }
+      const analyzer = new ImpactAnalyzer(store);
+      const result = analyzer.analyze(symbol, maxDepth, dir);
 
       if (opts.format === 'json') {
-        console.log(JSON.stringify({
-          affected: items,
-          summary: {
-            high: items.filter(x => x.risk === 'HIGH').length,
-            medium: items.filter(x => x.risk === 'MEDIUM').length,
-            low: items.filter(x => x.risk === 'LOW').length,
-          },
-          recommendation
-        }, null, 2));
+        console.log(JSON.stringify(result, null, 2));
       } else {
-        if (items.length === 0) {
+        if (result.affected.length === 0) {
           console.log(`No callers affected by changing "${symbol}"`);
         } else {
           console.log(`Impact analysis for "${symbol}":`);
-          for (const item of items) {
+          for (const item of result.affected) {
             console.log(`  [${item.risk}] ${item.symbol} (${item.file}) [depth: ${item.depth}, type: ${item.edgeType}]`);
           }
         }
-        console.log(`\nRecommendation: ${recommendation}`);
+        console.log(`\nRecommendation: ${result.recommendation}`);
       }
     });
 
@@ -1002,19 +1161,60 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('Show full symbol details and optional source code')
     .option('-d, --dir <path>', 'Target directory')
     .option('--source', 'Extract and display source code', false)
+    .option('--format <format>', 'Output format: text | json', 'text')
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
-      const { readFileSync } = await import('node:fs');
+      checkAndPrintStaleness(store, dir);
 
       const sym = store.getSymbolByName(symbol);
       if (!sym) {
-        console.error(`Error: Symbol "${symbol}" not found`);
+        // Fuzzy fallback
+        const candidates = store.getSymbolCandidatesForFuzzy();
+        const suggestions = findSimilarSymbols(symbol, candidates);
+        console.error(`Error: Symbol "${symbol}" not found.`);
+        if (suggestions.length > 0) {
+          console.log(`\nDid you mean:`);
+          for (const s of suggestions) {
+            console.log(`  • ${s.name} (${s.kind} @ ${s.filePath})`);
+          }
+        }
+        console.log(`\nTip: Use mapx search to find symbols by pattern. Example: mapx search "${symbol.length > 3 ? symbol.slice(0, 4) : symbol}*"`);
         process.exit(1);
       }
 
       const callers = store.getCallersOfSymbol(symbol);
       const callees = store.getCalleesOfSymbol(symbol);
+      const format = (opts.format as string) || 'text';
+
+      // JSON format
+      if (format === 'json') {
+        const result: Record<string, any> = {
+          name: sym.name,
+          kind: sym.kind,
+          scope: sym.scope || null,
+          file: sym.file_path,
+          startLine: sym.start_line,
+          endLine: sym.end_line,
+          signature: sym.signature || '',
+          callerCount: callers.length,
+          calleeCount: callees.length,
+        };
+        if (opts.source) {
+          try {
+            const absolutePath = resolve(dir, sym.file_path as string);
+            const content = readFileSync(absolutePath, 'utf8');
+            const lines = content.split('\n');
+            const start = (sym.start_line as number) - 1;
+            const end = (sym.end_line as number);
+            result.source = lines.slice(start, end).join('\n');
+          } catch (err: any) {
+            result.sourceError = err.message;
+          }
+        }
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
 
       console.log(`Symbol: ${sym.scope ? `${sym.scope}::` : ''}${sym.name}`);
       console.log(`Kind:   ${sym.kind}`);
@@ -1046,13 +1246,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('files')
     .description('List indexed files with prefix/lang/sort filters')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--path <prefix>', 'Filter by path prefix')
+    .option('--path <pattern>', 'Filter by path prefix or glob (e.g. src/core/*.ts)')
     .option('--lang <lang>', 'Filter by language')
     .option('--sort <sort>', 'lines | path', 'path')
     .option('--limit <limit>', 'Max files to return', '50')
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
       const results = store.getFilesFiltered({
         pathPrefix: opts.path as string,
@@ -1078,23 +1279,37 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (file: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store, graph } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
-      const deps = graph.getDependencies(file);
-      const rdeps = graph.getReverseDependencies(file);
+      const allFiles = store.getAllFiles() as Array<{ path: unknown }>;
+      const resolved = resolveFilePaths(file, allFiles);
 
-      if (deps.length > 0) {
-        console.log('Dependencies:');
-        for (const dep of deps) {
-          console.log(`  → ${dep.target} (${dep.type})`);
-        }
-      } else {
-        console.log('No dependencies found');
+      if (!resolved) {
+        console.error(`File "${file}" not found in index.`);
+        console.log(`\nTip: Use globs (src/core/*.ts), partial names (scanner), or run mapx files to list all tracked files.`);
+        process.exit(1);
       }
 
-      if (rdeps.length > 0) {
-        console.log('\nDepended on by:');
-        for (const rdep of rdeps) {
-          console.log(`  ← ${rdep.source} (${rdep.type})`);
+      for (const filePath of resolved) {
+        if (resolved.length > 1) console.log(`\n── ${filePath} ──`);
+
+        const deps = graph.getDependencies(filePath);
+        const rdeps = graph.getReverseDependencies(filePath);
+
+        if (deps.length > 0) {
+          console.log('Dependencies:');
+          for (const dep of deps) {
+            console.log(`  → ${dep.target} (${dep.type})`);
+          }
+        } else {
+          console.log('No dependencies found');
+        }
+
+        if (rdeps.length > 0) {
+          console.log('\nDepended on by:');
+          for (const rdep of rdeps) {
+            console.log(`  ← ${rdep.source} (${rdep.type})`);
+          }
         }
       }
     });
@@ -1110,10 +1325,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include-structural', 'Include import/extends edges in trace', false)
     .option('--sources', 'Show entry points', false)
     .option('--sinks', 'Show terminal consumers', false)
+    .option('--include-leaf-libraries', 'Include high-import leaf libraries in terminal consumers output', false)
     .option('--to <target>', 'Find the shortest path to target symbol/file')
     .action(async (start: string | undefined, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
 
       const tracer = new FlowTracer(store);
 
@@ -1138,11 +1355,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (opts.sinks) {
-        const sinks = tracer.findSinks(config.repo.name);
+        const includeLeaf = !!opts.includeLeafLibraries;
+        const sinks = tracer.findSinks(config.repo.name, includeLeaf);
         console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
         for (const s of sinks) {
           const inEdges = store.getReverseEdges(s.file).filter(e => [
-            'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route'
+            'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
           ].includes(e.edge_type as string));
           let extra = `[terminal — no outgoing data edges]`;
           if (s.file.includes('DatabaseManager') || s.file.includes('database')) {
@@ -1353,6 +1571,135 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       if (result.sinks.length > 0) {
         const sinkNames = result.sinks.map(s => s.symbol || s.file.split('/').pop() || s.file);
         console.log(`Sinks: ${sinkNames.join(', ')}`);
+      }
+    });
+
+  program
+    .command('sources')
+    .description('Find entry points (data sources) in the codebase')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+
+      const tracer = new FlowTracer(store);
+      const sources = tracer.findSources(config.repo.name);
+      console.log(`\nEntry points (data sources) — ${sources.length} found:`);
+      for (const s of sources) {
+        let extra = '[no incoming data edges]';
+        if (s.file.includes('routes/')) {
+          const routes = store.getEdgesForFile(s.file).filter(e => e.edge_type === 'route');
+          extra = `[route file — ${routes.length} controller endpoints]`;
+        } else if (s.file.includes('app/Jobs/')) {
+          extra = '[dispatched externally — queue worker]';
+        } else if (s.file.includes('app/Listeners/')) {
+          extra = '[event listener — external trigger]';
+        } else if (s.file.includes('app/Http/Middleware/')) {
+          extra = '[middleware — filter chain entry]';
+        }
+        console.log(`  ${s.file.padEnd(40)} ${extra}`);
+      }
+    });
+
+  program
+    .command('sinks')
+    .description('Find terminal consumers (data sinks) in the codebase')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--include-leaf-libraries', 'Include high-import leaf libraries in output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+
+      const tracer = new FlowTracer(store);
+      const includeLeaf = !!opts.includeLeafLibraries;
+      const sinks = tracer.findSinks(config.repo.name, includeLeaf);
+      console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
+      for (const s of sinks) {
+        const inEdges = store.getReverseEdges(s.file).filter(e => [
+          'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
+        ].includes(e.edge_type as string));
+        let extra = `[terminal — no outgoing data edges]`;
+        if (s.file.includes('DatabaseManager') || s.file.includes('database')) {
+          extra = `[DB facade → raw SQL — ${inEdges.length} in-edges]`;
+        } else if (s.file.includes('CacheManager') || s.file.includes('cache')) {
+          extra = `[Cache facade → Redis/Memcache — ${inEdges.length} in-edges]`;
+        } else if (s.file.includes('Mailer') || s.file.includes('mail')) {
+          extra = `[Mail facade → SMTP — ${inEdges.length} in-edges]`;
+        } else if (s.file.includes('QueueManager') || s.file.includes('queue')) {
+          extra = `[Queue::push — ${inEdges.length} in-edges]`;
+        }
+        console.log(`  ${s.file.padEnd(40)} ${extra}`);
+      }
+    });
+
+  program
+    .command('context <task>')
+    .description('Generate task-specific workspace context within a token budget')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--seeds <list>', 'Comma-separated list of seed symbols or file paths')
+    .option('--tokens <budget>', 'Maximum estimated token budget', '8192')
+    .option('--depth <n>', 'Graph traversal depth', '2')
+    .option('--format <format>', 'Output format: text | json', 'text')
+    .action(async (task: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { config, store, graph } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+
+      const builder = new ContextBuilder(store, graph);
+      const parsedTokens = parseInt(opts.tokens as string, 10) || 8192;
+      const parsedDepth = parseInt(opts.depth as string, 10) || 2;
+      const format = opts.format as string;
+      const seeds = opts.seeds ? (opts.seeds as string).split(',').map(s => s.trim()) : undefined;
+
+      const result = await builder.buildContext({
+        task,
+        seeds,
+        tokens: parsedTokens,
+        depth: parsedDepth,
+      });
+
+      if (format === 'json') {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log('# MapX Smart Context');
+      console.log(`*Estimated tokens:* ${result.estimatedTokens}\n`);
+      
+      console.log('## Included Files');
+      if (result.includedFiles.length === 0) {
+        console.log('None');
+      } else {
+        for (const f of result.includedFiles) {
+          console.log(`### [${f.path}](file://${resolve(dir, f.path)})`);
+          console.log(`- Language: ${f.language}`);
+          console.log(`- Lines: ${f.lineCount} | Size: ${f.sizeBytes} bytes`);
+          if (f.symbols.length > 0) {
+            console.log('- Symbols:');
+            for (const sym of f.symbols) {
+              const scopeStr = sym.scope ? `${sym.scope}::` : '';
+              console.log(`  - \`${sym.kind}\` \`${scopeStr}${sym.name}\` (lines ${sym.startLine}-${sym.endLine})`);
+            }
+          }
+        }
+      }
+
+      if (result.edges.length > 0) {
+        console.log('\n## Cross-File Dependencies');
+        for (const edge of result.edges) {
+          const srcSym = edge.sourceSymbol ? `#${edge.sourceSymbol}` : '';
+          const tgtSym = edge.targetSymbol ? `#${edge.targetSymbol}` : '';
+          console.log(`- \`${edge.sourceFile}${srcSym}\` → \`${edge.targetFile}${tgtSym}\` (${edge.edgeType})`);
+        }
+      }
+
+      if (result.excludedFiles.length > 0) {
+        console.log('\n## Excluded Files (Token budget exhausted)');
+        for (const f of result.excludedFiles) {
+          console.log(`- ${f}`);
+        }
       }
     });
 
@@ -1594,6 +1941,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const metrics = calculateMetrics(store, {
         repo: config.repo.name,
         language: opts.lang as string | undefined,
@@ -1620,7 +1968,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('List detected code clusters/modules')
     .argument('[clusterOrPath]', 'Target directory or a specific cluster name to inspect')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--source <source>', 'Filter by cluster source: namespace, directory, community, or all', 'all')
+    .option('--source <source>', 'Filter by cluster source: namespace, directory, community, layer, or all', 'all')
     .option('--json', 'Output results as JSON')
     .action(async (clusterOrPath: string | undefined, opts: Record<string, unknown>) => {
       let dir = resolveDir(opts, program.opts());
@@ -1741,7 +2089,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const nsCount = filtered.filter((c: any) => c.source === 'namespace').length;
       const dirCount = filtered.filter((c: any) => c.source === 'directory').length;
       const commCount = filtered.filter((c: any) => c.source === 'community').length;
-      console.log(`\n${filtered.length} clusters detected (${nsCount} namespace, ${dirCount} directory, ${commCount} community)\n`);
+      const layerCount = filtered.filter((c: any) => c.source === 'layer').length;
+      const layerSuffix = layerCount > 0 ? `, ${layerCount} layer` : '';
+      console.log(`\n${filtered.length} clusters detected (${nsCount} namespace, ${dirCount} directory, ${commCount} community${layerSuffix})\n`);
     });
 
   program
@@ -1755,6 +2105,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
       const edges = store.queryEdges({
         repo: config.repo.name,
         type: opts.type as string | undefined,
@@ -1858,6 +2209,199 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log(`${h.framework.padEnd(12)} | ${h.hookType.padEnd(15)} | ${h.hookName.padEnd(25)} | ${handler}`);
       }
       console.log(''.padEnd(80, '-'));
+      console.log('');
+    });
+
+  program
+    .command('profile')
+    .description('Show codebase profile: archetype, frameworks, and patterns')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+      const profileStr = store.getMeta('codebase_profile:' + repo);
+      if (!profileStr) {
+        console.log(`No codebase profile found for repo "${repo}". Run a scan first.`);
+        return;
+      }
+      const profile = JSON.parse(profileStr);
+      console.log('\n── Codebase Profile ───────────────────────────────────');
+      console.log(`  Archetype:             ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`);
+      console.log(`  Detected Frameworks:   ${profile.detectedFrameworks.join(', ') || 'none'}`);
+      console.log(`  Architecture Patterns: ${profile.detectedPatterns.join(', ') || 'none'}`);
+      console.log(`  Dominant Languages:    ${profile.dominantLanguages.join(', ')}`);
+      console.log(`  Has Backend:           ${profile.hasBackend}`);
+      console.log(`  Has Frontend:          ${profile.hasFrontend}`);
+      console.log(`  Is Monorepo:           ${profile.isMonorepo}`);
+      console.log('');
+    });
+
+  program
+    .command('arch')
+    .description('Show full architecture report: profile, layers, smells, and DSM')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--smells', 'Show only architectural smells')
+    .option('--dsm', 'Show only Dependency Structure Matrix (DSM)')
+    .option('--violations', 'Show only layer violations')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+
+      const showAll = !opts.smells && !opts.dsm && !opts.violations;
+
+      if (showAll || opts.smells || opts.violations) {
+        const smells = store.getArchSmells(repo);
+        const filtered = opts.violations ? smells.filter((s: any) => s.type === 'layer-violation') : smells;
+        
+        console.log(`\n── Architectural Smells & Violations (${filtered.length}) ─────────────────`);
+        if (filtered.length === 0) {
+          console.log('🟢 Clean! No architectural smells detected.');
+        } else {
+          for (const s of filtered) {
+            console.log(`\n  [${s.severity.toUpperCase()}] ${s.type}`);
+            console.log(`    Description: ${s.description}`);
+            if (s.involvedFiles.length > 0) {
+              console.log(`    Files:       ${s.involvedFiles.join(', ')}`);
+            }
+            if (s.involvedClusters && s.involvedClusters.length > 0) {
+              console.log(`    Clusters:    ${s.involvedClusters.join(', ')}`);
+            }
+            console.log(`    Suggestion:  ${s.suggestion}`);
+          }
+        }
+        console.log('');
+        if (!showAll) return;
+      }
+
+      if (showAll || opts.dsm) {
+        const dsm = calculateDSM(store, repo);
+        if (dsm.clusterNames.length === 0) {
+          console.log('No clusters found to build DSM.');
+        } else {
+          console.log('\n── Dependency Structure Matrix (DSM) ──────────────────');
+          const maxLength = Math.max(...dsm.clusterNames.map((n: string) => n.length), 5);
+          const headers = [''.padEnd(maxLength), ...dsm.clusterNames.map((_, idx) => `C${idx + 1}`.padStart(4))].join(' ');
+          console.log(headers);
+          console.log('-'.repeat(headers.length));
+          dsm.clusterNames.forEach((name, i) => {
+            const cells = dsm.matrix[i].map((val, j) => {
+              if (i === j) return '   *';
+              if (val === 0) return '   .';
+              return val.toString().padStart(4);
+            }).join(' ');
+            console.log(`${`C${i + 1} ${name}`.padEnd(maxLength)} ${cells}`);
+          });
+          console.log(`\nLegend:\n  * = self\n  . = no dependency\n  number = edge count from row cluster to column cluster`);
+          console.log('\nCluster Key:');
+          dsm.clusterNames.forEach((name, idx) => {
+            console.log(`  C${idx + 1}: ${name}`);
+          });
+        }
+        console.log('');
+        if (!showAll) return;
+      }
+
+      if (showAll) {
+        const profileStr = store.getMeta('codebase_profile:' + repo);
+        if (profileStr) {
+          const profile = JSON.parse(profileStr);
+          console.log('── Codebase Profile Summary ───────────────────────────');
+          console.log(`  Archetype:  ${profile.archetype} (confidence: ${profile.archetypeConfidence.toFixed(2)})`);
+          console.log(`  Languages:  ${profile.dominantLanguages.join(', ')}`);
+          console.log('');
+        }
+
+        const smells = store.getArchSmells(repo);
+        console.log('── Architecture Health ────────────────────────────────');
+        if (smells.length === 0) {
+          console.log('🟢 Clean! No smells detected.');
+        } else {
+          console.log(`⚠️  Detected ${smells.length} architectural smell(s). Run 'mapx arch --smells' for details.`);
+        }
+        console.log('');
+      }
+    });
+
+  program
+    .command('explain <file>')
+    .description('Explain why a file was classified with a specific role')
+    .option('-d, --dir <path>', 'Target directory')
+    .action(async (file: string, opts: Record<string, unknown>) => {
+      const dir = resolveDir(opts, program.opts());
+      const { store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      
+      const fileRecord = store.getFile(file);
+      if (!fileRecord) {
+        console.log(`File "${file}" not found in graph.`);
+        return;
+      }
+
+      const signals = store.getClassificationSignals(file);
+      const role = fileRecord.role || 'other';
+      const confidence = typeof fileRecord.role_confidence === 'number' ? fileRecord.role_confidence : 0.5;
+
+      console.log(`\n── Classification Explanation: ${file} ──`);
+      console.log(`  Role:       ${role} (confidence: ${confidence.toFixed(2)})`);
+      console.log(`\n  Signals:`);
+      for (const s of signals) {
+        console.log(`    [${s.source.padEnd(9)}] ${s.role.padEnd(12)} (conf: ${s.confidence.toFixed(2)}) - ${s.reason}`);
+      }
+      if (signals.length === 0) {
+        console.log('    (none)');
+      }
+      console.log('');
+    });
+
+  program
+    .command('layers')
+    .description('List files grouped by architectural roles/layers')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--json', 'Output results as JSON')
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      checkAndPrintStaleness(store, dir);
+      const repo = config.repo.name;
+
+      const files = store.getAllFiles(repo);
+      const roleGroups = new Map<string, string[]>();
+      for (const f of files) {
+        const role = (f.role as string) || 'other';
+        if (!roleGroups.has(role)) {
+          roleGroups.set(role, []);
+        }
+        roleGroups.get(role)!.push(f.path as string);
+      }
+
+      if (opts.json) {
+        const out: Record<string, string[]> = {};
+        for (const [r, paths] of roleGroups.entries()) {
+          out[r] = paths;
+        }
+        console.log(JSON.stringify(out, null, 2));
+        return;
+      }
+
+      console.log(`\n── Architectural Layers / Roles for "${repo}" ─────────`);
+      const sortedRoles = Array.from(roleGroups.keys()).sort();
+      for (const role of sortedRoles) {
+        const list = roleGroups.get(role)!;
+        console.log(`\n  ${role.toUpperCase()} (${list.length} files):`);
+        for (const f of list.slice(0, 10)) {
+          console.log(`    • ${f}`);
+        }
+        if (list.length > 10) {
+          console.log(`    • ...and ${list.length - 10} more`);
+        }
+      }
       console.log('');
     });
 
@@ -2118,6 +2662,27 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           }
         }
       }
+
+      // Deep-scan for nested git repos (up to 3 levels)
+      const nested = WorkspaceManager.discoverNestedGitRepos(dir);
+      const uninitNested = nested.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (uninitNested.length > 0) {
+        console.log('\nNested git repositories (deep scan):');
+        for (const n of uninitNested) {
+          console.log(`  - ${n.name.padEnd(15)} -> ${n.path} (available)`);
+        }
+      }
+
+      // Monorepo packages discovered via workspace manifests or common dirs
+      const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
+      const uninitMono = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitMono.length > 0) {
+        console.log('\nMonorepo packages:');
+        for (const p of uninitMono) {
+          console.log(`  - ${p.name.padEnd(15)} -> ${p.path} [${p.packageManager}]`);
+        }
+      }
+
       console.log('');
     });
 
@@ -2250,6 +2815,28 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         found += vsEntries.length;
       }
 
+      // Deep-scan for nested git repos (up to 3 levels)
+      const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
+      const uninitNestedDiscover = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (uninitNestedDiscover.length > 0) {
+        console.log('\nNested git repositories (deep scan ≤3 levels):');
+        for (const n of uninitNestedDiscover) {
+          console.log(`  - ${n.name.padEnd(20)} -> ${n.path} (available)`);
+        }
+        found += uninitNestedDiscover.length;
+      }
+
+      // Monorepo packages
+      const monoDiscover = WorkspaceManager.discoverMonorepoPackages(dir);
+      const uninitMonoDiscover = monoDiscover.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (uninitMonoDiscover.length > 0) {
+        console.log('\nMonorepo packages:');
+        for (const p of uninitMonoDiscover) {
+          console.log(`  - ${p.name.padEnd(20)} -> ${p.path} [${p.packageManager}]`);
+        }
+        found += uninitMonoDiscover.length;
+      }
+
       if (found === 0) {
         console.log('No unregistered repositories discovered.');
       } else {
@@ -2302,6 +2889,51 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           if (!registeredPaths.has(abs)) {
             toAdd.push({ name: p.name, path: p.path });
             registeredPaths.add(abs);
+          }
+        }
+      }
+
+      // 4. Nested git repositories — prompt user to select which to add
+      const nestedReposSync = WorkspaceManager.discoverNestedGitRepos(dir);
+      const newNestedRepos = nestedReposSync.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      if (newNestedRepos.length > 0) {
+        clack.log.step(`Found ${newNestedRepos.length} nested git repositor${newNestedRepos.length === 1 ? 'y' : 'ies'} via deep scan (up to 3 levels):`);
+        const chosen = await clack.multiselect({
+          message: 'Select nested repositories to register and scan:',
+          options: newNestedRepos.map(n => ({ value: n.path, label: `${n.name}  (${n.path})` })),
+          required: false,
+        });
+        if (clack.isCancel(chosen)) {
+          clack.cancel('Sync cancelled.');
+          process.exit(0);
+        }
+        for (const chosenPath of chosen as string[]) {
+          const nested = newNestedRepos.find(n => n.path === chosenPath)!;
+          toAdd.push({ name: nested.name, path: nested.path });
+          registeredPaths.add(resolve(dir, nested.path));
+        }
+      }
+
+      // 5. Monorepo packages — prompt user to select which to register
+      const monoPkgsSync = WorkspaceManager.discoverMonorepoPackages(dir);
+      const newMonoPkgs = monoPkgsSync.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      if (newMonoPkgs.length > 0) {
+        const mgr = newMonoPkgs[0].packageManager;
+        clack.log.step(`Found ${newMonoPkgs.length} monorepo package${newMonoPkgs.length === 1 ? '' : 's'} [${mgr}]:`);
+        const chosenMono = await clack.multiselect({
+          message: 'Select monorepo packages to register and scan:',
+          options: newMonoPkgs.map(p => ({ value: p.path, label: `${p.name}  (${p.path})` })),
+          required: false,
+        });
+        if (clack.isCancel(chosenMono)) {
+          clack.cancel('Sync cancelled.');
+          process.exit(0);
+        }
+        for (const chosenPath of chosenMono as string[]) {
+          const pkg = newMonoPkgs.find(p => p.path === chosenPath);
+          if (pkg) {
+            toAdd.push({ name: pkg.name, path: pkg.path });
+            registeredPaths.add(resolve(dir, pkg.path));
           }
         }
       }
@@ -2378,18 +3010,8 @@ export async function loadContext(dir: string): Promise<{
     );
   }
 
-  const symbols = store.getAllSymbols();
-  for (const sym of symbols) {
-    graph.addSymbolNode(
-      sym.name as string,
-      sym.file_path as string,
-      sym.name as string,
-      sym.kind as any,
-      sym.start_line as number,
-      sym.end_line as number,
-      sym.scope as string | null
-    );
-  }
+  // Symbols loading is skipped to optimize memory and context load times.
+  // CLI search and query use SQLite directly, avoiding graphology overhead.
 
   const edges = store.getAllEdges();
   for (const edge of edges) {
@@ -2408,3 +3030,54 @@ export async function loadContext(dir: string): Promise<{
 
   return { config, store, graph };
 }
+
+export function getStaleFilesCount(store: Store, dir: string): number {
+  try {
+    const files = store.getAllFiles();
+    let changedCount = 0;
+    for (const file of files) {
+      const absPath = resolve(dir, file.path as string);
+      if (existsSync(absPath)) {
+        const stats = statSync(absPath);
+        const dbTime = new Date(file.last_scanned as string).getTime();
+        if (stats.mtimeMs > dbTime) {
+          changedCount++;
+        }
+      } else {
+        changedCount++;
+      }
+    }
+    return changedCount;
+  } catch {
+    return 0;
+  }
+}
+
+export function checkAndPrintStaleness(store: Store, dir: string): void {
+  const staleCount = getStaleFilesCount(store, dir);
+  if (staleCount > 0) {
+    // Show up to 5 changed file names
+    const files = store.getAllFiles();
+    const changed: string[] = [];
+    for (const file of files) {
+      if (changed.length >= 5) break;
+      const absPath = resolve(dir, file.path as string);
+      if (existsSync(absPath)) {
+        const stats = statSync(absPath);
+        const dbTime = new Date(file.last_scanned as string).getTime();
+        if (stats.mtimeMs > dbTime) changed.push(file.path as string);
+      } else {
+        changed.push(`${file.path} (deleted)`);
+      }
+    }
+    const fileList = changed.length > 0
+      ? `\nChanged: ${changed.join(', ')}${staleCount > changed.length ? ` (and ${staleCount - changed.length} more)` : ''}`
+      : '';
+    console.warn(`⚠️  Warning: Graph index may be stale. ${staleCount} file(s) have changed on disk since the last scan. Run 'mapx update' to sync.${fileList}\n`);
+  }
+}
+
+export function checkTryCatch(content: string, lineNum: number, startLine: number, isPython: boolean): boolean {
+  return coreCheckTryCatch(content, lineNum, startLine, isPython);
+}
+

@@ -1,7 +1,9 @@
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '..');
+const VERSION = readFileSync(resolve(PROJECT_ROOT, 'VERSION'), 'utf-8').trim();
 
 const targets = [
   { target: 'bun-linux-x64', outfile: 'dist/mapx-linux-x64' },
@@ -23,7 +25,7 @@ for (const { target, outfile } of targets) {
   try {
     console.log(`  Building ${outfile}...`);
     execSync(
-      `bun build --compile --minify --bytecode --target=${target} ./src/main.ts --outfile ${outfile}`,
+      `bun build --compile --minify --define MAPX_BUILD_VERSION='"${VERSION}"' --target=${target} ./src/main.ts --outfile ${outfile}`,
       { cwd: PROJECT_ROOT, stdio: 'pipe' }
     );
     console.log(`  ✓ ${outfile}`);

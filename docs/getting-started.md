@@ -117,42 +117,37 @@ The content is wrapped in markers:
 
 ## Supported Languages
 
-### Built-in (Tier 1) — Always available, shipped with the tool
+### Built-in (Tier 1) — Dedicated Parsers
 
 | Language | Extensions | Symbols Extracted |
 |----------|-----------|-------------------|
 | PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
 | JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
 | TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks) |
+
+### Bundled (Tier 2) — Generic WASM Parsers (Always Available)
+
+| Language | Extensions | Symbols Extracted |
+|----------|-----------|-------------------|
 | Python | `.py` | classes, functions, methods (auto-promoted), constants |
 | Go | `.go` | structs, interfaces, functions, methods, constants, packages, variables, type aliases |
 | Rust | `.rs` | structs, traits, enums, functions, impl blocks, constants, statics, modules, macros |
 | Java | `.java` | classes, interfaces, enums, methods, constructors, fields, constants, annotations, packages |
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, constants, namespaces, records, delegates |
-
-### Bundled (Tier 2) — Shipped with tool, available without install
-
-| Language | Extensions | Symbols Extracted |
-|----------|-----------|-------------------|
 | Ruby | `.rb` | classes, modules, methods, constants, properties (attr_*) |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros, unions |
 | C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties, extensions |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties, enum entries |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals, vars, packages |
-| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks) |
-
-### Installable (Tier 3) — Install via `mapx lang install <name>`
-
-| Language | Extensions | Symbols Extracted |
-|----------|-----------|-------------------|
 | Svelte | `.svelte` | functions, classes, methods, props, constants |
 | Lua | `.lua` | functions, methods, local functions, variables |
 | Elixir | `.ex`, `.exs` | modules, functions (def/defp), macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests, error sets |
 | Bash | `.sh`, `.bash` | functions, variables, aliases |
 | Pascal | `.pas`, `.pp` | procedures, functions, classes, records, interfaces, methods, constants, units |
-| Dart | `.dart` | classes, functions, methods, enums, mixins, extensions, constants |
+| Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types (Dart 3.3+), constants, library namespaces |
 
 ## Dependencies Tracked
 
@@ -189,52 +184,9 @@ Stale locks (process no longer alive) are cleared automatically.
 
 ## Programmatic Usage
 
-You can also import `@mgamil/mapx` programmatically in Node.js or TypeScript applications to manage code graphs, run scans, or generate token-efficient context.
+MapX can be integrated programmatically as an ES Module in Node.js or TypeScript projects. This allows you to run scans, traverse dependency graphs, trace data flows, and build LLM-ready context dynamically.
 
-```typescript
-import { Config, Store, Scanner, MapxGraph, ContextBuilder } from '@mgamil/mapx';
-
-// 1. Load configuration and open database
-const dir = '/path/to/project';
-const config = await Config.load(dir);
-const store = new Store(`${dir}/.mapx/mapx.db`);
-
-// 2. Perform an incremental scan
-const scanner = new Scanner(dir, store);
-await scanner.scanIncremental();
-
-// 3. Load graph data
-const graph = new MapxGraph(config.repo.name);
-for (const file of store.getAllFiles()) {
-  graph.addFileNode(file.path, file.language, file.size_bytes, file.lines);
-}
-for (const edge of store.getAllEdges()) {
-  graph.addDependencyEdge({
-    sourceFile: edge.source_file,
-    targetFile: edge.target_file,
-    sourceSymbol: edge.source_symbol,
-    targetSymbol: edge.target_symbol,
-    edgeType: edge.edge_type,
-    repo: edge.repo,
-    weight: edge.weight,
-    verifiability: edge.verifiability,
-    targetRepo: edge.target_repo
-  });
-}
-
-// 4. Build a token-budgeted LLM context for a specific task
-const builder = new ContextBuilder(store, graph);
-const context = await builder.buildContext({
-  task: 'Debug memory leaks in SQLite connections',
-  tokens: 8000
-});
-
-console.log(context.text); // Prints structured Markdown context
-console.log(`Estimated token count: ${context.tokens}`);
-
-// 5. Always close the SQLite database store when done
-store.close();
-```
+For detailed documentation, module breakdowns, and e2e integration scripts, see the [Programmatic Usage Guide](programmatic-usage.md).
 
 ## Building a Standalone Binary
 

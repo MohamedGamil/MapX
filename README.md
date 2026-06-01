@@ -1,26 +1,99 @@
-# MapX
+<h1 align="center">MapX</h1>
 
-**Local code graph memory for LLMs.** Scan your codebase once — instantly query symbols, trace dependencies, analyze impact, and generate structured summaries without re-reading files.
+<p align="center">
+<a href="https://npmjs.org/package/@mgamil/mapx">
+<img src="https://img.shields.io/npm/v/@mgamil/mapx.svg" alt="version">
+</a>
+<a href="https://github.com/MohamedGamil/mapx/actions/workflows/ci.yml">
+<img src="https://github.com/MohamedGamil/mapx/actions/workflows/ci.yml/badge.svg" alt="test status">
+</a>
+<a href="https://coveralls.io/github/MohamedGamil/MapX">
+<img src="https://coveralls.io/repos/github/MohamedGamil/MapX/badge.svg?branch=develop" alt="coverage status">
+</a>
+<a href="https://npmjs.org/package/@mgamil/mapx">
+<img src="https://img.shields.io/npm/dw/@mgamil/mapx.svg" alt="downloads">
+</a>
+</p>
 
-MapXGraph _-also known as MapX-_ uses [tree-sitter](https://tree-sitter.github.io/) to parse source files across **22 languages**, builds a PageRank-weighted dependency graph, and persists everything to a local SQLite database. Works as a standalone CLI or as an [MCP server](https://modelcontextprotocol.io/) with **25 tools** for Claude Desktop, Cursor, VS Code, and any other MCP-compatible client.
+<br>
+<br>
 
----
+<p align="center">
+<strong>Local code graph memory for LLMs.</strong><br>
+<em>Scan your codebase once — instantly query symbols, trace dependencies, analyze impact, and generate structured summaries without re-reading files.</em>
+</p>
+
+<br>
+<br>
+
+## Why MapX?
+
+* **Blazing Fast multi-threaded Scans** - Parses files concurrently using **parallel scan workers** and reuses active tree-sitter instances via **parser pooling** for minimal overhead.
+* **Instant O(1) Pre-Scan Index** - Bypasses slow graph traversals by resolving namespaces, imports, and scopes through an indexed cache.
+* **Hash & Git-aware** - Syncs codebases in milliseconds by identifying modified files via git-blob tracking or MD5 content hashes.
+* **~80% LLM Cost Reduction** - Feeds exact signatures and dependency pathways to LLM agents rather than raw files, slashing context window costs.
+* **Deep Symbol & Semantics Mapping** - Automatically extracts classes, methods, functions, interfaces, traits, structs, modules, and namespaces along with call graphs.
+* **Framework Intelligent** - Maps out routing paths and hook bindings for 22 frameworks (Laravel, Next.js, Spring, Flutter, and more).
+* **32 MCP Tools** - Seamlessly feeds structured code graph intelligence to LLMs across Claude Desktop, Cursor, VS Code, and other MCP clients.
+* **Zero Cloud** - Keeps all metadata, graphs, and schemas fully offline and local in `.mapx/`.
+
+<br>
+
+## Table of Contents
+
+<details>
+<summary>Click to expand</summary>
+
+- [Features](#features)
+- [Installation](#installation)
+  - [From npm (Global Installation)](#from-npm-global-installation)
+  - [Zero Installation (via npx)](#zero-installation-via-npx)
+  - [Pre-built binary](#pre-built-binary)
+  - [From source](#from-source)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+- [Token Consumption Benchmarks](#token-consumption-benchmarks)
+- [MCP Integration](#mcp-integration)
+  - [Claude Desktop](#claude-desktop-claude_desktop_configjson)
+  - [Cursor / VS Code](#cursor--vs-code-cursor-mcpjson)
+  - [Available MCP tools (32 total)](#available-mcp-tools-32-total)
+- [Programmatic Usage](#programmatic-usage)
+- [Supported Languages](#supported-languages)
+  - [Built-in (Tier 1) — Dedicated Parsers](#built-in-tier-1--dedicated-parsers)
+  - [Bundled (Tier 2) — Generic WASM Parsers (Always Available)](#bundled-tier-2--generic-wasm-parsers-always-available)
+  - [Static (Index-only) — Dependency Tracking Without Symbol Extraction](#static-index-only--dependency-tracking-without-symbol-extraction)
+- [Agentic Integration](#agentic-integration)
+- [Storage](#storage)
+- [Architecture](#architecture)
+- [Documentation](#documentation)
+- [Development](#development)
+  - [npm script shortcuts](#npm-script-shortcuts)
+  - [Makefile shortcuts](#makefile-shortcuts)
+  - [Building binaries](#building-binaries)
+- [License](#license)
+
+</details>
+
+<br>
+<hr>
 
 ## Features
 
-- **22 languages** — 8 built-in (PHP, JS, TS, Python, Go, Rust, Java, C#), 7 bundled (Ruby, C, C++, Swift, Kotlin, Scala, Vue), 7 installable (Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart)
-- **Deep symbol extraction** — classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, namespaces — with full import/inheritance/instantiation reference tracking
-- **Incremental scans** — git-aware change detection; only re-parses files that changed
-- **Fast** — parallelised file reads, bounded WASM concurrency, batched SQLite writes
-- **Resumable** — scan progress is checkpointed; `Ctrl+C` and re-run picks up where it left off
-- **25 MCP tools** — scan, query, search, trace, callers, callees, impact, export, context, workspaces, and more
-- **Data flow tracing** — trace call chains, find sources/sinks, analyze change impact with blast radius scoring
-- **Multi-repo workspaces** — register multiple repos, discover submodules, track cross-repo dependencies
-- **Multiple export formats** — LLM summary (token-budgeted), JSON, GraphViz DOT, SVG, TOON
-- **Framework detection** — 21 frameworks recognized (Laravel, Express, Next.js, Django, Flask, FastAPI, Spring, Rails, and more)
-- **Web dashboard** — built-in `mapx ui` for interactive graph visualization
-- **Zero cloud** — everything stays on disk in `.mapx/` inside your project
-- **87% LLM cost reduction** — drops context token consumption by 87% vs baseline workspace reads by feeding exact signatures and transitive impact summaries
+- **22 languages + static file indexing** — all built-in or bundled out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart) plus static indexing for Markdown, HTML, CSS/SCSS, and JSON.
+- **Parallel Scanning Workers** — Offloads AST parsing to multi-threaded worker pools based on CPU core availability (up to 8x speedups).
+- **Parser Pooling** — In-memory parser cache that reuses active WASM tree-sitter grammars to avoid initialization overhead.
+- **O(1) Pre-Scan Indexing** — Fast lookup index mapping imports, scopes, and namespace resolutions instantly.
+- **Git & Content Hash Sync** — Git-aware change tracker for repo files and hash-based delta-checks for non-git workspaces.
+- **Resumable Batch checkpoints** — Checklist states are persisted; interrupted scans pick up exactly where they stopped.
+- **Deep symbol extraction** — Classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, namespaces.
+- **32 MCP tools** — Scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and language management.
+- **Flexible search** — Wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON formats.
+- **Data flow tracing** — Upstream/downstream trace routes, source/sink identification, and change blast radius analysis.
+- **Framework detection** — Parses routing routes, middleware, and hooks across 22 backend, frontend, and mobile frameworks.
+- **PageRank Node Importance** — Evaluates code structure to surface core architecture files to LLMs first.
+- **Hierarchical Leiden Clustering** — Group files dynamically into modules, architectural layers, or namespace structures.
+- **Web dashboard** — Real-time interactive visualizer via `mapx ui`.
+- **Graph-level exclusions** — Exclude test and scratch files from PageRank scoring while keeping their references searchable.
 
 ---
 
@@ -126,21 +199,32 @@ mapx -d /path/to/project export
 
 | Command | Description |
 |---------|-------------|
-| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs |
+| `mapx init [path]` | Initialise mapx; create `.mapx/`, `AGENTS.md`, auto-detect agent tools, generate MCP configs, discover monorepo packages & nested repos |
 | `mapx uninit [path]` | Remove mapx; delete `.mapx/`, reverse LLM integration changes, clean MCP configs |
 | `mapx scan [path]` | Full scan — builds the graph from scratch (supports `--force` to bypass cache) |
 | `mapx update [path]` | Incremental scan — only re-parses changed files |
 | `mapx status [path]` | Show graph metrics, language breakdown, PageRank rankings, git changes |
-| `mapx query <term>` | Search symbols by name (partial match) |
-| `mapx search <term>` | Advanced symbol search with `--kind`, `--file`, `--exact`, `--limit` filters |
-| `mapx deps <file>` | Show dependencies and reverse-dependencies |
+| `mapx query <term>` | Search symbols by name — supports glob patterns (`*Service`, `get*`), double-colon/dot namespace separators (e.g. `BillingService::getEffectiveLimits`, `BillingService.getEffectiveLimits`), and fuzzy suggestions |
+| `mapx search <term>` | Advanced symbol search with `--kind`, `--file`, `--exact`, `--limit`, `--format` filters and auto-expand |
+| `mapx deps <file>` | Show dependencies and reverse-dependencies (supports glob/wildcard/substring matching) |
 | `mapx trace <symbol>` | Trace data flow paths from a symbol |
-| `mapx callers <symbol>` | Show direct and nested callers |
-| `mapx callees <symbol>` | Show direct and nested callees |
-| `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring |
-| `mapx node <symbol>` | Inspect a symbol with metadata and optional `--source` |
-| `mapx files` | List and filter files with `--path`, `--lang`, `--sort`, `--limit` |
-| `mapx clusters` | List detected code clusters/modules |
+| `mapx callers <symbol>` | Show direct and nested callers (with fuzzy fallback) |
+| `mapx callees <symbol>` | Show direct and nested callees (with fuzzy fallback) |
+| `mapx impact <symbol>` | Change impact analysis — blast radius and risk scoring (with fuzzy pre-check) |
+| `mapx sources` | Find entry points (data sources) in the codebase |
+| `mapx sinks` | Find terminal consumers (data sinks) in the codebase (supports `--include-leaf-libraries` to show filtered leaf libraries) |
+| `mapx context <task>` | Generate task-specific workspace context within a token budget |
+| `mapx metrics` | Show coupling and instability metrics for files |
+| `mapx edges` | Granular query of dependency edges |
+| `mapx routes` | Show routes from all detected frameworks |
+| `mapx hooks` | Show hooks from all detected frameworks |
+| `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, `--format json`, and `--include-members` to list class/interface members |
+| `mapx files` | List and filter files with `--path` (prefix or glob), `--lang`, `--sort`, `--limit` |
+| `mapx clusters` | List detected code clusters/modules (filter with `--source layer\|community\|namespace\|directory`) |
+| `mapx profile` | Show codebase profile details (archetype, frameworks, active taxonomy) |
+| `mapx arch` | Full architecture report: profile, active layers/roles, smells, and DSM matrix |
+| `mapx explain` | Explain file dynamic role classification and weights |
+| `mapx layers` | List project files grouped by architectural roles/layers |
 | `mapx export` | Export graph (default: LLM summary, 8K tokens) |
 | `mapx export --format=json` | Full graph as JSON |
 | `mapx export --format=dot` | GraphViz DOT (with `--cluster` and `--depth`) |
@@ -149,13 +233,13 @@ mapx -d /path/to/project export
 | `mapx export -o out.txt` | Write export to a file |
 | `mapx summary [path]` | One-line project summary |
 | `mapx lang list` | List supported languages and status |
-| `mapx lang install <name>` | Install an installable-tier language |
-| `mapx lang uninstall <name>` | Uninstall a language |
+| `mapx lang install <name>` | Install a custom user-defined language |
+| `mapx lang uninstall <name>` | Uninstall a custom language |
 | `mapx ui` | Open the web dashboard for interactive visualization |
 | `mapx workspaces list` | List registered repositories |
 | `mapx workspaces add <path>` | Register a new repository |
-| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders |
-| `mapx workspaces sync` | Auto-register discovered repositories |
+| `mapx workspaces discover` | Discover unregistered submodules, peers, VS Code folders, nested git repos, and monorepo packages |
+| `mapx workspaces sync` | Auto-register discovered repositories; interactive prompts for nested repos and monorepo packages |
 | `mapx agents mcp` | Auto-detect agent tools and generate MCP config files |
 | `mapx serve --dir <path>` | Start MCP server (stdio) |
 | `mapx serve --sse --port 3456` | Start MCP server (SSE/HTTP) |
@@ -226,15 +310,16 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 }
 ```
 
-### Available MCP tools (25 total)
+### Available MCP tools (32 total)
 
 | Category | Tools |
 |----------|-------|
 | **Graph Building** | `mapx_scan`, `mapx_sync` |
 | **Symbol Discovery** | `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files` |
-| **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks` |
-| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status` |
+| **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` |
+| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics`, `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers` |
 | **Export** | `mapx_export`, `mapx_context` |
+| **Orchestration** | `mapx_batch`, `mapx_agents_generate` |
 | **Workspaces** | `mapx_workspaces` |
 | **Language Management** | `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall` |
 
@@ -244,71 +329,76 @@ See [docs/mcp-integration.md](docs/mcp-integration.md) for full tool parameters 
 
 ## Programmatic Usage
 
-MapX can be imported programmatically as an ESM library in Node.js or TypeScript projects to execute scans, load code graphs, or build token-optimized LLM context.
+MapX can be imported programmatically as an ESM library in Node.js or TypeScript projects to execute scans, load code graphs, run data-flow tracing, or build token-optimized LLM context.
 
 > [!IMPORTANT]
 > MapX is an **ESM-only** library. When importing MapX programmatically in a Node.js project, make sure to add `"type": "module"` to your consumer application's `package.json` to allow ES module resolution.
 
 ```typescript
-import { Config, Store, Scanner, MapxGraph, ContextBuilder } from '@mgamil/mapx';
+import { Config, Store, Scanner, MapxGraph } from '@mgamil/mapx';
 
 const dir = '/path/to/project';
 const config = await Config.load(dir);
 const store = new Store(`${dir}/.mapx/mapx.db`);
+const graph = new MapxGraph(config.repo.name);
 
 // 1. Run incremental scan
-const scanner = new Scanner(dir, store);
+const scanner = new Scanner(store, config, graph);
 await scanner.scanIncremental();
 
 // 2. Query code metrics
-console.log(`Scanned ${store.getFileCount()} files and ${store.getSymbolCount()} symbols.`);
+console.log(`Scanned ${store.getFileCount()} files.`);
 
 // 3. Close database connection
 store.close();
 ```
 
-See [docs/getting-started.md](docs/getting-started.md#programmatic-usage) for a detailed programmatic API example.
+See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed programmatic API integration guide and complete scripts.
 
 ---
 
 ## Supported Languages
 
-### Built-in (Tier 1) — Always available
+### Built-in (Tier 1) — Dedicated Parsers
 
 | Language | Extensions | Key Symbols |
 |----------|-----------|-------------|
 | PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
 | JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, enums, properties |
 | TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, enums, properties, namespaces |
+| Vue | `.vue` | functions, classes, methods, properties (supports `@/` alias resolution) |
+
+### Bundled (Tier 2) — Generic WASM Parsers (Always Available)
+
+| Language | Extensions | Key Symbols |
+|----------|-----------|-------------|
 | Python | `.py` | classes, functions, constants |
 | Go | `.go` | structs, interfaces, functions, methods, constants, packages |
 | Rust | `.rs` | structs, traits, enums, functions, impl blocks, constants, modules, macros |
 | Java | `.java` | classes, interfaces, enums, methods, fields, constants, packages |
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, namespaces, records |
-
-### Bundled (Tier 2) — Ships with the tool
-
-| Language | Extensions | Key Symbols |
-|----------|-----------|-------------|
 | Ruby | `.rb` | classes, modules, methods, constants, properties |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros |
 | C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals |
-| Vue | `.vue` | functions, classes, methods, properties (supports `@/` alias resolution) |
-
-### Installable (Tier 3) — `mapx lang install <name>`
-
-| Language | Extensions | Key Symbols |
-|----------|-----------|-------------|
 | Svelte | `.svelte` | functions, classes, methods, props, constants |
 | Lua | `.lua` | functions, methods, variables |
 | Elixir | `.ex`, `.exs` | modules, functions, macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests |
 | Bash | `.sh`, `.bash` | functions, variables, aliases |
 | Pascal | `.pas`, `.pp` | classes, records, interfaces, methods, functions, constants, units |
-| Dart | `.dart` | classes, functions, enums, mixins, extensions |
+| Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types, constants, library namespaces |
+
+### Static (Index-only) — Dependency Tracking Without Symbol Extraction
+
+| File Type | Extensions | Tracked References |
+|-----------|-----------|-------------------|
+| Markdown | `.md`, `.mdx`, `.markdown` | Links to other markdown files |
+| HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
+| CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
+| JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
 
 All languages track **imports**, **inheritance/implementation**, **instantiation**, and **calls** where applicable. See [docs/adding-languages.md](docs/adding-languages.md) to add your own.
 
@@ -355,11 +445,20 @@ mapx stores everything locally inside your project:
 
 `.mapx/` is automatically added to `.gitignore` during `mapx init`.
 
+### Configuration
+
+The `.mapx/config.json` file supports the following key settings:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `excludePatterns` | `["node_modules/**", ...]` | Glob patterns for files to exclude from scanning entirely |
+| `graphExcludePatterns` | `["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]` | Glob patterns for files to exclude from PageRank rankings and graph analysis (files are still indexed but deprioritized) |
+
+`graphExcludePatterns` is useful for keeping test and scratch files out of importance rankings while still tracking their dependencies. Files matching these patterns are scanned and queryable but excluded from PageRank computation, framework detection, and archetype scoring.
+
 ---
 
 ## Architecture
-
-<!-- ![Architecture Diagram](./docs/images/01-arch.png) -->
 
 ```mermaid
 graph TD
@@ -421,8 +520,9 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | Doc | Description |
 |-----|-------------|
 | [Getting Started](docs/getting-started.md) | Installation, quick start, supported languages |
-| [CLI Reference](docs/cli-reference.md) | All 31 commands and their flags |
-| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 25 tools |
+| [Programmatic Usage](docs/programmatic-usage.md) | Detailed TypeScript/JavaScript API integration guide |
+| [CLI Reference](docs/cli-reference.md) | All commands and their flags |
+| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 32 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |
@@ -465,6 +565,31 @@ make node s=UserService src=1  # Inspect with source
 make export-toon DIR=/path     # TOON export
 make serve-sse PORT=3456       # SSE server
 make ui PORT=8080              # Web dashboard
+```
+
+### Testing
+
+MapxGraph contains a comprehensive test suite of 950+ tests that verify core logic, language parsers, and framework routing/hook extraction.
+
+> [!IMPORTANT]
+> The parser integration tests run against real Tree-sitter WASM grammars. Ensure that WASM binaries are compiled and present in the `wasm/` directory before running parser integration tests:
+> ```bash
+> npm run build:wasm  # or 'make wasm'
+> ```
+
+To execute the test suite, run:
+```bash
+# Run all tests (unit + integration)
+npm test
+
+# Run all tests with coverage reports
+npm run test:coverage
+
+# Run language parser integration tests only (verifies symbol/reference extraction)
+npx vitest run tests/parsers-integration.test.ts
+
+# Run framework extractor tests only (verifies route/hook mapping)
+npx vitest run tests/framework-extractors.test.ts
 ```
 
 ### Building binaries

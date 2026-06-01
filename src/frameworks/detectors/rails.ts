@@ -6,15 +6,28 @@ import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.j
 export class RailsDetector implements FrameworkDetector {
   readonly name = 'rails';
   readonly language = 'ruby';
-  readonly filePattern = /(routes\.rb|Gemfile)$/;
+  readonly filePattern = /routes\.rb$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    const gemfilePath = join(projectRoot, 'Gemfile');
-    if (existsSync(gemfilePath)) {
-      const content = await readFile(gemfilePath, 'utf-8');
-      if (content.includes('rails')) return true;
+    const gemfiles = files.filter(f => f === 'Gemfile' || f.endsWith('/Gemfile'));
+    if (gemfiles.length === 0) {
+      gemfiles.push('Gemfile');
     }
-    return files.some(f => f.endsWith('routes.rb'));
+
+    for (const file of gemfiles) {
+      const gemfilePath = join(projectRoot, file);
+      if (existsSync(gemfilePath)) {
+        try {
+          const content = await readFile(gemfilePath, 'utf-8');
+          if (content.includes("gem 'rails'") || content.includes('gem "rails"')) {
+            return true;
+          }
+        } catch {
+          // Ignored
+        }
+      }
+    }
+    return false;
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

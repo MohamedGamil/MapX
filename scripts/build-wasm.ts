@@ -22,6 +22,12 @@ const GRAMMARS = [
   { name: 'tree-sitter-vue', files: ['tree-sitter-vue.wasm'] },
   { name: 'tree-sitter-dart', files: ['tree-sitter-dart.wasm'] },
   { name: 'tree-sitter-scala', files: ['tree-sitter-scala.wasm'] },
+  { name: 'tree-sitter-svelte', files: ['tree-sitter-svelte.wasm'] },
+  { name: 'tree-sitter-lua', files: ['tree-sitter-lua.wasm'] },
+  { name: 'tree-sitter-elixir', files: ['tree-sitter-elixir.wasm'] },
+  { name: 'tree-sitter-zig', files: ['tree-sitter-zig.wasm'] },
+  { name: 'tree-sitter-bash', files: ['tree-sitter-bash.wasm'] },
+  { name: 'tree-sitter-pascal', files: ['tree-sitter-pascal.wasm'] },
 ];
 
 async function downloadFile(url: string, destPath: string): Promise<boolean> {
@@ -74,62 +80,72 @@ async function run() {
         }
       }
 
-      if (foundPath) {
-        execSync(`cp "${foundPath}" "${dest}"`, { cwd: PROJECT_ROOT });
-        console.log(`  Copied ${file} from node_modules`);
-      } else {
-        // Try unpkg tree-sitter-wasms collection first
-        const primaryWasmUrl = `https://unpkg.com/tree-sitter-wasms@latest/out/${file}`;
-        console.log(`  Downloading ${file} from tree-sitter-wasms collection...`);
-        let success = await downloadFile(primaryWasmUrl, dest);
-        
-        if (!success) {
-          // Try unpkg from the grammar package itself
-          const fallbackWasmUrl = `https://unpkg.com/${grammar.name}@latest/${file}`;
-          console.log(`  tree-sitter-wasms download failed. Downloading ${file} from ${grammar.name}...`);
-          success = await downloadFile(fallbackWasmUrl, dest);
-        }
+      let success = false;
+      if (existsSync(grammarDir)) {
+        console.log(`  Attempting to build ${file} from source...`);
+        try {
+          execSync(`npx tree-sitter build --wasm "${grammarDir}"`, {
+            cwd: PROJECT_ROOT,
+            stdio: 'ignore',
+          });
 
-        if (success) {
-          console.log(`  Successfully downloaded ${file} from CDN`);
-        } else {
-          // Fallback to compilation from source
-          if (existsSync(grammarDir)) {
-            console.log(`  CDN downloads failed. Attempting to build ${file} from source...`);
-            try {
-              execSync(`npx tree-sitter build --wasm "${grammarDir}"`, {
-                cwd: PROJECT_ROOT,
-                stdio: 'pipe',
-              });
+          const possibleOutputs = [
+            join(PROJECT_ROOT, file),
+            join(PROJECT_ROOT, `${grammar.name}.wasm`),
+          ];
 
-              const possibleOutputs = [
-                join(PROJECT_ROOT, file),
-                join(PROJECT_ROOT, `${grammar.name}.wasm`),
-              ];
-
-              let builtFile = '';
-              for (const out of possibleOutputs) {
-                if (existsSync(out)) {
-                  builtFile = out;
-                  break;
-                }
-              }
-
-              if (builtFile) {
-                execSync(`mv "${builtFile}" "${dest}"`, { cwd: PROJECT_ROOT });
-                console.log(`  Successfully built and moved ${file} to wasm/`);
-              } else {
-                console.log(`  Build finished but output file ${file} could not be found.`);
-              }
-            } catch (e: any) {
-              console.log(`  Failed to build ${grammar.name} natively: ${e.message}`);
+          let builtFile = '';
+          for (const out of possibleOutputs) {
+            if (existsSync(out)) {
+              builtFile = out;
+              break;
             }
+          }
+
+          if (builtFile) {
+            execSync(`mv "${builtFile}" "${dest}"`, { cwd: PROJECT_ROOT });
+            console.log(`  Successfully built and moved ${file} to wasm/`);
+            success = true;
+          }
+        } catch (e: any) {
+          console.log(`  Failed to build ${grammar.name} natively: ${e.message}. Falling back...`);
+        }
+      }
+
+      if (!success) {
+        if (foundPath) {
+          execSync(`cp "${foundPath}" "${dest}"`, { cwd: PROJECT_ROOT });
+          console.log(`  Copied ${file} from node_modules`);
+        } else {
+          // Try unpkg tree-sitter-wasms collection first
+          const primaryWasmUrl = `https://unpkg.com/tree-sitter-wasms@latest/out/${file}`;
+          console.log(`  Downloading ${file} from tree-sitter-wasms collection...`);
+          success = await downloadFile(primaryWasmUrl, dest);
+          
+          if (!success) {
+            // Try unpkg from the grammar package itself
+            const fallbackWasmUrl = `https://unpkg.com/${grammar.name}@latest/${file}`;
+            console.log(`  tree-sitter-wasms download failed. Downloading ${file} from ${grammar.name}...`);
+            success = await downloadFile(fallbackWasmUrl, dest);
+          }
+
+          if (success) {
+            console.log(`  Successfully downloaded ${file} from CDN`);
           } else {
             console.log(`  Failed to obtain ${file} (CDN downloads failed, source not installed).`);
           }
         }
       }
     }
+  }
+  // Copy web-tree-sitter.wasm
+  const wtsWasmSrc = join(PROJECT_ROOT, 'node_modules', 'web-tree-sitter', 'web-tree-sitter.wasm');
+  const wtsWasmDest = join(WASM_DIR, 'web-tree-sitter.wasm');
+  if (existsSync(wtsWasmSrc)) {
+    execSync(`cp "${wtsWasmSrc}" "${wtsWasmDest}"`, { cwd: PROJECT_ROOT });
+    console.log('  Copied web-tree-sitter.wasm from node_modules');
+  } else {
+    console.log('  Warning: web-tree-sitter.wasm not found in node_modules/web-tree-sitter');
   }
 
   const existing = execSync(`ls -la ${WASM_DIR}`, { encoding: 'utf-8' });

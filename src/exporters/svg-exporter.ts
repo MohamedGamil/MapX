@@ -273,6 +273,7 @@ export class SvgExporter {
       route: { stroke: '#10b981', dash: '' },
       binding: { stroke: '#8b5cf6', dash: '4,4' },
       middleware: { stroke: '#f97316', dash: '2,2' },
+      render: { stroke: '#06b6d4', dash: '3,3' },
     };
 
     const seen = new Set<string>();

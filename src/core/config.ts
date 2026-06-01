@@ -33,6 +33,7 @@ const DEFAULT_CONFIG: MapxConfig = {
       'build/**',
       '**/build/**',
       '*.min.js',
+      '*.min.css',
       'monaco/vs/**/*.js',
       'bootstrap-*/bootstrap.js',
       'bootstrap-*/bootstrap.min.js',
@@ -71,6 +72,7 @@ const DEFAULT_CONFIG: MapxConfig = {
       '**/*.DS_Store',
     ],
     includePatterns: [],
+    graphExcludePatterns: ['scratch/**', 'benchmarks/**', 'tests/**', '**/*.test.*', '**/*.spec.*'],
   },
 };
 
@@ -173,7 +175,7 @@ export class Config {
         defaultExclude.push('**/migrations/**', '**/seeds/**', '**/storage/**');
       }
       if (isJSTS) {
-        defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts');
+        defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '**/*.test.tsx', '**/*.spec.tsx');
       }
     }
 
@@ -183,6 +185,10 @@ export class Config {
     const userInclude = existing?.settings?.includePatterns ?? [];
     const mergedExclude = [...new Set([...userExclude, ...defaultExclude.filter(p => !userExclude.includes(p))])];
     const mergedInclude = [...new Set([...userInclude, ...DEFAULT_CONFIG.settings.includePatterns])];
+
+    const userGraphExclude = existing?.settings?.graphExcludePatterns ?? [];
+    const defaultGraphExclude = DEFAULT_CONFIG.settings.graphExcludePatterns ?? [];
+    const mergedGraphExclude = [...new Set([...userGraphExclude, ...defaultGraphExclude.filter(p => !userGraphExclude.includes(p))])];
 
     const defaultRepoName = repoName || resolve(workspaceRoot).split('/').pop() || 'default';
     // Keep existing repos; ensure there is at least the default entry
@@ -207,6 +213,7 @@ export class Config {
         maxTokenBudget: existing?.settings?.maxTokenBudget ?? DEFAULT_CONFIG.settings.maxTokenBudget,
         excludePatterns: mergedExclude,
         includePatterns: mergedInclude,
+        graphExcludePatterns: mergedGraphExclude,
       },
     };
 

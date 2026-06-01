@@ -1,5 +1,7 @@
 import { Store } from './store.js';
 import { ReferenceType } from '../types.js';
+import { isGlobPattern, globToLike } from './fuzzy-matcher.js';
+import picomatch from 'picomatch';
 
 export type TraceDirection = 'down' | 'up' | 'both';
 
@@ -54,7 +56,8 @@ const DATA_BEARING_EDGES: string[] = [
   'relation',
   'dispatch',
   'notify',
-  'route'
+  'route',
+  'render'
 ];
 
 const STRUCTURAL_EDGES: string[] = [
@@ -70,10 +73,31 @@ function matchesSymbol(nodeSymbol: string | null, edgeSymbol: string | null): bo
   if (!nodeSymbol) return true;
   if (!edgeSymbol) return true;
   if (nodeSymbol === edgeSymbol) return true;
+
+  const normNode = nodeSymbol.replace(/\./g, '::').toLowerCase();
+  const normEdge = edgeSymbol.replace(/\./g, '::').toLowerCase();
+  if (normNode === normEdge) return true;
+
   if (nodeSymbol.includes('::')) {
-    const [, name] = nodeSymbol.split('::');
-    if (edgeSymbol === name) return true;
+    const parts = nodeSymbol.split('::');
+    const name = parts[parts.length - 1];
+    if (edgeSymbol.toLowerCase() === name.toLowerCase()) return true;
   }
+
+  if (nodeSymbol.includes('.')) {
+    const parts = nodeSymbol.split('.');
+    const last = parts[parts.length - 1].toLowerCase();
+    const commonExtensions = new Set([
+      'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+      'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+      'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+    ]);
+    if (!commonExtensions.has(last)) {
+      const name = parts[parts.length - 1];
+      if (edgeSymbol.toLowerCase() === name.toLowerCase()) return true;
+    }
+  }
+
   return false;
 }
 
@@ -238,7 +262,9 @@ export class FlowTracer {
     const traceSinks: TraceNode[] = [];
 
     for (const key of uniqueNodes) {
-      const [file, symbol] = key.split('::');
+      const firstColon = key.indexOf('::');
+      const file = firstColon !== -1 ? key.substring(0, firstColon) : key;
+      const symbol = firstColon !== -1 ? key.substring(firstColon + 2) : '';
       const nodeSym = symbol || null;
       const node: TraceNode = { file, symbol: nodeSym, depth: 0, incomingEdgeType: 'start' };
 
@@ -259,7 +285,9 @@ export class FlowTracer {
       paths: allPaths,
       sources: traceSources,
       sinks: traceSinks,
-      cycles: detectedCycles,
+      cycles: Array.from(
+        new Map(detectedCycles.map(c => [`${c.fromFile}→${c.toFile}:${c.cycleLength}`, c])).values()
+      ),
       nodeCount: uniqueNodes.size,
       edgeCount: traceEdges.size,
       maxDepthReached,
@@ -268,23 +296,55 @@ export class FlowTracer {
 
   resolveStart(input: string, repo?: string): { file: string; symbol: string | null } | null {
     const allFiles = this.store.getAllFiles(repo);
-    const matchedFile = allFiles.find(f => f.path === input || (f.path as string).endsWith(input));
-    if (matchedFile) {
-      return { file: matchedFile.path as string, symbol: null };
+    const paths = allFiles.map(f => f.path as string);
+
+    // 1. Exact match
+    let matchedPath = paths.find(p => p === input);
+
+    // 2. Glob / wildcard
+    if (!matchedPath && isGlobPattern(input)) {
+      const matchBase = !input.includes('/');
+      const isMatch = picomatch(input, { dot: true, nocase: true, matchBase });
+      matchedPath = paths.find(p => isMatch(p));
+    }
+
+    // 3. Suffix / substring fallback
+    if (!matchedPath) {
+      matchedPath = paths.find(p => p.endsWith(input) || p.includes(input));
+    }
+
+    if (matchedPath) {
+      return { file: matchedPath, symbol: null };
     }
 
     let scope: string | null = null;
     let name = input;
     if (input.includes('::')) {
       const parts = input.split('::');
-      scope = parts[0];
-      name = parts[1];
+      name = parts.pop()!;
+      scope = parts.join('::');
+    } else if (input.includes('.')) {
+      const parts = input.split('.');
+      const last = parts[parts.length - 1].toLowerCase();
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      if (!commonExtensions.has(last)) {
+        name = parts.pop()!;
+        scope = parts.join('.');
+      }
     }
 
     const allSymbols = this.store.getAllSymbols(repo);
     let matchedSymbol: any = null;
     if (scope) {
       matchedSymbol = allSymbols.find(s => s.name === name && s.scope === scope);
+      if (!matchedSymbol) {
+        const normScope = scope.replace(/\./g, '::').toLowerCase();
+        matchedSymbol = allSymbols.find(s => s.name === name && s.scope && (s.scope as string).replace(/\./g, '::').toLowerCase() === normScope);
+      }
     } else {
       matchedSymbol = allSymbols.find(s => s.name === name || s.scope === name);
     }
@@ -341,7 +401,7 @@ export class FlowTracer {
     return sources;
   }
 
-  findSinks(repo?: string): TraceNode[] {
+  findSinks(repo?: string, includeLeafLibraries = false): TraceNode[] {
     const files = this.store.getAllFiles(repo);
     const edges = this.store.getAllEdges(repo);
     const filePaths = new Set<string>(files.map(f => f.path as string));
@@ -380,7 +440,18 @@ export class FlowTracer {
         });
       }
     }
-    return sinks;
+    if (includeLeafLibraries) {
+      return sinks;
+    }
+    // Filter out leaf-library files: high structural in-degree means
+    // the file is a stable foundation, not a true data sink.
+    const structuralEdges = edges.filter(e => STRUCTURAL_EDGES.includes(e.edge_type as string));
+    const structuralIncoming = new Map<string, number>();
+    for (const e of structuralEdges) {
+      const tgt = e.target_file as string;
+      structuralIncoming.set(tgt, (structuralIncoming.get(tgt) || 0) + 1);
+    }
+    return sinks.filter(s => (structuralIncoming.get(s.file) || 0) < 3);
   }
 
   findCriticalPath(from: string, to: string, repo?: string): TracePath | null {

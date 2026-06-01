@@ -87,14 +87,12 @@ All 22 supported languages are pre-configured. No `languages` entry is needed un
 
 | Tier | Languages | Count |
 |------|-----------|-------|
-| **Built-in** | PHP, JavaScript, TypeScript, Python, Go, Rust, Java, C# | 8 |
-| **Bundled** | Ruby, C, C++, Swift, Kotlin, Dart, Scala, Vue | 8 |
-| **Installable** | Svelte, Lua, Elixir, Zig, Bash, Pascal | 6 |
+| **Built-in** | PHP, JavaScript, TypeScript, Vue | 4 |
+| **Bundled** | Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, Pascal | 18 |
 
-Install additional languages with:
+List all available languages and status with:
 ```bash
-mapx lang install lua
-mapx lang list          # see all available languages and status
+mapx lang list
 ```
 
 ## Settings
@@ -104,6 +102,37 @@ mapx lang list          # see all available languages and status
 | `maxTokenBudget` | number | 16384 | Maximum token budget for LLM export |
 | `excludePatterns` | string[] | (see above) | Glob patterns for files to exclude from scanning |
 | `includePatterns` | string[] | [] | If set, only include matching files |
+| `graphExcludePatterns` | string[] | `["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]` | Glob patterns for files to exclude from PageRank rankings and graph analysis (files are still indexed but deprioritized) |
+
+## Architecture & Role Classification
+
+MapxGraph dynamically profiles your codebase and classifies files into architectural roles. You can customize the classifier archetype, custom roles, and specific file classification overrides by adding an `architecture` section to the `settings` block in `.mapx/config.json`:
+
+```json
+{
+  "settings": {
+    "architecture": {
+      "archetype": "web-api",
+      "customRoles": [
+        { "name": "billing", "paths": ["src/billing/**", "src/payments/**"] },
+        { "name": "notifications", "paths": ["src/notifications/**"] }
+      ],
+      "overrides": {
+        "src/legacy/**": "other",
+        "src/graphql/resolvers/**": "api"
+      }
+    }
+  }
+}
+```
+
+### Architecture Settings Reference
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `archetype` | string | Override the codebase archetype detection. Supported archetypes: `cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, `mobile-app`, `mixed`. |
+| `customRoles` | object[] | Define new custom roles mapped to path patterns. Each entry has a `name` string and `paths` (string or array of strings). |
+| `overrides` | record<string, string> | Map precise file/directory glob patterns directly to a specific dynamic role (e.g. `api`, `service`, `data`, `shared`, `other`). |
 
 ## .gitignore
 

@@ -1,28 +1,16 @@
 # Adding Languages
 
-MapxGraph supports three tiers of language support. All tiers use tree-sitter WASM grammars and `.scm` query files for symbol and reference extraction.
+MapxGraph supports two tiers of pre-configured language support and a third tier for custom user-defined languages. All tiers use tree-sitter WASM grammars and `.scm` query files for symbol and reference extraction.
 
-## Tier 1: Built-in Languages
+## Tier 1: Built-in Languages (Dedicated Parsers)
 
-PHP, JavaScript, TypeScript, Python, Go, Rust, Java, and C# are built-in and always available. Their tree-sitter WASM grammars and queries are bundled with the tool at relative paths (`wasm/` and `queries/`).
+PHP, JavaScript, TypeScript, and Vue are built-in and always available. They use dedicated, language-specific parser implementations for enhanced analysis. Their tree-sitter WASM grammars and queries are bundled with the tool at relative paths (`wasm/` and `queries/`).
 
-## Tier 2: Bundled Languages
+## Tier 2: Bundled Languages (Generic WASM Parsers)
 
-Ruby, C, C++, Swift, Kotlin, Dart, Scala, and Vue are bundled — their WASM grammars and queries ship with the tool and are available without any `mapx lang install` step. They use relative paths just like built-in languages.
+Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, and Pascal are bundled — their WASM grammars and queries ship with the tool and are available out-of-the-box. They use relative paths and are parsed dynamically via the `GenericWasmParser` base class.
 
-## Tier 3: Installable Languages
-
-Svelte, Lua, Elixir, Zig, Bash, and Pascal are installable. Use the CLI to manage them:
-
-```bash
-mapx lang list           # See all languages and their status
-mapx lang install lua    # Install Lua grammar
-mapx lang uninstall lua  # Remove Lua grammar
-```
-
-Installed grammars are stored in `~/.mapx/grammars/` and their queries in `~/.mapx/grammars/queries/<lang>/`.
-
-## Tier 4: User-Defined Languages
+## Tier 3: User-Defined Languages
 
 Users can add entirely custom languages via `.mapx/config.json` without modifying the tool:
 

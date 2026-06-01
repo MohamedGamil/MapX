@@ -8,11 +8,338 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
----
-
-## [0.2.7] — 2026-05-24
+## [0.3.5] — 2026-06-01
 
 ### Changed
+- Nothig, just a version bump to make NPM happy
+
+## [0.3.4] — 2026-06-01
+
+### Added
+- **`graphExcludePatterns` configuration**: New setting to exclude test/scratch files from PageRank rankings, framework detection, and archetype scoring while keeping them indexed and queryable. Default patterns: `scratch/**`, `benchmarks/**`, `tests/**`, `**/*.test.*`, `**/*.spec.*`.
+- **Prepared Statement Caching**: Introduced a statement caching layer (`stmtCache`) in both `better-sqlite3` (NodeStore) and `bun:sqlite` (BunStore) drivers, reducing SQL statement compilation overhead during post-scanning loops.
+- **SQLite-backed PageRank Column**: Added schema migration version 9 to introduce the `pagerank` column to the `files` table, allowing PageRank values to be persisted directly inside SQLite.
+- **Intra-class call tracking**: `this.method()` calls within TypeScript and JavaScript classes are now tracked as call edges in the dependency graph, enabling accurate callers/callees tracing for internal class method references.
+- **`include_members` option for `mapx_node`**: New boolean parameter for the `mapx_node` MCP tool (and `--include-members` CLI flag) to list class, interface, or trait member symbols (methods, properties) alongside the inspected symbol's metadata.
+- **`include_leaf_libraries` option for `mapx_sinks` and `trace`**: New boolean parameter for the `mapx_sinks` MCP tool (and `--include-leaf-libraries` CLI flag for both `sinks` and `trace --sinks` commands) to include high-import leaf-library files that are normally filtered out as stable foundations.
+- **Content-hash based incremental scanning**: Non-git projects can now use `mapx sync` for incremental updates. File changes are detected via content hashing (SHA-256) instead of requiring a Git working tree.
+- **Pre-scan symbol index**: Built a pre-scan O(1) symbol lookup index to accelerate reference resolution during scanning, replacing repeated linear searches.
+- **Parser pooling**: WASM `Parser` instances are now pooled and reused per language, eliminating redundant parser creation and WASM instantiation overhead during scans.
+- **Hub/orchestrator classification signal**: Files with high fan-in combined with high fan-out are now classified with a hub/orchestrator signal in the role classifier, improving architectural layer accuracy.
+- **Worker thread parallel parsing**: Spawns multiple worker threads via `node:worker_threads` to parse files concurrently, yielding a 3-5x CPU performance speedup for large codebases. Includes a `--no-parallel` CLI flag and `parallel: false` option (both CLI and MCP) to run sequentially on the main thread.
+- **Centralized asset root path resolution**: Added a centralized, unified compatibility helper to resolve WASM assets safely across both Node.js and Bun runtimes.
+- **Contextual error messages for routes/hooks**: `mapx routes` and `mapx hooks` (CLI and MCP) now return descriptive, context-aware error messages when no routes or hooks are found, including suggestions for supported frameworks and troubleshooting steps.
+
+### Changed
+- **Files-only PageRank Calculation**: PageRank is now calculated on a lightweight files-only dependency graph during post-scan analysis, reducing PageRank computation time to under 50ms and writing updates in a single database transaction.
+- **Lightweight Graph Context Loading**: Initializing the workspace graph in CLI context loading, MCP tools, and Web Dashboard API endpoints now completely skips loading symbols into the in-memory graph.
+- **Database-driven CLI/MCP Search & Query Rankings**: CLI search, MCP search, and LLM/Toon exporters now retrieve symbol importance scores using a fast SQLite JOIN between `symbols` and `files` tables.
+- **Instant UI Graph Loading**: The visual graph `/api/graph` endpoint, `/api/metrics`, and `/api/context` endpoints bypass graphology initialization entirely. Additionally, `/api/graph` aggregates and deduplicates edges directly in SQLite via native grouping, reducing JSON payload generation and processing time by over 95% (from ~70,000 symbol-level edges to ~3,000 file-level edges for large repositories).
+- Community clusters now use directory-prefix labels (e.g., `src/core (12 files)`) instead of generic `community_N` names, making cluster names immediately meaningful.
+- Scan/sync output now shows total file count alongside changed file count (e.g., `Scanned 42 changed files (1,203 total)`).
+- Search JSON format includes `totalMatches` and `offset` fields for pagination awareness.
+- Leaf-library files (those with ≥3 structural importers) are filtered from sinks output by default; use `include_leaf_libraries` to restore them.
+
+### Fixed
+- **Static files in parallel scans resolved**: Fixed a critical crash and missing dependencies issue where worker threads failed to parse static file types (Markdown, CSS, HTML, JSON, YAML) and bypassed user-defined languages. Workers now inline and execute the static parser natively, ensuring all dependency links are preserved in multi-threaded scans.
+- **Visual graph ESM dynamic require resolved**: Fixed a critical runtime crash where dynamic `require` statements failed in ESM mode for payloads larger than 1MB, resolving `/api/graph` failing to load on large codebases. Statically imported all dynamic dependencies in `ui-server.ts` and `ui-events.ts` to ensure compatibility across Node.js and Bun runtimes.
+- **C# / ASP.NET scanner hang resolved**: Fixed a severe database lockup and thread blocking issue when scanning large repositories (such as `n2cms` with ~3,100 files and ~40,000 references). The scanner now merges newly parsed symbols in memory and updates the `symbolIndex` before reference resolution starts, keeping reference resolution at O(1) in memory and eliminating synchronous SQLite queries.
+- **Scanner post-scan and visual hang resolved**: Resolved a secondary hang where the CLI progress bar appeared stuck on the last file by:
+  - Deferring clearing of `symbolIndex` until after `runPostScanAnalysis` completes to avoid falling back to synchronous database queries during route/hook resolution.
+  - Adding a `Resolving references` phase (`resolve`) progress reporting to the CLI instead of remaining visually stuck at `Parsing files`.
+  - Batching framework route/hook edge database insertions inside `scanFrameworkRoutesAndHooks` within a single SQLite transaction, reducing disk-sync overhead.
+  - Supporting qualified dot-separated namespaces (e.g. `N2.Content.Page`) in `resolveSymbolToFile` using O(1) index lookups.
+- Self-edge guard prevents files from depending on themselves in the graph, eliminating spurious self-referential edges.
+- Trace cycles deduplicated on `(fromFile→toFile:cycleLength)` tuple to avoid reporting the same cycle multiple times at different entry points.
+- Architecture smells deduplicated on `(type, involvedFiles)` to prevent redundant smell reports.
+- Scratch/test files (matching `graphExcludePatterns`) excluded from framework detection and archetype scoring, preventing test fixtures from influencing project classification.
+- Duplicate framework detection calls eliminated with caching, reducing scan time for multi-framework projects.
+- Post-scan analysis pipeline extracted into a shared function, eliminating ~85 lines of duplicated code between full scan and incremental sync paths.
+
+## [0.3.3] — 2026-05-31
+
+### Added
+- **Flexible Symbol Querying**: Support querying and searching for symbols using both double-colon `::` and dot `.` notations natively.
+  - Handled multi-level scopes (e.g. `Namespace::Class::Method` or `Namespace.Class.Method`).
+  - Added fallback normalized scope matching for mixed notation lookups in `getSymbolByName`, `getCallersOfSymbol`, `getCalleesOfSymbol`, and `resolveStart` in `FlowTracer`.
+  - Added unit test cases covering dot and double-colon nested namespace formats.
+- **Symbol Explorer Graph Navigation**: Added support in the Web Dashboard's Symbol Explorer details view to navigate directly to and focus the symbol's file node on the Cytoscape graph.
+  - Rendered the file path in the Symbol Explorer details panel as an interactive `involved-file-badge` that automatically switches tabs, changes to focus layout mode, and centers on the file node.
+- **Expanded Test Coverage**: Dramatically increased automated test coverage by adding integration tests for all supported languages and web frameworks.
+  - Added `tests/parsers-integration.test.ts` to verify parsing, AST queries, symbol extraction, and reference extraction using real WASM binaries for all 23 supported languages.
+  - Added `tests/framework-extractors.test.ts` to cover route and hook extraction across all 22 web frameworks, ensuring zero regressions in routing/hooks mappings.
+- **Monorepo Framework Detection**: Enabled framework routing and hooks detection for applications inside monorepo subdirectories.
+  - Implemented shared utility helpers `hasPackageJsonDependency` and `hasComposerDependency` in `src/frameworks/utils.ts` to inspect all project configuration files in the workspace (including those in nested subdirectories like `apps/backend/package.json`).
+  - Refactored JS/TS detectors (`NestJSDetector`, `ExpressDetector`, `NextJSDetector`, `ReactRouterDetector`, `SvelteKitDetector`, `TanstackRouterDetector`, `VueRouterDetector`) to utilize the package dependency helper.
+  - Refactored other detectors (`LaravelDetector`, `SymfonyDetector`, `YiiDetector`, `SpringDetector`, `RailsDetector`, `GoDetector`, `RustDetector`, `VaporDetector`, `WordPressDetector`) to check both project root and subdirectory configurations.
+  - Added comprehensive test suite `tests/framework-detectors.test.ts` to verify detectors under both standard root and nested monorepo folder layouts.
+- **Static YAML file support**: Registered `.yaml` and `.yml` as static tier languages and implemented path extraction in `StaticFileParser` to trace relative references between YAML files (establishing correlation only between each other). This also indexes files like `pubspec.yaml`, enabling the package mapper to resolve Dart package imports.
+- **Flutter / Dart framework support**: Full first-class support for Flutter cross-platform mobile apps.
+  - New `FlutterDetector` (`src/frameworks/detectors/flutter.ts`) — detects Flutter projects via `pubspec.yaml` (`sdk: flutter`) or the presence of `lib/main.dart`. Extracts routes from `Navigator.pushNamed`, `MaterialApp` routes map, `GoRouter` (`GoRoute(path: '...')`), and `auto_route` (`@RoutePage()`) annotations. Extracts widget lifecycle hooks (`initState`, `dispose`, `build`, `didChangeDependencies`, etc.) and state-management bindings for Provider/Riverpod (`context.watch`, `ref.watch`), BLoC (`BlocBuilder`, `BlocListener`, `BlocConsumer`), and GetX (`Obx`, `GetBuilder`).
+  - **Expanded Dart symbol extraction** — `queries/dart/symbols.scm` now captures concrete functions (`function_declaration`), concrete methods (`method_declaration`), getters and setters (both concrete and abstract `*_signature` forms), factory and named constructors, `type_alias` / `function_type_alias` typedefs, `extension_type_declaration` (Dart 3.3+), enum member constants, and library declarations as namespaces.
+  - **Improved Dart dependency resolution** — `queries/dart/references.scm` now captures `part` and `part of` directives, `function_invocation` (direct calls), named constructor invocations (`Foo.fromJson`), `mixin on` clauses, and generic type arguments (`Future<AuthResult>`). Removed the incorrect `function_expression_body` call rule.
+  - **`package:` URI resolution in scanner** — `import 'package:my_app/src/auth.dart'` is now resolved to `lib/src/auth.dart` inside the project. `dart:` stdlib URIs are immediately short-circuited (no resolution attempt).
+  - **Fixed Dart `nodeMappings`** — `method` now correctly maps to `method_declaration`, `function` to `function_declaration`. Added `property`, `namespace`, and `interface` entries.
+  - **Flutter archetype detection** — `CodebaseProfiler` now recognises Flutter projects (`.dart` files under `lib/`) as `mobile-app`. `pubspec.yaml` is recognised as a package boundary for monorepo component detection.
+  - **Flutter-aware role classification** — `RoleClassifier path signals for `blocs/`, `cubits/`, `providers/`, `notifiers/`, `repositories/`, `datasources/`, `routes/`, and `navigation/` directories. Naming signals for `*Bloc`, `*Cubit`, `*Notifier`, `*Screen`, `*Page` class suffixes. `main.dart` classified as `entry`.
+  - **Enhanced Dart dependency resolution** — Comprehensive improvements to Dart import resolution in the scanner:
+    - **pubspec.yaml-aware `package:` resolution** — Scanner now discovers `pubspec.yaml` files across the workspace, extracts the `name:` field, and builds a package-name → `lib/` path map. `package:` URI imports are resolved using this map first (enabling monorepo cross-package imports like `package:core_pkg/models/user.dart` → `packages/core/lib/models/user.dart`), then falls back to the previous `lib/` prepend for same-project imports.
+    - **Dart-specific relative import fast-path** — Dart source files (`.dart`) now use a dedicated resolution path that resolves all non-scheme imports (including bare paths from `part` directives) relative to the source file's directory. This avoids trying JS/TS/Vue extension candidates (`.js`, `.ts`, `.tsx`, `/index.*`, etc.) that are meaningless for Dart files.
+    - **Distinct `part`/`part of` tree-sitter captures** — `queries/dart/references.scm` now captures `part_directive` as `ref.target_part`/`ref.type_part` and `part_of_directive` as `ref.target_part_of`/`ref.type_part_of` (previously both used `ref.type_import`), enabling the scanner to distinguish part file relationships from regular imports.
+    - **Dart/Flutter import signal for role classification** — `RoleClassifier.getImportsSignal` now recognises Flutter/Dart libraries: `flutter_bloc`/`bloc`/`riverpod`/`provider` → `state` role, `flutter/material`/`flutter/cupertino`/`flutter/widgets` → `components` role, `sqflite`/`hive`/`drift`/`isar` → `data` role.
+    - **25 new tests** — Comprehensive `tests/dart-resolution.test.ts` covering: `dart:` stdlib skipping, `package:` URI resolution (basic and monorepo), `discoverDartPackages` (single and multi-pubspec), relative imports, bare-path part directives, and JS/TS non-regression.
+
+### Changed
+- **ASP.NET Route Extraction Improvements**: Upgraded `AspNetDetector` to support class-level `[Route]` back-scanning, resolving issues where multiple classes in a single file or complex class modifier layouts caused route associations to fail. Added support for C# `[action]` routing placeholder token replacements, and expanded route parameter constraint stripping to handle complex patterns like `{id:min(1)}` or `{id:int}`.
+- **Picomatch Glob Migration**: Migrated remaining manual RegExp path/glob matching inside `resolveFilePaths` (`src/cli.ts`) and `resolveStart` (`src/core/flow-tracer.ts`) to use `picomatch` directly. Included dynamic `matchBase` configuration to correctly handle patterns with or without directory boundary slashes.
+- **Test coverage improvements**: Increased statement/branch/function/line coverage across `src/cli.ts` and `src/mcp.ts`.
+  - `cli.ts`: 70% → 74% statements, 58% → 62% branches, 57% → 62% functions.
+  - `mcp.ts`: 71% → 77% statements, 56% → 62% branches, 55% → 69% functions.
+  - New tests cover: `resolveFilePaths` glob/substring branches, fuzzy "Did you mean?" suggestions in `query`/`search`/`callers`/`callees`/`impact`/`node`, `trace` JSON/DOT/text with real paths (including cycle markers), `sources`/`sinks` route/queue/event/db/cache/mail annotations, `node --format json --source` error path, `profile` command with and without data, and staleness helper branches.
+  - Fixed `vi.mock('../src/core/fuzzy-matcher.js')` to export `isGlobPattern` so `resolveFilePaths` glob detection works in the test environment.
+
+### Fixed
+- **CI Dependency Native Compilation**: Added `nan` override (`^2.22.0`) to root `package.json` to resolve native addon compilation errors for `tree-sitter-pascal` (and other tree-sitter packages using old `nan` bindings) under Node.js 20+ in CI workflows.
+- **TypeScript Compilation & Declaration Emission**: Fixed `TS2339` error during `dts` emission by asserting type compatibility (`cand.scope as string` and `s.scope as string`) during scope filtering and matching.
+- **WASM grammar ABI compatibility**: Rebuilt the compiled `tree-sitter-dart.wasm` binary from source using the local tree-sitter CLI to resolve compatibility errors (e.g. `failIf` errors inside `Language.load`) with the runtime `web-tree-sitter` package.
+- **Dart Tree-sitter query compile errors**: Corrected AST patterns in `symbols.scm` and `references.scm` to be compatible with tree-sitter-dart v1.0.0 grammar. Commented out unsupported rules (`extension_type_declaration`, `mixin_on_clause`, `method_invocation`, `function_invocation`, `named_constructor_invocation`) and removed invalid field names. Explicitly traced parent-child AST paths for imports/exports through intermediate `configurable_uri` and `uri` nodes.
+- **Language Grammar Query and WASM Parser Compatibility**: Resolved critical AST schema compatibility issues across multiple tree-sitter languages by correcting and updating query `.scm` files:
+  - **Java**: Updated modifiers query to match static/final predicates against `(modifiers)` child nodes instead of the non-existent `(modifier)` node type.
+  - **Swift**: Commented out the non-existent `extension_declaration` query.
+  - **Bash**: Changed `name: (word)` to `name: (command_name)` in `command` queries to match the correct AST structure.
+  - **Elixir**: Removed invalid `arguments:` field name in `call` queries, matching the `(arguments)` child node directly.
+  - **Zig**: Updated symbols query to use `function_declaration` and `assignment_statement` instead of `fn_proto` and `variable_declaration`. Corrected references query to use `field_identifier` and `call_expression` inside `field_expression` without invalid fields.
+  - **Ruby**: Updated superclass query to use a generic wildcard expression (`superclass: (_)`) and updated instantiation query to use separate non-field calls.
+  - **Lua**: Rewrote `require` calls to match `(variable)` function names and use a version-agnostic arguments query `(_) @ref.target_require` to prevent syntax crashes.
+  - **Pascal**: Replaced invalid query node types with actual AST nodes (`declProc` and `unit` for symbols, `uses_clause` and `exprCall` for references).
+  - **Scala**: Simplified import reference query to capture the entire `(import_declaration)` node directly.
+- **Svelte Symbol Extraction**: Added matching for the Svelte `<script>` tag (`script_element` mapped as `class`) to extract Svelte components as symbols, since modern tree-sitter-svelte parses script blocks as `raw_text`.
+- **Parser Resiliency**: Enhanced `GenericWasmParser.cleanTarget` to strip outer parenthesized arguments (e.g., `('module')` -> `module`), ensuring robust dependency extraction when wildcard arguments are captured.
+
+## [0.3.2] — 2026-05-31
+
+### Added
+- **Architecture & Health UI Revamp**: Re-architected the layout of the Architecture & Health panel.
+  - Arranged the panel as a flat grid with top-row side-by-side cards (Codebase Profile and Smells) and a full-width bottom card (DSM matrix), completely eliminating horizontal page overflow.
+  - Made the top row cards stretch to equal height for a clean layout, while maintaining responsiveness by auto-stacking on narrower viewports (<1000px).
+  - Replaced the static, raw-text codebase profile details with glassmorphic pills/badges (`.profile-pill`) for dominant languages, frameworks, and architectural patterns, and color-coded status badges for boolean flags.
+  - Added a premium, dynamic SVG circular progress ring (health gauge) to the system health card.
+  - Styled involved files in architectural smells as clickable badges (`.involved-file-badge`) that trigger programmatic graph navigation.
+  - Implemented a global click listener for node navigation (`data-go-id`) that automatically switches graph mode to Neighborhood focus at depth 1 with the clicked node as the focus seed, handles Cytoscape animation/resize, and transitions active tabs to the Graph Explorer.
+  - Unified badge styling and solved spacing issues by replacing inline styles with `.selection-badge` and `.smell-badge-mini` CSS classes with proper padding, typography, and margins (`margin-right: 8px`).
+- **Markdown Files Classification**: Configured markdown files (`.md`, `.markdown`, `.mdx`) to always be classified as `'docs'` (documentation) with 100% confidence by default.
+- **Selected File Details Enrichment**: Tapping a file node in the Graph Explorer now dynamically loads and displays its Smart Architecture Classification signals and a summary of any architectural smells it is involved in (including suggestions to resolve them).
+- **/api/explain API Endpoint**: Exposes classification signals for a specific file path.
+- **Smart Architecture Classification**: Replaced the hardcoded path-only layer heuristic with an adaptive, multi-signal classification engine.
+  - **Codebase Profiler**: Dynamic archetype detection (`cli-tool`, `web-api`, `web-app`, `full-stack`, `library`, `monorepo`, etc.) and pattern recognition.
+  - **Multi-Signal Role Classifier**: Combines 5 signals (path structure, exported symbol naming suffixes, topology, framework bindings, and import directions) to dynamically classify files into Universal, Backend, Frontend, and Tool taxonomy roles.
+  - **Leiden Community Detection**: Pure TypeScript implementation of the Leiden algorithm, yielding connected, deterministic, and resolution-controlled clusters.
+  - **Architectural Smell Detector & Flow Validator**: Identifies design smells (`cyclic-dependency` via Tarjan's SCC, `hub-component`, `layer-violation` based on allowed direction flow, and `unstable-dependency`).
+  - **Dependency Structure Matrix (DSM)**: Heatmap matrix of cluster coupling and Martin's stability metrics (Afferent/Efferent coupling, Instability, Abstractness, and Distance from Main Sequence).
+- **New CLI Commands**:
+  - `mapx profile` — Shows detected archetype, patterns, and language breakdown.
+  - `mapx arch` — Full architectural report (profile, active layers, smells, and DSM).
+  - `mapx explain <file>` — Explains classification signals and confidence scores for a file.
+  - `mapx layers` — Lists files grouped by their architectural role.
+- **New MCP Tools**: Added `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, and `mapx_layers` to support agentic architectural audits.
+- **Web Dashboard "Architecture & Health" Tab**:
+  - Interactive DSM heatmap matrix table showing cluster-level dependencies.
+  - Health dashboard with gauges for circular dependencies, god clusters, and layer violations.
+  - Smell annotations in the Graph View (enlarged hub nodes, dashed red circular edge paths, and highlighted violation arrows).
+- **Static file indexing**: Markdown (`.md`, `.mdx`, `.markdown`), HTML (`.html`, `.htm`, `.xhtml`), CSS/SCSS/Sass/Less (`.css`, `.scss`, `.sass`, `.less`), and JSON/JSONC (`.json`, `.jsonc`, `.json5`) files are now indexed and included in the dependency graph. No symbol extraction is performed; only outgoing path references (links, `@import`, `url()`, `href`, `src`, `$ref`) are recorded as edges.
+- New `'static'` tier in `LanguageDefinition` for index-only languages with no WASM grammar.
+- New `StaticFileParser` (`src/parsers/static-file-parser.ts`) with per-language regex extraction. Markdown links are restricted to markdown-only targets to avoid spurious cross-type edges.
+- New `Store.resetRepoForScan()` method — wipes files, symbols, outgoing edges, and clusters for a repo in a single transaction while preserving incoming cross-repo edges and scan-time meta keys.
+- New `StaticFileParser` test suite (`tests/static-file-parser.test.ts`) — 69 tests covering all four file types, extension variants, edge-case filtering, and registry integration.
+- **Architectural layer clusters** — `ClusterEngine` now detects a fourth cluster source: `'layer'`. Every file in a repo is automatically assigned one of 16 architectural layer categories (`entry`, `api`, `core`, `parsers`, `exporters`, `agents`, `frameworks`, `ui`, `data`, `utils`, `types`, `config`, `scripts`, `test`, `docs`, `other`) via `ClusterEngine.assignFileLayer(filePath)`, which applies path-pattern and filename heuristics in priority order. Each non-empty layer becomes a secondary cluster (stored with `is_primary = 0` so files can belong to both a structural cluster and a layer cluster). A new `layer` TEXT column (`DEFAULT 'other'`) has been added to the `clusters` DB table (migration v7).
+- New **"Group: Arch Layer"** option in the UI graph proximity view grouping dropdown — selecting it visualises all nodes grouped by architectural layer with distinct per-layer border colours.
+- Each layer cluster node in the graph carries a `layerColor` data property; a new cytoscape stylesheet rule (`node[type="cluster-group"][?layerColor]`) uses it to render per-layer border and background tints, making architectural structure immediately visible.
+- `mapx clusters --source layer` now works as a filter. The summary line at the bottom of `mapx clusters` output includes the layer count when layer clusters are present (e.g. `… 16 layer`).
+- New `ArchLayer` union type exported from `src/types.ts`.
+- 17 new tests in `tests/cluster-engine.test.ts`: 15 unit tests for `assignFileLayer` covering every layer category (entry, api, core, parsers, exporters, agents, frameworks, ui, data, utils, types, config, scripts, test, docs, fallback), plus 2 integration tests confirming layer clusters are correctly persisted and wired to memberships.
+- **`mapx init` monorepo/nested-repo discovery step** — after init completes, when a TTY is present, mapx now checks for monorepo packages and nested git repositories. If any are found a Y/N prompt (default Y) asks whether to register them, followed by individual `multiselect` lists for nested repos and monorepo packages separately. Pass `--no-discover` to skip entirely (useful for non-interactive CI environments).
+- **Monorepo package discovery** — `WorkspaceManager.discoverMonorepoPackages(rootDir)` detects packages/apps within a monorepo and returns them as registerable repos. Detection reads workspace manifests in priority order: `pnpm-workspace.yaml` → `package.json` workspaces (npm/yarn) → `lerna.json` → `rush.json` → `Cargo.toml` `[workspace]` members → `go.work` `use` block → `turbo.json`/`nx.json` (uses default dirs). Falls back to scanning `apps/`, `packages/`, `libs/`, `services/`, `modules/`, `clients/`, `backend/`, `frontend/` when no manifest is found. Each directory must contain a package manifest (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `composer.json`, `build.gradle`, `pom.xml`) and must not have its own `.git` entry (those are handled by `discoverNestedGitRepos`). Package names are resolved from manifests with `@scope/` prefix stripping.
+- `mapx workspaces list` now includes a **"Monorepo packages"** section showing unregistered packages with their detected package manager.
+- `mapx workspaces discover` includes monorepo packages in its output.
+- `mapx workspaces sync` prompts with an interactive `multiselect` to choose which monorepo packages to register and scan.
+- `mapx_workspaces` MCP tool `discover` action now includes `{ source: 'monorepo' }` entries for discovered packages.
+- New `MonorepoPackageInfo` type exported from `src/types.ts`.
+- 14 new tests in `tests/workspace-manager.test.ts` covering: npm/yarn/pnpm/lerna/cargo/go manifests, fallback scan, skip dirs without manifests, skip `.git` dirs, `@scope/` strip, directory name fallback, deduplication, and noise dir skipping.
+- **Nested git repository discovery** — `WorkspaceManager.discoverNestedGitRepos(root, maxDepth=3)` recursively walks the workspace directory up to 3 levels deep, finding any subdirectory that contains a `.git` entry. Common noise paths (`node_modules`, `dist`, `build`, `.cache`, `coverage`, `vendor`, `target`, `.mapx`, etc.) are automatically skipped. Recursion stops at each discovered boundary so inner repos of an already-found repo are not double-reported.
+- `mapx workspaces list` now includes a **"Nested git repositories (deep scan)"** section listing any discovered nested repos not yet registered.
+- `mapx workspaces discover` includes nested git repos in its output with a `nested-git` source label, and counts them in the total.
+- `mapx workspaces sync` prompts the user with an interactive `multiselect` to choose which newly discovered nested repositories to register and scan (submodules/peer repos are still auto-added silently as before).
+- `mapx_workspaces` MCP tool `discover` action now includes `{ source: 'nested-git' }` entries for nested repos found by the deep scan.
+- New `discoverNestedGitRepos` test suite in `tests/workspace-manager.test.ts` — 10 tests covering depth limits, custom `maxDepth`, skip lists, boundary non-recursion, multi-repo at same level, empty roots, and nonexistent paths.
+
+### Changed
+- **Default View & Reset View settings**: Configured the dashboard to load by default into the "Clusters Map" (proximity mode) with "Group: Architecture" (layer grouping) enabled. Standardized the "Reset All" button to restore these view settings.
+- `*.min.css` added to default `excludePatterns` to avoid indexing minified stylesheets as noise.
+- `mapx files --path` now accepts glob patterns (e.g. `src/core/*.ts`, `**/*.json`) in addition to plain path prefixes.
+- `mapx deps <file>` now resolves file arguments via glob, wildcard, and substring matching — exact match is tried first, then glob patterns, then substring containment. Multiple matched files are all reported.
+- `FlowTracer.resolveStart` (used by `mapx trace`) now resolves file arguments via glob and substring matching in addition to exact/suffix match.
+- `mapx_files` MCP tool `path` parameter now accepts glob patterns; the response header says `"matching <glob>"` for glob inputs and `"under <prefix>"` for plain prefix inputs.
+- Makefile `files` target now quotes the `--path` argument (`"$(p)"`) to prevent shell glob expansion before the CLI receives it.
+- Makefile has new targets for all missing CLI commands: `context`, `profile`, `arch`, `explain`, and `layers`, aligning Makefile shortcuts with all available CLI commands.
+- **Leiden community detection parameters**: Tuned resolution from `1.0` to `1.3` and lowered minimum community size from `3` to `2` to split large monolithic clusters and capture small component pairs (e.g. source-test relationships).
+- **Proximity View unassigned file grouping**: Instead of a flat global `community_unassigned` bucket, files without community clusters are grouped dynamically by their parent directory paths as fallback folder clusters.
+- **Enhanced Proximity Cluster Styling and Visuals**: Dynamically styled community clusters, folder fallbacks, orphans, and singulars in the graph using distinct shapes, border colors, and border styles (e.g. dashed borders for folder and orphan nodes, solid bronze hexagons for tight community groups) to significantly improve visibility and readability.
+
+### Fixed
+
+- **Proximity mapping collision**: Filtered membership inputs in `communityMap` to only map community clusters (names starting with `community_`), preventing directory/namespace memberships from overwriting proximity groupings.
+- **Leiden community overlap discarding**: Removed strict overlap filtering that skipped community clusters matching directory file sets, preserving topological groupings in the Proximity view.
+- **Proximity unassigned cluster labels**: Labeled unassigned directory fallback clusters dynamically as `Folder: <directory_path> (<count> files)` with correct drill-down capabilities, removing the repetitive "Unassigned" prefix.
+- **UI Tab Panel Layout Nesting**: Fixed a layout bug in `src/ui/index.html` where missing closing tags (`</div>` and `</section>`) for the Metrics tab caused subsequent tabs (Architecture, Context, and Tool Call Log) to be incorrectly nested inside it, resulting in a blank screen.
+- **ELK layout horizontal spread** — The ELK "Layered" graph layout now uses `elk.separateConnectedComponents: true` so disconnected file groups (e.g. standalone `.md`, `.json`, or `.scm` files) no longer bleed into the same horizontal bands as connected TypeScript/JavaScript trees, eliminating excessive left-right spread. File nodes are additionally partitioned by extension (`ts/tsx` → band 1, `js/jsx` → 2, `json/yaml` → 3, `html/css/vue/svelte` → 4, `md` → 5, `sh` → 6, `scm` → 7) via a `nodeLayoutOptions` callback, so files of the same type land in the same vertical cut of the tree and form separate compact sub-structures when unconnected to other groups. Spacing, compaction strategy (`LEFT_RIGHT_CONSTRAINT_LOCKING`), and aspect ratio (`1.7`) are tuned to reduce horizontal bloat.
+- **Cytoscape self-loop edge warnings** — Edges where `source === target` (scanner artifacts where a file references itself) are now filtered out of `rawGraphElements` at load time. These caused `Edge 'edge-X-X' has invalid endpoints` console warnings in Cytoscape because source and target nodes overlap.
+- **`.js`-extension imports resolving to `.ts` sources**: TypeScript projects that use the `"moduleResolution": "bundler"` / `"nodenext"` convention of writing `import './utils.js'` when the actual source file is `utils.ts` now resolve correctly. `resolveImportPath` now checks `<stem>.ts` and `<stem>.tsx` as immediate fallback candidates whenever the import specifier ends with `.js` or `.jsx`, **before** trying generic extension appending. A real `.js` file (if present) still takes priority.
+- **False Cross-File Dependency Edges** — Fixed a symbol resolution bug in `resolveSymbolToFile` (`src/core/scanner.ts`) where a call to a locally-defined helper (e.g. `cleanQuotes` inside `php.ts`) could resolve to an identically-named symbol in a completely unrelated file (e.g. `express.ts`), creating phantom graph edges. The resolver now checks for a **same-file match first** at every resolution path (exact-name lookup, namespace-stripped fallback, and first-result fallback) before falling back to a global match.
+- **`scan --force` stale data**: A forced full re-scan now wipes all existing DB data for the target repo (symbols, edges, files, clusters) and clears any stale interrupted-scan resume state **before** discovery begins. Previously, an interrupted prior scan could cause `--force` to silently skip files it considered already completed, and symbols/edges from deleted or renamed files could persist indefinitely.
+- **Layer memberships overriding community grouping** — The UI proximity view's default "Group: Community" strategy built a `communityMap` from all memberships without filtering by source. Since every file also receives a `layer:*` membership and `Map.set` overwrites, layer entries appearing after community entries silently replaced community assignments for connected files, collapsing the view into `cluster:layer:*` pseudo-communities. The `communityMap` builder now skips memberships whose `clusterName` starts with `layer:` — the layer grouping strategy already has its own dedicated code path.
+- **JSONC/JSON5 config files returning no references** — `StaticFileParser.extractJsonRefs` used `JSON.parse` directly, which rejects JSONC/JSON5 syntax (comments, trailing commas, unquoted keys, single-quoted strings). Files with `.jsonc` or `.json5` extensions — and common configs like `tsconfig.json` with comments — silently returned zero `$ref`/`extends` references. Added a `stripJsoncSyntax()` normaliser that handles line/block comments, trailing commas, single-quoted strings, and unquoted object keys before parsing. Includes 10 new test cases.
+
+## [0.3.1] — 2026-05-31
+
+### Added
+
+- **Expanded Core Test Coverage** — Expanded unit test coverage to 80%+ across five key core modules:
+  - `src/core/store-interface.ts` (100% line coverage)
+  - `src/agents/generator.ts` (96.62% line coverage)
+  - `src/core/scanner.ts` (86.35% line coverage)
+  - `src/mcp.ts` (81.75% line coverage)
+  - `src/cli.ts` (80.02% line coverage)
+- **Robust Unit Test Mocking** — Refactored and expanded test suites using `vi.hoisted()` for clean module-level mocking in `tests/cli.test.ts` (expanded to 159 tests) and `tests/mcp.test.ts` (expanded to 98 tests), covering complex edge cases, progress rendering, subcommands, and tool implementations.
+- **Symbol Explorer Pagination** — Symbol Explorer now supports paginated browsing with 50 results per page. Pagination controls (Prev / page-info / Next) appear at both the top and bottom of the left panel for quick navigation without scrolling. `/api/symbols` returns `{ results, total, limit, offset }` and accepts `limit`/`offset` query params. `Store.searchSymbolsFiltered` accepts an `offset` param; a new `Store.countSymbolsFiltered` method returns the total match count using the same WHERE clause.
+- **Symbol Explorer Row Highlighting** — Clicking a row in the Symbol Explorer now highlights it with a blue-tinted background and outline via a `selected-symbol-row` CSS class, making it easy to track which symbol is currently selected while reading the detail panel.
+- **Symbol Explorer Dual Pagination Controls** — Pagination Prev / info / Next controls now appear at both the top and bottom of the Symbol Explorer left panel, so the user never has to scroll to reach navigation.
+- **Tool Call Log Infinite Scroll** — The Tool Call Log now loads entries in pages of 50 using an `IntersectionObserver` sentinel at the bottom of the scroll container. Scrolling to the bottom automatically fetches the next page of older entries. `/api/tool-calls` accepts `?limit=N&offset=M` and returns `{ events, total }` for cursor-based pagination; the SSE/polling path continues to inject new entries at the top in real-time.
+- **Graph Loading Overlay** — A spinner overlay with phase labels ("Fetching graph data…" → "Building graph…" → "Running layout…") is displayed inside the graph canvas while data is loading. The overlay auto-dismisses on `layoutstop` or after a 10-second safety timeout.
+- **fCoSE Default Graph Layout** — fCoSE (Force-directed Compound Spring Embedder) is now the default graph layout algorithm, replacing ELK. The layout selector defaults to "Organic — fCoSE" on page load and after Reset All.
+
+### Changed
+
+- **Graph API Edge Deduplication** — `/api/graph` now deduplicates edges server-side using a `Map` keyed on `source_file→target_file`, aggregating weight and count. This eliminates thousands of redundant symbol-level edges from being sent to the browser for large codebases, significantly improving load time and Cytoscape rendering performance.
+- **Proximity Mode Threshold Lowered** — Auto-switching to Proximity Clusters mode now triggers when `fileCount > 200 || edgeCount > 500` (previously `fileCount > 1000`), catching medium-sized codebases that were silently overloading the force-directed layout.
+- **fCoSE Layout Tuning** — fCoSE config now always uses `quality: 'default'` (was `'draft'` for large graphs, which skipped overlap removal). `nodeRepulsion` increased to `250000`, `gravity` set to `0.08`, `edgeElasticity` to `0.35`, `tilingPadding` to `40`, and `nodeSeparation` adapts between `120`–`160` based on node count. `uniformNodeDimensions: false` preserves dynamic sizing.
+- **Pre-scatter Before Physics Layouts** — All physics-based layouts (fCoSE, cose, Cola, Concentric) now scatter nodes to randomized positions across the full container dimensions before running the layout. This prevents nodes from stacking at the origin `(0,0)` when switching modes or reloading the graph, and produces better-spread initial conditions for force simulation.
+- **Animation Threshold Reduced** — Graph element animations are disabled when `visibleCount > 200` (was `> 500`), avoiding sluggish transitions on mid-sized graphs.
+
+### Fixed
+
+- **ERR_HTTP_HEADERS_SENT Crash** — Fixed a crash in `ui-server.ts` where `store.close()` inside a `finally` block could throw after the response was already sent, causing the outer `catch` to attempt a second `res.writeHead()`. Both catch blocks now guard with `if (!res.headersSent)` and `store.close()` errors are silently swallowed in `finally`.
+
+## [0.3.0] — 2026-05-29
+
+### Added
+
+- **Picomatch Glob Migration** — Migrated all glob pattern matching, testing, and filtering logic across the entire MapX codebase from `minimatch` to `picomatch`.
+- **Bundled Language & Dialect WASMs** — Bundled all 22 supported languages and dialect WASMs (including Svelte, Lua, Elixir, Zig, Bash, Pascal, and Dart) directly with the npm package under a `bundled` tier. This provides zero-install offline-first execution.
+- **Fuzzy Symbol Suggestions (CLI & MCP)** — When a symbol is not found, all symbol-accepting commands (`query`, `search`, `callers`, `callees`, `impact`, `node`) now use [Fuse.js](https://fusejs.io/) to suggest up to 5 similar symbol names ranked by edit distance. Created `src/core/fuzzy-matcher.ts` as a shared module for both CLI and MCP tools.
+- **`mapx_batch` MCP Tool** — New orchestration tool that executes multiple operations (`search`, `node`, `callers`, `callees`, `deps`) in a single round-trip call. Supports configurable `maxItems` limit (default: 10) with per-operation error isolation.
+- **JSON Output for `search` and `node` CLI Commands** — Added `--format json` option to `mapx search` and `mapx node` CLI commands, producing structured JSON output with symbol metadata, PageRank scores, and optional source code.
+- **Summary Headers (CLI & MCP)** — All search/query/caller/callee/files results now include a count summary header (e.g. `Found 20 symbols of kind "class":`), active filters, and broadening notices.
+- **GitHub Actions CI Workflow** — Added `.github/workflows/ci.yml` with 4 jobs: type check, unit tests with coverage, build verification, and integration tests exercising glob/fuzzy/batch features.
+- **Unit Test Suite (Vitest)** — Added `vitest` with `@vitest/coverage-v8` for unit testing. Created `tests/fuzzy-matcher.test.ts` (16 tests) and `tests/store-search.test.ts` (17 tests) covering glob patterns, wildcards, case-insensitive matching, fuzzy suggestions, kind filtering, and search-with-filter logic.
+- **CLI, MCP, and Bun Store Unit Test Suites** — Implemented comprehensive unit test suites for `cli.ts`, `mcp.ts`, and `store-bun.ts`. Tests CLI subcommands, global flags, and outputs. Tests MCP server tools, schema parsing, and command routing using an in-memory transport mock. Tests BunStore SQL backend using a mock SQLite registry over `better-sqlite3`.
+- **CI Test Coverage Expansion** — Expanded test coverage targets to include CLI, MCP, and BunStore, raising workspace statement coverage from 39.56% to 59.27% and lines coverage to 61.15%.
+
+### Changed
+
+- **Standalone Bun Binary Module Resolution Fix** — Refactored `store.ts` to statically import `store-bun.js` and `store-node.js` backends instead of using dynamic `createRequire`, resolving runtime `Cannot find module './store-bun.js'` crashes in compiled Bun standalone binaries.
+- **Standalone Bun Binary WASM Path Fix** — Patched `findAssetRoot()` in `wasm-parser.ts` and `parse-worker.ts` to filter out Bun virtual filesystem paths (`/$bunfs` and `bun:`) and added the `locateFile` option to `Parser.init` pointing to `web-tree-sitter.wasm` inside `PROJECT_ROOT/wasm/` directory to prevent runtime WebAssembly crashes.
+- **README Redesign** — Redesigned the main `README.md` with centered hero badges, a description tagline, an expandable Table of Contents, and structural parser tables matching the style of the picomatch README.
+- **Wildcard & Glob Pattern Support (CLI & MCP)** — `mapx query`, `mapx search`, `mapx_query`, and `mapx_search` now support wildcard (`*`, empty string) and glob patterns (`*Service`, `get?`, `*Controller*`). The original bug where `{ "term": "*", "kind": "enum" }` returned no results is fixed. Glob patterns are converted to SQL `LIKE` patterns (`*` → `%`, `?` → `_`).
+- **Case-Insensitive Symbol Search** — All symbol name matching across `searchSymbols()` and `searchSymbolsFiltered()` now uses `COLLATE NOCASE` for consistent case-insensitive behavior.
+- **Auto-Expand on Zero Results** — When a `--kind` filter yields zero results in `search`/`mapx_search`, the search automatically retries without the kind filter and notifies the user that results were broadened.
+- **Enhanced Staleness Warnings (CLI & MCP)** — Staleness warnings now list up to 5 changed file names (e.g. `Changed: src/mcp.ts, src/cli.ts (and 3 more)`) instead of just showing a count.
+- **Enriched MCP Tool Schemas** — All 9 major MCP tool descriptions rewritten with concrete JSON usage examples, search mode documentation, and `kind` field `enum` constraint. Tools: `mapx_search`, `mapx_query`, `mapx_node`, `mapx_callers`, `mapx_callees`, `mapx_impact`, `mapx_context`, `mapx_files`, `mapx_export`.
+- **Related Symbols in `mapx_node` / `mapx node`** — Node inspection now shows a "Related symbols" sidebar listing callers, callees, and sibling symbols in the same file.
+- **Updated Agent Templates** — All 12 agent integration templates (AGENTS.md, CLAUDE.md, Cursor, Windsurf, Copilot, Aider, Gemini, Zed, Continue, Cline, Antigravity, Instructions) updated to document glob patterns, fuzzy fallback, `--format json`, `mapx_batch`, and 26-tool count.
+
+## [0.2.7] — 2026-05-28
+
+### Added
+
+- **Proximity Clusters View Mode** — Added a new visualization mode designed specifically for large codebases (>1000 files). Files are grouped using community detection (LPA) into root-level cluster group nodes (styled as hexagons with wrapped labels showing file counts). Double-clicking or clicking root clusters zooms and expands them into focused drill-down views displaying cluster nodes and boundary nodes with dashed border formatting. Provides intuitive breadcrumb navigation to return to parent views.
+- **Concentric & Hierarchical Dagre Layouts** — Registered and integrated Cytoscape Concentric layout (ordering nodes by connections) and Dagre hierarchical layout (visualizing parent-child dependency trees within expanded clusters) to replace the old Circle layout option.
+- **Custom Grouping Strategies & Filtering** — Added support for grouping graph elements by Community Clusters, Directories, Programming Languages, or Custom User Tags.
+- **Interactive Graph Editing** — Added "Remove Node" and "Remove Edge" actions directly in the selection details panel. Hidden elements can be cleared using the "Reset Hidden" toolbar action.
+- **Custom Node Tagging** — Added a tag input and "Add Tag" button in the selection details panel to assign custom metadata tags, allowing custom-grouped graph visualization.
+- **Qualified Hook Entries** — Upgraded Laravel hook binding extraction to register fully-qualified namespace and class names as hook entries in the code graph database.
+- **UI Graph Selection Related Flows** — Added an interactive selection details panel component displaying related nodes and edges, organized by incoming/outgoing flow directions. Incoming and outgoing flows are wrapped in native details/summary collapsible elements (collapsed by default). Button elements use high-contrast color highlights to optimize legibility. Clicking any element in the list triggers programmatic graph centering, selection highlighting, and detail panel updates.
+- **Laravel Pre-scan & Routing Context** — Integrated pre-scan parsing of `app/Http/Kernel.php` to extract middleware groups and aliases, and `app/Providers/RouteServiceProvider.php` to capture global prefixes, namespaces, and middleware groups applied to route files. Implemented recursive workspace directory scanning to discover custom package service providers (`*ServiceProvider.php`) and register route files loaded via `$this->loadRoutesFrom(...)`.
+- **Laravel Middleware Resolution & Hook Extraction** — Enhanced route extraction to resolve and expand compound/alias middleware references to their concrete FQNs. Added hook bindings extraction to register discovered service providers (`service_provider`) and middlewares (`middleware`) as qualified entries in the code graph.
+- **CLI Command Alignment (Sources, Sinks, Context)** — Added top-level CLI commands `mapx sources`, `mapx sinks`, and `mapx context <task>` to achieve feature parity and align the CLI toolset with the MCP server tools and documentation.
+- **Automatic MCP Instructions Generation** — Integrated `instructions.md` (`.agents/rules/instructions.md`) into the central templates registry, so that it is automatically generated and updated during `mapx init`, `mapx agents generate`, and `mapx agents update` setups (while remaining hidden from CLI multiselect provider prompts).
+- **Detailed MCP Guide** — Created `.agents/rules/instructions.md` containing a comprehensive usage guide for MapX MCP server tools, schemas, query parameters, and best practices.
+- **LLM Exporter File Summaries** — Integrated heuristic summaries (class/method/function counts and dominant symbol types) for file nodes in the `llm` export format.
+- **Graph Layout Dropdown with 8 Algorithms** — Replaced the scattered layout button group (fCoSE, Concentric, Dagre, Grid) with a single unified dropdown selector supporting 8 layout algorithms: Force-Directed (fCoSE), Spring Embedded, Constraint-Based (Cola), Tree Hierarchy (Dagre), ELK Hierarchical (MrTree), Circular, Ring (Concentric), and Grid. Each layout has tuned parameters via a centralized `getLayoutConfigForName()` resolver.
+- **Custom Autocomplete for Neighborhood Focus** — Replaced the native HTML datalist with a fully custom autocomplete dropdown featuring fuzzy substring file matching, keyboard navigation (↑/↓/Enter/Escape), match text highlighting, language badges per result, file path display, and click-outside-to-close behavior.
+- **Segmented Depth Toggle** — Replaced the cycling depth button in focus mode with a 3-button segmented control (`1 | 2 | 3`) providing immediate visual feedback of the current traversal depth selection.
+- **Custom Tags Persistence** — Tags assigned to graph nodes are now saved to `localStorage` with a repo-scoped key (`mapx-custom-tags-{repoName}`) and automatically restored on page load. Tags can be removed individually via `✕` buttons on each tag badge.
+- **Reset All Toolbar Button** — Added a "Reset All" action button that restores all toolbar state to defaults: mode (proximity), layout (concentric), grouping (community), language filter (none), focus state, cluster state, and hidden elements.
+- **Enriched Selection Details Panel** — File node selection now displays a stat grid with: in/out degree, total connections, symbol count, PageRank score (×1000), and cluster membership. Edge selection shows verifiability badges (green for verified, yellow for inferred), edge weight, and clickable source/target links.
+- **`/api/graph/meta` Endpoint** — Added a new lightweight API endpoint returning `{ totalFiles, totalEdges, totalElements }` for the UI to check graph size before requesting full data.
+- **Graph API Pagination** — `/api/graph` now accepts `?limit=N&offset=M` query parameters. When pagination params are provided, the response is wrapped in `{ elements: [...], meta: { total, limit, offset } }`. Without pagination params, the flat array is returned for backward compatibility.
+- **Graph API Gzip Compression** — Responses larger than 1MB are automatically gzip-compressed via streaming when the client sends `Accept-Encoding: gzip`, removing the previous hard 10MB error limit for large codebases.
+- **Graph API Enriched Node/Edge Data** — `/api/graph` file nodes now include `symbolCount` (SQL aggregate from symbols table) and `pagerank` (computed via `MapxGraph.computePageRank()`). Edge elements now include `weight` from the database record.
+
+### Changed
+
+- **Graph Toolbar Contextual Visibility** — Mode-dependent controls now show/hide automatically: clusters toggle appears only in Full Codebase and Focus modes, grouping strategy dropdown only in Proximity mode, and focus panel only in Neighborhood Focus mode. This eliminates logical interference between mode-specific toggles.
+- **Unified Layout Resolution** — Consolidated all per-mode layout configuration into a single `getLayoutConfigForName()` resolver function, eliminating ~70 lines of duplicated layout config across mode handlers. `updateGraphDisplay()` now respects the user's layout dropdown selection and only overrides for proximity top-level view (which requires fCoSE for community grouping).
+- **fCoSE Node Spacing** — Increased `nodeRepulsion` from `60000` to `120000`, `idealEdgeLength` from `100` to `160`, enabled `nodeDimensionsIncludeLabels`, and added `nodeSeparation: 100` to prevent node overlap in force-directed layouts, especially for large graphs.
+- **Directory Node Text Overflow** — Fixed long directory path labels overflowing node boundaries by truncating to last 2 path segments (e.g., `…/components/ui`) and applying Cytoscape `text-wrap: ellipsis` with `text-max-width` constraints.
+- **Cluster Group Node Text Overflow** — Changed cluster group label rendering from `text-wrap: wrap` to `text-wrap: ellipsis` with dynamic `text-max-width` proportional to node size, preventing label spillover on compact hexagon nodes.
+- **Edge Selection Details** — Edge tap details now show: verifiability as a styled badge (green for `verified`, yellow for `inferred`), edge weight when available, and clickable source/target file links that navigate the graph. Removed the verbose Edge ID display.
+- **Laravel Route & Controller Mapping** — Upgraded the [LaravelDetector](./src/frameworks/detectors/laravel.ts) to support modular route structures (case-insensitive checking), group array attributes (prefix, namespace, middleware), `Route::controller` groups, `Route::match` and `Route::any` verbs, and inline comma-separated controller attributes. Added singularized resource route expansion (`resource`, `apiResource`, `resources`, `apiResources`) to generate actual individual routes with their controller action symbols rather than a single dummy `RESOURCE` route.
+- **Deep Laravel Controller Analysis** — Added parsing of controller files to extract path, query, and request body parameters, as well as constructor-defined middlewares (supporting `.only(...)` and `.except(...)` filters) using an asynchronous file cache.
+- **Route Registry Deduplication** — Updated the [RouteRegistry](./src/frameworks/route-registry.ts) `addRoute` method to check for and prevent duplicate route registrations.
+- **Updated Agent Templates** — Aligned all IDE/agent templates (GitHub Copilot, Windsurf, Cline, Aider, Gemini, Zed) in [templates.ts](./src/agents/templates.ts) to include references to the new `sources`, `sinks`, and `context` commands or MCP tools.
+- **Cross-Language Reference Prevention** — Constrained global symbol resolution to respect language compatibility groups. References from a source file (e.g. a PHP WordPress plugin) can no longer resolve to symbols in incompatible language files (e.g. TypeScript), preventing false edges.
+- **Search Wildcard & Case-Insensitivity** — Modified the symbol search command and MCP tool to support wildcard `*` and empty string `""` queries to list all symbols under a file path constraint. Standardized `kind` search filters to run case-insensitively.
+- **Logical Cluster Grouping Boost** — Refined the `mapx_context` token-budget relevance scoring heuristics to give an extra boost (+150 points) to files sharing logical clusters with the matched seed files.
+- **Centralized try/catch-Aware Impact Analysis** — Extracted and centralized BFS traversal and risk categorization logic to a new reusable `ImpactAnalyzer` module. Categorized callers at depth 2+ as `MEDIUM` or `LOW` risk, and calling sites inside test files or wrapped in try/catch blocks as `LOW` risk.
+
+- **Graph Resolution Blacklist** — Prevented standard built-in JavaScript/TypeScript globals (`Date`, `Error`, `Map`, `Set`, `Promise`, `Object`, `Array`, `String`, `Number`, `Boolean`, `Function`, `RegExp`, `Symbol`, `JSON`, `Math`, `console`, `Console`, etc.) from incorrectly resolving to user-defined symbols during database reference resolution.
+- **Import Caller Filtering** — Excluded named imports and require declarations (`import` and `require` edge types) from the standard `callers` query outputs, eliminating `<top-level>` import statement noise in call graphs.
+- **Enhanced Change Impact Risk Scoring** — Upgraded `mapx impact` and `mapx_impact` risk grading. Calls from test files (`.test.ts`, `.spec.ts`, etc.) are now classified as `LOW` risk, calls wrapped inside `try`/`catch` blocks are downgraded by one risk level, and callers at depth 2+ or inside test modules are classified as `MEDIUM` or `LOW` risk.
+- **Filesystem Staleness Detection** — Added file modification time checking to output a staleness warning header (`⚠️ Warning: Graph index may be stale...`) in all CLI and MCP query tools when modifications occur on disk without running `mapx update`.
+- **NestJS Decorator Routing** — Implemented decorator-based route extraction from class-level `@Controller` and method-level route handler decorators (`@Get`, `@Post`, `@Patch`, `@Delete`, etc.) supporting both string arguments (including template literals) and object configurations (e.g. `@Controller({ path: 'prefix' })`).
+
+- **NestJS GraphQL & WebSockets Integration** — Added resolver extraction from `@Resolver`, `@Query`, `@Mutation`, and `@Subscription` decorators, WebSocket event subscriptions from `@SubscribeMessage`, and microservice handlers from `@MessagePattern` and `@EventPattern` using a robust, comment-resilient method name discovery helper.
+- **NestJS Lifecycle & Custom Interfaces** — Cataloged class definitions implementing custom interfaces such as lifecycle hooks (`OnModuleInit`, `OnApplicationBootstrap`, etc.) and guard/pipe/interceptor definitions (`CanActivate`, `PipeTransform`, `NestInterceptor`) as queryable hooks.
+- **NestJS Constructor Dependency Injection** — Extended TS/TSX tree-sitter references queries to capture type annotations in constructor parameters (e.g. `constructor(private readonly service: Service)`) and map them as `param_type` dependency injection edges in the graph.
+- **AST-Based Parser Scope Resolution** — Fixed a critical scoping bug in the generic WASM parser that caused method/property symbols to incorrectly inherit the scope of the last-parsed class in file iteration, resolving them via AST ancestor symbol lookup instead.
+- **JSX Rendering Edges** — Added parsing and extraction of opening (`<Component>`) and self-closing (`<Component />`) JSX tags in `.tsx` and `.jsx` files as `render` edges.
+- **Native HTML Elements Filtering** — Implemented target name checking (`/^[A-Z]/`) to filter out native lowercase HTML tags (like `<div />`, `<span />`) and only emit edges for custom React component tags.
+- **TS/TSX Query Separation** — Separated references query configuration between standard TypeScript and TSX files (`references.scm` and `references-tsx.scm`) to prevent grammar syntax compilation errors in non-JSX files.
+- **JSX Extension Mapping** — Added `.jsx` file extension mapping to the JavaScript language registry for JSX file recognition and parsing.
+- **Exporter Rendering Edge Styling** — Added distinctive cyan styling (dotted/dashed) for `render` edges in both DOT and SVG exporter modules.
+- **CLI & MCP Sinks Filtering** — Added support for `render` type edges in data-bearing edges arrays in CLI and MCP server tools to ensure accurate terminal consumer/sink detection.
+- **React & TSX Parser Fixes** — Added support for scanning, indexing, and querying TSX files (`.tsx` extensions) using a dedicated TSX tree-sitter parser grammar.
+- **Default and Anonymous Export Parsing** — Enhanced TypeScript and JavaScript symbol extraction to query and match default class/function exports and anonymous arrow functions exported as default.
+- **Anonymous Default Export Auto-naming** — Implemented auto-naming logic in the generic WASM parser to resolve anonymous default exports using the file's base name (e.g., `export default () => {}` in `Home.tsx` is named `Home`).
+- **Duplicate Symbol Node Filtering** — Added a `seenNodeIds` lookup constraint during AST parse collection to prevent duplicate symbols from being extracted when matching multiple query patterns on the same node.
+- **TSX Import Path Resolution** — Updated the path resolution algorithm to recognize `/index.tsx` and `.tsx` candidate targets for relative and absolute imports.
+- **Exclusion Configuration Adjustments** — Extended JS/TS default ignore patterns in the configuration class to automatically exclude `**/*.test.tsx` and `**/*.spec.tsx` files.
+- **Layout Algorithm Shorthand Labels** — Each layout option in the dropdown now includes the algorithm shorthand after an em dash for quick identification (e.g., "Tidy — Cola", "Organic — fCoSE", "Layered — Dagre", "Tree — ELK", "Radial — Concentric", "Circular — Circle").
+- **Dedicated Layout Toolbar Group** — Separated the layout dropdown into its own `toolbar-group` with a "Layout" label, placed first in the toolbar for prominence.
+- **Focus Mode Controls Restoration** — Restored the Neighborhood Focus controls (file search autocomplete, clear button, depth segmented toggle) as the last toolbar group, with a "Focus" label. Controls appear only when focus mode is active.
+- **Breadcrumbs for Focus Mode** — Breadcrumbs now display in both Proximity Clusters drilldown (showing cluster name) and Neighborhood Focus mode (showing focused file name with "Focus →" prefix).
+- **HTTP Method Color Coding** — Route method badges are now color-coded by verb: GET (emerald), POST (blue), PUT (amber), PATCH (teal), DELETE (red), HEAD (indigo), OPTIONS (violet), ANY (purple), with a slate fallback for unknown methods.
+- **Hook Type Color Coding** — Hook type badges are now color-coded by keyword: middleware (indigo), event/listener (cyan), filter (amber), action (rose), lifecycle (teal), provider (violet), guard (red), pipe (cyan-light), interceptor (purple), resolver (blue), subscriber (pink).
+- **Metric Card Glassmorphism** — Metric cards now feature glassmorphism styling with `backdrop-filter: blur`, hover state with brighter border and shadow, uppercase small-caps headings with bottom dividers, and tighter typographic spacing.
+- **Global Monochromatic Scrollbars** — Replaced per-element scrollbar styles with a unified global `*` scrollbar using 5px monochromatic white-on-dark theme (`rgba(255,255,255, 0.12)` thumb, `rgba(255,255,255, 0.03)` track) applied consistently across all scrollable panels.
+
+### Changed
+
+- **Grouping Strategy Enable/Disable** — Changed grouping strategy dropdown from show/hide to always-visible with enabled/disabled state. Enabled only in Proximity Clusters mode at root level (no active drilldown). Disabled with 35% opacity and `not-allowed` cursor in all other modes or when drilled into a cluster/directory.
+- **Toolbar Separator Visibility Centralized** — Separator visibility is now managed exclusively by `updateToolbarVisibility()`, shown when either breadcrumbs or focus search panel are visible. Removed 5 scattered separator manipulation points.
+- **Cola Layout Vertical Drift Fix** — Added `randomize: true` to Cola config, position scrambling before each Cola run in `runLayout()`, tighter convergence threshold (0.001), explicit constraint iterations (`unconstrIter: 10`, `userConstIter: 20`, `allConstIter: 20`), increased `nodeSpacing` to 40, and `ungrabifyWhileSimulating: true` to prevent progressive vertical drift after view/grouping changes.
+
+### Fixed
 
 - **Silence prebuild-install Deprecation Warning** — Resolved the NPM deprecation warning for `prebuild-install` (transitive dependency of `better-sqlite3`) by adding a package-level override pointing directly to the tagged GitHub repository release. This preserves SQLite query/transaction integrity and prevents terminal noise during installation.
 - **Fix Bun SQLite Require Compilation Warning** — Replaced direct Node-style `require('bun:sqlite')` with dynamically constructed `createRequire` in `src/core/store-bun.ts`. This silences the compiler warning during ESM builds while preserving native Bun SQLite loader capability.
@@ -279,7 +606,13 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/MohamedGamil/mapx/compare/v0.2.7...v0.3.0
+[0.2.7]: https://github.com/MohamedGamil/mapx/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/MohamedGamil/mapx/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/MohamedGamil/mapx/compare/v0.2.3...v0.2.4
