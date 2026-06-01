@@ -62,7 +62,7 @@ export class ToonExporter {
     const clusters = this.store.getClusters(opt.repo);
 
     let rankedFiles = this.graph.getRankedFiles();
-    let rankedSymbols = this.graph.getRankedSymbols();
+    let rankedSymbols = this.store.getTopSymbolsByPageRank(this.graph, 100000);
 
     // Filter by allowed files if specified
     if (opt.files) {

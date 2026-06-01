@@ -1,9 +1,9 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync, existsSync, statSync, watchFile, unwatchFile } from 'node:fs';
+import { readFileSync, existsSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync, watch } from 'node:fs';
 import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGzip } from 'node:zlib';
-import { pipeline } from 'node:stream';
+import { pipeline, Readable } from 'node:stream';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
@@ -179,35 +179,8 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          // --- Build MapxGraph and compute PageRank ---
-          const config = await Config.load(dir);
-          const graph = new MapxGraph(config.repo.name);
-
+          // --- Retrieve pre-computed PageRank scores directly from SQLite ---
           const files = store.getAllFiles();
-          const allSymbols = store.getAllSymbols();
-          const edges = store.getAllEdges();
-
-          for (const file of files) {
-            graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
-          }
-          for (const sym of allSymbols) {
-            graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-          }
-          for (const edge of edges) {
-            graph.addDependencyEdge({
-              sourceFile: edge.source_file as string,
-              targetFile: edge.target_file as string,
-              sourceSymbol: edge.source_symbol as string | null,
-              targetSymbol: edge.target_symbol as string | null,
-              edgeType: edge.edge_type as any,
-              repo: edge.repo as string,
-              weight: edge.weight as number,
-              verifiability: edge.verifiability as any,
-              targetRepo: edge.target_repo as string | null,
-            });
-          }
-
-          const pageRankScores = graph.computePageRank();
 
           // --- Symbol counts per file via SQL aggregate ---
           const symbolCountRows = store.raw.prepare(
@@ -231,41 +204,28 @@ export function startUiServer(opts: ServerOpts) {
                 size: f.size_bytes,
                 lines: f.lines,
                 symbolCount: symbolCountMap.get(fPath) || 0,
-                pagerank: pageRankScores.get(fPath) || 0,
+                pagerank: (f.pagerank as number) || 0,
                 role: f.role,
                 roleConfidence: f.role_confidence
               }
             });
           }
 
-          // Deduplicate edges: many symbol-level edges share the same source/target file pair.
-          // Aggregate them into one weighted edge per unique file→file pair to keep the
-          // payload small and Cytoscape from receiving thousands of duplicate elements.
-          const edgeMap = new Map<string, { source: string; target: string; weight: number; count: number; type: string; verifiability: string }>();
-          for (const e of edges) {
-            const key = `${e.source_file as string}->${e.target_file as string}`;
-            const existing = edgeMap.get(key);
-            if (existing) {
-              existing.weight = Math.max(existing.weight, e.weight as number);
-              existing.count++;
-            } else {
-              edgeMap.set(key, {
-                source: e.source_file as string,
-                target: e.target_file as string,
-                weight: e.weight as number,
-                count: 1,
-                type: e.edge_type as string,
-                verifiability: e.verifiability as string,
-              });
-            }
-          }
-          for (const e of edgeMap.values()) {
+          // --- Retrieve and format grouped file-to-file edges directly from SQLite ---
+          // Aggregating directly in SQLite avoids loading and looping over thousands of symbol-level edges in JS.
+          const groupedEdges = store.raw.prepare(`
+            SELECT source_file, target_file, MAX(weight) as weight, COUNT(*) as count, edge_type, verifiability
+            FROM edges
+            GROUP BY source_file, target_file
+          `).all() as Array<{ source_file: string; target_file: string; weight: number; count: number; edge_type: string; verifiability: string }>;
+
+          for (const e of groupedEdges) {
             elements.push({
               data: {
-                id: `edge-${e.source}-${e.target}`,
-                source: e.source,
-                target: e.target,
-                type: e.type,
+                id: `edge-${e.source_file}-${e.target_file}`,
+                source: e.source_file,
+                target: e.target_file,
+                type: e.edge_type,
                 verifiability: e.verifiability,
                 weight: e.weight,
                 count: e.count,
@@ -301,7 +261,6 @@ export function startUiServer(opts: ServerOpts) {
               'Content-Encoding': 'gzip',
               'Transfer-Encoding': 'chunked'
             });
-            const { Readable } = require('node:stream');
             const source = Readable.from([payload]);
             const gzip = createGzip();
             pipeline(source, gzip, res, (err: any) => {
@@ -463,27 +422,6 @@ export function startUiServer(opts: ServerOpts) {
         const store = new Store(dbPath);
         try {
           const config = await Config.load(dir);
-          const graph = new MapxGraph(config.repo.name);
-
-          for (const file of store.getAllFiles()) {
-            graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
-          }
-          for (const sym of store.getAllSymbols()) {
-            graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-          }
-          for (const edge of store.getAllEdges()) {
-            graph.addDependencyEdge({
-              sourceFile: edge.source_file as string,
-              targetFile: edge.target_file as string,
-              sourceSymbol: edge.source_symbol as string | null,
-              targetSymbol: edge.target_symbol as string | null,
-              edgeType: edge.edge_type as any,
-              repo: edge.repo as string,
-              weight: edge.weight as number,
-              verifiability: edge.verifiability as any,
-              targetRepo: edge.target_repo as string | null,
-            });
-          }
 
           const fileCount = store.getFileCount();
           const symbolCount = store.getSymbolCount();
@@ -491,8 +429,8 @@ export function startUiServer(opts: ServerOpts) {
 
           const fileMetrics = calculateMetrics(store, { repo: config.repo.name });
           const graphMetrics = calculateGraphMetrics(store, config.repo.name);
-          const topFiles = store.getTopFilesByPageRank(graph, 10);
-          const topSymbols = store.getTopSymbolsByPageRank(graph, 10);
+          const topFiles = store.getTopFilesByPageRank(null, 10);
+          const topSymbols = store.getTopSymbolsByPageRank(null, 10);
 
           // Get extra metrics matching CLI status
           const verifiedEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified'").get() as any)?.cnt || 0;
@@ -572,9 +510,7 @@ export function startUiServer(opts: ServerOpts) {
             for (const file of store.getAllFiles()) {
               graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
             }
-            for (const sym of store.getAllSymbols()) {
-              graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-            }
+            // Symbols loading is skipped to optimize context build memory and time.
             for (const edge of store.getAllEdges()) {
               graph.addDependencyEdge({
                 sourceFile: edge.source_file as string,
@@ -680,7 +616,6 @@ export function startUiServer(opts: ServerOpts) {
               return;
             }
             // Read only the new bytes
-            const { openSync, readSync, closeSync } = require('node:fs');
             const fd = openSync(logPath, 'r');
             const buf = Buffer.alloc(currentSize - lastSize);
             readSync(fd, buf, 0, buf.length, lastSize);
@@ -701,7 +636,6 @@ export function startUiServer(opts: ServerOpts) {
         let logWatcher: any = null;
         try {
           if (existsSync(logPath)) {
-            const { watch } = require('node:fs');
             logWatcher = watch(logPath, (eventType: string) => {
               if (eventType === 'change') {
                 pollLogFile();

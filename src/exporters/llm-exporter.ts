@@ -22,7 +22,7 @@ export class LLMExporter {
     let symbols = this.store.getAllSymbols(opt.repo);
     let edges = this.store.getAllEdges(opt.repo);
     let rankedFiles = this.graph.getRankedFiles();
-    let rankedSymbols = this.graph.getRankedSymbols();
+    let rankedSymbols = this.store.getTopSymbolsByPageRank(this.graph, 100000);
 
     if (opt.files) {
       const allowed = new Set(opt.files);

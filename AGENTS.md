@@ -29,8 +29,8 @@ mapx -d /path/to/project scan
 
 - `mapx init [path]` - First-time setup (auto-adds .mapx/ to .gitignore, discovers monorepo packages & nested repos)
 - `mapx uninit [path]` - Remove .mapx/ and reverse integration changes
-- `mapx scan [path]` - Full scan (use `--force` to bypass cache)
-- `mapx update [path]` (alias: `sync`) - Incremental update (fast)
+- `mapx scan [path]` - Full scan (use `--force` to bypass cache, `--no-parallel` to disable worker threads)
+- `mapx update [path]` (alias: `sync`) - Incremental update (fast, use `--no-parallel` to disable worker threads)
 - `mapx status [path]` - Check what changed since last scan
 - `mapx export [--dir path]` - Export compact graph summary
 - `mapx export --format=<fmt>` - Export as `llm`, `json`, `dot`, `svg`, or `toon`
@@ -71,8 +71,8 @@ mapx -d /path/to/project scan
 ## MCP Tools
 
 When running as an MCP server, MapxGraph exposes these tools:
-- `mapx_scan` - Scan the code graph (full scan)
-- `mapx_sync` - Sync changed files to update the graph (incremental scan)
+- `mapx_scan` - Scan the code graph (full scan; supports `force` and `parallel` options)
+- `mapx_sync` - Sync changed files to update the graph (incremental scan; supports `parallel` option)
 - `mapx_query` - Search symbols by name pattern
 - `mapx_search` - Filtered semantic and regex-like symbol search
 - `mapx_node` - Deep inspection of a specific symbol and its source code (supports `include_members` to list class/interface members)

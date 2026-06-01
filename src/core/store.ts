@@ -6,7 +6,7 @@ import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy
 import { BunStore } from './store-bun.js';
 import { NodeStore } from './store-node.js';
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 function parseSearchPattern(pattern: string): { scopeLike: string | null; namePattern: string } {
   const commonExtensions = new Set([
@@ -214,6 +214,14 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_arch_smells_repo ON arch_smells(repo)`,
     ],
   },
+  {
+    version: 9,
+    description: 'Add pagerank column to files table',
+    up: [
+      `ALTER TABLE files ADD COLUMN pagerank REAL DEFAULT 0.0`,
+      `CREATE INDEX IF NOT EXISTS idx_files_pagerank ON files(pagerank)`
+    ]
+  }
 ];
 
 function createStoreBackend(dbPath: string): StoreBackend {
@@ -1118,12 +1126,57 @@ export class Store {
     return results;
   }
 
-  getTopFilesByPageRank(graph: MapxGraph, limit: number = 5): any[] {
-    return graph.getRankedFiles().slice(0, limit);
+  updateFilePageRank(filePath: string, pagerank: number): void {
+    this.backend.prepare('UPDATE files SET pagerank = ? WHERE path = ?')
+      .run(pagerank, filePath);
   }
 
-  getTopSymbolsByPageRank(graph: MapxGraph, limit: number = 5): any[] {
-    return graph.getRankedSymbols().slice(0, limit);
+  getTopFilesByPageRank(graph?: MapxGraph | null, limit: number = 5): any[] {
+    if (graph && graph.constructor.name !== 'MapxGraph' && typeof graph.getRankedFiles === 'function') {
+      return graph.getRankedFiles().slice(0, limit);
+    }
+    const rows = this.backend.prepare(
+      'SELECT path, pagerank, language FROM files ORDER BY pagerank DESC LIMIT ?'
+    ).all(limit);
+    if (rows.length > 0) {
+      return rows.map(r => ({
+        path: r.path,
+        pagerank: r.pagerank,
+        language: r.language
+      }));
+    }
+    if (graph && typeof graph.getRankedFiles === 'function') {
+      return graph.getRankedFiles().slice(0, limit);
+    }
+    return [];
+  }
+
+  getTopSymbolsByPageRank(graph?: MapxGraph | null, limit: number = 5): any[] {
+    if (graph && graph.constructor.name !== 'MapxGraph' && typeof graph.getRankedSymbols === 'function') {
+      return graph.getRankedSymbols().slice(0, limit);
+    }
+    const rows = this.backend.prepare(`
+      SELECT s.name, s.kind, s.file_path, s.start_line, s.scope,
+             (f.pagerank * (1 + (CASE WHEN s.scope IS NOT NULL THEN 2 ELSE 1 END) * 0.1)) AS pagerank
+      FROM symbols s
+      JOIN files f ON s.file_path = f.path
+      ORDER BY pagerank DESC
+      LIMIT ?
+    `).all(limit);
+    if (rows.length > 0) {
+      return rows.map(r => ({
+        name: r.name,
+        kind: r.kind,
+        filePath: r.file_path,
+        startLine: r.start_line,
+        pagerank: r.pagerank,
+        scope: r.scope
+      }));
+    }
+    if (graph && typeof graph.getRankedSymbols === 'function') {
+      return graph.getRankedSymbols().slice(0, limit);
+    }
+    return [];
   }
 
   updateFileRole(filePath: string, role: string, confidence: number): void {

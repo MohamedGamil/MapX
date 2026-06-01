@@ -926,10 +926,19 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         return;
       }
 
-      const rankedAll = graph.getRankedSymbols();
       const rankMap = new Map<string, number>();
-      for (const item of rankedAll) {
-        rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
+      if (results.length > 0) {
+        const filePaths = Array.from(new Set(results.map(r => r.file_path)));
+        const placeholders = filePaths.map(() => '?').join(',');
+        const fileRanks = store.raw.prepare(`
+          SELECT path, pagerank FROM files WHERE path IN (${placeholders})
+        `).all(...filePaths) as any[];
+        const fileRankMap = new Map<string, number>(fileRanks.map(f => [f.path, f.pagerank]));
+        for (const sym of results) {
+          const parentFileRank = fileRankMap.get(sym.file_path) || 0;
+          const symbolRank = parentFileRank * (1 + (sym.scope ? 2 : 1) * 0.1);
+          rankMap.set(`${sym.file_path}::${sym.name}`, symbolRank);
+        }
       }
 
       // JSON format
@@ -2997,18 +3006,8 @@ export async function loadContext(dir: string): Promise<{
     );
   }
 
-  const symbols = store.getAllSymbols();
-  for (const sym of symbols) {
-    graph.addSymbolNode(
-      sym.name as string,
-      sym.file_path as string,
-      sym.name as string,
-      sym.kind as any,
-      sym.start_line as number,
-      sym.end_line as number,
-      sym.scope as string | null
-    );
-  }
+  // Symbols loading is skipped to optimize memory and context load times.
+  // CLI search and query use SQLite directly, avoiding graphology overhead.
 
   const edges = store.getAllEdges();
   for (const edge of edges) {

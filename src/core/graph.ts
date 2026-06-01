@@ -93,8 +93,8 @@ export class MapxGraph {
     }
   }
 
-  getRankedFiles(): Array<{ path: string; pagerank: number; language: string }> {
-    const scores = this.computePageRank();
+  getRankedFiles(excludePatterns?: string[]): Array<{ path: string; pagerank: number; language: string }> {
+    const scores = this.computePageRank(excludePatterns);
     const files: Array<{ path: string; pagerank: number; language: string }> = [];
 
     for (const [nodeId, score] of scores) {
@@ -108,8 +108,8 @@ export class MapxGraph {
     return files;
   }
 
-  getRankedSymbols(): Array<{ name: string; kind: SymbolKind; filePath: string; startLine: number; pagerank: number; scope: string | null }> {
-    const fileRank = this.computePageRank();
+  getRankedSymbols(excludePatterns?: string[]): Array<{ name: string; kind: SymbolKind; filePath: string; startLine: number; pagerank: number; scope: string | null }> {
+    const fileRank = this.computePageRank(excludePatterns);
     const symbols: Array<{ name: string; kind: SymbolKind; filePath: string; startLine: number; pagerank: number; scope: string | null }> = [];
 
     for (const node of this.graph.nodes()) {

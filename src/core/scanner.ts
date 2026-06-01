@@ -1728,6 +1728,44 @@ export class Scanner {
       }
     });
 
+    // 7. Calculate files-only PageRank and persist to files table
+    try {
+      const dbFiles = this.store.getAllFiles(repo.name);
+      const dbEdges = this.store.raw.prepare('SELECT source_file, target_file, edge_type, weight, verifiability, target_repo, metadata FROM edges WHERE repo = ?').all(repo.name) as any[];
+
+      const filesGraph = new MapxGraph(repo.name);
+      for (const f of dbFiles) {
+        filesGraph.addFileNode(f.path as string, (f.language as string) || 'unknown', (f.size_bytes as number) || 0, (f.lines as number) || 0);
+      }
+      for (const edge of dbEdges) {
+        filesGraph.addDependencyEdge({
+          sourceFile: edge.source_file,
+          targetFile: edge.target_file,
+          sourceSymbol: null,
+          targetSymbol: null,
+          edgeType: edge.edge_type,
+          weight: edge.weight,
+          verifiability: edge.verifiability,
+          repo: repo.name,
+          targetRepo: edge.target_repo,
+          metadata: typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : (edge.metadata || {}),
+        });
+      }
+
+      const excludePatterns = this.config.settings.graphExcludePatterns || [];
+      const rankedFiles = filesGraph.getRankedFiles(excludePatterns);
+
+      this.store.inTransaction(() => {
+        for (const rf of rankedFiles) {
+          if (typeof this.store.updateFilePageRank === 'function') {
+            this.store.updateFilePageRank(rf.path, rf.pagerank);
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('[mapx] Failed to calculate and save files-only PageRank:', err);
+    }
+
     // Clear framework detection cache after post-scan analysis
     this.cachedActiveDetectors.clear();
   }
