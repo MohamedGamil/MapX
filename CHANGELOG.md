@@ -8,6 +8,11 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-06-01
+
+### Changed
+- Nothig, just a version bump to make NPM happy
+
 ## [0.3.4] — 2026-06-01
 
 ### Added
