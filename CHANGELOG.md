@@ -28,6 +28,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - Leaf-library files (those with ≥3 structural importers) are filtered from sinks output by default; use `include_leaf_libraries` to restore them.
 
 ### Fixed
+- **C# / ASP.NET scanner hang resolved**: Fixed a severe database lockup and thread blocking issue when scanning large repositories (such as `n2cms` with ~3,100 files and ~40,000 references). The scanner now merges newly parsed symbols in memory and updates the `symbolIndex` before reference resolution starts, keeping reference resolution at O(1) in memory and eliminating synchronous SQLite queries.
 - Self-edge guard prevents files from depending on themselves in the graph, eliminating spurious self-referential edges.
 - Trace cycles deduplicated on `(fromFile→toFile:cycleLength)` tuple to avoid reporting the same cycle multiple times at different entry points.
 - Architecture smells deduplicated on `(type, involvedFiles)` to prevent redundant smell reports.

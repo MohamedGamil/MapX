@@ -468,6 +468,27 @@ describe('Scanner Coverage Boost', () => {
     expect(index.get('funca')).toHaveLength(3); // case-insensitive gets all 3
     expect(index.get('Funca')).toBeDefined(); // exact case
 
+    // Test buildSymbolIndex with merging capabilities & stale symbol exclusions
+    const indexMerged = scanner['buildSymbolIndex'](
+      'repo1',
+      ['a.ts'], // stale path to exclude
+      [
+        {
+          symbols: [{ name: 'newFuncA', kind: 'function', startLine: 1, endLine: 2, scope: 'NewScope' }],
+          references: [],
+          errors: []
+        }
+      ]
+    );
+    // stale symbol from a.ts (funcA) should be excluded
+    const funcaEntries = indexMerged.get('funca') || [];
+    expect(funcaEntries.find(e => e.file === 'a.ts')).toBeUndefined();
+    // non-stale symbols (b.ts, c.ts) should remain
+    expect(funcaEntries.find(e => e.file === 'b.ts')).toBeDefined();
+    // new parsed symbol (newFuncA) should be merged
+    expect(indexMerged.get('newfunca')).toBeDefined();
+    expect(indexMerged.get('newfunca')![0].file).toBe('a.ts');
+
     // 2. resolveReferencesWithMap coverage (including spans and scopes resolution)
     // resolveReferences fallback when workspaceFileMap is empty (lines 986-988)
     const fileMap = new Map<string, string>([

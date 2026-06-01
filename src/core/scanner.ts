@@ -337,6 +337,13 @@ export class Scanner {
         }
       );
 
+      // Rebuild the symbol index to include the newly parsed symbols before reference resolution
+      this.symbolIndex = this.buildSymbolIndex(
+        repo.name,
+        toParse.map(f => f.relativePath),
+        parseResults
+      );
+
       const fileMap = this.workspaceFileMap.size > 0 ? this.workspaceFileMap : (() => {
         const allTrackedFiles = this.store.getAllFiles();
         const map = new Map<string, string>();
@@ -576,6 +583,13 @@ export class Scanner {
           file: relPath,
         });
       }
+    );
+
+    // Rebuild the symbol index to include the newly parsed symbols before reference resolution
+    this.symbolIndex = this.buildSymbolIndex(
+      repo.name,
+      toReindex.map(r => r.path),
+      parseResults
     );
 
     let totalSymbols = 0;
@@ -1496,12 +1510,16 @@ export class Scanner {
    * Build an in-memory symbol index for O(1) lookups during reference resolution.
    * Maps symbol names (case-insensitive) to their file locations.
    */
-  private buildSymbolIndex(repoName: string): Map<string, Array<{ name: string; file: string; scope: string | null }>> {
+  private buildSymbolIndex(
+    repoName: string,
+    parsedPaths?: string[],
+    results?: ParseResult[]
+  ): Map<string, Array<{ name: string; file: string; scope: string | null }>> {
     const index = new Map<string, Array<{ name: string; file: string; scope: string | null }>>();
-    const symbols = this.store.getAllSymbols(repoName);
-    for (const sym of symbols) {
-      const name = sym.name as string;
-      const entry = { name, file: sym.file_path as string, scope: (sym.scope as string) || null };
+    const excludeSet = new Set(parsedPaths || []);
+
+    const addEntry = (name: string, file: string, scope: string | null) => {
+      const entry = { name, file, scope };
       const key = name.toLowerCase();
       const existing = index.get(key);
       if (existing) {
@@ -1518,7 +1536,26 @@ export class Scanner {
           index.set(name, [entry]);
         }
       }
+    };
+
+    const symbols = this.store.getAllSymbols(repoName);
+    for (const sym of symbols) {
+      const filePath = sym.file_path as string;
+      if (excludeSet.has(filePath)) continue;
+      addEntry(sym.name as string, filePath, (sym.scope as string) || null);
     }
+
+    if (parsedPaths && results) {
+      for (let i = 0; i < parsedPaths.length; i++) {
+        const filePath = parsedPaths[i];
+        const res = results[i];
+        if (!res) continue;
+        for (const sym of res.symbols) {
+          addEntry(sym.name, filePath, sym.scope);
+        }
+      }
+    }
+
     return index;
   }
 
@@ -1712,6 +1749,13 @@ export class Scanner {
           file: relPath,
         });
       }
+    );
+
+    // Rebuild the symbol index to include the newly parsed symbols before reference resolution
+    this.symbolIndex = this.buildSymbolIndex(
+      repo.name,
+      toReindex.map(f => f.relativePath),
+      parseResults
     );
 
     let totalSymbols = 0;
