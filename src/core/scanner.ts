@@ -785,7 +785,10 @@ export class Scanner {
 
     const workers: Worker[] = [];
     const readyPromises: Promise<void>[] = [];
-    const languages = getBuiltinLanguages();
+    const languages = {
+      ...getBuiltinLanguages(),
+      ...this.config.getResolvedUserLanguages()
+    };
     const assetRoot = findAssetRoot(import.meta.url);
 
     for (let i = 0; i < workerCount; i++) {

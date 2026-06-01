@@ -34,6 +34,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - Leaf-library files (those with ≥3 structural importers) are filtered from sinks output by default; use `include_leaf_libraries` to restore them.
 
 ### Fixed
+- **Static files in parallel scans resolved**: Fixed a critical crash and missing dependencies issue where worker threads failed to parse static file types (Markdown, CSS, HTML, JSON, YAML) and bypassed user-defined languages. Workers now inline and execute the static parser natively, ensuring all dependency links are preserved in multi-threaded scans.
 - **Visual graph ESM dynamic require resolved**: Fixed a critical runtime crash where dynamic `require` statements failed in ESM mode for payloads larger than 1MB, resolving `/api/graph` failing to load on large codebases. Statically imported all dynamic dependencies in `ui-server.ts` and `ui-events.ts` to ensure compatibility across Node.js and Bun runtimes.
 - **C# / ASP.NET scanner hang resolved**: Fixed a severe database lockup and thread blocking issue when scanning large repositories (such as `n2cms` with ~3,100 files and ~40,000 references). The scanner now merges newly parsed symbols in memory and updates the `symbolIndex` before reference resolution starts, keeping reference resolution at O(1) in memory and eliminating synchronous SQLite queries.
 - **Scanner post-scan and visual hang resolved**: Resolved a secondary hang where the CLI progress bar appeared stuck on the last file by:

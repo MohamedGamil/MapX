@@ -23,6 +23,10 @@ describe('Worker Thread Parsing Integration', () => {
       join(tempDir, 'file2.ts'),
       `export function add(a: number, b: number) { return a + b; }`
     );
+    writeFileSync(
+      join(tempDir, 'static.md'),
+      `This is a [link](./another.md) in markdown.`
+    );
   });
 
   afterAll(() => {
@@ -53,13 +57,20 @@ describe('Worker Thread Parsing Integration', () => {
         sizeBytes: 100,
         lines: 5,
       },
+      {
+        absolutePath: join(tempDir, 'static.md'),
+        language: 'markdown',
+        sizeBytes: 100,
+        lines: 3,
+      },
     ];
 
     // Parse with workers
     const workerResults = await (scanner as any).parseWithWorkers(files, resolve(__dirname, '..'));
-    expect(workerResults).toHaveLength(2);
+    expect(workerResults).toHaveLength(3);
     expect(workerResults[0].errors).toHaveLength(0);
     expect(workerResults[1].errors).toHaveLength(0);
+    expect(workerResults[2].errors).toHaveLength(0);
 
     // Verify symbols
     const hasGreeter = workerResults[0].symbols.some(s => s.name === 'Greeter');
@@ -67,10 +78,15 @@ describe('Worker Thread Parsing Integration', () => {
     expect(hasGreeter).toBe(true);
     expect(hasAdd).toBe(true);
 
+    // Verify static markdown reference extraction
+    const hasMarkdownLink = workerResults[2].references.some(r => r.targetName === './another.md');
+    expect(hasMarkdownLink).toBe(true);
+
     // Parse on main thread for comparison
     const mainResults = await (scanner as any).parseOnMainThread(files, resolve(__dirname, '..'));
-    expect(mainResults).toHaveLength(2);
+    expect(mainResults).toHaveLength(3);
     expect(mainResults[0].symbols).toEqual(workerResults[0].symbols);
     expect(mainResults[1].symbols).toEqual(workerResults[1].symbols);
+    expect(mainResults[2].references).toEqual(workerResults[2].references);
   });
 });
