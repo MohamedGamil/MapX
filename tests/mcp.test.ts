@@ -263,6 +263,8 @@ vi.mock('../src/frameworks/route-registry.js', () => ({
     load = vi.fn().mockResolvedValue(undefined);
     queryRoutes = vi.fn().mockReturnValue([]);
     queryHooks = vi.fn().mockReturnValue([]);
+    getRoutes = vi.fn().mockReturnValue([]);
+    getHooks = vi.fn().mockReturnValue([]);
   }
 }));
 
@@ -590,16 +592,44 @@ describe('MCP module', () => {
       expect(text).toContain('Did you mean');
     });
 
-    it('returns json format output', async () => {
-      storeMocks.searchSymbolsFiltered.mockReturnValue([
-        { name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' }
-      ]);
+    it('returns json format output with pagination metadata', async () => {
+      let callCount = 0;
+      storeMocks.searchSymbolsFiltered.mockImplementation((args: any) => {
+        callCount++;
+        if (args.limit !== undefined) {
+          return [{ name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' }];
+        }
+        return [
+          { name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' },
+          { name: 'Main2', kind: 'class', file_path: 'src/main2.ts', start_line: 1, end_line: 10, scope: null, signature: '' }
+        ];
+      });
 
-      const res = await callTool('mapx_search', { term: 'Main', format: 'json' });
+      const res = await callTool('mapx_search', { term: 'Main', limit: 1, format: 'json' });
       const text = getText(res);
       const parsed = JSON.parse(text);
       expect(parsed.total).toBe(1);
+      expect(parsed.totalMatches).toBe(2);
+      expect(parsed.offset).toBe(0);
       expect(parsed.results[0].name).toBe('Main');
+    });
+
+    it('returns found N of M symbols in text format when limit is reached', async () => {
+      let callCount = 0;
+      storeMocks.searchSymbolsFiltered.mockImplementation((args: any) => {
+        callCount++;
+        if (args.limit !== undefined) {
+          return [{ name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' }];
+        }
+        return [
+          { name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' },
+          { name: 'Main2', kind: 'class', file_path: 'src/main2.ts', start_line: 1, end_line: 10, scope: null, signature: '' }
+        ];
+      });
+
+      const res = await callTool('mapx_search', { term: 'Main', limit: 1 });
+      const text = getText(res);
+      expect(text).toContain('Found 1 of 2 symbols');
     });
 
     it('returns error when term is missing', async () => {
@@ -1121,6 +1151,13 @@ describe('MCP module', () => {
     it('executes mapx_sinks', async () => {
       const res = await callTool('mapx_sinks');
       expect(getText(res)).toContain('Terminal consumers');
+      expect(flowTracerMocks.findSinks).toHaveBeenCalledWith(expect.any(String), false);
+    });
+
+    it('executes mapx_sinks with include_leaf_libraries true', async () => {
+      const res = await callTool('mapx_sinks', { include_leaf_libraries: true });
+      expect(getText(res)).toContain('Terminal consumers');
+      expect(flowTracerMocks.findSinks).toHaveBeenCalledWith(expect.any(String), true);
     });
   });
 
@@ -1146,12 +1183,12 @@ describe('MCP module', () => {
   describe('mapx_routes and mapx_hooks', () => {
     it('executes mapx_routes', async () => {
       const res = await callTool('mapx_routes');
-      expect(getText(res)).toBeDefined();
+      expect(getText(res)).toContain('No routes found');
     });
 
     it('executes mapx_hooks', async () => {
       const res = await callTool('mapx_hooks');
-      expect(getText(res)).toBeDefined();
+      expect(getText(res)).toContain('No hooks found');
     });
   });
 

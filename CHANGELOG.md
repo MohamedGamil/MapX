@@ -8,6 +8,47 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- **`graphExcludePatterns` configuration**: New setting to exclude test/scratch files from PageRank rankings, framework detection, and archetype scoring while keeping them indexed and queryable. Default patterns: `scratch/**`, `benchmarks/**`, `tests/**`, `**/*.test.*`, `**/*.spec.*`.
+- **Prepared Statement Caching**: Introduced a statement caching layer (`stmtCache`) in both `better-sqlite3` (NodeStore) and `bun:sqlite` (BunStore) drivers, reducing SQL statement compilation overhead during post-scanning loops.
+- **SQLite-backed PageRank Column**: Added schema migration version 9 to introduce the `pagerank` column to the `files` table, allowing PageRank values to be persisted directly inside SQLite.
+- **Intra-class call tracking**: `this.method()` calls within TypeScript and JavaScript classes are now tracked as call edges in the dependency graph, enabling accurate callers/callees tracing for internal class method references.
+- **`include_members` option for `mapx_node`**: New boolean parameter for the `mapx_node` MCP tool (and `--include-members` CLI flag) to list class, interface, or trait member symbols (methods, properties) alongside the inspected symbol's metadata.
+- **`include_leaf_libraries` option for `mapx_sinks` and `trace`**: New boolean parameter for the `mapx_sinks` MCP tool (and `--include-leaf-libraries` CLI flag for both `sinks` and `trace --sinks` commands) to include high-import leaf-library files that are normally filtered out as stable foundations.
+- **Content-hash based incremental scanning**: Non-git projects can now use `mapx sync` for incremental updates. File changes are detected via content hashing (SHA-256) instead of requiring a Git working tree.
+- **Pre-scan symbol index**: Built a pre-scan O(1) symbol lookup index to accelerate reference resolution during scanning, replacing repeated linear searches.
+- **Parser pooling**: WASM `Parser` instances are now pooled and reused per language, eliminating redundant parser creation and WASM instantiation overhead during scans.
+- **Hub/orchestrator classification signal**: Files with high fan-in combined with high fan-out are now classified with a hub/orchestrator signal in the role classifier, improving architectural layer accuracy.
+- **Worker thread parallel parsing**: Spawns multiple worker threads via `node:worker_threads` to parse files concurrently, yielding a 3-5x CPU performance speedup for large codebases. Includes a `--no-parallel` CLI flag and `parallel: false` option (both CLI and MCP) to run sequentially on the main thread.
+- **Centralized asset root path resolution**: Added a centralized, unified compatibility helper to resolve WASM assets safely across both Node.js and Bun runtimes.
+- **Contextual error messages for routes/hooks**: `mapx routes` and `mapx hooks` (CLI and MCP) now return descriptive, context-aware error messages when no routes or hooks are found, including suggestions for supported frameworks and troubleshooting steps.
+
+### Changed
+- **Files-only PageRank Calculation**: PageRank is now calculated on a lightweight files-only dependency graph during post-scan analysis, reducing PageRank computation time to under 50ms and writing updates in a single database transaction.
+- **Lightweight Graph Context Loading**: Initializing the workspace graph in CLI context loading, MCP tools, and Web Dashboard API endpoints now completely skips loading symbols into the in-memory graph.
+- **Database-driven CLI/MCP Search & Query Rankings**: CLI search, MCP search, and LLM/Toon exporters now retrieve symbol importance scores using a fast SQLite JOIN between `symbols` and `files` tables.
+- **Instant UI Graph Loading**: The visual graph `/api/graph` endpoint, `/api/metrics`, and `/api/context` endpoints bypass graphology initialization entirely. Additionally, `/api/graph` aggregates and deduplicates edges directly in SQLite via native grouping, reducing JSON payload generation and processing time by over 95% (from ~70,000 symbol-level edges to ~3,000 file-level edges for large repositories).
+- Community clusters now use directory-prefix labels (e.g., `src/core (12 files)`) instead of generic `community_N` names, making cluster names immediately meaningful.
+- Scan/sync output now shows total file count alongside changed file count (e.g., `Scanned 42 changed files (1,203 total)`).
+- Search JSON format includes `totalMatches` and `offset` fields for pagination awareness.
+- Leaf-library files (those with ≥3 structural importers) are filtered from sinks output by default; use `include_leaf_libraries` to restore them.
+
+### Fixed
+- **Static files in parallel scans resolved**: Fixed a critical crash and missing dependencies issue where worker threads failed to parse static file types (Markdown, CSS, HTML, JSON, YAML) and bypassed user-defined languages. Workers now inline and execute the static parser natively, ensuring all dependency links are preserved in multi-threaded scans.
+- **Visual graph ESM dynamic require resolved**: Fixed a critical runtime crash where dynamic `require` statements failed in ESM mode for payloads larger than 1MB, resolving `/api/graph` failing to load on large codebases. Statically imported all dynamic dependencies in `ui-server.ts` and `ui-events.ts` to ensure compatibility across Node.js and Bun runtimes.
+- **C# / ASP.NET scanner hang resolved**: Fixed a severe database lockup and thread blocking issue when scanning large repositories (such as `n2cms` with ~3,100 files and ~40,000 references). The scanner now merges newly parsed symbols in memory and updates the `symbolIndex` before reference resolution starts, keeping reference resolution at O(1) in memory and eliminating synchronous SQLite queries.
+- **Scanner post-scan and visual hang resolved**: Resolved a secondary hang where the CLI progress bar appeared stuck on the last file by:
+  - Deferring clearing of `symbolIndex` until after `runPostScanAnalysis` completes to avoid falling back to synchronous database queries during route/hook resolution.
+  - Adding a `Resolving references` phase (`resolve`) progress reporting to the CLI instead of remaining visually stuck at `Parsing files`.
+  - Batching framework route/hook edge database insertions inside `scanFrameworkRoutesAndHooks` within a single SQLite transaction, reducing disk-sync overhead.
+  - Supporting qualified dot-separated namespaces (e.g. `N2.Content.Page`) in `resolveSymbolToFile` using O(1) index lookups.
+- Self-edge guard prevents files from depending on themselves in the graph, eliminating spurious self-referential edges.
+- Trace cycles deduplicated on `(fromFile→toFile:cycleLength)` tuple to avoid reporting the same cycle multiple times at different entry points.
+- Architecture smells deduplicated on `(type, involvedFiles)` to prevent redundant smell reports.
+- Scratch/test files (matching `graphExcludePatterns`) excluded from framework detection and archetype scoring, preventing test fixtures from influencing project classification.
+- Duplicate framework detection calls eliminated with caching, reducing scan time for multi-framework projects.
+- Post-scan analysis pipeline extracted into a shared function, eliminating ~85 lines of duplicated code between full scan and incremental sync paths.
+
 ## [0.3.3] — 2026-05-31
 
 ### Added

@@ -10,12 +10,13 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
 - Run `mapx search <term>` for advanced filtered search (auto-expand, fuzzy fallback, `--format json`).
 - Run `mapx callers <symbol>` / `mapx callees <symbol>` to trace call chains (fuzzy fallback on typos).
 - Run `mapx impact <symbol>` to assess change blast radius.
-- Run `mapx trace <symbol>` to analyze data flow.
+- Run `mapx trace <symbol> [--sinks] [--include-leaf-libraries]` to analyze data flow.
 - Run `mapx sources` to find entry points.
-- Run `mapx sinks` to find terminal consumers.
+- Run `mapx sinks [--include-leaf-libraries]` to find terminal consumers.
 - Run `mapx context <task>` to generate task-specific context.
 - Run `mapx node <symbol> --source` to inspect a symbol's source code.
 - Run `mapx node <symbol> --format json` for structured JSON output.
+- Run `mapx node <symbol> --include-members` to list class/interface member symbols.
 - Run `mapx profile` to show codebase profile details.
 - Run `mapx arch` to audit architecture design smells and structural quality.
 - Run `mapx explain <file>` to explain file layer/role classification signals.

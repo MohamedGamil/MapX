@@ -24,6 +24,12 @@
 (call_expression
   function: (identifier) @ref.target_call) @ref.type_call
 
+; Track this.method() intra-class calls
+(call_expression
+  function: (member_expression
+    object: (this)
+    property: (property_identifier) @ref.target_call)) @ref.type_call
+
 ; Constructor parameter type annotations (for DI)
 (method_definition
   name: (property_identifier) @method_name (#eq? @method_name "constructor")

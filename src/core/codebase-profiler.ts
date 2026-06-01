@@ -12,6 +12,17 @@ export class CodebaseProfiler {
     const files = this.store.getAllFiles(repoName);
     const filePaths = files.map(f => f.path as string);
 
+    // Filter out scratch, benchmark, and test files so they don't skew
+    // framework confidence or archetype detection.
+    const scratchTestRe = /\.(test|spec)\.[a-z0-9]+$/i;
+    const filteredPaths = filePaths.filter(p => {
+      const lower = p.toLowerCase();
+      if (lower.startsWith('scratch/') || lower.startsWith('benchmarks/')) return false;
+      if (lower.includes('/tests/') || lower.includes('/test/')) return false;
+      if (scratchTestRe.test(lower)) return false;
+      return true;
+    });
+
     // 1. Language breakdown & file extensions
     const extCount: Record<string, number> = {};
     const langCount: Record<string, number> = {};
@@ -27,7 +38,7 @@ export class CodebaseProfiler {
       .sort((a, b) => b[1] - a[1])
       .map(entry => entry[0]);
 
-    // 2. Directory structure signals
+    // 2. Directory structure signals (uses filteredPaths to avoid test/scratch noise)
     let hasBin = false;
     let hasRoutes = false;
     let hasControllers = false;
@@ -37,7 +48,7 @@ export class CodebaseProfiler {
     let hasMobile = false;
     let hasSrc = false;
 
-    for (const p of filePaths) {
+    for (const p of filteredPaths) {
       const lower = p.toLowerCase();
       const parts = lower.split('/');
 
@@ -82,12 +93,12 @@ export class CodebaseProfiler {
     }
 
     const hasFrontend = frontendFileCount > 0 || hasComponents || hasPages;
-    const hasBackend = hasRoutes || hasControllers || filePaths.some(p => {
+    const hasBackend = hasRoutes || hasControllers || filteredPaths.some(p => {
       const base = path.basename(p).toLowerCase();
       return base === 'server.ts' || base === 'server.js' || base === 'app.ts' || base === 'app.js';
     });
 
-    const isMonorepo = hasPackages && filePaths.some(p => p.includes('/package.json') && p.split('/').length > 2);
+    const isMonorepo = hasPackages && filteredPaths.some(p => p.includes('/package.json') && p.split('/').length > 2);
 
     // 4. Archetype Determination
     let archetype: CodebaseArchetype = 'mixed';

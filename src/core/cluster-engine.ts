@@ -334,9 +334,19 @@ export class ClusterEngine {
       if (filePaths.length < 2) continue;
 
       const commName = `community_${communityIndex++}`;
+
+      // Compute dominant directory prefix for a meaningful label
+      const dirCounts = new Map<string, number>();
+      for (const fp of filePaths) {
+        const parts = fp.split('/');
+        const dir = parts.length > 1 ? parts.slice(0, 2).join('/') : parts[0];
+        dirCounts.set(dir, (dirCounts.get(dir) || 0) + 1);
+      }
+      const dominantDir = [...dirCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'mixed';
+
       clusters.push({
         name: commName,
-        label: `Community ${commName.split('_')[1]}`,
+        label: `${dominantDir} (${filePaths.length} files)`,
         source: 'community',
         parentName: null,
         depth: 0,

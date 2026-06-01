@@ -72,6 +72,7 @@ const DEFAULT_CONFIG: MapxConfig = {
       '**/*.DS_Store',
     ],
     includePatterns: [],
+    graphExcludePatterns: ['scratch/**', 'benchmarks/**', 'tests/**', '**/*.test.*', '**/*.spec.*'],
   },
 };
 
@@ -185,6 +186,10 @@ export class Config {
     const mergedExclude = [...new Set([...userExclude, ...defaultExclude.filter(p => !userExclude.includes(p))])];
     const mergedInclude = [...new Set([...userInclude, ...DEFAULT_CONFIG.settings.includePatterns])];
 
+    const userGraphExclude = existing?.settings?.graphExcludePatterns ?? [];
+    const defaultGraphExclude = DEFAULT_CONFIG.settings.graphExcludePatterns ?? [];
+    const mergedGraphExclude = [...new Set([...userGraphExclude, ...defaultGraphExclude.filter(p => !userGraphExclude.includes(p))])];
+
     const defaultRepoName = repoName || resolve(workspaceRoot).split('/').pop() || 'default';
     // Keep existing repos; ensure there is at least the default entry
     const existingRepos: RepoConfig[] = existing?.repos ?? [];
@@ -208,6 +213,7 @@ export class Config {
         maxTokenBudget: existing?.settings?.maxTokenBudget ?? DEFAULT_CONFIG.settings.maxTokenBudget,
         excludePatterns: mergedExclude,
         includePatterns: mergedInclude,
+        graphExcludePatterns: mergedGraphExclude,
       },
     };
 

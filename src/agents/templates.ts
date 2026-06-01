@@ -170,8 +170,8 @@ mapx -d /path/to/project scan
 
 - \`mapx init [path]\` - First-time setup (auto-adds .mapx/ to .gitignore, discovers monorepo packages & nested repos)
 - \`mapx uninit [path]\` - Remove .mapx/ and reverse integration changes
-- \`mapx scan [path]\` - Full scan (use \`--force\` to bypass cache)
-- \`mapx update [path]\` (alias: \`sync\`) - Incremental update (fast)
+- \`mapx scan [path]\` - Full scan (use \`--force\` to bypass cache, \`--no-parallel\` to disable worker threads)
+- \`mapx update [path]\` (alias: \`sync\`) - Incremental update (fast, use \`--no-parallel\` to disable worker threads)
 - \`mapx status [path]\` - Check what changed since last scan
 - \`mapx export [--dir path]\` - Export compact graph summary
 - \`mapx export --format=<fmt>\` - Export as \`llm\`, \`json\`, \`dot\`, \`svg\`, or \`toon\`
@@ -181,9 +181,9 @@ mapx -d /path/to/project scan
 - \`mapx deps <file> [--dir path]\` - Show dependencies for a file (supports glob/wildcard/substring matching)
 - \`mapx summary [path]\` - Project summary
 - \`mapx clusters [--dir path] [--source source] [--json]\` - List detected clusters/modules (filter by source: namespace, directory, community, layer)
-- \`mapx trace <symbol> [--dir path]\` - Trace data flow
+- \`mapx trace [symbol-or-file] [--dir path] [--direction up|down|both] [--depth n] [--include-structural] [--sources] [--sinks] [--include-leaf-libraries]\` - Trace data flow, path, entry points (sources), or terminal consumers (sinks)
 - \`mapx sources [--dir path]\` - Find entry points (data sources) in the codebase
-- \`mapx sinks [--dir path]\` - Find terminal consumers (data sinks) in the codebase
+- \`mapx sinks [--dir path] [--include-leaf-libraries]\` - Find terminal consumers (data sinks) in the codebase
 - \`mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]\` - Generate task-specific workspace context
 - \`mapx callers <symbol> [--dir path] [--depth depth]\` - Trace callers of a symbol (fuzzy fallback on typos)
 - \`mapx callees <symbol> [--dir path] [--depth depth]\` - Trace callees of a symbol (fuzzy fallback on typos)
@@ -196,7 +196,7 @@ mapx -d /path/to/project scan
 - \`mapx explain <file> [--reclassify]\` - Explain file role classification signals and weights
 - \`mapx layers [path] [--json]\` - List files grouped by architectural roles/layers
 - \`mapx impact <symbol> [--dir path] [--depth depth]\` - Change impact analysis with fuzzy pre-check
-- \`mapx node <symbol> [--dir path] [--source] [--format text|json]\` - Inspect a symbol node with optional source code
+- \`mapx node <symbol> [--dir path] [--source] [--format text|json] [--include-members]\` - Inspect a symbol node with optional source code and member listing
 - \`mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]\` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
 - \`mapx lang list\` - List supported languages and status
 - \`mapx lang install <lang>\` - Install dynamic language support
@@ -212,18 +212,18 @@ mapx -d /path/to/project scan
 ## MCP Tools
 
 When running as an MCP server, MapxGraph exposes these tools:
-- \`mapx_scan\` - Scan the code graph (full scan)
-- \`mapx_sync\` - Sync changed files to update the graph (incremental scan)
+- \`mapx_scan\` - Scan the code graph (full scan; supports \`force\` and \`parallel\` options)
+- \`mapx_sync\` - Sync changed files to update the graph (incremental scan; supports \`parallel\` option)
 - \`mapx_query\` - Search symbols by name pattern
 - \`mapx_search\` - Filtered semantic and regex-like symbol search
-- \`mapx_node\` - Deep inspection of a specific symbol and its source code
+- \`mapx_node\` - Deep inspection of a specific symbol and its source code (supports \`include_members\` to list class/interface members)
 - \`mapx_files\` - List and filter files by path prefix or glob pattern, language, and size or line counts
 - \`mapx_dependencies\` - Get deps and reverse-deps for a file
 - \`mapx_callers\` - Direct and nested callers of a symbol
 - \`mapx_callees\` - Direct and nested callees of a symbol
 - \`mapx_trace\` - Trace data flow paths from a starting symbol or file
 - \`mapx_sources\` - Find entry points (sources) in the codebase
-- \`mapx_sinks\` - Find terminal consumers (sinks) in the codebase
+- \`mapx_sinks\` - Find terminal consumers (sinks) in the codebase (supports \`include_leaf_libraries\` to show filtered leaf libraries)
 - \`mapx_routes\` - Show framework routes
 - \`mapx_hooks\` - Show framework hooks
 - \`mapx_edges\` - Granular query of graph dependency edges
@@ -352,9 +352,9 @@ This project uses MapxGraph (22 languages, 32 MCP tools). You can run the follow
 - \`mapx callees <symbol>\` - Trace callees (with fuzzy "Did you mean?" on typos)
 - \`mapx impact <symbol>\` - Change impact analysis
 - \`mapx clusters\` - View logical modules
-- \`mapx trace <symbol>\` - Trace data-flow paths
+- \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` - Trace data-flow paths
 - \`mapx sources\` - Find entry points
-- \`mapx sinks\` - Find terminal consumers
+- \`mapx sinks [--include-leaf-libraries]\` - Find terminal consumers
 - \`mapx context <task>\` - Generate task-specific context
 - \`mapx node <symbol> --source\` - Inspect symbol source code
 - \`mapx node <symbol> --format json\` - Symbol details as JSON
@@ -424,9 +424,9 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
 - \`mapx callers <symbol>\`: Show who calls a symbol (fuzzy fallback on typos).
 - \`mapx callees <symbol>\`: Show what a symbol calls (fuzzy fallback on typos).
 - \`mapx impact <symbol>\`: Change impact analysis.
-- \`mapx trace <symbol>\`: Show data-flow traversal.
+- \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\`: Show data-flow traversal or list entry points/sinks.
 - \`mapx sources\`: Find entry points.
-- \`mapx sinks\`: Find terminal consumers.
+- \`mapx sinks [--include-leaf-libraries]\`: Find terminal consumers.
 - \`mapx context <task>\`: Generate task-specific context.
 - \`mapx node <symbol> --source\`: View symbol source code.
 - \`mapx node <symbol> --format json\`: Symbol details as JSON.
@@ -446,12 +446,13 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains (fuzzy fallback on typos).
 - Run \`mapx impact <symbol>\` to assess change blast radius.
-- Run \`mapx trace <symbol>\` to analyze data flow.
+- Run \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` to analyze data flow.
 - Run \`mapx sources\` to find entry points.
-- Run \`mapx sinks\` to find terminal consumers.
+- Run \`mapx sinks [--include-leaf-libraries]\` to find terminal consumers.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx node <symbol> --source\` to inspect a symbol's source code.
 - Run \`mapx node <symbol> --format json\` for structured JSON output.
+- Run \`mapx node <symbol> --include-members\` to list class/interface member symbols.
 - Run \`mapx profile\` to show codebase profile details.
 - Run \`mapx arch\` to audit architecture design smells and structural quality.
 - Run \`mapx explain <file>\` to explain file layer/role classification signals.
@@ -486,9 +487,9 @@ This project uses MapxGraph (22 languages, 32 MCP tools).
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains.
 - Run \`mapx impact <symbol>\` to assess change risk before refactoring.
-- Run \`mapx trace <symbol>\` to trace data flow.
+- Run \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` to trace data flow.
 - Run \`mapx sources\` to find entry points.
-- Run \`mapx sinks\` to find terminal consumers.
+- Run \`mapx sinks [--include-leaf-libraries]\` to find terminal consumers.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx sync\` after file edits to update the graph.`
   },
@@ -602,6 +603,7 @@ Simpler search by name pattern. Supports the same glob patterns as \`mapx_search
 Fetches metadata for a single symbol (file path, line range, signature) and can optionally extract the exact source code.
 - Set \`source: true\` to view the symbol's implementation.
 - Set \`format: "json"\` for structured JSON output.
+- Set \`include_members: true\` to list class/interface/trait member symbols (methods, properties).
 - Shows related symbols: callers, callees, and sibling symbols in the same file.
 - **Fuzzy fallback**: Suggests similar names if symbol not found.
 
@@ -625,9 +627,14 @@ Checks indexing state, language counts, top files/symbols, and Git status.
 ### 7. \`mapx_sync\` (Incremental Indexing)
 Scans only modified/new files since the last scan and updates the graph index. Fast and efficient.
 - Call this immediately after modifying files.
+- **Optional parameters**:
+  - \`parallel\` (boolean): Enable parallel parsing via worker threads (default: true).
 
 ### 8. \`mapx_scan\` (Full Indexing)
 Performs a full clean re-scan of the codebase. Use only for major structural updates.
+- **Optional parameters**:
+  - \`force\` (boolean): Force re-parsing of all files (bypass cache).
+  - \`parallel\` (boolean): Enable parallel parsing via worker threads (default: true).
 
 ### 9. \`mapx_impact\` (Change Impact Analysis)
 Traces transitive callers of a symbol up to a certain depth and grades the change risk (\`HIGH\`, \`MEDIUM\`, or \`LOW\`).
@@ -647,7 +654,7 @@ Follows data-bearing edges forward/backward through the graph to trace data prop
 ### 12. \`mapx_dependencies\` / \`mapx_sources\` / \`mapx_sinks\`
 - \`mapx_dependencies\`: Get deps and reverse-deps for a file.
 - \`mapx_sources\`: Find entry points (data sources) in the codebase.
-- \`mapx_sinks\`: Find terminal consumers (sinks) in the codebase.
+- \`mapx_sinks\`: Find terminal consumers (sinks) in the codebase. Set \`include_leaf_libraries: true\` to include high-import leaf libraries normally filtered out.
 
 ### 13. \`mapx_files\` / \`mapx_clusters\` / \`mapx_export\` / \`mapx_workspaces\`
 - \`mapx_files\`: List and filter files by path prefix or glob pattern, language, and size or line counts.

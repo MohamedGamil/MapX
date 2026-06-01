@@ -5,6 +5,7 @@ const _require = createRequire(import.meta.url);
 
 export class BunStore implements StoreBackend {
   private db: any;
+  private stmtCache = new Map<string, PreparedStmt>();
 
   constructor(dbPath: string) {
     const { Database } = _require('bun:sqlite');
@@ -19,12 +20,17 @@ export class BunStore implements StoreBackend {
   }
 
   prepare(sql: string): PreparedStmt {
-    const stmt = this.db.prepare(sql);
-    return {
-      run: (...args: unknown[]) => stmt.run(...args),
-      get: (...args: unknown[]) => stmt.get(...args) as Record<string, unknown> | undefined,
-      all: (...args: unknown[]) => stmt.all(...args) as Record<string, unknown>[],
-    };
+    let cached = this.stmtCache.get(sql);
+    if (!cached) {
+      const stmt = this.db.prepare(sql);
+      cached = {
+        run: (...args: unknown[]) => stmt.run(...args),
+        get: (...args: unknown[]) => stmt.get(...args) as Record<string, unknown> | undefined,
+        all: (...args: unknown[]) => stmt.all(...args) as Record<string, unknown>[],
+      };
+      this.stmtCache.set(sql, cached);
+    }
+    return cached;
   }
 
   pragma(pragma: string): void {
@@ -37,6 +43,7 @@ export class BunStore implements StoreBackend {
   }
 
   close(): void {
+    this.stmtCache.clear();
     this.db.close();
   }
 }

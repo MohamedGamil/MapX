@@ -45,7 +45,14 @@ export class ArchitectureAnalyzer {
     const clusterSmells = this.detectClusterSmells(clusterMetrics, edges, files);
     smells.push(...clusterSmells);
 
-    return smells;
+    // Deduplicate smells on (type, sorted involved files)
+    const seenSmells = new Set<string>();
+    return smells.filter(s => {
+      const key = `${s.type}:${(s.involvedFiles || []).sort().join(',')}`;
+      if (seenSmells.has(key)) return false;
+      seenSmells.add(key);
+      return true;
+    });
   }
 
   private detectCycles(edges: any[], files: string[]): ArchSmell[] {

@@ -561,6 +561,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--repo <name>', 'Scan only a specific registered repository')
     .option('--all', 'Scan all registered repositories')
     .option('--force', 'Force re-parsing of all files (bypass cache)', false)
+    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -569,6 +570,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const scanner = new Scanner(store, config, graph, onProgress, {
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
+        parallel: opts.parallel as boolean | undefined,
       });
 
       const onSigInt = () => {
@@ -615,6 +617,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--repo <name>', 'Update only a specific registered repository')
     .option('--all', 'Update all registered repositories')
+    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -638,6 +641,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const scanner = new Scanner(store, config, graph, onProgress, {
         excludes: opts.exclude as string[],
         includes: opts.include as string[],
+        parallel: opts.parallel as boolean | undefined,
       });
       const onSigInt = () => {
         scanner.abort();
@@ -922,10 +926,19 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         return;
       }
 
-      const rankedAll = graph.getRankedSymbols();
       const rankMap = new Map<string, number>();
-      for (const item of rankedAll) {
-        rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
+      if (results.length > 0) {
+        const filePaths = Array.from(new Set(results.map(r => r.file_path)));
+        const placeholders = filePaths.map(() => '?').join(',');
+        const fileRanks = store.raw.prepare(`
+          SELECT path, pagerank FROM files WHERE path IN (${placeholders})
+        `).all(...filePaths) as any[];
+        const fileRankMap = new Map<string, number>(fileRanks.map(f => [f.path, f.pagerank]));
+        for (const sym of results) {
+          const parentFileRank = fileRankMap.get(sym.file_path) || 0;
+          const symbolRank = parentFileRank * (1 + (sym.scope ? 2 : 1) * 0.1);
+          rankMap.set(`${sym.file_path}::${sym.name}`, symbolRank);
+        }
       }
 
       // JSON format
@@ -1312,6 +1325,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include-structural', 'Include import/extends edges in trace', false)
     .option('--sources', 'Show entry points', false)
     .option('--sinks', 'Show terminal consumers', false)
+    .option('--include-leaf-libraries', 'Include high-import leaf libraries in terminal consumers output', false)
     .option('--to <target>', 'Find the shortest path to target symbol/file')
     .action(async (start: string | undefined, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
@@ -1341,7 +1355,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (opts.sinks) {
-        const sinks = tracer.findSinks(config.repo.name);
+        const includeLeaf = !!opts.includeLeafLibraries;
+        const sinks = tracer.findSinks(config.repo.name, includeLeaf);
         console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
         for (const s of sinks) {
           const inEdges = store.getReverseEdges(s.file).filter(e => [
@@ -1591,13 +1606,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('sinks')
     .description('Find terminal consumers (data sinks) in the codebase')
     .option('-d, --dir <path>', 'Target directory')
+    .option('--include-leaf-libraries', 'Include high-import leaf libraries in output', false)
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
       checkAndPrintStaleness(store, dir);
 
       const tracer = new FlowTracer(store);
-      const sinks = tracer.findSinks(config.repo.name);
+      const includeLeaf = !!opts.includeLeafLibraries;
+      const sinks = tracer.findSinks(config.repo.name, includeLeaf);
       console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
       for (const s of sinks) {
         const inEdges = store.getReverseEdges(s.file).filter(e => [
@@ -2993,18 +3010,8 @@ export async function loadContext(dir: string): Promise<{
     );
   }
 
-  const symbols = store.getAllSymbols();
-  for (const sym of symbols) {
-    graph.addSymbolNode(
-      sym.name as string,
-      sym.file_path as string,
-      sym.name as string,
-      sym.kind as any,
-      sym.start_line as number,
-      sym.end_line as number,
-      sym.scope as string | null
-    );
-  }
+  // Symbols loading is skipped to optimize memory and context load times.
+  // CLI search and query use SQLite directly, avoiding graphology overhead.
 
   const edges = store.getAllEdges();
   for (const edge of edges) {

@@ -60,10 +60,8 @@ async function loadContext(dir: string) {
     graph.addFileNode(file.path as string, file.language as string, file.size_bytes as number, file.lines as number);
   }
 
-  const symbols = store.getAllSymbols();
-  for (const sym of symbols) {
-    graph.addSymbolNode(sym.name as string, sym.file_path as string, sym.name as string, sym.kind as any, sym.start_line as number, sym.end_line as number, sym.scope as string | null);
-  }
+  // Symbols loading is skipped to optimize memory and context load times.
+  // MCP tools query SQLite directly when symbol lookups are required.
 
   const edges = store.getAllEdges();
   for (const edge of edges) {
@@ -118,6 +116,8 @@ export function buildServer(options?: ServeOptions): Server {
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
             repo: { type: 'string', description: 'Scan only a specific registered repository' },
             all: { type: 'boolean', description: 'Scan all registered repositories' },
+            force: { type: 'boolean', description: 'Force re-parsing of all files (bypass cache)' },
+            parallel: { type: 'boolean', description: 'Enable parallel parsing via worker threads (default: true)' },
             ...dirProperty,
           },
         },
@@ -132,6 +132,7 @@ export function buildServer(options?: ServeOptions): Server {
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
             repo: { type: 'string', description: 'Update/sync only a specific registered repository' },
             all: { type: 'boolean', description: 'Update/sync all registered repositories' },
+            parallel: { type: 'boolean', description: 'Enable parallel parsing via worker threads (default: true)' },
             ...dirProperty,
           },
         },
@@ -380,6 +381,7 @@ EXAMPLES:
         inputSchema: {
           type: 'object',
           properties: {
+            include_leaf_libraries: { type: 'boolean', description: 'Include high-import leaf libraries that are normally filtered out as stable foundations', default: false },
             ...dirProperty,
           },
         },
@@ -528,6 +530,7 @@ EXAMPLES:
           properties: {
             symbol: { type: 'string', description: 'Symbol name (e.g. "UserService") or scoped name (e.g. "UserService::findAll")' },
             source: { type: 'boolean', description: 'Include the symbol\'s source code in the response', default: false },
+            include_members: { type: 'boolean', description: 'Include member symbols (methods, properties) when inspecting a class/interface/trait', default: false },
             format: { type: 'string', enum: ['text', 'json'], description: 'Output format', default: 'text' },
             ...dirProperty,
           },
@@ -692,13 +695,16 @@ EXAMPLE:
           repoNames = ['all'];
         }
 
+        const force = !!(args as any)?.force;
+        const parallel = (args as any)?.parallel;
+
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
-          const result = await scanner.scanFull(repoNames);
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel });
+          const result = await scanner.scanFull(repoNames, { force });
           return {
             content: [{
               type: 'text',
-              text: `Scanned ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
+              text: `Scanned ${result.filesScanned} files (${result.totalFiles || result.filesScanned} total) in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\nFound ${result.symbolsFound} symbols, ${result.edgesFound} edges in ${result.durationMs}ms`,
             }],
           };
         } catch (err: any) {
@@ -726,13 +732,15 @@ EXAMPLE:
           repoNames = ['all'];
         }
 
+        const parallel = (args as any)?.parallel;
+
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include });
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel });
           const result = await scanner.scanIncremental(repoNames);
           return {
             content: [{
               type: 'text',
-              text: `Updated ${result.filesScanned} files in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\n${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated in ${result.durationMs}ms`,
+              text: `Updated ${result.filesScanned} files (${result.totalFiles || result.filesScanned} total) in ${dir} (${Object.entries(result.languageBreakdown).map(([l, c]) => `${l}: ${c}`).join(', ')})\n${result.symbolsFound} symbols updated, ${result.edgesFound} edges updated in ${result.durationMs}ms`,
             }],
           };
         } catch (err: any) {
@@ -965,11 +973,22 @@ Recommendation:
         }
 
         // PageRank enrichment
-        const rankedAll = ctx.graph.getRankedSymbols();
         const rankMap = new Map<string, number>();
-        for (const item of rankedAll) {
-          rankMap.set(`${item.filePath}::${item.name}`, item.pagerank);
+        if (results.length > 0) {
+          const filePaths = Array.from(new Set(results.map(r => r.file_path)));
+          const placeholders = filePaths.map(() => '?').join(',');
+          const fileRanks = ctx.store.raw.prepare(`
+            SELECT path, pagerank FROM files WHERE path IN (${placeholders})
+          `).all(...filePaths) as any[];
+          const fileRankMap = new Map<string, number>(fileRanks.map(f => [f.path, f.pagerank]));
+          for (const sym of results) {
+            const parentFileRank = fileRankMap.get(sym.file_path) || 0;
+            const symbolRank = parentFileRank * (1 + (sym.scope ? 2 : 1) * 0.1);
+            rankMap.set(`${sym.file_path}::${sym.name}`, symbolRank);
+          }
         }
+
+        const totalMatches = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact }).length;
 
         // F43: JSON format support
         if (format === 'json') {
@@ -983,12 +1002,18 @@ Recommendation:
             signature: sym.signature || '',
             pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
           }));
+          const offset = 0;
           const warning = getMcpStalenessWarning(ctx.store, dir);
-          return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
+          return { content: [{ type: 'text', text: warning + JSON.stringify({ total: results.length, totalMatches, offset, broadened, term, kind: kind || null, results: jsonResults }, null, 2) }] };
         }
 
         // F43: Summary header
-        let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+        let header = '';
+        if (limit !== undefined && results.length < totalMatches) {
+          header = `Found ${results.length} of ${totalMatches} symbols`;
+        } else {
+          header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+        }
         if (kind && !broadened) header += ` of kind "${kind}"`;
         if (filePrefix) header += ` in ${filePrefix}`;
         if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;
@@ -1341,6 +1366,17 @@ Callees: ${callees.length}`;
 
         if (relatedParts.length > 0) {
           outputText += `\n\n── Related ──\n${relatedParts.join('\n\n')}`;
+        }
+
+        // F44: Include siblings/members when requested
+        const includeMembersArg = (args as any)?.include_members;
+        if (includeMembersArg) {
+          const allFileSymbols = ctx.store.getSymbolsForFile(sym.file_path as string);
+          const memberSymbols = allFileSymbols.filter((s: any) => s.scope === sym.name);
+          if (memberSymbols.length > 0) {
+            const memberLines = memberSymbols.map((s: any) => `  ${s.kind} ${s.name} (L${s.start_line}-${s.end_line})`);
+            outputText += `\n\n── Members ──\n${memberLines.join('\n')}`;
+          }
         }
 
         const warning = getMcpStalenessWarning(ctx.store, dir);
@@ -1788,8 +1824,9 @@ Callees: ${callees.length}`;
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const tracer = new FlowTracer(ctx.store);
-        const sinks = tracer.findSinks(ctx.config.repo.name);
-        const lines = [`Terminal consumers (data sinks) — ${sinks.length} found:`];
+        const includeLeafLibraries = !!(args as any)?.include_leaf_libraries;
+        const sinks = tracer.findSinks(ctx.config.repo.name, includeLeafLibraries);
+        const lines = [`Terminal consumers (data sinks) — ${sinks.length} found${!includeLeafLibraries ? ' (excluding high-import leaf libraries)' : ''}:`];
         for (const s of sinks) {
           const inEdges = ctx.store.getReverseEdges(s.file).filter(e => [
             'call', 'instantiation', 'param_type', 'return_type', 'relation', 'dispatch', 'notify', 'route', 'render'
@@ -1861,6 +1898,20 @@ Callees: ${callees.length}`;
           path: (args as any)?.pathPattern,
         });
 
+        if (routes.length === 0) {
+          const allRoutes = routeRegistry.getRoutes();
+          let msg = 'No routes found.';
+          if (allRoutes.length === 0) {
+            msg += '\n\nNo framework routes have been detected. Possible causes:\n  • No route-defining framework was detected during scan\n  • Run `mapx scan --force` to re-detect frameworks\n  • Supported: Express, Fastify, Koa, Laravel, Next.js, Django, Flask, Rails, Spring, FastAPI';
+          } else {
+            msg += `\n\n${allRoutes.length} route(s) exist but none match the current filters.`;
+            if ((args as any)?.framework) msg += `\n  framework: "${(args as any).framework}"`;
+            if ((args as any)?.method) msg += `\n  method: "${(args as any).method}"`;
+            if ((args as any)?.pathPattern) msg += `\n  path: "${(args as any).pathPattern}"`;
+          }
+          return { content: [{ type: 'text', text: msg }] };
+        }
+
         return {
           content: [{
             type: 'text',
@@ -1882,6 +1933,20 @@ Callees: ${callees.length}`;
           hookType: (args as any)?.type,
           hookName: (args as any)?.namePattern,
         });
+
+        if (hooks.length === 0) {
+          const allHooks = routeRegistry.getHooks();
+          let msg = 'No hooks found.';
+          if (allHooks.length === 0) {
+            msg += '\n\nNo framework hooks have been detected. Possible causes:\n  • No hook-defining framework was detected during scan\n  • Run `mapx scan --force` to re-detect frameworks\n  • Supported: Express middleware, Laravel events, React hooks, Vue composables';
+          } else {
+            msg += `\n\n${allHooks.length} hook(s) exist but none match the current filters.`;
+            if ((args as any)?.framework) msg += `\n  framework: "${(args as any).framework}"`;
+            if ((args as any)?.type) msg += `\n  type: "${(args as any).type}"`;
+            if ((args as any)?.namePattern) msg += `\n  name: "${(args as any).namePattern}"`;
+          }
+          return { content: [{ type: 'text', text: msg }] };
+        }
 
         return {
           content: [{
