@@ -40,7 +40,7 @@ mapx -d /path/to/project scan
 - `mapx deps <file> [--dir path]` - Show dependencies for a file (supports glob/wildcard/substring matching)
 - `mapx summary [path]` - Project summary
 - `mapx clusters [--dir path] [--source source] [--json]` - List detected clusters/modules (filter by source: namespace, directory, community, layer)
-- `mapx trace <symbol> [--dir path]` - Trace data flow
+- `mapx trace [symbol-or-file] [--dir path] [--direction up|down|both] [--depth n] [--include-structural] [--sources] [--sinks] [--include-leaf-libraries]` - Trace data flow, path, entry points (sources), or terminal consumers (sinks)
 - `mapx sources [--dir path]` - Find entry points (data sources) in the codebase
 - `mapx sinks [--dir path] [--include-leaf-libraries]` - Find terminal consumers (data sinks) in the codebase
 - `mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]` - Generate task-specific workspace context

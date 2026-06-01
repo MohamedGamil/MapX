@@ -182,7 +182,7 @@ Trace data flow paths from a starting symbol or file.
 ```bash
 mapx trace [symbol-or-file] [--dir /path] [--direction <dir>] [--depth <n>] [--max-depth <n>]
                             [--format <fmt>] [--include-structural] [--sources] [--sinks]
-                            [--to <target>]
+                            [--include-leaf-libraries] [--to <target>]
 ```
 
 Options:
@@ -193,16 +193,18 @@ Options:
 - `--include-structural` — Include import/extends edges in trace (default: false)
 - `--sources` — Show entry points instead of tracing a symbol
 - `--sinks` — Show terminal consumers instead of tracing a symbol
+- `--include-leaf-libraries` — Include high-import leaf libraries in terminal consumers output (when `--sinks` is active; default: false)
 - `--to` — Find the shortest critical path from the start to a target symbol/file
 
 Examples:
 ```bash
-mapx trace handleRequest               # Bidirectional trace
-mapx trace handleRequest --direction up # Upstream only
-mapx trace --sources                    # List all entry points
-mapx trace --sinks                      # List all terminal consumers
-mapx trace Store --to FlowTracer        # Shortest path between symbols
-mapx trace Store --format json          # JSON output
+mapx trace handleRequest                            # Bidirectional trace
+mapx trace handleRequest --direction up              # Upstream only
+mapx trace --sources                                 # List all entry points
+mapx trace --sinks                                   # List all terminal consumers
+mapx trace --sinks --include-leaf-libraries          # List all terminal consumers including leaf libraries
+mapx trace Store --to FlowTracer                     # Shortest path between symbols
+mapx trace Store --format json                       # JSON output
 ```
 
 ## `mapx callers <symbol>`
@@ -517,10 +519,13 @@ Identifies files with no incoming data-bearing edges — route files, queue work
 Find terminal consumers (data sinks) in the codebase.
 
 ```bash
-mapx sinks [--dir /path]
+mapx sinks [--dir /path] [--include-leaf-libraries]
 ```
 
-Identifies files with no outgoing data-bearing edges — database facades, cache managers, mail senders, and queue dispatchers.
+Options:
+- `--include-leaf-libraries` — Include high-import leaf libraries in output (default: false)
+
+Identifies files with no outgoing data-bearing edges — database facades, cache managers, mail senders, and queue dispatchers. By default, high-import leaf libraries are filtered out to reduce noise, unless `--include-leaf-libraries` is passed.
 
 ## `mapx context <task>`
 

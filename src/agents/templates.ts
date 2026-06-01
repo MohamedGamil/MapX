@@ -181,7 +181,7 @@ mapx -d /path/to/project scan
 - \`mapx deps <file> [--dir path]\` - Show dependencies for a file (supports glob/wildcard/substring matching)
 - \`mapx summary [path]\` - Project summary
 - \`mapx clusters [--dir path] [--source source] [--json]\` - List detected clusters/modules (filter by source: namespace, directory, community, layer)
-- \`mapx trace <symbol> [--dir path]\` - Trace data flow
+- \`mapx trace [symbol-or-file] [--dir path] [--direction up|down|both] [--depth n] [--include-structural] [--sources] [--sinks] [--include-leaf-libraries]\` - Trace data flow, path, entry points (sources), or terminal consumers (sinks)
 - \`mapx sources [--dir path]\` - Find entry points (data sources) in the codebase
 - \`mapx sinks [--dir path] [--include-leaf-libraries]\` - Find terminal consumers (data sinks) in the codebase
 - \`mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]\` - Generate task-specific workspace context
@@ -352,9 +352,9 @@ This project uses MapxGraph (22 languages, 32 MCP tools). You can run the follow
 - \`mapx callees <symbol>\` - Trace callees (with fuzzy "Did you mean?" on typos)
 - \`mapx impact <symbol>\` - Change impact analysis
 - \`mapx clusters\` - View logical modules
-- \`mapx trace <symbol>\` - Trace data-flow paths
+- \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` - Trace data-flow paths
 - \`mapx sources\` - Find entry points
-- \`mapx sinks\` - Find terminal consumers
+- \`mapx sinks [--include-leaf-libraries]\` - Find terminal consumers
 - \`mapx context <task>\` - Generate task-specific context
 - \`mapx node <symbol> --source\` - Inspect symbol source code
 - \`mapx node <symbol> --format json\` - Symbol details as JSON
@@ -424,9 +424,9 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
 - \`mapx callers <symbol>\`: Show who calls a symbol (fuzzy fallback on typos).
 - \`mapx callees <symbol>\`: Show what a symbol calls (fuzzy fallback on typos).
 - \`mapx impact <symbol>\`: Change impact analysis.
-- \`mapx trace <symbol>\`: Show data-flow traversal.
+- \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\`: Show data-flow traversal or list entry points/sinks.
 - \`mapx sources\`: Find entry points.
-- \`mapx sinks\`: Find terminal consumers.
+- \`mapx sinks [--include-leaf-libraries]\`: Find terminal consumers.
 - \`mapx context <task>\`: Generate task-specific context.
 - \`mapx node <symbol> --source\`: View symbol source code.
 - \`mapx node <symbol> --format json\`: Symbol details as JSON.
@@ -446,9 +446,9 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains (fuzzy fallback on typos).
 - Run \`mapx impact <symbol>\` to assess change blast radius.
-- Run \`mapx trace <symbol>\` to analyze data flow.
+- Run \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` to analyze data flow.
 - Run \`mapx sources\` to find entry points.
-- Run \`mapx sinks\` to find terminal consumers.
+- Run \`mapx sinks [--include-leaf-libraries]\` to find terminal consumers.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx node <symbol> --source\` to inspect a symbol's source code.
 - Run \`mapx node <symbol> --format json\` for structured JSON output.
@@ -487,9 +487,9 @@ This project uses MapxGraph (22 languages, 32 MCP tools).
 - Run \`mapx search <term>\` for advanced filtered search (auto-expand, fuzzy fallback, \`--format json\`).
 - Run \`mapx callers <symbol>\` / \`mapx callees <symbol>\` to trace call chains.
 - Run \`mapx impact <symbol>\` to assess change risk before refactoring.
-- Run \`mapx trace <symbol>\` to trace data flow.
+- Run \`mapx trace <symbol> [--sinks] [--include-leaf-libraries]\` to trace data flow.
 - Run \`mapx sources\` to find entry points.
-- Run \`mapx sinks\` to find terminal consumers.
+- Run \`mapx sinks [--include-leaf-libraries]\` to find terminal consumers.
 - Run \`mapx context <task>\` to generate task-specific context.
 - Run \`mapx sync\` after file edits to update the graph.`
   },

@@ -14,9 +14,9 @@ Use MapxGraph commands in this repository to analyze code across **22 languages*
 - `mapx callers <symbol>`: Show who calls a symbol (fuzzy fallback on typos).
 - `mapx callees <symbol>`: Show what a symbol calls (fuzzy fallback on typos).
 - `mapx impact <symbol>`: Change impact analysis.
-- `mapx trace <symbol>`: Show data-flow traversal.
+- `mapx trace <symbol> [--sinks] [--include-leaf-libraries]`: Show data-flow traversal or list entry points/sinks.
 - `mapx sources`: Find entry points.
-- `mapx sinks`: Find terminal consumers.
+- `mapx sinks [--include-leaf-libraries]`: Find terminal consumers.
 - `mapx context <task>`: Generate task-specific context.
 - `mapx node <symbol> --source`: View symbol source code.
 - `mapx node <symbol> --format json`: Symbol details as JSON.
