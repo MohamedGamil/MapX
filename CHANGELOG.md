@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-06-01
+
 ### Added
 - **`graphExcludePatterns` configuration**: New setting to exclude test/scratch files from PageRank rankings, framework detection, and archetype scoring while keeping them indexed and queryable. Default patterns: `scratch/**`, `benchmarks/**`, `tests/**`, `**/*.test.*`, `**/*.spec.*`.
 - **Prepared Statement Caching**: Introduced a statement caching layer (`stmtCache`) in both `better-sqlite3` (NodeStore) and `bun:sqlite` (BunStore) drivers, reducing SQL statement compilation overhead during post-scanning loops.
@@ -599,7 +601,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.4...HEAD
+[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4
 [0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...v0.3.1
