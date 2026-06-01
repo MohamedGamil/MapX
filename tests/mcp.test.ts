@@ -1151,6 +1151,13 @@ describe('MCP module', () => {
     it('executes mapx_sinks', async () => {
       const res = await callTool('mapx_sinks');
       expect(getText(res)).toContain('Terminal consumers');
+      expect(flowTracerMocks.findSinks).toHaveBeenCalledWith(expect.any(String), false);
+    });
+
+    it('executes mapx_sinks with include_leaf_libraries true', async () => {
+      const res = await callTool('mapx_sinks', { include_leaf_libraries: true });
+      expect(getText(res)).toContain('Terminal consumers');
+      expect(flowTracerMocks.findSinks).toHaveBeenCalledWith(expect.any(String), true);
     });
   });
 

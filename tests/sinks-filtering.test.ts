@@ -135,4 +135,31 @@ describe('Sinks filtering — leaf-library exclusion', () => {
     const sinks = tracer.findSinks();
     expect(sinks).toHaveLength(0);
   });
+
+  it('should include leaf libraries when includeLeafLibraries is set to true', () => {
+    const mockStore = {
+      getAllFiles: () => [
+        { path: 'src/main.ts' },
+        { path: 'src/scanner.ts' },
+        { path: 'src/parser.ts' },
+        { path: 'src/utils/helpers.ts' },
+        { path: 'src/sink.ts' },
+      ],
+      getAllEdges: () => [
+        { source_file: 'src/main.ts', target_file: 'src/scanner.ts', edge_type: 'call' },
+        { source_file: 'src/scanner.ts', target_file: 'src/parser.ts', edge_type: 'call' },
+        { source_file: 'src/parser.ts', target_file: 'src/sink.ts', edge_type: 'call' },
+        { source_file: 'src/main.ts', target_file: 'src/utils/helpers.ts', edge_type: 'call' },
+        { source_file: 'src/main.ts', target_file: 'src/utils/helpers.ts', edge_type: 'import' },
+        { source_file: 'src/scanner.ts', target_file: 'src/utils/helpers.ts', edge_type: 'import' },
+        { source_file: 'src/parser.ts', target_file: 'src/utils/helpers.ts', edge_type: 'import' },
+      ],
+    } as unknown as Store;
+
+    const tracer = new FlowTracer(mockStore);
+    const sinks = tracer.findSinks(undefined, true);
+
+    expect(sinks.some(s => s.file === 'src/utils/helpers.ts')).toBe(true);
+    expect(sinks.some(s => s.file === 'src/sink.ts')).toBe(true);
+  });
 });

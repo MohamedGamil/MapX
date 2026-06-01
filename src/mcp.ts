@@ -1825,7 +1825,7 @@ Callees: ${callees.length}`;
 
         const tracer = new FlowTracer(ctx.store);
         const includeLeafLibraries = !!(args as any)?.include_leaf_libraries;
-        const sinks = tracer.findSinks(ctx.config.repo.name);
+        const sinks = tracer.findSinks(ctx.config.repo.name, includeLeafLibraries);
         const lines = [`Terminal consumers (data sinks) — ${sinks.length} found${!includeLeafLibraries ? ' (excluding high-import leaf libraries)' : ''}:`];
         for (const s of sinks) {
           const inEdges = ctx.store.getReverseEdges(s.file).filter(e => [

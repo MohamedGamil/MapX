@@ -401,7 +401,7 @@ export class FlowTracer {
     return sources;
   }
 
-  findSinks(repo?: string): TraceNode[] {
+  findSinks(repo?: string, includeLeafLibraries = false): TraceNode[] {
     const files = this.store.getAllFiles(repo);
     const edges = this.store.getAllEdges(repo);
     const filePaths = new Set<string>(files.map(f => f.path as string));
@@ -439,6 +439,9 @@ export class FlowTracer {
           incomingEdgeType: 'start',
         });
       }
+    }
+    if (includeLeafLibraries) {
+      return sinks;
     }
     // Filter out leaf-library files: high structural in-degree means
     // the file is a stable foundation, not a true data sink.

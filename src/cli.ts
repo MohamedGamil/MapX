@@ -1325,6 +1325,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include-structural', 'Include import/extends edges in trace', false)
     .option('--sources', 'Show entry points', false)
     .option('--sinks', 'Show terminal consumers', false)
+    .option('--include-leaf-libraries', 'Include high-import leaf libraries in terminal consumers output', false)
     .option('--to <target>', 'Find the shortest path to target symbol/file')
     .action(async (start: string | undefined, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
@@ -1354,7 +1355,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       if (opts.sinks) {
-        const sinks = tracer.findSinks(config.repo.name);
+        const includeLeaf = !!opts.includeLeafLibraries;
+        const sinks = tracer.findSinks(config.repo.name, includeLeaf);
         console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
         for (const s of sinks) {
           const inEdges = store.getReverseEdges(s.file).filter(e => [
@@ -1604,13 +1606,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('sinks')
     .description('Find terminal consumers (data sinks) in the codebase')
     .option('-d, --dir <path>', 'Target directory')
+    .option('--include-leaf-libraries', 'Include high-import leaf libraries in output', false)
     .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
       checkAndPrintStaleness(store, dir);
 
       const tracer = new FlowTracer(store);
-      const sinks = tracer.findSinks(config.repo.name);
+      const includeLeaf = !!opts.includeLeafLibraries;
+      const sinks = tracer.findSinks(config.repo.name, includeLeaf);
       console.log(`\nTerminal consumers (data sinks) — ${sinks.length} found:`);
       for (const s of sinks) {
         const inEdges = store.getReverseEdges(s.file).filter(e => [
