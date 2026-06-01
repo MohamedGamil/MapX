@@ -1,4 +1,4 @@
-<!-- mapx v0.3.3 -->
+<!-- mapx v0.3.5 -->
 # Zed Assistant MapxGraph Instructions
 
 This project uses MapxGraph (22 languages, 32 MCP tools).

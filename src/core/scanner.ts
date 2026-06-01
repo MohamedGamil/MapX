@@ -792,12 +792,15 @@ export class Scanner {
     const assetRoot = findAssetRoot(import.meta.url);
 
     for (let i = 0; i < workerCount; i++) {
-      const worker = new Worker(workerUrl, {
-        workerData: { languages, ignoredSymbols, assetRoot },
-        execArgv: /\.ts$/.test(workerUrl.pathname)
-          ? ['--import', 'tsx']
-          : undefined
-      });
+      const worker = /\.ts$/.test(workerUrl.pathname)
+        ? new Worker(`import '${workerUrl.href}';`, {
+            eval: true,
+            workerData: { languages, ignoredSymbols, assetRoot },
+            execArgv: ['--import', 'tsx']
+          })
+        : new Worker(workerUrl, {
+            workerData: { languages, ignoredSymbols, assetRoot }
+          });
       workers.push(worker);
 
       readyPromises.push(new Promise<void>((resolveReady, rejectReady) => {
