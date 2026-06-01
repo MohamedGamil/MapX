@@ -793,11 +793,15 @@ export class Scanner {
 
     for (let i = 0; i < workerCount; i++) {
       const worker = /\.ts$/.test(workerUrl.pathname)
-        ? new Worker(`import '${workerUrl.href}';`, {
-            eval: true,
-            workerData: { languages, ignoredSymbols, assetRoot },
-            execArgv: ['--import', 'tsx']
-          })
+        ? new Worker(
+            `import { register } from 'tsx/esm/api';
+             register();
+             import('${workerUrl.href}');`,
+            {
+              eval: true,
+              workerData: { languages, ignoredSymbols, assetRoot }
+            }
+          )
         : new Worker(workerUrl, {
             workerData: { languages, ignoredSymbols, assetRoot }
           });
