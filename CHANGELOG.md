@@ -607,8 +607,8 @@ _Changelog entries not yet backfilled. See git log for history._
 
 <!-- Links (keep at the bottom) -->
 [Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.4...HEAD
-[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4
-[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3
+[0.3.4]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MohamedGamil/mapx/compare/v0.2.7...v0.3.0
