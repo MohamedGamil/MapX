@@ -457,9 +457,14 @@ describe('Scanner Coverage Boost', () => {
     // 1. buildSymbolIndex coverage (lines 1503-1518)
     const mockStore = createMockStore({
       getAllSymbols: () => [
-        { name: 'funcA', file_path: 'a.ts', scope: 'Scope1' },
-        { name: 'funcA', file_path: 'b.ts', scope: null }, // same case, no scope
-        { name: 'Funca', file_path: 'c.ts', scope: 'Scope2' }  // different case
+        { name: 'funcA', file_path: 'a.ts', scope: 'Scope1', repo: 'repo1' },
+        { name: 'funcA', file_path: 'b.ts', scope: null, repo: 'repo1' }, // same case, no scope
+        { name: 'Funca', file_path: 'c.ts', scope: 'Scope2', repo: 'repo1' }  // different case
+      ],
+      searchSymbols: (name: string) => [
+        { name: 'funcA', file_path: 'a.ts', scope: 'Scope1', repo: 'repo1' },
+        { name: 'funcA', file_path: 'b.ts', scope: null, repo: 'repo1' },
+        { name: 'Funca', file_path: 'c.ts', scope: 'Scope2', repo: 'repo1' }
       ]
     });
     const graph = new MapxGraph('repo1');
@@ -467,6 +472,25 @@ describe('Scanner Coverage Boost', () => {
     const index = scanner['buildSymbolIndex']('repo1');
     expect(index.get('funca')).toHaveLength(3); // case-insensitive gets all 3
     expect(index.get('Funca')).toBeDefined(); // exact case
+
+    // 1.1 Test resolveSymbolToFile with dot-qualified namespaces using symbolIndex
+    const testFileMap = new Map<string, string>([
+      ['a.ts', 'repo1'],
+      ['b.ts', 'repo1'],
+      ['c.ts', 'repo1']
+    ]);
+    scanner['symbolIndex'] = index;
+    expect(scanner['resolveSymbolToFile']('funcA', testFileMap, 'src/main.ts')).toBe('a.ts');
+    expect(scanner['resolveSymbolToFile']('Scope1\\funcA', testFileMap, 'src/main.ts')).toBe('a.ts');
+    expect(scanner['resolveSymbolToFile']('N2.Content.funcA', testFileMap, 'src/main.ts')).toBe('a.ts');
+    expect(scanner['resolveSymbolToFile']('funcA.ts', testFileMap, 'src/main.ts')).toBeNull();
+
+    // 1.2 Test resolveSymbolToFile fallback (when symbolIndex is null)
+    scanner['symbolIndex'] = null;
+    expect(scanner['resolveSymbolToFile']('funcA', testFileMap, 'src/main.ts')).toBe('a.ts');
+    expect(scanner['resolveSymbolToFile']('Scope1\\funcA', testFileMap, 'src/main.ts')).toBe('a.ts');
+    expect(scanner['resolveSymbolToFile']('N2.Content.funcA', testFileMap, 'src/main.ts')).toBe('a.ts');
+    expect(scanner['resolveSymbolToFile']('funcA.ts', testFileMap, 'src/main.ts')).toBeNull();
 
     // Test buildSymbolIndex with merging capabilities & stale symbol exclusions
     const indexMerged = scanner['buildSymbolIndex'](

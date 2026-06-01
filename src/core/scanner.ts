@@ -368,7 +368,12 @@ export class Scanner {
           completed.add(toParse[i].relativePath);
         }
 
-
+        this.onProgress?.({
+          phase: 'resolve',
+          current: batchEnd,
+          total: toParse.length,
+          file: toParse[batchEnd - 1].relativePath,
+        });
 
         this.saveResumeState(repo.name, {
           totalFiles: discovered.length,
@@ -397,7 +402,6 @@ export class Scanner {
 
     // Release cached content to free memory after parsing
     for (const f of discovered) { (f as any).content = undefined; }
-    this.symbolIndex = null;
 
     if (!this.aborted) {
       const commitSha = isGitRepo(repoRoot) ? getCurrentCommitSha(repoRoot) : null;
@@ -405,7 +409,13 @@ export class Scanner {
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
       this.clearResumeState(repo.name);
 
-      await this.runPostScanAnalysis(repo, repoRoot);
+      try {
+        await this.runPostScanAnalysis(repo, repoRoot);
+      } finally {
+        this.symbolIndex = null;
+      }
+    } else {
+      this.symbolIndex = null;
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -596,27 +606,40 @@ export class Scanner {
     let totalEdges = 0;
     const langBreakdown: Record<string, number> = {};
 
-    for (let i = 0; i < toReindex.length && !this.aborted; i++) {
-      const { path: relPath, fileInfo } = toReindex[i];
-      const result = parseResults[i];
+    this.onProgress?.({ phase: 'resolve', current: 0, total: toReindex.length });
 
-      this.writeParseResult(relPath, result, repo.name);
+    this.store.inTransaction(() => {
+      for (let i = 0; i < toReindex.length && !this.aborted; i++) {
+        const { path: relPath, fileInfo } = toReindex[i];
+        const result = parseResults[i];
 
-      totalSymbols += result.symbols.length;
-      totalEdges += result.references.length;
-      langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
+        this.writeParseResult(relPath, result, repo.name);
 
+        totalSymbols += result.symbols.length;
+        totalEdges += result.references.length;
+        langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
 
-    }
-
-    this.symbolIndex = null;
+        this.onProgress?.({
+          phase: 'resolve',
+          current: i + 1,
+          total: toReindex.length,
+          file: relPath,
+        });
+      }
+    });
 
     if (!this.aborted) {
       const commitSha = getCurrentCommitSha(repoRoot);
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
 
-      await this.runPostScanAnalysis(repo, repoRoot);
+      try {
+        await this.runPostScanAnalysis(repo, repoRoot);
+      } finally {
+        this.symbolIndex = null;
+      }
+    } else {
+      this.symbolIndex = null;
     }
 
     return {
@@ -1220,10 +1243,10 @@ export class Scanner {
       }
     }
 
-    const filterMatches = (matches: Record<string, unknown>[]): Record<string, unknown>[] => {
+    const filterMatches = (matches: any[]): any[] => {
       if (!sourceLang) return matches;
       return matches.filter(m => {
-        const targetPath = m.file_path as string;
+        const targetPath = (m.file_path || m.file) as string;
         const targetLangDef = getLanguageForFile(targetPath, this.config.getResolvedUserLanguages());
         const targetLang = targetLangDef ? targetLangDef.name : '';
         return areLanguagesCompatible(sourceLang!, targetLang);
@@ -1232,25 +1255,42 @@ export class Scanner {
 
     // Use pre-built symbol index for O(1) lookup when available
     if (this.symbolIndex) {
-      const indexed = this.symbolIndex.get(symbolName) || this.symbolIndex.get(symbolName.toLowerCase());
+      let indexed = this.symbolIndex.get(symbolName) || this.symbolIndex.get(symbolName.toLowerCase());
+      if (!indexed) {
+        if (symbolName.includes('\\')) {
+          const parts = symbolName.split('\\');
+          const shortName = parts[parts.length - 1];
+          indexed = this.symbolIndex.get(shortName) || this.symbolIndex.get(shortName.toLowerCase());
+        } else if (symbolName.includes('.')) {
+          const parts = symbolName.split('.');
+          const last = parts[parts.length - 1];
+          const commonExtensions = new Set([
+            'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+            'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+            'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+          ]);
+          if (!commonExtensions.has(last.toLowerCase())) {
+            const shortName = last;
+            indexed = this.symbolIndex.get(shortName) || this.symbolIndex.get(shortName.toLowerCase());
+          }
+        }
+      }
       if (indexed && indexed.length > 0) {
-        // Apply language compatibility filter
-        const compatible = sourceLang
-          ? indexed.filter(m => {
-              const targetLangDef = getLanguageForFile(m.file, this.config.getResolvedUserLanguages());
-              return targetLangDef ? areLanguagesCompatible(sourceLang!, targetLangDef.name) : true;
-            })
-          : indexed;
+        const compatible = filterMatches(indexed);
         if (compatible.length > 0) {
+          const shortName = symbolName.includes('\\') 
+            ? symbolName.split('\\').pop()! 
+            : (symbolName.includes('.') ? symbolName.split('.').pop()! : symbolName);
           if (sourcePath) {
-            const sameFile = compatible.find(m => m.file === sourcePath && m.name === symbolName);
+            const sameFile = compatible.find(m => m.file === sourcePath && m.name === shortName);
             if (sameFile) return sameFile.file;
           }
-          const exact = compatible.find(m => m.name === symbolName);
+          const exact = compatible.find(m => m.name === shortName);
           if (exact) return exact.file;
           return compatible[0].file;
         }
       }
+      return null; // O(1) short-circuit: if not in symbolIndex, it's a third-party/external symbol not in this workspace.
     }
 
     let matches = this.store.searchSymbols(symbolName);
@@ -1278,6 +1318,28 @@ export class Scanner {
         const exactMatch = matches.find(m => m.name === shortName);
         if (exactMatch) return exactMatch.file_path as string;
         return matches[0].file_path as string;
+      }
+    } else if (symbolName.includes('.')) {
+      const parts = symbolName.split('.');
+      const last = parts[parts.length - 1];
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      if (!commonExtensions.has(last.toLowerCase())) {
+        const shortName = last;
+        matches = this.store.searchSymbols(shortName);
+        matches = filterMatches(matches);
+        if (matches.length > 0) {
+          if (sourcePath) {
+            const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === shortName);
+            if (sameFileMatch) return sameFileMatch.file_path as string;
+          }
+          const exactMatch = matches.find(m => m.name === shortName);
+          if (exactMatch) return exactMatch.file_path as string;
+          return matches[0].file_path as string;
+        }
       }
     } else if (matches.length > 0) {
       // Multiple matches, none exact — prefer same-file over arbitrary first result
@@ -1348,6 +1410,8 @@ export class Scanner {
       }
     };
 
+    const edgesToInsert: any[] = [];
+
     for (const detector of activeDetectors) {
       // Find files that match the detector's pattern (e.g. routes/api.php)
       const matchingPaths = filePaths.filter(p => detector.filePattern.test(p));
@@ -1389,7 +1453,7 @@ export class Scanner {
             routeRegistry.addRoute(route);
 
             // Add as an edge in the db/graph
-            this.store.insertEdge({
+            edgesToInsert.push({
               sourceFile: relPath,
               targetFile: route.handlerFile,
               sourceSymbol: null,
@@ -1451,7 +1515,7 @@ export class Scanner {
                 ? hook.hookType
                 : 'hook') as any;
 
-              this.store.insertEdge({
+              edgesToInsert.push({
                 sourceFile: relPath,
                 targetFile: hook.handlerFile,
                 sourceSymbol: null,
@@ -1487,6 +1551,14 @@ export class Scanner {
           console.error(`Failed to extract routes/hooks for ${relPath}:`, err);
         }
       }
+    }
+
+    if (edgesToInsert.length > 0) {
+      this.store.inTransaction(() => {
+        for (const edge of edgesToInsert) {
+          this.store.insertEdge(edge);
+        }
+      });
     }
 
     await routeRegistry.save(workspaceRoot);
@@ -1538,10 +1610,12 @@ export class Scanner {
       }
     };
 
-    const symbols = this.store.getAllSymbols(repoName);
+    // Load all symbols across all repositories in the workspace to support cross-repository resolution
+    const symbols = this.store.getAllSymbols();
     for (const sym of symbols) {
       const filePath = sym.file_path as string;
-      if (excludeSet.has(filePath)) continue;
+      const symRepo = sym.repo as string;
+      if (symRepo === repoName && excludeSet.has(filePath)) continue;
       addEntry(sym.name as string, filePath, (sym.scope as string) || null);
     }
 
@@ -1762,24 +1836,40 @@ export class Scanner {
     let totalEdges = 0;
     const langBreakdown: Record<string, number> = {};
 
-    for (let i = 0; i < toReindex.length && !this.aborted; i++) {
-      const f = toReindex[i];
-      const result = parseResults[i];
+    this.onProgress?.({ phase: 'resolve', current: 0, total: toReindex.length });
 
-      this.writeParseResult(f.relativePath, result, repo.name);
+    this.store.inTransaction(() => {
+      for (let i = 0; i < toReindex.length && !this.aborted; i++) {
+        const f = toReindex[i];
+        const result = parseResults[i];
 
-      totalSymbols += result.symbols.length;
-      totalEdges += result.references.length;
-      langBreakdown[f.language] = (langBreakdown[f.language] || 0) + 1;
-    }
+        this.writeParseResult(f.relativePath, result, repo.name);
+
+        totalSymbols += result.symbols.length;
+        totalEdges += result.references.length;
+        langBreakdown[f.language] = (langBreakdown[f.language] || 0) + 1;
+
+        this.onProgress?.({
+          phase: 'resolve',
+          current: i + 1,
+          total: toReindex.length,
+          file: f.relativePath,
+        });
+      }
+    });
 
     // Release content and index
     for (const f of discovered) { (f as any).content = undefined; }
-    this.symbolIndex = null;
 
     if (!this.aborted) {
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
-      await this.runPostScanAnalysis(repo, repoRoot);
+      try {
+        await this.runPostScanAnalysis(repo, repoRoot);
+      } finally {
+        this.symbolIndex = null;
+      }
+    } else {
+      this.symbolIndex = null;
     }
 
     return {

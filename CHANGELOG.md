@@ -29,6 +29,11 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Fixed
 - **C# / ASP.NET scanner hang resolved**: Fixed a severe database lockup and thread blocking issue when scanning large repositories (such as `n2cms` with ~3,100 files and ~40,000 references). The scanner now merges newly parsed symbols in memory and updates the `symbolIndex` before reference resolution starts, keeping reference resolution at O(1) in memory and eliminating synchronous SQLite queries.
+- **Scanner post-scan and visual hang resolved**: Resolved a secondary hang where the CLI progress bar appeared stuck on the last file by:
+  - Deferring clearing of `symbolIndex` until after `runPostScanAnalysis` completes to avoid falling back to synchronous database queries during route/hook resolution.
+  - Adding a `Resolving references` phase (`resolve`) progress reporting to the CLI instead of remaining visually stuck at `Parsing files`.
+  - Batching framework route/hook edge database insertions inside `scanFrameworkRoutesAndHooks` within a single SQLite transaction, reducing disk-sync overhead.
+  - Supporting qualified dot-separated namespaces (e.g. `N2.Content.Page`) in `resolveSymbolToFile` using O(1) index lookups.
 - Self-edge guard prevents files from depending on themselves in the graph, eliminating spurious self-referential edges.
 - Trace cycles deduplicated on `(fromFile→toFile:cycleLength)` tuple to avoid reporting the same cycle multiple times at different entry points.
 - Architecture smells deduplicated on `(type, involvedFiles)` to prevent redundant smell reports.
