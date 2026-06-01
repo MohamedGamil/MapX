@@ -793,7 +793,10 @@ export class Scanner {
 
     for (let i = 0; i < workerCount; i++) {
       const worker = new Worker(workerUrl, {
-        workerData: { languages, ignoredSymbols, assetRoot }
+        workerData: { languages, ignoredSymbols, assetRoot },
+        execArgv: /\.ts$/.test(workerUrl.pathname)
+          ? (process.execArgv.length > 0 ? process.execArgv : ['--import', 'tsx'])
+          : undefined
       });
       workers.push(worker);
 

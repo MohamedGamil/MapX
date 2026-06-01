@@ -60,7 +60,46 @@ vi.mock('node:fs', async (importOriginal) => {
         throw new Error('File not found');
       }
       return original.statSync(p);
+    },
+    readFileSync: (p: string, options: any) => {
+      if (p.includes('.mapx/config.json')) {
+        return JSON.stringify({
+          version: '1.0.0',
+          repo: { name: 'test-repo', path: '.' },
+          repos: [{ name: 'test-repo', path: '.' }],
+          languages: {},
+          settings: {
+            maxTokenBudget: 16384,
+            excludePatterns: []
+          }
+        });
+      }
+      return original.readFileSync(p, options);
     }
+  };
+});
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...original,
+    readFile: async (p: string, options?: any) => {
+      if (p.includes('.mapx/config.json')) {
+        return JSON.stringify({
+          version: '1.0.0',
+          repo: { name: 'test-repo', path: '.' },
+          repos: [{ name: 'test-repo', path: '.' }],
+          languages: {},
+          settings: {
+            maxTokenBudget: 16384,
+            excludePatterns: []
+          }
+        });
+      }
+      return original.readFile(p, options);
+    },
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    mkdir: vi.fn().mockResolvedValue(undefined)
   };
 });
 

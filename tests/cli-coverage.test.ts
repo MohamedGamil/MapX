@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { resolve, basename, relative, join } from 'path';
 import * as clack from '@clack/prompts';
 import { Scanner } from '../src/core/scanner.js';
@@ -189,6 +189,26 @@ describe('CLI Additional Coverage Boost', () => {
   let errorSpy: any;
   let warnSpy: any;
   let exitSpy: any;
+
+  beforeAll(async () => {
+    const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+    if (!fs.existsSync('.mapx')) {
+      fs.mkdirSync('.mapx', { recursive: true });
+    }
+  });
+
+  afterAll(async () => {
+    const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+    if (fs.existsSync('.mapx/mapx.db')) {
+      try { fs.unlinkSync('.mapx/mapx.db'); } catch {}
+    }
+    if (fs.existsSync('.mapx/config.json')) {
+      try { fs.unlinkSync('.mapx/config.json'); } catch {}
+    }
+    try {
+      fs.rmdirSync('.mapx');
+    } catch {}
+  });
 
   beforeEach(() => {
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
