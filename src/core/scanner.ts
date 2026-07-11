@@ -294,7 +294,21 @@ export class Scanner {
       const activeFrameworks = activeDetectors.map(d => d.name);
       const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
 
-      const parseResults = await this.parseFilesParallel(toParse, workspaceRoot, ignoredSymbols);
+      let parsedFilesCount = 0;
+      const parseResults = await this.parseFilesParallel(
+        toParse,
+        workspaceRoot,
+        ignoredSymbols,
+        (relPath) => {
+          parsedFilesCount++;
+          this.onProgress?.({
+            phase: 'parse',
+            current: unchangedFiles.length + resumedCompleted.size + parsedFilesCount,
+            total: discovered.length,
+            file: relPath,
+          });
+        }
+      );
 
       const fileMap = this.workspaceFileMap.size > 0 ? this.workspaceFileMap : (() => {
         const allTrackedFiles = this.store.getAllFiles();
@@ -320,12 +334,7 @@ export class Scanner {
           completed.add(toParse[i].relativePath);
         }
 
-        this.onProgress?.({
-          phase: 'parse',
-          current: completed.size,
-          total: discovered.length,
-          file: toParse[batchEnd - 1].relativePath,
-        });
+
 
         this.saveResumeState(repo.name, {
           totalFiles: discovered.length,
@@ -520,10 +529,20 @@ export class Scanner {
     const activeFrameworks = activeDetectors.map(d => d.name);
     const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
 
+    let parsedFilesCount = 0;
     const parseResults = await this.parseFilesParallel(
       toReindex.map(r => r.fileInfo),
       workspaceRoot,
-      ignoredSymbols
+      ignoredSymbols,
+      (relPath) => {
+        parsedFilesCount++;
+        this.onProgress?.({
+          phase: 'parse',
+          current: parsedFilesCount,
+          total: toReindex.length,
+          file: relPath,
+        });
+      }
     );
 
     let totalSymbols = 0;
@@ -540,12 +559,7 @@ export class Scanner {
       totalEdges += result.references.length;
       langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
 
-      this.onProgress?.({
-        phase: 'parse',
-        current: i + 1,
-        total: changes.length,
-        file: relPath,
-      });
+
     }
 
     if (!this.aborted) {
@@ -671,16 +685,31 @@ export class Scanner {
     return deleted;
   }
 
-  private async parseFilesParallel(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
+  private async parseFilesParallel(
+    files: FileInfo[],
+    workspaceRoot: string,
+    ignoredSymbols?: Set<string>,
+    onFileParsed?: (relPath: string) => void
+  ): Promise<ParseResult[]> {
     if (files.length === 0) return [];
-    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols);
+    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
   }
 
-  private async parseWithWorkers(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
-    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols);
+  private async parseWithWorkers(
+    files: FileInfo[],
+    workspaceRoot: string,
+    ignoredSymbols?: Set<string>,
+    onFileParsed?: (relPath: string) => void
+  ): Promise<ParseResult[]> {
+    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
   }
 
-  private async parseOnMainThread(files: FileInfo[], workspaceRoot: string, ignoredSymbols?: Set<string>): Promise<ParseResult[]> {
+  private async parseOnMainThread(
+    files: FileInfo[],
+    workspaceRoot: string,
+    ignoredSymbols?: Set<string>,
+    onFileParsed?: (relPath: string) => void
+  ): Promise<ParseResult[]> {
     const results: ParseResult[] = new Array(files.length);
 
     // Read all files concurrently first (I/O bound, cheap to parallelize)
@@ -710,6 +739,8 @@ export class Scanner {
 
         if (sources[i] === null) {
           results[i] = { symbols: [], references: [], errors: [{ message: `Failed to read ${relPath}` }] };
+          onFileParsed?.(relPath);
+          await new Promise(resolve => setImmediate(resolve));
           continue;
         }
 
@@ -722,6 +753,8 @@ export class Scanner {
         } catch {
           results[i] = { symbols: [], references: [], errors: [{ message: `Failed to parse ${relPath}` }] };
         }
+        onFileParsed?.(relPath);
+        await new Promise(resolve => setImmediate(resolve));
       }
     };
 
