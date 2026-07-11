@@ -33,6 +33,7 @@ const DEFAULT_CONFIG: MapxConfig = {
       'build/**',
       '**/build/**',
       '*.min.js',
+      '*.min.css',
       'monaco/vs/**/*.js',
       'bootstrap-*/bootstrap.js',
       'bootstrap-*/bootstrap.min.js',
@@ -173,7 +174,7 @@ export class Config {
         defaultExclude.push('**/migrations/**', '**/seeds/**', '**/storage/**');
       }
       if (isJSTS) {
-        defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts');
+        defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '**/*.test.tsx', '**/*.spec.tsx');
       }
     }
 

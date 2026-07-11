@@ -7,15 +7,20 @@ import { Store } from './store.js';
 import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
+import { CodebaseProfiler } from './codebase-profiler.js';
+import { RoleClassifier } from './role-classifier.js';
+import { ArchitectureAnalyzer } from './architecture-analyzer.js';
+import { calculateClusterMetrics } from './metrics.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
-import { getLanguageForFile } from '../languages/registry.js';
+import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
-import { minimatch } from 'minimatch';
+import picomatch from 'picomatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
+import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -49,7 +54,7 @@ interface DiscoveredFile extends FileInfo {
 export function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
   return (rel: string) => {
     if (excludes.some(p => {
-      if (minimatch(rel, p, { dot: true })) return true;
+      if (picomatch.isMatch(rel, p, { dot: true })) return true;
       const segments = rel.split('/');
       if (segments.some(seg => seg === p)) return true;
       return false;
@@ -58,7 +63,7 @@ export function buildMatcher(excludes: string[], includes: string[]): (rel: stri
     }
     if (includes.length > 0) {
       const matched = includes.some(p => {
-        if (minimatch(rel, p, { dot: true })) return true;
+        if (picomatch.isMatch(rel, p, { dot: true })) return true;
         const segments = rel.split('/');
         if (segments.some(seg => seg === p)) return true;
         return false;
@@ -218,6 +223,15 @@ export class Scanner {
     const workspaceRoot = this.config.getWorkspaceRoot();
     const repoRoot = resolve(workspaceRoot, repo.path);
 
+    if (force) {
+      // Clear stale resume state so a previously-interrupted scan cannot
+      // cause --force to silently skip files it considers "already completed".
+      this.clearResumeState(repo.name);
+      // Wipe all DB data for this repo before re-scanning so that symbols,
+      // edges, files, and clusters from a prior run cannot become stale.
+      this.store.resetRepoForScan(repo.name);
+    }
+
     const discovered = await this.discoverFiles(repoRoot, repo.name);
     this.onProgress?.({ phase: 'discover', current: discovered.length, total: discovered.length });
 
@@ -367,11 +381,92 @@ export class Scanner {
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
       this.clearResumeState(repo.name);
 
+      // 1. Scan Framework Routes and Hooks
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+
+      // 2. Profile Codebase
+      const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+      let activeFrameworks: string[] = [];
+      if (existsSync(frameworksPath)) {
+        try {
+          activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
+        } catch {}
+      }
+      const profiler = new CodebaseProfiler(this.store);
+      const profile = profiler.profile(repo.name, activeFrameworks);
+      this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
+
+      // 3. Classify all files
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(workspaceRoot);
+      const routes = routeRegistry.getRoutes();
+      const hooks = routeRegistry.getHooks();
+
+      const classifier = new RoleClassifier(this.store, this.config);
+      const files = this.store.getAllFiles(repo.name);
+      
+      this.store.inTransaction(() => {
+        for (const f of files) {
+          const filePath = f.path as string;
+          this.store.deleteClassificationSignalsForFile(filePath);
+          const result = classifier.classify(filePath, repo.name, profile, routes, hooks);
+          this.store.updateFileRole(filePath, result.role, result.confidence);
+          for (const sig of result.signals) {
+            this.store.insertClassificationSignal({
+              filePath,
+              repo: repo.name,
+              source: sig.source,
+              role: sig.role,
+              confidence: sig.confidence,
+              reason: sig.reason,
+            });
+          }
+        }
+      });
+
+      // 4. Detect clusters & run communities
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
 
-      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+      // 5. Calculate and persist cluster metrics
+      const metricsList = calculateClusterMetrics(this.store, repo.name);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repo.name);
+        for (const m of metricsList) {
+          this.store.insertClusterMetrics({
+            clusterName: m.clusterName,
+            repo: repo.name,
+            fileCount: m.fileCount,
+            afferentCoupling: m.afferentCoupling,
+            efferentCoupling: m.efferentCoupling,
+            instability: m.instability,
+            internalEdges: m.internalEdges,
+            externalEdges: m.externalEdges,
+            cohesionRatio: m.cohesionRatio,
+            abstractness: m.abstractness,
+            distanceFromMainSeq: m.distanceFromMainSeq,
+          });
+        }
+      });
+
+      // 6. Run Architectural Smell Detection and persist smells
+      const analyzer = new ArchitectureAnalyzer(this.store);
+      const smellsList = analyzer.analyze(repo.name, profile);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repo.name);
+        for (const smell of smellsList) {
+          this.store.insertArchSmell({
+            repo: repo.name,
+            type: smell.type,
+            severity: smell.severity,
+            description: smell.description,
+            involvedFiles: smell.involvedFiles,
+            involvedClusters: smell.involvedClusters,
+            suggestion: smell.suggestion,
+          });
+        }
+      });
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -567,11 +662,92 @@ export class Scanner {
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
 
+      // 1. Scan Framework Routes and Hooks
+      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+
+      // 2. Profile Codebase
+      const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+      let activeFrameworks: string[] = [];
+      if (existsSync(frameworksPath)) {
+        try {
+          activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
+        } catch {}
+      }
+      const profiler = new CodebaseProfiler(this.store);
+      const profile = profiler.profile(repo.name, activeFrameworks);
+      this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
+
+      // 3. Classify all files
+      const routeRegistry = new RouteRegistry();
+      await routeRegistry.load(workspaceRoot);
+      const routes = routeRegistry.getRoutes();
+      const hooks = routeRegistry.getHooks();
+
+      const classifier = new RoleClassifier(this.store, this.config);
+      const files = this.store.getAllFiles(repo.name);
+      
+      this.store.inTransaction(() => {
+        for (const f of files) {
+          const filePath = f.path as string;
+          this.store.deleteClassificationSignalsForFile(filePath);
+          const result = classifier.classify(filePath, repo.name, profile, routes, hooks);
+          this.store.updateFileRole(filePath, result.role, result.confidence);
+          for (const sig of result.signals) {
+            this.store.insertClassificationSignal({
+              filePath,
+              repo: repo.name,
+              source: sig.source,
+              role: sig.role,
+              confidence: sig.confidence,
+              reason: sig.reason,
+            });
+          }
+        }
+      });
+
+      // 4. Detect clusters & run communities
       this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
       const clusterEngine = new ClusterEngine(this.store);
       clusterEngine.detect(repo.name);
 
-      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+      // 5. Calculate and persist cluster metrics
+      const metricsList = calculateClusterMetrics(this.store, repo.name);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repo.name);
+        for (const m of metricsList) {
+          this.store.insertClusterMetrics({
+            clusterName: m.clusterName,
+            repo: repo.name,
+            fileCount: m.fileCount,
+            afferentCoupling: m.afferentCoupling,
+            efferentCoupling: m.efferentCoupling,
+            instability: m.instability,
+            internalEdges: m.internalEdges,
+            externalEdges: m.externalEdges,
+            cohesionRatio: m.cohesionRatio,
+            abstractness: m.abstractness,
+            distanceFromMainSeq: m.distanceFromMainSeq,
+          });
+        }
+      });
+
+      // 6. Run Architectural Smell Detection and persist smells
+      const analyzer = new ArchitectureAnalyzer(this.store);
+      const smellsList = analyzer.analyze(repo.name, profile);
+      this.store.inTransaction(() => {
+        this.store.raw.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repo.name);
+        for (const smell of smellsList) {
+          this.store.insertArchSmell({
+            repo: repo.name,
+            type: smell.type,
+            severity: smell.severity,
+            description: smell.description,
+            involvedFiles: smell.involvedFiles,
+            involvedClusters: smell.involvedClusters,
+            suggestion: smell.suggestion,
+          });
+        }
+      });
     }
 
     return {
@@ -842,6 +1018,8 @@ export class Scanner {
 
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
+      const isJsOrTs = /\.(js|ts|jsx|tsx|vue)$/.test(sourcePath);
+      if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       let targetFile: string | null = null;
 
       if (ref.referenceType === 'require') {
@@ -849,7 +1027,7 @@ export class Scanner {
       } else if (ref.referenceType === 'import') {
         targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
       } else {
-        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap);
+        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath);
       }
 
       if (targetFile) {
@@ -918,13 +1096,29 @@ export class Scanner {
     }
     const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
 
+    // When a .ts file imports with an explicit .js extension (TypeScript "use .js for .ts"
+    // convention), we must also try the .ts/.tsx source equivalents.
+    const jsToTsCandidates: string[] = [];
+    if (normalizedTarget.endsWith('.js')) {
+      const base = normalizedTarget.slice(0, -3);
+      jsToTsCandidates.push(base + '.ts', base + '.tsx');
+    } else if (normalizedTarget.endsWith('.jsx')) {
+      const base = normalizedTarget.slice(0, -4);
+      jsToTsCandidates.push(base + '.tsx', base + '.ts');
+    }
+
     const candidates = [
       normalizedTarget,
+      ...jsToTsCandidates,
       normalizedTarget + '/index.js',
       normalizedTarget + '/index.ts',
+      normalizedTarget + '/index.tsx',
+      normalizedTarget + '/index.jsx',
       normalizedTarget + '/index.vue',
       normalizedTarget + '.js',
       normalizedTarget + '.ts',
+      normalizedTarget + '.tsx',
+      normalizedTarget + '.jsx',
       normalizedTarget + '.vue',
     ];
 
@@ -936,10 +1130,35 @@ export class Scanner {
     return null;
   }
 
-  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>): string | null {
+  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
+
+    let sourceLang: string | null = null;
+    if (sourcePath) {
+      const langDef = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages());
+      if (langDef) {
+        sourceLang = langDef.name;
+      }
+    }
+
+    const filterMatches = (matches: Record<string, unknown>[]): Record<string, unknown>[] => {
+      if (!sourceLang) return matches;
+      return matches.filter(m => {
+        const targetPath = m.file_path as string;
+        const targetLangDef = getLanguageForFile(targetPath, this.config.getResolvedUserLanguages());
+        const targetLang = targetLangDef ? targetLangDef.name : '';
+        return areLanguagesCompatible(sourceLang!, targetLang);
+      });
+    };
+
     let matches = this.store.searchSymbols(symbolName);
+    matches = filterMatches(matches);
     if (matches.length > 0) {
+      // Prefer a definition in the same file as the caller to avoid false cross-file edges
+      if (sourcePath) {
+        const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === symbolName);
+        if (sameFileMatch) return sameFileMatch.file_path as string;
+      }
       const exactMatch = matches.find(m => m.name === symbolName);
       if (exactMatch) return exactMatch.file_path as string;
     }
@@ -948,20 +1167,30 @@ export class Scanner {
       const parts = symbolName.split('\\');
       const shortName = parts[parts.length - 1];
       matches = this.store.searchSymbols(shortName);
+      matches = filterMatches(matches);
       if (matches.length > 0) {
+        if (sourcePath) {
+          const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === shortName);
+          if (sameFileMatch) return sameFileMatch.file_path as string;
+        }
         const exactMatch = matches.find(m => m.name === shortName);
         if (exactMatch) return exactMatch.file_path as string;
         return matches[0].file_path as string;
       }
     } else if (matches.length > 0) {
+      // Multiple matches, none exact — prefer same-file over arbitrary first result
+      if (sourcePath) {
+        const sameFile = matches.find(m => m.file_path === sourcePath);
+        if (sameFile) return sameFile.file_path as string;
+      }
       return matches[0].file_path as string;
     }
     return null;
   }
   private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
     return excludes.some(p => {
-      if (minimatch(relDir, p, { dot: true })) return true;
-      if (minimatch(relDir + '/**', p, { dot: true })) return true;
+      if (picomatch.isMatch(relDir, p, { dot: true })) return true;
+      if (picomatch.isMatch(relDir + '/**', p, { dot: true })) return true;
       const segments = relDir.split('/');
       if (segments.some(seg => seg === p)) return true;
       return false;
@@ -1026,7 +1255,16 @@ export class Scanner {
           const absPath = resolve(workspaceRoot, relPath);
           const content = await readFile(absPath, 'utf-8');
 
-          const routes = await detector.extractRoutes(relPath, content, ctx);
+          const localCtx: ScanContext = {
+            ...ctx,
+            resolveSymbolToFile: (symName: string, sourcePath?: string) => {
+              return sourcePath
+                ? this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath)
+                : ctx.resolveSymbolToFile(symName);
+            }
+          };
+
+          const routes = await detector.extractRoutes(relPath, content, localCtx);
           for (const route of routes) {
             let conf = 1.0;
             const routeConf = route.metadata?.confidence ?? (route as any).confidence;
@@ -1085,7 +1323,7 @@ export class Scanner {
           }
 
           if (detector.extractHooks) {
-            const hooks = await detector.extractHooks(relPath, content, ctx);
+            const hooks = await detector.extractHooks(relPath, content, localCtx);
             for (const hook of hooks) {
               let conf = 1.0;
               const hookConf = hook.metadata?.confidence ?? (hook as any).confidence;

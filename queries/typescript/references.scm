@@ -23,3 +23,28 @@
 
 (call_expression
   function: (identifier) @ref.target_call) @ref.type_call
+
+; Constructor parameter type annotations (for DI)
+(method_definition
+  name: (property_identifier) @method_name (#eq? @method_name "constructor")
+  parameters: (formal_parameters
+    [
+      (required_parameter
+        type: (type_annotation
+          [
+            (type_identifier) @ref.target_param_type
+            (generic_type name: (type_identifier) @ref.target_param_type)
+          ]
+        )
+      )
+      (optional_parameter
+        type: (type_annotation
+          [
+            (type_identifier) @ref.target_param_type
+            (generic_type name: (type_identifier) @ref.target_param_type)
+          ]
+        )
+      )
+    ]
+  )
+) @ref.type_param_type

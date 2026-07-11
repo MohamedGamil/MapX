@@ -1,6 +1,6 @@
 .PHONY: help init uninit scan update sync status export export-wide export-json export-dot export-svg export-svg-grid export-toon \
        query search deps summary trace callers callees impact node files clusters metrics edges \
-       routes hooks \
+       routes hooks profile arch explain layers context \
        agents-list agents-generate agents-update agents-mcp agents-mcp-detect \
        serve serve-sse ui workspaces-list workspaces-discover workspaces-sync workspaces-add workspaces-remove lang-list lang-install lang-uninstall \
        bench bench-json \
@@ -46,7 +46,7 @@ uninit: ## Remove .mapx/ directory and reverse integrations (make uninit DIR=/pa
 	$(CLI) uninit $(DIR) --force
 
 scan: ## Full scan of all source files (make scan DIR=/path)
-	$(CLI) scan $(DIR)
+	$(CLI) scan --force $(DIR)
 
 update: ## Incremental scan (only changed files) (make update DIR=/path)
 	$(CLI) update $(DIR)
@@ -109,8 +109,12 @@ node: ## Inspect symbol: make node s=SymbolName [src=1] DIR=/path
 	@test -n "$(s)" || (echo "Usage: make node s=SymbolName [src=1] [DIR=/path]" && exit 1)
 	$(CLI) node "$(s)" $(if $(src),--source,) --dir=$(DIR)
 
-files: ## List files: make files [p=prefix] [l=lang] DIR=/path
-	$(CLI) files $(if $(p),--path $(p),) $(if $(l),--lang $(l),) --dir=$(DIR)
+files: ## List files: make files [p=prefix_or_glob] [l=lang] DIR=/path
+	$(CLI) files $(if $(p),--path "$(p)",) $(if $(l),--lang $(l),) --dir=$(DIR)
+
+context: ## Generate task-specific context (make context t="Task description" [s=seeds] [b=budget] DIR=/path)
+	@test -n "$(t)" || (echo "Usage: make context t=\"Task description\" [s=seeds] [b=budget] [DIR=/path]" && exit 1)
+	$(CLI) context "$(t)" $(if $(s),--seeds="$(s)",) $(if $(b),--tokens=$(b),) --dir=$(DIR)
 
 clusters: ## List code clusters (make clusters DIR=/path)
 	$(CLI) clusters --dir=$(DIR)
@@ -131,6 +135,7 @@ serve-sse: ## Start MCP server — SSE/HTTP (make serve-sse [PORT=3456] DIR=/pat
 	$(CLI) serve --sse --port $(or $(PORT),45123) --dir=$(DIR)
 
 ui: ## Open web dashboard (make ui [PORT=8080] DIR=/path)
+	npm run build:npm
 	$(CLI) ui $(if $(PORT),--port $(PORT),) --dir=$(DIR)
 
 workspaces-list: ## List registered repos
@@ -166,6 +171,19 @@ routes: ## Show detected framework routes (make routes DIR=/path)
 
 hooks: ## Show detected framework hooks (make hooks DIR=/path)
 	$(CLI) hooks $(DIR)
+
+profile: ## Show codebase profile (make profile DIR=/path)
+	$(CLI) profile $(DIR)
+
+arch: ## Show full architecture report (make arch [smells=1] [dsm=1] [violations=1] [json=1] DIR=/path)
+	$(CLI) arch $(if $(smells),--smells,) $(if $(dsm),--dsm,) $(if $(violations),--violations,) $(if $(json),--json,) $(DIR)
+
+explain: ## Explain classification signals for a file (make explain f=path/to/file [reclassify=1] DIR=/path)
+	@test -n "$(f)" || (echo "Usage: make explain f=path/to/file [reclassify=1] [DIR=/path]" && exit 1)
+	$(CLI) explain "$(f)" $(if $(reclassify),--reclassify,) --dir=$(DIR)
+
+layers: ## List files grouped by architectural roles (make layers [json=1] DIR=/path)
+	$(CLI) layers $(if $(json),--json,) --dir=$(DIR)
 
 # ── Agent Integration ─────────────────────────────────────────
 
@@ -250,6 +268,9 @@ test-clean: ## Clean test: remove .mapx and re-test
 	rm -rf $(DIR)/.mapx
 	$(MAKE) test DIR=$(DIR)
 
+test-ci: ## Test using vitest
+	npm run test -- --coverage
+
 # ── Lint & Typecheck ──────────────────────────────────────────
 
 typecheck: ## Run TypeScript type checking
@@ -276,31 +297,31 @@ build-linux: wasm ## Build for linux-x64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-linux-x64 ./src/main.ts --outfile dist/mapx-linux-x64
+	bun build --compile --minify --define MAPX_BUILD_VERSION='"$(VERSION)"' --target=bun-linux-x64 ./src/main.ts --outfile dist/mapx-linux-x64
 
 build-linux-arm: wasm ## Build for linux-arm64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-linux-arm64 ./src/main.ts --outfile dist/mapx-linux-arm64
+	bun build --compile --minify --define MAPX_BUILD_VERSION='"$(VERSION)"' --target=bun-linux-arm64 ./src/main.ts --outfile dist/mapx-linux-arm64
 
 build-mac-arm: wasm ## Build for macOS ARM (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-darwin-arm64 ./src/main.ts --outfile dist/mapx-darwin-arm64
+	bun build --compile --minify --define MAPX_BUILD_VERSION='"$(VERSION)"' --target=bun-darwin-arm64 ./src/main.ts --outfile dist/mapx-darwin-arm64
 
 build-mac-x64: wasm ## Build for macOS x64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-darwin-x64 ./src/main.ts --outfile dist/mapx-darwin-x64
+	bun build --compile --minify --define MAPX_BUILD_VERSION='"$(VERSION)"' --target=bun-darwin-x64 ./src/main.ts --outfile dist/mapx-darwin-x64
 
 build-win: wasm ## Build for Windows x64 (requires bun)
 ifndef BUN
 	$(error "bun is required for building")
 endif
-	bun build --compile --minify --bytecode --target=bun-windows-x64 ./src/main.ts --outfile dist/mapx-windows-x64.exe
+	bun build --compile --minify --define MAPX_BUILD_VERSION='"$(VERSION)"' --target=bun-windows-x64 ./src/main.ts --outfile dist/mapx-windows-x64.exe
 
 build: build-linux ## Build for current platform (linux-x64 default)
 

@@ -1,10 +1,12 @@
 import type { StoreBackend } from './store-interface.js';
-import { createRequire } from 'node:module';
 import type { MapxGraph } from './graph.js';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy-matcher.js';
+import { BunStore } from './store-bun.js';
+import { NodeStore } from './store-node.js';
 
-const dynamicRequire = createRequire(import.meta.url);
-
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 8;
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -134,15 +136,62 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_edges_target_repo ON edges(target_repo)`,
     ],
   },
+  {
+    version: 7,
+    description: 'Add layer column to clusters table for architectural layer assignments',
+    up: [
+      `ALTER TABLE clusters ADD COLUMN layer TEXT DEFAULT 'other'`,
+    ],
+  },
+  {
+    version: 8,
+    description: 'Add codebase classification role columns, classification_signals, cluster_metrics, and arch_smells tables',
+    up: [
+      `ALTER TABLE files ADD COLUMN role TEXT DEFAULT 'other'`,
+      `ALTER TABLE files ADD COLUMN role_confidence REAL DEFAULT 0.0`,
+      `CREATE TABLE IF NOT EXISTS classification_signals (
+        file_path TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        source TEXT NOT NULL,
+        role TEXT NOT NULL,
+        confidence REAL NOT NULL,
+        reason TEXT NOT NULL,
+        PRIMARY KEY (file_path, repo, source)
+      )`,
+      `CREATE TABLE IF NOT EXISTS cluster_metrics (
+        cluster_name TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        file_count INTEGER NOT NULL,
+        afferent_coupling REAL NOT NULL,
+        efferent_coupling REAL NOT NULL,
+        instability REAL NOT NULL,
+        internal_edges INTEGER NOT NULL,
+        external_edges INTEGER NOT NULL,
+        cohesion_ratio REAL NOT NULL,
+        abstractness REAL NOT NULL,
+        distance_from_main_seq REAL NOT NULL,
+        PRIMARY KEY (cluster_name, repo)
+      )`,
+      `CREATE TABLE IF NOT EXISTS arch_smells (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        repo TEXT NOT NULL,
+        type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        description TEXT NOT NULL,
+        involved_files TEXT NOT NULL,
+        involved_clusters TEXT NOT NULL,
+        suggestion TEXT NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_arch_smells_repo ON arch_smells(repo)`,
+    ],
+  },
 ];
 
 function createStoreBackend(dbPath: string): StoreBackend {
   const isBun = typeof (globalThis as any).Bun !== 'undefined';
   if (isBun) {
-    const { BunStore } = dynamicRequire('./store-bun.js');
     return new BunStore(dbPath);
   }
-  const { NodeStore } = dynamicRequire('./store-node.js');
   return new NodeStore(dbPath);
 }
 
@@ -150,6 +199,12 @@ export class Store {
   private backend: StoreBackend;
 
   constructor(dbPath: string) {
+    if (dbPath !== ':memory:') {
+      const parentDir = path.dirname(dbPath);
+      if (!fs.existsSync(parentDir)) {
+        fs.mkdirSync(parentDir, { recursive: true });
+      }
+    }
     this.backend = createStoreBackend(dbPath);
     this.backend.exec(INITIAL_SCHEMA);
     this.runMigrations();
@@ -299,14 +354,24 @@ export class Store {
   }
 
   searchSymbols(namePattern: string, repo?: string): Record<string, unknown>[] {
+    // Support glob patterns: *Service → %Service, get* → get%
+    let likePattern: string;
+    if (isWildcardTerm(namePattern)) {
+      likePattern = '%';
+    } else if (isGlobPattern(namePattern)) {
+      likePattern = globToLike(namePattern);
+    } else {
+      likePattern = `%${namePattern}%`;
+    }
+
     if (repo) {
       return this.backend.prepare(
-        'SELECT * FROM symbols WHERE name LIKE ? AND repo = ? ORDER BY kind, name'
-      ).all(`%${namePattern}%`, repo);
+        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
+      ).all(likePattern, repo);
     }
     return this.backend.prepare(
-      'SELECT * FROM symbols WHERE name LIKE ? ORDER BY kind, name'
-    ).all(`%${namePattern}%`);
+      'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE ORDER BY kind, name'
+    ).all(likePattern);
   }
 
   getSymbolsForFile(filePath: string): Record<string, unknown>[] {
@@ -468,10 +533,11 @@ export class Store {
     parentName: string | null;
     depth: number;
     fileCount: number;
+    layer?: string;
   }): void {
     this.backend.prepare(`
-      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO clusters (repo, name, label, source, parent_name, depth, file_count, layer)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       cluster.repo,
       cluster.name,
@@ -479,7 +545,8 @@ export class Store {
       cluster.source,
       cluster.parentName,
       cluster.depth,
-      cluster.fileCount
+      cluster.fileCount,
+      cluster.layer ?? 'other'
     );
   }
 
@@ -575,11 +642,34 @@ export class Store {
     });
   }
 
+  /**
+   * Wipe all data owned by a repo in preparation for a fresh forced re-scan.
+   * Unlike deleteRepo(), this intentionally preserves:
+   *   - Cross-repo edges where this repo is only the TARGET (those belong to
+   *     other repos' scans and will be cleaned up when those repos are re-scanned).
+   *   - last_scan_commit / last_scan_time meta keys (updated once scan completes).
+   */
+  resetRepoForScan(repoName: string): void {
+    this.inTransaction(() => {
+      this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM edges WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_membership WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM clusters WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
+    });
+  }
+
   deleteRepo(repoName: string): void {
     this.inTransaction(() => {
       this.backend.prepare('DELETE FROM symbols WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM edges WHERE repo = ? OR target_repo = ?').run(repoName, repoName);
       this.backend.prepare('DELETE FROM files WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM meta WHERE key LIKE ? OR key LIKE ?').run(`last_scan_commit:${repoName}`, `last_scan_time:${repoName}`);
     });
   }
@@ -590,23 +680,38 @@ export class Store {
     filePrefix?: string;
     exact?: boolean;
     limit?: number;
+    offset?: number;
     repo?: string;
   }): Record<string, any>[] {
     const limit = options.limit ?? 20;
+    const offset = options.offset ?? 0;
     let sql = 'SELECT * FROM symbols WHERE ';
     const params: any[] = [];
 
-    if (options.exact) {
-      sql += '(name = ? OR file_path = ?)';
+    const wildcard = isWildcardTerm(options.term);
+
+    if (wildcard) {
+      // Wildcard: match all symbols (no name filter)
+      // Works with or without a file prefix — the key behavioral fix
+      sql += '1=1';
+    } else if (options.exact) {
+      // Exact: case-insensitive exact name match
+      sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
       params.push(options.term, options.term);
+    } else if (isGlobPattern(options.term)) {
+      // Glob: convert * and ? to SQL LIKE wildcards, case-insensitive
+      const likePattern = globToLike(options.term);
+      sql += '(name LIKE ? COLLATE NOCASE)';
+      params.push(likePattern);
     } else {
-      sql += '(name LIKE ? OR file_path LIKE ?)';
+      // Default: substring match, case-insensitive
+      sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
       params.push(`%${options.term}%`, `%${options.term}%`);
     }
 
     if (options.kind) {
-      sql += ' AND kind = ?';
-      params.push(options.kind);
+      sql += ' AND LOWER(kind) = ?';
+      params.push(options.kind.toLowerCase());
     }
 
     if (options.filePrefix) {
@@ -619,10 +724,95 @@ export class Store {
       params.push(options.repo);
     }
 
-    sql += ' ORDER BY kind, name LIMIT ?';
-    params.push(limit);
+    sql += ' ORDER BY kind, name LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     return this.backend.prepare(sql).all(...params);
+  }
+
+  countSymbolsFiltered(options: {
+    term: string;
+    kind?: string;
+    filePrefix?: string;
+    exact?: boolean;
+    repo?: string;
+  }): number {
+    let sql = 'SELECT COUNT(*) as cnt FROM symbols WHERE ';
+    const params: any[] = [];
+
+    const wildcard = isWildcardTerm(options.term);
+
+    if (wildcard) {
+      sql += '1=1';
+    } else if (options.exact) {
+      sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
+      params.push(options.term, options.term);
+    } else if (isGlobPattern(options.term)) {
+      const likePattern = globToLike(options.term);
+      sql += '(name LIKE ? COLLATE NOCASE)';
+      params.push(likePattern);
+    } else {
+      sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
+      params.push(`%${options.term}%`, `%${options.term}%`);
+    }
+
+    if (options.kind) {
+      sql += ' AND LOWER(kind) = ?';
+      params.push(options.kind.toLowerCase());
+    }
+    if (options.filePrefix) {
+      sql += ' AND file_path LIKE ?';
+      params.push(`${options.filePrefix}%`);
+    }
+    if (options.repo) {
+      sql += ' AND repo = ?';
+      params.push(options.repo);
+    }
+
+    const row = this.backend.prepare(sql).get(...params) as { cnt: number };
+    return row?.cnt ?? 0;
+  }
+
+  /**
+   * Return all distinct symbol names in the index.
+   * Used by the fuzzy matcher to generate suggestions when a search fails.
+   */
+  getAllSymbolNames(repo?: string): string[] {
+    const sql = repo
+      ? 'SELECT DISTINCT name FROM symbols WHERE repo = ? ORDER BY name'
+      : 'SELECT DISTINCT name FROM symbols ORDER BY name';
+    const rows = repo
+      ? this.backend.prepare(sql).all(repo)
+      : this.backend.prepare(sql).all();
+    return rows.map((r: any) => r.name as string);
+  }
+
+  /**
+   * Return all symbol kinds and their counts.
+   * Used to provide helpful error messages when a kind filter yields no results.
+   */
+  listSymbolKinds(repo?: string): { kind: string; count: number }[] {
+    const sql = repo
+      ? 'SELECT kind, COUNT(*) as count FROM symbols WHERE repo = ? GROUP BY kind ORDER BY count DESC'
+      : 'SELECT kind, COUNT(*) as count FROM symbols GROUP BY kind ORDER BY count DESC';
+    const rows = repo
+      ? this.backend.prepare(sql).all(repo)
+      : this.backend.prepare(sql).all();
+    return rows as { kind: string; count: number }[];
+  }
+
+  /**
+   * Return a lightweight candidates list for fuzzy matching.
+   * Only fetches name, kind, file_path — no full row scan.
+   */
+  getSymbolCandidatesForFuzzy(repo?: string): Array<{ name: string; kind: string; file_path: string }> {
+    const sql = repo
+      ? 'SELECT DISTINCT name, kind, file_path FROM symbols WHERE repo = ?'
+      : 'SELECT DISTINCT name, kind, file_path FROM symbols';
+    const rows = repo
+      ? this.backend.prepare(sql).all(repo)
+      : this.backend.prepare(sql).all();
+    return rows as Array<{ name: string; kind: string; file_path: string }>;
   }
 
   getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
@@ -652,8 +842,17 @@ export class Store {
     const params: any[] = [];
 
     if (options.pathPrefix) {
-      sql += ' AND path LIKE ?';
-      params.push(`${options.pathPrefix}%`);
+      const raw = options.pathPrefix;
+      // Glob pattern: convert to SQL LIKE (*, ? → %, _)
+      const isGlob = raw.includes('*') || raw.includes('?');
+      if (isGlob) {
+        const likePattern = raw.replace(/\*/g, '%').replace(/\?/g, '_');
+        sql += ' AND path LIKE ?';
+        params.push(likePattern);
+      } else {
+        sql += ' AND path LIKE ?';
+        params.push(`${raw}%`);
+      }
     }
 
     if (options.lang) {
@@ -705,7 +904,7 @@ export class Store {
 
     const results: Record<string, any>[] = [];
     for (const sym of symbols) {
-      let sql = 'SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?)';
+      let sql = "SELECT * FROM edges WHERE target_file = ? AND (target_symbol = ? OR target_symbol = ?) AND edge_type NOT IN ('import', 'require')";
       const params = [sym.file_path, sym.name, `${sym.scope}::${sym.name}`];
       if (repo) {
         sql += ' AND repo = ?';
@@ -762,6 +961,88 @@ export class Store {
 
   getTopSymbolsByPageRank(graph: MapxGraph, limit: number = 5): any[] {
     return graph.getRankedSymbols().slice(0, limit);
+  }
+
+  updateFileRole(filePath: string, role: string, confidence: number): void {
+    this.backend.prepare('UPDATE files SET role = ?, role_confidence = ? WHERE path = ?')
+      .run(role, confidence, filePath);
+  }
+
+  insertClassificationSignal(signal: { filePath: string; repo: string; source: string; role: string; confidence: number; reason: string }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO classification_signals (file_path, repo, source, role, confidence, reason)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(signal.filePath, signal.repo, signal.source, signal.role, signal.confidence, signal.reason);
+  }
+
+  getClassificationSignals(filePath: string): Record<string, any>[] {
+    return this.backend.prepare('SELECT * FROM classification_signals WHERE file_path = ?').all(filePath) as any[];
+  }
+
+  deleteClassificationSignalsForFile(filePath: string): void {
+    this.backend.prepare('DELETE FROM classification_signals WHERE file_path = ?').run(filePath);
+  }
+
+  insertClusterMetrics(m: {
+    clusterName: string;
+    repo: string;
+    fileCount: number;
+    afferentCoupling: number;
+    efferentCoupling: number;
+    instability: number;
+    internalEdges: number;
+    externalEdges: number;
+    cohesionRatio: number;
+    abstractness: number;
+    distanceFromMainSeq: number;
+  }): void {
+    this.backend.prepare(`
+      INSERT OR REPLACE INTO cluster_metrics (
+        cluster_name, repo, file_count, afferent_coupling, efferent_coupling,
+        instability, internal_edges, external_edges, cohesion_ratio,
+        abstractness, distance_from_main_seq
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      m.clusterName, m.repo, m.fileCount, m.afferentCoupling, m.efferentCoupling,
+      m.instability, m.internalEdges, m.externalEdges, m.cohesionRatio,
+      m.abstractness, m.distanceFromMainSeq
+    );
+  }
+
+  getClusterMetrics(repo: string): Record<string, any>[] {
+    return this.backend.prepare('SELECT * FROM cluster_metrics WHERE repo = ?').all(repo) as any[];
+  }
+
+  insertArchSmell(smell: {
+    repo: string;
+    type: string;
+    severity: string;
+    description: string;
+    involvedFiles: string[];
+    involvedClusters?: string[];
+    suggestion: string;
+  }): void {
+    this.backend.prepare(`
+      INSERT INTO arch_smells (repo, type, severity, description, involved_files, involved_clusters, suggestion)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      smell.repo,
+      smell.type,
+      smell.severity,
+      smell.description,
+      JSON.stringify(smell.involvedFiles),
+      JSON.stringify(smell.involvedClusters ?? []),
+      smell.suggestion
+    );
+  }
+
+  getArchSmells(repo: string): Record<string, any>[] {
+    const rows = this.backend.prepare('SELECT * FROM arch_smells WHERE repo = ?').all(repo) as any[];
+    return rows.map(r => ({
+      ...r,
+      involvedFiles: JSON.parse(r.involved_files),
+      involvedClusters: JSON.parse(r.involved_clusters),
+    }));
   }
 
   inTransaction<T>(fn: () => T): T {

@@ -1,0 +1,16 @@
+# mapx v0.3.1
+## MapxGraph Rules for Cline
+
+This project is indexed by MapxGraph (22 languages, 32 MCP tools).
+Auto-start the MCP server with the configured directory `/Users/gamil/Projects/mapx`.
+Available tools:
+- `mapx_export` - Call this first to get the summary.
+- `mapx_query` / `mapx_search` - Find files or symbols (supports glob: `*Service`, `get*`, fuzzy fallback).
+- `mapx_callers` / `mapx_callees` - Trace call chains.
+- `mapx_impact` - Assess blast radius before changes.
+- `mapx_trace` - Trace data-flow paths.
+- `mapx_sources` / `mapx_sinks` - Find entry points / terminal consumers.
+- `mapx_context` - Generate token-budgeted context.
+- `mapx_profile` / `mapx_smells` - Profile codebase and audit design quality / code smells.
+- `mapx_batch` - Batch multiple operations in a single call.
+# /mapx

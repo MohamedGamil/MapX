@@ -165,6 +165,7 @@ export class DotExporter {
       middleware: 'dotted',
       dispatch: 'dashed',
       notify: 'dotted',
+      render: 'dotted',
     };
 
     const seen = new Set<string>();
@@ -193,6 +194,8 @@ export class DotExporter {
         colorAttr = ', color="magenta"';
       } else if (type === 'notify') {
         colorAttr = ', color="pink"';
+      } else if (type === 'render') {
+        colorAttr = ', color="cyan"';
       }
       lines.push(`  "${src}" -> "${tgt}" [label="${type}", style=${style}${colorAttr}];`);
     }
