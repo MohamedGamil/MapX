@@ -102,6 +102,7 @@ mapx lang list
 | `maxTokenBudget` | number | 16384 | Maximum token budget for LLM export |
 | `excludePatterns` | string[] | (see above) | Glob patterns for files to exclude from scanning |
 | `includePatterns` | string[] | [] | If set, only include matching files |
+| `graphExcludePatterns` | string[] | `["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]` | Glob patterns for files to exclude from PageRank rankings and graph analysis (files are still indexed but deprioritized) |
 
 ## Architecture & Role Classification
 

@@ -14,10 +14,7 @@
 
 ; Class inheritance: class Foo < Bar
 (class
-  superclass: (scope_resolution name: (constant) @ref.target_extends)) @ref.type_extends
-
-(class
-  superclass: (constant) @ref.target_extends) @ref.type_extends
+  superclass: (_) @ref.target_extends) @ref.type_extends
 
 ; include Module
 (call
@@ -43,6 +40,11 @@
 
 ; Instantiation: ClassName.new
 (call
-  method: (identifier) @_new
-  receiver: (constant) @ref.target_instantiation
+  (constant) @ref.target_instantiation
+  (identifier) @_new
+  (#eq? @_new "new")) @ref.type_instantiation
+
+(call
+  (scope_resolution) @ref.target_instantiation
+  (identifier) @_new
   (#eq? @_new "new")) @ref.type_instantiation

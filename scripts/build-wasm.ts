@@ -80,56 +80,57 @@ async function run() {
         }
       }
 
-      if (foundPath) {
-        execSync(`cp "${foundPath}" "${dest}"`, { cwd: PROJECT_ROOT });
-        console.log(`  Copied ${file} from node_modules`);
-      } else {
-        // Try unpkg tree-sitter-wasms collection first
-        const primaryWasmUrl = `https://unpkg.com/tree-sitter-wasms@latest/out/${file}`;
-        console.log(`  Downloading ${file} from tree-sitter-wasms collection...`);
-        let success = await downloadFile(primaryWasmUrl, dest);
-        
-        if (!success) {
-          // Try unpkg from the grammar package itself
-          const fallbackWasmUrl = `https://unpkg.com/${grammar.name}@latest/${file}`;
-          console.log(`  tree-sitter-wasms download failed. Downloading ${file} from ${grammar.name}...`);
-          success = await downloadFile(fallbackWasmUrl, dest);
-        }
+      let success = false;
+      if (existsSync(grammarDir)) {
+        console.log(`  Attempting to build ${file} from source...`);
+        try {
+          execSync(`npx tree-sitter build --wasm "${grammarDir}"`, {
+            cwd: PROJECT_ROOT,
+            stdio: 'ignore',
+          });
 
-        if (success) {
-          console.log(`  Successfully downloaded ${file} from CDN`);
-        } else {
-          // Fallback to compilation from source
-          if (existsSync(grammarDir)) {
-            console.log(`  CDN downloads failed. Attempting to build ${file} from source...`);
-            try {
-              execSync(`npx tree-sitter build --wasm "${grammarDir}"`, {
-                cwd: PROJECT_ROOT,
-                stdio: 'pipe',
-              });
+          const possibleOutputs = [
+            join(PROJECT_ROOT, file),
+            join(PROJECT_ROOT, `${grammar.name}.wasm`),
+          ];
 
-              const possibleOutputs = [
-                join(PROJECT_ROOT, file),
-                join(PROJECT_ROOT, `${grammar.name}.wasm`),
-              ];
-
-              let builtFile = '';
-              for (const out of possibleOutputs) {
-                if (existsSync(out)) {
-                  builtFile = out;
-                  break;
-                }
-              }
-
-              if (builtFile) {
-                execSync(`mv "${builtFile}" "${dest}"`, { cwd: PROJECT_ROOT });
-                console.log(`  Successfully built and moved ${file} to wasm/`);
-              } else {
-                console.log(`  Build finished but output file ${file} could not be found.`);
-              }
-            } catch (e: any) {
-              console.log(`  Failed to build ${grammar.name} natively: ${e.message}`);
+          let builtFile = '';
+          for (const out of possibleOutputs) {
+            if (existsSync(out)) {
+              builtFile = out;
+              break;
             }
+          }
+
+          if (builtFile) {
+            execSync(`mv "${builtFile}" "${dest}"`, { cwd: PROJECT_ROOT });
+            console.log(`  Successfully built and moved ${file} to wasm/`);
+            success = true;
+          }
+        } catch (e: any) {
+          console.log(`  Failed to build ${grammar.name} natively: ${e.message}. Falling back...`);
+        }
+      }
+
+      if (!success) {
+        if (foundPath) {
+          execSync(`cp "${foundPath}" "${dest}"`, { cwd: PROJECT_ROOT });
+          console.log(`  Copied ${file} from node_modules`);
+        } else {
+          // Try unpkg tree-sitter-wasms collection first
+          const primaryWasmUrl = `https://unpkg.com/tree-sitter-wasms@latest/out/${file}`;
+          console.log(`  Downloading ${file} from tree-sitter-wasms collection...`);
+          success = await downloadFile(primaryWasmUrl, dest);
+          
+          if (!success) {
+            // Try unpkg from the grammar package itself
+            const fallbackWasmUrl = `https://unpkg.com/${grammar.name}@latest/${file}`;
+            console.log(`  tree-sitter-wasms download failed. Downloading ${file} from ${grammar.name}...`);
+            success = await downloadFile(fallbackWasmUrl, dest);
+          }
+
+          if (success) {
+            console.log(`  Successfully downloaded ${file} from CDN`);
           } else {
             console.log(`  Failed to obtain ${file} (CDN downloads failed, source not installed).`);
           }

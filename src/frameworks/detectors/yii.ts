@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
+import { hasComposerDependency } from '../utils.js';
 
 export class YiiDetector implements FrameworkDetector {
   readonly name = 'yii';
@@ -9,19 +10,7 @@ export class YiiDetector implements FrameworkDetector {
   readonly filePattern = /\.php$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    const composerPath = join(projectRoot, 'composer.json');
-    if (existsSync(composerPath)) {
-      try {
-        const pkg = JSON.parse(await readFile(composerPath, 'utf-8'));
-        const reqs = { ...pkg.require, ...pkg['require-dev'] };
-        if (reqs && (reqs['yiisoft/yii2'] || reqs['yiisoft/yii3'] || reqs['yiisoft/router'])) {
-          return true;
-        }
-      } catch {
-        // Ignored
-      }
-    }
-    return files.some(f => f.includes('config/web.php') || f.includes('config/routes.php'));
+    return hasComposerDependency(projectRoot, files, ['yiisoft/yii2', 'yiisoft/yii3', 'yiisoft/router']);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

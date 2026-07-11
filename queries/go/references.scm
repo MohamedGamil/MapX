@@ -17,6 +17,6 @@
   type: (type_identifier) @ref.target_instantiation) @ref.type_instantiation
 
 ; Interface embedding: embedding a type inside an interface
-(type_spec
-  type: (interface_type
-    (type_identifier) @ref.target_extends)) @ref.type_extends
+;(type_spec
+;  type: (interface_type
+;    (type_identifier) @ref.target_extends)) @ref.type_extends

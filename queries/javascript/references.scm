@@ -13,6 +13,12 @@
 (call_expression
   function: (identifier) @ref.target_call) @ref.type_call
 
+; Track this.method() intra-class calls
+(call_expression
+  function: (member_expression
+    object: (this)
+    property: (property_identifier) @ref.target_call)) @ref.type_call
+
 (jsx_opening_element
   name: [
     (identifier) @ref.target_render

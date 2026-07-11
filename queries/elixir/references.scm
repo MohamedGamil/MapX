@@ -4,25 +4,25 @@
 (call
   target: (identifier) @_alias
   (#eq? @_alias "alias")
-  arguments: (arguments (alias) @ref.target_import)) @ref.type_import
+  (arguments (alias) @ref.target_import)) @ref.type_import
 
 ; Import references: import MyApp.Module
 (call
   target: (identifier) @_import
   (#eq? @_import "import")
-  arguments: (arguments (alias) @ref.target_import)) @ref.type_import
+  (arguments (alias) @ref.target_import)) @ref.type_import
 
 ; Use references: use GenServer
 (call
   target: (identifier) @_use
   (#eq? @_use "use")
-  arguments: (arguments (alias) @ref.target_extends)) @ref.type_extends
+  (arguments (alias) @ref.target_extends)) @ref.type_extends
 
 ; Require references: require Logger
 (call
   target: (identifier) @_require
   (#eq? @_require "require")
-  arguments: (arguments (alias) @ref.target_import)) @ref.type_import
+  (arguments (alias) @ref.target_import)) @ref.type_import
 
 ; Function calls
 (call
@@ -42,4 +42,4 @@
 (call
   target: (identifier) @_defimpl
   (#eq? @_defimpl "defimpl")
-  arguments: (arguments (alias) @ref.target_implements)) @ref.type_implements
+  (arguments (alias) @ref.target_implements)) @ref.type_implements

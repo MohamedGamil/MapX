@@ -10,7 +10,7 @@ describe('Store core class', () => {
   });
 
   it('initializes the database and runs migrations', () => {
-    expect(store.getMeta('schema_version')).toBe('8');
+    expect(store.getMeta('schema_version')).toBe('9');
   });
 
   it('performs meta operations correctly', () => {
@@ -210,6 +210,69 @@ describe('Store core class', () => {
     expect(store.getTopSymbolsByPageRank(graph, 1)).toEqual([{ name: 'A', pagerank: 0.9 }]);
   });
 
+  it('retrieves top files and symbols directly from SQLite database', () => {
+    const testStore = new Store(':memory:');
+    
+    // Insert a file
+    testStore.upsertFile({
+      path: 'db-file.ts',
+      repo: 'mapx',
+      language: 'typescript',
+      size_bytes: 100,
+      lines: 10,
+    });
+    
+    // Set pagerank
+    testStore.updateFilePageRank('db-file.ts', 0.95);
+    
+    // Insert a symbol in that file
+    testStore.insertSymbol({
+      filePath: 'db-file.ts',
+      repo: 'mapx',
+      name: 'DbClass',
+      kind: 'class',
+      scope: null,
+      signature: '',
+      startLine: 1,
+      endLine: 5,
+      metadata: '{}'
+    });
+    
+    // Retrieve top file from DB (pass null as graph)
+    const topFiles = testStore.getTopFilesByPageRank(null, 1);
+    expect(topFiles).toHaveLength(1);
+    expect(topFiles[0].path).toBe('db-file.ts');
+    expect(topFiles[0].pagerank).toBe(0.95);
+    
+    // Retrieve top symbol from DB (pass null as graph)
+    const topSymbols = testStore.getTopSymbolsByPageRank(null, 1);
+    expect(topSymbols).toHaveLength(1);
+    expect(topSymbols[0].name).toBe('DbClass');
+    expect(topSymbols[0].filePath).toBe('db-file.ts');
+    // Formula check: since scope is null, pagerank = 0.95 * (1 + 1 * 0.1) = 0.95 * 1.1 = 1.045
+    expect(topSymbols[0].pagerank).toBeCloseTo(1.045, 4);
+
+    testStore.close();
+  });
+
+  it('caches prepared database statements', () => {
+    const testStore = new Store(':memory:');
+    
+    // Retrieve two statements with the same query
+    const query = 'SELECT 1';
+    const stmt1 = testStore.raw.prepare(query);
+    const stmt2 = testStore.raw.prepare(query);
+    
+    // They should be the exact same cached object (referential equality)
+    expect(stmt1).toBe(stmt2);
+    
+    // A different query should return a different statement
+    const stmt3 = testStore.raw.prepare('SELECT 2');
+    expect(stmt1).not.toBe(stmt3);
+    
+    testStore.close();
+  });
+
   it('supports close', () => {
     const tempStore = new Store(':memory:');
     expect(() => tempStore.close()).not.toThrow();
@@ -341,7 +404,7 @@ describe('Store core class', () => {
 
     // Now open via Store. It should detect schema version 1, apply migrations up to 6
     const storeV1 = new Store(testPath);
-    expect(storeV1.getMeta('schema_version')).toBe('8');
+    expect(storeV1.getMeta('schema_version')).toBe('9');
     // Verify content_hash and target_repo columns exist
     const filesInfo = storeV1.raw.prepare("PRAGMA table_info(files)").all();
     expect(filesInfo.some((c: any) => c.name === 'content_hash')).toBe(true);
@@ -419,7 +482,7 @@ describe('Store core class', () => {
 
     // Now open via Store. It should detect schema version 2, apply migrations up to 6
     const storeV2 = new Store(testPath);
-    expect(storeV2.getMeta('schema_version')).toBe('8');
+    expect(storeV2.getMeta('schema_version')).toBe('9');
     storeV2.close();
     fs.unlinkSync(testPath);
   });
@@ -756,6 +819,42 @@ describe('Store core class', () => {
       metadata: '{}'
     });
 
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'getEffectiveLimits',
+      kind: 'method',
+      scope: 'BillingService',
+      signature: '',
+      startLine: 12,
+      endLine: 15,
+      metadata: '{}'
+    });
+
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'deepMethod',
+      kind: 'method',
+      scope: 'NamespaceA::NamespaceB::ClassC',
+      signature: '',
+      startLine: 20,
+      endLine: 25,
+      metadata: '{}'
+    });
+
+    store.insertSymbol({
+      filePath: 'src/main.ts',
+      repo: 'mapx',
+      name: 'dotteddeepMethod',
+      kind: 'method',
+      scope: 'NamespaceA.NamespaceB.ClassC',
+      signature: '',
+      startLine: 20,
+      endLine: 25,
+      metadata: '{}'
+    });
+
     // 1. scope and name with repo
     const s1 = store.getSymbolByName('MyScope::MyClass', 'mapx');
     expect(s1).toBeDefined();
@@ -770,6 +869,36 @@ describe('Store core class', () => {
     const s3 = store.getSymbolByName('MyClass');
     expect(s3).toBeDefined();
     expect(s3?.name).toBe('MyClass');
+
+    // 4. Dot notation (C# / Java style)
+    const s4 = store.getSymbolByName('BillingService.getEffectiveLimits', 'mapx');
+    expect(s4).toBeDefined();
+    expect(s4?.name).toBe('getEffectiveLimits');
+
+    // 5. Double colon notation (PHP/C++ style)
+    const s5 = store.getSymbolByName('BillingService::getEffectiveLimits', 'mapx');
+    expect(s5).toBeDefined();
+    expect(s5?.name).toBe('getEffectiveLimits');
+
+    // 6. Multi-level namespace using double colons
+    const s6 = store.getSymbolByName('NamespaceA::NamespaceB::ClassC::deepMethod', 'mapx');
+    expect(s6).toBeDefined();
+    expect(s6?.name).toBe('deepMethod');
+
+    // 7. Multi-level namespace using dot notation
+    const s7 = store.getSymbolByName('NamespaceA.NamespaceB.ClassC.deepMethod', 'mapx');
+    expect(s7).toBeDefined();
+    expect(s7?.name).toBe('deepMethod');
+
+    // 8. Mixed notation fallback (e.g. query with dots when DB has colons)
+    const s8 = store.getSymbolByName('NamespaceA.NamespaceB.ClassC::deepMethod', 'mapx');
+    expect(s8).toBeDefined();
+    expect(s8?.name).toBe('deepMethod');
+
+    // 9. Mixed notation fallback (e.g. query with colons when DB has dots)
+    const s9 = store.getSymbolByName('NamespaceA::NamespaceB::ClassC::dotteddeepMethod', 'mapx');
+    expect(s9).toBeDefined();
+    expect(s9?.name).toBe('dotteddeepMethod');
   });
 
   it('performs getFilesFiltered with sort lines', () => {

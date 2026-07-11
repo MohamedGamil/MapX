@@ -8,6 +8,111 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-06-01
+
+### Added
+- **`graphExcludePatterns` configuration**: New setting to exclude test/scratch files from PageRank rankings, framework detection, and archetype scoring while keeping them indexed and queryable. Default patterns: `scratch/**`, `benchmarks/**`, `tests/**`, `**/*.test.*`, `**/*.spec.*`.
+- **Prepared Statement Caching**: Introduced a statement caching layer (`stmtCache`) in both `better-sqlite3` (NodeStore) and `bun:sqlite` (BunStore) drivers, reducing SQL statement compilation overhead during post-scanning loops.
+- **SQLite-backed PageRank Column**: Added schema migration version 9 to introduce the `pagerank` column to the `files` table, allowing PageRank values to be persisted directly inside SQLite.
+- **Intra-class call tracking**: `this.method()` calls within TypeScript and JavaScript classes are now tracked as call edges in the dependency graph, enabling accurate callers/callees tracing for internal class method references.
+- **`include_members` option for `mapx_node`**: New boolean parameter for the `mapx_node` MCP tool (and `--include-members` CLI flag) to list class, interface, or trait member symbols (methods, properties) alongside the inspected symbol's metadata.
+- **`include_leaf_libraries` option for `mapx_sinks` and `trace`**: New boolean parameter for the `mapx_sinks` MCP tool (and `--include-leaf-libraries` CLI flag for both `sinks` and `trace --sinks` commands) to include high-import leaf-library files that are normally filtered out as stable foundations.
+- **Content-hash based incremental scanning**: Non-git projects can now use `mapx sync` for incremental updates. File changes are detected via content hashing (SHA-256) instead of requiring a Git working tree.
+- **Pre-scan symbol index**: Built a pre-scan O(1) symbol lookup index to accelerate reference resolution during scanning, replacing repeated linear searches.
+- **Parser pooling**: WASM `Parser` instances are now pooled and reused per language, eliminating redundant parser creation and WASM instantiation overhead during scans.
+- **Hub/orchestrator classification signal**: Files with high fan-in combined with high fan-out are now classified with a hub/orchestrator signal in the role classifier, improving architectural layer accuracy.
+- **Worker thread parallel parsing**: Spawns multiple worker threads via `node:worker_threads` to parse files concurrently, yielding a 3-5x CPU performance speedup for large codebases. Includes a `--no-parallel` CLI flag and `parallel: false` option (both CLI and MCP) to run sequentially on the main thread.
+- **Centralized asset root path resolution**: Added a centralized, unified compatibility helper to resolve WASM assets safely across both Node.js and Bun runtimes.
+- **Contextual error messages for routes/hooks**: `mapx routes` and `mapx hooks` (CLI and MCP) now return descriptive, context-aware error messages when no routes or hooks are found, including suggestions for supported frameworks and troubleshooting steps.
+
+### Changed
+- **Files-only PageRank Calculation**: PageRank is now calculated on a lightweight files-only dependency graph during post-scan analysis, reducing PageRank computation time to under 50ms and writing updates in a single database transaction.
+- **Lightweight Graph Context Loading**: Initializing the workspace graph in CLI context loading, MCP tools, and Web Dashboard API endpoints now completely skips loading symbols into the in-memory graph.
+- **Database-driven CLI/MCP Search & Query Rankings**: CLI search, MCP search, and LLM/Toon exporters now retrieve symbol importance scores using a fast SQLite JOIN between `symbols` and `files` tables.
+- **Instant UI Graph Loading**: The visual graph `/api/graph` endpoint, `/api/metrics`, and `/api/context` endpoints bypass graphology initialization entirely. Additionally, `/api/graph` aggregates and deduplicates edges directly in SQLite via native grouping, reducing JSON payload generation and processing time by over 95% (from ~70,000 symbol-level edges to ~3,000 file-level edges for large repositories).
+- Community clusters now use directory-prefix labels (e.g., `src/core (12 files)`) instead of generic `community_N` names, making cluster names immediately meaningful.
+- Scan/sync output now shows total file count alongside changed file count (e.g., `Scanned 42 changed files (1,203 total)`).
+- Search JSON format includes `totalMatches` and `offset` fields for pagination awareness.
+- Leaf-library files (those with ≥3 structural importers) are filtered from sinks output by default; use `include_leaf_libraries` to restore them.
+
+### Fixed
+- **Static files in parallel scans resolved**: Fixed a critical crash and missing dependencies issue where worker threads failed to parse static file types (Markdown, CSS, HTML, JSON, YAML) and bypassed user-defined languages. Workers now inline and execute the static parser natively, ensuring all dependency links are preserved in multi-threaded scans.
+- **Visual graph ESM dynamic require resolved**: Fixed a critical runtime crash where dynamic `require` statements failed in ESM mode for payloads larger than 1MB, resolving `/api/graph` failing to load on large codebases. Statically imported all dynamic dependencies in `ui-server.ts` and `ui-events.ts` to ensure compatibility across Node.js and Bun runtimes.
+- **C# / ASP.NET scanner hang resolved**: Fixed a severe database lockup and thread blocking issue when scanning large repositories (such as `n2cms` with ~3,100 files and ~40,000 references). The scanner now merges newly parsed symbols in memory and updates the `symbolIndex` before reference resolution starts, keeping reference resolution at O(1) in memory and eliminating synchronous SQLite queries.
+- **Scanner post-scan and visual hang resolved**: Resolved a secondary hang where the CLI progress bar appeared stuck on the last file by:
+  - Deferring clearing of `symbolIndex` until after `runPostScanAnalysis` completes to avoid falling back to synchronous database queries during route/hook resolution.
+  - Adding a `Resolving references` phase (`resolve`) progress reporting to the CLI instead of remaining visually stuck at `Parsing files`.
+  - Batching framework route/hook edge database insertions inside `scanFrameworkRoutesAndHooks` within a single SQLite transaction, reducing disk-sync overhead.
+  - Supporting qualified dot-separated namespaces (e.g. `N2.Content.Page`) in `resolveSymbolToFile` using O(1) index lookups.
+- Self-edge guard prevents files from depending on themselves in the graph, eliminating spurious self-referential edges.
+- Trace cycles deduplicated on `(fromFile→toFile:cycleLength)` tuple to avoid reporting the same cycle multiple times at different entry points.
+- Architecture smells deduplicated on `(type, involvedFiles)` to prevent redundant smell reports.
+- Scratch/test files (matching `graphExcludePatterns`) excluded from framework detection and archetype scoring, preventing test fixtures from influencing project classification.
+- Duplicate framework detection calls eliminated with caching, reducing scan time for multi-framework projects.
+- Post-scan analysis pipeline extracted into a shared function, eliminating ~85 lines of duplicated code between full scan and incremental sync paths.
+
+## [0.3.3] — 2026-05-31
+
+### Added
+- **Flexible Symbol Querying**: Support querying and searching for symbols using both double-colon `::` and dot `.` notations natively.
+  - Handled multi-level scopes (e.g. `Namespace::Class::Method` or `Namespace.Class.Method`).
+  - Added fallback normalized scope matching for mixed notation lookups in `getSymbolByName`, `getCallersOfSymbol`, `getCalleesOfSymbol`, and `resolveStart` in `FlowTracer`.
+  - Added unit test cases covering dot and double-colon nested namespace formats.
+- **Symbol Explorer Graph Navigation**: Added support in the Web Dashboard's Symbol Explorer details view to navigate directly to and focus the symbol's file node on the Cytoscape graph.
+  - Rendered the file path in the Symbol Explorer details panel as an interactive `involved-file-badge` that automatically switches tabs, changes to focus layout mode, and centers on the file node.
+- **Expanded Test Coverage**: Dramatically increased automated test coverage by adding integration tests for all supported languages and web frameworks.
+  - Added `tests/parsers-integration.test.ts` to verify parsing, AST queries, symbol extraction, and reference extraction using real WASM binaries for all 23 supported languages.
+  - Added `tests/framework-extractors.test.ts` to cover route and hook extraction across all 22 web frameworks, ensuring zero regressions in routing/hooks mappings.
+- **Monorepo Framework Detection**: Enabled framework routing and hooks detection for applications inside monorepo subdirectories.
+  - Implemented shared utility helpers `hasPackageJsonDependency` and `hasComposerDependency` in `src/frameworks/utils.ts` to inspect all project configuration files in the workspace (including those in nested subdirectories like `apps/backend/package.json`).
+  - Refactored JS/TS detectors (`NestJSDetector`, `ExpressDetector`, `NextJSDetector`, `ReactRouterDetector`, `SvelteKitDetector`, `TanstackRouterDetector`, `VueRouterDetector`) to utilize the package dependency helper.
+  - Refactored other detectors (`LaravelDetector`, `SymfonyDetector`, `YiiDetector`, `SpringDetector`, `RailsDetector`, `GoDetector`, `RustDetector`, `VaporDetector`, `WordPressDetector`) to check both project root and subdirectory configurations.
+  - Added comprehensive test suite `tests/framework-detectors.test.ts` to verify detectors under both standard root and nested monorepo folder layouts.
+- **Static YAML file support**: Registered `.yaml` and `.yml` as static tier languages and implemented path extraction in `StaticFileParser` to trace relative references between YAML files (establishing correlation only between each other). This also indexes files like `pubspec.yaml`, enabling the package mapper to resolve Dart package imports.
+- **Flutter / Dart framework support**: Full first-class support for Flutter cross-platform mobile apps.
+  - New `FlutterDetector` (`src/frameworks/detectors/flutter.ts`) — detects Flutter projects via `pubspec.yaml` (`sdk: flutter`) or the presence of `lib/main.dart`. Extracts routes from `Navigator.pushNamed`, `MaterialApp` routes map, `GoRouter` (`GoRoute(path: '...')`), and `auto_route` (`@RoutePage()`) annotations. Extracts widget lifecycle hooks (`initState`, `dispose`, `build`, `didChangeDependencies`, etc.) and state-management bindings for Provider/Riverpod (`context.watch`, `ref.watch`), BLoC (`BlocBuilder`, `BlocListener`, `BlocConsumer`), and GetX (`Obx`, `GetBuilder`).
+  - **Expanded Dart symbol extraction** — `queries/dart/symbols.scm` now captures concrete functions (`function_declaration`), concrete methods (`method_declaration`), getters and setters (both concrete and abstract `*_signature` forms), factory and named constructors, `type_alias` / `function_type_alias` typedefs, `extension_type_declaration` (Dart 3.3+), enum member constants, and library declarations as namespaces.
+  - **Improved Dart dependency resolution** — `queries/dart/references.scm` now captures `part` and `part of` directives, `function_invocation` (direct calls), named constructor invocations (`Foo.fromJson`), `mixin on` clauses, and generic type arguments (`Future<AuthResult>`). Removed the incorrect `function_expression_body` call rule.
+  - **`package:` URI resolution in scanner** — `import 'package:my_app/src/auth.dart'` is now resolved to `lib/src/auth.dart` inside the project. `dart:` stdlib URIs are immediately short-circuited (no resolution attempt).
+  - **Fixed Dart `nodeMappings`** — `method` now correctly maps to `method_declaration`, `function` to `function_declaration`. Added `property`, `namespace`, and `interface` entries.
+  - **Flutter archetype detection** — `CodebaseProfiler` now recognises Flutter projects (`.dart` files under `lib/`) as `mobile-app`. `pubspec.yaml` is recognised as a package boundary for monorepo component detection.
+  - **Flutter-aware role classification** — `RoleClassifier path signals for `blocs/`, `cubits/`, `providers/`, `notifiers/`, `repositories/`, `datasources/`, `routes/`, and `navigation/` directories. Naming signals for `*Bloc`, `*Cubit`, `*Notifier`, `*Screen`, `*Page` class suffixes. `main.dart` classified as `entry`.
+  - **Enhanced Dart dependency resolution** — Comprehensive improvements to Dart import resolution in the scanner:
+    - **pubspec.yaml-aware `package:` resolution** — Scanner now discovers `pubspec.yaml` files across the workspace, extracts the `name:` field, and builds a package-name → `lib/` path map. `package:` URI imports are resolved using this map first (enabling monorepo cross-package imports like `package:core_pkg/models/user.dart` → `packages/core/lib/models/user.dart`), then falls back to the previous `lib/` prepend for same-project imports.
+    - **Dart-specific relative import fast-path** — Dart source files (`.dart`) now use a dedicated resolution path that resolves all non-scheme imports (including bare paths from `part` directives) relative to the source file's directory. This avoids trying JS/TS/Vue extension candidates (`.js`, `.ts`, `.tsx`, `/index.*`, etc.) that are meaningless for Dart files.
+    - **Distinct `part`/`part of` tree-sitter captures** — `queries/dart/references.scm` now captures `part_directive` as `ref.target_part`/`ref.type_part` and `part_of_directive` as `ref.target_part_of`/`ref.type_part_of` (previously both used `ref.type_import`), enabling the scanner to distinguish part file relationships from regular imports.
+    - **Dart/Flutter import signal for role classification** — `RoleClassifier.getImportsSignal` now recognises Flutter/Dart libraries: `flutter_bloc`/`bloc`/`riverpod`/`provider` → `state` role, `flutter/material`/`flutter/cupertino`/`flutter/widgets` → `components` role, `sqflite`/`hive`/`drift`/`isar` → `data` role.
+    - **25 new tests** — Comprehensive `tests/dart-resolution.test.ts` covering: `dart:` stdlib skipping, `package:` URI resolution (basic and monorepo), `discoverDartPackages` (single and multi-pubspec), relative imports, bare-path part directives, and JS/TS non-regression.
+
+### Changed
+- **ASP.NET Route Extraction Improvements**: Upgraded `AspNetDetector` to support class-level `[Route]` back-scanning, resolving issues where multiple classes in a single file or complex class modifier layouts caused route associations to fail. Added support for C# `[action]` routing placeholder token replacements, and expanded route parameter constraint stripping to handle complex patterns like `{id:min(1)}` or `{id:int}`.
+- **Picomatch Glob Migration**: Migrated remaining manual RegExp path/glob matching inside `resolveFilePaths` (`src/cli.ts`) and `resolveStart` (`src/core/flow-tracer.ts`) to use `picomatch` directly. Included dynamic `matchBase` configuration to correctly handle patterns with or without directory boundary slashes.
+- **Test coverage improvements**: Increased statement/branch/function/line coverage across `src/cli.ts` and `src/mcp.ts`.
+  - `cli.ts`: 70% → 74% statements, 58% → 62% branches, 57% → 62% functions.
+  - `mcp.ts`: 71% → 77% statements, 56% → 62% branches, 55% → 69% functions.
+  - New tests cover: `resolveFilePaths` glob/substring branches, fuzzy "Did you mean?" suggestions in `query`/`search`/`callers`/`callees`/`impact`/`node`, `trace` JSON/DOT/text with real paths (including cycle markers), `sources`/`sinks` route/queue/event/db/cache/mail annotations, `node --format json --source` error path, `profile` command with and without data, and staleness helper branches.
+  - Fixed `vi.mock('../src/core/fuzzy-matcher.js')` to export `isGlobPattern` so `resolveFilePaths` glob detection works in the test environment.
+
+### Fixed
+- **CI Dependency Native Compilation**: Added `nan` override (`^2.22.0`) to root `package.json` to resolve native addon compilation errors for `tree-sitter-pascal` (and other tree-sitter packages using old `nan` bindings) under Node.js 20+ in CI workflows.
+- **TypeScript Compilation & Declaration Emission**: Fixed `TS2339` error during `dts` emission by asserting type compatibility (`cand.scope as string` and `s.scope as string`) during scope filtering and matching.
+- **WASM grammar ABI compatibility**: Rebuilt the compiled `tree-sitter-dart.wasm` binary from source using the local tree-sitter CLI to resolve compatibility errors (e.g. `failIf` errors inside `Language.load`) with the runtime `web-tree-sitter` package.
+- **Dart Tree-sitter query compile errors**: Corrected AST patterns in `symbols.scm` and `references.scm` to be compatible with tree-sitter-dart v1.0.0 grammar. Commented out unsupported rules (`extension_type_declaration`, `mixin_on_clause`, `method_invocation`, `function_invocation`, `named_constructor_invocation`) and removed invalid field names. Explicitly traced parent-child AST paths for imports/exports through intermediate `configurable_uri` and `uri` nodes.
+- **Language Grammar Query and WASM Parser Compatibility**: Resolved critical AST schema compatibility issues across multiple tree-sitter languages by correcting and updating query `.scm` files:
+  - **Java**: Updated modifiers query to match static/final predicates against `(modifiers)` child nodes instead of the non-existent `(modifier)` node type.
+  - **Swift**: Commented out the non-existent `extension_declaration` query.
+  - **Bash**: Changed `name: (word)` to `name: (command_name)` in `command` queries to match the correct AST structure.
+  - **Elixir**: Removed invalid `arguments:` field name in `call` queries, matching the `(arguments)` child node directly.
+  - **Zig**: Updated symbols query to use `function_declaration` and `assignment_statement` instead of `fn_proto` and `variable_declaration`. Corrected references query to use `field_identifier` and `call_expression` inside `field_expression` without invalid fields.
+  - **Ruby**: Updated superclass query to use a generic wildcard expression (`superclass: (_)`) and updated instantiation query to use separate non-field calls.
+  - **Lua**: Rewrote `require` calls to match `(variable)` function names and use a version-agnostic arguments query `(_) @ref.target_require` to prevent syntax crashes.
+  - **Pascal**: Replaced invalid query node types with actual AST nodes (`declProc` and `unit` for symbols, `uses_clause` and `exprCall` for references).
+  - **Scala**: Simplified import reference query to capture the entire `(import_declaration)` node directly.
+- **Svelte Symbol Extraction**: Added matching for the Svelte `<script>` tag (`script_element` mapped as `class`) to extract Svelte components as symbols, since modern tree-sitter-svelte parses script blocks as `raw_text`.
+- **Parser Resiliency**: Enhanced `GenericWasmParser.cleanTarget` to strip outer parenthesized arguments (e.g., `('module')` -> `module`), ensuring robust dependency extraction when wildcard arguments are captured.
+
+## [0.3.2] — 2026-05-31
+
 ### Added
 - **Architecture & Health UI Revamp**: Re-architected the layout of the Architecture & Health panel.
   - Arranged the panel as a flat grid with top-row side-by-side cards (Codebase Profile and Smells) and a full-width bottom card (DSM matrix), completely eliminating horizontal page overflow.
@@ -496,7 +601,11 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.4...HEAD
+[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4
+[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/MohamedGamil/mapx/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/MohamedGamil/mapx/compare/v0.2.7...v0.3.0
 [0.2.7]: https://github.com/MohamedGamil/mapx/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/MohamedGamil/mapx/compare/v0.2.5...v0.2.6

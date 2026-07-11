@@ -171,7 +171,9 @@ export class RoleClassifier {
     }
 
     // Universal generic
-    if (parts.some(p => p === 'utils' || p === 'util' || p === 'helpers' || p === 'helper' || p === 'shared' || p === 'common' || p === 'lib' || p === 'libs')) {
+    // For Flutter/mobile apps, `lib/` is the main source root (equivalent to `src/`), not a shared folder.
+    const isFlutterSourceRoot = profile.archetype === 'mobile-app' && parts[0] === 'lib' && lower.endsWith('.dart');
+    if (!isFlutterSourceRoot && parts.some(p => p === 'utils' || p === 'util' || p === 'helpers' || p === 'helper' || p === 'shared' || p === 'common' || p === 'lib' || p === 'libs')) {
       return { source: 'path', role: 'shared', confidence: 0.8, reason: 'Matched shared/utilities folder' };
     }
 
@@ -233,10 +235,30 @@ export class RoleClassifier {
       if (parts.some(p => p === 'assets' || p === 'images' || p === 'fonts' || p === 'icons' || p === 'public')) {
         return { source: 'path', role: 'assets', confidence: 0.85, reason: 'Frontend static assets directory' };
       }
+
+      // Flutter-specific directories
+      if (parts.some(p => p === 'blocs' || p === 'bloc' || p === 'cubits' || p === 'cubit')) {
+        return { source: 'path', role: 'state', confidence: 0.92, reason: 'Flutter BLoC/Cubit state management directory' };
+      }
+      if (parts.some(p => p === 'providers' || p === 'provider' || p === 'notifiers' || p === 'notifier')) {
+        return { source: 'path', role: 'state', confidence: 0.9, reason: 'Flutter Provider/Riverpod state directory' };
+      }
+      if (parts.some(p => p === 'controllers' || p === 'controller') && lower.endsWith('.dart')) {
+        return { source: 'path', role: 'state', confidence: 0.85, reason: 'Flutter GetX controller directory' };
+      }
+      if (parts.some(p => p === 'repositories' || p === 'repository' || p === 'datasources' || p === 'datasource')) {
+        return { source: 'path', role: 'data', confidence: 0.9, reason: 'Flutter data/repository layer directory' };
+      }
+      if (parts.some(p => p === 'models' || p === 'model' || p === 'entities' || p === 'entity') && lower.endsWith('.dart')) {
+        return { source: 'path', role: 'data', confidence: 0.85, reason: 'Flutter data model/entity directory' };
+      }
+      if (parts.some(p => p === 'routes' || p === 'router' || p === 'navigation') && lower.endsWith('.dart')) {
+        return { source: 'path', role: 'api', confidence: 0.88, reason: 'Flutter routing/navigation directory' };
+      }
     }
 
     // Default main/index
-    if (basename === 'main.ts' || basename === 'main.js' || basename === 'index.ts' || basename === 'index.js' || basename === 'app.ts' || basename === 'app.js') {
+    if (basename === 'main.ts' || basename === 'main.js' || basename === 'main.dart' || basename === 'index.ts' || basename === 'index.js' || basename === 'app.ts' || basename === 'app.js') {
       return { source: 'path', role: 'entry', confidence: 0.8, reason: 'Entry point filename' };
     }
 
@@ -265,8 +287,11 @@ export class RoleClassifier {
       } else if (name.endsWith('Middleware') || name.endsWith('Guard') || name.endsWith('Interceptor')) {
         roleScores['middleware'] = (roleScores['middleware'] || 0) + 1;
         matches.push(name);
-      } else if (name.endsWith('Component') || name.endsWith('Widget') || name.endsWith('View')) {
+      } else if (name.endsWith('Component') || name.endsWith('Widget') || name.endsWith('View') || name.endsWith('Screen') || name.endsWith('Page')) {
         roleScores['components'] = (roleScores['components'] || 0) + 1;
+        matches.push(name);
+      } else if (name.endsWith('Bloc') || name.endsWith('Cubit') || name.endsWith('Notifier') || name.endsWith('ChangeNotifier') || name.endsWith('Provider')) {
+        roleScores['state'] = (roleScores['state'] || 0) + 1;
         matches.push(name);
       } else if (name.startsWith('use') && sym.kind === 'function') {
         roleScores['hooks'] = (roleScores['hooks'] || 0) + 1;
@@ -331,6 +356,16 @@ export class RoleClassifier {
       };
     }
 
+    // Hub/orchestrator files: high fan-in AND high fan-out
+    if (fanIn >= 5 && fanOut >= 10) {
+      return {
+        source: 'topology',
+        role: 'core',
+        confidence: 0.7,
+        reason: `High fan-in (${fanIn}) and fan-out (${fanOut}) suggests core orchestrator`,
+      };
+    }
+
     return null;
   }
 
@@ -380,6 +415,12 @@ export class RoleClassifier {
         roleScores['state'] = (roleScores['state'] || 0) + 1;
       } else if (target.includes('vitest') || target.includes('jest') || target.includes('mocha') || target.includes('chai')) {
         roleScores['test'] = (roleScores['test'] || 0) + 1;
+      } else if (target.includes('flutter_bloc') || target.includes('bloc/') || target.includes('riverpod') || target.includes('provider')) {
+        roleScores['state'] = (roleScores['state'] || 0) + 1;
+      } else if (target.includes('flutter/material') || target.includes('flutter/cupertino') || target.includes('flutter/widgets')) {
+        roleScores['components'] = (roleScores['components'] || 0) + 1;
+      } else if (target.includes('sqflite') || target.includes('hive') || target.includes('drift') || target.includes('isar')) {
+        roleScores['data'] = (roleScores['data'] || 0) + 1;
       }
     }
 

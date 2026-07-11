@@ -172,12 +172,36 @@ function extractJsonRefs(source: string): ExtractedReference[] {
   }
   return refs;
 }
+function extractYamlRefs(source: string): ExtractedReference[] {
+  const refs: ExtractedReference[] = [];
+  const lines = source.split('\n');
+  
+  // Match relative-like paths ending in .yaml or .yml (e.g. ./config.yaml, ../other.yml)
+  const yamlPathRe = /["']?(\.\.?\/[^"'\s#]+?\.(?:yaml|yml))["']?/g;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let m: RegExpExecArray | null;
+    yamlPathRe.lastIndex = 0; // Reset regex
+    while ((m = yamlPathRe.exec(line)) !== null) {
+      const target = m[1].trim();
+      refs.push({
+        sourceSymbol: null,
+        targetName: target,
+        referenceType: 'import',
+        startLine: i + 1,
+        verifiability: 'inferred'
+      });
+    }
+  }
+  return refs;
+}
 
 export class StaticFileParser implements LanguageParser {
   readonly languageName = 'static';
 
   get supportedExtensions(): string[] {
-    return ['.md', '.mdx', '.markdown', '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less', '.json', '.jsonc', '.json5'];
+    return ['.md', '.mdx', '.markdown', '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less', '.json', '.jsonc', '.json5', '.yaml', '.yml'];
   }
 
   async parse(filePath: string, source: string): Promise<ParseResult> {
@@ -192,6 +216,8 @@ export class StaticFileParser implements LanguageParser {
       references = extractCssRefs(source);
     } else if (ext === 'json' || ext === 'jsonc' || ext === 'json5') {
       references = extractJsonRefs(source);
+    } else if (ext === 'yaml' || ext === 'yml') {
+      references = extractYamlRefs(source);
     }
 
     return { symbols: [], references, errors: [] };

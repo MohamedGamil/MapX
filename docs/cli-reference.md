@@ -67,7 +67,7 @@ Perform a full scan of all source files. Builds the graph from scratch.
 - Survives interruptions: progress is saved per-file, re-run to resume
 
 ```bash
-mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--force]
+mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--force] [--no-parallel]
 ```
 
 Options:
@@ -76,14 +76,15 @@ Options:
 - `--repo` — Scan only a specific registered repository
 - `--all` — Scan all registered repositories
 - `--force` — Force re-parsing of all files (bypasses file caching and rebuilds all symbols and edges)
+- `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
 
 ## `mapx update` / `mapx sync`
 
 Incremental scan. Detects changed files via git and only re-scans those.
 
 ```bash
-mapx update [/path]
-mapx sync [/path]
+mapx update [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--no-parallel]
+mapx sync [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--no-parallel]
 ```
 
 Options:
@@ -91,6 +92,7 @@ Options:
 - `--include` — Include glob patterns (repeatable)
 - `--repo` — Update only a specific registered repository
 - `--all` — Update all registered repositories
+- `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
 
 ## `mapx status`
 
@@ -110,7 +112,7 @@ Outputs:
 
 ## `mapx query <term>`
 
-Search for symbols by name. Supports partial matching, glob patterns (`*Service`, `get*`, `*Controller*`), and wildcard (`*` to list all). When no matches are found, suggests similar symbols via fuzzy matching.
+Search for symbols by name. Supports partial matching, glob patterns (`*Service`, `get*`, `*Controller*`), wildcard (`*` to list all), and flexible namespace querying using double-colons or dots (e.g. `BillingService::getEffectiveLimits` or `BillingService.getEffectiveLimits`). When no matches are found, suggests similar symbols via fuzzy matching.
 
 ```bash
 mapx query <term> [--dir /path]
@@ -122,6 +124,8 @@ mapx query UserService           # Partial match
 mapx query '*Service'            # Glob: all symbols ending with "Service"
 mapx query 'get*'                # Glob: all symbols starting with "get"
 mapx query '*'                   # List all symbols
+mapx query BillingService::getEffectiveLimits # Double-colon namespace query
+mapx query BillingService.getEffectiveLimits  # Dot namespace query
 mapx query Stor                  # Typo: fuzzy suggestions → Store, StoreBackend
 ```
 
@@ -178,7 +182,7 @@ Trace data flow paths from a starting symbol or file.
 ```bash
 mapx trace [symbol-or-file] [--dir /path] [--direction <dir>] [--depth <n>] [--max-depth <n>]
                             [--format <fmt>] [--include-structural] [--sources] [--sinks]
-                            [--to <target>]
+                            [--include-leaf-libraries] [--to <target>]
 ```
 
 Options:
@@ -189,16 +193,18 @@ Options:
 - `--include-structural` — Include import/extends edges in trace (default: false)
 - `--sources` — Show entry points instead of tracing a symbol
 - `--sinks` — Show terminal consumers instead of tracing a symbol
+- `--include-leaf-libraries` — Include high-import leaf libraries in terminal consumers output (when `--sinks` is active; default: false)
 - `--to` — Find the shortest critical path from the start to a target symbol/file
 
 Examples:
 ```bash
-mapx trace handleRequest               # Bidirectional trace
-mapx trace handleRequest --direction up # Upstream only
-mapx trace --sources                    # List all entry points
-mapx trace --sinks                      # List all terminal consumers
-mapx trace Store --to FlowTracer        # Shortest path between symbols
-mapx trace Store --format json          # JSON output
+mapx trace handleRequest                            # Bidirectional trace
+mapx trace handleRequest --direction up              # Upstream only
+mapx trace --sources                                 # List all entry points
+mapx trace --sinks                                   # List all terminal consumers
+mapx trace --sinks --include-leaf-libraries          # List all terminal consumers including leaf libraries
+mapx trace Store --to FlowTracer                     # Shortest path between symbols
+mapx trace Store --format json                       # JSON output
 ```
 
 ## `mapx callers <symbol>`
@@ -513,10 +519,13 @@ Identifies files with no incoming data-bearing edges — route files, queue work
 Find terminal consumers (data sinks) in the codebase.
 
 ```bash
-mapx sinks [--dir /path]
+mapx sinks [--dir /path] [--include-leaf-libraries]
 ```
 
-Identifies files with no outgoing data-bearing edges — database facades, cache managers, mail senders, and queue dispatchers.
+Options:
+- `--include-leaf-libraries` — Include high-import leaf libraries in output (default: false)
+
+Identifies files with no outgoing data-bearing edges — database facades, cache managers, mail senders, and queue dispatchers. By default, high-import leaf libraries are filtered out to reduce noise, unless `--include-leaf-libraries` is passed.
 
 ## `mapx context <task>`
 

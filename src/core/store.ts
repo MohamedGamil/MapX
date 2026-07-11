@@ -6,7 +6,36 @@ import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy
 import { BunStore } from './store-bun.js';
 import { NodeStore } from './store-node.js';
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
+
+function parseSearchPattern(pattern: string): { scopeLike: string | null; namePattern: string } {
+  const commonExtensions = new Set([
+    'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+    'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+    'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+  ]);
+
+  if (pattern.includes('::')) {
+    const parts = pattern.split('::');
+    const namePart = parts.pop()!;
+    const scopePart = parts.join('::');
+    const scopeLike = isWildcardTerm(scopePart) ? '%' : (isGlobPattern(scopePart) ? globToLike(scopePart) : `%${scopePart}%`);
+    return { scopeLike, namePattern: namePart };
+  }
+
+  if (pattern.includes('.')) {
+    const parts = pattern.split('.');
+    const last = parts[parts.length - 1].toLowerCase();
+    if (!commonExtensions.has(last)) {
+      const namePart = parts.pop()!;
+      const scopePart = parts.join('.');
+      const scopeLike = isWildcardTerm(scopePart) ? '%' : (isGlobPattern(scopePart) ? globToLike(scopePart) : `%${scopePart}%`);
+      return { scopeLike, namePattern: namePart };
+    }
+  }
+
+  return { scopeLike: null, namePattern: pattern };
+}
 
 const INITIAL_SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -185,6 +214,14 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_arch_smells_repo ON arch_smells(repo)`,
     ],
   },
+  {
+    version: 9,
+    description: 'Add pagerank column to files table',
+    up: [
+      `ALTER TABLE files ADD COLUMN pagerank REAL DEFAULT 0.0`,
+      `CREATE INDEX IF NOT EXISTS idx_files_pagerank ON files(pagerank)`
+    ]
+  }
 ];
 
 function createStoreBackend(dbPath: string): StoreBackend {
@@ -332,6 +369,14 @@ export class Store {
     return this.backend.prepare('SELECT * FROM files').all();
   }
 
+  /**
+   * Get files matching a path suffix pattern (e.g., 'pubspec.yaml').
+   * Uses SQL LIKE for efficient filtering without loading all files.
+   */
+  getFilesByPattern(pathSuffix: string): Record<string, unknown>[] {
+    return this.backend.prepare('SELECT * FROM files WHERE path LIKE ?').all(`%${pathSuffix}`);
+  }
+
   insertSymbol(sym: {
     filePath: string;
     repo: string;
@@ -354,24 +399,35 @@ export class Store {
   }
 
   searchSymbols(namePattern: string, repo?: string): Record<string, unknown>[] {
-    // Support glob patterns: *Service → %Service, get* → get%
+    const { scopeLike, namePattern: term } = parseSearchPattern(namePattern);
     let likePattern: string;
-    if (isWildcardTerm(namePattern)) {
+    if (isWildcardTerm(term)) {
       likePattern = '%';
-    } else if (isGlobPattern(namePattern)) {
-      likePattern = globToLike(namePattern);
+    } else if (isGlobPattern(term)) {
+      likePattern = globToLike(term);
     } else {
-      likePattern = `%${namePattern}%`;
+      likePattern = `%${term}%`;
     }
 
-    if (repo) {
+    if (scopeLike) {
+      if (repo) {
+        return this.backend.prepare(
+          'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND scope LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
+        ).all(likePattern, scopeLike, repo);
+      }
       return this.backend.prepare(
-        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
-      ).all(likePattern, repo);
+        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND scope LIKE ? COLLATE NOCASE ORDER BY kind, name'
+      ).all(likePattern, scopeLike);
+    } else {
+      if (repo) {
+        return this.backend.prepare(
+          'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE AND repo = ? ORDER BY kind, name'
+        ).all(likePattern, repo);
+      }
+      return this.backend.prepare(
+        'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE ORDER BY kind, name'
+      ).all(likePattern);
     }
-    return this.backend.prepare(
-      'SELECT * FROM symbols WHERE name LIKE ? COLLATE NOCASE ORDER BY kind, name'
-    ).all(likePattern);
   }
 
   getSymbolsForFile(filePath: string): Record<string, unknown>[] {
@@ -685,28 +741,30 @@ export class Store {
   }): Record<string, any>[] {
     const limit = options.limit ?? 20;
     const offset = options.offset ?? 0;
+    const { scopeLike, namePattern: term } = parseSearchPattern(options.term);
+
     let sql = 'SELECT * FROM symbols WHERE ';
     const params: any[] = [];
 
-    const wildcard = isWildcardTerm(options.term);
+    const wildcard = isWildcardTerm(term);
 
     if (wildcard) {
-      // Wildcard: match all symbols (no name filter)
-      // Works with or without a file prefix — the key behavioral fix
       sql += '1=1';
     } else if (options.exact) {
-      // Exact: case-insensitive exact name match
       sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
-      params.push(options.term, options.term);
-    } else if (isGlobPattern(options.term)) {
-      // Glob: convert * and ? to SQL LIKE wildcards, case-insensitive
-      const likePattern = globToLike(options.term);
+      params.push(term, term);
+    } else if (isGlobPattern(term)) {
+      const likePattern = globToLike(term);
       sql += '(name LIKE ? COLLATE NOCASE)';
       params.push(likePattern);
     } else {
-      // Default: substring match, case-insensitive
       sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
-      params.push(`%${options.term}%`, `%${options.term}%`);
+      params.push(`%${term}%`, `%${term}%`);
+    }
+
+    if (scopeLike) {
+      sql += ' AND scope LIKE ? COLLATE NOCASE';
+      params.push(scopeLike);
     }
 
     if (options.kind) {
@@ -739,21 +797,27 @@ export class Store {
   }): number {
     let sql = 'SELECT COUNT(*) as cnt FROM symbols WHERE ';
     const params: any[] = [];
+    const { scopeLike, namePattern: term } = parseSearchPattern(options.term);
 
-    const wildcard = isWildcardTerm(options.term);
+    const wildcard = isWildcardTerm(term);
 
     if (wildcard) {
       sql += '1=1';
     } else if (options.exact) {
       sql += '(name = ? COLLATE NOCASE OR file_path = ? COLLATE NOCASE)';
-      params.push(options.term, options.term);
-    } else if (isGlobPattern(options.term)) {
-      const likePattern = globToLike(options.term);
+      params.push(term, term);
+    } else if (isGlobPattern(term)) {
+      const likePattern = globToLike(term);
       sql += '(name LIKE ? COLLATE NOCASE)';
       params.push(likePattern);
     } else {
       sql += '(name LIKE ? COLLATE NOCASE OR file_path LIKE ? COLLATE NOCASE)';
-      params.push(`%${options.term}%`, `%${options.term}%`);
+      params.push(`%${term}%`, `%${term}%`);
+    }
+
+    if (scopeLike) {
+      sql += ' AND scope LIKE ? COLLATE NOCASE';
+      params.push(scopeLike);
     }
 
     if (options.kind) {
@@ -816,12 +880,53 @@ export class Store {
   }
 
   getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
+    let scope: string | null = null;
+    let name = fullName;
+
     if (fullName.includes('::')) {
-      const [scope, name] = fullName.split('::');
-      if (repo) {
-        return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? AND repo = ? LIMIT 1').get(scope, name, repo);
+      const parts = fullName.split('::');
+      name = parts.pop()!;
+      scope = parts.join('::');
+    } else if (fullName.includes('.')) {
+      const parts = fullName.split('.');
+      const last = parts[parts.length - 1].toLowerCase();
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      if (!commonExtensions.has(last)) {
+        name = parts.pop()!;
+        scope = parts.join('.');
       }
-      return this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? LIMIT 1').get(scope, name);
+    }
+
+    if (scope) {
+      let res: any;
+      if (repo) {
+        res = this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? AND repo = ? LIMIT 1').get(scope, name, repo);
+      } else {
+        res = this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? LIMIT 1').get(scope, name);
+      }
+      if (res) return res;
+
+      // Fallback with normalized scope matching
+      let candidates: any[];
+      if (repo) {
+        candidates = this.backend.prepare('SELECT * FROM symbols WHERE name = ? AND repo = ?').all(name, repo);
+      } else {
+        candidates = this.backend.prepare('SELECT * FROM symbols WHERE name = ?').all(name);
+      }
+      const normScope = scope.replace(/\./g, '::');
+      for (const cand of candidates) {
+        if (cand.scope) {
+          const candNormScope = cand.scope.replace(/\./g, '::');
+          if (candNormScope === normScope) {
+            return cand;
+          }
+        }
+      }
+      return undefined;
     } else {
       if (repo) {
         return this.backend.prepare('SELECT * FROM symbols WHERE name = ? AND repo = ? LIMIT 1').get(fullName, repo);
@@ -879,8 +984,28 @@ export class Store {
 
   getCallersOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
     let symbols: Record<string, any>[] = [];
+    let scope: string | null = null;
+    let name = fullName;
+
     if (fullName.includes('::')) {
-      const [scope, name] = fullName.split('::');
+      const parts = fullName.split('::');
+      name = parts.pop()!;
+      scope = parts.join('::');
+    } else if (fullName.includes('.')) {
+      const parts = fullName.split('.');
+      const last = parts[parts.length - 1].toLowerCase();
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      if (!commonExtensions.has(last)) {
+        name = parts.pop()!;
+        scope = parts.join('.');
+      }
+    }
+
+    if (scope) {
       let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
       const params = [scope, name];
       if (repo) {
@@ -888,6 +1013,19 @@ export class Store {
         params.push(repo);
       }
       symbols = this.backend.prepare(sql).all(...params);
+
+      // Fallback with normalized scope matching
+      if (symbols.length === 0) {
+        let fallbackSql = 'SELECT * FROM symbols WHERE name = ?';
+        const fallbackParams = [name];
+        if (repo) {
+          fallbackSql += ' AND repo = ?';
+          fallbackParams.push(repo);
+        }
+        const candidates = this.backend.prepare(fallbackSql).all(...fallbackParams);
+        const normScope = scope.replace(/\./g, '::');
+        symbols = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
+      }
     } else {
       let sql = 'SELECT * FROM symbols WHERE name = ?';
       const params = [fullName];
@@ -918,8 +1056,28 @@ export class Store {
 
   getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
     let symbols: Record<string, any>[] = [];
+    let scope: string | null = null;
+    let name = fullName;
+
     if (fullName.includes('::')) {
-      const [scope, name] = fullName.split('::');
+      const parts = fullName.split('::');
+      name = parts.pop()!;
+      scope = parts.join('::');
+    } else if (fullName.includes('.')) {
+      const parts = fullName.split('.');
+      const last = parts[parts.length - 1].toLowerCase();
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      if (!commonExtensions.has(last)) {
+        name = parts.pop()!;
+        scope = parts.join('.');
+      }
+    }
+
+    if (scope) {
       let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
       const params = [scope, name];
       if (repo) {
@@ -927,6 +1085,19 @@ export class Store {
         params.push(repo);
       }
       symbols = this.backend.prepare(sql).all(...params);
+
+      // Fallback with normalized scope matching
+      if (symbols.length === 0) {
+        let fallbackSql = 'SELECT * FROM symbols WHERE name = ?';
+        const fallbackParams = [name];
+        if (repo) {
+          fallbackSql += ' AND repo = ?';
+          fallbackParams.push(repo);
+        }
+        const candidates = this.backend.prepare(fallbackSql).all(...fallbackParams);
+        const normScope = scope.replace(/\./g, '::');
+        symbols = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
+      }
     } else {
       let sql = 'SELECT * FROM symbols WHERE name = ?';
       const params = [fullName];
@@ -955,12 +1126,57 @@ export class Store {
     return results;
   }
 
-  getTopFilesByPageRank(graph: MapxGraph, limit: number = 5): any[] {
-    return graph.getRankedFiles().slice(0, limit);
+  updateFilePageRank(filePath: string, pagerank: number): void {
+    this.backend.prepare('UPDATE files SET pagerank = ? WHERE path = ?')
+      .run(pagerank, filePath);
   }
 
-  getTopSymbolsByPageRank(graph: MapxGraph, limit: number = 5): any[] {
-    return graph.getRankedSymbols().slice(0, limit);
+  getTopFilesByPageRank(graph?: MapxGraph | null, limit: number = 5): any[] {
+    if (graph && graph.constructor.name !== 'MapxGraph' && typeof graph.getRankedFiles === 'function') {
+      return graph.getRankedFiles().slice(0, limit);
+    }
+    const rows = this.backend.prepare(
+      'SELECT path, pagerank, language FROM files ORDER BY pagerank DESC LIMIT ?'
+    ).all(limit);
+    if (rows.length > 0) {
+      return rows.map(r => ({
+        path: r.path,
+        pagerank: r.pagerank,
+        language: r.language
+      }));
+    }
+    if (graph && typeof graph.getRankedFiles === 'function') {
+      return graph.getRankedFiles().slice(0, limit);
+    }
+    return [];
+  }
+
+  getTopSymbolsByPageRank(graph?: MapxGraph | null, limit: number = 5): any[] {
+    if (graph && graph.constructor.name !== 'MapxGraph' && typeof graph.getRankedSymbols === 'function') {
+      return graph.getRankedSymbols().slice(0, limit);
+    }
+    const rows = this.backend.prepare(`
+      SELECT s.name, s.kind, s.file_path, s.start_line, s.scope,
+             (f.pagerank * (1 + (CASE WHEN s.scope IS NOT NULL THEN 2 ELSE 1 END) * 0.1)) AS pagerank
+      FROM symbols s
+      JOIN files f ON s.file_path = f.path
+      ORDER BY pagerank DESC
+      LIMIT ?
+    `).all(limit);
+    if (rows.length > 0) {
+      return rows.map(r => ({
+        name: r.name,
+        kind: r.kind,
+        filePath: r.file_path,
+        startLine: r.start_line,
+        pagerank: r.pagerank,
+        scope: r.scope
+      }));
+    }
+    if (graph && typeof graph.getRankedSymbols === 'function') {
+      return graph.getRankedSymbols().slice(0, limit);
+    }
+    return [];
   }
 
   updateFileRole(filePath: string, role: string, confidence: number): void {

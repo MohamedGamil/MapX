@@ -369,6 +369,7 @@ Find entry points (sources) in the codebase.
 
 #### `mapx_sinks`
 Find terminal consumers (sinks) in the codebase.
+- `include_leaf_libraries` (boolean, optional): Include high-import leaf libraries that are normally filtered out as stable foundations (default: `false`)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_routes`

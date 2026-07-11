@@ -4,13 +4,16 @@ import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
 
 export class RustDetector implements FrameworkDetector {
-  readonly name = 'rust-web';
+  readonly name = 'rust';
   readonly language = 'rust';
   readonly filePattern = /\.rs$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
+    if (files.some(f => f === 'Cargo.toml' || f.endsWith('/Cargo.toml'))) {
+      return true;
+    }
     const cargoPath = join(projectRoot, 'Cargo.toml');
-    return existsSync(cargoPath) || files.some(f => f.endsWith('.rs'));
+    return existsSync(cargoPath);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

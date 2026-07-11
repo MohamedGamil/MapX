@@ -9,8 +9,11 @@ export class VaporDetector implements FrameworkDetector {
   readonly filePattern = /\.swift$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
+    if (files.some(f => f === 'Package.swift' || f.endsWith('/Package.swift'))) {
+      return true;
+    }
     const pkgSwift = join(projectRoot, 'Package.swift');
-    return existsSync(pkgSwift) || files.some(f => f.endsWith('.swift'));
+    return existsSync(pkgSwift);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

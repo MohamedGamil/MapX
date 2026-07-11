@@ -1,12 +1,7 @@
 ; Scala Reference Extraction Queries
 
 ; Import declarations
-(import_declaration
-  (identifier) @ref.target_import) @ref.type_import
-
-; Wildcard imports
-(import_declaration
-  (stable_identifier (identifier) @ref.target_import)) @ref.type_import
+(import_declaration) @ref.target_import @ref.type_import
 
 ; Class extends: class Foo extends Bar
 (extends_clause

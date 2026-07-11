@@ -20,6 +20,7 @@ import { VaporDetector } from './detectors/vapor.js';
 import { SymfonyDetector } from './detectors/symfony.js';
 import { YiiDetector } from './detectors/yii.js';
 import { WordPressDetector } from './detectors/wordpress.js';
+import { FlutterDetector } from './detectors/flutter.js';
 
 export class FrameworkRegistry {
   private static instance: FrameworkRegistry | null = null;
@@ -47,6 +48,7 @@ export class FrameworkRegistry {
     this.register(new SymfonyDetector());
     this.register(new YiiDetector());
     this.register(new WordPressDetector());
+    this.register(new FlutterDetector());
   }
 
   static getInstance(): FrameworkRegistry {

@@ -1,20 +1,20 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
-import type { FrameworkDetector, RouteBinding, ScanContext } from '../../types.js';
+import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../../types.js';
 
 export class SpringDetector implements FrameworkDetector {
   readonly name = 'spring';
   readonly language = 'java';
-  readonly filePattern = /\.(java|kt)$/;
+  readonly filePattern = /\.java$/;
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
+    if (files.some(f => f === 'pom.xml' || f.endsWith('/pom.xml') || f === 'build.gradle' || f.endsWith('/build.gradle') || f === 'build.gradle.kts' || f.endsWith('/build.gradle.kts'))) {
+      return true;
+    }
     const hasPom = existsSync(join(projectRoot, 'pom.xml'));
     const hasGradle = existsSync(join(projectRoot, 'build.gradle'));
-    if (hasPom || hasGradle) return true;
-
-    // Check for @SpringBootApplication or class imports
-    return files.some(f => f.endsWith('.java') || f.endsWith('.kt'));
+    return hasPom || hasGradle;
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

@@ -27,7 +27,7 @@ describe('StaticFileParser — meta', () => {
 
   it('supportedExtensions covers all static types', () => {
     const exts = parser.supportedExtensions;
-    for (const e of ['.md', '.mdx', '.markdown', '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less', '.json', '.jsonc', '.json5']) {
+    for (const e of ['.md', '.mdx', '.markdown', '.html', '.htm', '.xhtml', '.css', '.scss', '.sass', '.less', '.json', '.jsonc', '.json5', '.yaml', '.yml']) {
       expect(exts).toContain(e);
     }
   });
@@ -383,6 +383,48 @@ describe('StaticFileParser — JSONC / JSON5 syntax', () => {
 });
 
 // ---------------------------------------------------------------------------
+// YAML
+// ---------------------------------------------------------------------------
+
+describe('StaticFileParser — YAML', () => {
+  it('extracts relative paths ending in .yaml or .yml', async () => {
+    const src = `
+dependencies:
+  core: ./core.yaml
+  ui: '../ui/ui_config.yml'
+    `;
+    const result = await parse('pubspec.yaml', src);
+    expect(targets(result)).toContain('./core.yaml');
+    expect(targets(result)).toContain('../ui/ui_config.yml');
+  });
+
+  it('ignores paths pointing to non-YAML files', async () => {
+    const src = `
+dependencies:
+  library: ./lib/main.dart
+  asset: ./assets/logo.png
+    `;
+    const result = await parse('pubspec.yaml', src);
+    expect(result.references).toHaveLength(0);
+  });
+
+  it('ignores absolute paths and external URLs', async () => {
+    const src = `
+schema: https://example.com/schema.yaml
+absolute: /root/config.yaml
+    `;
+    const result = await parse('config.yaml', src);
+    expect(result.references).toHaveLength(0);
+  });
+
+  it('records correct startLine for YAML references', async () => {
+    const src = `line1\nline2\nconfig: ./sub.yaml`;
+    const result = await parse('config.yaml', src);
+    expect(result.references[0].startLine).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Unknown / fallback extension
 // ---------------------------------------------------------------------------
 
@@ -451,20 +493,31 @@ describe('Registry — static language entries', () => {
     expect(getLanguageForFile('config.json5')?.name).toBe('json');
   });
 
+  it('resolves .yaml to yaml', () => {
+    const lang = getLanguageForFile('pubspec.yaml');
+    expect(lang?.name).toBe('yaml');
+    expect(lang?.tier).toBe('static');
+  });
+
+  it('resolves .yml to yaml', () => {
+    expect(getLanguageForFile('config.yml')?.name).toBe('yaml');
+  });
+
   it('static entries appear in getBuiltinLanguages()', () => {
     const langs = getBuiltinLanguages();
     expect(langs).toHaveProperty('markdown');
     expect(langs).toHaveProperty('html');
     expect(langs).toHaveProperty('css');
     expect(langs).toHaveProperty('json');
-    for (const key of ['markdown', 'html', 'css', 'json']) {
+    expect(langs).toHaveProperty('yaml');
+    for (const key of ['markdown', 'html', 'css', 'json', 'yaml']) {
       expect(langs[key].tier).toBe('static');
     }
   });
 
   it('static entries have empty grammarWasm', () => {
     const langs = getBuiltinLanguages();
-    for (const key of ['markdown', 'html', 'css', 'json']) {
+    for (const key of ['markdown', 'html', 'css', 'json', 'yaml']) {
       expect(langs[key].grammarWasm).toBe('');
     }
   });

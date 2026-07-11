@@ -1,11 +1,11 @@
 # Framework & Routing Integration
 
-MapxGraph features built-in framework detection and automatic route/hook extraction for **21 popular web frameworks** across multiple languages. This allows developers and LLMs to map external HTTP requests and event triggers directly to their implementing files and handler symbols.
+MapxGraph features built-in framework detection and automatic route/hook extraction for **22 popular frameworks** across multiple languages. This allows developers and LLMs to map external HTTP requests, event triggers, and mobile navigation routes directly to their implementing files and handler symbols.
 
 ## How It Works
 
 During a codebase scan (via `mapx scan` or `mapx update`), MapxGraph executes framework-specific detectors to:
-1. **Detect Active Frameworks**: Checks project configuration files (e.g., `package.json`, `composer.json`, `requirements.txt`, `Gemfile`) and matches file extension patterns or directory structures.
+1. **Detect Active Frameworks**: Checks project configuration files (e.g., `package.json`, `composer.json`, `requirements.txt`, `Gemfile`) and matches file extension patterns or directory structures. This detector scan is **monorepo-aware**; it searches both the workspace root and nested subdirectories (such as `apps/backend/package.json` or `packages/api/package.json`) to register nested applications automatically.
 2. **Extract API Routes**: Parses routing configurations to map HTTP verbs (GET, POST, PUT, DELETE, etc.) and URL path patterns to their handler files and controller symbols.
 3. **Extract Hooks & Events**: Maps event listener bindings (e.g., WordPress actions/filters, Laravel event listeners) to their respective handler functions.
 4. **Persist Registry**: Saves findings to `.mapx/routes.json` and `.mapx/hooks.json` to keep them queryable.
@@ -19,7 +19,7 @@ graph TD
     classDef registry fill:#fff3e0,stroke:#e65100,stroke-width:2px;
 
     Scan["mapx scan / update"]:::scanner
-    Detectors["Framework Registry<br>(21 Detectors)"]:::detector
+    Detectors["Framework Registry<br>(22 Detectors)"]:::detector
     
     Laravel["Laravel Detector"]:::detector
     Express["Express Detector"]:::detector
@@ -43,7 +43,7 @@ graph TD
 
 ---
 
-## Supported Frameworks (21 total)
+## Supported Frameworks (22 total)
 
 | Framework | Language | Heuristic & Scope |
 |-----------|----------|-------------------|
@@ -68,6 +68,7 @@ graph TD
 | **Symfony** | PHP | Composer dependencies (`symfony/framework-bundle`), annotations/attributes, YAML routes. |
 | **Yii** | PHP | Heuristics on controller actions (`actionIndex`) and URL rules. |
 | **WordPress** | PHP | Detects theme and plugin structures, extracts `add_action()` and `add_filter()` hooks. |
+| **Flutter** | Dart | Detects Flutter projects via `pubspec.yaml` (`sdk: flutter`) or `lib/main.dart`; extracts `Navigator.pushNamed`, `MaterialApp` routes, `GoRouter` (`GoRoute(path: '...')`), and `auto_route` (`@RoutePage()`) routes; extracts widget lifecycle hooks (`initState`, `dispose`, `build`, `didChangeDependencies`) and state-management bindings for Provider/Riverpod, BLoC, and GetX. |
 
 ---
 

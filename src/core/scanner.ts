@@ -3,7 +3,9 @@ import { existsSync, readFileSync, closeSync } from 'node:fs';
 import { resolve, relative, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
+import { Worker } from 'node:worker_threads';
 import { Store } from './store.js';
+import { findAssetRoot } from '../parsers/assets.js';
 import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
 import { Config } from './config.js';
@@ -47,6 +49,7 @@ interface FileInfo {
 interface DiscoveredFile extends FileInfo {
   relativePath: string;
   contentHash: string;
+  content?: string;
   isNew: boolean;
   contentChanged: boolean;
 }
@@ -84,13 +87,17 @@ export class Scanner {
   private cliExcludes: string[] = [];
   private cliIncludes: string[] = [];
   private workspaceFileMap = new Map<string, string>();
+  private dartPackageMap = new Map<string, string>();
+  private cachedActiveDetectors = new Map<string, any[]>();
+  private symbolIndex: Map<string, Array<{ name: string; file: string; scope: string | null }>> | null = null;
+  private parallel: boolean;
 
   constructor(
     store: Store,
     config: Config,
     graph: MapxGraph,
     onProgress?: ProgressCallback,
-    options?: { excludes?: string[]; includes?: string[] }
+    options?: { excludes?: string[]; includes?: string[]; parallel?: boolean }
   ) {
     this.store = store;
     this.config = config;
@@ -99,6 +106,7 @@ export class Scanner {
     this.concurrency = DEFAULT_CONCURRENCY;
     this.cliExcludes = options?.excludes ?? [];
     this.cliIncludes = options?.includes ?? [];
+    this.parallel = options?.parallel !== false;
   }
 
   abort(): void {
@@ -302,11 +310,16 @@ export class Scanner {
       });
 
       // Detect active frameworks early so we can build ignored symbols for parsing
-      const registry = FrameworkRegistry.getInstance();
       const filePaths = discovered.map(f => f.relativePath);
-      const activeDetectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+      const activeDetectors = await this.getActiveDetectors(repoRoot, filePaths);
       const activeFrameworks = activeDetectors.map(d => d.name);
       const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+
+      // Build pre-scan symbol index for O(1) lookups during reference resolution
+      this.symbolIndex = this.buildSymbolIndex(repo.name);
+
+      // Discover Dart packages for accurate package: URI resolution
+      this.discoverDartPackages(workspaceRoot);
 
       let parsedFilesCount = 0;
       const parseResults = await this.parseFilesParallel(
@@ -322,6 +335,13 @@ export class Scanner {
             file: relPath,
           });
         }
+      );
+
+      // Rebuild the symbol index to include the newly parsed symbols before reference resolution
+      this.symbolIndex = this.buildSymbolIndex(
+        repo.name,
+        toParse.map(f => f.relativePath),
+        parseResults
       );
 
       const fileMap = this.workspaceFileMap.size > 0 ? this.workspaceFileMap : (() => {
@@ -348,7 +368,12 @@ export class Scanner {
           completed.add(toParse[i].relativePath);
         }
 
-
+        this.onProgress?.({
+          phase: 'resolve',
+          current: batchEnd,
+          total: toParse.length,
+          file: toParse[batchEnd - 1].relativePath,
+        });
 
         this.saveResumeState(repo.name, {
           totalFiles: discovered.length,
@@ -375,98 +400,22 @@ export class Scanner {
       langBreakdown[f.language] = (langBreakdown[f.language] || 0) + 1;
     }
 
+    // Release cached content to free memory after parsing
+    for (const f of discovered) { (f as any).content = undefined; }
+
     if (!this.aborted) {
       const commitSha = isGitRepo(repoRoot) ? getCurrentCommitSha(repoRoot) : null;
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
       this.clearResumeState(repo.name);
 
-      // 1. Scan Framework Routes and Hooks
-      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
-
-      // 2. Profile Codebase
-      const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
-      let activeFrameworks: string[] = [];
-      if (existsSync(frameworksPath)) {
-        try {
-          activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
-        } catch {}
+      try {
+        await this.runPostScanAnalysis(repo, repoRoot);
+      } finally {
+        this.symbolIndex = null;
       }
-      const profiler = new CodebaseProfiler(this.store);
-      const profile = profiler.profile(repo.name, activeFrameworks);
-      this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
-
-      // 3. Classify all files
-      const routeRegistry = new RouteRegistry();
-      await routeRegistry.load(workspaceRoot);
-      const routes = routeRegistry.getRoutes();
-      const hooks = routeRegistry.getHooks();
-
-      const classifier = new RoleClassifier(this.store, this.config);
-      const files = this.store.getAllFiles(repo.name);
-      
-      this.store.inTransaction(() => {
-        for (const f of files) {
-          const filePath = f.path as string;
-          this.store.deleteClassificationSignalsForFile(filePath);
-          const result = classifier.classify(filePath, repo.name, profile, routes, hooks);
-          this.store.updateFileRole(filePath, result.role, result.confidence);
-          for (const sig of result.signals) {
-            this.store.insertClassificationSignal({
-              filePath,
-              repo: repo.name,
-              source: sig.source,
-              role: sig.role,
-              confidence: sig.confidence,
-              reason: sig.reason,
-            });
-          }
-        }
-      });
-
-      // 4. Detect clusters & run communities
-      this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
-      const clusterEngine = new ClusterEngine(this.store);
-      clusterEngine.detect(repo.name);
-
-      // 5. Calculate and persist cluster metrics
-      const metricsList = calculateClusterMetrics(this.store, repo.name);
-      this.store.inTransaction(() => {
-        this.store.raw.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repo.name);
-        for (const m of metricsList) {
-          this.store.insertClusterMetrics({
-            clusterName: m.clusterName,
-            repo: repo.name,
-            fileCount: m.fileCount,
-            afferentCoupling: m.afferentCoupling,
-            efferentCoupling: m.efferentCoupling,
-            instability: m.instability,
-            internalEdges: m.internalEdges,
-            externalEdges: m.externalEdges,
-            cohesionRatio: m.cohesionRatio,
-            abstractness: m.abstractness,
-            distanceFromMainSeq: m.distanceFromMainSeq,
-          });
-        }
-      });
-
-      // 6. Run Architectural Smell Detection and persist smells
-      const analyzer = new ArchitectureAnalyzer(this.store);
-      const smellsList = analyzer.analyze(repo.name, profile);
-      this.store.inTransaction(() => {
-        this.store.raw.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repo.name);
-        for (const smell of smellsList) {
-          this.store.insertArchSmell({
-            repo: repo.name,
-            type: smell.type,
-            severity: smell.severity,
-            description: smell.description,
-            involvedFiles: smell.involvedFiles,
-            involvedClusters: smell.involvedClusters,
-            suggestion: smell.suggestion,
-          });
-        }
-      });
+    } else {
+      this.symbolIndex = null;
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -548,7 +497,8 @@ export class Scanner {
     const repoRoot = resolve(workspaceRoot, repo.path);
 
     if (!isGitRepo(repoRoot)) {
-      return this._scanFullForRepo(repo);
+      // Content-hash based incremental for non-git projects
+      return this._scanIncrementalByHash(repo);
     }
 
     const lastCommit = this.store.getMeta('last_scan_commit:' + repo.name);
@@ -618,11 +568,16 @@ export class Scanner {
     });
 
     // Detect active frameworks early so we can build ignored symbols for parsing
-    const registry = FrameworkRegistry.getInstance();
     const allFilePaths = this.store.getAllFiles(repo.name).map(f => f.path as string);
-    const activeDetectors = await registry.detectActiveFrameworks(repoRoot, allFilePaths);
+    const activeDetectors = await this.getActiveDetectors(repoRoot, allFilePaths);
     const activeFrameworks = activeDetectors.map(d => d.name);
     const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+
+    // Build pre-scan symbol index for O(1) lookups during reference resolution
+    this.symbolIndex = this.buildSymbolIndex(repo.name);
+
+    // Discover Dart packages for accurate package: URI resolution
+    this.discoverDartPackages(workspaceRoot);
 
     let parsedFilesCount = 0;
     const parseResults = await this.parseFilesParallel(
@@ -640,114 +595,51 @@ export class Scanner {
       }
     );
 
+    // Rebuild the symbol index to include the newly parsed symbols before reference resolution
+    this.symbolIndex = this.buildSymbolIndex(
+      repo.name,
+      toReindex.map(r => r.path),
+      parseResults
+    );
+
     let totalSymbols = 0;
     let totalEdges = 0;
     const langBreakdown: Record<string, number> = {};
 
-    for (let i = 0; i < toReindex.length && !this.aborted; i++) {
-      const { path: relPath, fileInfo } = toReindex[i];
-      const result = parseResults[i];
+    this.onProgress?.({ phase: 'resolve', current: 0, total: toReindex.length });
 
-      this.writeParseResult(relPath, result, repo.name);
+    this.store.inTransaction(() => {
+      for (let i = 0; i < toReindex.length && !this.aborted; i++) {
+        const { path: relPath, fileInfo } = toReindex[i];
+        const result = parseResults[i];
 
-      totalSymbols += result.symbols.length;
-      totalEdges += result.references.length;
-      langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
+        this.writeParseResult(relPath, result, repo.name);
 
+        totalSymbols += result.symbols.length;
+        totalEdges += result.references.length;
+        langBreakdown[fileInfo.language] = (langBreakdown[fileInfo.language] || 0) + 1;
 
-    }
+        this.onProgress?.({
+          phase: 'resolve',
+          current: i + 1,
+          total: toReindex.length,
+          file: relPath,
+        });
+      }
+    });
 
     if (!this.aborted) {
       const commitSha = getCurrentCommitSha(repoRoot);
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
 
-      // 1. Scan Framework Routes and Hooks
-      await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
-
-      // 2. Profile Codebase
-      const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
-      let activeFrameworks: string[] = [];
-      if (existsSync(frameworksPath)) {
-        try {
-          activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
-        } catch {}
+      try {
+        await this.runPostScanAnalysis(repo, repoRoot);
+      } finally {
+        this.symbolIndex = null;
       }
-      const profiler = new CodebaseProfiler(this.store);
-      const profile = profiler.profile(repo.name, activeFrameworks);
-      this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
-
-      // 3. Classify all files
-      const routeRegistry = new RouteRegistry();
-      await routeRegistry.load(workspaceRoot);
-      const routes = routeRegistry.getRoutes();
-      const hooks = routeRegistry.getHooks();
-
-      const classifier = new RoleClassifier(this.store, this.config);
-      const files = this.store.getAllFiles(repo.name);
-      
-      this.store.inTransaction(() => {
-        for (const f of files) {
-          const filePath = f.path as string;
-          this.store.deleteClassificationSignalsForFile(filePath);
-          const result = classifier.classify(filePath, repo.name, profile, routes, hooks);
-          this.store.updateFileRole(filePath, result.role, result.confidence);
-          for (const sig of result.signals) {
-            this.store.insertClassificationSignal({
-              filePath,
-              repo: repo.name,
-              source: sig.source,
-              role: sig.role,
-              confidence: sig.confidence,
-              reason: sig.reason,
-            });
-          }
-        }
-      });
-
-      // 4. Detect clusters & run communities
-      this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
-      const clusterEngine = new ClusterEngine(this.store);
-      clusterEngine.detect(repo.name);
-
-      // 5. Calculate and persist cluster metrics
-      const metricsList = calculateClusterMetrics(this.store, repo.name);
-      this.store.inTransaction(() => {
-        this.store.raw.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repo.name);
-        for (const m of metricsList) {
-          this.store.insertClusterMetrics({
-            clusterName: m.clusterName,
-            repo: repo.name,
-            fileCount: m.fileCount,
-            afferentCoupling: m.afferentCoupling,
-            efferentCoupling: m.efferentCoupling,
-            instability: m.instability,
-            internalEdges: m.internalEdges,
-            externalEdges: m.externalEdges,
-            cohesionRatio: m.cohesionRatio,
-            abstractness: m.abstractness,
-            distanceFromMainSeq: m.distanceFromMainSeq,
-          });
-        }
-      });
-
-      // 6. Run Architectural Smell Detection and persist smells
-      const analyzer = new ArchitectureAnalyzer(this.store);
-      const smellsList = analyzer.analyze(repo.name, profile);
-      this.store.inTransaction(() => {
-        this.store.raw.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repo.name);
-        for (const smell of smellsList) {
-          this.store.insertArchSmell({
-            repo: repo.name,
-            type: smell.type,
-            severity: smell.severity,
-            description: smell.description,
-            involvedFiles: smell.involvedFiles,
-            involvedClusters: smell.involvedClusters,
-            suggestion: smell.suggestion,
-          });
-        }
-      });
+    } else {
+      this.symbolIndex = null;
     }
 
     return {
@@ -831,6 +723,7 @@ export class Scanner {
               sizeBytes: stats.size,
               lines,
               contentHash,
+              content,
               isNew,
               contentChanged,
             });
@@ -868,6 +761,14 @@ export class Scanner {
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
     if (files.length === 0) return [];
+    if (this.parallel && files.length > 10) {
+      try {
+        return await this.parseWithWorkers(files, workspaceRoot, ignoredSymbols, onFileParsed);
+      } catch (err: any) {
+        // Fallback to main thread on error (e.g. worker initialization/spawn error)
+        return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
+      }
+    }
     return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
   }
 
@@ -877,7 +778,139 @@ export class Scanner {
     ignoredSymbols?: Set<string>,
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
-    return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
+    const workerCount = Math.min(this.concurrency, files.length, 8);
+    const workerExt = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
+    // If running in Vitest/TS, point to parse-worker.ts, otherwise parse-worker.js
+    const workerUrl = new URL(`../parsers/parse-worker${workerExt}`, import.meta.url);
+
+    const workers: Worker[] = [];
+    const readyPromises: Promise<void>[] = [];
+    const languages = {
+      ...getBuiltinLanguages(),
+      ...this.config.getResolvedUserLanguages()
+    };
+    const assetRoot = findAssetRoot(import.meta.url);
+
+    for (let i = 0; i < workerCount; i++) {
+      const worker = new Worker(workerUrl, {
+        workerData: { languages, ignoredSymbols, assetRoot }
+      });
+      workers.push(worker);
+
+      readyPromises.push(new Promise<void>((resolveReady, rejectReady) => {
+        const onMessage = (msg: any) => {
+          if (msg.type === 'ready') {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            resolveReady();
+          } else if (msg.type === 'error') {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            rejectReady(new Error(msg.error || 'Worker init error'));
+          }
+        };
+        const onError = (err: Error) => {
+          worker.off('message', onMessage);
+          worker.off('error', onError);
+          rejectReady(err);
+        };
+        worker.on('message', onMessage);
+        worker.on('error', onError);
+      }));
+    }
+
+    // Wait for all workers to be initialized
+    await Promise.all(readyPromises);
+
+    let nextIdx = 0;
+    const results: ParseResult[] = new Array(files.length);
+
+    const runWorkerLoop = async (worker: Worker) => {
+      return new Promise<void>((resolveLoop, rejectLoop) => {
+        let currentResolve: (() => void) | null = null;
+        let currentReject: ((err: Error) => void) | null = null;
+
+        const onMessage = (msg: any) => {
+          const resultIndex = msg.id;
+          results[resultIndex] = {
+            symbols: msg.symbols || [],
+            references: msg.references || [],
+            errors: msg.errors || []
+          };
+
+          const fileInfo = files[resultIndex];
+          const relPath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
+          onFileParsed?.(relPath);
+
+          if (currentResolve) {
+            const cb = currentResolve;
+            currentResolve = null;
+            cb();
+          }
+        };
+
+        const onError = (err: Error) => {
+          if (currentReject) {
+            currentReject(err);
+          } else {
+            rejectLoop(err);
+          }
+        };
+
+        const onExit = (code: number) => {
+          if (code !== 0) {
+            const err = new Error(`Worker exited with code ${code}`);
+            if (currentReject) currentReject(err);
+            else rejectLoop(err);
+          }
+        };
+
+        worker.on('message', onMessage);
+        worker.on('error', onError);
+        worker.on('exit', onExit);
+
+        const nextJob = () => {
+          if (this.aborted || nextIdx >= files.length) {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            worker.off('exit', onExit);
+            resolveLoop();
+            return;
+          }
+
+          const i = nextIdx++;
+          const fileInfo = files[i];
+          const relPath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
+
+          new Promise<void>((res, rej) => {
+            currentResolve = res;
+            currentReject = rej;
+            worker.postMessage({
+              id: i,
+              filePath: relPath,
+              absolutePath: fileInfo.absolutePath
+            });
+          }).then(() => {
+            nextJob();
+          }).catch((err) => {
+            worker.off('message', onMessage);
+            worker.off('error', onError);
+            worker.off('exit', onExit);
+            rejectLoop(err);
+          });
+        };
+
+        nextJob();
+      });
+    };
+
+    try {
+      await Promise.all(workers.map(w => runWorkerLoop(w)));
+    } finally {
+      await Promise.all(workers.map(w => w.terminate()));
+    }
+
+    return results;
   }
 
   private async parseOnMainThread(
@@ -888,11 +921,11 @@ export class Scanner {
   ): Promise<ParseResult[]> {
     const results: ParseResult[] = new Array(files.length);
 
-    // Read all files concurrently first (I/O bound, cheap to parallelize)
+    // Use cached content from discovery when available, otherwise read from disk
     const sources = await Promise.all(
       files.map(async (f) => {
         try {
-          return await readFile(f.absolutePath, 'utf-8');
+          return (f as DiscoveredFile).content || await readFile(f.absolutePath, 'utf-8');
         } catch {
           return null;
         }
@@ -1088,13 +1121,54 @@ export class Scanner {
   private resolveImportPath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
     if (!target || typeof target !== 'string') return null;
     let resolvedTarget = target;
+
+    // ── Dart: skip stdlib (`dart:core`, `dart:async`, etc.) ─────────────────
+    if (target.startsWith('dart:')) return null;
+
+    // ── Dart: resolve package: URIs ──────────────────────────────────────────
+    // `package:my_app/src/services/auth.dart` → try `lib/src/services/auth.dart`
+    // First checks the pubspec-derived package map for monorepo support, then
+    // falls back to stripping the package name and prepending `lib/`.
+    if (target.startsWith('package:')) {
+      const withoutScheme = target.slice('package:'.length);
+      const slashIdx = withoutScheme.indexOf('/');
+      if (slashIdx !== -1) {
+        const pkgName = withoutScheme.slice(0, slashIdx);
+        const pkgPath = withoutScheme.slice(slashIdx + 1);
+
+        // 1. Try known package map (monorepo-aware)
+        const pkgRoot = this.dartPackageMap.get(pkgName);
+        if (pkgRoot) {
+          const candidate = pkgRoot + pkgPath;
+          if (fileMap.has(candidate)) return candidate;
+        }
+
+        // 2. Fallback: strip package name, prepend lib/ (same-project)
+        const dartCandidate = 'lib/' + pkgPath;
+        if (fileMap.has(dartCandidate)) return dartCandidate;
+      }
+      return null;
+    }
+
+    // ── Dart: relative imports always use explicit .dart extension ───────────
+    // Fast-path that avoids trying JS/TS/Vue extension candidates for Dart files.
+    // In Dart, all non-scheme imports (including bare paths like 'user.g.dart'
+    // from part directives) are relative to the source file's directory.
+    if (sourcePath.endsWith('.dart')) {
+      const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
+      resolvedTarget = dir ? join(dir, target) : target;
+      const normalized = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+      if (fileMap.has(normalized)) return normalized;
+      return null;
+    }
+
     if (sourcePath.endsWith('.vue') && target.startsWith('@/')) {
       resolvedTarget = 'src/' + target.substring(2);
     } else {
       const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
       resolvedTarget = target.startsWith('.') ? join(dir, target) : target;
     }
-    const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+    const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//,  '').replace(/^\//, '');
 
     // When a .ts file imports with an explicit .js extension (TypeScript "use .js for .ts"
     // convention), we must also try the .ts/.tsx source equivalents.
@@ -1130,6 +1204,37 @@ export class Scanner {
     return null;
   }
 
+  /**
+   * Discovers Dart packages by walking the workspace for pubspec.yaml files
+   * and extracting the `name:` field. Populates `dartPackageMap` with
+   * `packageName → relative/path/to/lib/` mappings.
+   */
+  private discoverDartPackages(workspaceRoot: string): void {
+    this.dartPackageMap.clear();
+    const allFiles = this.store.getFilesByPattern ? this.store.getFilesByPattern('pubspec.yaml') : this.store.getAllFiles();
+    for (const f of allFiles) {
+      const filePath = f.path as string;
+      if (!filePath.endsWith('pubspec.yaml')) continue;
+
+      try {
+        const absPath = resolve(workspaceRoot, filePath);
+        const content = readFileSync(absPath, 'utf-8');
+        // Extract the `name:` field from pubspec.yaml (simple regex, no YAML lib)
+        const nameMatch = content.match(/^name:\s*([^\s#]+)/m);
+        if (nameMatch) {
+          const pkgName = nameMatch[1];
+          // The lib/ directory is relative to the pubspec.yaml directory
+          const pkgDir = filePath.includes('/')
+            ? filePath.substring(0, filePath.lastIndexOf('/') + 1)
+            : '';
+          this.dartPackageMap.set(pkgName, pkgDir + 'lib/');
+        }
+      } catch {
+        // Skip unreadable pubspec files
+      }
+    }
+  }
+
   private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
 
@@ -1141,15 +1246,55 @@ export class Scanner {
       }
     }
 
-    const filterMatches = (matches: Record<string, unknown>[]): Record<string, unknown>[] => {
+    const filterMatches = (matches: any[]): any[] => {
       if (!sourceLang) return matches;
       return matches.filter(m => {
-        const targetPath = m.file_path as string;
+        const targetPath = (m.file_path || m.file) as string;
         const targetLangDef = getLanguageForFile(targetPath, this.config.getResolvedUserLanguages());
         const targetLang = targetLangDef ? targetLangDef.name : '';
         return areLanguagesCompatible(sourceLang!, targetLang);
       });
     };
+
+    // Use pre-built symbol index for O(1) lookup when available
+    if (this.symbolIndex) {
+      let indexed = this.symbolIndex.get(symbolName) || this.symbolIndex.get(symbolName.toLowerCase());
+      if (!indexed) {
+        if (symbolName.includes('\\')) {
+          const parts = symbolName.split('\\');
+          const shortName = parts[parts.length - 1];
+          indexed = this.symbolIndex.get(shortName) || this.symbolIndex.get(shortName.toLowerCase());
+        } else if (symbolName.includes('.')) {
+          const parts = symbolName.split('.');
+          const last = parts[parts.length - 1];
+          const commonExtensions = new Set([
+            'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+            'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+            'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+          ]);
+          if (!commonExtensions.has(last.toLowerCase())) {
+            const shortName = last;
+            indexed = this.symbolIndex.get(shortName) || this.symbolIndex.get(shortName.toLowerCase());
+          }
+        }
+      }
+      if (indexed && indexed.length > 0) {
+        const compatible = filterMatches(indexed);
+        if (compatible.length > 0) {
+          const shortName = symbolName.includes('\\') 
+            ? symbolName.split('\\').pop()! 
+            : (symbolName.includes('.') ? symbolName.split('.').pop()! : symbolName);
+          if (sourcePath) {
+            const sameFile = compatible.find(m => m.file === sourcePath && m.name === shortName);
+            if (sameFile) return sameFile.file;
+          }
+          const exact = compatible.find(m => m.name === shortName);
+          if (exact) return exact.file;
+          return compatible[0].file;
+        }
+      }
+      return null; // O(1) short-circuit: if not in symbolIndex, it's a third-party/external symbol not in this workspace.
+    }
 
     let matches = this.store.searchSymbols(symbolName);
     matches = filterMatches(matches);
@@ -1176,6 +1321,28 @@ export class Scanner {
         const exactMatch = matches.find(m => m.name === shortName);
         if (exactMatch) return exactMatch.file_path as string;
         return matches[0].file_path as string;
+      }
+    } else if (symbolName.includes('.')) {
+      const parts = symbolName.split('.');
+      const last = parts[parts.length - 1];
+      const commonExtensions = new Set([
+        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
+        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
+        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
+      ]);
+      if (!commonExtensions.has(last.toLowerCase())) {
+        const shortName = last;
+        matches = this.store.searchSymbols(shortName);
+        matches = filterMatches(matches);
+        if (matches.length > 0) {
+          if (sourcePath) {
+            const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === shortName);
+            if (sameFileMatch) return sameFileMatch.file_path as string;
+          }
+          const exactMatch = matches.find(m => m.name === shortName);
+          if (exactMatch) return exactMatch.file_path as string;
+          return matches[0].file_path as string;
+        }
       }
     } else if (matches.length > 0) {
       // Multiple matches, none exact — prefer same-file over arbitrary first result
@@ -1221,8 +1388,7 @@ export class Scanner {
     const files = await this.store.getAllFiles(repo.name);
     const filePaths = files.map(f => f.path as string);
 
-    const registry = FrameworkRegistry.getInstance();
-    const activeDetectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+    const activeDetectors = await this.getActiveDetectors(repoRoot, filePaths);
     if (activeDetectors.length === 0) return;
 
     // Save active frameworks
@@ -1246,6 +1412,8 @@ export class Scanner {
         return this.resolveSymbolToFile(symName, this.workspaceFileMap);
       }
     };
+
+    const edgesToInsert: any[] = [];
 
     for (const detector of activeDetectors) {
       // Find files that match the detector's pattern (e.g. routes/api.php)
@@ -1288,7 +1456,7 @@ export class Scanner {
             routeRegistry.addRoute(route);
 
             // Add as an edge in the db/graph
-            this.store.insertEdge({
+            edgesToInsert.push({
               sourceFile: relPath,
               targetFile: route.handlerFile,
               sourceSymbol: null,
@@ -1350,7 +1518,7 @@ export class Scanner {
                 ? hook.hookType
                 : 'hook') as any;
 
-              this.store.insertEdge({
+              edgesToInsert.push({
                 sourceFile: relPath,
                 targetFile: hook.handlerFile,
                 sourceSymbol: null,
@@ -1388,6 +1556,369 @@ export class Scanner {
       }
     }
 
+    if (edgesToInsert.length > 0) {
+      this.store.inTransaction(() => {
+        for (const edge of edgesToInsert) {
+          this.store.insertEdge(edge);
+        }
+      });
+    }
+
     await routeRegistry.save(workspaceRoot);
+  }
+
+  /**
+   * Cached framework detection. Avoids calling FrameworkRegistry.detectActiveFrameworks
+   * multiple times per scan (discovery, parsing, post-scan) for the same repo root.
+   */
+  private async getActiveDetectors(repoRoot: string, filePaths: string[]): Promise<any[]> {
+    if (this.cachedActiveDetectors.has(repoRoot)) {
+      return this.cachedActiveDetectors.get(repoRoot)!;
+    }
+    const registry = FrameworkRegistry.getInstance();
+    const detectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+    this.cachedActiveDetectors.set(repoRoot, detectors);
+    return detectors;
+  }
+
+  /**
+   * Build an in-memory symbol index for O(1) lookups during reference resolution.
+   * Maps symbol names (case-insensitive) to their file locations.
+   */
+  private buildSymbolIndex(
+    repoName: string,
+    parsedPaths?: string[],
+    results?: ParseResult[]
+  ): Map<string, Array<{ name: string; file: string; scope: string | null }>> {
+    const index = new Map<string, Array<{ name: string; file: string; scope: string | null }>>();
+    const excludeSet = new Set(parsedPaths || []);
+
+    const addEntry = (name: string, file: string, scope: string | null) => {
+      const entry = { name, file, scope };
+      const key = name.toLowerCase();
+      const existing = index.get(key);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        index.set(key, [entry]);
+      }
+      // Also index by exact name for case-sensitive match
+      if (key !== name) {
+        const exactExisting = index.get(name);
+        if (exactExisting) {
+          exactExisting.push(entry);
+        } else {
+          index.set(name, [entry]);
+        }
+      }
+    };
+
+    // Load all symbols across all repositories in the workspace to support cross-repository resolution
+    const symbols = this.store.getAllSymbols();
+    for (const sym of symbols) {
+      const filePath = sym.file_path as string;
+      const symRepo = sym.repo as string;
+      if (symRepo === repoName && excludeSet.has(filePath)) continue;
+      addEntry(sym.name as string, filePath, (sym.scope as string) || null);
+    }
+
+    if (parsedPaths && results) {
+      for (let i = 0; i < parsedPaths.length; i++) {
+        const filePath = parsedPaths[i];
+        const res = results[i];
+        if (!res) continue;
+        for (const sym of res.symbols) {
+          addEntry(sym.name, filePath, sym.scope);
+        }
+      }
+    }
+
+    return index;
+  }
+
+  /**
+   * Shared post-scan analysis pipeline. Runs framework detection, profiling,
+   * classification, clustering, metrics, and smell detection.
+   * Eliminates ~85 lines of duplicated code between full and incremental scans.
+   */
+  private async runPostScanAnalysis(repo: RepoConfig, repoRoot: string): Promise<void> {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+
+    // 1. Scan Framework Routes and Hooks
+    await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+
+    // 2. Profile Codebase
+    const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+    let activeFrameworks: string[] = [];
+    if (existsSync(frameworksPath)) {
+      try {
+        activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
+      } catch {}
+    }
+    const profiler = new CodebaseProfiler(this.store);
+    const profile = profiler.profile(repo.name, activeFrameworks);
+    this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
+
+    // 3. Classify all files
+    const routeRegistry = new RouteRegistry();
+    await routeRegistry.load(workspaceRoot);
+    const routes = routeRegistry.getRoutes();
+    const hooks = routeRegistry.getHooks();
+
+    const classifier = new RoleClassifier(this.store, this.config);
+    const files = this.store.getAllFiles(repo.name);
+    
+    this.store.inTransaction(() => {
+      for (const f of files) {
+        const filePath = f.path as string;
+        this.store.deleteClassificationSignalsForFile(filePath);
+        const result = classifier.classify(filePath, repo.name, profile, routes, hooks);
+        this.store.updateFileRole(filePath, result.role, result.confidence);
+        for (const sig of result.signals) {
+          this.store.insertClassificationSignal({
+            filePath,
+            repo: repo.name,
+            source: sig.source,
+            role: sig.role,
+            confidence: sig.confidence,
+            reason: sig.reason,
+          });
+        }
+      }
+    });
+
+    // 4. Detect clusters & run communities
+    this.onProgress?.({ phase: 'cluster', current: 0, total: 0 });
+    const clusterEngine = new ClusterEngine(this.store);
+    clusterEngine.detect(repo.name);
+
+    // 5. Calculate and persist cluster metrics
+    const metricsList = calculateClusterMetrics(this.store, repo.name);
+    this.store.inTransaction(() => {
+      this.store.raw.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repo.name);
+      for (const m of metricsList) {
+        this.store.insertClusterMetrics({
+          clusterName: m.clusterName,
+          repo: repo.name,
+          fileCount: m.fileCount,
+          afferentCoupling: m.afferentCoupling,
+          efferentCoupling: m.efferentCoupling,
+          instability: m.instability,
+          internalEdges: m.internalEdges,
+          externalEdges: m.externalEdges,
+          cohesionRatio: m.cohesionRatio,
+          abstractness: m.abstractness,
+          distanceFromMainSeq: m.distanceFromMainSeq,
+        });
+      }
+    });
+
+    // 6. Run Architectural Smell Detection and persist smells
+    const analyzer = new ArchitectureAnalyzer(this.store);
+    const smellsList = analyzer.analyze(repo.name, profile);
+    this.store.inTransaction(() => {
+      this.store.raw.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repo.name);
+      for (const smell of smellsList) {
+        this.store.insertArchSmell({
+          repo: repo.name,
+          type: smell.type,
+          severity: smell.severity,
+          description: smell.description,
+          involvedFiles: smell.involvedFiles,
+          involvedClusters: smell.involvedClusters,
+          suggestion: smell.suggestion,
+        });
+      }
+    });
+
+    // 7. Calculate files-only PageRank and persist to files table
+    try {
+      const dbFiles = this.store.getAllFiles(repo.name);
+      const dbEdges = this.store.raw.prepare('SELECT source_file, target_file, edge_type, weight, verifiability, target_repo, metadata FROM edges WHERE repo = ?').all(repo.name) as any[];
+
+      const filesGraph = new MapxGraph(repo.name);
+      for (const f of dbFiles) {
+        filesGraph.addFileNode(f.path as string, (f.language as string) || 'unknown', (f.size_bytes as number) || 0, (f.lines as number) || 0);
+      }
+      for (const edge of dbEdges) {
+        filesGraph.addDependencyEdge({
+          sourceFile: edge.source_file,
+          targetFile: edge.target_file,
+          sourceSymbol: null,
+          targetSymbol: null,
+          edgeType: edge.edge_type,
+          weight: edge.weight,
+          verifiability: edge.verifiability,
+          repo: repo.name,
+          targetRepo: edge.target_repo,
+          metadata: typeof edge.metadata === 'string' ? JSON.parse(edge.metadata) : (edge.metadata || {}),
+        });
+      }
+
+      const excludePatterns = this.config.settings.graphExcludePatterns || [];
+      const rankedFiles = filesGraph.getRankedFiles(excludePatterns);
+
+      this.store.inTransaction(() => {
+        for (const rf of rankedFiles) {
+          if (typeof this.store.updateFilePageRank === 'function') {
+            this.store.updateFilePageRank(rf.path, rf.pagerank);
+          }
+        }
+      });
+    } catch (err) {
+      console.warn('[mapx] Failed to calculate and save files-only PageRank:', err);
+    }
+
+    // Clear framework detection cache after post-scan analysis
+    this.cachedActiveDetectors.clear();
+  }
+
+  /**
+   * Content-hash based incremental scan for non-git projects.
+   * Compares stored content hashes with current file hashes to detect changes,
+   * rather than falling back to a full scan.
+   */
+  private async _scanIncrementalByHash(repo: RepoConfig): Promise<ScanResult> {
+    const startTime = Date.now();
+    this.aborted = false;
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const repoRoot = resolve(workspaceRoot, repo.path);
+
+    const discovered = await this.discoverFiles(repoRoot, repo.name);
+
+    // Compare stored hashes to discover changed/new/deleted files
+    const trackedHashes = new Map<string, string>();
+    for (const f of this.store.getAllFiles(repo.name)) {
+      trackedHashes.set(f.path as string, (f.content_hash as string) || '');
+    }
+
+    const toRemove: string[] = [];
+    const toReindex: DiscoveredFile[] = [];
+
+    for (const f of discovered) {
+      if (f.isNew || f.contentChanged) {
+        toReindex.push(f);
+      }
+    }
+
+    // Detect deleted files
+    const currentPaths = new Set(discovered.map(f => f.relativePath));
+    for (const [path] of trackedHashes) {
+      if (!currentPaths.has(path)) toRemove.push(path);
+    }
+
+    if (toRemove.length === 0 && toReindex.length === 0) {
+      return {
+        filesScanned: 0,
+        symbolsFound: 0,
+        edgesFound: 0,
+        durationMs: Date.now() - startTime,
+        languageBreakdown: {},
+      };
+    }
+
+    this.store.inTransaction(() => {
+      for (const p of toRemove) {
+        this.store.deleteFile(p);
+      }
+      for (const f of toReindex) {
+        this.store.deleteSymbolsForFile(f.relativePath);
+        this.store.deleteEdgesForFile(f.relativePath);
+        this.store.upsertFile({
+          path: f.relativePath,
+          repo: repo.name,
+          language: f.language,
+          gitBlobHash: null,
+          contentHash: f.contentHash,
+          lastScanned: new Date().toISOString(),
+          sizeBytes: f.sizeBytes,
+          lines: f.lines,
+        });
+
+        this.graph.addFileNode(f.relativePath, f.language, f.sizeBytes, f.lines);
+      }
+    });
+
+    // Detect active frameworks
+    const filePaths = discovered.map(f => f.relativePath);
+    const activeDetectors = await this.getActiveDetectors(repoRoot, filePaths);
+    const activeFrameworks = activeDetectors.map(d => d.name);
+    const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+
+    // Build pre-scan symbol index
+    this.symbolIndex = this.buildSymbolIndex(repo.name);
+
+    this.discoverDartPackages(workspaceRoot);
+
+    let parsedFilesCount = 0;
+    const parseResults = await this.parseFilesParallel(
+      toReindex,
+      workspaceRoot,
+      ignoredSymbols,
+      (relPath) => {
+        parsedFilesCount++;
+        this.onProgress?.({
+          phase: 'parse',
+          current: parsedFilesCount,
+          total: toReindex.length,
+          file: relPath,
+        });
+      }
+    );
+
+    // Rebuild the symbol index to include the newly parsed symbols before reference resolution
+    this.symbolIndex = this.buildSymbolIndex(
+      repo.name,
+      toReindex.map(f => f.relativePath),
+      parseResults
+    );
+
+    let totalSymbols = 0;
+    let totalEdges = 0;
+    const langBreakdown: Record<string, number> = {};
+
+    this.onProgress?.({ phase: 'resolve', current: 0, total: toReindex.length });
+
+    this.store.inTransaction(() => {
+      for (let i = 0; i < toReindex.length && !this.aborted; i++) {
+        const f = toReindex[i];
+        const result = parseResults[i];
+
+        this.writeParseResult(f.relativePath, result, repo.name);
+
+        totalSymbols += result.symbols.length;
+        totalEdges += result.references.length;
+        langBreakdown[f.language] = (langBreakdown[f.language] || 0) + 1;
+
+        this.onProgress?.({
+          phase: 'resolve',
+          current: i + 1,
+          total: toReindex.length,
+          file: f.relativePath,
+        });
+      }
+    });
+
+    // Release content and index
+    for (const f of discovered) { (f as any).content = undefined; }
+
+    if (!this.aborted) {
+      this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
+      try {
+        await this.runPostScanAnalysis(repo, repoRoot);
+      } finally {
+        this.symbolIndex = null;
+      }
+    } else {
+      this.symbolIndex = null;
+    }
+
+    return {
+      filesScanned: toReindex.length,
+      symbolsFound: totalSymbols,
+      edgesFound: totalEdges,
+      durationMs: Date.now() - startTime,
+      languageBreakdown: langBreakdown,
+    };
   }
 }

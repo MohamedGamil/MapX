@@ -133,10 +133,26 @@ vi.mock('../src/core/workspace-manager.js', () => ({
   }
 }));
 
-const { mockFindSimilarSymbols, mockGetChangedFiles, mockIsGitRepo } = vi.hoisted(() => ({
+const { mockFindSimilarSymbols, mockGetChangedFiles, mockIsGitRepo, flowTracerMocks } = vi.hoisted(() => ({
   mockFindSimilarSymbols: vi.fn().mockReturnValue([]),
   mockGetChangedFiles: vi.fn().mockReturnValue([]),
   mockIsGitRepo: vi.fn().mockReturnValue(true),
+  flowTracerMocks: {
+    trace: vi.fn().mockReturnValue({
+      start: { file: 'src/main.ts', symbol: 'MyClass' },
+      direction: 'both',
+      paths: [],
+      sources: [],
+      sinks: [],
+      cycles: [],
+      nodeCount: 0,
+      edgeCount: 0,
+      maxDepthReached: false,
+    }),
+    traceFlow: vi.fn().mockReturnValue([]),
+    findSources: vi.fn().mockReturnValue([]),
+    findSinks: vi.fn().mockReturnValue([]),
+  },
 }));
 
 vi.mock('../src/core/fuzzy-matcher.js', () => ({
@@ -227,20 +243,7 @@ vi.mock('../src/core/context-builder.js', () => ({
 
 vi.mock('../src/core/flow-tracer.js', () => ({
   FlowTracer: class {
-    traceFlow = vi.fn().mockReturnValue([]);
-    trace = vi.fn().mockReturnValue({
-      start: { file: 'src/main.ts', symbol: 'MyClass' },
-      direction: 'both',
-      paths: [],
-      sources: [],
-      sinks: [],
-      cycles: [],
-      nodeCount: 0,
-      edgeCount: 0,
-      maxDepthReached: false,
-    });
-    findSources = vi.fn().mockReturnValue([]);
-    findSinks = vi.fn().mockReturnValue([]);
+    constructor() { Object.assign(this, flowTracerMocks); }
   }
 }));
 
@@ -260,6 +263,8 @@ vi.mock('../src/frameworks/route-registry.js', () => ({
     load = vi.fn().mockResolvedValue(undefined);
     queryRoutes = vi.fn().mockReturnValue([]);
     queryHooks = vi.fn().mockReturnValue([]);
+    getRoutes = vi.fn().mockReturnValue([]);
+    getHooks = vi.fn().mockReturnValue([]);
   }
 }));
 
@@ -336,6 +341,20 @@ describe('MCP module', () => {
   beforeEach(async () => {
     mockExists = true;
     resetStoreMocks();
+    flowTracerMocks.trace.mockReturnValue({
+      start: { file: 'src/main.ts', symbol: 'MyClass' },
+      direction: 'both',
+      paths: [],
+      sources: [],
+      sinks: [],
+      cycles: [],
+      nodeCount: 0,
+      edgeCount: 0,
+      maxDepthReached: false,
+    });
+    flowTracerMocks.traceFlow.mockReturnValue([]);
+    flowTracerMocks.findSources.mockReturnValue([]);
+    flowTracerMocks.findSinks.mockReturnValue([]);
     server = buildServer({ debug: false });
     transport = new MockTransport();
     await server.connect(transport);
@@ -573,16 +592,44 @@ describe('MCP module', () => {
       expect(text).toContain('Did you mean');
     });
 
-    it('returns json format output', async () => {
-      storeMocks.searchSymbolsFiltered.mockReturnValue([
-        { name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' }
-      ]);
+    it('returns json format output with pagination metadata', async () => {
+      let callCount = 0;
+      storeMocks.searchSymbolsFiltered.mockImplementation((args: any) => {
+        callCount++;
+        if (args.limit !== undefined) {
+          return [{ name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' }];
+        }
+        return [
+          { name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' },
+          { name: 'Main2', kind: 'class', file_path: 'src/main2.ts', start_line: 1, end_line: 10, scope: null, signature: '' }
+        ];
+      });
 
-      const res = await callTool('mapx_search', { term: 'Main', format: 'json' });
+      const res = await callTool('mapx_search', { term: 'Main', limit: 1, format: 'json' });
       const text = getText(res);
       const parsed = JSON.parse(text);
       expect(parsed.total).toBe(1);
+      expect(parsed.totalMatches).toBe(2);
+      expect(parsed.offset).toBe(0);
       expect(parsed.results[0].name).toBe('Main');
+    });
+
+    it('returns found N of M symbols in text format when limit is reached', async () => {
+      let callCount = 0;
+      storeMocks.searchSymbolsFiltered.mockImplementation((args: any) => {
+        callCount++;
+        if (args.limit !== undefined) {
+          return [{ name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' }];
+        }
+        return [
+          { name: 'Main', kind: 'class', file_path: 'src/main.ts', start_line: 1, end_line: 10, scope: null, signature: '' },
+          { name: 'Main2', kind: 'class', file_path: 'src/main2.ts', start_line: 1, end_line: 10, scope: null, signature: '' }
+        ];
+      });
+
+      const res = await callTool('mapx_search', { term: 'Main', limit: 1 });
+      const text = getText(res);
+      expect(text).toContain('Found 1 of 2 symbols');
     });
 
     it('returns error when term is missing', async () => {
@@ -1104,6 +1151,13 @@ describe('MCP module', () => {
     it('executes mapx_sinks', async () => {
       const res = await callTool('mapx_sinks');
       expect(getText(res)).toContain('Terminal consumers');
+      expect(flowTracerMocks.findSinks).toHaveBeenCalledWith(expect.any(String), false);
+    });
+
+    it('executes mapx_sinks with include_leaf_libraries true', async () => {
+      const res = await callTool('mapx_sinks', { include_leaf_libraries: true });
+      expect(getText(res)).toContain('Terminal consumers');
+      expect(flowTracerMocks.findSinks).toHaveBeenCalledWith(expect.any(String), true);
     });
   });
 
@@ -1129,12 +1183,12 @@ describe('MCP module', () => {
   describe('mapx_routes and mapx_hooks', () => {
     it('executes mapx_routes', async () => {
       const res = await callTool('mapx_routes');
-      expect(getText(res)).toBeDefined();
+      expect(getText(res)).toContain('No routes found');
     });
 
     it('executes mapx_hooks', async () => {
       const res = await callTool('mapx_hooks');
-      expect(getText(res)).toBeDefined();
+      expect(getText(res)).toContain('No hooks found');
     });
   });
 
@@ -1401,5 +1455,200 @@ describe('MCP module', () => {
   it('handles unknown tool name', async () => {
     const res = await callTool('mapx_nonexistent_tool');
     expect(getText(res)).toContain('Unknown tool');
+  });
+
+  // ==================== RESOLVE DIR NULL PATH ====================
+  it('returns error when no dir is provided and defaultDir not set', async () => {
+    const res = await callToolRaw('mapx_scan', {});
+    expect(getText(res)).toContain('No project directory');
+  });
+
+  // ==================== MAPX_SCAN / MAPX_SYNC WITH REPO/ALL ====================
+  describe('mapx_scan with repo/all flags', () => {
+    it('executes mapx_scan with repo filter', async () => {
+      const res = await callTool('mapx_scan', { repo: 'test-repo' });
+      expect(getText(res)).toContain('Scanned');
+    });
+
+    it('executes mapx_scan with all flag', async () => {
+      const res = await callTool('mapx_scan', { all: true });
+      expect(getText(res)).toContain('Scanned');
+    });
+  });
+
+  describe('mapx_sync with repo/all flags', () => {
+    it('executes mapx_sync with repo filter', async () => {
+      const res = await callTool('mapx_sync', { repo: 'my-repo' });
+      expect(getText(res)).toContain('Updated');
+    });
+
+    it('executes mapx_sync with all flag', async () => {
+      const res = await callTool('mapx_sync', { all: true });
+      expect(getText(res)).toContain('Updated');
+    });
+  });
+
+  // ==================== MAPX_TRACE WITH ACTUAL PATHS ====================
+  describe('mapx_trace with non-empty paths', () => {
+    const traceResultWithPaths = {
+      start: { file: 'src/main.ts', symbol: 'MyClass' },
+      direction: 'down',
+      paths: [
+        {
+          nodes: [
+            { file: 'src/main.ts', symbol: 'MyClass', depth: 0, incomingEdgeType: 'start' },
+            { file: 'src/utils.ts', symbol: 'helperFunc', depth: 1, incomingEdgeType: 'call' },
+          ],
+        },
+      ],
+      sources: [{ file: 'src/entry.ts', symbol: 'main' }],
+      sinks: [{ file: 'src/utils.ts', symbol: 'helperFunc' }],
+      cycles: [],
+      nodeCount: 2,
+      edgeCount: 1,
+      maxDepthReached: false,
+    };
+
+    beforeEach(() => {
+      flowTracerMocks.trace.mockReturnValue(traceResultWithPaths);
+    });
+
+    it('returns json format trace with paths and node/edge data', async () => {
+      const res = await callTool('mapx_trace', { start: 'MyClass', format: 'json' });
+      const text = getText(res);
+      const parsed = JSON.parse(text);
+      expect(parsed.nodeCount).toBe(2);
+      expect(parsed.nodes).toHaveLength(2);
+      expect(parsed.edges).toHaveLength(1);
+      expect(parsed.edges[0].fromSymbol).toBe('MyClass');
+      expect(parsed.edges[0].toSymbol).toBe('helperFunc');
+    });
+
+    it('returns dot format trace with nodes and edges', async () => {
+      const res = await callTool('mapx_trace', { start: 'MyClass', format: 'dot' });
+      const text = getText(res);
+      expect(text).toContain('digraph');
+      expect(text).toContain('MyClass');
+      expect(text).toContain('helperFunc');
+      expect(text).toContain('->');
+    });
+
+    it('returns text format trace with path output', async () => {
+      const res = await callTool('mapx_trace', { start: 'MyClass', format: 'text' });
+      const text = getText(res);
+      expect(text).toContain('MyClass');
+      expect(text).toContain('helperFunc');
+      expect(text).toContain('Nodes:');
+    });
+
+    it('returns text format trace with sinks listed', async () => {
+      const res = await callTool('mapx_trace', { start: 'MyClass' });
+      const text = getText(res);
+      expect(text).toContain('Sinks:');
+      expect(text).toContain('helperFunc');
+    });
+
+    it('dot format marks start node as diamond', async () => {
+      const res = await callTool('mapx_trace', { start: 'MyClass', format: 'dot' });
+      const text = getText(res);
+      expect(text).toContain('diamond');
+    });
+
+    it('dot format marks sink node as octagon', async () => {
+      const res = await callTool('mapx_trace', { start: 'MyClass', format: 'dot' });
+      const text = getText(res);
+      expect(text).toContain('octagon');
+    });
+  });
+
+  // ==================== MAPX_TRACE WITH CYCLES ====================
+  describe('mapx_trace with cycles', () => {
+    it('text format marks cyclic nodes with cycle indicator', async () => {
+      flowTracerMocks.trace.mockReturnValue({
+        start: { file: 'src/a.ts', symbol: 'A' },
+        direction: 'both',
+        paths: [
+          {
+            nodes: [
+              { file: 'src/a.ts', symbol: 'A', depth: 0, incomingEdgeType: 'start' },
+              { file: 'src/b.ts', symbol: 'B', depth: 1, incomingEdgeType: 'call' },
+            ],
+          },
+        ],
+        sources: [],
+        sinks: [],
+        cycles: [{ fromFile: 'src/b.ts', fromSymbol: 'B', toFile: 'src/a.ts', toSymbol: 'A' }],
+        nodeCount: 2,
+        edgeCount: 1,
+        maxDepthReached: false,
+      });
+      const res = await callTool('mapx_trace', { start: 'A', format: 'text' });
+      const text = getText(res);
+      expect(text).toContain('↻ cycle');
+    });
+  });
+
+  // ==================== MAPX_LANG_INSTALL/UNINSTALL ERRORS ====================
+  describe('mapx_lang_install and uninstall error handling', () => {
+    it('returns error message when installLanguage throws', async () => {
+      const { installLanguage } = await import('../src/languages/installer.js');
+      vi.mocked(installLanguage).mockRejectedValueOnce(new Error('network error'));
+      const res = await callTool('mapx_lang_install', { lang: 'ruby' });
+      expect(getText(res)).toContain('Error installing language');
+      expect(getText(res)).toContain('ruby');
+    });
+
+    it('returns error message when uninstallLanguage throws', async () => {
+      const { uninstallLanguage } = await import('../src/languages/installer.js');
+      vi.mocked(uninstallLanguage).mockRejectedValueOnce(new Error('permission denied'));
+      const res = await callTool('mapx_lang_uninstall', { lang: 'go' });
+      expect(getText(res)).toContain('Error uninstalling language');
+      expect(getText(res)).toContain('go');
+    });
+  });
+
+  // ==================== STALE FILE HELPER TESTS (POSITIVE CASES) ====================
+  describe('stale file helpers with stale data', () => {
+    const staleFiles = [
+      { path: 'src/main.ts', last_scanned: '1970-01-01T00:00:00.000Z', language: 'typescript', size_bytes: 100, lines: 10 },
+      { path: 'src/utils.ts', last_scanned: '1970-01-01T00:00:00.000Z', language: 'typescript', size_bytes: 50, lines: 5 },
+    ];
+
+    it('getStaleFilesCount returns count of stale files', () => {
+      const store = { getAllFiles: vi.fn().mockReturnValue(staleFiles) } as any;
+      // statSync returns { mtimeMs: 100 }, last_scanned epoch=0, so 100 > 0 = stale
+      // existsSync for actual files on disk returns true via original
+      const count = getStaleFilesCount(store, '.');
+      expect(count).toBeGreaterThan(0);
+    });
+
+    it('getStaleFilesCount returns 0 when store.getAllFiles throws', () => {
+      const store = { getAllFiles: vi.fn().mockImplementation(() => { throw new Error('db error'); }) } as any;
+      expect(getStaleFilesCount(store, '.')).toBe(0);
+    });
+
+    it('getStaleFileNames returns stale file paths', () => {
+      const store = { getAllFiles: vi.fn().mockReturnValue(staleFiles) } as any;
+      const names = getStaleFileNames(store, '.');
+      expect(names.length).toBeGreaterThan(0);
+    });
+
+    it('getStaleFileNames returns empty array when store.getAllFiles throws', () => {
+      const store = { getAllFiles: vi.fn().mockImplementation(() => { throw new Error('db'); }) } as any;
+      expect(getStaleFileNames(store, '.')).toEqual([]);
+    });
+
+    it('getMcpStalenessWarning returns warning when stale files exist', () => {
+      const store = { getAllFiles: vi.fn().mockReturnValue(staleFiles) } as any;
+      const warning = getMcpStalenessWarning(store, '.');
+      expect(warning).toContain('stale');
+      expect(warning).toContain('mapx_sync');
+    });
+
+    it('getMcpStalenessWarning includes stale file list in warning', () => {
+      const store = { getAllFiles: vi.fn().mockReturnValue(staleFiles) } as any;
+      const warning = getMcpStalenessWarning(store, '.');
+      expect(warning).toContain('Changed:');
+    });
   });
 });
