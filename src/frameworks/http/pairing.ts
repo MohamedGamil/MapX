@@ -71,7 +71,12 @@ export function pairCall(record: HttpCallRecord, routes: RouteBinding[]): Paired
     for (const { segs, suffix } of candidates) {
       const m = matchScore(client, segs);
       if (!m) continue;
-      const better = !best || m.score > best.score || (m.score === best.score && !suffix && best.suffix);
+      // Ties: a full match beats a suffix match; otherwise the lexicographically smallest
+      // (handler file, path) wins, so the result never depends on routes.json order.
+      const key = `${route.handlerFile}\u0000${route.path}`;
+      const bestKey = best ? `${best.route.handlerFile}\u0000${best.route.path}` : '';
+      const better = !best || m.score > best.score ||
+        (m.score === best.score && (best.suffix && !suffix || (best.suffix === suffix && key < bestKey)));
       if (better) best = { route, score: m.score, params: m.params, suffix };
     }
   }

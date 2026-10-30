@@ -10,9 +10,22 @@ const TEMPLATE = /^`((?:\\.|[^`])*)`$/s;
 /** String constants of one file: `const X = '…'` (also exported, and template literals without substitutions). */
 export function fileConstants(content: string): Map<string, string> {
   const constants = new Map<string, string>();
+  const literal = `(['"\`])((?:\\\\.|(?!\\LQ).)*)\\LQ(?!\\s*[+.[(?*\\/%-])`;
+  const add = (name: string, quote: string, body: string) => {
+    if (quote !== '`' || !body.includes('${')) constants.set(name, body.replace(/\\(.)/g, '$1'));
+  };
   // The literal must be the whole initialiser: `'/api' + VERSION` or `'v1'.toUpperCase()` is not a constant.
-  for (const m of content.matchAll(/(?:export\s+)?const\s+(\w+)\s*(?::\s*\w+\s*)?=\s*(['"`])((?:\\.|(?!\2).)*)\2(?!\s*[+.[(?*\/%-])/gs))
-    if (m[2] !== '`' || !m[3]!.includes('${')) constants.set(m[1]!, m[3]!.replace(/\\(.)/g, '$1'));
+  const first = new RegExp(`(?:export\\s+)?const\\s+(\\w+)\\s*(?::\\s*\\w+\\s*)?=\\s*${literal.replace(/LQ/g, '2')}`, 'gs');
+  const next = new RegExp(`^\\s*,\\s*(\\w+)\\s*(?::\\s*\\w+\\s*)?=\\s*${literal.replace(/LQ/g, '2')}`, 's');
+  for (const m of content.matchAll(first)) {
+    add(m[1]!, m[2]!, m[3]!);
+    // Further declarators of the same statement: const A = '/a', B = '/b';
+    let rest = content.slice(m.index! + m[0].length);
+    for (let d = next.exec(rest); d; d = next.exec(rest)) {
+      add(d[1]!, d[2]!, d[3]!);
+      rest = rest.slice(d[0].length);
+    }
+  }
   return constants;
 }
 
@@ -47,19 +60,30 @@ export function visibleConstants(file: string, content: string, index: ConstantI
   return visible;
 }
 
+function balancedParens(text: string): boolean {
+  let depth = 0;
+  for (const c of text) {
+    if (c === '(') depth++;
+    else if (c === ')' && --depth < 0) return false;
+  }
+  return depth === 0;
+}
+
 /** Splits on top-level `+`, respecting strings, templates and brackets. */
 function splitPlus(expr: string): string[] {
   const parts: string[] = [];
   let depth = 0;
   let quote: string | null = null;
+  // `${…}` nesting inside the current template, separate from bracket depth
+  let interpolation = 0;
   let start = 0;
   for (let i = 0; i < expr.length; i++) {
     const c = expr[i]!;
     if (quote) {
       if (c === '\\') i++;
-      else if (quote === '`' && c === '$' && expr[i + 1] === '{') depth++;
-      else if (quote === '`' && c === '}' && depth > 0) depth--;
-      else if (c === quote && depth === 0) quote = null;
+      else if (quote === '`' && c === '$' && expr[i + 1] === '{') interpolation++;
+      else if (quote === '`' && c === '}' && interpolation > 0) interpolation--;
+      else if (c === quote && interpolation === 0) quote = null;
       continue;
     }
     if (c === "'" || c === '"' || c === '`') quote = c;
@@ -87,13 +111,22 @@ export interface Evaluated {
 export function evaluate(expr: string, constants: Map<string, string>, env: (key: string) => string | undefined = () => undefined): Evaluated {
   let value = '';
   let known = false;
-  for (const part of splitPlus(expr.trim())) {
+  for (let part of splitPlus(expr.trim())) {
     let m: RegExpMatchArray | null;
+    // ('/api/' + id): evaluate the parenthesised expression as a part
+    while (part.startsWith('(') && part.endsWith(')') && balancedParens(part.slice(1, -1))) part = part.slice(1, -1).trim();
+    if (/^\(|\+/.test(part) && splitPlus(part).length > 1) {
+      const inner = evaluate(part, constants, env);
+      value += inner.known ? inner.value : '{}';
+      known ||= inner.known;
+      continue;
+    }
     if ((m = part.match(QUOTED))) {
       value += m[2]!.replace(/\\(.)/g, '$1');
       known = true;
-    } else if ((m = part.match(TEMPLATE))) {
-      const body = m[1]!;
+    } else if ((m = part.match(TEMPLATE)) || (part.startsWith('`') && part.endsWith('`') && part.length > 1)) {
+      // Nested templates inside ${…} contain backticks, so take the body by position.
+      const body = m ? m[1]! : part.slice(1, -1);
       let i = 0;
       while (i < body.length) {
         if (body[i] === '$' && body[i + 1] === '{') {

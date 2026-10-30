@@ -48,7 +48,8 @@ export class MapxGraph {
     const targetId = this.fileNodeId(edge.targetFile);
 
     if (this.graph.hasNode(sourceId) && this.graph.hasNode(targetId)) {
-      const edgeKey = `${sourceId}->${targetId}:${edge.edgeType}:${edge.sourceSymbol || ''}`;
+      // HTTP calls to different actions of one controller stay distinct edges.
+      const edgeKey = `${sourceId}->${targetId}:${edge.edgeType}:${edge.sourceSymbol || ''}${edge.edgeType === 'http' ? `:${edge.targetSymbol || ''}` : ''}`;
       if (!this.graph.hasEdge(edgeKey)) {
         try {
           this.graph.addDirectedEdgeWithKey(edgeKey, sourceId, targetId, {

@@ -5,6 +5,8 @@ import { posix } from 'node:path';
 
 export const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
 export const HTTP_SOURCE = /\.(m?[jt]sx?|cjs|vue|svelte)$/;
+/** Built or vendored bundles: compiled copies of the sources, not call sites of their own. */
+export const HTTP_SKIP = /(^|\/)(public|dist|build|vendor|node_modules)\/|\.min\.[cm]?js$|\.bundle\.js$/;
 
 export interface HttpClientRef {
   kind: 'axios' | 'fetch' | 'instance' | 'factory' | 'configured';
@@ -215,7 +217,21 @@ function createBaseURL(text: string, createAt: number): string | undefined {
   return options?.startsWith('{') ? objectProperty(options.slice(1, -1), 'baseURL') : undefined;
 }
 
-const lineAt = (text: string, index: number) => text.slice(0, index).split('\n').length;
+/** Line lookup by binary search over newline offsets: linear setup, log-time queries. */
+function lineIndex(text: string): (index: number) => number {
+  const starts = [0];
+  for (let i = text.indexOf('\n'); i >= 0; i = text.indexOf('\n', i + 1)) starts.push(i + 1);
+  return (index: number) => {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid]! <= index) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo + 1;
+  };
+}
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Exported clients: `export const http = axios.create(..)`, `export default () => axios.create(..)`, … */
@@ -237,6 +253,11 @@ export function collectProviders(files: { path: string; content: string }[]): Pr
       [/export\s+default\s+axios\.create\s*\(/g, 'instance', false],
       [/export\s+default\s+(?:async\s*)?\([^)]*\)\s*=>\s*(?:\(\s*)?axios\.create\s*\(/g, 'factory', false],
       [/export\s+default\s+function\s*\w*\s*\([^)]*\)\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', false],
+      // async functions and block-bodied arrows
+      [/export\s+(?:async\s+)?function\s+(\w+)\s*\([^)]*\)\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', true],
+      [/export\s+(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', true],
+      [/export\s+default\s+(?:async\s+)?function\s*\w*\s*\([^)]*\)\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', false],
+      [/export\s+default\s+(?:async\s*)?\([^)]*\)\s*=>\s*\{\s*return\s+axios\.create\s*\(/g, 'factory', false],
     ];
     for (const [re, kind, hasName] of patterns)
       for (const m of content.matchAll(re)) add(hasName ? m[1]! : null, kind, m.index! + m[0].lastIndexOf('axios.create'));
@@ -248,6 +269,21 @@ export function collectProviders(files: { path: string; content: string }[]): Pr
     }
     if (named.size) index.named.set(path, named);
   }
+  // Re-exports: export { default as http, api } from './http'
+  for (const { path, content } of files)
+    for (const m of content.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+      const target = resolveImport(path, m[2]!, new Set(files.map(f => f.path)));
+      if (!target) continue;
+      for (const item of m[1]!.split(',')) {
+        const [imported, exported] = item.trim().split(/\s+as\s+/);
+        if (!imported) continue;
+        const provider = imported === 'default' ? index.defaults.get(target) : index.named.get(target)?.get(imported);
+        if (!provider) continue;
+        const name = exported ?? imported;
+        if (name === 'default') index.defaults.set(path, provider);
+        else index.named.set(path, new Map([...(index.named.get(path) ?? []), [name, provider]]));
+      }
+    }
   return index;
 }
 
@@ -285,6 +321,8 @@ function receiversFor(file: string, content: string, providers: ProviderIndex, f
         receivers.push({ pattern: escape(m[1]!), client: { ...own(m[1]!, provider), kind: 'factory' } });
     }
   };
+  for (const m of content.matchAll(/import\s+\*\s+as\s+(\w+)\s+from\s*['"]axios['"]/g))
+    receivers.push({ pattern: escape(m[1]!), client: { kind: 'axios', name: m[1]! } });
   for (const m of content.matchAll(/import\s+(?:(\w+)\s*,?\s*)?(?:\{([^}]*)\})?\s*from\s*['"]([^'"]+)['"]/g)) {
     const [, def, namedList, spec] = m;
     if (spec === 'axios') {
@@ -323,14 +361,18 @@ function receiversFor(file: string, content: string, providers: ProviderIndex, f
 export function urlBranches(arg: string): string[] {
   let depth = 0;
   let question = -1;
+  let pending = 0; // nested `?` inside the consequent awaiting their `:`
   for (let i = 0; i < arg.length; i++) {
     const c = arg[i]!;
     if (c === "'" || c === '"' || c === '`') i = skipString(arg, i);
     else if ('([{'.includes(c)) depth++;
     else if (')]}'.includes(c)) depth--;
-    else if (depth === 0 && c === '?' && arg[i + 1] !== '.' && arg[i + 1] !== '?' && question < 0) question = i;
-    else if (depth === 0 && c === ':' && question >= 0) {
-      return [...urlBranches(arg.slice(question + 1, i).trim()), ...urlBranches(arg.slice(i + 1).trim())];
+    else if (depth === 0 && c === '?' && arg[i + 1] !== '.' && arg[i + 1] !== '?' && arg[i - 1] !== '?') {
+      if (question < 0) question = i;
+      else pending++;
+    } else if (depth === 0 && c === ':' && question >= 0) {
+      if (pending > 0) pending--;
+      else return [...urlBranches(arg.slice(question + 1, i).trim()), ...urlBranches(arg.slice(i + 1).trim())];
     }
   }
   return [arg];
@@ -347,6 +389,7 @@ export function extractHttpCalls(
   const methods = HTTP_METHODS.join('|');
   // Search the masked source: calls in comments, strings or SFC templates are not calls.
   const masked = maskSource(file, content);
+  const lineAt = lineIndex(content);
   for (const r of receiversFor(file, content, ctx.providers, ctx.files, ctx.clients ?? [])) {
     const re = new RegExp(`(?<![\\w.$])${r.pattern}\\s*\\.\\s*(${methods})\\s*\\(`, 'g');
     for (const m of masked.matchAll(re)) {
@@ -355,7 +398,7 @@ export function extractHttpCalls(
       if (!args[0]) continue;
       seen.add(m.index!);
       for (const rawUrl of urlBranches(args[0]))
-        calls.push({ file, line: lineAt(content, m.index!), method: m[1]!.toUpperCase(), rawUrl, client: r.client });
+        calls.push({ file, line: lineAt(m.index!), method: m[1]!.toUpperCase(), rawUrl, client: r.client });
     }
   }
   for (const m of masked.matchAll(/(?<![\w.$])(?:window\.|globalThis\.)?fetch\s*\(/g)) {
@@ -368,7 +411,7 @@ export function extractHttpCalls(
     const method = args[1]?.startsWith('{') ? objectProperty(args[1].slice(1, -1), 'method') : undefined;
     const literal = method?.match(/^['"`](\w+)['"`]$/)?.[1];
     for (const rawUrl of urlBranches(args[0]))
-      calls.push({ file, line: lineAt(content, m.index!), method: (literal ?? 'GET').toUpperCase(), rawUrl, client: { kind: 'fetch', name: 'fetch' } });
+      calls.push({ file, line: lineAt(m.index!), method: (literal ?? 'GET').toUpperCase(), rawUrl, client: { kind: 'fetch', name: 'fetch' } });
   }
   return calls.sort((a, b) => a.line - b.line);
 }

@@ -39,6 +39,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx_search` with `term: "*"` and a file filter returns every symbol in the file (previously capped at 20), and reports `Found N of M` with the real total whenever results are truncated. (M0-22-R1)
 - The npm package no longer ships the 7.8 MB dashboard source map (`MAPX_UI_SOURCEMAP=1` keeps it for local builds). (M0-15-R1)
 - Name-only symbol resolution no longer crosses languages: a PHP route whose controller is not indexed no longer links to a JavaScript class of the same name, and resolution without a known source language returns nothing instead of any match. (M2-01)
+- HTTP call extraction handles nested ternaries and templates, parenthesised URLs, multi-declarator constants, async or block-bodied client factories, re-exports and `import * as axios`; skips built bundles (`public/`, `dist/`, `*.min.js`); is linear on huge files; and refreshes after `.env` or `settings.http` edits alone. Ties between equally good routes no longer depend on scan order. (M2-07)
 - `mapx search "*" --file <path>` lists every symbol in the file (previously 20), and reports `Found N of M` with the real total when results are truncated; JSON output includes `totalMatches`. (M0-22-R2)
 - `mapx node --include-members` now exists, as documented, and lists the member symbols of a class, interface or trait (text and JSON). (M0-36)
 - The codebase profiler uses the configured `graphExcludePatterns` instead of fixed scratch/test rules. (M0-38)

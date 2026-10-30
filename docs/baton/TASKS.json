@@ -4966,7 +4966,8 @@
         "src/core/graph.ts",
         "tests/http-client-calls.test.ts",
         "tests/http-url-resolution.test.ts",
-        "tests/http-pairing.test.ts"
+        "tests/http-pairing.test.ts",
+        "tests/http-followups.test.ts"
       ],
       "acceptanceCriteria": [
         "`a ? b ? '/x' : '/y' : '/z'` yields three branches; `` `/api/${t ? `x` : `y`}/list` `` and `('/api/' + id)` resolve.",
@@ -4976,18 +4977,68 @@
         "Editing only .env or settings.http.clients and re-scanning updates the records."
       ],
       "verificationCommands": [
-        "npx vitest run tests/http-client-calls.test.ts tests/http-url-resolution.test.ts tests/http-pairing.test.ts"
+        "npx vitest run tests/http-client-calls.test.ts tests/http-url-resolution.test.ts tests/http-pairing.test.ts",
+        "npx vitest run tests/http-followups.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
-      "status": "BACKLOG",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T22:04:06.614Z",
+      "completedAt": "2026-10-30T22:08:29.517Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-07.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-client-calls.test.ts tests/http-url-resolution.test.ts tests/http-pairing.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-07.md"
+        },
+        {
+          "command": "npx vitest run tests/http-followups.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-07.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T22:04:06.352Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:04:06.614Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:08:29.154Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:08:29.517Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-client-calls.test.ts tests/http-url-resolution.test.ts tests/http-pairing.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-07.md"
+            },
+            {
+              "command": "npx vitest run tests/http-followups.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-07.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

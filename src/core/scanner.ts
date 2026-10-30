@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, stat, readdir, open } from 'node:fs/promises';
-import { existsSync, readFileSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, closeSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
@@ -20,7 +20,7 @@ import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } fro
 import picomatch from 'picomatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
-import { collectProviders, extractHttpCalls, HTTP_SOURCE, type HttpClientConfig } from '../frameworks/http/client-calls.js';
+import { collectProviders, extractHttpCalls, HTTP_SKIP, HTTP_SOURCE, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall } from '../frameworks/http/pairing.js';
 import { collectConstants, envCandidates, evaluate, joinURL, parseDotenv, visibleConstants } from '../frameworks/http/url-resolver.js';
@@ -513,6 +513,7 @@ export class Scanner {
     const changes = getChangedFiles(repoRoot, lastCommit || undefined);
 
     if (changes.length === 0) {
+      await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
         filesScanned: 0,
         symbolsFound: 0,
@@ -1689,7 +1690,8 @@ export class Scanner {
   private async scanHttpCalls(repo: RepoConfig): Promise<void> {
     const workspaceRoot = this.config.getWorkspaceRoot();
     const paths = this.store.getAllFiles(repo.name).map(f => f.path as string);
-    const sources = paths.filter(p => HTTP_SOURCE.test(p));
+    const sources = paths.filter(p => HTTP_SOURCE.test(p) && !HTTP_SKIP.test(p));
+    this.store.setMeta('http_inputs:' + repo.name, this.httpInputsFingerprint(resolve(workspaceRoot, repo.path)));
     const registry = new HttpCallRegistry();
     await registry.load(workspaceRoot);
     const files: { path: string; content: string }[] = [];
@@ -1746,6 +1748,43 @@ export class Scanner {
     registry.dropMissing(known);
     registry.replaceFiles(new Set(paths), records);
     await registry.save(workspaceRoot);
+  }
+
+  /**
+   * Fingerprint of the HTTP inputs that live outside indexed source: settings.http and every
+   * .env* file of the repo (path + mtime). Changing either must refresh http-calls.json even when
+   * no source file changed (M2-07).
+   */
+  private httpInputsFingerprint(repoRoot: string): string {
+    const envFiles: string[] = [];
+    const walk = (dir: string, depth: number) => {
+      if (depth > 4) return;
+      let entries: import('node:fs').Dirent[];
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        const full = join(dir, e.name);
+        if (e.isDirectory()) {
+          if (!['node_modules', 'vendor', '.git', '.mapx', 'dist', 'storage'].includes(e.name)) walk(full, depth + 1);
+        } else if (/^\.env(\.|$)/.test(e.name)) {
+          try {
+            envFiles.push(`${full}@${statSync(full).mtimeMs}`);
+          } catch {}
+        }
+      }
+    };
+    walk(repoRoot, 0);
+    return createHash('md5').update(JSON.stringify([this.config.settings.http ?? null, envFiles.sort()])).digest('hex');
+  }
+
+  private async refreshHttpIfInputsChanged(repo: RepoConfig, repoRoot: string): Promise<void> {
+    const fingerprint = this.httpInputsFingerprint(repoRoot);
+    if (this.store.getMeta('http_inputs:' + repo.name) === fingerprint) return;
+    await this.scanHttpCalls(repo);
+    await this.pairHttpCalls();
   }
 
   /**
@@ -1959,6 +1998,7 @@ export class Scanner {
     }
 
     if (toRemove.length === 0 && toReindex.length === 0) {
+      await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
         filesScanned: 0,
         symbolsFound: 0,
