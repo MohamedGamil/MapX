@@ -194,6 +194,11 @@ export class MapxGraph {
     return count;
   }
 
+  dropEdgesByType(edgeType: string): void {
+    const toDrop = this.graph.edges().filter(edge => this.graph.getEdgeAttributes(edge).type === edgeType);
+    for (const edge of toDrop) this.graph.dropEdge(edge);
+  }
+
   dropFrameworkEdgesForRepo(repoName: string): void {
     const toDrop: string[] = [];
     for (const edge of this.graph.edges()) {

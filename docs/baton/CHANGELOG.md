@@ -11,3 +11,4 @@
 - 2026-10-30: M1-09 acceptance corrected; the 'route edges lose middlewares' finding in REVIEW-2026-10-30-baseline was wrong and is withdrawn. M1-02…M1-09 also register tests/laravel-mounts.test.ts.
 - 2026-10-30: M0-30 reconciled CHANGELOG 0.2.7–0.3.5, specs 09/10 and KNOWN_ISSUES. Imported M0-31…M0-35 as DONE (test evidence); added M0-36…M0-39 and M4-03…M4-05 (M4-06 and M4-07 deferred).
 - 2026-10-30: owner decisions D006 (dashboard ceiling 720 KiB; M0-15-R2 unblocked) and D007 (releases are owner-initiated: M1-99 DEFERRED, gate renamed G-RELEASE and marked ownerInitiated, milestone release versions removed).
+- 2026-10-30: M2-06 FAILED in verification after an independent review (1 P0, 7 P1). Added M2-03-R1 (P0/P1 extraction) and M2-04-R1 (P1 URL) as hard dependencies of M2-06, and M2-07 for the P2 follow-ups.

@@ -66,11 +66,14 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 
 - **M2-01** Fail-closed cross-language name resolution — DONE, P0, 6h; depends on nothing.
-- **M2-02** Vue 2.7 and Vue 3 HTTP client fixture with labels — READY, P1, 8h; depends on M1-01.
-- **M2-03** HTTP client call-site extraction — BACKLOG, P1, 14h; depends on M2-02.
-- **M2-04** URL constant, template and conditional resolution — BACKLOG, P1, 10h; depends on M2-03.
-- **M2-05** Base URL resolution — BACKLOG, P1, 8h; depends on M2-03.
-- **M2-06** Pair client calls with backend routes across repositories — BACKLOG, P1, 14h; depends on M2-04, M2-05, M1-98, M2-01.
+- **M2-02** Vue 2.7 and Vue 3 HTTP client fixture with labels — DONE, P1, 8h; depends on M1-01.
+- **M2-03** HTTP client call-site extraction — DONE, P1, 14h; depends on M2-02.
+- **M2-04** URL constant, template and conditional resolution — DONE, P1, 10h; depends on M2-03.
+- **M2-05** Base URL resolution — DONE, P1, 8h; depends on M2-03.
+- **M2-03-R1** Fix HTTP extraction defects found in the M2 review — DONE, P0, 6h; depends on M2-03.
+- **M2-04-R1** Fix URL resolution defects found in the M2 review — DONE, P1, 5h; depends on M2-04, M2-05.
+- **M2-06** Pair client calls with backend routes across repositories — DONE, P1, 14h; depends on M2-04, M2-05, M1-98, M2-01, M2-03-R1, M2-04-R1.
+- **M2-07** HTTP pairing follow-ups from the M2 review — BACKLOG, P2, 10h; depends on M2-06.
 
 ## M3 — Vue SFC semantics
 

@@ -1,6 +1,6 @@
 # MapX project state
 
-Updated 2026-10-30, end of session 2. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`; this session's work is uncommitted until the owner commits it.
+Updated 2026-10-30, end of session 3. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`; this session's work is uncommitted until the owner commits it.
 
 ## Milestones
 
@@ -8,8 +8,8 @@ Updated 2026-10-30, end of session 2. Plan baseline: `develop@7e5aa19` (0.3.5). 
 | --- | --- | --- |
 | M0 Delivered baseline and remediation | all DONE except M0-39 | M0-39 (tests for untested 0.3.x features) promotable |
 | M1 Laravel route correctness | **10 of 10 active tasks DONE** | M1-99 (release) DEFERRED: owner-initiated (D007) |
-| M2 Cross-language precision and HTTP pairing | 1 of 6 DONE | M2-01 done; M2-02 READY |
-| M3 Vue SFC semantics | 0 of 6 | M3-01 READY |
+| M2 Cross-language precision and HTTP pairing | **8 of 9 DONE** | M2-01 … M2-06 plus M2-03-R1 and M2-04-R1 done; M2-07 (P2 review follow-ups) promotable |
+| M3 Vue SFC semantics | 0 of 6 | **M3-01 READY with an iteration spec** (next) |
 | M4 Measurement and DX | 0 of 7 | M4-03 and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
 
 Live list: `npm run plan:scan`.
@@ -29,13 +29,22 @@ Live list: `npm run plan:scan`.
 - **M1-01 … M1-09, M1-98:** Laravel mount graph. On the 41-route fixture: URI recall 67% → 100%, handler recall 57% → 100%, precision 60% → 100%, false positives 2 → 0.
 - **M2-01:** reproduced name-only PHP → JS edges through the framework resolver; resolution now fails closed. MapX's own edge counts are unchanged.
 
+## Done in session 3
+
+- **M2-02:** Vue 2.7/3 HTTP fixture (32 labelled calls, 15 patterns) and `score-http.ts`; contract D008 (`.mapx/http-calls.json`).
+- **M2-03:** call-site extraction (axios, fetch, instances, factories, aliases, configured receivers; ternary branches).
+- **M2-04 / M2-05:** URL evaluation (constants, templates, imports) and base URLs (`axios.create`, `.env`, axios joining).
+- **M2-06:** workspace-wide pairing with live backend routes; `http` edges; `mapx routes --clients [--unmatched]` and `mapx_routes { clients }`.
+- On the fixture, 0.3.5 → now: call sites 0 → 100%, URLs 0 → 100%, pairing recall 0 → 100%, pairing precision 100%.
+- **Independent review** of M2-03 … M2-06 found 1 P0 and 7 P1s, all fixed before M2-06 closed: M2-03-R1 (deleted-file records, global/require axios, calls in comments or strings, argument parsing), M2-04-R1 (constants, env prefixes, env walk) and pairing (client routers, `ALL`, `:id`/`<id>`). The P2s are M2-07.
+
 ## Corrections
 
 The import review's finding "Laravel route edges lose middlewares" was wrong and is withdrawn (see `reviews/REVIEW-2026-10-30-baseline.md` and CHANGELOG).
 
 ## Latest validation
 
-`npm run check` exit 0 (2026-10-30, end of session): plan valid (68 tasks); 19 Unreleased changelog entries all cite tasks; typecheck clean; 58 test files, 1094 tests passed; skill tests 5/5. `npx tsx scripts/check-package.ts`: 234 files, 4.29 MB packed, no source maps.
+`npm run check` exit 0 (2026-10-30, end of session 3): plan valid (71 tasks); every Unreleased changelog entry cites a task; typecheck clean; 1136 tests passed; skill tests 5/5. `npx tsx scripts/check-package.ts`: 234 files, 4.29 MB packed, no source maps.
 
 ## Owner decisions recorded
 

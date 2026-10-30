@@ -26,6 +26,7 @@ import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impac
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
+import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
@@ -329,6 +330,7 @@ EXAMPLES:
             framework: { type: 'string', description: 'Filter by framework name' },
             method: { type: 'string', description: 'Filter by HTTP method (GET, POST, etc.)' },
             pathPattern: { type: 'string', description: 'Filter by route path pattern' },
+            clients: { type: 'string', enum: ['all', 'unmatched'], description: 'Instead of routes, list frontend HTTP call sites (axios/fetch/clients) with the backend route each reaches; "unmatched" lists only calls that reach no live route' },
             ...dirProperty,
           },
         },
@@ -1891,6 +1893,16 @@ Callees: ${callees.length}`;
         const resolved = resolveOrFail(args || {});
         if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
         const dir = resolved.dir;
+
+        const clients = (args as any)?.clients as string | undefined;
+        if (clients === 'all' || clients === 'unmatched') {
+          const calls = await loadClientCalls(dir, {
+            unmatched: clients === 'unmatched',
+            method: (args as any)?.method,
+            path: (args as any)?.pathPattern,
+          });
+          return { content: [{ type: 'text', text: calls.length ? JSON.stringify(calls, null, 2) : (clients === 'unmatched' ? 'No unmatched HTTP calls.' : 'No frontend HTTP calls found. Run `mapx scan` on a workspace with JS/TS/Vue sources.') }] };
+        }
 
         const routeRegistry = new RouteRegistry();
         await routeRegistry.load(dir);

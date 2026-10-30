@@ -1,0 +1,4 @@
+{
+  "description": "Merged into .mapx/config.json settings by scripts/eval/score-http.ts before scanning. apiService is a project wrapper MapX cannot recognise without configuration.",
+  "settings": { "http": { "clients": [{ "receiver": "apiService", "baseURL": "/api" }] } }
+}

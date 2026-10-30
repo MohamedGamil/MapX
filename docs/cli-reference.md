@@ -581,13 +581,24 @@ Show routes from all detected frameworks.
 
 ```bash
 mapx routes [path] [--dir /path] [--framework <name>] [--method <verb>] [--path-pattern <pattern>] [--json]
+mapx routes [path] --clients [--unmatched] [--method <verb>] [--path-pattern <pattern>] [--json]
 ```
 
 Options:
 - `--framework` — Filter by framework name
 - `--method` — Filter by HTTP method (GET, POST, etc.)
-- `--path-pattern` — Filter by route path pattern
-- `--json` — Output routes as JSON
+- `--path-pattern` — Filter by route path pattern (with `--clients`: by request URL)
+- `--json` — Output as JSON. Every route carries `line`, `name`, `middlewares`, `reachable`, `overridden` and `conditional`
+- `--clients` — Instead of routes, list frontend HTTP call sites (axios, `fetch`, `axios.create` instances, factories, aliases and configured receivers) with their resolved URL and the backend route each reaches
+- `--unmatched` — With `--clients`: only calls that reach no live route (dead or broken calls)
+
+Client receivers MapX cannot recognise on its own (project wrappers) are configured in `.mapx/config.json`:
+
+```json
+{ "settings": { "http": { "clients": [{ "receiver": "apiService", "baseURL": "/api" }] } } }
+```
+
+Paired calls are stored as `http` edges, from the calling file to the route handler.
 
 ## `mapx hooks`
 

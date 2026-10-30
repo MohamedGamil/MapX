@@ -40,3 +40,18 @@ Owner decision: 0.4.0 is not released at the end of M1. A release happens only w
 - gate `G-REL-0.4.0` becomes `G-RELEASE` with `ownerInitiated: true`.
 
 Agents never request this gate, never bump `VERSION` and never publish. Unreleased work keeps accumulating under CHANGELOG `[Unreleased]`.
+
+## D008 — HTTP call-site contract: `.mapx/http-calls.json` (2026-10-30)
+
+Frontend HTTP calls are persisted like routes, in `.mapx/http-calls.json`. It holds one record per client call site:
+
+```
+{ file, line, method, rawUrl, url, pattern?, route: { method, path, handlerSymbol?, handlerFile } | null }
+```
+
+- **`url`** is resolved: base URL joined with axios semantics, constants and template parts substituted, and unknown parts written as `{}`.
+- **`route`** is the paired backend route; `null` means unmatched.
+- **Writers:** M2-03 writes `file`, `line`, `method` and `rawUrl`; M2-04 and M2-05 fill `url`; M2-06 fills `route` and adds `http` edges.
+- **Scorer:** `scripts/eval/score-http.ts` reads only this file, so the scorer (M2-02) can be built before any extractor exists.
+
+Why: it mirrors `routes.json` (M1), keeps each stage independently testable, and lets the fixture record a 0.3.5 baseline of 0 now.

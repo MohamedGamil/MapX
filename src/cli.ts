@@ -24,6 +24,7 @@ import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
+import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
 import { findSimilarSymbols, isGlobPattern, globToLike } from './core/fuzzy-matcher.js';
 import picomatch from 'picomatch';
@@ -2151,8 +2152,32 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--method <verb>', 'Filter by HTTP method (GET, POST, etc.)')
     .option('--path-pattern <pattern>', 'Filter by route path pattern')
     .option('--json', 'Output routes as JSON')
+    .option('--clients', 'Show frontend HTTP call sites and the routes they reach instead of routes')
+    .option('--unmatched', 'With --clients: only calls that reach no live route')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+      if (opts.clients) {
+        const calls = await loadClientCalls(dir, {
+          unmatched: !!opts.unmatched,
+          method: opts.method as string | undefined,
+          path: opts.pathPattern as string | undefined,
+        });
+        if (opts.json) {
+          console.log(JSON.stringify(calls, null, 2));
+          return;
+        }
+        if (calls.length === 0) {
+          console.log(opts.unmatched ? 'No unmatched HTTP calls.' : 'No frontend HTTP calls found.');
+          return;
+        }
+        console.log(`\nFrontend HTTP calls (${calls.length}):`);
+        for (const c of calls) {
+          const target = c.route ? `${c.route.handlerSymbol ?? c.route.handlerFile} [${c.route.confidence}]` : 'UNMATCHED';
+          console.log(`  ${c.file}:${c.line}  ${c.method.padEnd(6)} ${(c.url ?? c.rawUrl).padEnd(36)} → ${target}`);
+        }
+        console.log('');
+        return;
+      }
       const routeRegistry = new RouteRegistry();
       await routeRegistry.load(dir);
 

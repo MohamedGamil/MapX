@@ -1,0 +1,293 @@
+{
+  "description": "Expected HTTP call sites in tests/fixtures/vue-http, paired against tests/fixtures/laravel-routes. file is relative to the fixture root (vue2/ is mounted as frontend-vue2/, vue3/ as frontend-vue3/). url is the resolved request path with parameters as {}. route is 'METHOD /path' of the backend route the call reaches, or null when no live route serves it.",
+  "labels": [
+    {
+      "id": "L01",
+      "pattern": "factory",
+      "file": "vue2/src/services/postService.js",
+      "line": 7,
+      "method": "GET",
+      "url": "/api/posts",
+      "route": "GET /api/posts"
+    },
+    {
+      "id": "L02",
+      "pattern": "alias",
+      "file": "vue2/src/services/postService.js",
+      "line": 8,
+      "method": "POST",
+      "url": "/api/posts/search",
+      "route": "POST /api/posts/search"
+    },
+    {
+      "id": "L03",
+      "pattern": "constant-imported",
+      "file": "vue2/src/services/postService.js",
+      "line": 9,
+      "method": "GET",
+      "url": "/api/legacy/items",
+      "route": "GET /api/legacy/items"
+    },
+    {
+      "id": "L04",
+      "pattern": "template",
+      "file": "vue2/src/services/postService.js",
+      "line": 10,
+      "method": "GET",
+      "url": "/api/legacy/items/{}",
+      "route": "GET /api/legacy/items/{id}"
+    },
+    {
+      "id": "L05",
+      "pattern": "split-line",
+      "file": "vue2/src/services/postService.js",
+      "line": 12,
+      "method": "GET",
+      "url": "/api/v1/users",
+      "route": "GET /api/v1/users"
+    },
+    {
+      "id": "L06",
+      "pattern": "conditional",
+      "file": "vue2/src/services/postService.js",
+      "line": 16,
+      "method": "GET",
+      "url": "/api/v1/users",
+      "route": "GET /api/v1/users"
+    },
+    {
+      "id": "L07",
+      "pattern": "conditional",
+      "file": "vue2/src/services/postService.js",
+      "line": 16,
+      "method": "GET",
+      "url": "/api/v1/people",
+      "route": "GET /api/v1/people"
+    },
+    {
+      "id": "L08",
+      "pattern": "overridden-route",
+      "file": "vue2/src/services/postService.js",
+      "line": 17,
+      "method": "GET",
+      "url": "/api/dup",
+      "route": "GET /api/dup"
+    },
+    {
+      "id": "L09",
+      "pattern": "unserved",
+      "file": "vue2/src/services/postService.js",
+      "line": 18,
+      "method": "GET",
+      "url": "/api/nope/missing",
+      "route": null
+    },
+    {
+      "id": "L10",
+      "pattern": "axios-direct",
+      "file": "vue2/src/components/TagList.vue",
+      "line": 13,
+      "method": "GET",
+      "url": "/api/tags",
+      "route": "GET /api/tags"
+    },
+    {
+      "id": "L11",
+      "pattern": "constant-local",
+      "file": "vue2/src/components/TagList.vue",
+      "line": 14,
+      "method": "GET",
+      "url": "/api/blog-categories/{}",
+      "route": "GET /api/blog-categories/{blog_category}"
+    },
+    {
+      "id": "L12",
+      "pattern": "unmounted-route",
+      "file": "vue2/src/components/TagList.vue",
+      "line": 15,
+      "method": "GET",
+      "url": "/ghost",
+      "route": null
+    },
+    {
+      "id": "L13",
+      "pattern": "factory",
+      "file": "vue2/src/store/modules/people.js",
+      "line": 6,
+      "method": "GET",
+      "url": "/api/v1/people",
+      "route": "GET /api/v1/people"
+    },
+    {
+      "id": "L14",
+      "pattern": "factory",
+      "file": "vue2/src/store/modules/people.js",
+      "line": 7,
+      "method": "GET",
+      "url": "/api/v1/people/{}",
+      "route": "GET /api/v1/people/{person}"
+    },
+    {
+      "id": "L15",
+      "pattern": "factory",
+      "file": "vue2/src/store/modules/people.js",
+      "line": 8,
+      "method": "PUT",
+      "url": "/api/v1/people/{}",
+      "route": "PUT /api/v1/people/{person}"
+    },
+    {
+      "id": "L16",
+      "pattern": "factory",
+      "file": "vue2/src/store/modules/people.js",
+      "line": 9,
+      "method": "DELETE",
+      "url": "/api/v1/people/{}",
+      "route": "DELETE /api/v1/people/{person}"
+    },
+    {
+      "id": "L17",
+      "pattern": "env-base",
+      "file": "vue3/src/services/statusService.ts",
+      "line": 3,
+      "method": "GET",
+      "url": "/api/statuses",
+      "route": "GET /api/statuses"
+    },
+    {
+      "id": "L18",
+      "pattern": "axios-instance",
+      "file": "vue3/src/services/statusService.ts",
+      "line": 4,
+      "method": "POST",
+      "url": "/api/statuses",
+      "route": "POST /api/statuses"
+    },
+    {
+      "id": "L19",
+      "pattern": "axios-instance",
+      "file": "vue3/src/services/statusService.ts",
+      "line": 5,
+      "method": "PUT",
+      "url": "/api/statuses/{}",
+      "route": "PUT /api/statuses/{status}"
+    },
+    {
+      "id": "L20",
+      "pattern": "axios-instance",
+      "file": "vue3/src/services/statusService.ts",
+      "line": 6,
+      "method": "PATCH",
+      "url": "/api/statuses/{}",
+      "route": "PATCH /api/statuses/{status}"
+    },
+    {
+      "id": "L21",
+      "pattern": "axios-instance",
+      "file": "vue3/src/services/statusService.ts",
+      "line": 7,
+      "method": "DELETE",
+      "url": "/api/statuses/{}",
+      "route": "DELETE /api/statuses/{status}"
+    },
+    {
+      "id": "L22",
+      "pattern": "unserved",
+      "file": "vue3/src/services/statusService.ts",
+      "line": 8,
+      "method": "GET",
+      "url": "/api/reports/daily",
+      "route": null
+    },
+    {
+      "id": "L23",
+      "pattern": "axios-instance",
+      "file": "vue3/src/services/misc.ts",
+      "line": 3,
+      "method": "GET",
+      "url": "/api/blog-categories/create",
+      "route": "GET /api/blog-categories/create"
+    },
+    {
+      "id": "L24",
+      "pattern": "template",
+      "file": "vue3/src/services/misc.ts",
+      "line": 4,
+      "method": "GET",
+      "url": "/api/blog-categories/{}/edit",
+      "route": "GET /api/blog-categories/{blog_category}/edit"
+    },
+    {
+      "id": "L25",
+      "pattern": "fetch",
+      "file": "vue3/src/services/misc.ts",
+      "line": 5,
+      "method": "GET",
+      "url": "/shop/products",
+      "route": "GET /shop/products"
+    },
+    {
+      "id": "L26",
+      "pattern": "fetch",
+      "file": "vue3/src/services/misc.ts",
+      "line": 6,
+      "method": "GET",
+      "url": "/about",
+      "route": "GET /about"
+    },
+    {
+      "id": "L27",
+      "pattern": "fetch",
+      "file": "vue3/src/services/misc.ts",
+      "line": 7,
+      "method": "GET",
+      "url": "/api/tags/{}",
+      "route": "GET /api/tags/{tag}"
+    },
+    {
+      "id": "L28",
+      "pattern": "configured-receiver",
+      "file": "vue3/src/views/Billing.vue",
+      "line": 4,
+      "method": "GET",
+      "url": "/api/billing/v1/invoices",
+      "route": "GET /api/billing/v1/invoices"
+    },
+    {
+      "id": "L29",
+      "pattern": "configured-receiver",
+      "file": "vue3/src/views/Billing.vue",
+      "line": 5,
+      "method": "GET",
+      "url": "/api/billing/v1/invoices/{}",
+      "route": "GET /api/billing/v1/invoices/{invoice}"
+    },
+    {
+      "id": "L30",
+      "pattern": "fetch",
+      "file": "vue3/src/views/Billing.vue",
+      "line": 6,
+      "method": "GET",
+      "url": "/api/health",
+      "route": "GET /api/health"
+    },
+    {
+      "id": "L31",
+      "pattern": "fetch",
+      "file": "vue3/src/views/Billing.vue",
+      "line": 7,
+      "method": "GET",
+      "url": "/api/notices/latest",
+      "route": "GET /api/notices/latest"
+    },
+    {
+      "id": "L32",
+      "pattern": "fetch",
+      "file": "vue3/src/views/Billing.vue",
+      "line": 8,
+      "method": "POST",
+      "url": "/api/posts/search",
+      "route": "POST /api/posts/search"
+    }
+  ]
+}

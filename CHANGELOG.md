@@ -23,6 +23,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **Laravel route fixture and scorer**: `tests/fixtures/laravel-routes` (41 labelled routes) and `scripts/eval/score-routes.ts`, which report per-pattern recall and precision. (M1-01)
 - `frameworks.json` is now honoured as an override: frameworks listed there stay active even when detection misses them. (M1-08)
 
+- **Frontend → backend HTTP pairing**: MapX now finds HTTP call sites in JS, TS and Vue files (axios, `fetch`, `axios.create` instances, factories such as `Api()`, aliases, and receivers configured in `settings.http.clients`), resolves their URLs (string constants, template literals, conditional branches, base URLs from `axios.create` options and `.env` files with axios joining rules), and pairs each call with the live backend route it reaches across repositories. Paired calls become `http` edges to the route handler. `mapx routes --clients [--unmatched]` and `mapx_routes { clients }` list calls and the calls that reach no route. (M2-03, M2-04, M2-05, M2-06)
+- **HTTP pairing fixture and scorer**: `tests/fixtures/vue-http` (32 labelled calls in Vue 2.7 and Vue 3 apps) and `scripts/eval/score-http.ts`. (M2-02)
+
 ### Fixed
 - Laravel routes declared with array handlers (`['uses' => 'C@m', 'as' => ..., 'middleware' => ...]`) now resolve their handler; handler symbols are fully qualified using the group namespace. (M1-02)
 - Resource route parameters follow Laravel (`blog-categories` → `{blog_category}`, `statuses` → `{status}`, `people` → `{person}`); `->parameters()`, `->only()` and `->except()` are honoured. (M1-05)

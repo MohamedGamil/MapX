@@ -4108,7 +4108,8 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
-        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md",
+        "docs/baton/DECISIONS.md#D008"
       ],
       "outputs": [
         "tests/fixtures/vue-http/",
@@ -4121,31 +4122,75 @@
         "tests/http-pairing-fixture.test.ts"
       ],
       "acceptanceCriteria": [
-        "Labels cover the 7 wrapper patterns in report item 12 and one call to an unserved endpoint, at least 30 edges.",
-        "score-http.ts prints recall and precision per pattern and exits 0; baseline recall 0 recorded."
+        "labels.json has at least 30 labels covering the 13 client patterns in iterations/M2-02.md, including at least 2 route:null labels (unserved, unmounted).",
+        "Every non-null label route matches a live label in tests/fixtures/laravel-routes/labels.json (asserted by the test).",
+        "score-http.ts --json exits 0 and reports call-site recall 0 at this revision; the baseline is recorded in reports/M2-02.md.",
+        "Scorer unit tests cover wrong pairs on null labels, {id} ≡ {} URL normalisation, and a missing http-calls.json."
       ],
       "verificationCommands": [
         "npx vitest run tests/http-pairing-fixture.test.ts",
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Labels cover the 7 wrapper patterns in report item 12 and one call to an unserved endpoint, at least 30 edges.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T21:21:47.659Z",
+      "completedAt": "2026-10-30T21:24:40.682Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-02.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-02.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-02.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-30T21:11:15.025Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:21:47.659Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:24:40.438Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:24:40.682Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-02.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-02.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -4183,28 +4228,81 @@
       ],
       "affectedFiles": [
         "src/frameworks/http",
-        "src/core/config.ts",
+        "src/core/scanner.ts",
+        "src/types.ts",
+        "tests/http-client-calls.test.ts",
         "tests/http-pairing-fixture.test.ts"
       ],
       "acceptanceCriteria": [
-        "Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
-        "frameworks.http.clients in config adds a receiver name, shown by a test."
+        "On the M2-02 fixture, call-site recall is 100% (32/32, right method) per score-http.ts; the fixture floor callSiteRecall is raised to 1.",
+        "Without apiService in settings.http.clients, exactly L28 and L29 are not extracted (tests/http-client-calls.test.ts).",
+        "Non-client member calls such as map.get(x) and store.get(k) yield no record (unit test).",
+        "Re-scanning an unchanged workspace yields identical records without duplicates."
       ],
       "verificationCommands": [
         "npx vitest run tests/http-pairing-fixture.test.ts",
         "npx vitest run tests/http-client-calls.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T21:25:32.130Z",
+      "completedAt": "2026-10-30T21:29:25.534Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M2-03.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-03.md"
+        },
+        {
+          "command": "npx vitest run tests/http-client-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-03.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:24:40.941Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:25:32.130Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:29:25.228Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:29:25.534Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-03.md"
+            },
+            {
+              "command": "npx vitest run tests/http-client-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-03.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -4241,27 +4339,79 @@
       ],
       "affectedFiles": [
         "src/frameworks/http",
+        "src/core/scanner.ts",
+        "tests/http-url-resolution.test.ts",
         "tests/http-pairing-fixture.test.ts"
       ],
       "acceptanceCriteria": [
-        "const BASE = 'settings/x'; api.get(`${BASE}/${id}`) resolves to settings/x/{param}.",
-        "cond ? '/a' : '/b' yields two call sites."
+        "const BASE = 'settings/x'; api.get(`${BASE}/${id}`) resolves to /settings/x/{} (url field), for file-local and imported constants.",
+        "Each branch of a conditional URL (split into call sites by M2-03) resolves to its own url.",
+        "On the M2-02 fixture, every label whose URL needs no base URL resolves (url recall for patterns constant-local, constant-imported, template, fetch, axios-direct, conditional), measured by score-http.ts."
       ],
       "verificationCommands": [
         "npx vitest run tests/http-pairing-fixture.test.ts",
         "npx vitest run tests/http-url-resolution.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. const BASE = 'settings/x'; api.get(`${BASE}/${id}`) resolves to settings/x/{param}.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T21:29:53.490Z",
+      "completedAt": "2026-10-30T21:33:14.290Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M2-04.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04.md"
+        },
+        {
+          "command": "npx vitest run tests/http-url-resolution.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:29:25.827Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:29:53.490Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:33:13.939Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:33:14.290Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04.md"
+            },
+            {
+              "command": "npx vitest run tests/http-url-resolution.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -4309,15 +4459,294 @@
         "npx vitest run tests/http-base-url.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. baseURL '/api/' joined with 'x' and with '/x' both give /api/x.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T21:33:14.685Z",
+      "completedAt": "2026-10-30T21:33:15.247Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-05.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-05.md"
+        },
+        {
+          "command": "npx vitest run tests/http-base-url.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-05.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:29:26.137Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:33:14.685Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:33:14.966Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:33:15.247Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-05.md"
+            },
+            {
+              "command": "npx vitest run tests/http-base-url.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-05.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-03-R1",
+      "milestone": "M2",
+      "title": "Fix HTTP extraction defects found in the M2 review",
+      "objective": "Fix the extraction defects an independent review found in M2-03: stale records of deleted files, global/required axios, calls in comments or strings, arguments containing comments or regex literals, and method definitions named fetch.",
+      "description": "Post-acceptance defects of M2-03 (DONE is terminal). Review of 2026-10-30, reproduced by the reviewer: P0 deleted files keep records in http-calls.json; P1 window.axios / require(\"axios\") not detected; P1 commented-out and in-string calls extracted; P1 a quote in an argument comment or a regex literal drops the call; P2 `async fetch(id) {}` / `function fetch()` recorded as calls.",
+      "priority": "P0",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "http"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-03.md",
+        "docs/baton/reports/M2-06.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/client-calls.ts",
+        "src/frameworks/http/http-registry.ts",
+        "src/core/scanner.ts",
+        "tests/http-client-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "After deleting a frontend file and re-scanning, http-calls.json has no record for it.",
+        "`window.axios = require(\"axios\")` in one file and `axios.get(\"/a\")` in another yields a record; so does `const axios = require(\"axios\")`.",
+        "`// axios.get(\"/old\")`, `/* axios.delete(\"/x\") */` and `\"use axios.post('/docs')\"` yield no record.",
+        "`axios.get(\"/a\", // don't cache\\n {})` and `axios.get(u.replace(/'/g, \"\"))` each yield a record.",
+        "`async fetch(id) {}` and `function fetch(url) {}` yield no record."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-client-calls.test.ts",
+        "npx vitest run tests/http-pairing-fixture.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:44:07.037Z",
+      "completedAt": "2026-10-30T21:46:26.188Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M2-03-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-client-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-03-R1.md"
+        },
+        {
+          "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-03-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:44:06.787Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:44:07.037Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:46:25.948Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:46:26.188Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-client-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-03-R1.md"
+            },
+            {
+              "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-03-R1.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-04-R1",
+      "milestone": "M2",
+      "title": "Fix URL resolution defects found in the M2 review",
+      "objective": "Fix the URL defects an independent review found in M2-04/M2-05: constants taking the first literal of a longer expression, env or base prefixes inside the request path, and the env-file walk.",
+      "description": "Post-acceptance defects of M2-04/M2-05. P1 `const BASE = \"/api\" + VERSION` was taken as \"/api\"; P1 `${import.meta.env.VITE_API}/api/users` resolved to \"{}/api/users\" and never paired; P2 envCandidates loops forever on absolute paths, ignores its root and checks .env.local before .env.development.local.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "http"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-04",
+          "type": "hard"
+        },
+        {
+          "id": "M2-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-04.md",
+        "docs/baton/reports/M2-06.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/url-resolver.ts",
+        "src/core/scanner.ts",
+        "tests/http-url-resolution.test.ts",
+        "tests/http-base-url.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`const BASE = '/api' + VERSION` and `const V = 'v1'.toUpperCase()` are not string constants.",
+        "A path starting with an env value or unknown prefix uses the env value when defined; otherwise the leading `{}` is dropped and baseURLUnresolved is set.",
+        "envCandidates terminates for absolute paths, stops at the given root, and orders .env.development.local before .env.development before .env.local before .env (Vite / Vue CLI precedence; the original criterion had this order wrong)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-url-resolution.test.ts",
+        "npx vitest run tests/http-base-url.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:46:26.659Z",
+      "completedAt": "2026-10-30T21:47:44.811Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M2-04-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-url-resolution.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04-R1.md"
+        },
+        {
+          "command": "npx vitest run tests/http-base-url.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:46:26.423Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:46:26.659Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:47:44.557Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:47:44.811Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-url-resolution.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04-R1.md"
+            },
+            {
+              "command": "npx vitest run tests/http-base-url.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -4328,7 +4757,7 @@
       "milestone": "M2",
       "title": "Pair client calls with backend routes across repositories",
       "objective": "Emit typed `http` edges from call site to route handler by method and normalised path, with confidence, and `unmatched` markers.",
-      "description": "Emit typed `http` edges from call site to route handler by method and normalised path, with confidence, and `unmatched` markers.",
+      "description": "Emit typed `http` edges from call site to route handler by method and normalised path, with confidence, and `unmatched` markers. 2026-10-30: FAILED in verification. The independent review found pairing defects in scope (client-side router routes treated as backends, Next.js ALL, :id/<id> params); fixed after M2-03-R1 and M2-04-R1.",
       "priority": "P1",
       "estimate": {
         "min": 10,
@@ -4356,6 +4785,14 @@
         {
           "id": "M2-01",
           "type": "hard"
+        },
+        {
+          "id": "M2-03-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R1",
+          "type": "hard"
         }
       ],
       "optionalDependencies": [],
@@ -4370,23 +4807,180 @@
       "affectedFiles": [
         "src/frameworks/http",
         "src/core/scanner.ts",
+        "src/core/store.ts",
+        "src/core/graph.ts",
         "src/types.ts",
         "src/cli.ts",
         "src/mcp.ts",
+        "docs/cli-reference.md",
+        "docs/mcp-integration.md",
+        "tests/http-pairing.test.ts",
         "tests/http-pairing-fixture.test.ts"
       ],
       "acceptanceCriteria": [
-        "Fixture pairing recall ≥ 80% and precision ≥ 95%.",
-        "The call to the unserved endpoint is reported as unmatched.",
-        "{id} and {slug} placeholders match each other."
+        "Fixture pairing recall ≥ 80% and precision ≥ 95% (score-http.ts --min-recall 0.8 --min-precision 0.95).",
+        "L09, L22 (unserved) and L12 (unmounted route) have route:null and are listed by `mapx routes --clients --unmatched`.",
+        "Client /api/v1/people/{} pairs with route /api/v1/people/{person} ({id} ≡ {slug}).",
+        "The call to the overridden GET /api/dup pairs with the winner PostController@newDup.",
+        "Scanning the frontend repo before the backend repo still pairs (multi-repo order test).",
+        "`http` edges exist only for paired calls, with the handler as target_symbol."
       ],
       "verificationCommands": [
         "npx vitest run tests/http-pairing-fixture.test.ts",
-        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+        "npx vitest run tests/http-pairing.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Fixture pairing recall ≥ 80% and precision ≥ 95%.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:47:45.367Z",
+      "completedAt": "2026-10-30T21:49:23.243Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M2-06.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06.md"
+        },
+        {
+          "command": "npx vitest run tests/http-pairing.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:33:15.546Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:34:08.260Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:38:09.139Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:44:06.283Z",
+          "from": "VERIFYING",
+          "to": "FAILED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:47:45.103Z",
+          "from": "FAILED",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:47:45.367Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:49:22.937Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:49:23.243Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06.md"
+            },
+            {
+              "command": "npx vitest run tests/http-pairing.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-07",
+      "milestone": "M2",
+      "title": "HTTP pairing follow-ups from the M2 review",
+      "objective": "Address the P2 findings of the M2 review: nested ternaries in the consequent, nested templates and parenthesised URLs, more provider shapes (async/block factories, re-exports, namespace imports), deterministic tie-breaking across repos, distinct graph edges per call, linear line lookup and skipping bundled assets, and refreshing records when only .env or settings.http change.",
+      "description": "Deferred P2 findings of the 2026-10-30 independent review of M2-03 … M2-06 (see reports/M2-06.md).",
+      "priority": "P2",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "http"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-06",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-06.md"
+      ],
+      "outputs": [
+        "fixes",
+        "tests"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http",
+        "src/core/scanner.ts",
+        "src/core/graph.ts",
+        "tests/http-client-calls.test.ts",
+        "tests/http-url-resolution.test.ts",
+        "tests/http-pairing.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`a ? b ? '/x' : '/y' : '/z'` yields three branches; `` `/api/${t ? `x` : `y`}/list` `` and `('/api/' + id)` resolve.",
+        "A provider written as `export async function f() { return axios.create() }`, `() => { return axios.create() }`, `export { default as http } from './http'`, or used via `import * as axios`, is recognised.",
+        "Two equally scored routes pick the same one regardless of routes.json order (documented rule), covered by a test.",
+        "Extracting a 3 MB single-line file with 6,000 calls takes under 1 s; files under public/ or dist/ are skipped.",
+        "Editing only .env or settings.http.clients and re-scanning updates the records."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-client-calls.test.ts tests/http-url-resolution.test.ts tests/http-pairing.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
       "status": "BACKLOG",
-      "owner": "maintainer",
+      "owner": "claude",
       "actualHours": null,
       "startedAt": null,
       "completedAt": null,
@@ -4394,7 +4988,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -4429,14 +5023,17 @@
       ],
       "affectedFiles": [
         "tests/fixtures/vue-sfc",
+        "scripts/eval/score-edges.ts",
         "tests/vue-sfc.test.ts"
       ],
       "acceptanceCriteria": [
-        "Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
-        "The test records the 0.3.5 baseline (expected edges missing) as known failures, not passes."
+        "At least 30 expected edges cover every pattern in iterations/M3-01.md in both Vue versions where the pattern exists, plus at least 3 negatives.",
+        "`score-edges.ts tests/fixtures/vue-sfc --json` exits 0; the per-pattern baseline is recorded in reports/M3-01.md.",
+        "Scorer unit tests: exact edge-type and symbol matching, negatives counted as false positives, unscored edge types ignored."
       ],
       "verificationCommands": [
-        "npx vitest run tests/vue-sfc.test.ts"
+        "npx vitest run tests/vue-sfc.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
       "status": "READY",
@@ -4455,7 +5052,7 @@
           "evidence": []
         }
       ],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -4576,7 +5173,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -4696,7 +5293,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."

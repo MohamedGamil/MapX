@@ -20,6 +20,10 @@ import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } fro
 import picomatch from 'picomatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
+import { collectProviders, extractHttpCalls, HTTP_SOURCE, type HttpClientConfig } from '../frameworks/http/client-calls.js';
+import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
+import { pairCall } from '../frameworks/http/pairing.js';
+import { collectConstants, envCandidates, evaluate, joinURL, parseDotenv, visibleConstants } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
@@ -1678,11 +1682,121 @@ export class Scanner {
    * classification, clustering, metrics, and smell detection.
    * Eliminates ~85 lines of duplicated code between full and incremental scans.
    */
+  /**
+   * Extracts frontend HTTP call sites (axios, fetch, clients and configured receivers) from the
+   * repo's JS/TS/Vue files and replaces the repo's records in .mapx/http-calls.json (D008).
+   */
+  private async scanHttpCalls(repo: RepoConfig): Promise<void> {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const paths = this.store.getAllFiles(repo.name).map(f => f.path as string);
+    const sources = paths.filter(p => HTTP_SOURCE.test(p));
+    const registry = new HttpCallRegistry();
+    await registry.load(workspaceRoot);
+    const files: { path: string; content: string }[] = [];
+    for (const path of sources) {
+      try {
+        files.push({ path, content: await readFile(resolve(workspaceRoot, path), 'utf-8') });
+      } catch {}
+    }
+    const providers = collectProviders(files);
+    const fileSet = new Set(sources);
+    const clients = (this.config.settings.http?.clients ?? []) as HttpClientConfig[];
+    const calls = files.flatMap(f => extractHttpCalls(f.path, f.content, { providers, files: fileSet, clients }));
+
+    // Resolve each URL: constants and templates (M2-04), then the client's base URL (M2-05).
+    const constantIndex = collectConstants(files);
+    const contentOf = new Map(files.map(f => [f.path, f.content]));
+    const visible = new Map<string, Map<string, string>>();
+    const constantsFor = (file: string) => {
+      if (!visible.has(file)) visible.set(file, visibleConstants(file, contentOf.get(file) ?? '', constantIndex, fileSet));
+      return visible.get(file)!;
+    };
+    const dotenv = new Map<string, Map<string, string> | null>();
+    const repoRoot = repo.path === '.' ? '' : repo.path.replace(/^\.\//, '');
+    const envFor = (file: string) => (key: string) => {
+      for (const candidate of envCandidates(file, repoRoot)) {
+        if (!dotenv.has(candidate)) {
+          const abs = resolve(workspaceRoot, candidate);
+          dotenv.set(candidate, existsSync(abs) ? parseDotenv(readFileSync(abs, 'utf-8')) : null);
+        }
+        const value = dotenv.get(candidate)?.get(key);
+        if (value !== undefined) return value;
+      }
+      return undefined;
+    };
+    const records: HttpCallRecord[] = calls.map(call => {
+      const path = evaluate(call.rawUrl, constantsFor(call.file), envFor(call.file));
+      if (!path.known) return call;
+      // A path that starts with something unknown (an undefined env value, a runtime prefix) is
+      // relative to that prefix: keep the rest and let pairing match it as a suffix.
+      if (path.value.startsWith('{}')) return { ...call, url: path.value.slice(2) || '/', baseURLUnresolved: true };
+      const baseFile = call.client.definedIn ?? call.file;
+      const base = call.client.baseURL !== undefined ? evaluate(call.client.baseURL, constantsFor(baseFile), envFor(baseFile)) : null;
+      const usable = base?.known && !base.value.includes('{}');
+      return {
+        ...call,
+        url: joinURL(usable ? base!.value : undefined, path.value),
+        ...(base && !usable ? { baseURLUnresolved: true } : {}),
+      };
+    });
+    if (!records.length && !registry.getRecords().length) return;
+    // Replace this repo's records, and drop records of files the store no longer has (deleted
+    // since the last scan): `paths` no longer lists those, so they would otherwise linger.
+    const known = new Set(this.store.getAllFiles().map(f => f.path as string));
+    registry.dropMissing(known);
+    registry.replaceFiles(new Set(paths), records);
+    await registry.save(workspaceRoot);
+  }
+
+  /**
+   * Pairs every recorded HTTP call with the live route it reaches (M2-06) and rebuilds all
+   * `http` edges: calling file → route handler, owned by the calling file's repo.
+   */
+  private async pairHttpCalls(): Promise<void> {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const registry = new HttpCallRegistry();
+    await registry.load(workspaceRoot);
+    if (!registry.getRecords().length) return;
+    const routeRegistry = new RouteRegistry();
+    await routeRegistry.load(workspaceRoot);
+    const routes = routeRegistry.getRoutes();
+    const repoOf = new Map(this.store.getAllFiles().map(f => [f.path as string, f.repo as string]));
+
+    const records = registry.getRecords().map(r => ({ ...r, route: pairCall(r, routes) }));
+    registry.setRecords(records);
+    await registry.save(workspaceRoot);
+
+    this.store.deleteEdgesByType('http');
+    this.graph.dropEdgesByType('http');
+    const edges: GraphEdge[] = records
+      .filter(r => r.route && repoOf.has(r.file))
+      .map(r => ({
+        sourceFile: r.file,
+        targetFile: r.route!.handlerFile,
+        sourceSymbol: null,
+        targetSymbol: r.route!.handlerSymbol ?? null,
+        edgeType: 'http',
+        repo: repoOf.get(r.file)!,
+        weight: 1.0,
+        verifiability: 'inferred',
+        metadata: { httpVerb: r.method, uri: r.url, route: r.route!.path, line: r.line, confidence: r.route!.confidence },
+      }));
+    this.store.inTransaction(() => {
+      for (const edge of edges) this.store.insertEdge(edge);
+    });
+    for (const edge of edges) this.graph.addDependencyEdge(edge);
+  }
+
   private async runPostScanAnalysis(repo: RepoConfig, repoRoot: string): Promise<void> {
     const workspaceRoot = this.config.getWorkspaceRoot();
 
     // 1. Scan Framework Routes and Hooks
     await this.scanFrameworkRoutesAndHooks(repo, repoRoot);
+
+    // 1b. Frontend HTTP call sites (.mapx/http-calls.json), then pair every call in the
+    // workspace with the routes known now, so repo scan order does not matter.
+    await this.scanHttpCalls(repo);
+    await this.pairHttpCalls();
 
     // 2. Profile Codebase
     const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');

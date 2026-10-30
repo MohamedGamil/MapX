@@ -482,6 +482,10 @@ export class Store {
     ).run(repoName);
   }
 
+  deleteEdgesByType(edgeType: string): void {
+    this.backend.prepare('DELETE FROM edges WHERE edge_type = ?').run(edgeType);
+  }
+
   getEdgesForFile(filePath: string): Record<string, unknown>[] {
     return this.backend.prepare(
       'SELECT * FROM edges WHERE source_file = ? ORDER BY edge_type'

@@ -61,7 +61,9 @@ export type ReferenceType =
   | 'graphql_resolver'
   | 'message_handler'
   | 'websocket_handler'
-  | 'render';
+  | 'render'
+  /** Frontend HTTP call → backend route handler (M2-06). */
+  | 'http';
 
 export interface ParseResult {
   symbols: ExtractedSymbol[];
@@ -161,6 +163,10 @@ export interface MapxConfig {
     graphExcludePatterns?: string[];
     php?: {
       facadeMap?: Record<string, string>;
+    };
+    /** Frontend HTTP clients MapX cannot recognise on its own (D008). */
+    http?: {
+      clients?: { receiver: string; baseURL?: string }[];
     };
     [key: string]: any;
   };

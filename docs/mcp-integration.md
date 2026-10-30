@@ -376,6 +376,8 @@ Find terminal consumers (sinks) in the codebase.
 Show routes extracted from framework controllers or configuration.
 - `framework` (string, optional): Filter by framework name
 - `method` (string, optional): Filter by HTTP method (GET, POST, etc.)
+- `pathPattern` (string, optional): Filter by route path (or request URL with `clients`)
+- `clients` (`"all"` | `"unmatched"`, optional): Instead of routes, list frontend HTTP call sites with their resolved URL and the backend route each reaches; `"unmatched"` lists only calls that reach no live route
 - `dir` (string, optional): Target project directory
 
 #### `mapx_hooks`

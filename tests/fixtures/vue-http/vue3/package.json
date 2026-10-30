@@ -1,0 +1,1 @@
+{ "name": "vue3-app", "dependencies": { "vue": "^3.4.0", "axios": "^1.7.0" } }
