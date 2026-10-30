@@ -148,6 +148,21 @@ export function resolveCSharpImport(target: string, _sourcePath: string, ctx: Im
   return files.sort()[0] ?? null;
 }
 
+/** PHP: `use App\\Services\\UserService` → the PSR-4 file …/Services/UserService.php (case-insensitive first segment). */
+export function resolvePhpImport(target: string, sourcePath: string, ctx: ImportContext): string | null {
+  const parts = target.replace(/^\\/, '').split('\\').filter(Boolean);
+  if (parts.length < 2) return null;
+  const lower = new Map<string, string>();
+  for (const f of ctx.files) if (f.endsWith('.php')) lower.set(f.toLowerCase(), f);
+  // Longest suffix first: App/Services/UserService.php, then Services/UserService.php.
+  for (let start = 0; start <= parts.length - 2; start++) {
+    const suffix = `${parts.slice(start).join('/')}.php`.toLowerCase();
+    const hits = [...lower.entries()].filter(([l]) => l === suffix || l.endsWith(`/${suffix}`)).map(([, f]) => f).sort((a, b) => a.length - b.length);
+    if (hits.length) return hits.find((h) => h.split('/')[0] === sourcePath.split('/')[0]) ?? hits[0]!;
+  }
+  return null;
+}
+
 const LANGUAGE_RESOLVERS: Record<string, (t: string, s: string, c: ImportContext) => string | null> = {
   java: (t, s, c) => resolveJvmImport(t, s, c, ['.java', '.kt']),
   kotlin: (t, s, c) => resolveJvmImport(t, s, c, ['.kt', '.java']),
@@ -157,6 +172,7 @@ const LANGUAGE_RESOLVERS: Record<string, (t: string, s: string, c: ImportContext
   python: resolvePythonImport,
   ruby: resolveRubyImport,
   'c-sharp': resolveCSharpImport,
+  php: resolvePhpImport,
 };
 
 /** Resolver for `language`, or undefined when the language uses path-style imports. */

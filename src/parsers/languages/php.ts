@@ -158,14 +158,16 @@ export class PhpParser extends GenericWasmParser {
         'hasOneOfMany',
       ]);
 
+      // PHP name resolution: `\X` is fully qualified; a first segment imported by `use` expands
+      // (aliases and partial names like Contracts\Foo); anything else is relative to the file's
+      // namespace. self/static/parent are never qualified.
+      const currentNamespace = source.match(/^\s*namespace\s+([\w\\]+)\s*[;{]/m)?.[1] ?? '';
       const resolveToFqn = (name: string): string => {
-        if (name.startsWith('\\')) {
-          return name.substring(1);
-        }
-        if (name.includes('\\')) {
-          return name;
-        }
-        return useTable.get(name) ?? name;
+        if (name.startsWith('\\')) return name.substring(1);
+        const [head, ...rest] = name.split('\\');
+        if (useTable.has(head!)) return [useTable.get(head!)!, ...rest].join('\\');
+        if (['self', 'static', 'parent'].includes(name.toLowerCase())) return name;
+        return currentNamespace ? `${currentNamespace}\\${name}` : name;
       };
 
       // Process standard captures (extends, implements, calls, instantiations)
@@ -268,8 +270,7 @@ export class PhpParser extends GenericWasmParser {
       const SCALAR_TYPES = new Set([
         'string', 'int', 'integer', 'float', 'double', 'bool', 'boolean',
         'array', 'object', 'callable', 'iterable', 'void', 'null', 'never',
-        'mixed', 'self', 'static', 'parent',
-        'Collection', 'Builder', 'Request', 'Response',
+        'mixed', 'self', 'static', 'parent', 'false', 'true',
       ]);
 
       const processTypeHints = (capturesList: any[], edgeType: 'param_type' | 'return_type') => {
@@ -281,10 +282,11 @@ export class PhpParser extends GenericWasmParser {
           const namedTypes = findNamedTypes(capture.node);
           for (const typeNode of namedTypes) {
             const typeText = typeNode.text;
-            if (SCALAR_TYPES.has(typeText)) continue;
-            if (typeText.startsWith('\\Illuminate\\') || typeText.startsWith('Illuminate\\')) continue;
-
+            if (SCALAR_TYPES.has(typeText.toLowerCase())) continue;
+            // Framework types (Illuminate\Http\Request, …) are external; app types named Request or
+            // Response are not, so filter on the resolved name, not the short one.
             const resolved = resolveToFqn(typeText);
+            if (resolved.startsWith('Illuminate\\')) continue;
             references.push({
               sourceSymbol,
               targetName: resolved,
@@ -748,7 +750,11 @@ export class PhpParser extends GenericWasmParser {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
       if (ref.referenceType === 'call' || ref.referenceType === 'instantiation') {
         const shortName = ref.targetName.split('\\').at(-1) ?? ref.targetName;
-        if (shortName !== 'Route') {
+        // Only a real facade reference is rewritten: the facade class itself, or a global alias
+        // (unqualified in a non-namespaced file). An imported or same-namespace class named
+        // Cache/Event/Response is the app's own class.
+        const isFacadeReference = ref.targetName === shortName || ref.targetName === `Illuminate\\Support\\Facades\\${shortName}`;
+        if (shortName !== 'Route' && isFacadeReference) {
           const resolved = mergedFacadeMap[shortName];
           if (resolved) {
             ref.targetName = resolved;

@@ -1376,6 +1376,13 @@ export class Scanner {
             const sameFile = compatible.find(m => m.file === sourcePath && m.name === shortName);
             if (sameFile) return sameFile.file;
           }
+          // A namespaced name (App\Models\Role) prefers the homonym whose path follows its namespace
+          // (…/Models/Role.php) over another namespace's Role (M0-04-R1).
+          if (symbolName.includes('\\')) {
+            const nsPath = symbolName.split('\\').filter(Boolean).slice(-2).join('/').toLowerCase();
+            const byPath = compatible.find(m => m.name === shortName && m.file.toLowerCase().replace(/\.[^./]+$/, '').endsWith(nsPath));
+            if (byPath) return byPath.file;
+          }
           const exact = compatible.find(m => m.name === shortName);
           if (exact) return exact.file;
           return compatible[0].file;

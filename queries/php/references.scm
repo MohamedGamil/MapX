@@ -26,19 +26,19 @@
 ; Inheritance
 (class_declaration
   (base_clause
-    (name) @ref.target_extends)) @ref.type_extends
+    [(name) (qualified_name)] @ref.target_extends)) @ref.type_extends
 
 (class_declaration
   (class_interface_clause
-    (name) @ref.target_implements)) @ref.type_implements
+    [(name) (qualified_name)] @ref.target_implements)) @ref.type_implements
 
 ; Instantiation
 (object_creation_expression
-  (name) @ref.target_instantiation) @ref.type_instantiation
+  [(name) (qualified_name)] @ref.target_instantiation) @ref.type_instantiation
 
 ; Scoped calls
 (scoped_call_expression
-  scope: (name) @ref.target_call) @ref.type_call
+  scope: [(name) (qualified_name)] @ref.target_call) @ref.type_call
 
 ; Member calls
 (member_call_expression
