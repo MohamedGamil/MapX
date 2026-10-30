@@ -6930,26 +6930,58 @@
       "acceptanceCriteria": [
         "A 17-file Laravel fixture scanned with default flags has the same dispatch, notify and laravelRole results as with --no-parallel (≥5 dispatch, ≥2 notify, 7 roles).",
         "`Event::dispatch(new UserRegistered)` targets App\\Events\\UserRegistered with dispatchedRole event.",
-        "EventServiceProvider `$listen` yields a listener → event edge (the I06 stretch goal)."
+        "EventServiceProvider `$listen` yields a `binding` edge from the provider to each listener with metadata bindingType listen and event = the event FQN (file-level edges originate in the parsed file, so F12's \"event → listener\" is represented as metadata)."
       ],
       "verificationCommands": [
         "npx vitest run tests/legacy-php-worker.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T22:31:59.199Z",
+      "completedAt": "2026-10-30T22:36:10.670Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-06-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-php-worker.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-06-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-30T22:24:20.600Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:31:59.199Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:36:10.419Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:36:10.670Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-php-worker.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-06-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

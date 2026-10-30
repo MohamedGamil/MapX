@@ -488,6 +488,28 @@ export class PhpParser extends GenericWasmParser {
           curr = curr.parent;
         }
 
+        // Event::dispatch(new X) / Bus::dispatch(new X): the facade is only the channel; the
+        // dispatched class is the `new` argument.
+        const facadeChannel = /^(?:\\?Illuminate\\Support\\Facades\\)?(Event|Bus|Queue)$/.exec(targetFqn) || /^(Event|Bus|Queue)$/.exec(targetRaw);
+        if (facadeChannel) {
+          const call = curr?.type === 'scoped_call_expression' ? curr : null;
+          const created = call?.childForFieldName('arguments')?.descendantsOfType?.('object_creation_expression')?.[0];
+          const createdName = created?.namedChildren?.find((c: any) => c.type === 'name' || c.type === 'qualified_name')?.text;
+          if (!createdName) continue;
+          references.push({
+            sourceSymbol: methodName,
+            targetName: resolveToFqn(createdName),
+            referenceType: 'dispatch',
+            startLine,
+            verifiability: 'verified',
+            metadata: {
+              dispatchMethod: `${facadeChannel[1]}::${methodCallName}`,
+              dispatchedRole: facadeChannel[1] === 'Event' ? 'event' : 'job',
+            }
+          });
+          continue;
+        }
+
         references.push({
           sourceSymbol: methodName,
           targetName: targetFqn,
@@ -499,6 +521,34 @@ export class PhpParser extends GenericWasmParser {
             dispatchedRole: 'job',
           }
         });
+      }
+
+      // EventServiceProvider: protected $listen = [Event::class => [Listener::class, …]]
+      // File-level edges originate here, so each listener gets a `binding` edge from the provider
+      // carrying the event it handles (F12 stretch goal).
+      const listenAt = source.search(/\$listen\s*=\s*\[/);
+      if (listenAt >= 0) {
+        const open = source.indexOf('[', listenAt);
+        let depth = 0;
+        let close = -1;
+        for (let i = open; i < source.length; i++) {
+          if (source[i] === '[') depth++;
+          else if (source[i] === ']' && --depth === 0) { close = i; break; }
+        }
+        const body = close > open ? source.slice(open + 1, close) : '';
+        for (const entry of body.matchAll(/([\\\w]+)::class\s*=>\s*\[([^\]]*)\]/g)) {
+          const eventFqn = resolveToFqn(entry[1]!);
+          const line = source.slice(0, open + 1 + entry.index!).split('\n').length;
+          for (const listener of entry[2]!.matchAll(/([\\\w]+)::class/g))
+            references.push({
+              sourceSymbol: null,
+              targetName: resolveToFqn(listener[1]!),
+              referenceType: 'binding',
+              startLine: line,
+              verifiability: 'verified',
+              metadata: { bindingType: 'listen', event: eventFqn },
+            });
+        }
       }
 
       const targetNotifyCaptures = refCaptures.get('ref.target_notify') || [];

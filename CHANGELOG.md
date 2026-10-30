@@ -27,6 +27,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **HTTP pairing fixture and scorer**: `tests/fixtures/vue-http` (32 labelled calls in Vue 2.7 and Vue 3 apps) and `scripts/eval/score-http.ts`. (M2-02)
 
 ### Fixed
+- Parallel scans (the default above 10 files) now parse with the same language parsers as sequential scans, so PHP facades, dispatch/notify edges and Laravel roles no longer disappear on real Laravel apps. Worker threads also start when MapX runs from source (they used to fall back to one thread silently), and a fallback is now reported. `Event::dispatch(new X)` targets X, and `$listen` arrays produce listener bindings. (M0-06-R1)
 - Stored edges now keep the parser's metadata (Eloquent relationship type and method, binding type and phase, concrete class, facade alias). Laravel routes declared with `Class::class` handlers are stored as verified, so `metrics --verified-only` keeps them; resource routes keep `resourceType`. (M0-05-R1)
 - Laravel routes declared with array handlers (`['uses' => 'C@m', 'as' => ..., 'middleware' => ...]`) now resolve their handler; handler symbols are fully qualified using the group namespace. (M1-02)
 - Resource route parameters follow Laravel (`blog-categories` → `{blog_category}`, `statuses` → `{status}`, `people` → `{person}`); `->parameters()`, `->only()` and `->except()` are honoured. (M1-05)

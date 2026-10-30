@@ -1,5 +1,5 @@
 // End-to-end helpers: build a throwaway workspace, run the real CLI on it, query the store.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -27,6 +27,17 @@ export function mapx(cwd: string, ...args: string[]): string {
     env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+/** Like `mapx`, but returns stderr too (for asserting warnings). */
+export function mapxWithStderr(cwd: string, ...args: string[]): { stdout: string; stderr: string } {
+  const r = spawnSync(process.execPath, ['--import', TSX, MAIN, ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1' },
+  });
+  if (r.status !== 0) throw new Error(`mapx ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
+  return { stdout: r.stdout, stderr: r.stderr };
 }
 
 export function init(root: string): void {

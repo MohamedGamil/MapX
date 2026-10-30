@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getParserForFile } from './parser-registry.js';
 
 // --- Self-contained static parsing helpers to avoid ESM loader issues in Workers ---
 const isRelativeLike = (s: string) =>
@@ -310,6 +311,16 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
     } catch (e: any) {
       return { ...empty, errors: [{ message: `Failed to parse static file: ${e.message}` }] };
     }
+  }
+
+  // Parse with the same language parser the main thread uses, so language post-processing
+  // (PHP facades, dispatch/notify, Laravel roles, TSX defaults, …) is identical in both paths.
+  try {
+    const parser = getParserForFile(job.filePath, workerData.userLanguages);
+    const result = await parser.parse(job.filePath, source, { facadeMap: workerData.facadeMap, ignoredSymbols });
+    return { id: job.id, ...result };
+  } catch {
+    // Fall back to the generic capture walk below.
   }
 
   let langCtx = loadedLanguages.get(langKey);

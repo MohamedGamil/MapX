@@ -780,7 +780,9 @@ export class Scanner {
       try {
         return await this.parseWithWorkers(files, workspaceRoot, ignoredSymbols, onFileParsed);
       } catch (err: any) {
-        // Fallback to main thread on error (e.g. worker initialization/spawn error)
+        // Fallback to main thread on error (e.g. worker initialization/spawn error). Say so: a
+        // silent fallback hid a broken worker bootstrap for every source-mode scan (M0-06-R1).
+        console.warn(`[mapx] Parallel parsing unavailable (${err?.message ?? err}); parsing on one thread.`);
         return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
       }
     }
@@ -805,20 +807,25 @@ export class Scanner {
       ...this.config.getResolvedUserLanguages()
     };
     const assetRoot = findAssetRoot(import.meta.url);
+    // Workers parse with the same language parsers as the main thread (PHP post-processing etc.).
+    const userLanguages = this.config.getResolvedUserLanguages();
+    const facadeMap = this.config.settings.php?.facadeMap;
 
     for (let i = 0; i < workerCount; i++) {
       const worker = /\.ts$/.test(workerUrl.pathname)
         ? new Worker(
-            `import { register } from 'tsx/esm/api';
+            // Resolve tsx from MapX's own install, not from the scanned workspace (which usually
+            // has no tsx), otherwise every source-mode scan silently fell back to one thread.
+            `import { register } from '${import.meta.resolve('tsx/esm/api')}';
              register();
              import('${workerUrl.href}');`,
             {
               eval: true,
-              workerData: { languages, ignoredSymbols, assetRoot }
+              workerData: { languages, ignoredSymbols, assetRoot, userLanguages, facadeMap }
             }
           )
         : new Worker(workerUrl, {
-            workerData: { languages, ignoredSymbols, assetRoot }
+            workerData: { languages, ignoredSymbols, assetRoot, userLanguages, facadeMap }
           });
       workers.push(worker);
 
