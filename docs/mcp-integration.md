@@ -387,8 +387,12 @@ Show hooks from detected frameworks.
 - `dir` (string, optional): Target project directory
 
 #### `mapx_edges`
-Granular query of graph dependency edges.
-- `type` (string, optional): Filter by edge type
+Granular query of graph dependency edges. Returns a JSON array by default (`format: "text"` for the line listing).
+- `file` (string, optional): File whose edges to list (workspace-relative or absolute)
+- `direction` (string, optional): `outgoing`, `incoming` or `both` (default)
+- `type` (string, optional): Filter by edge type; comma-separated for several
+- `verifiedOnly` (boolean, optional): Leave out inferred edges
+- `format` (string, optional): `json` (default) or `text`
 - `from` (string, optional): Originating file path pattern
 - `to` (string, optional): Target file path pattern
 - `dir` (string, optional): Target project directory
@@ -413,6 +417,9 @@ Check scan status, language breakdown, PageRank rankings, and index recommendati
 #### `mapx_metrics`
 Compute afferent/efferent coupling and instability metrics for codebase files.
 - `lang` (string, optional): Filter by language
+- `verifiedOnly` (boolean, optional): Only verified edges
+- `format` (string, optional): `json` returns an array ranked by total degree (Ca + Ce), each entry with `pagerank`
+- `top` (number, optional): Only the N files with the highest total degree
 - `dir` (string, optional): Target project directory
 
 #### `mapx_profile`

@@ -18,9 +18,10 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
-import { calculateMetrics, calculateDSM } from './core/metrics.js';
+import { calculateMetrics, calculateDSM, rankMetrics } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
+import { edgeView, indexedPath } from './core/edge-view.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { describeLanguage, isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
@@ -713,6 +714,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--all', 'Per-repository status table for every registered repository')
+    .addHelpText('after', '\nPer-file coupling (Ca, Ce, instability, PageRank) is in `mapx metrics` (`--format json --top N`).')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -2088,15 +2090,28 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('-d, --dir <path>', 'Target directory')
     .option('--lang <language>', 'Filter metrics by language')
     .option('--verified-only', 'Only compute metrics using verified edges')
+    .option('--format <format>', 'Output format: text or json', 'text')
+    .option('--top <n>', 'Only the N files with the highest total degree (Ca + Ce)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
-      const { config, store } = await loadContext(dir);
-      checkAndPrintStaleness(store, dir);
-      const metrics = calculateMetrics(store, {
+      const { config, store, graph } = await loadContext(dir);
+      if (opts.format !== 'json') checkAndPrintStaleness(store, dir);
+      let metrics = calculateMetrics(store, {
         repo: config.repo.name,
         language: opts.lang as string | undefined,
         verifiedOnly: !!opts.verifiedOnly,
       });
+
+      // JSON and --top rank by total degree and carry PageRank (M0-03-R2).
+      const top = opts.top !== undefined ? parseInt(opts.top as string, 10) : undefined;
+      if (opts.format === 'json' || top) {
+        const ranked = rankMetrics(metrics, new Map(graph.getRankedFiles().map(f => [f.path, f.pagerank])), top);
+        if (opts.format === 'json') {
+          console.log(JSON.stringify(ranked, null, 2));
+          return;
+        }
+        metrics = ranked;
+      }
 
       if (metrics.length === 0) {
         console.log('No metrics found.');
@@ -2247,21 +2262,39 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   program
     .command('edges')
     .description('Granular query of dependency edges')
-    .argument('[path]', 'Target directory')
+    .argument('[file]', 'File whose edges to list (relative or absolute); a directory is taken as the target directory')
     .option('-d, --dir <path>', 'Target directory')
-    .option('--type <type>', 'Filter edges by type')
+    .option('--type <types>', 'Filter edges by type (comma-separated: relation,extends)')
+    .option('--direction <dir>', 'With a file: outgoing, incoming or both', 'both')
+    .option('--verified-only', 'Leave out inferred edges')
+    .option('--format <format>', 'Output format: text or json', 'text')
     .option('--from <file>', 'Filter edges originating from a file pattern')
     .option('--to <file>', 'Filter edges targeting a file pattern')
-    .action(async (path: string | undefined, opts: Record<string, unknown>) => {
-      const dir = path ? resolve(path) : resolveDir(opts, program.opts());
+    .action(async (fileArg: string | undefined, opts: Record<string, unknown>) => {
+      // The positional used to be the target directory; a directory still means that.
+      const isDir = !!fileArg && existsSync(resolve(fileArg)) && statSync(resolve(fileArg)).isDirectory();
+      const dir = isDir ? resolve(fileArg!) : resolveDir(opts, program.opts());
       const { config, store } = await loadContext(dir);
-      checkAndPrintStaleness(store, dir);
+      if (opts.format !== 'json') checkAndPrintStaleness(store, dir);
+      const direction = String(opts.direction ?? 'both');
+      if (!['outgoing', 'incoming', 'both'].includes(direction)) {
+        console.error(`Unknown --direction "${direction}" (use outgoing, incoming or both).`);
+        process.exit(1);
+      }
       const edges = store.queryEdges({
         repo: config.repo.name,
         type: opts.type as string | undefined,
+        file: fileArg && !isDir ? indexedPath(dir, fileArg) : undefined,
+        direction: direction as 'outgoing' | 'incoming' | 'both',
+        verifiedOnly: !!opts.verifiedOnly,
         from: opts.from as string | undefined,
         to: opts.to as string | undefined,
       });
+
+      if (opts.format === 'json') {
+        console.log(JSON.stringify(edges.map(edgeView), null, 2));
+        return;
+      }
 
       if (edges.length === 0) {
         console.log('No matching edges found.');

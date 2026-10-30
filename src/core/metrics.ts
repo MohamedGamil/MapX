@@ -66,6 +66,23 @@ export function calculateMetrics(
   return results.sort((a, b) => b.instability - a.instability || b.afferent - a.afferent || a.path.localeCompare(b.path));
 }
 
+export interface RankedFileMetrics extends FileMetrics {
+  /** Ca + Ce: distinct files depending on this one plus files it depends on. */
+  totalDegree: number;
+  pagerank: number;
+}
+
+/**
+ * Metrics ranked by total degree (then PageRank, then path), each with its PageRank; `top` keeps
+ * the first N. Used by `mapx metrics --format json / --top` and mapx_metrics (M0-03-R2).
+ */
+export function rankMetrics(metrics: FileMetrics[], pagerank: Map<string, number>, top?: number): RankedFileMetrics[] {
+  const ranked = metrics
+    .map(m => ({ ...m, totalDegree: m.afferent + m.efferent, pagerank: pagerank.get(m.path) ?? 0 }))
+    .sort((a, b) => b.totalDegree - a.totalDegree || b.pagerank - a.pagerank || a.path.localeCompare(b.path));
+  return top && top > 0 ? ranked.slice(0, top) : ranked;
+}
+
 export interface GraphMetrics {
   density: number;
   transitivity: number;

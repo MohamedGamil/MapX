@@ -62,6 +62,12 @@ mapx query <symbol-name> [--dir /path]
 # Show dependencies for a file
 mapx deps <file-path> [--dir /path]
 
+# Edges of one file, filtered, as JSON
+mapx edges <file-path> --direction outgoing --type relation,extends --verified-only --format=json
+
+# Most connected files (Ca + Ce) with PageRank
+mapx metrics --format=json --top 10
+
 # Project summary
 mapx summary [/path]
 
@@ -75,13 +81,16 @@ mapx serve --sse --port 3456 --dir /path/to/project # SSE (HTTP) transport
 
 ## MCP Tools
 
-When running as an MCP server, MapxGraph exposes these tools:
+When running as an MCP server, MapxGraph exposes 32 tools:
 
-- **`mapx_scan`** — Scan/update the code graph
-- **`mapx_query`** — Search symbols by name pattern
-- **`mapx_dependencies`** — Get deps and reverse-deps for a file
-- **`mapx_export`** — Export compact graph summary (supports llm, json, dot, svg formats)
-- **`mapx_status`** — Check scan status and file counts
+- **Graph building:** `mapx_scan`, `mapx_sync`
+- **Symbol discovery:** `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files`
+- **Dependencies and flow:** `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` (JSON by default; `file`, `direction`, `type`, `verifiedOnly`)
+- **Analysis:** `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics` (`format: "json"`, `top`), `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers`
+- **Export:** `mapx_export` (llm, json, dot, svg, toon), `mapx_context`
+- **Workspaces:** `mapx_workspaces` (list, discover)
+- **Languages:** `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall`
+- **Orchestration:** `mapx_batch`, `mapx_agents_generate`
 
 ## When to Use
 
@@ -100,5 +109,5 @@ When running as an MCP server, MapxGraph exposes these tools:
 ## Supported Languages
 
 - **PHP** (built-in): classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces
-- **JavaScript** (built-in): classes, methods, functions, interfaces, enums, properties, namespaces
+- **JavaScript** (built-in): classes, methods, functions, constants, variables, properties
 - **TypeScript** (built-in): classes, methods, functions, interfaces, enums, type aliases, properties, namespaces

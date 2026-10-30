@@ -1016,12 +1016,21 @@ describe('MCP module', () => {
 
   // ==================== MAPX_EDGES ====================
   describe('mapx_edges', () => {
+    it('returns a JSON array by default (M0-03-R2)', async () => {
+      storeMocks.queryEdges.mockReturnValue([
+        { source_file: 'src/a.ts', target_file: 'src/b.ts', source_symbol: 'funcA', target_symbol: 'funcB', edge_type: 'call', verifiability: 'inferred', weight: 1, metadata: '{}' }
+      ]);
+
+      const edges = JSON.parse(getText(await callTool('mapx_edges')));
+      expect(edges).toEqual([expect.objectContaining({ sourceFile: 'src/a.ts', sourceSymbol: 'funcA', targetFile: 'src/b.ts', type: 'call', verifiability: 'inferred' })]);
+    });
+
     it('returns edges when found', async () => {
       storeMocks.queryEdges.mockReturnValue([
         { source_file: 'src/a.ts', target_file: 'src/b.ts', source_symbol: 'funcA', target_symbol: 'funcB', edge_type: 'call', verifiability: 'verified' }
       ]);
 
-      const res = await callTool('mapx_edges');
+      const res = await callTool('mapx_edges', { format: 'text' });
       const text = getText(res);
       expect(text).toContain('Found 1 matching edges');
       expect(text).toContain('src/a.ts#funcA');
@@ -1032,14 +1041,14 @@ describe('MCP module', () => {
         { source_file: 'src/a.ts', target_file: 'src/b.ts', source_symbol: null, target_symbol: null, edge_type: 'call', verifiability: 'inferred' }
       ]);
 
-      const res = await callTool('mapx_edges');
+      const res = await callTool('mapx_edges', { format: 'text' });
       expect(getText(res)).toContain('[inferred]');
     });
 
     it('returns no edges message when empty', async () => {
       storeMocks.queryEdges.mockReturnValue([]);
 
-      const res = await callTool('mapx_edges');
+      const res = await callTool('mapx_edges', { format: 'text' });
       expect(getText(res)).toContain('No matching edges found');
     });
   });

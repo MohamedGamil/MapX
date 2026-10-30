@@ -19,7 +19,8 @@ import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
-import { calculateMetrics, calculateClusterMetrics, calculateDSM } from './core/metrics.js';
+import { calculateMetrics, calculateClusterMetrics, calculateDSM, rankMetrics } from './core/metrics.js';
+import { edgeView, indexedPath } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
@@ -222,17 +223,23 @@ EXAMPLES:
           properties: {
             lang: { type: 'string', description: 'Filter metrics by language' },
             verifiedOnly: { type: 'boolean', description: 'Only compute metrics using verified edges', default: false },
+            format: { type: 'string', enum: ['text', 'json'], description: 'json: array ranked by total degree (Ca + Ce), each entry with pagerank', default: 'text' },
+            top: { type: 'number', description: 'Only the N files with the highest total degree' },
             ...dirProperty,
           },
         },
       },
       {
         name: 'mapx_edges',
-        description: 'Granular query of dependency edges in the code graph.',
+        description: 'Granular query of dependency edges in the code graph. Returns a JSON array by default.',
         inputSchema: {
           type: 'object',
           properties: {
-            type: { type: 'string', description: 'Filter edges by type' },
+            file: { type: 'string', description: 'File whose edges to list (workspace-relative or absolute)' },
+            direction: { type: 'string', enum: ['outgoing', 'incoming', 'both'], description: 'With file: edges leaving it, reaching it, or both', default: 'both' },
+            type: { type: 'string', description: 'Filter edges by type; comma-separated for several (relation,extends)' },
+            verifiedOnly: { type: 'boolean', description: 'Leave out inferred edges', default: false },
+            format: { type: 'string', enum: ['json', 'text'], description: 'Output format', default: 'json' },
             from: { type: 'string', description: 'Filter edges originating from a file pattern (substring match)' },
             to: { type: 'string', description: 'Filter edges targeting a file pattern (substring match)' },
             ...dirProperty,
@@ -1440,11 +1447,21 @@ Callees: ${callees.length}`;
         const lang = (args as any)?.lang;
         const verifiedOnly = !!(args as any)?.verifiedOnly;
 
-        const metrics = calculateMetrics(ctx.store, {
+        let metrics = calculateMetrics(ctx.store, {
           repo: ctx.config.repo.name,
           language: lang,
           verifiedOnly,
         });
+
+        // Same ranking as `mapx metrics --format json --top N` (M0-03-R2).
+        const top = (args as any)?.top !== undefined ? Number((args as any).top) : undefined;
+        if ((args as any)?.format === 'json' || top) {
+          const ranked = rankMetrics(metrics, new Map(ctx.graph.getRankedFiles().map(f => [f.path, f.pagerank])), top);
+          if ((args as any)?.format === 'json') {
+            return { content: [{ type: 'text', text: JSON.stringify(ranked, null, 2) }] };
+          }
+          metrics = ranked;
+        }
 
         if (metrics.length === 0) {
           return { content: [{ type: 'text', text: 'No metrics found.' }] };
@@ -1480,13 +1497,22 @@ Callees: ${callees.length}`;
         const type = (args as any)?.type;
         const from = (args as any)?.from;
         const to = (args as any)?.to;
+        const file = (args as any)?.file as string | undefined;
 
         const edges = ctx.store.queryEdges({
           repo: ctx.config.repo.name,
           type,
           from,
           to,
+          file: file ? indexedPath(dir, file) : undefined,
+          direction: (args as any)?.direction ?? 'both',
+          verifiedOnly: !!(args as any)?.verifiedOnly,
         });
+
+        // JSON by default (M0-03-R2); `format: "text"` keeps the line listing.
+        if (((args as any)?.format ?? 'json') === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(edges.map(edgeView), null, 2) }] };
+        }
 
         if (edges.length === 0) {
           return { content: [{ type: 'text', text: 'No matching edges found.' }] };

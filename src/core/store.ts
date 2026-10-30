@@ -505,7 +505,20 @@ export class Store {
     return this.backend.prepare('SELECT * FROM edges').all();
   }
 
-  queryEdges(options: { type?: string; from?: string; to?: string; repo?: string }): Record<string, unknown>[] {
+  /**
+   * Edge query behind `mapx edges` and mapx_edges. `type` may be a comma-separated list; `file`
+   * with `direction` selects edges leaving it (outgoing), reaching it (incoming) or both;
+   * `from` / `to` are substring filters (M0-03-R2).
+   */
+  queryEdges(options: {
+    type?: string;
+    from?: string;
+    to?: string;
+    repo?: string;
+    file?: string;
+    direction?: 'outgoing' | 'incoming' | 'both';
+    verifiedOnly?: boolean;
+  }): Record<string, unknown>[] {
     let sql = 'SELECT * FROM edges WHERE 1=1';
     const params: string[] = [];
 
@@ -513,9 +526,23 @@ export class Store {
       sql += ' AND repo = ?';
       params.push(options.repo);
     }
-    if (options.type) {
-      sql += ' AND edge_type = ?';
-      params.push(options.type);
+    const types = (options.type ?? '').split(',').map(t => t.trim()).filter(Boolean);
+    if (types.length) {
+      sql += ` AND edge_type IN (${types.map(() => '?').join(', ')})`;
+      params.push(...types);
+    }
+    if (options.file) {
+      const direction = options.direction ?? 'both';
+      if (direction === 'outgoing') sql += ' AND source_file = ?';
+      else if (direction === 'incoming') sql += ' AND target_file = ?';
+      else {
+        sql += ' AND (source_file = ? OR target_file = ?)';
+        params.push(options.file);
+      }
+      params.push(options.file);
+    }
+    if (options.verifiedOnly) {
+      sql += " AND COALESCE(verifiability, 'verified') != 'inferred'";
     }
     if (options.from) {
       sql += ' AND source_file LIKE ?';
@@ -526,7 +553,7 @@ export class Store {
       params.push(`%${options.to}%`);
     }
 
-    return this.backend.prepare(sql).all(...params);
+    return this.backend.prepare(sql + ' ORDER BY source_file, target_file, edge_type').all(...params);
   }
 
   getFileCount(repo?: string): number {

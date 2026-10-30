@@ -563,12 +563,14 @@ mapx context 'Fix auth bug' --format json                              # JSON ou
 Show coupling and instability metrics for files.
 
 ```bash
-mapx metrics [path] [--dir /path] [--lang <language>] [--verified-only]
+mapx metrics [path] [--dir /path] [--lang <language>] [--verified-only] [--format text|json] [--top <n>]
 ```
 
 Options:
 - `--lang` — Filter metrics by language
 - `--verified-only` — Only compute metrics using verified edges
+- `--format json` — A JSON array ranked by total degree (Ca + Ce, then PageRank); each entry has `path`, `language`, `afferent`, `efferent`, `totalDegree`, `instability` and `pagerank`
+- `--top <n>` — Only the N files with the highest total degree (text output is then ranked the same way)
 
 Outputs a table with afferent coupling (Ca), efferent coupling (Ce), and instability index for each file.
 
@@ -577,13 +579,22 @@ Outputs a table with afferent coupling (Ca), efferent coupling (Ce), and instabi
 Granular query of dependency edges.
 
 ```bash
-mapx edges [path] [--dir /path] [--type <type>] [--from <file>] [--to <file>]
+mapx edges [file] [--dir /path] [--direction outgoing|incoming|both] [--type <types>] [--verified-only]
+           [--format text|json] [--from <file>] [--to <file>]
 ```
 
 Options:
-- `--type` — Filter edges by type (e.g. `call`, `import`, `instantiation`)
+- `[file]` — List the edges of this file (workspace-relative or absolute). A directory is still accepted as the target directory
+- `--direction` — With a file: `outgoing` (edges leaving it), `incoming` (edges reaching it) or `both` (default)
+- `--type` — Filter edges by type; comma-separated for several (e.g. `relation,extends`)
+- `--verified-only` — Leave out inferred edges
+- `--format json` — A JSON array of `{ sourceFile, sourceSymbol, targetFile, targetSymbol, type, verifiability, weight, targetRepo, metadata }`
 - `--from` — Filter edges originating from a file pattern
 - `--to` — Filter edges targeting a file pattern
+
+```bash
+mapx edges app/Models/User.php --direction outgoing --type relation,extends --verified-only --format=json
+```
 
 ## `mapx routes`
 
