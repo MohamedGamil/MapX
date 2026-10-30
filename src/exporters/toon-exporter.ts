@@ -1,5 +1,6 @@
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
+import { filterClustersToFiles } from './cluster-filter.js';
 import type { ExportOptions } from '../types.js';
 
 export function toonQuote(value: string, activeDelimiter: ',' | '\t' | '|' = ','): string {
@@ -59,7 +60,11 @@ export class ToonExporter {
     let files = this.store.getAllFiles(opt.repo);
     let symbols = this.store.getAllSymbols(opt.repo);
     let edges = this.store.getAllEdges(opt.repo);
-    const clusters = this.store.getClusters(opt.repo);
+    const clusters = filterClustersToFiles(
+      this.store.getClusters(opt.repo),
+      opt.files ? this.store.getClusterMemberships(opt.repo) : [],
+      opt.files ? new Set(opt.files) : null,
+    );
 
     let rankedFiles = this.graph.getRankedFiles();
     let rankedSymbols = this.store.getTopSymbolsByPageRank(this.graph, 100000);

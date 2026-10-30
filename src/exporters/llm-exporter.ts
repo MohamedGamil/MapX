@@ -1,5 +1,6 @@
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
+import { filterClustersToFiles } from './cluster-filter.js';
 import type { ExportOptions } from '../types.js';
 
 const TOKEN_CHARS_PER_LINE = 4;
@@ -37,7 +38,7 @@ export class LLMExporter {
     parts.push(`# Mapx: ${repoName}`);
     parts.push('');
 
-    const structureSection = this.buildStructureSection(opt.repo);
+    const structureSection = this.buildStructureSection(opt.repo, opt.files ? new Set(opt.files) : null);
     if (structureSection) {
       parts.push(structureSection);
     }
@@ -70,8 +71,8 @@ export class LLMExporter {
     return result;
   }
 
-  private buildStructureSection(repo?: string): string {
-    const clusters = this.store.getClusters(repo);
+  private buildStructureSection(repo?: string, allowed: Set<string> | null = null): string {
+    const clusters = filterClustersToFiles(this.store.getClusters(repo), allowed ? this.store.getClusterMemberships(repo) : [], allowed);
     if (clusters.length === 0) return '';
 
     const lines: string[] = [];

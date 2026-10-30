@@ -3,6 +3,19 @@ import { existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import type { MapxConfig, RepoConfig, UserLanguageDefinition } from '../types.js';
 import type { LanguageDefinition } from '../languages/registry.js';
+
+/** Laravel noise excluded by default for `framework: laravel` repos (F10), relative to the repo root. */
+export const LARAVEL_DEFAULT_EXCLUDES = [
+  'database/migrations/**',
+  'database/seeders/**',
+  'database/factories/**',
+  'storage/**',
+  'bootstrap/cache/**',
+  'public/**',
+  'resources/views/**',
+  '**/*.blade.php',
+  'vendor/**',
+];
 import { getBuiltinLanguages } from '../languages/registry.js';
 
 const DEFAULT_CONFIG: MapxConfig = {
@@ -131,17 +144,6 @@ export class Config {
     const defaultExclude = [...DEFAULT_CONFIG.settings.excludePatterns];
 
     if (shouldAddLaravelExcludes) {
-      const LARAVEL_DEFAULT_EXCLUDES = [
-        'database/migrations/**',
-        'database/seeders/**',
-        'database/factories/**',
-        'storage/**',
-        'bootstrap/cache/**',
-        'public/**',
-        'resources/views/**',
-        '**/*.blade.php',
-        'vendor/**',
-      ];
       for (const pattern of LARAVEL_DEFAULT_EXCLUDES) {
         if (!defaultExclude.includes(pattern)) {
           defaultExclude.push(pattern);
@@ -214,6 +216,10 @@ export class Config {
         excludePatterns: mergedExclude,
         includePatterns: mergedInclude,
         graphExcludePatterns: mergedGraphExclude,
+        // A declined suggestion is remembered, so scans don't re-apply the Laravel excludes (F10).
+        ...(isLaravel && !shouldAddLaravelExcludes ? { laravelDefaultExcludes: false } : {}),
+        ...(existing?.settings?.laravelDefaultExcludes !== undefined && !(isLaravel && !shouldAddLaravelExcludes)
+          ? { laravelDefaultExcludes: existing.settings.laravelDefaultExcludes } : {}),
       },
     };
 

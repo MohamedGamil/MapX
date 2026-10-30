@@ -161,6 +161,8 @@ export interface MapxConfig {
     excludePatterns: string[];
     includePatterns: string[];
     graphExcludePatterns?: string[];
+    /** false when the user declined Laravel's default excludes at init (F10). */
+    laravelDefaultExcludes?: boolean;
     php?: {
       facadeMap?: Record<string, string>;
     };

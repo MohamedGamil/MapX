@@ -20,6 +20,7 @@ import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } fro
 import picomatch from 'picomatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
+import { LARAVEL_DEFAULT_EXCLUDES } from './config.js';
 import { collectProviders, extractHttpCalls, HTTP_SKIP, HTTP_SOURCE, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall } from '../frameworks/http/pairing.js';
@@ -272,8 +273,16 @@ export class Scanner {
     const newFiles = discovered.filter(f => f.isNew);
     const changedFiles = discovered.filter(f => !f.isNew && f.contentChanged);
     const incompleteFiles = discovered.filter(f => !f.isNew && !f.contentChanged && !filesWithSymbols.has(f.relativePath));
-    const unchangedFiles = force ? [] : discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
-    const filesToParse = force ? discovered : [...newFiles, ...changedFiles, ...incompleteFiles];
+    // Changed include/exclude filters can bring files back whose inbound references were never
+    // resolved (their referrers are unchanged and would not be re-parsed): re-parse everything
+    // once when the effective filters differ from the last scan (M0-02-R1).
+    const filterKey = 'scan_filters:' + repo.name;
+    const filters = JSON.stringify({ excludes: this.effectiveExcludes(repo.name), includes: [...this.config.settings.includePatterns, ...this.cliIncludes] });
+    const previousFilters = this.store.getMeta(filterKey);
+    const reparseAll = force || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
+    this.store.setMeta(filterKey, filters);
+    const unchangedFiles = reparseAll ? [] : discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
+    const filesToParse = reparseAll ? discovered : [...newFiles, ...changedFiles, ...incompleteFiles];
 
     const resumeState = this.loadResumeState(repo.name);
     const resumedCompleted = new Set(resumeState?.completedFiles || []);
@@ -540,10 +549,7 @@ export class Scanner {
       };
     }
 
-    const excludes = [
-      ...this.config.settings.excludePatterns,
-      ...this.cliExcludes,
-    ];
+    const excludes = this.effectiveExcludes(repo.name);
     const includes = [
       ...this.config.settings.includePatterns,
       ...this.cliIncludes,
@@ -679,10 +685,7 @@ export class Scanner {
   private async discoverFiles(repoRoot: string, repoName: string, silent = false): Promise<DiscoveredFile[]> {
     const files: DiscoveredFile[] = [];
     const workspaceRoot = this.config.getWorkspaceRoot();
-    const excludes = [
-      ...this.config.settings.excludePatterns,
-      ...this.cliExcludes,
-    ];
+    const excludes = this.effectiveExcludes(repoName);
     const includes = [
       ...this.config.settings.includePatterns,
       ...this.cliIncludes,
@@ -1449,14 +1452,32 @@ export class Scanner {
     }
     return null;
   }
+  /**
+   * Prune a directory only when everything beneath it is excluded: `app/Http/**` prunes
+   * app/Http/Controllers, `app/Http/*` (files directly in app/Http) does not (M0-02-R1).
+   * An exact non-glob directory path or a bare directory name also prunes.
+   */
   private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
+    const deepProbe = `${relDir}/__mapx_probe__/__mapx_probe__.x`;
     return excludes.some(p => {
-      if (picomatch.isMatch(relDir, p, { dot: true })) return true;
-      if (picomatch.isMatch(relDir + '/**', p, { dot: true })) return true;
-      const segments = relDir.split('/');
-      if (segments.some(seg => seg === p)) return true;
-      return false;
+      if (picomatch.isMatch(deepProbe, p, { dot: true })) return true;
+      if (!/[*?[\]{}!]/.test(p) && p.replace(/\/+$/, '') === relDir) return true;
+      return relDir.split('/').some(seg => seg === p);
     });
+  }
+
+  /** Config + CLI excludes, plus Laravel's defaults for `framework: laravel` repos unless declined (F10). */
+  private effectiveExcludes(repoName: string): string[] {
+    const excludes = [...this.config.settings.excludePatterns, ...this.cliExcludes];
+    const repo = this.config.repos.find(r => r.name === repoName);
+    if (repo?.framework === 'laravel' && this.config.settings.laravelDefaultExcludes !== false) {
+      const prefix = !repo.path || repo.path === '.' ? '' : `${repo.path.replace(/^\.\//, '').replace(/\/+$/, '')}/`;
+      for (const p of LARAVEL_DEFAULT_EXCLUDES) {
+        const scoped = p.startsWith('**/') ? p : `${prefix}${p}`;
+        if (!excludes.includes(scoped)) excludes.push(scoped);
+      }
+    }
+    return excludes;
   }
 
   private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {
