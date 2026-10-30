@@ -1119,7 +1119,8 @@ export class Scanner {
           weight: 1.0,
           verifiability: ref.verifiability ?? 'verified',
           targetRepo: (targetRepoName && targetRepoName !== repoName) ? targetRepoName : undefined,
-          metadata: { startLine: ref.startLine },
+          // Keep what the parser recorded (relationship, binding, facade, dispatch details).
+          metadata: { ...(ref.metadata ?? {}), startLine: ref.startLine },
         });
       }
     }
@@ -1579,7 +1580,8 @@ export class Scanner {
           edgeType: 'route',
           repo: repo.name,
           weight: 1.0,
-          verifiability: 'inferred',
+          // A handler named by class constant is resolved by the language, not guessed.
+          verifiability: meta.confidence === 'declared' ? 'verified' : 'inferred',
           metadata: {
             httpVerb: route.method,
             uri: route.path,
@@ -1588,6 +1590,7 @@ export class Scanner {
             confidence: meta.confidence || 'inferred',
             ...(route.line !== undefined ? { line: route.line } : {}),
             ...(meta.name ? { name: meta.name } : {}),
+            ...(meta.resourceType ? { resourceType: meta.resourceType } : {}),
             ...(meta.reachable === false ? { reachable: false } : {}),
             ...(meta.overridden ? { overridden: true, overriddenBy: meta.overriddenBy } : {}),
             ...(meta.conditional ? { conditional: true } : {}),

@@ -1683,6 +1683,7 @@ function processRouteChain(
   useImports: Map<string, string>,
   extra: { vars: Map<string, string>; scope: { dir: string; root: string } } = { vars: new Map(), scope: { dir: '', root: '' } }
 ) {
+  const routesBefore = routes.length;
   let verb: string | null = null;
   let uriExpr: string | null = null;
   let routeName: string | undefined;
@@ -1916,4 +1917,7 @@ function processRouteChain(
       });
     }
   }
+  // Handlers given as Class::class (array form or resource controller) are declared, not inferred.
+  if (handlerStr && /::class\b/.test(handlerStr))
+    for (const r of routes.slice(routesBefore)) (r.metadata ??= {}).confidence = 'declared';
 }

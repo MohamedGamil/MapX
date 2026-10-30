@@ -409,7 +409,12 @@ export class PhpParser extends GenericWasmParser {
         if (abstractVal) {
           const concreteVal = getArgText(argsNode, 1);
           const abstractFqn = resolveToFqn(abstractVal);
-          const concreteFqn = concreteVal ? resolveToFqn(concreteVal) : null;
+          // Only a class constant (Concrete::class) or a class-name string names a concrete class;
+          // a closure or factory is not one.
+          const arg1 = argsNode.namedChild(1);
+          const valNode1 = arg1 ? (arg1.type === 'argument' ? (arg1.namedChild(0) || arg1) : arg1) : null;
+          const namesClass = !!valNode1 && (valNode1.type === 'class_constant_access_expression' || valNode1.type === 'string' || valNode1.type === 'encapsed_string');
+          const concreteFqn = concreteVal && namesClass ? resolveToFqn(concreteVal) : null;
           const startLine = cap.node.startPosition.row + 1;
 
           const arg0 = argsNode.namedChild(0);

@@ -27,6 +27,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **HTTP pairing fixture and scorer**: `tests/fixtures/vue-http` (32 labelled calls in Vue 2.7 and Vue 3 apps) and `scripts/eval/score-http.ts`. (M2-02)
 
 ### Fixed
+- Stored edges now keep the parser's metadata (Eloquent relationship type and method, binding type and phase, concrete class, facade alias). Laravel routes declared with `Class::class` handlers are stored as verified, so `metrics --verified-only` keeps them; resource routes keep `resourceType`. (M0-05-R1)
 - Laravel routes declared with array handlers (`['uses' => 'C@m', 'as' => ..., 'middleware' => ...]`) now resolve their handler; handler symbols are fully qualified using the group namespace. (M1-02)
 - Resource route parameters follow Laravel (`blog-categories` → `{blog_category}`, `statuses` → `{status}`, `people` → `{person}`); `->parameters()`, `->only()` and `->except()` are honoured. (M1-05)
 - Route paths built from local string variables (`$base.'/x'`) resolve; unresolvable dynamic paths are flagged `dynamic` instead of leaking PHP source. (M1-06)
