@@ -13,3 +13,4 @@
 - 2026-10-30: owner decisions D006 (dashboard ceiling 720 KiB; M0-15-R2 unblocked) and D007 (releases are owner-initiated: M1-99 DEFERRED, gate renamed G-RELEASE and marked ownerInitiated, milestone release versions removed).
 - 2026-10-30: M2-06 FAILED in verification after an independent review (1 P0, 7 P1). Added M2-03-R1 (P0/P1 extraction) and M2-04-R1 (P1 URL) as hard dependencies of M2-06, and M2-07 for the P2 follow-ups.
 - 2026-10-30: owner Q&A (D009). Added M0-22-R2 (CLI search defect), M0-40 (type-check tests and scripts) and M0-41 (legacy criterion audit); M2-07 and M0-39 are in scope before M3-01.
+- 2026-10-31: M0-41 legacy audit added 15 remediation tasks (≈139 h). D010: tiers all-bundled; implement all promised surface (epic M0-03-R1 decomposed into M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, then cancelled); impact try/catch downgrade removed; all remediation before M3 (M3-01 → BLOCKED on quality dependencies).

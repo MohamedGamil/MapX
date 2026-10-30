@@ -61,3 +61,12 @@ Why: it mirrors `routes.json` (M1), keeps each stage independently testable, and
 - **Scope before the next work item (M3-01):** fix M2-07 (the HTTP review P2s), M0-22-R2 (CLI search truncation), M0-40 (type-check tests and scripts, R04), M0-41 (full criterion-level audit of the legacy iterations, R01) and M0-39 (tests for untested 0.3.x features).
 - **Root repo:** when sub-repos are registered, the workspace root `.` stays registered. It indexes files outside every sub-repo; the nested-repo fix (M0-23) already prevents double indexing. No change.
 - **Commits:** one commit per task on `develop`.
+
+## D010 — Owner Q&A on the legacy audit (2026-10-31)
+
+Context: the M0-41 audit found 0 of 16 legacy iterations fully confirmed (`reviews/REVIEW-2026-10-30-legacy-audit.md`).
+
+- **Language tiers (M0-12-R2):** all grammars are bundled. Amend I12/F20 accordingly: `lang list` reports every grammar as bundled; add `lang info`; `lang install`/`uninstall` become clear messages ("all grammars are bundled") instead of copying files nothing reads; add shebang detection.
+- **Specified-but-unbuilt CLI/MCP surface (epic M0-03-R1):** implement everything as specified. The epic is decomposed into M0-03-R2, M0-05-R2, M0-09-R2 and M0-10-R1.
+- **Impact try/catch downgrade (M0-11-R1):** remove it. Risk depends on call depth and test files only, as F19 specifies.
+- **Ordering:** the whole remediation backlog, P2 included, is done before M3. M3-01 has a hard dependency on every remediation task.

@@ -5061,7 +5061,80 @@
         "quality",
         "vue"
       ],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "id": "M0-06-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-05-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-04-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-12-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-12-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-17-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-07-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-09-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-08-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-11-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-20-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-02-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-01-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-18-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-03-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-05-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-09-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-10-R1",
+          "type": "quality"
+        }
+      ],
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
@@ -5087,7 +5160,7 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
-      "status": "READY",
+      "status": "BLOCKED",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -5101,6 +5174,13 @@
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:24:06.000Z",
+          "from": "READY",
+          "to": "BLOCKED",
+          "evidence": [],
+          "note": "D010: the remediation backlog comes before M3; quality dependencies added in the same structured edit (READY → BLOCKED could not go through the tool while the plan was mid-edit)."
         }
       ],
       "criticalPath": true,
@@ -6745,14 +6825,27 @@
         "test -s docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "review-agents",
       "actualHours": null,
       "startedAt": "2026-10-30T21:59:49.544Z",
-      "completedAt": null,
+      "completedAt": "2026-10-30T22:24:20.334Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run plan:validate",
+          "exitCode": 0,
+          "artifact": "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+        },
+        {
+          "command": "test -s docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md",
+          "exitCode": 0,
+          "artifact": "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-30T21:59:49.299Z",
@@ -6764,6 +6857,1371 @@
           "at": "2026-10-30T21:59:49.544Z",
           "from": "READY",
           "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:24:20.093Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:24:20.334Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run plan:validate",
+              "exitCode": 0,
+              "artifact": "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+            },
+            {
+              "command": "test -s docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md",
+              "exitCode": 0,
+              "artifact": "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-06-R1",
+      "milestone": "M0",
+      "title": "Run PHP post-processing in parallel worker scans (facades, dispatch, Laravel roles)",
+      "objective": "Scans that use worker threads (the default for more than 10 files) apply the same PHP post-processing as sequential scans: facade rewrites, dispatch/notify edges and laravelRole.",
+      "description": "Scans that use worker threads (the default for more than 10 files) apply the same PHP post-processing as sequential scans: facade rewrites, dispatch/notify edges and laravelRole. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P0",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-06",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-06-R1.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/parse-worker.ts",
+        "src/parsers/languages/php.ts",
+        "src/core/scanner.ts",
+        "tests/legacy-php-worker.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A 17-file Laravel fixture scanned with default flags has the same dispatch, notify and laravelRole results as with --no-parallel (≥5 dispatch, ≥2 notify, 7 roles).",
+        "`Event::dispatch(new UserRegistered)` targets App\\Events\\UserRegistered with dispatchedRole event.",
+        "EventServiceProvider `$listen` yields a listener → event edge (the I06 stretch goal)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-php-worker.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:20.600Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-05-R1",
+      "milestone": "M0",
+      "title": "Persist reference metadata and route edge verifiability",
+      "objective": "Reference metadata (Eloquent relationship type, binding type and phase, facade alias) reaches stored edges; route edges carry verifiability from their confidence and keep resourceType.",
+      "description": "Reference metadata (Eloquent relationship type, binding type and phase, facade alias) reaches stored edges; route edges carry verifiability from their confidence and keep resourceType. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P0",
+      "estimate": {
+        "min": 3,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-05-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/languages/php.ts",
+        "tests/legacy-php-metadata.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A belongsTo relation edge has metadata.relationshipType 'many-to-one' and relationshipMethod 'belongsTo' in the store.",
+        "A singleton binding edge has bindingType 'singleton' and serviceProviderPhase 'register'; a closure concrete has concreteClass null.",
+        "An array-form route `[C::class, 'm']` is stored verified; Route::resource edges have metadata.resourceType 'resource'; `metrics --verified-only` keeps them."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-php-metadata.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:20.858Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-04-R1",
+      "milestone": "M0",
+      "title": "PHP name resolution: use imports, namespaces, facades, qualified names",
+      "objective": "PHP `use` statements become import edges; short names resolve in the file's own namespace first; facade rewriting never overrides an explicit import; Request/Response/Collection/Builder are classes, not scalars; qualified names in extends/implements/new are captured.",
+      "description": "PHP `use` statements become import edges; short names resolve in the file's own namespace first; facade rewriting never overrides an explicit import; Request/Response/Collection/Builder are classes, not scalars; qualified names in extends/implements/new are captured. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P1",
+      "estimate": {
+        "min": 9,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-04-R1.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "queries/php",
+        "src/core/scanner.ts",
+        "tests/legacy-php-resolution.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A controller with `use App\\Services\\UserService;` has an import edge to app/Services/UserService.php.",
+        "With App\\Admin\\Role present, App\\Models\\User::belongsToMany(Role::class) targets app/Models/Role.php.",
+        "`use App\\Support\\Cache; new Cache()` targets App\\Support\\Cache; `use App\\Models\\Event; Event::create()` is not rewritten to the dispatcher.",
+        "`handle(): Response` with `use App\\Http\\Response` yields a return_type edge.",
+        "`extends \\App\\Other\\Z` and `implements Contracts\\Foo` (expanded through use) yield edges."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-php-resolution.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:21.105Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-12-R1",
+      "milestone": "M0",
+      "title": "Import resolution for Java, Rust, Go, Python, Ruby and C#",
+      "objective": "Imports in the main non-JS languages resolve to the imported file: Java packages, Rust `use crate::`, Go module imports, Python modules and packages, Ruby require/require_relative, C# `using` captured.",
+      "description": "Imports in the main non-JS languages resolve to the imported file: Java packages, Rust `use crate::`, Go module imports, Python modules and packages, Ruby require/require_relative, C# `using` captured. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P0",
+      "estimate": {
+        "min": 11,
+        "expected": 14,
+        "max": 18
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-12-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "queries",
+        "tests/legacy-imports.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each of Java `import com.ex.Bar`, Rust `use crate::bar::Bar`, Go module import, Python `from pkg import mod` and Ruby `require_relative 'base'` yields exactly one import/require edge to the target file in a probe workspace.",
+        "C# `using Lib;` is captured as an import reference."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-imports.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:21.349Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-12-R2",
+      "milestone": "M0",
+      "title": "Language tiers: all bundled (amend spec), lang info, shebang detection",
+      "objective": "Resolve the fictional Tier-3 installer: every grammar is bundled and reported Installed; install/uninstall copy files nothing reads; `lang info` does not exist; no shebang detection.",
+      "description": "Resolve the fictional Tier-3 installer: every grammar is bundled and reported Installed; install/uninstall copy files nothing reads; `lang info` does not exist; no shebang detection. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P0",
+      "estimate": {
+        "min": 3,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-12-R2.md"
+      ],
+      "affectedFiles": [
+        "src/languages",
+        "src/parsers",
+        "src/cli.ts",
+        "tests/legacy-languages.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`mapx lang list` shows every grammar (including tsx) as bundled; no language reports \"Not Installed\".",
+        "`mapx lang info bash` exits 0 and prints extensions, tier and grammar path.",
+        "`mapx lang install x` / `uninstall x` exit 0 with a message that all grammars are bundled, and change nothing.",
+        "An extensionless `#!/bin/bash` (and `#!/usr/bin/env python3`) file is indexed with that language.",
+        "specs are amended per D010 (DECISIONS reference); F20 extension-list gaps (.pyw, .rake, .gemspec, .zsh, .fish, .luau, .h++) are added."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-languages.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:21.592Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-17-R1",
+      "milestone": "M0",
+      "title": "Language extraction accuracy (Ruby, C++, C#, Dart, Python, Go, Kotlin and symbol naming)",
+      "objective": "Fix the per-language extraction defects the audit reproduced.",
+      "description": "Fix the per-language extraction defects the audit reproduced. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P1",
+      "estimate": {
+        "min": 11,
+        "expected": 14,
+        "max": 18
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-17",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-17-R1.md"
+      ],
+      "affectedFiles": [
+        "queries",
+        "src/languages/registry.ts",
+        "src/parsers",
+        "tests/legacy-language-accuracy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Ruby `class Foo < Base` → extends Base; `include Greet` → implements.",
+        "C++ in-class and `Foo::run` methods are kind method with their class scope; template function symbols are named by identifier.",
+        "C# `class A : Base, IRun` → extends Base, implements IRun.",
+        "Dart `helper()` yields a call reference; Python `Bar()` on a class is an instantiation; Go interface embedding is extends; Kotlin interface/enum class have their kinds.",
+        "JS reference file yields ≥6 symbol kinds (const/property/variable); Python yields ≥6 (property).",
+        "Rust has one symbol per struct (no duplicate per impl); Swift init and Scala import targets are clean."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-language-accuracy.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:21.852Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-07-R1",
+      "milestone": "M0",
+      "title": "Package name and distribution correctness",
+      "objective": "Generated MCP configs and docs use the real package name `@mgamil/mapx` (the unscoped `mapx` returns 404); NPM_TOKEN setup is documented; native binaries report the real version; the spec's Node range and package name match reality.",
+      "description": "Generated MCP configs and docs use the real package name `@mgamil/mapx` (the unscoped `mapx` returns 404); NPM_TOKEN setup is documented; native binaries report the real version; the spec's Node range and package name match reality. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P0",
+      "estimate": {
+        "min": 1,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-07",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/agents/templates.ts",
+        "src/agents/generator.ts",
+        "package.json",
+        "README.md",
+        "tests/legacy-distribution.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Generated CLAUDE.md / MCP configs invoke `@mgamil/mapx` (or the resolved binary), never bare `mapx` via npx.",
+        "`npm run build:linux && dist/mapx-linux-x64 --version` prints VERSION.",
+        "README or CONTRIBUTING documents NPM_TOKEN."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-distribution.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:22.113Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-09-R1",
+      "milestone": "M0",
+      "title": "Agent integration files: correctness defects",
+      "objective": "Fix agent file generation defects.",
+      "description": "Fix agent file generation defects. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-09",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-09-R1.md"
+      ],
+      "affectedFiles": [
+        "src/agents",
+        "src/cli.ts",
+        "tests/legacy-agents.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`agents generate --providers=all` exits 0 and writes ≥10 files.",
+        "Cursor .mdc and Windsurf rules start with `---` (sentinel after frontmatter).",
+        "`agents update` keeps text after `<!-- /mapx -->` on its own line.",
+        "A hand-edited block is not overwritten without a TTY confirmation or --force.",
+        "`agents list` reports per-file status current/outdated/edited/missing."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-agents.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:22.374Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-08-R1",
+      "milestone": "M0",
+      "title": "Clusters and trace defects",
+      "objective": "Fix cluster detection, cluster export and trace defects.",
+      "description": "Fix cluster detection, cluster export and trace defects. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P1",
+      "estimate": {
+        "min": 7,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-08",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-08-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/leiden.ts",
+        "src/core/cluster-engine.ts",
+        "src/exporters",
+        "src/core/flow-tracer.ts",
+        "tests/legacy-clusters.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Leiden splits two 4-cliques joined by one edge into 2 communities.",
+        "`export --format dot --cluster auto --depth 0` emits cluster nodes only.",
+        "Cluster edges are drawn with penwidth scaled by edge count.",
+        "`trace Scanner --direction down` aggregates class members (Edges > 0).",
+        "Fallback SVG draws dispatch/notify dashed/dotted; PHP directory clusters report their file counts."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-clusters.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:22.625Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-11-R1",
+      "milestone": "M0",
+      "title": "Impact, callees, staleness and globals defects",
+      "objective": "Fix impact risk classification, callee locations, staleness detection and the globals blacklist.",
+      "description": "Fix impact risk classification, callee locations, staleness detection and the globals blacklist. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-11",
+          "type": "hard"
+        },
+        {
+          "id": "M0-21",
+          "type": "hard"
+        },
+        {
+          "id": "M0-18",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-11-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/impact-analyzer.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "src/core/scanner.ts",
+        "tests/legacy-impact-staleness.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Impact risk no longer depends on try/catch (D010): a direct caller is HIGH whether or not its body or comments contain `try`.",
+        "Import-only dependants appear in impact as LOW.",
+        "`callees` prints the target symbol's own file:line.",
+        "A new untracked file triggers the staleness warning and is indexed by `sync`; rewriting a file with identical content does not leave a stale warning after scan.",
+        "`new Date()` in .mjs/.cjs/.mts/.cts/.svelte creates no edge to a user Date."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-impact-staleness.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:22.883Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-20-R1",
+      "milestone": "M0",
+      "title": "NestJS and GraphQL extraction defects",
+      "objective": "Bound NestJS decorator lookback to the current class and parse GraphQL decorators correctly.",
+      "description": "Bound NestJS decorator lookback to the current class and parse GraphQL decorators correctly. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 5,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-20",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-20-R1.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/nestjs.ts",
+        "tests/legacy-nestjs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A plain class after an @Controller class gets no route and no hook.",
+        "`@Query(() => [User], { name: 'users' })` yields hook name users with metadata operationType query; mutations likewise.",
+        "`implements CanActivate` creates no self-file edge."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-nestjs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:23.127Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-02-R1",
+      "milestone": "M0",
+      "title": "Glob filter defects",
+      "objective": "Re-including previously excluded files restores their inbound edges; `dir/*` excludes do not prune subdirectories; filtered exports do not leak excluded clusters; Laravel default excludes apply at scan time for framework: laravel.",
+      "description": "Re-including previously excluded files restores their inbound edges; `dir/*` excludes do not prune subdirectories; filtered exports do not leak excluded clusters; Laravel default excludes apply at scan time for framework: laravel. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 5,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-02-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/config.ts",
+        "src/exporters",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "scan → scan --exclude \"app/Services/**\" → scan returns to the original edge count.",
+        "`scan --exclude \"app/Http/*\"` keeps app/Http/Controllers/*.",
+        "LLM/TOON exports filtered by --exclude list no cluster made only of excluded files.",
+        "A config with framework: laravel but no explicit globs does not index welcome.blade.php."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:23.365Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-01-R1",
+      "milestone": "M0",
+      "title": "Edge verifiability for JS/TS member calls and DOT styling",
+      "objective": "Untyped JS/TS member calls are captured as inferred references; DOT/SVG dash only inferred edges.",
+      "description": "Untyped JS/TS member calls are captured as inferred references; DOT/SVG dash only inferred edges. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 5,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-01-R1.md"
+      ],
+      "affectedFiles": [
+        "queries/javascript",
+        "queries/typescript",
+        "src/exporters",
+        "tests/legacy-verifiability.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`function f(o){ o.doWork() }` yields a call reference marked inferred.",
+        "A verified binding edge is not drawn dashed."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-verifiability.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:23.608Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-18-R1",
+      "milestone": "M0",
+      "title": "TSX anonymous default class method scope",
+      "objective": "Methods of `export default class { … }` are scoped to the file-derived class name.",
+      "description": "Methods of `export default class { … }` are scoped to the file-derived class name. Found by the M0-41 legacy audit (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md); every listed input was reproduced by the auditor.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-18",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-18-R1.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/typescript.ts",
+        "tests/legacy-tsx.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "In AnonClass.tsx, `go()` has scope AnonClass."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-tsx.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:23.877Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-03-R1",
+      "milestone": "M0",
+      "title": "Unbuilt CLI/MCP surface promised by I03, I05, I09 and I10",
+      "objective": "Deliver or formally drop each specified-but-missing option the audit found (metrics/edges flags, relationship display, agent template stanzas, workspace flags and columns, JSONC .code-workspace).",
+      "description": "Epic: decompose after owner decision D010. Items: metrics --format/--top/pagerank; edges <file> --direction/--type list/--verified-only/JSON default/absolute paths; query relationships; LLM model section and controller grouping; middleware edges; agent template SSE/slashCommands/Aider --read/Zed merge; --include-peers, --no-workspaces, status --all, export --all, deps --cross-repo; workspaces table columns; mapx_workspaces crossRepoEdgeCount and submodule type; JSONC .code-workspace. Found by M0-41 (docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md). Decomposed 2026-10-31 into M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1 (D010).",
+      "priority": "P1",
+      "estimate": {
+        "min": 20,
+        "expected": 30,
+        "max": 40
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-03",
+          "type": "hard"
+        },
+        {
+          "id": "M0-05",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-06-R1.md"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/mcp.ts",
+        "src/core",
+        "src/agents",
+        "src/exporters"
+      ],
+      "acceptanceCriteria": [
+        "Each listed item is implemented with a test or removed from the spec with a DECISIONS entry (D010); none remains silently missing."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "CANCELLED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:07.303Z",
+          "from": "BACKLOG",
+          "to": "CANCELLED",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "epic",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-03-R2",
+      "milestone": "M0",
+      "title": "metrics and edges CLI/MCP surface (F02/F04)",
+      "objective": "Implement the F02/F04 surface as specified.",
+      "description": "Implement the F02/F04 surface as specified. Decomposed from epic M0-03-R1 per D010 (implement everything). Source: docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 7,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-03",
+          "type": "hard"
+        },
+        {
+          "id": "M0-05-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/mcp.ts",
+        "src/core/metrics.ts",
+        "src/core/store.ts",
+        "src/agents.stub.md",
+        "tests/legacy-metrics-edges.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`mapx metrics --format=json --top 5` returns 5 entries ranked by total degree, each with pagerank; mapx_metrics accepts format and top.",
+        "`mapx edges app/Models/User.php --direction outgoing --type relation,extends --verified-only --format=json` returns valid JSON with only matching edges; absolute and relative paths work; mapx_edges defaults to JSON.",
+        "`mapx status` help mentions `mapx metrics`; src/agents.stub.md lists the current tools."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-metrics-edges.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-05-R2",
+      "milestone": "M0",
+      "title": "Laravel structure surface: relationships, middleware edges, LLM sections (F07–F09)",
+      "objective": "Implement the F07–F09 display deliverables.",
+      "description": "Implement the F07–F09 display deliverables. Decomposed from epic M0-03-R1 per D010 (implement everything). Source: docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 7,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-05-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/exporters/llm-exporter.ts",
+        "src/core/scanner.ts",
+        "tests/legacy-laravel-surface.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`mapx query User` lists its relationships (method, type, target).",
+        "`->middleware('auth')` yields a middleware edge from the route file to the middleware class.",
+        "The LLM export has a models section with relations and groups routes by controller class (OrderController on one line for its 8 routes).",
+        "`mapx deps AppServiceProvider` shows abstract → concrete bindings."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-laravel-surface.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-09-R2",
+      "milestone": "M0",
+      "title": "Agent template deliverables: SSE, Continue, Aider, Zed (F17)",
+      "objective": "Implement the missing F17 template deliverables.",
+      "description": "Implement the missing F17 template deliverables. Decomposed from epic M0-03-R1 per D010 (implement everything). Source: docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-07-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/agents",
+        "tests/legacy-agent-templates.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Generated CLAUDE.md contains both stdio and SSE MCP stanzas.",
+        "Continue config has slashCommands; Aider output documents --read and writes .aider.conf.yml.",
+        "Zed generation merges the MCP server into .zed/settings.json without losing existing keys."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-agent-templates.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-10-R1",
+      "milestone": "M0",
+      "title": "Workspace surface: flags, table, cross-repo counts, JSONC (F18)",
+      "objective": "Implement the missing F18 deliverables.",
+      "description": "Implement the missing F18 deliverables. Decomposed from epic M0-03-R1 per D010 (implement everything). Source: docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 7,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "legacy",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-10",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "outputs": [
+        "fixes",
+        "regression tests",
+        "reports/M0-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/mcp.ts",
+        "src/core/workspace-manager.ts",
+        "tests/legacy-workspaces.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`workspaces discover --include-peers` lists peers only when given; `init --no-workspaces` skips discovery.",
+        "`status --all`, `export --all` and `deps --cross-repo` exit 0; status --all prints the cross-repo edge count.",
+        "`mapx workspaces` prints Name, Path, Type, Files, Last scanned and HEAD columns.",
+        "mapx_workspaces JSON has top-level crossRepoEdgeCount; initialised submodules have type submodule.",
+        "A .code-workspace with comments and trailing commas is read."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-workspaces.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T22:24:24.856Z",
+          "from": "BACKLOG",
+          "to": "READY",
           "evidence": []
         }
       ],
