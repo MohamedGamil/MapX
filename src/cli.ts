@@ -404,6 +404,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const mcpActions = generator.generateMcpConfigs(detected, { dir });
           for (const action of mcpActions) {
             if (action.status === 'up_to_date') continue;
+            if (action.status === 'unparseable') {
+              clack.log.warn(`Skipped ${action.filename}: it is not valid JSON, so the mapx server was not added.`);
+              continue;
+            }
             generator.executeMcpConfig(action);
             const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
             clack.log.success(`MCP config ${verb} ${action.filename} (${action.tool})`);
@@ -2561,6 +2565,19 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           clack.log.success(`Wrote to ${action.filename} (status: ${action.status})`);
         }
       }
+
+      // Providers whose MCP server lives in an editor config (Zed) get it merged in (M0-09-R2).
+      for (const action of generator.generateMcpConfigs(generator.companionMcpConfigs(targets), { dir })) {
+        if (action.status === 'up_to_date') continue;
+        if (action.status === 'unparseable') {
+          clack.log.warn(`Skipped ${action.filename}: it is not valid JSON, so the mapx server was not added.`);
+        } else if (opts.dryRun) {
+          clack.log.info(`[DRY RUN] Would ${action.status} ${action.filename} (${action.tool})`);
+        } else {
+          generator.executeMcpConfig(action);
+          clack.log.success(`MCP config ${action.status === 'merge' ? 'merged into' : 'written to'} ${action.filename} (${action.tool})`);
+        }
+      }
     });
 
   agentsCmd
@@ -2679,6 +2696,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const action of actions) {
         if (action.status === 'up_to_date') {
           clack.log.info(`${action.filename}: Up to date.`);
+          continue;
+        }
+        if (action.status === 'unparseable') {
+          clack.log.warn(`Skipped ${action.filename}: it is not valid JSON, so the mapx server was not added.`);
           continue;
         }
         if (opts.dryRun) {

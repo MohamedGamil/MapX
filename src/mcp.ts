@@ -1887,6 +1887,15 @@ Callees: ${callees.length}`;
             results.push(`${action.filename}: Successfully generated/updated (${action.status}).`);
           }
         }
+        for (const action of generator.generateMcpConfigs(generator.companionMcpConfigs(targetProviders), { dir })) {
+          if (action.status === 'up_to_date') continue;
+          if (action.status === 'unparseable') {
+            results.push(`${action.filename}: Skipped, not valid JSON.`);
+          } else {
+            generator.executeMcpConfig(action);
+            results.push(`${action.filename}: mapx MCP server ${action.status === 'merge' ? 'merged in' : 'written'}.`);
+          }
+        }
 
         return { content: [{ type: 'text', text: results.join('\n') }] };
       }

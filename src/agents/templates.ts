@@ -4,6 +4,10 @@ export interface ProviderTemplate {
   content: string;
   /** True if this template is an MCP server config (JSON) rather than an instruction doc */
   isMcpConfig?: boolean;
+  /** Further templates written whenever this provider is (e.g. Aider's .aider.conf.yml). */
+  companions?: string[];
+  /** Companion-only templates are not offered as providers of their own. */
+  hidden?: boolean;
 }
 
 /**
@@ -112,6 +116,26 @@ export const MCP_CONFIGS: McpConfigEntry[] = [
       return JSON.stringify({
         servers: {
           mapx: {
+            command: cmd.command,
+            args: mcpArgs(projectDir),
+          }
+        }
+      }, null, 2);
+    },
+  },
+  {
+    // Zed reads MCP servers from `context_servers` in its project settings (M0-09-R2).
+    name: 'zed',
+    filename: '.zed/settings.json',
+    detect: (dir: string) => {
+      return existsSync(join(dir, '.zed'));
+    },
+    generate: (projectDir: string) => {
+      const cmd = mcpCommand();
+      return JSON.stringify({
+        context_servers: {
+          mapx: {
+            source: 'custom',
             command: cmd.command,
             args: mcpArgs(projectDir),
           }
@@ -289,6 +313,21 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
 }
 \`\`\`
 
+### SSE (HTTP) transport
+
+To share one long-running server between clients, start it with \`mapx serve --sse --port {{MCP_PORT}} --dir {{PROJECT_DIR}}\` and register its URL instead:
+
+\`\`\`json
+{
+  "mcpServers": {
+    "mapx-{{PROJECT_NAME}}": {
+      "type": "sse",
+      "url": "http://localhost:{{MCP_PORT}}/sse"
+    }
+  }
+}
+\`\`\`
+
 ## MCP Tools Available (32 total)
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
@@ -412,9 +451,15 @@ Available tools:
   aider: {
     filename: 'AIDER.md',
     isAppend: false,
+    companions: ['aider-conf'],
     content: `# MapxGraph Aider Integration
 
 Use MapxGraph commands in this repository to analyze code across **22 languages**.
+
+## Loading this file
+
+\`.aider.conf.yml\` lists this file under \`read:\`, so Aider loads it as read-only context on startup.
+To load it by hand instead, run \`aider --read AIDER.md\` (or \`/read-only AIDER.md\` inside a session).
 
 ## Key CLI Commands
 
@@ -475,6 +520,27 @@ contextProviders:
     args:
       name: mapx-status
       cmd: mapx status
+slashCommands:
+  - name: mapx-impact
+    description: Blast radius of changing a symbol (mapx impact)
+    prompt: Run \`mapx impact {{{ input }}}\` in the terminal and summarise the affected files by risk.
+  - name: mapx-callers
+    description: Who calls a symbol (mapx callers)
+    prompt: Run \`mapx callers {{{ input }}}\` in the terminal and list the call sites.
+  - name: mapx-context
+    description: Token-budgeted context for a task (mapx context)
+    prompt: Run \`mapx context "{{{ input }}}"\` in the terminal and use its output as context for the task.
+  - name: mapx-sync
+    description: Update the graph after edits (mapx sync)
+    prompt: Run \`mapx sync\` in the terminal and report what changed.
+`
+  },
+  'aider-conf': {
+    filename: '.aider.conf.yml',
+    isAppend: true,
+    hidden: true,
+    content: `read:
+  - AIDER.md
 `
   },
   zed: {
@@ -483,6 +549,7 @@ contextProviders:
     content: `# Zed Assistant MapxGraph Instructions
 
 This project uses MapxGraph (22 languages, 32 MCP tools).
+\`mapx agents generate --providers zed\` also registers the mapx MCP server under \`context_servers\` in \`.zed/settings.json\`, keeping your other settings.
 
 ## Key Commands
 - Run \`mapx export\` to retrieve a token-budgeted codebase summary.

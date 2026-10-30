@@ -4,6 +4,7 @@ import { join, dirname, basename, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TEMPLATES, MCP_CONFIGS, ProviderTemplate, McpConfigEntry } from './templates.js';
 import { VERSION } from '../version.js';
+import { stripJsoncSyntax } from '../parsers/static-file-parser.js';
 
 export interface AgentAction {
   provider: string;
@@ -19,7 +20,7 @@ export interface McpConfigAction {
   tool: string;
   filename: string;
   filepath: string;
-  status: 'create' | 'update' | 'merge' | 'up_to_date';
+  status: 'create' | 'update' | 'merge' | 'up_to_date' | 'unparseable';
   content: string;
 }
 
@@ -66,7 +67,7 @@ export class AgentGenerator {
   }
 
   public listProviders(): string[] {
-    return Object.keys(TEMPLATES).filter(p => p !== 'instructions');
+    return Object.keys(TEMPLATES).filter(p => p !== 'instructions' && !TEMPLATES[p]!.hidden);
   }
 
   public getTemplate(provider: string): ProviderTemplate | undefined {
@@ -91,6 +92,11 @@ export class AgentGenerator {
     const targetProviders = [...providers];
     if (!targetProviders.includes('instructions')) {
       targetProviders.push('instructions');
+    }
+    for (const provider of [...targetProviders]) {
+      for (const companion of TEMPLATES[provider]?.companions ?? []) {
+        if (!targetProviders.includes(companion)) targetProviders.push(companion);
+      }
     }
 
     for (const provider of targetProviders) {
@@ -257,6 +263,14 @@ export class AgentGenerator {
   }
 
   /**
+   * MCP configs that belong to instruction providers: generating Zed's instructions also
+   * registers the server in .zed/settings.json (M0-09-R2).
+   */
+  public companionMcpConfigs(providers: string[]): McpConfigEntry[] {
+    return MCP_CONFIGS.filter(entry => providers.includes(entry.name));
+  }
+
+  /**
    * List all available MCP config targets.
    */
   public listMcpConfigs(): McpConfigEntry[] {
@@ -291,7 +305,8 @@ export class AgentGenerator {
       // File exists — try to merge the mapx key into existing config
       try {
         const existingRaw = readFileSync(filepath, 'utf-8');
-        const existing = JSON.parse(existingRaw);
+        // Editor settings are often JSONC (comments, trailing commas).
+        const existing = JSON.parse(stripJsoncSyntax(existingRaw));
         const newObj = JSON.parse(newContent);
 
         // Determine the key path that holds the mapx server entry
@@ -316,12 +331,12 @@ export class AgentGenerator {
           });
         }
       } catch {
-        // Can't parse existing file — overwrite with new content
+        // Never overwrite a config we cannot parse: it holds the user's other settings.
         actions.push({
           tool: entry.name,
           filename: entry.filename,
           filepath,
-          status: 'update',
+          status: 'unparseable',
           content: newContent,
         });
       }
@@ -334,7 +349,7 @@ export class AgentGenerator {
    * Execute MCP config actions (write files to disk).
    */
   public executeMcpConfig(action: McpConfigAction): void {
-    if (action.status === 'up_to_date') return;
+    if (action.status === 'up_to_date' || action.status === 'unparseable') return;
     const parentDir = dirname(action.filepath);
     if (!existsSync(parentDir)) {
       mkdirSync(parentDir, { recursive: true });
@@ -382,11 +397,11 @@ export class AgentGenerator {
 
       try {
         const raw = readFileSync(filepath, 'utf-8');
-        const obj = JSON.parse(raw);
+        const obj = JSON.parse(stripJsoncSyntax(raw));
         let modified = false;
 
         // Remove mapx from all known container keys
-        for (const key of ['mcp', 'mcpServers', 'servers']) {
+        for (const key of ['mcp', 'mcpServers', 'servers', 'context_servers']) {
           if (obj[key] && typeof obj[key] === 'object' && 'mapx' in obj[key]) {
             delete obj[key].mapx;
             modified = true;

@@ -262,6 +262,9 @@ vi.mock('../src/agents/generator.js', () => ({
       { filename: 'AGENTS.md', status: 'create', provider: 'generic' },
     ]);
     execute = vi.fn();
+    companionMcpConfigs = vi.fn().mockReturnValue([]);
+    generateMcpConfigs = vi.fn().mockReturnValue([]);
+    executeMcpConfig = vi.fn();
   }
 }));
 

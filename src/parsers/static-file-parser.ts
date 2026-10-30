@@ -86,7 +86,7 @@ function extractCssRefs(source: string): ExtractedReference[] {
  *   4. Single-quoted strings → double-quoted
  *   5. Unquoted object keys
  */
-function stripJsoncSyntax(raw: string): string {
+export function stripJsoncSyntax(raw: string): string {
   let result = '';
   let i = 0;
   const len = raw.length;

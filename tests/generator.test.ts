@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { AgentGenerator } from '../src/agents/generator.js';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -224,7 +224,7 @@ describe('AgentGenerator module', () => {
     expect(genericPlan!.diff).toBeDefined();
   });
 
-  it('generateMcpConfigs falls back to update when existing file is not valid JSON', async () => {
+  it('generateMcpConfigs never overwrites an existing file that is not valid JSON (M0-09-R2)', async () => {
     // Covers lines 300-309: catch block in generateMcpConfigs
     const workspace = join(tempDir, 'proj-mcp-invalid');
     await mkdir(workspace);
@@ -238,7 +238,9 @@ describe('AgentGenerator module', () => {
 
     const actions = generator.generateMcpConfigs([tool], { dir: workspace });
     expect(actions).toHaveLength(1);
-    expect(actions[0].status).toBe('update');
+    expect(actions[0].status).toBe('unparseable');
+    generator.executeMcpConfig(actions[0]);
+    expect(await readFile(filepath, 'utf-8')).toBe('this is not json {{{');
   });
 
   it('revertMcpConfigs removes file entirely when only mapx entry remains', async () => {

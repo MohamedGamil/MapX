@@ -26,7 +26,10 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **Frontend → backend HTTP pairing**: MapX now finds HTTP call sites in JS, TS and Vue files (axios, `fetch`, `axios.create` instances, factories such as `Api()`, aliases, and receivers configured in `settings.http.clients`), resolves their URLs (string constants, template literals, conditional branches, base URLs from `axios.create` options and `.env` files with axios joining rules), and pairs each call with the live backend route it reaches across repositories. Paired calls become `http` edges to the route handler. `mapx routes --clients [--unmatched]` and `mapx_routes { clients }` list calls and the calls that reach no route. (M2-03, M2-04, M2-05, M2-06)
 - **HTTP pairing fixture and scorer**: `tests/fixtures/vue-http` (32 labelled calls in Vue 2.7 and Vue 3 apps) and `scripts/eval/score-http.ts`. (M2-02)
 
+- **Agent templates**: `CLAUDE.md` documents the SSE stanza next to the stdio one; Continue gets `slashCommands`; Aider gets `.aider.conf.yml` (`read: AIDER.md`) and `--read` instructions; generating Zed's instructions also registers the mapx MCP server in `.zed/settings.json` (also via `agents mcp`/`init`), keeping existing keys. (M0-09-R2)
+
 ### Fixed
+- MCP config merging accepts JSONC (comments, trailing commas) and no longer overwrites a config file it cannot parse; it warns and leaves the file alone. (M0-09-R2)
 - Agent files: `agents generate --providers=all` works; Cursor and Windsurf rules keep their frontmatter first; `agents update` never overwrites a hand-edited mapx block without `--force`, even when the block is also outdated (sentinels now carry a content hash); `agents list` shows each file's status (missing, current, outdated, edited). (M0-09-R1)
 - JS/TS calls on untyped receivers (`obj.method()`) are captured as inferred call edges (built-in methods such as `map` or `push` are skipped), and DOT export dashes only inferred edges, so verified bindings and dispatches are no longer drawn as if guessed. (M0-01-R1)
 - Methods of an anonymous `export default class { … }` are scoped to the class name derived from the file. (M0-18-R1)

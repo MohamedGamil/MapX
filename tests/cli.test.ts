@@ -287,6 +287,7 @@ const agentGeneratorMocks = {
   detectAgentTools: vi.fn().mockReturnValue([]),
   listMcpConfigs: vi.fn().mockReturnValue([{ name: 'cursor-mcp', filename: '.cursor/mcp.json' }]),
   generateMcpConfigs: vi.fn().mockReturnValue([]),
+  companionMcpConfigs: vi.fn().mockReturnValue([]),
   executeMcpConfig: vi.fn(),
   revertMcpConfigs: vi.fn(),
 };

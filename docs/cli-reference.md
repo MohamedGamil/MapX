@@ -708,6 +708,12 @@ Options:
 
 When run interactively without flags, presents a multi-select prompt to choose providers.
 
+Some providers write more than their instruction file:
+- `claude`: `CLAUDE.md` documents both the stdio stanza and the SSE stanza (`mapx serve --sse --port <mcp-port>`, URL `http://localhost:<mcp-port>/sse`).
+- `aider`: also writes `.aider.conf.yml` with `read: [AIDER.md]`, so Aider loads the instructions on startup (`aider --read AIDER.md` does the same by hand).
+- `continue`: `.continue/mapx.yaml` adds `slashCommands` (`/mapx-impact`, `/mapx-callers`, `/mapx-context`, `/mapx-sync`).
+- `zed`: also registers the mapx server under `context_servers` in `.zed/settings.json`. Existing keys are kept; comments and trailing commas are accepted, but the merged file is written back as plain JSON. A settings file that cannot be parsed is left untouched, with a warning.
+
 ## `mapx agents update`
 
 Update existing LLM integration files to the current MapxGraph version.
