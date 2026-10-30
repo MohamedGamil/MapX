@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 const PROJECT_ROOT = resolve(import.meta.dirname, '..');
 const VERSION = readFileSync(resolve(PROJECT_ROOT, 'VERSION'), 'utf-8').trim();
 
-const targets = [
+const allTargets = [
   { target: 'bun-linux-x64', outfile: 'dist/mapx-linux-x64' },
   { target: 'bun-linux-arm64', outfile: 'dist/mapx-linux-arm64' },
   { target: 'bun-darwin-arm64', outfile: 'dist/mapx-darwin-arm64' },
@@ -13,11 +13,23 @@ const targets = [
   { target: 'bun-windows-x64', outfile: 'dist/mapx-windows-x64.exe' },
 ];
 
-console.log('Building WASM grammars...');
-try {
-  execSync('npx tsx scripts/build-wasm.ts', { cwd: PROJECT_ROOT, stdio: 'inherit' });
-} catch {
-  console.log('WASM build had issues (may already be built)');
+// `tsx scripts/build-all.ts linux-x64 …` builds only the named targets (the package.json
+// build:* scripts use this so every binary gets the VERSION define).
+const only = process.argv.slice(2);
+const targets = only.length ? allTargets.filter(t => only.some(o => t.target === `bun-${o}`)) : allTargets;
+if (only.length && targets.length !== only.length) {
+  console.error(`Unknown target in: ${only.join(', ')}`);
+  process.exit(2);
+}
+
+// A full build refreshes the WASM grammars; a single-target build reuses the committed ones.
+if (!only.length) {
+  console.log('Building WASM grammars...');
+  try {
+    execSync('npx tsx scripts/build-wasm.ts', { cwd: PROJECT_ROOT, stdio: 'inherit' });
+  } catch {
+    console.log('WASM build had issues (may already be built)');
+  }
 }
 
 console.log('\nBuilding binaries...');
@@ -31,6 +43,7 @@ for (const { target, outfile } of targets) {
     console.log(`  ✓ ${outfile}`);
   } catch (e: any) {
     console.log(`  ✗ ${outfile}: ${e.message?.split('\n')[0]}`);
+    process.exitCode = 1;
   }
 }
 

@@ -28,9 +28,12 @@ export interface McpConfigEntry {
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+/** The npm package that provides the `mapx` binary (the unscoped name `mapx` is not ours). */
+export const NPM_PACKAGE = '@mgamil/mapx';
+
 /**
- * Build the mapx MCP server command. Prefers global `mapx` binary; falls back
- * to `npx -y mapx` for npm-installed projects.
+ * Build the mapx MCP server command: the global `mapx` binary installed by
+ * `npm install -g @mgamil/mapx`.
  */
 function mcpCommand(): { command: string; args: string[] } {
   return { command: 'mapx', args: [] };
@@ -276,7 +279,7 @@ Add the following to your Claude Desktop configuration file (\`~/.config/Claude/
       "command": "npx",
       "args": [
         "-y",
-        "mapx",
+        "${NPM_PACKAGE}",
         "serve",
         "--dir",
         "{{PROJECT_DIR}}"

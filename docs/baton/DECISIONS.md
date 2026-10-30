@@ -70,3 +70,7 @@ Context: the M0-41 audit found 0 of 16 legacy iterations fully confirmed (`revie
 - **Specified-but-unbuilt CLI/MCP surface (epic M0-03-R1):** implement everything as specified. The epic is decomposed into M0-03-R2, M0-05-R2, M0-09-R2 and M0-10-R1.
 - **Impact try/catch downgrade (M0-11-R1):** remove it. Risk depends on call depth and test files only, as F19 specifies.
 - **Ordering:** the whole remediation backlog, P2 included, is done before M3. M3-01 has a hard dependency on every remediation task.
+
+## D011 — Distribution facts (M0-07-R1, 2026-10-31)
+
+The package is `@mgamil/mapx` (the unscoped `mapx` is not ours), and the supported Node floor is 20.18 (`engines`; better-sqlite3 12 requires it). F13's "npm install -g mapx" and "Node 18" are superseded by these facts. Generated configs and docs use the scoped name.

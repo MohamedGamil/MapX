@@ -14,7 +14,7 @@ Add the following to your Claude Desktop configuration file (`~/.config/Claude/c
       "command": "npx",
       "args": [
         "-y",
-        "mapx",
+        "@mgamil/mapx",
         "serve",
         "--dir",
         "/Users/gamil/Projects/mapx"

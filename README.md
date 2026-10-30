@@ -612,6 +612,16 @@ make package-all
 make install-local
 ```
 
+### Publishing to npm
+
+The package is published as **`@mgamil/mapx`**; the unscoped name `mapx` belongs to someone else. Releases are owner-initiated. Pushing a `vX.Y.Z` tag runs `.github/workflows/publish-npm.yml`, which publishes with npm provenance. One-time setup:
+
+1. Create an npm **automation** access token for an account with publish rights on `@mgamil/mapx`.
+2. Add it to the GitHub repository as the Actions secret **`NPM_TOKEN`** (Settings → Secrets and variables → Actions).
+3. Keep `VERSION`, `package.json` and the CHANGELOG in step (`npm run version-sync`) before tagging.
+
+Native binaries built with `npm run build:linux` (or the other `build:*` scripts) and `make build-*` embed the version from `VERSION`.
+
 ---
 
 ## License
