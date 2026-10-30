@@ -6561,15 +6561,54 @@
         "npm run typecheck"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
-      "status": "BACKLOG",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T22:01:53.579Z",
+      "completedAt": "2026-10-30T22:03:51.435Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-40.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-40.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T22:01:53.038Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:01:53.579Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:03:51.028Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:03:51.435Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-40.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

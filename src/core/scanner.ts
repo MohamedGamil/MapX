@@ -50,7 +50,7 @@ interface FileInfo {
   lines: number;
 }
 
-interface DiscoveredFile extends FileInfo {
+export interface DiscoveredFile extends FileInfo {
   relativePath: string;
   contentHash: string;
   content?: string;

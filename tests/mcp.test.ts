@@ -1,3 +1,4 @@
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 let mockExists = true;
@@ -1404,7 +1405,7 @@ describe('MCP module', () => {
     it('handles debug logging in tool calls', async () => {
       const debugServer = buildServer({ debug: true });
       const debugTransport = new MockTransport();
-      await debugServer.connect(debugTransport);
+      await debugServer.connect(debugTransport as unknown as Transport);
 
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
@@ -1434,7 +1435,7 @@ describe('MCP module', () => {
     it('handles debug logging for list_tools', async () => {
       const debugServer = buildServer({ debug: true });
       const debugTransport = new MockTransport();
-      await debugServer.connect(debugTransport);
+      await debugServer.connect(debugTransport as unknown as Transport);
 
       const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 

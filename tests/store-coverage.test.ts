@@ -41,6 +41,9 @@ describe('Store Coverage Boost', () => {
       path: 'src/main.ts',
       repo: 'test-repo',
       language: 'typescript',
+      gitBlobHash: null,
+      contentHash: null,
+      lastScanned: new Date().toISOString(),
       sizeBytes: 100,
       lines: 10
     });

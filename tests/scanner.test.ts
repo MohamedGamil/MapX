@@ -785,7 +785,7 @@ describe('Scanner module', () => {
       await scanner.scanFull(['repo1'], { force: true });
       // setMeta should have been called to clear the resume state (sets it to '')
       const clearCalls = (mockStore.setMeta as ReturnType<typeof vi.fn>).mock.calls.filter(
-        ([key, val]: [string, string]) => key.startsWith('scan_resume_state:') && val === ''
+        ([key, val]: unknown[]) => String(key).startsWith('scan_resume_state:') && val === ''
       );
       expect(clearCalls.length).toBeGreaterThan(0);
     });

@@ -99,7 +99,7 @@
     "test:unit": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc -p tsconfig.check.json",
     "check": "npm run plan:validate && node scripts/baton/check-changelog-coverage.mjs && npm run typecheck && npm test && npm run test:skills",
     "test:skills": "node --test .claude/skills/baton/scripts/baton-scan.test.mjs .claude/skills/baton-review/scripts/review-scope.test.mjs",
     "plan:validate": "tsx scripts/baton/cli.ts validate",

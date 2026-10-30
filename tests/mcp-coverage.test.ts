@@ -182,7 +182,7 @@ describe('MCP Server Coverage Boost', () => {
 
   it('handles startMcpServer with no default project dir', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const stderrWriteSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => 0);
+    const stderrWriteSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     
     mockExistsSyncResult = false; // force no default project dir fallback
     await expect(startMcpServer(undefined, { sse: false })).rejects.toThrow();
@@ -205,7 +205,7 @@ describe('MCP Server Coverage Boost', () => {
 
   it('handles startMcpServer fallback to cwd when it has mapx config', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const stderrWriteSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => 0);
+    const stderrWriteSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     
     mockExistsSyncResult = true; // force finding it in cwd
     await startMcpServer(undefined, { sse: false });

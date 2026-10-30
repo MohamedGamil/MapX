@@ -218,7 +218,10 @@ describe('Store core class', () => {
       path: 'db-file.ts',
       repo: 'mapx',
       language: 'typescript',
-      size_bytes: 100,
+      gitBlobHash: null,
+      contentHash: null,
+      lastScanned: new Date().toISOString(),
+      sizeBytes: 100,
       lines: 10,
     });
     

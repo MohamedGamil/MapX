@@ -73,13 +73,13 @@ describe('Worker Thread Parsing Integration', () => {
     expect(workerResults[2].errors).toHaveLength(0);
 
     // Verify symbols
-    const hasGreeter = workerResults[0].symbols.some(s => s.name === 'Greeter');
-    const hasAdd = workerResults[1].symbols.some(s => s.name === 'add');
+    const hasGreeter = workerResults[0].symbols.some((s: { name: string }) => s.name === 'Greeter');
+    const hasAdd = workerResults[1].symbols.some((s: { name: string }) => s.name === 'add');
     expect(hasGreeter).toBe(true);
     expect(hasAdd).toBe(true);
 
     // Verify static markdown reference extraction
-    const hasMarkdownLink = workerResults[2].references.some(r => r.targetName === './another.md');
+    const hasMarkdownLink = workerResults[2].references.some((r: { targetName: string }) => r.targetName === './another.md');
     expect(hasMarkdownLink).toBe(true);
 
     // Parse on main thread for comparison

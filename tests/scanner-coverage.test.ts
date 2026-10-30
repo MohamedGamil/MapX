@@ -1,5 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { Scanner } from '../src/core/scanner.js';
+import type { DiscoveredFile } from '../src/core/scanner.js';
+import type { ExtractedReference } from '../src/types.js';
 import type { Store } from '../src/core/store.js';
 import type { Config } from '../src/core/config.js';
 import { MapxGraph } from '../src/core/graph.js';
@@ -228,7 +230,7 @@ describe('Scanner Coverage Boost', () => {
     const scanner = new Scanner(mockStore, mockConfig, graph);
 
     // Override discoverFiles to return no changes
-    scanner['discoverFiles'] = async () => [
+    scanner['discoverFiles'] = async () => <DiscoveredFile[]><unknown>[
       {
         relativePath: 'a.ts',
         language: 'typescript',
@@ -258,7 +260,7 @@ describe('Scanner Coverage Boost', () => {
     const scanner = new Scanner(mockStore, mockConfig, graph);
 
     // Only a.ts is discovered on disk, deleted.ts is missing
-    scanner['discoverFiles'] = async () => [
+    scanner['discoverFiles'] = async () => <DiscoveredFile[]><unknown>[
       {
         relativePath: 'a.ts',
         language: 'typescript',
@@ -380,7 +382,7 @@ describe('Scanner Coverage Boost', () => {
 
     // 3. Scan all repo names
     scanner['acquireScanLock'] = async () => true;
-    scanner['discoverFiles'] = async () => [];
+    scanner['discoverFiles'] = async () => <DiscoveredFile[]><unknown>[];
     const mockConfigAll = {
       getWorkspaceRoot: () => '/workspace',
       getResolvedUserLanguages: () => ({}),
@@ -389,7 +391,7 @@ describe('Scanner Coverage Boost', () => {
     } as unknown as Config;
     const scannerAll = new Scanner(mockStore, mockConfigAll, graph);
     scannerAll['acquireScanLock'] = async () => true;
-    scannerAll['discoverFiles'] = async () => [];
+    scannerAll['discoverFiles'] = async () => <DiscoveredFile[]><unknown>[];
 
     const resultFull = await scannerAll.scanFull(['all']);
     expect(resultFull.filesScanned).toBe(0);
@@ -413,7 +415,7 @@ describe('Scanner Coverage Boost', () => {
     }));
 
     // 1. Parallel workers success case
-    scanner.parallel = true;
+    (scanner as any).parallel = true;
     (globalThis as any).mockWorkerFailInit = false;
     (globalThis as any).mockWorkerThrowOnMessage = false;
     (globalThis as any).mockWorkerFailExecution = false;
@@ -503,7 +505,7 @@ describe('Scanner Coverage Boost', () => {
       ['a.ts'], // stale path to exclude
       [
         {
-          symbols: [{ name: 'newFuncA', kind: 'function', startLine: 1, endLine: 2, scope: 'NewScope' }],
+          symbols: [{ name: 'newFuncA', kind: 'function', startLine: 1, endLine: 2, scope: 'NewScope', signature: 'newFuncA()', metadata: {} }],
           references: [],
           errors: []
         }
@@ -547,7 +549,7 @@ describe('Scanner Coverage Boost', () => {
     scannerForRefs['resolveImportPath'] = () => 'c.ts';
     scannerForRefs['resolveSymbolToFile'] = () => 'd.ts';
 
-    const resolved = scannerForRefs['resolveReferences'](refs, 'a.ts', 'repo1');
+    const resolved = scannerForRefs['resolveReferences'](refs as unknown as ExtractedReference[], 'a.ts', 'repo1');
     expect(resolved).toHaveLength(3); // console skipped, others resolved
     expect(resolved[0].sourceSymbol).toBe('MyClass::myOuterSym');
 
@@ -558,7 +560,7 @@ describe('Scanner Coverage Boost', () => {
     });
     const scannerForFull = new Scanner(mockStoreForFull, mockConfig, graph);
     scannerForFull['acquireScanLock'] = async () => true;
-    scannerForFull['discoverFiles'] = async () => [
+    scannerForFull['discoverFiles'] = async () => <DiscoveredFile[]><unknown>[
       {
         relativePath: 'a.ts',
         language: 'typescript',

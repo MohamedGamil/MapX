@@ -248,7 +248,7 @@ describe('CLI Additional Coverage Boost', () => {
     checkAndPrintStaleness(mockStore, '.');
 
     expect(warnSpy).toHaveBeenCalled();
-    const calls = warnSpy.mock.calls.map(c => c[0]).join('');
+    const calls = warnSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     expect(calls).toContain('index may be stale');
     expect(calls).toContain('tests/cli-coverage.test.ts');
     expect(calls).toContain('deleted-file.ts (deleted)');
@@ -270,7 +270,7 @@ describe('CLI Additional Coverage Boost', () => {
     checkAndPrintStaleness(mockStore, '.');
 
     expect(warnSpy).toHaveBeenCalled();
-    const calls = warnSpy.mock.calls.map(c => c[0]).join('');
+    const calls = warnSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     expect(calls).toContain('and 2 more');
   });
 
@@ -411,6 +411,9 @@ describe('CLI Additional Coverage Boost', () => {
         path: 'src/main.ts',
         repo: 'test-repo',
         language: 'typescript',
+        gitBlobHash: null,
+        contentHash: null,
+        lastScanned: new Date().toISOString(),
         sizeBytes: 100,
         lines: 10
       });
