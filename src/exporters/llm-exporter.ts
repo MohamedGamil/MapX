@@ -2,6 +2,7 @@ import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
 import { filterClustersToFiles } from './cluster-filter.js';
 import type { ExportOptions } from '../types.js';
+import { describeRelation, modelRelations, type ModelRelation } from '../core/relations.js';
 
 const TOKEN_CHARS_PER_LINE = 4;
 
@@ -55,6 +56,9 @@ export class LLMExporter {
 
     const symbolSection = this.buildSymbolSection(rankedSymbols, budget);
     parts.push(symbolSection);
+
+    const modelSection = this.buildModelSection(opt.repo, opt.files ? new Set(opt.files) : null);
+    if (modelSection) parts.push(modelSection);
 
     if (edges.length > 0) {
       const depSection = this.buildDependencySection(edges);
@@ -242,6 +246,24 @@ export class LLMExporter {
     return lines.join('\n');
   }
 
+  /** Eloquent models with their relationships (F07, M0-05-R2); empty when there are none. */
+  private buildModelSection(repo: string | undefined, allowed: Set<string> | null): string {
+    const relations = modelRelations(this.store, { repo }).filter(r => !allowed || allowed.has(r.file));
+    if (!relations.length) return '';
+    const byModel = new Map<string, ModelRelation[]>();
+    for (const r of relations) {
+      const key = `${r.model}\0${r.file}`;
+      if (!byModel.has(key)) byModel.set(key, []);
+      byModel.get(key)!.push(r);
+    }
+    const lines = [`## Models (${byModel.size})`];
+    for (const list of byModel.values()) {
+      lines.push(`- ${list[0]!.model} @ ${list[0]!.file}: ${list.map(describeRelation).join('; ')}`);
+    }
+    lines.push('');
+    return lines.join('\n');
+  }
+
   private buildDependencySection(edges: Record<string, unknown>[]): string {
     const lines: string[] = [];
     lines.push('## Dependencies');
@@ -257,7 +279,9 @@ export class LLMExporter {
     for (const edge of edges) {
       if (edge.edge_type === 'route') {
         const src = edge.source_file as string;
-        const controller = (edge.target_symbol as string) || (edge.target_file as string).split('/').pop() || 'Controller';
+        // One line per controller class, not per action (`Controller@index`, `Controller::show`)
+        // (M0-05-R2).
+        const controller = ((edge.target_symbol as string) || (edge.target_file as string).split('/').pop() || 'Controller').replace(/(@|::)[^\\]*$/, '');
         const key = `${src}->${controller}`;
 
         let meta: any = {};

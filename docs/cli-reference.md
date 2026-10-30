@@ -122,6 +122,8 @@ Search for symbols by name. Supports partial matching, glob patterns (`*Service`
 mapx query <term> [--dir /path]
 ```
 
+A class that declares Eloquent relationships lists them under `relationships:`, one per line: the declaring method, the relationship call, the target model and the relationship type (`team → belongsTo App\Models\Team (many-to-one)`).
+
 Examples:
 ```bash
 mapx query UserService           # Partial match
@@ -164,6 +166,8 @@ Show dependencies (what the file depends on) and reverse dependencies (what depe
 ```bash
 mapx deps <file> [--dir /path] [--cross-repo]
 ```
+
+A file that declares service-container bindings (`$this->app->bind/singleton(Abstract::class, Concrete::class)`, `$listen`) also gets a `Bindings (abstract → concrete)` block; closures show as `(closure)`, and `$listen` entries read `Event → Listener (listen)`.
 
 `--cross-repo` lists only the edges whose two ends are in different registered repositories: `→ [repo] file (type)` for dependencies and `← [repo] file (type)` for dependents.
 

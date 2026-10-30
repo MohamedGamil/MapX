@@ -22,6 +22,7 @@ import { calculateMetrics, calculateDSM, rankMetrics } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
 import { edgeView, indexedPath } from './core/edge-view.js';
+import { describeRelation, modelRelations } from './core/relations.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { describeLanguage, isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
@@ -940,6 +941,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         if (sym.signature && sym.signature !== sym.name) {
           console.log(`    signature: ${sym.signature}`);
         }
+        // An Eloquent model lists its relationships (F07, M0-05-R2).
+        if (sym.kind === 'class') {
+          const relations = modelRelations(store, { file: sym.file_path as string }).filter(r => r.model === sym.name);
+          if (relations.length) {
+            console.log('    relationships:');
+            for (const r of relations) console.log(`      ${describeRelation(r)}`);
+          }
+        }
       }
     });
 
@@ -1424,6 +1433,22 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           console.log('\nDepended on by:');
           for (const rdep of rdeps) {
             console.log(`  ← ${rdep.source} (${rdep.type})`);
+          }
+        }
+
+        // Service container bindings declared here: abstract → concrete (F08, M0-05-R2).
+        const bindings = store.getEdgesForFile(filePath).filter(e => e.edge_type === 'binding');
+        if (bindings.length > 0) {
+          console.log('\nBindings (abstract → concrete):');
+          for (const b of bindings) {
+            let meta: Record<string, unknown> = {};
+            try { meta = JSON.parse((b.metadata as string) || '{}'); } catch { /* keep {} */ }
+            const target = (b.target_symbol as string) || (b.target_file as string);
+            // `$listen` bindings point at the listener; the event is the "abstract" side.
+            const [abstract, concrete] = meta.bindingType === 'listen'
+              ? [String(meta.event ?? '?'), target]
+              : [target, (meta.concreteClass as string | null) ?? '(closure)'];
+            console.log(`  ${abstract} → ${concrete}${meta.bindingType ? ` (${meta.bindingType})` : ''}`);
           }
         }
       }

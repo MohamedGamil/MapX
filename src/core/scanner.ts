@@ -1546,6 +1546,9 @@ export class Scanner {
     };
 
     const edgesToInsert: any[] = [];
+    // Middleware names (Kernel aliases such as `auth`, or class names) → the class that handles
+    // them, from the middleware hooks; route middlewares are resolved through it (M0-05-R2).
+    const middlewareTargets = new Map<string, { file: string; symbol: string | null }>();
 
     for (const detector of activeDetectors) {
       detector.beginScan?.(workspaceRoot);
@@ -1613,6 +1616,9 @@ export class Scanner {
               hook.metadata.sourceFile = relPath;
 
               routeRegistry.addHook(hook);
+              if (hook.hookType === 'middleware' && hook.handlerFile) {
+                middlewareTargets.set(hook.hookName, { file: hook.handlerFile, symbol: hook.handlerSymbol || null });
+              }
 
               const edgeType = (['graphql_resolver', 'message_handler', 'websocket_handler', 'middleware'].includes(hook.hookType)
                 ? hook.hookType
@@ -1688,6 +1694,43 @@ export class Scanner {
             ...(meta.overridden ? { overridden: true, overriddenBy: meta.overriddenBy } : {}),
             ...(meta.conditional ? { conditional: true } : {}),
           },
+        };
+        edgesToInsert.push(edge);
+        this.graph.addDependencyEdge(edge);
+      }
+
+      // Route file → middleware class for every `->middleware('auth')` (F09, M0-05-R2): one edge
+      // per route file and middleware, listing the routes it guards.
+      const guarded = new Map<string, { source: string; name: string; target: { file: string; symbol: string | null }; uris: string[] }>();
+      for (const route of detectorRoutes) {
+        const meta = route.metadata ?? {};
+        const source = meta.sourceFile as string | undefined;
+        if (!source) continue;
+        for (const raw of (route.middlewares ?? meta.middlewares ?? []) as string[]) {
+          const name = String(raw).split(':')[0]!.trim();
+          let target = middlewareTargets.get(name);
+          if (!target && /^[A-Z\\]/.test(name)) {
+            const file = ctx.resolveSymbolToFile(name, source);
+            if (file) target = { file, symbol: name };
+          }
+          if (!target) continue;
+          const key = `${source}\0${target.file}\0${name}`;
+          const entry = guarded.get(key) ?? { source, name, target, uris: [] };
+          entry.uris.push(`${route.method} ${route.path}`);
+          guarded.set(key, entry);
+        }
+      }
+      for (const g of guarded.values()) {
+        const edge: GraphEdge = {
+          sourceFile: g.source,
+          targetFile: g.target.file,
+          sourceSymbol: null,
+          targetSymbol: g.target.symbol,
+          edgeType: 'middleware',
+          repo: repo.name,
+          weight: 1.0,
+          verifiability: 'verified',
+          metadata: { middleware: g.name, middlewareType: 'route', routeCount: g.uris.length, routes: g.uris },
         };
         edgesToInsert.push(edge);
         this.graph.addDependencyEdge(edge);
