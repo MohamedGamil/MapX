@@ -85,7 +85,7 @@
 - **O(1) Pre-Scan Indexing** — Fast lookup index mapping imports, scopes, and namespace resolutions instantly.
 - **Git & Content Hash Sync** — Git-aware change tracker for repo files and hash-based delta-checks for non-git workspaces.
 - **Resumable Batch checkpoints** — Checklist states are persisted; interrupted scans pick up exactly where they stopped.
-- **Deep symbol extraction** — Classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, namespaces.
+- **Deep symbol extraction** — Classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces.
 - **32 MCP tools** — Scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and language management.
 - **Flexible search** — Wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON formats.
 - **Data flow tracing** — Upstream/downstream trace routes, source/sink identification, and change blast radius analysis.

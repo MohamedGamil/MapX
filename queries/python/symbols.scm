@@ -17,5 +17,12 @@
     left: (identifier) @symbol.name
     (#match? @symbol.name "^[A-Z][A-Z0-9_]*$"))) @symbol.kind_constant
 
-; Property definitions via @property decorator are auto-promoted from function
-; to method by GenericWasmParser when inside a class scope
+; Module-level variables (other assignments at the top level) (M0-17-R1)
+(module
+  (expression_statement
+    (assignment
+      left: (identifier) @symbol.name
+      (#not-match? @symbol.name "^[A-Z][A-Z0-9_]*$"))) @symbol.kind_variable)
+
+; Methods decorated with @property / @cached_property become kind property in
+; GenericWasmParser (M0-17-R1)

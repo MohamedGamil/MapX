@@ -44,3 +44,15 @@
 ; Captures typed references such as `List<MyClass>`, `Future<AuthResult>`, etc.
 (type_arguments
   (type_identifier) @ref.target_instantiation) @ref.type_instantiation
+
+; ─── Calls: `helper()` and `obj.run()` (M0-17-R1) ───────────────────────────
+; Dart has no call node: the callee is followed by a sibling selector holding the arguments.
+(_
+  (identifier) @ref.target_call
+  .
+  (selector (argument_part))) @ref.type_call
+
+(_
+  (selector (unconditional_assignable_selector (identifier) @ref.target_call))
+  .
+  (selector (argument_part))) @ref.type_call

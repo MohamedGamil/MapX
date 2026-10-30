@@ -32,6 +32,18 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- Language extraction accuracy: (M0-17-R1)
+  - Ruby `class Foo < Base` extends `Base` (not `< Base`), `include M` is recorded as implements, and `include`/`extend` are no longer call edges;
+  - C++ methods defined inside a class or as `Foo::run` are methods of `Foo`, and template functions are named by their identifier (not their whole source);
+  - C# base lists separate the base class (extends) from interfaces (implements);
+  - Dart calls produce call references;
+  - Python `Bar()` is an instantiation, `@property` methods are properties, and module-level variables are symbols;
+  - Go interface and struct embedding are extends edges;
+  - Kotlin interfaces and enum classes have kinds `interface` and `enum`;
+  - JavaScript top-level `const`/`let`/`var` bindings and class fields are symbols (new kind `variable`);
+  - Rust impl blocks no longer duplicate their struct;
+  - Swift initialisers are named `init`;
+  - Scala imports target clean paths (`a.b.{C, D}` gives `a.b.C` and `a.b.D`).
 - `.code-workspace` and `rush.json` files with comments or trailing commas are read (before, the workspace folders were silently ignored). (M0-10-R1)
 - Clusters and trace: Leiden no longer merges two dense groups joined by a single edge (aggregation dropped each community's internal weight) and gives the same communities on every run; PHP apps no longer show empty `app.*` directory clusters; `mapx trace <Class>` follows the class's members instead of returning 0 edges, and trace edge counts are per symbol; the fallback SVG styles dispatch (bold magenta) and notify (dotted pink) edges. Fresh parallel scans (> 10 files) now keep each file's PHP namespace, so namespace clusters appear without a second scan. (M0-08-R1)
 - MCP config merging accepts JSONC (comments, trailing commas) and no longer overwrites a config file it cannot parse; it warns and leaves the file alone. (M0-09-R2)

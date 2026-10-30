@@ -173,7 +173,7 @@ This project uses **MapxGraph** — a local code graph memory system that provid
 
 ## What MapxGraph Does
 
-MapxGraph scans source files across **22 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
+MapxGraph scans source files across **22 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
 
 This means you (the LLM) can quickly understand the codebase structure without reading every file.
 

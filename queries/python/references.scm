@@ -22,15 +22,18 @@
 
 ; Function calls: foo()
 (call
-  function: (identifier) @ref.target_call) @ref.type_call
+  function: (identifier) @ref.target_call
+  (#not-match? @ref.target_call "^[A-Z]")) @ref.type_call
+
+; Instantiation: Bar() — PEP 8 names classes in CapWords (M0-17-R1)
+(call
+  function: (identifier) @ref.target_instantiation
+  (#match? @ref.target_instantiation "^[A-Z]")) @ref.type_instantiation
 
 ; Method calls: obj.method()
 (call
   function: (attribute
     attribute: (identifier) @ref.target_call)) @ref.type_call
-
-; Instantiation: ClassName() — uppercase identifiers in call position
-; (handled as call — GenericWasmParser treats PascalCase calls as instantiation when needed)
 
 ; Decorator references: @decorator
 (decorator

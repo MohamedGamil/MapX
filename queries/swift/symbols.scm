@@ -13,7 +13,8 @@
   name: (simple_identifier) @symbol.name) @symbol.kind_function
 
 ; Initializers
-(init_declaration) @symbol.kind_method
+(init_declaration
+  name: _ @symbol.name) @symbol.kind_method
 
 ; Property declarations
 (property_declaration

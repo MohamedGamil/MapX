@@ -12,9 +12,9 @@
 ; Functions
 (function_item name: (identifier) @symbol.name) @symbol.kind_function
 
-; Impl blocks (captured as class to represent implementation)
-(impl_item
-  type: (type_identifier) @symbol.name) @symbol.kind_class
+; Impl blocks are not symbols of their own: `impl Point` and `impl Clone for Point` each produced
+; another `Point` next to the struct. Methods inside them still take the impl type as their
+; scope (GenericWasmParser) (M0-17-R1).
 
 ; Const items
 (const_item name: (identifier) @symbol.name) @symbol.kind_constant

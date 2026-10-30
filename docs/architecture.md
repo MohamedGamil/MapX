@@ -78,7 +78,7 @@ Walks the filesystem, detects languages, orchestrates parsing, and stores result
 
 Uses `graphology` directed multigraph with PageRank centrality.
 
-- **Nodes**: Files and symbols (classes, methods, functions, interfaces, enums, structs, modules, constants, properties, namespaces, traits)
+- **Nodes**: Files and symbols (classes, methods, functions, interfaces, enums, structs, modules, constants, properties, variables, namespaces, traits)
 - **Edges**: Dependencies (import, require, extends, implements, call, instantiation, use, include)
 - **PageRank**: Computed on-demand to rank files/symbols by structural importance
 - **Serialization**: Can export/import the full graph as JSON

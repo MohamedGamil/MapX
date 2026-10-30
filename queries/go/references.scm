@@ -16,7 +16,15 @@
 (composite_literal
   type: (type_identifier) @ref.target_instantiation) @ref.type_instantiation
 
-; Interface embedding: embedding a type inside an interface
-;(type_spec
-;  type: (interface_type
-;    (type_identifier) @ref.target_extends)) @ref.type_extends
+; Interface embedding: `interface { Reader; io.Writer }` (M0-17-R1). A single-type element only,
+; so constraint unions such as `int | float64` are not taken for embedded interfaces.
+(interface_type
+  (type_elem . (type_identifier) @ref.target_extends .)) @ref.type_extends
+
+(interface_type
+  (type_elem . (qualified_type name: (type_identifier) @ref.target_extends) .)) @ref.type_extends
+
+; Struct embedding: an unnamed field `struct { Base }`
+(field_declaration
+  !name
+  type: (type_identifier) @ref.target_extends) @ref.type_extends

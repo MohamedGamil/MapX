@@ -31,7 +31,8 @@ export type SymbolKind =
   | 'namespace'
   | 'struct'
   | 'module'
-  | 'field';
+  | 'field'
+  | 'variable';
 
 export interface ExtractedReference {
   sourceSymbol: string | null;
