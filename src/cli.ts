@@ -880,7 +880,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--kind <kind>', 'Filter by symbol kind (class, method, function, interface, trait, constant, enum, property, namespace, struct, module)')
     .option('--file <prefix>', 'Filter by file path prefix')
     .option('--exact', 'Only match exact name (case-insensitive)', false)
-    .option('--limit <limit>', 'Max results to return', '20')
+    .option('--limit <limit>', 'Max results to return (default 20; a wildcard file listing returns every symbol)')
     .option('--format <format>', 'Output format: text | json', 'text')
     .action(async (term: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
@@ -890,7 +890,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const kind = opts.kind as string | undefined;
       const filePrefix = opts.file as string | undefined;
       const exact = !!opts.exact;
-      const limit = parseInt(opts.limit as string, 10);
+      const isWildcard = term === '*' || term === '';
+      // Listing a whole file (wildcard + --file) returns every symbol unless --limit is given.
+      const limit = opts.limit !== undefined
+        ? parseInt(opts.limit as string, 10)
+        : isWildcard && filePrefix ? Math.max(1, store.countSymbolsFiltered({ term, kind, filePrefix, exact })) : 20;
       const format = (opts.format as string) || 'text';
 
       let results = store.searchSymbolsFiltered({ term, kind, filePrefix, exact, limit });
@@ -942,6 +946,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
       }
 
+      const totalMatches = store.countSymbolsFiltered({ term, kind: broadened ? undefined : kind, filePrefix, exact });
+
       // JSON format
       if (format === 'json') {
         const jsonResults = results.map(sym => ({
@@ -954,12 +960,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           signature: sym.signature || '',
           pagerank: rankMap.get(`${sym.file_path}::${sym.name}`) || 0,
         }));
-        console.log(JSON.stringify({ total: results.length, broadened, term, kind: kind || null, results: jsonResults }, null, 2));
+        console.log(JSON.stringify({ total: results.length, totalMatches, broadened, term, kind: kind || null, results: jsonResults }, null, 2));
         return;
       }
 
       // Summary header
-      let header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
+      let header = results.length < totalMatches
+        ? `Found ${results.length} of ${totalMatches} symbols`
+        : `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
       if (kind && !broadened) header += ` of kind "${kind}"`;
       if (filePrefix) header += ` in ${filePrefix}`;
       if (broadened) header += ` (broadened from kind="${kind}" which had 0 results)`;

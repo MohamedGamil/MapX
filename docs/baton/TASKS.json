@@ -6422,6 +6422,226 @@
       "objective": "Evaluate a compiled discovery and parsing sidecar (KNOWN_ISSUES wish).",
       "milestone": "M4",
       "description": "Evaluate a compiled discovery and parsing sidecar (KNOWN_ISSUES wish)."
+    },
+    {
+      "id": "M0-22-R2",
+      "milestone": "M0",
+      "title": "CLI mapx search: full file listing and truncation totals",
+      "objective": "`mapx search` lists every symbol for `*` with --file and reports `Found N of M` when results are truncated, matching the M0-22-R1 MCP fix.",
+      "description": "Defect found 2026-10-30 (the M0-22-R1 report listed the CLI as unchecked): the CLI search caps a wildcard file listing at 20, never reports truncation, and its JSON output has no totalMatches.",
+      "priority": "P1",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "cli"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-22-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-22-R1.md"
+      ],
+      "outputs": [
+        "fix",
+        "test"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "tests/cli-search-usability.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`mapx search \"*\" --file src/many.ts` on a 25-function file prints 25 symbols.",
+        "`mapx search fn` with 25 matches prints `Found 20 of 25 symbols`.",
+        "`--format json` includes totalMatches."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/cli-search-usability.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T22:00:11.153Z",
+      "completedAt": "2026-10-30T22:01:33.576Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-22-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/cli-search-usability.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-22-R2.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T22:00:10.709Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:00:11.153Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:01:32.955Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:01:33.576Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/cli-search-usability.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-22-R2.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-40",
+      "milestone": "M0",
+      "title": "Type-check tests and scripts",
+      "objective": "`npm run typecheck` covers src/, tests/ and scripts/ (fixtures excluded), with zero errors.",
+      "description": "Risk R04 (D009): tsconfig.json includes src only; including tests and scripts shows 20 type errors in 9 test files (2026-10-30).",
+      "priority": "P1",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "quality"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/RISKS.md"
+      ],
+      "outputs": [
+        "tsconfig.check.json",
+        "fixed tests"
+      ],
+      "affectedFiles": [
+        "tsconfig.json",
+        "tsconfig.check.json",
+        "package.json",
+        "tests",
+        "scripts"
+      ],
+      "acceptanceCriteria": [
+        "`npm run typecheck` checks tests/**/*.ts and scripts/**/*.ts (excluding tests/fixtures) and exits 0.",
+        "Introducing a type error in a test file makes `npm run typecheck` exit non-zero (mutation check)."
+      ],
+      "verificationCommands": [
+        "npm run typecheck"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-41",
+      "milestone": "M0",
+      "title": "Criterion-level audit of the unaudited legacy iterations",
+      "objective": "Give every legacy iteration not yet audited (I01–I12, I17, I18, I20, I21 = M0-01…M0-12, M0-17, M0-18, M0-20, M0-21) a verdict per acceptance criterion, with remediation tasks for anything falsely complete or defective.",
+      "description": "Risk R01 (D009). The import review verified only the baseline for these; two of the six checked were disputed.",
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "low",
+      "area": [
+        "quality",
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+      ],
+      "outputs": [
+        "audit report",
+        "remediation tasks"
+      ],
+      "affectedFiles": [
+        "docs/baton/reviews",
+        "docs/baton/TASKS.json"
+      ],
+      "acceptanceCriteria": [
+        "Each of the 16 iterations has a verdict (CONFIRMED / DEFECTIVE / FALSELY COMPLETE / UNVERIFIABLE) with file:line basis in docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md.",
+        "Every DEFECTIVE / FALSELY COMPLETE / UNVERIFIABLE verdict has a remediation task in TASKS.json, or a fix with a regression test made within this task.",
+        "`npm run plan:validate` exits 0."
+      ],
+      "verificationCommands": [
+        "npm run plan:validate",
+        "test -s docs/baton/reviews/REVIEW-2026-10-30-legacy-audit.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "IN_PROGRESS",
+      "owner": "review-agents",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:59:49.544Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-30T21:59:49.299Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:59:49.544Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
     }
   ]
 }

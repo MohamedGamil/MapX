@@ -67,6 +67,8 @@ const storeMocks = {
   close: vi.fn(),
   queryEdges: vi.fn().mockReturnValue([]),
   searchSymbolsFiltered: vi.fn().mockReturnValue([]),
+  // Count = the unlimited search, as the real store's COUNT(*) query would return.
+  countSymbolsFiltered: vi.fn((o: any) => (storeMocks.searchSymbolsFiltered({ ...o, limit: undefined }) ?? []).length),
   getFilesFiltered: vi.fn().mockReturnValue([]),
   getLanguageBreakdown: vi.fn().mockReturnValue({}),
   getClusters: vi.fn().mockReturnValue([]),

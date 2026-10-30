@@ -55,3 +55,9 @@ Frontend HTTP calls are persisted like routes, in `.mapx/http-calls.json`. It ho
 - **Scorer:** `scripts/eval/score-http.ts` reads only this file, so the scorer (M2-02) can be built before any extractor exists.
 
 Why: it mirrors `routes.json` (M1), keeps each stage independently testable, and lets the fixture record a 0.3.5 baseline of 0 now.
+
+## D009 — Owner Q&A on clearing open issues (2026-10-30)
+
+- **Scope before the next work item (M3-01):** fix M2-07 (the HTTP review P2s), M0-22-R2 (CLI search truncation), M0-40 (type-check tests and scripts, R04), M0-41 (full criterion-level audit of the legacy iterations, R01) and M0-39 (tests for untested 0.3.x features).
+- **Root repo:** when sub-repos are registered, the workspace root `.` stays registered. It indexes files outside every sub-repo; the nested-repo fix (M0-23) already prevents double indexing. No change.
+- **Commits:** one commit per task on `develop`.
