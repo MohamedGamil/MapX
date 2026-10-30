@@ -5,8 +5,9 @@
   [(dotted_name) (identifier)] @ref.target_import) @ref.type_import
 
 ; from ... import: from foo import bar
-(import_from_statement
-  [(dotted_name) (identifier)] @ref.target_import) @ref.type_import
+; The whole statement is the target: the resolver needs the module (with relative dots) and
+; the imported names to tell a submodule (from pkg import mod) from a name in pkg/__init__.py.
+((import_from_statement) @ref.target_import) @ref.type_import
 
 ; Class inheritance: class Foo(Base, Mixin)
 (class_definition

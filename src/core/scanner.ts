@@ -23,6 +23,7 @@ import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { collectProviders, extractHttpCalls, HTTP_SKIP, HTTP_SOURCE, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall } from '../frameworks/http/pairing.js';
+import { importResolverFor } from './import-resolvers.js';
 import { collectConstants, envCandidates, evaluate, joinURL, parseDotenv, visibleConstants } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -1105,8 +1106,11 @@ export class Scanner {
       if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       let targetFile: string | null = null;
 
-      if (ref.referenceType === 'require') {
+      const sourceLanguage = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages())?.name;
+      if (ref.referenceType === 'require' && !(sourceLanguage && importResolverFor(sourceLanguage))) {
         targetFile = this.resolveRequirePath(ref.targetName, sourcePath, fileMap);
+      } else if (ref.referenceType === 'require') {
+        targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
       } else if (ref.referenceType === 'import') {
         targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
       } else {
@@ -1169,8 +1173,39 @@ export class Scanner {
     return null;
   }
 
+  private importFileSets = new WeakMap<Map<string, string>, Set<string>>();
+  private importTextCache = new Map<string, string | null>();
+
   private resolveImportPath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
     if (!target || typeof target !== 'string') return null;
+
+    // Languages whose imports name modules/packages/namespaces (Java, Rust, Go, Python, Ruby, C#…)
+    const language = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages())?.name;
+    const resolver = language ? importResolverFor(language) : undefined;
+    if (resolver) {
+      let files = this.importFileSets.get(fileMap);
+      if (!files) {
+        files = new Set(fileMap.keys());
+        this.importFileSets.set(fileMap, files);
+      }
+      const workspaceRoot = this.config.getWorkspaceRoot();
+      return resolver(target, sourcePath, {
+        files,
+        readText: (path) => {
+          if (!this.importTextCache.has(path)) {
+            const abs = resolve(workspaceRoot, path);
+            this.importTextCache.set(path, existsSync(abs) ? readFileSync(abs, 'utf-8') : null);
+          }
+          return this.importTextCache.get(path)!;
+        },
+        // The in-memory index covers files of this scan not yet written to the store.
+        namespaceFiles: (namespace) => [...new Set([
+          ...(this.symbolIndex?.get(namespace.toLowerCase()) ?? []).filter(e => e.name === namespace).map(e => e.file),
+          ...(this.store.raw.prepare("SELECT DISTINCT file_path FROM symbols WHERE kind = 'namespace' AND name = ?").all(namespace) as { file_path: string }[])
+            .map(r => r.file_path),
+        ])],
+      });
+    }
     let resolvedTarget = target;
 
     // ── Dart: skip stdlib (`dart:core`, `dart:async`, etc.) ─────────────────

@@ -40,6 +40,10 @@
 (namespace_declaration
   name: [(identifier) (qualified_name)] @symbol.name) @symbol.kind_namespace
 
+; File-scoped namespaces (C# 10): namespace Lib.Models;
+(file_scoped_namespace_declaration
+  name: [(identifier) (qualified_name)] @symbol.name) @symbol.kind_namespace
+
 ; Record declarations
 (record_declaration
   name: (identifier) @symbol.name) @symbol.kind_class
