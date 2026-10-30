@@ -240,6 +240,9 @@ export class ClusterEngine {
 
     for (const f of files) {
       const filePath = f.path as string;
+      // Files already in a namespace cluster never join a directory cluster, so they must not
+      // create one either: a PHP app's app/Models would otherwise be an empty cluster (M0-08-R1).
+      if (existingPrimaryMemberships.has(filePath)) continue;
       const parts = filePath.split('/');
       if (parts.length <= 1) continue;
 

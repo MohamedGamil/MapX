@@ -262,18 +262,23 @@ export class SvgExporter {
       svgH = MARGIN * 2 + rows * ITEM_H + (rows - 1) * GAP_Y;
     }
 
-    const edgeStyles: Record<string, { stroke: string; dash: string }> = {
+    // Same convention as the DOT exporter: a dashed line means inferred (F01), so verified types
+    // are told apart by colour, dots and weight; dispatch and notify had no style at all and
+    // were drawn like imports (M0-08-R1).
+    const edgeStyles: Record<string, { stroke: string; dash: string; width?: number }> = {
       import: { stroke: '#64748b', dash: '' },
       require: { stroke: '#64748b', dash: '' },
-      extends: { stroke: '#3b82f6', dash: '' },
-      implements: { stroke: '#10b981', dash: '4,4' },
-      call: { stroke: '#f59e0b', dash: '3,3' },
-      instantiation: { stroke: '#8b5cf6', dash: '3,3' },
-      relation: { stroke: '#3b82f6', dash: '' },
+      extends: { stroke: '#3b82f6', dash: '', width: 2 },
+      implements: { stroke: '#10b981', dash: '' },
+      call: { stroke: '#f59e0b', dash: '1,3' },
+      instantiation: { stroke: '#8b5cf6', dash: '1,3' },
+      relation: { stroke: '#3b82f6', dash: '', width: 2 },
       route: { stroke: '#10b981', dash: '' },
-      binding: { stroke: '#8b5cf6', dash: '4,4' },
-      middleware: { stroke: '#f97316', dash: '2,2' },
-      render: { stroke: '#06b6d4', dash: '3,3' },
+      binding: { stroke: '#8b5cf6', dash: '' },
+      middleware: { stroke: '#f97316', dash: '1,3' },
+      dispatch: { stroke: '#d946ef', dash: '', width: 2 },
+      notify: { stroke: '#ec4899', dash: '1,3' },
+      render: { stroke: '#06b6d4', dash: '1,3' },
     };
 
     const seen = new Set<string>();
@@ -301,7 +306,7 @@ export class SvgExporter {
       const midY = (sy + ty) / 2;
 
       edgeLines.push(
-        `  <path d="M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}" fill="none" stroke="${style.stroke}" stroke-width="1.2"${dashAttr} opacity="0.35" class="edge-path" marker-end="url(#arrow)"/>`,
+        `  <path d="M${sx},${sy} C${sx},${midY} ${tx},${midY} ${tx},${ty}" fill="none" stroke="${style.stroke}" stroke-width="${style.width ?? 1.2}"${dashAttr} opacity="0.35" class="edge-path" marker-end="url(#arrow)"/>`,
       );
     }
 

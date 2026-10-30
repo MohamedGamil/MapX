@@ -885,10 +885,13 @@ export class Scanner {
 
         const onMessage = (msg: any) => {
           const resultIndex = msg.id;
+          // fileMetadata carries the PHP namespace; dropping it lost namespace clusters on every
+          // fresh parallel scan (M0-08-R1).
           results[resultIndex] = {
             symbols: msg.symbols || [],
             references: msg.references || [],
-            errors: msg.errors || []
+            errors: msg.errors || [],
+            ...(msg.fileMetadata ? { fileMetadata: msg.fileMetadata } : {}),
           };
 
           const fileInfo = files[resultIndex];

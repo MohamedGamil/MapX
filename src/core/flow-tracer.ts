@@ -78,6 +78,10 @@ function matchesSymbol(nodeSymbol: string | null, edgeSymbol: string | null): bo
   const normEdge = edgeSymbol.replace(/\./g, '::').toLowerCase();
   if (normNode === normEdge) return true;
 
+  // A class (or other container) stands for its members: tracing `Scanner` follows the calls
+  // made from and to `Scanner::scanFull`, `Scanner.walk`, ... (M0-08-R1).
+  if (edgeSymbol.startsWith(`${nodeSymbol}::`) || edgeSymbol.startsWith(`${nodeSymbol}.`)) return true;
+
   if (nodeSymbol.includes('::')) {
     const parts = nodeSymbol.split('::');
     const name = parts[parts.length - 1];
@@ -250,9 +254,9 @@ export class FlowTracer {
       for (let i = 0; i < p.nodes.length; i++) {
         uniqueNodes.add(`${p.nodes[i].file}::${p.nodes[i].symbol || ''}`);
         if (i > 0) {
-          const from = direction === 'up' ? p.nodes[i].file : p.nodes[i - 1].file;
-          const to = direction === 'up' ? p.nodes[i - 1].file : p.nodes[i].file;
-          traceEdges.add(`${from}->${to}`);
+          // Symbol-level, like the node count: same-file calls are distinct edges.
+          const [a, b] = [p.nodes[i - 1], p.nodes[i]];
+          traceEdges.add(`${a.file}::${a.symbol || ''}->${b.file}::${b.symbol || ''}`);
         }
       }
     }

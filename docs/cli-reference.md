@@ -190,6 +190,7 @@ Options:
 - `--depth` — Maximum traversal depth (default: 3)
 - `--max-depth` — Alias for `--depth`
 - `--format` — Output format: `text` (default), `dot`, `json`
+- A class (or other container) as the start symbol stands for its members: `mapx trace Scanner --direction down` follows the calls made by `Scanner::scan`, `Scanner::walk`, …
 - `--include-structural` — Include import/extends edges in trace (default: false)
 - `--sources` — Show entry points instead of tracing a symbol
 - `--sinks` — Show terminal consumers instead of tracing a symbol
@@ -315,7 +316,7 @@ Options:
 - `--exclude` — Exclude glob patterns
 - `--include` — Include glob patterns
 - `--cluster` — Cluster rendering for DOT/SVG: `none` (default, flat) or `auto` (with subgraph blocks)
-- `--depth` — Maximum cluster nesting depth for DOT/SVG
+- `--depth` — Maximum cluster nesting depth for DOT/SVG. With `--cluster auto`, `--depth 0` is the cluster-level view: one node per cluster (with its file count), one edge per cluster pair labelled with its edge count and types, and `penwidth` = log(count) + 1, capped at 5
 - `--delimiter` — Delimiter for TOON format: `comma`, `tab`, `pipe` (default: `comma`)
 - `--key-folding` — Collapse single-key chains into dotted paths for TOON
 
@@ -328,6 +329,7 @@ mapx export --format=dot -o graph.dot                # GraphViz DOT
 mapx export --format=svg -o graph.svg                # SVG visualization
 mapx export --format=toon -o graph.toon              # TOON compact format
 mapx export --format=dot --cluster=none              # Flat DOT (no clusters)
+mapx export --format=dot --cluster=auto --depth=0    # Clusters only, edges weighted by count
 mapx export --format=svg --depth=2                   # SVG with max 2 cluster levels
 mapx export --tokens=16384                           # More detailed LLM summary
 ```

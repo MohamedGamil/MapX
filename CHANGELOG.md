@@ -28,7 +28,10 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 - **Agent templates**: `CLAUDE.md` documents the SSE stanza next to the stdio one; Continue gets `slashCommands`; Aider gets `.aider.conf.yml` (`read: AIDER.md`) and `--read` instructions; generating Zed's instructions also registers the mapx MCP server in `.zed/settings.json` (also via `agents mcp`/`init`), keeping existing keys. (M0-09-R2)
 
+- `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
+
 ### Fixed
+- Clusters and trace: Leiden no longer merges two dense groups joined by a single edge (aggregation dropped each community's internal weight) and gives the same communities on every run; PHP apps no longer show empty `app.*` directory clusters; `mapx trace <Class>` follows the class's members instead of returning 0 edges, and trace edge counts are per symbol; the fallback SVG styles dispatch (bold magenta) and notify (dotted pink) edges. Fresh parallel scans (> 10 files) now keep each file's PHP namespace, so namespace clusters appear without a second scan. (M0-08-R1)
 - MCP config merging accepts JSONC (comments, trailing commas) and no longer overwrites a config file it cannot parse; it warns and leaves the file alone. (M0-09-R2)
 - Agent files: `agents generate --providers=all` works; Cursor and Windsurf rules keep their frontmatter first; `agents update` never overwrites a hand-edited mapx block without `--force`, even when the block is also outdated (sentinels now carry a content hash); `agents list` shows each file's status (missing, current, outdated, edited). (M0-09-R1)
 - JS/TS calls on untyped receivers (`obj.method()`) are captured as inferred call edges (built-in methods such as `map` or `push` are skipped), and DOT export dashes only inferred edges, so verified bindings and dispatches are no longer drawn as if guessed. (M0-01-R1)

@@ -8,6 +8,7 @@ interface Graph {
   nodes: string[];
   degrees: Map<string, number>;
   neighbors: Map<string, Map<string, number>>;
+  selfLoops: Map<string, number>;
   totalWeight: number;
 }
 
@@ -28,39 +29,30 @@ export function detectLeidenCommunities(
     return fallback;
   }
 
-  // 2. Perform Leiden community detection (Iterative aggregation and refinement)
+  // 2. Leiden levels: local moving, refinement inside each community, aggregation of the
+  // refined communities (internal weight kept as self-loops), until a level merges nothing.
+  // Node order is fixed so the same graph always yields the same communities (M0-08-R1).
   let currentGraph = graph;
-  // Map from original node name to its meta-node mapping in the current level
   let nodeToMeta = new Map<string, string>();
   for (const n of nodeList) {
     nodeToMeta.set(n, n);
   }
 
-  let level = 0;
-  while (level < maxIterations) {
-    const { partition, refinedPartition } = runLeidenLevel(currentGraph, resolution);
-    
-    // Check if any communities were merged/changed
-    let changed = false;
-    for (const [node, comm] of Object.entries(partition)) {
-      if (node !== comm) {
-        changed = true;
-        break;
-      }
-    }
-    if (!changed) break;
+  for (let level = 0; level < maxIterations; level++) {
+    const partition = runLocalMovement(currentGraph, resolution);
+    const communityCount = new Set(Object.values(partition)).size;
+    if (communityCount === currentGraph.nodes.length) break;
 
-    // Map original nodes to the new aggregated communities
+    let refinedPartition = runRefinement(currentGraph, partition, resolution);
+    // Refinement that merges nothing would stall the aggregation: aggregate the moved partition.
+    if (new Set(Object.values(refinedPartition)).size === currentGraph.nodes.length) refinedPartition = partition;
+
     const nextNodeToMeta = new Map<string, string>();
     for (const [origNode, metaNode] of nodeToMeta.entries()) {
-      const currentComm = refinedPartition[metaNode] || partition[metaNode];
-      nextNodeToMeta.set(origNode, currentComm);
+      nextNodeToMeta.set(origNode, refinedPartition[metaNode]!);
     }
     nodeToMeta = nextNodeToMeta;
-
-    // Aggregate graph based on the refined partition
     currentGraph = aggregateGraph(currentGraph, refinedPartition);
-    level++;
   }
 
   // 3. Group original nodes by their final community meta-node ID
@@ -87,6 +79,7 @@ export function detectLeidenCommunities(
 function buildGraph(nodes: string[], edges: { source: string; target: string; weight: number }[]): Graph {
   const degrees = new Map<string, number>();
   const neighbors = new Map<string, Map<string, number>>();
+  const selfLoops = new Map<string, number>();
   let totalWeight = 0;
 
   for (const n of nodes) {
@@ -99,7 +92,15 @@ function buildGraph(nodes: string[], edges: { source: string; target: string; we
     const v = e.target;
     const w = e.weight;
 
-    if (!degrees.has(u) || !degrees.has(v) || u === v) continue;
+    if (!degrees.has(u) || !degrees.has(v)) continue;
+
+    // A self-loop is an aggregated community's internal weight: it counts twice in the degree.
+    if (u === v) {
+      selfLoops.set(u, (selfLoops.get(u) || 0) + w);
+      degrees.set(u, degrees.get(u)! + 2 * w);
+      totalWeight += w;
+      continue;
+    }
 
     degrees.set(u, degrees.get(u)! + w);
     degrees.set(v, degrees.get(v)! + w);
@@ -113,28 +114,18 @@ function buildGraph(nodes: string[], edges: { source: string; target: string; we
     totalWeight += w;
   }
 
-  return { nodes, degrees, neighbors, totalWeight };
+  return { nodes, degrees, neighbors, selfLoops, totalWeight };
 }
 
-/**
- * Runs a single level of Leiden: local movement, refinement, and partition generation.
- */
-function runLeidenLevel(
-  graph: Graph,
-  resolution: number
-): { partition: Record<string, string>; refinedPartition: Record<string, string> } {
-  // Local movement phase (similar to Louvain but optimized)
-  const partition = runLocalMovement(graph, resolution);
-
-  // Refinement phase (identifies sub-communities inside the moved partitions to ensure connectivity)
-  const refinedPartition = runRefinement(graph, partition, resolution);
-
-  return { partition, refinedPartition };
+/** Modularity gain of putting a node (degree k, `connWeight` to the community) into a community of total degree `commWeight`. */
+function gain(connWeight: number, commWeight: number, k: number, resolution: number, m: number): number {
+  return connWeight - resolution * (commWeight * k) / (2 * m);
 }
 
 function runLocalMovement(graph: Graph, resolution: number): Record<string, string> {
   const partition: Record<string, string> = {};
   const communityWeights = new Map<string, number>(); // sum of degree of nodes in community
+  const m = graph.totalWeight;
 
   for (const n of graph.nodes) {
     partition[n] = n;
@@ -145,49 +136,40 @@ function runLocalMovement(graph: Graph, resolution: number): Record<string, stri
   let iterations = 0;
   const maxMoveIterations = 10;
 
-  // Node movement with modularity optimization
   while (changed && iterations < maxMoveIterations) {
     changed = false;
     iterations++;
 
-    // Shuffle nodes for ordering independence
-    const shuffledNodes = [...graph.nodes].sort(() => Math.random() - 0.5);
-
-    for (const node of shuffledNodes) {
-      const currentComm = partition[node];
+    for (const node of graph.nodes) {
+      const currentComm = partition[node]!;
       const nodeWeight = graph.degrees.get(node)!;
-
       const nodeNeighbors = graph.neighbors.get(node)!;
       if (nodeNeighbors.size === 0) continue;
 
-      // Calculate connection weights to neighbor communities
       const commConnections = new Map<string, number>();
       for (const [nbr, w] of nodeNeighbors.entries()) {
-        const nbrComm = partition[nbr];
+        const nbrComm = partition[nbr]!;
         commConnections.set(nbrComm, (commConnections.get(nbrComm) || 0) + w);
       }
 
+      // Take the node out of its community, then put it back where the gain is highest;
+      // staying wins ties.
+      const remaining = (communityWeights.get(currentComm) || 0) - nodeWeight;
       let bestComm = currentComm;
-      let maxDeltaQ = 0;
+      let bestGain = gain(commConnections.get(currentComm) || 0, remaining, nodeWeight, resolution, m);
 
-      // Find community that maximizes modularity gain
       for (const [comm, connWeight] of commConnections.entries()) {
         if (comm === currentComm) continue;
-
-        const commWeight = communityWeights.get(comm) || 0;
-        // Newman-Girvan delta Q formula with resolution:
-        // delta Q = (connWeight / totalWeight) - resolution * (commWeight * nodeWeight) / (2 * totalWeight^2)
-        const deltaQ = connWeight - resolution * (commWeight * nodeWeight) / (2 * graph.totalWeight);
-
-        if (deltaQ > maxDeltaQ) {
-          maxDeltaQ = deltaQ;
+        const g = gain(connWeight, communityWeights.get(comm) || 0, nodeWeight, resolution, m);
+        if (g > bestGain + 1e-12) {
+          bestGain = g;
           bestComm = comm;
         }
       }
 
-      if (bestComm !== currentComm && maxDeltaQ > 0) {
+      if (bestComm !== currentComm) {
         partition[node] = bestComm;
-        communityWeights.set(currentComm, (communityWeights.get(currentComm) || 0) - nodeWeight);
+        communityWeights.set(currentComm, remaining);
         communityWeights.set(bestComm, (communityWeights.get(bestComm) || 0) + nodeWeight);
         changed = true;
       }
@@ -198,7 +180,8 @@ function runLocalMovement(graph: Graph, resolution: number): Record<string, stri
 }
 
 /**
- * Leiden refinement phase: guarantees connected community components and optimizes density.
+ * Leiden refinement phase: inside each community, singletons merge only into well-connected
+ * sub-communities of the same community, so every refined community is connected.
  */
 function runRefinement(
   graph: Graph,
@@ -206,65 +189,63 @@ function runRefinement(
   resolution: number
 ): Record<string, string> {
   const refinedPartition: Record<string, string> = {};
-  
-  // Group nodes by their communities from the local movement phase
+  const m = graph.totalWeight;
+
   const commToNodes = new Map<string, string[]>();
-  for (const [node, comm] of Object.entries(partition)) {
+  for (const node of graph.nodes) {
+    const comm = partition[node]!;
     if (!commToNodes.has(comm)) {
       commToNodes.set(comm, []);
     }
     commToNodes.get(comm)!.push(node);
   }
 
-  // Refine each community independently
   for (const nodes of commToNodes.values()) {
-    // Sub-communities inside the main community
     const subPartition: Record<string, string> = {};
     const subCommWeights = new Map<string, number>();
+    const subCommSize = new Map<string, number>();
 
-    // Start with each node in its own sub-community
     for (const n of nodes) {
       subPartition[n] = n;
       subCommWeights.set(n, graph.degrees.get(n)!);
+      subCommSize.set(n, 1);
     }
 
-    // Refinement only moves nodes to sub-communities that are well-connected (guaranteeing connectivity)
     for (const node of nodes) {
+      // Only nodes still alone in their sub-community move.
+      if (subCommSize.get(subPartition[node]!) !== 1) continue;
       const nodeWeight = graph.degrees.get(node)!;
-      const nodeNeighbors = graph.neighbors.get(node)!;
 
       const subCommConnections = new Map<string, number>();
-      for (const [nbr, w] of nodeNeighbors.entries()) {
-        // Only look at neighbors within the same parent community
+      for (const [nbr, w] of graph.neighbors.get(node)!.entries()) {
         if (partition[nbr] !== partition[node]) continue;
-        const nbrSubComm = subPartition[nbr];
+        const nbrSubComm = subPartition[nbr]!;
+        if (nbrSubComm === subPartition[node]) continue;
         subCommConnections.set(nbrSubComm, (subCommConnections.get(nbrSubComm) || 0) + w);
       }
 
-      let bestSubComm = subPartition[node];
-      let maxDeltaQ = 0;
-
+      let bestSubComm = subPartition[node]!;
+      let bestGain = 0;
       for (const [subComm, connWeight] of subCommConnections.entries()) {
-        const subCommWeight = subCommWeights.get(subComm) || 0;
-        const deltaQ = connWeight - resolution * (subCommWeight * nodeWeight) / (2 * graph.totalWeight);
-
-        if (deltaQ > maxDeltaQ) {
-          maxDeltaQ = deltaQ;
+        const g = gain(connWeight, subCommWeights.get(subComm) || 0, nodeWeight, resolution, m);
+        if (g > bestGain + 1e-12) {
+          bestGain = g;
           bestSubComm = subComm;
         }
       }
 
-      if (bestSubComm !== subPartition[node] && maxDeltaQ > 0) {
-        const currentSubComm = subPartition[node];
+      if (bestSubComm !== subPartition[node]) {
+        const currentSubComm = subPartition[node]!;
         subPartition[node] = bestSubComm;
-        subCommWeights.set(currentSubComm, (subCommWeights.get(currentSubComm) || 0) - nodeWeight);
+        subCommWeights.set(currentSubComm, 0);
+        subCommSize.set(currentSubComm, 0);
         subCommWeights.set(bestSubComm, (subCommWeights.get(bestSubComm) || 0) + nodeWeight);
+        subCommSize.set(bestSubComm, (subCommSize.get(bestSubComm) || 0) + 1);
       }
     }
 
-    // Copy to the refined partition
     for (const n of nodes) {
-      refinedPartition[n] = subPartition[n];
+      refinedPartition[n] = subPartition[n]!;
     }
   }
 
@@ -286,7 +267,13 @@ function aggregateGraph(graph: Graph, refinedPartition: Record<string, string>):
     metaEdgesMap.set(mNode, new Map());
   }
 
-  // Sum edge weights between communities
+  // Sum edge weights between communities; a node's own self-loop stays inside its community.
+  // Internal edges are visited from both ends, like cross edges, so the halving below holds.
+  for (const [node, w] of graph.selfLoops.entries()) {
+    const comm = refinedPartition[node]!;
+    const commMap = metaEdgesMap.get(comm)!;
+    commMap.set(comm, (commMap.get(comm) || 0) + 2 * w);
+  }
   for (const [node, nodeNeighbors] of graph.neighbors.entries()) {
     const srcComm = refinedPartition[node];
     for (const [nbr, w] of nodeNeighbors.entries()) {
