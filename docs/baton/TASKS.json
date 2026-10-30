@@ -7281,20 +7281,52 @@
         "npx vitest run tests/legacy-languages.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T22:38:31.324Z",
+      "completedAt": "2026-10-30T22:42:25.927Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-languages.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-30T22:24:21.592Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:38:31.324Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:42:25.635Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T22:42:25.927Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-languages.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

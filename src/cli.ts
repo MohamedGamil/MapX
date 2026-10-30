@@ -21,7 +21,7 @@ import { calculateMetrics, calculateDSM } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
-import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
+import { describeLanguage, isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
@@ -1861,21 +1861,36 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .description('List all supported languages, their extensions, tier, and status')
     .action(() => {
       const langs = getBuiltinLanguages();
-      console.log('Supported languages:');
+      console.log('Supported languages (all grammars are bundled):');
       for (const [name, def] of Object.entries(langs)) {
-        const installed = isLanguageInstalled(name) ? 'Installed' : 'Not Installed';
-        console.log(`  - ${name} (${def.extensions.join(', ')} | tier: ${def.tier} | status: ${installed})`);
+        const status = isLanguageInstalled(name) ? 'bundled' : 'unavailable';
+        console.log(`  - ${name} (${def.extensions.join(', ')} | tier: ${def.tier} | status: ${status})`);
+      }
+    });
+
+  langCmd
+    .command('info <lang>')
+    .description('Show extensions, tier and grammar/query files of a language')
+    .action((lang: string) => {
+      try {
+        const info = describeLanguage(lang);
+        console.log(`${info.name}`);
+        console.log(`  Tier:       ${info.tier}`);
+        console.log(`  Extensions: ${info.extensions.join(', ')}`);
+        console.log(`  Grammar:    ${info.grammar ? `${info.grammar}${info.grammarPresent ? '' : ' (missing!)'}` : 'none (static parser)'}`);
+        if (info.queries.length) console.log(`  Queries:    ${info.queries.join(', ')}`);
+      } catch (err: any) {
+        console.error(err.message);
+        process.exit(1);
       }
     });
 
   langCmd
     .command('install <lang>')
-    .description('Install grammar and query files for an installable language')
+    .description('No-op: all language grammars are bundled')
     .action(async (lang: string) => {
       try {
-        clack.log.step(`Installing language '${lang}'...`);
-        await installLanguage(lang);
-        clack.log.success(`Successfully installed language '${lang}'.`);
+        clack.log.info(await installLanguage(lang));
       } catch (err: any) {
         clack.log.error(`Error installing language '${lang}': ${err.message}`);
         process.exit(1);
@@ -1884,12 +1899,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
   langCmd
     .command('uninstall <lang>')
-    .description('Uninstall grammar and query files for an installable language')
+    .description('No-op: bundled grammars cannot be removed (use --exclude)')
     .action(async (lang: string) => {
       try {
-        clack.log.step(`Uninstalling language '${lang}'...`);
-        await uninstallLanguage(lang);
-        clack.log.success(`Successfully uninstalled language '${lang}'.`);
+        clack.log.info(await uninstallLanguage(lang));
       } catch (err: any) {
         clack.log.error(`Error uninstalling language '${lang}': ${err.message}`);
         process.exit(1);

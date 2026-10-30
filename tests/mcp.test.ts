@@ -172,8 +172,9 @@ vi.mock('../src/core/impact-analyzer.js', () => ({
 
 vi.mock('../src/languages/installer.js', () => ({
   isLanguageInstalled: vi.fn().mockReturnValue(true),
-  installLanguage: vi.fn().mockResolvedValue(true),
-  uninstallLanguage: vi.fn().mockResolvedValue(true)
+  // D010: all grammars are bundled; install/uninstall return an explanatory message.
+  installLanguage: vi.fn().mockResolvedValue("'python' is bundled with MapX; nothing to install."),
+  uninstallLanguage: vi.fn().mockResolvedValue("'python' is bundled with MapX and cannot be uninstalled.")
 }));
 
 vi.mock('../src/languages/registry.js', () => ({
@@ -1209,12 +1210,12 @@ describe('MCP module', () => {
 
     it('installs a language', async () => {
       const res = await callTool('mapx_lang_install', { lang: 'python' });
-      expect(getText(res)).toContain('Successfully installed');
+      expect(getText(res)).toContain('nothing to install');
     });
 
     it('uninstalls a language', async () => {
       const res = await callTool('mapx_lang_uninstall', { lang: 'python' });
-      expect(getText(res)).toContain('Successfully uninstalled');
+      expect(getText(res)).toContain('cannot be uninstalled');
     });
 
     it('returns error when lang param is missing for install', async () => {

@@ -165,6 +165,7 @@ interface ParseJob {
   id: number;
   filePath: string;
   absolutePath: string;
+  language?: string;
 }
 
 interface ParseResult {
@@ -290,6 +291,11 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
       break;
     }
   }
+  // Extensionless scripts: the scanner detected the language from the shebang line.
+  if (!langKey && job.language && langDefs.has(job.language)) {
+    langKey = job.language;
+    langDef = langDefs.get(langKey);
+  }
   if (!langKey) return empty;
 
   if (langDef && langDef.tier === 'static') {
@@ -316,7 +322,7 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
   // Parse with the same language parser the main thread uses, so language post-processing
   // (PHP facades, dispatch/notify, Laravel roles, TSX defaults, …) is identical in both paths.
   try {
-    const parser = getParserForFile(job.filePath, workerData.userLanguages);
+    const parser = getParserForFile(job.filePath, workerData.userLanguages, job.language);
     const result = await parser.parse(job.filePath, source, { facadeMap: workerData.facadeMap, ignoredSymbols });
     return { id: job.id, ...result };
   } catch {

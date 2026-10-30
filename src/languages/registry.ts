@@ -101,7 +101,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   },
   python: {
     name: 'python',
-    extensions: ['.py'],
+    extensions: ['.py', '.pyw'],
     grammarWasm: 'wasm/tree-sitter-python.wasm',
     queries: {
       symbols: 'queries/python/symbols.scm',
@@ -195,7 +195,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   },
   ruby: {
     name: 'ruby',
-    extensions: ['.rb'],
+    extensions: ['.rb', '.rake', '.gemspec'],
     grammarWasm: 'wasm/tree-sitter-ruby.wasm',
     queries: {
       symbols: 'queries/ruby/symbols.scm',
@@ -228,7 +228,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   },
   cpp: {
     name: 'cpp',
-    extensions: ['.cpp', '.hpp', '.cc', '.cxx', '.hh'],
+    extensions: ['.cpp', '.hpp', '.cc', '.cxx', '.hh', '.h++', '.c++'],
     grammarWasm: 'wasm/tree-sitter-cpp.wasm',
     queries: {
       symbols: 'queries/cpp/symbols.scm',
@@ -317,7 +317,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   },
   lua: {
     name: 'lua',
-    extensions: ['.lua'],
+    extensions: ['.lua', '.luau'],
     grammarWasm: 'wasm/tree-sitter-lua.wasm',
     queries: {
       symbols: 'queries/lua/symbols.scm',
@@ -365,7 +365,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   },
   bash: {
     name: 'bash',
-    extensions: ['.sh', '.bash'],
+    extensions: ['.sh', '.bash', '.zsh'],
     grammarWasm: 'wasm/tree-sitter-bash.wasm',
     queries: {
       symbols: 'queries/bash/symbols.scm',
@@ -379,7 +379,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   },
   pascal: {
     name: 'pascal',
-    extensions: ['.pas', '.pp'],
+    extensions: ['.pas', '.pp', '.dpr', '.lpr'],
     grammarWasm: 'wasm/tree-sitter-pascal.wasm',
     queries: {
       symbols: 'queries/pascal/symbols.scm',
@@ -485,6 +485,31 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
 
 export function getBuiltinLanguages(): Record<string, LanguageDefinition> {
   return { ...BUILTIN_LANGUAGES };
+}
+
+/** Interpreter named by a `#!` line → language, for extensionless scripts. */
+const SHEBANG_LANGUAGES: [RegExp, string][] = [
+  [/\b(?:ba|z|k|da)?sh\b/, 'bash'],
+  [/\bpython[\d.]*\b/, 'python'],
+  [/\b(?:node|nodejs|deno|bun)\b/, 'javascript'],
+  [/\bruby\b/, 'ruby'],
+  [/\bphp\b/, 'php'],
+  [/\blua(?:jit)?\b/, 'lua'],
+  [/\belixir\b/, 'elixir'],
+];
+
+export function languageFromShebang(firstLine: string): LanguageDefinition | null {
+  if (!firstLine.startsWith('#!')) return null;
+  // `#!/usr/bin/env -S node --flag` → node; `#!/bin/bash -e` → bash
+  const words = firstLine.slice(2).trim().split(/\s+/);
+  const interpreter = (words[0]?.endsWith('/env') ? words.find((w, i) => i > 0 && !w.startsWith('-')) : words[0]) ?? '';
+  const base = interpreter.split('/').pop() ?? '';
+  for (const [re, name] of SHEBANG_LANGUAGES) if (re.test(base)) return BUILTIN_LANGUAGES[name] ?? null;
+  return null;
+}
+
+export function getLanguageByName(name: string, userLanguages: Record<string, LanguageDefinition> = {}): LanguageDefinition | null {
+  return ({ ...BUILTIN_LANGUAGES, ...userLanguages } as Record<string, LanguageDefinition>)[name] ?? null;
 }
 
 export function getLanguageForFile(

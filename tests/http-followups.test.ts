@@ -81,14 +81,24 @@ describe('graph http edges', () => {
 });
 
 describe('large bundles', () => {
-  it('extracts 6,000 calls from a 3 MB single-line file in under a second', () => {
+  it('extracts 6,000 calls from a 3 MB single-line file in linear time', () => {
     const call = "axios.get('/api/items/' + id);";
-    const body = `import axios from 'axios';` + Array.from({ length: 6000 }, (_, i) => `function f${i}(id){${call}var pad${i}='${'x'.repeat(440)}';}`).join('');
-    expect(body.length).toBeGreaterThan(3_000_000);
-    const start = performance.now();
-    const calls = extract({ 'src/big.js': body }, 'src/big.js');
-    expect(calls).toHaveLength(6000);
-    expect(performance.now() - start).toBeLessThan(1000);
+    const make = (n: number) => `import axios from 'axios';` + Array.from({ length: n }, (_, i) => `function f${i}(id){${call}var pad${i}='${'x'.repeat(440)}';}`).join('');
+    const time = (n: number) => {
+      const body = make(n);
+      const start = performance.now();
+      const calls = extract({ 'src/big.js': body }, 'src/big.js');
+      expect(calls).toHaveLength(n);
+      return { ms: performance.now() - start, size: body.length };
+    };
+    time(600); // warm-up (JIT, regex compilation)
+    const small = time(600);
+    const big = time(6000);
+    expect(big.size).toBeGreaterThan(3_000_000);
+    // 10x the input must cost far less than the ~100x a quadratic line lookup did; absolute
+    // ceiling is generous because the full suite runs files in parallel.
+    expect(big.ms / Math.max(small.ms, 1)).toBeLessThan(30);
+    expect(big.ms).toBeLessThan(5000);
   });
 
   it('skips built and vendored bundles', () => {

@@ -571,7 +571,7 @@ EXAMPLES:
       },
       {
         name: 'mapx_lang_install',
-        description: 'Install grammar and query files for a dynamically installable language.',
+        description: 'No-op kept for compatibility: all language grammars are bundled with MapX (reports that nothing needs installing).',
         inputSchema: {
           type: 'object',
           properties: {
@@ -582,7 +582,7 @@ EXAMPLES:
       },
       {
         name: 'mapx_lang_uninstall',
-        description: 'Uninstall grammar and query files for a dynamically installable language.',
+        description: 'No-op kept for compatibility: bundled grammars cannot be removed; use exclude patterns to skip files.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1988,8 +1988,7 @@ Callees: ${callees.length}`;
           return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }] };
         }
         try {
-          await installLanguage(lang);
-          return { content: [{ type: 'text', text: `Successfully installed language '${lang}'.` }] };
+          return { content: [{ type: 'text', text: await installLanguage(lang) }] };
         } catch (err: any) {
           return { content: [{ type: 'text', text: `Error installing language '${lang}': ${err.message}` }] };
         }
@@ -2001,8 +2000,7 @@ Callees: ${callees.length}`;
           return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }] };
         }
         try {
-          await uninstallLanguage(lang);
-          return { content: [{ type: 'text', text: `Successfully uninstalled language '${lang}'.` }] };
+          return { content: [{ type: 'text', text: await uninstallLanguage(lang) }] };
         } catch (err: any) {
           return { content: [{ type: 'text', text: `Error uninstalling language '${lang}': ${err.message}` }] };
         }

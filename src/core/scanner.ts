@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, stat, readdir, open } from 'node:fs/promises';
-import { existsSync, readFileSync, closeSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, closeSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, extname, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
@@ -14,7 +14,7 @@ import { RoleClassifier } from './role-classifier.js';
 import { ArchitectureAnalyzer } from './architecture-analyzer.js';
 import { calculateClusterMetrics } from './metrics.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
-import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
+import { getLanguageForFile, languageFromShebang, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import picomatch from 'picomatch';
@@ -48,6 +48,22 @@ interface FileInfo {
   language: string;
   sizeBytes: number;
   lines: number;
+}
+
+/** Language of an extensionless script from its `#!` line (reads at most 256 bytes). */
+function shebangLanguage(path: string) {
+  try {
+    const fd = openSync(path, 'r');
+    try {
+      const buf = Buffer.alloc(256);
+      const n = readSync(fd, buf, 0, 256, 0);
+      return languageFromShebang(buf.subarray(0, n).toString('utf-8').split('\n')[0] ?? '');
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
 }
 
 export interface DiscoveredFile extends FileInfo {
@@ -719,7 +735,8 @@ export class Scanner {
           const relPath = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
           if (!matcher(relPath)) continue;
 
-          const langDef = getLanguageForFile(fullPath, this.config.getResolvedUserLanguages());
+          const langDef = getLanguageForFile(fullPath, this.config.getResolvedUserLanguages())
+            ?? (entry.name.includes('.') ? null : shebangLanguage(fullPath));
           if (!langDef) continue;
 
           try {
@@ -920,7 +937,8 @@ export class Scanner {
             worker.postMessage({
               id: i,
               filePath: relPath,
-              absolutePath: fileInfo.absolutePath
+              absolutePath: fileInfo.absolutePath,
+              language: fileInfo.language
             });
           }).then(() => {
             nextJob();
@@ -986,7 +1004,7 @@ export class Scanner {
         }
 
         try {
-          const parser = getParserForFile(relPath, this.config.getResolvedUserLanguages());
+          const parser = getParserForFile(relPath, this.config.getResolvedUserLanguages(), fileInfo.language);
           results[i] = await parser.parse(relPath, sources[i]!, {
             facadeMap: this.config.settings.php?.facadeMap,
             ignoredSymbols,
