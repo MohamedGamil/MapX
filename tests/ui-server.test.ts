@@ -1,0 +1,52 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
+import { startUiServer } from '../src/ui-server.js';
+import { cleanup, init, mapx, workspace } from './helpers/e2e.js';
+
+// M0-39: dashboard server endpoints (/api/status, /api/graph, /api/explain, /api/tool-calls)
+// and token auth, against a really scanned workspace.
+describe('UI server endpoints', () => {
+  let root: string;
+  let server: Server;
+  let base: string;
+  beforeAll(async () => {
+    root = workspace({
+      'src/a.ts': "import { b } from './b';\nexport const a = () => b();\n",
+      'src/b.ts': 'export function b() { return 1; }\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    server = startUiServer({ port: 0, host: '127.0.0.1', dir: root, token: 'secret' }) as unknown as Server;
+    await new Promise<void>((r) => (server.listening ? r() : server.once('listening', () => r())));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }, 60000);
+  afterAll(async () => {
+    await new Promise((r) => server.close(r));
+    cleanup(root);
+  });
+  const get = (path: string, auth = true) => fetch(base + path, { headers: auth ? { Authorization: 'Bearer secret' } : {} });
+
+  it('rejects API calls without the token', async () => {
+    expect((await get('/api/status', false)).status).toBe(401);
+  });
+
+  it('serves status and graph data for the scanned workspace', async () => {
+    const status = await get('/api/status');
+    expect(status.status).toBe(200);
+    const graph = await get('/api/graph');
+    expect(graph.status).toBe(200);
+    const body = JSON.stringify(await graph.json());
+    expect(body).toContain('src/a.ts');
+    expect(body).toContain('src/b.ts');
+  });
+
+  it('serves explain signals and paged tool calls as JSON', async () => {
+    const explain = await get('/api/explain?file=src/a.ts');
+    expect(explain.status).toBe(200);
+    expect(await explain.json()).toHaveProperty('signals');
+    const calls = await get('/api/tool-calls?limit=5');
+    expect(calls.status).toBe(200);
+    expect(await calls.json()).toMatchObject({ total: expect.any(Number) });
+  });
+});

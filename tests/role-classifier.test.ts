@@ -644,3 +644,27 @@ describe('RoleClassifier — imports signals', () => {
     expect(impSig).toBeUndefined();
   });
 });
+
+// M0-39: the hub/orchestrator topology signal (CHANGELOG 0.3.4), on a real store.
+import { Store as RealStore } from '../src/core/store.js';
+import { RoleClassifier as RealClassifier } from '../src/core/role-classifier.js';
+describe('hub/orchestrator signal', () => {
+  it('marks a file with fan-in >= 5 and fan-out >= 10 as a core orchestrator', () => {
+    const store = new RealStore(':memory:');
+    const edge = (source: string, target: string) =>
+      store.insertEdge({ sourceFile: source, targetFile: target, sourceSymbol: null, targetSymbol: null, edgeType: 'import', repo: 'r', weight: 1 });
+    for (let i = 0; i < 5; i++) edge(`src/caller${i}.ts`, 'src/hub.ts');
+    for (let i = 0; i < 10; i++) edge('src/hub.ts', `src/dep${i}.ts`);
+    for (let i = 0; i < 4; i++) edge(`src/caller${i}.ts`, 'src/almost.ts');
+    for (let i = 0; i < 10; i++) edge('src/almost.ts', `src/dep${i}.ts`);
+    const classifier = new RealClassifier(store, { settings: {} } as any);
+    const profile = { archetype: 'library', hasBackend: false, hasFrontend: false } as any;
+    const hub = classifier.classify('src/hub.ts', 'r', profile).signals.find((s: any) => s.source === 'topology');
+    expect(hub).toMatchObject({ role: 'core' });
+    expect(hub!.reason).toContain('orchestrator');
+    const almost = classifier.classify('src/almost.ts', 'r', profile).signals.find((s: any) => s.source === 'topology');
+    expect(almost?.reason ?? '').not.toContain('orchestrator');
+    store.close();
+  });
+});
+
