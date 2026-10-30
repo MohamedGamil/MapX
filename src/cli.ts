@@ -19,6 +19,7 @@ import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateMetrics, calculateDSM } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
+import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { describeLanguage, isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
@@ -1082,7 +1083,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             caller: callerName,
             callee: calleeName,
             file: edge.target_file,
-            line: meta.startLine || 1,
+            // The callee's own declaration, not the call site in the caller.
+            line: store.getSymbolLineInFile(edge.target_file, calleeName) ?? meta.startLine ?? 1,
             depth: depth + 1
           });
 
@@ -3094,48 +3096,18 @@ export async function loadContext(dir: string): Promise<{
 }
 
 export function getStaleFilesCount(store: Store, dir: string): number {
-  try {
-    const files = store.getAllFiles();
-    let changedCount = 0;
-    for (const file of files) {
-      const absPath = resolve(dir, file.path as string);
-      if (existsSync(absPath)) {
-        const stats = statSync(absPath);
-        const dbTime = new Date(file.last_scanned as string).getTime();
-        if (stats.mtimeMs > dbTime) {
-          changedCount++;
-        }
-      } else {
-        changedCount++;
-      }
-    }
-    return changedCount;
-  } catch {
-    return 0;
-  }
+  return staleCount(findStaleFiles(store, dir));
 }
 
 export function checkAndPrintStaleness(store: Store, dir: string): void {
-  const staleCount = getStaleFilesCount(store, dir);
-  if (staleCount > 0) {
-    // Show up to 5 changed file names
-    const files = store.getAllFiles();
-    const changed: string[] = [];
-    for (const file of files) {
-      if (changed.length >= 5) break;
-      const absPath = resolve(dir, file.path as string);
-      if (existsSync(absPath)) {
-        const stats = statSync(absPath);
-        const dbTime = new Date(file.last_scanned as string).getTime();
-        if (stats.mtimeMs > dbTime) changed.push(file.path as string);
-      } else {
-        changed.push(`${file.path} (deleted)`);
-      }
-    }
+  const report = findStaleFiles(store, dir);
+  const count = staleCount(report);
+  if (count > 0) {
+    const changed = staleNames(report, 5);
     const fileList = changed.length > 0
-      ? `\nChanged: ${changed.join(', ')}${staleCount > changed.length ? ` (and ${staleCount - changed.length} more)` : ''}`
+      ? `\nChanged: ${changed.join(', ')}${count > changed.length ? ` (and ${count - changed.length} more)` : ''}`
       : '';
-    console.warn(`⚠️  Warning: Graph index may be stale. ${staleCount} file(s) have changed on disk since the last scan. Run 'mapx update' to sync.${fileList}\n`);
+    console.warn(`⚠️  Warning: Graph index may be stale. ${count} file(s) have changed on disk since the last scan. Run 'mapx update' to sync.${fileList}\n`);
   }
 }
 

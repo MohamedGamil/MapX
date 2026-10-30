@@ -1058,6 +1058,15 @@ export class Store {
     return results;
   }
 
+  /** Start line of `name` (or `Scope::name`) declared in `file`, or null. */
+  getSymbolLineInFile(file: string, name: string): number | null {
+    const short = name.split(/::|\./).pop() ?? name;
+    const row = this.backend
+      .prepare('SELECT start_line FROM symbols WHERE file_path = ? AND name = ? ORDER BY start_line LIMIT 1')
+      .get(file, short) as { start_line: number } | undefined;
+    return row?.start_line ?? null;
+  }
+
   getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
     let symbols: Record<string, any>[] = [];
     let scope: string | null = null;

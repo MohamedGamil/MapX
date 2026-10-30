@@ -1,6 +1,7 @@
 import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { resolve, basename, relative, join } from 'path';
 import * as clack from '@clack/prompts';
+import { tmpdir } from 'node:os';
 import { Scanner } from '../src/core/scanner.js';
 
 // Initialize global variables for mocks before imports
@@ -245,7 +246,8 @@ describe('CLI Additional Coverage Boost', () => {
       ]
     } as unknown as Store;
 
-    checkAndPrintStaleness(mockStore, '.');
+    // A non-git directory, so the repo's own untracked files never leak into the count.
+    checkAndPrintStaleness(mockStore, tmpdir());
 
     expect(warnSpy).toHaveBeenCalled();
     const calls = warnSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
@@ -267,7 +269,8 @@ describe('CLI Additional Coverage Boost', () => {
       ]
     } as unknown as Store;
 
-    checkAndPrintStaleness(mockStore, '.');
+    // A non-git directory, so the repo's own untracked files never leak into the count.
+    checkAndPrintStaleness(mockStore, tmpdir());
 
     expect(warnSpy).toHaveBeenCalled();
     const calls = warnSpy.mock.calls.map((c: unknown[]) => c[0]).join('');

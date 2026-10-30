@@ -22,6 +22,7 @@ import { SvgExporter } from './exporters/svg-exporter.js';
 import { calculateMetrics, calculateClusterMetrics, calculateDSM } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
+import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
@@ -1195,7 +1196,8 @@ Recommendation:
               caller: callerName,
               callee: calleeName,
               file: edge.target_file,
-              line: meta.startLine || 1,
+              // The callee's own declaration, not the call site in the caller.
+              line: ctx.store.getSymbolLineInFile(edge.target_file, calleeName) ?? meta.startLine ?? 1,
               depth: depth + 1
             });
 
@@ -2591,25 +2593,7 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
 }
 
 export function getStaleFilesCount(store: Store, dir: string): number {
-  try {
-    const files = store.getAllFiles();
-    let changedCount = 0;
-    for (const file of files) {
-      const absPath = resolve(dir, file.path as string);
-      if (existsSync(absPath)) {
-        const stats = statSync(absPath);
-        const dbTime = new Date(file.last_scanned as string).getTime();
-        if (stats.mtimeMs > dbTime) {
-          changedCount++;
-        }
-      } else {
-        changedCount++;
-      }
-    }
-    return changedCount;
-  } catch {
-    return 0;
-  }
+  return staleCount(findStaleFiles(store, dir));
 }
 
 /**
@@ -2617,26 +2601,7 @@ export function getStaleFilesCount(store: Store, dir: string): number {
  * Used for F44 enhanced staleness warnings.
  */
 export function getStaleFileNames(store: Store, dir: string, maxFiles: number = 5): string[] {
-  try {
-    const files = store.getAllFiles();
-    const changed: string[] = [];
-    for (const file of files) {
-      if (changed.length >= maxFiles) break;
-      const absPath = resolve(dir, file.path as string);
-      if (existsSync(absPath)) {
-        const stats = statSync(absPath);
-        const dbTime = new Date(file.last_scanned as string).getTime();
-        if (stats.mtimeMs > dbTime) {
-          changed.push(file.path as string);
-        }
-      } else {
-        changed.push(`${file.path} (deleted)`);
-      }
-    }
-    return changed;
-  } catch {
-    return [];
-  }
+  return staleNames(findStaleFiles(store, dir), maxFiles);
 }
 
 export function getMcpStalenessWarning(store: Store, dir: string): string {

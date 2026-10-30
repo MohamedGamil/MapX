@@ -1,5 +1,6 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { resolve } from 'path';
+import { tmpdir } from 'node:os';
 
 // Set up mocks before importing src/mcp.ts
 let requestHandler: any;
@@ -322,14 +323,19 @@ describe('MCP Server Coverage Boost', () => {
       ]
     } as unknown as Store;
 
-    const staleCount = getStaleFilesCount(mockStore, '.');
+    // A non-git directory, so the repo's own untracked files never leak into the count.
+    const realFs = require('node:fs') as typeof import('node:fs');
+    const dir = realFs.mkdtempSync(resolve(tmpdir(), 'mapx-stale-'));
+    realFs.mkdirSync(resolve(dir, 'tests'));
+    realFs.writeFileSync(resolve(dir, 'tests/mcp-coverage.test.ts'), 'changed since 2000');
+    const staleCount = getStaleFilesCount(mockStore, dir);
     expect(staleCount).toBe(2);
 
-    const staleNames = getStaleFileNames(mockStore, '.', 1);
+    const staleNames = getStaleFileNames(mockStore, dir, 1);
     expect(staleNames).toHaveLength(1);
     expect(staleNames[0]).toBe('tests/mcp-coverage.test.ts');
 
-    const warning = getMcpStalenessWarning(mockStore, '.');
+    const warning = getMcpStalenessWarning(mockStore, dir);
     expect(warning).toContain('Index is stale');
     expect(warning).toContain('tests/mcp-coverage.test.ts');
   });

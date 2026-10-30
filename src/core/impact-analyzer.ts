@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { Store } from './store.js';
 
 export interface ImpactItem {
@@ -107,31 +105,10 @@ export class ImpactAnalyzer {
           /\/tests\//i.test(edge.source_file) ||
           /__tests__/.test(edge.source_file);
 
-        if (isTestFile) {
-          risk = 'LOW';
-        } else if (risk !== 'LOW') {
-          // Check if call is within a try/catch block
-          let hasTryCatch = false;
-          try {
-            let callerStartLine = 1;
-            if (edge.source_symbol) {
-              const symInfo = this.store.getSymbolByName(edge.source_symbol);
-              if (symInfo) {
-                callerStartLine = symInfo.start_line as number;
-              }
-            }
-            const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
-            const callLine = meta.startLine || 1;
-            const absolutePath = resolve(dir, edge.source_file);
-            const content = readFileSync(absolutePath, 'utf8');
-            const isPython = edge.source_file.endsWith('.py');
-            hasTryCatch = checkTryCatch(content, callLine, callerStartLine, isPython);
-          } catch {}
-
-          if (hasTryCatch) {
-            risk = 'LOW';
-          }
-        }
+        // Risk depends on depth and test files only (F19, D010). A try/catch around the call
+        // used to downgrade HIGH to LOW, but a caught exception still lets behaviour changes
+        // propagate, and the line-based check also matched `try` in comments.
+        if (isTestFile) risk = 'LOW';
 
         items.push({
           symbol: callerName,
@@ -144,6 +121,19 @@ export class ImpactAnalyzer {
         if (edge.source_symbol) {
           queue.push({ symName: edge.source_symbol, depth: curDepth });
         }
+      }
+    }
+
+    // Files that only import the symbol's file (no call edge) are affected too, at LOW risk.
+    const target = this.store.getSymbolByName(symbolName);
+    if (target?.file_path) {
+      const seenFiles = new Set(items.map(x => x.file));
+      const importers = this.store.raw
+        .prepare("SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND edge_type IN ('import', 'require') AND source_file != ?")
+        .all(target.file_path, target.file_path) as { source_file: string }[];
+      for (const { source_file } of importers) {
+        if (seenFiles.has(source_file)) continue;
+        items.push({ symbol: '<import>', file: source_file, depth: 1, edgeType: 'import', risk: 'LOW' });
       }
     }
 

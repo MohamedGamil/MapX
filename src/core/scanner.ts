@@ -1102,7 +1102,7 @@ export class Scanner {
 
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
-      const isJsOrTs = /\.(js|ts|jsx|tsx|vue)$/.test(sourcePath);
+      const isJsOrTs = /\.([cm]?[jt]sx?|vue|svelte)$/.test(sourcePath);
       if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       let targetFile: string | null = null;
 

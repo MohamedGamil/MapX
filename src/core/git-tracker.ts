@@ -97,6 +97,20 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
     // no staged changes
   }
 
+  // New files git does not track yet are changes too (git diff never lists them).
+  try {
+    const untracked = execSync('git ls-files --others --exclude-standard', {
+      cwd: repoRoot,
+      encoding: 'utf-8', stdio: QUIET,
+      maxBuffer: 50 * 1024 * 1024,
+    });
+    const listed = new Set(changes.map(c => c.path));
+    for (const path of String(untracked ?? '').split('\n').filter(Boolean))
+      if (!listed.has(path)) changes.push({ path, status: 'added' });
+  } catch {
+    // not a git repo
+  }
+
   return changes;
 }
 
