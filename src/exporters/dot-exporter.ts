@@ -152,18 +152,20 @@ export class DotExporter {
 
     lines.push('');
 
+    // `dashed` is reserved for inferred edges (F01); verified edge types are told apart by
+    // weight and colour instead (M0-01-R1).
     const edgeStyles: Record<string, string> = {
       import: 'solid',
       require: 'solid',
       extends: 'bold',
-      implements: 'dashed',
+      implements: 'solid',
       call: 'dotted',
       instantiation: 'dotted',
       relation: 'bold',
       route: 'solid',
-      binding: 'dashed',
+      binding: 'solid',
       middleware: 'dotted',
-      dispatch: 'dashed',
+      dispatch: 'bold',
       notify: 'dotted',
       render: 'dotted',
     };

@@ -2,7 +2,7 @@ import type { LanguageParser } from './parser-interface.js';
 import type { ParseResult, ExtractedSymbol, ExtractedReference, SymbolKind } from '../types.js';
 import type { LanguageDefinition } from '../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from './wasm-parser.js';
-import { COMMON_FRAMEWORK_METHODS } from './common-methods.js';
+import { COMMON_FRAMEWORK_METHODS, JS_BUILTIN_METHODS } from './common-methods.js';
 
 export class GenericWasmParser implements LanguageParser {
   readonly languageName: string;
@@ -158,6 +158,12 @@ export class GenericWasmParser implements LanguageParser {
 
             let verifiability: 'verified' | 'inferred' = 'verified';
             if (referenceType === 'call' && COMMON_FRAMEWORK_METHODS.has(targetName)) {
+              verifiability = 'inferred';
+            }
+            // obj.method() on an untyped receiver (not `this`): name-only, so inferred (F01).
+            const member = capture.node.parent;
+            if (referenceType === 'call' && member?.type === 'member_expression' && member.childForFieldName?.('object')?.type === 'identifier') {
+              if (JS_BUILTIN_METHODS.has(targetName)) continue;
               verifiability = 'inferred';
             }
 

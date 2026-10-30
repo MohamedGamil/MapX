@@ -30,6 +30,13 @@
     object: (this)
     property: (property_identifier) @ref.target_call)) @ref.type_call
 
+; Calls on an untyped receiver: obj.method(). Resolved by name only, so the parser labels them
+; inferred (F01, M0-01-R1); built-in method names are skipped.
+(call_expression
+  function: (member_expression
+    object: (identifier)
+    property: (property_identifier) @ref.target_call)) @ref.type_call
+
 ; Constructor parameter type annotations (for DI)
 (method_definition
   name: (property_identifier) @method_name (#eq? @method_name "constructor")
