@@ -66,6 +66,8 @@ export class GenericWasmParser implements LanguageParser {
               if (isDefaultOrAnonymous) {
                 const baseName = filePath.split('/').pop() || '';
                 name = baseName.replace(/\.[a-zA-Z0-9]+$/, '') || 'default';
+                // Members of `export default class { … }` take this derived name as their scope.
+                nameByNodeId.set(capture.node.id, name);
               } else {
                 name = capture.node.text;
               }
