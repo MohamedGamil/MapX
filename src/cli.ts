@@ -12,6 +12,7 @@ import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { AgentGenerator } from './agents/generator.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
+import { codeWorkspaceFiles, crossRepoPairs, summarizeRepos, table, timeAgo } from './core/workspace-summary.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -368,6 +369,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--no-suggestions', 'Skip interactive framework suggestions')
     .option('--no-mcp-configs', 'Skip auto-generating MCP config files for detected agent tools')
     .option('--no-discover', 'Skip monorepo / nested-repo discovery step')
+    .option('--no-workspaces', 'Skip the submodule and VS Code workspace registration step')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const isLaravel = detectLaravel(dir);
@@ -426,6 +428,40 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const entry = content.length > 0 && !content.endsWith('\n') ? '\n.mapx/\n' : '.mapx/\n';
           writeFileSync(gitignorePath, content + entry);
           clack.log.success(`Added .mapx/ to .gitignore`);
+        }
+      }
+
+      // Submodules and VS Code workspace folders (F18; skip with --no-workspaces). Registering
+      // needs a TTY prompt; otherwise init only reports what it found (M0-10-R1).
+      if (opts.workspaces !== false) {
+        const registered = new Set(config.repos.map(r => resolve(dir, r.path)));
+        const groups: { title: string; question: string; repos: { name: string; path: string }[] }[] = [];
+        const submodules = WorkspaceManager.discoverSubmodules(dir);
+        if (submodules.length > 0) {
+          console.log(`\nDetected .gitmodules with ${submodules.length} submodule(s):`);
+          for (const s of submodules) console.log(`  ${s.name.padEnd(20)} (${s.path}) ${s.isInitialized ? '✓ initialised' : '✗ not initialised'}`);
+          groups.push({ title: 'submodule', question: 'Register initialised submodules?', repos: submodules.filter(s => s.isInitialized && !registered.has(resolve(dir, s.path))) });
+        }
+        for (const file of codeWorkspaceFiles(dir)) {
+          const folders = WorkspaceManager.discoverVSCodeWorkspace(file, dir).filter(f => !registered.has(resolve(dir, f.path)));
+          if (!folders.length) continue;
+          console.log(`\nDetected VS Code workspace file: ${basename(file)}`);
+          console.log(`  Additional repos: ${folders.map(f => `${f.name} (${f.path})`).join(', ')}`);
+          groups.push({ title: 'workspace repo', question: 'Register workspace repos?', repos: folders });
+        }
+        for (const group of groups.filter(g => g.repos.length)) {
+          if (!process.stdin.isTTY) {
+            console.log(`Run \`mapx workspaces sync\` to register ${group.repos.length} ${group.title}(s).`);
+            continue;
+          }
+          const ok = await clack.confirm({ message: group.question, initialValue: true });
+          if (clack.isCancel(ok) || !ok) continue;
+          for (const r of group.repos) {
+            config.addRepo(r.name, r.path);
+            registered.add(resolve(dir, r.path));
+          }
+          await config.save();
+          clack.log.success(`Registered ${group.repos.length} ${group.title}(s). Run \`mapx scan --all\` to index all repos.`);
         }
       }
 
@@ -676,9 +712,36 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .argument('[path]', 'Target directory')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
+    .option('--all', 'Per-repository status table for every registered repository')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
+
+      if (opts.all) {
+        // F18 per-repo table; changed files are attributed through each file's repo (M0-10-R1).
+        const stale = findStaleFiles(store, dir);
+        const repoOf = new Map(store.getAllFiles().map(f => [f.path as string, f.repo as string]));
+        const changed = new Map<string, number>();
+        for (const f of [...stale.changed, ...stale.deleted]) {
+          const repo = repoOf.get(f) ?? config.repo.name;
+          changed.set(repo, (changed.get(repo) ?? 0) + 1);
+        }
+        changed.set(config.repo.name, (changed.get(config.repo.name) ?? 0) + stale.added.length);
+        const summaries = summarizeRepos(dir, config.repos, config.repo.name, store);
+        const n = (v: number) => v.toLocaleString('en-US');
+        const rows = summaries.map(r => {
+          const c = changed.get(r.name) ?? 0;
+          return [r.name, n(r.files), n(r.symbols), n(r.edges), r.head ?? '-', timeAgo(r.lastScanned), c ? `${c} file${c === 1 ? '' : 's'}` : 'clean'];
+        });
+        console.log('');
+        for (const line of table(['Repo', 'Files', 'Symbols', 'Edges', 'HEAD', 'Last scan', 'Changed'], rows)) console.log(line);
+        const sum = (k: 'files' | 'symbols' | 'edges') => summaries.reduce((a, r) => a + r[k], 0);
+        console.log(`\nTotal: ${n(sum('files'))} files, ${n(sum('symbols'))} symbols, ${n(sum('edges'))} edges`);
+        const pairs = crossRepoPairs(store);
+        const total = pairs.reduce((a, p) => a + p.count, 0);
+        console.log(`Cross-repo edges: ${n(total)}${pairs.length ? ` (${pairs.map(p => `${p.from} → ${p.to}: ${n(p.count)}`).join(', ')})` : ''}`);
+        return;
+      }
 
       const lastScan    = store.getMeta('last_scan_time:' + config.repo.name) || store.getMeta('last_scan_time');
       const lastCommit  = store.getMeta('last_scan_commit:' + config.repo.name) || store.getMeta('last_scan_commit');
@@ -1305,6 +1368,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .command('deps <file>')
     .description('Show dependencies for a file')
     .option('-d, --dir <path>', 'Target directory')
+    .option('--cross-repo', 'Only dependencies that cross into or come from another registered repository')
     .action(async (file: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store, graph } = await loadContext(dir);
@@ -1321,6 +1385,26 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       for (const filePath of resolved) {
         if (resolved.length > 1) console.log(`\n── ${filePath} ──`);
+
+        if (opts.crossRepo) {
+          // F18: edges whose two ends live in different registered repos (M0-10-R1).
+          const out = store.raw.prepare(
+            'SELECT DISTINCT target_file, edge_type, repo, target_repo FROM edges WHERE source_file = ? AND target_repo IS NOT NULL AND target_repo != repo ORDER BY target_file'
+          ).all(filePath) as { target_file: string; edge_type: string; repo: string; target_repo: string }[];
+          const inc = store.raw.prepare(
+            'SELECT DISTINCT source_file, edge_type, repo, target_repo FROM edges WHERE target_file = ? AND target_repo IS NOT NULL AND target_repo != repo ORDER BY source_file'
+          ).all(filePath) as { source_file: string; edge_type: string; repo: string; target_repo: string }[];
+          if (!out.length && !inc.length) console.log('No cross-repo dependencies found');
+          if (out.length) {
+            console.log('Cross-repo dependencies:');
+            for (const e of out) console.log(`  → [${e.target_repo}] ${e.target_file} (${e.edge_type})`);
+          }
+          if (inc.length) {
+            console.log(`${out.length ? '\n' : ''}Cross-repo dependents:`);
+            for (const e of inc) console.log(`  ← [${e.repo}] ${e.source_file} (${e.edge_type})`);
+          }
+          continue;
+        }
 
         const deps = graph.getDependencies(filePath);
         const rdeps = graph.getReverseDependencies(filePath);
@@ -1739,6 +1823,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--format <format>', 'Output format: llm, json, dot, svg, toon', 'llm')
     .option('--tokens <budget>', 'Token budget for LLM export', '8192')
     .option('--repo <name>', 'Filter by repo name')
+    .option('--all', 'All registered repositories; the LLM format gets one section per repo')
     .option('-o, --output <file>', 'Write output to file instead of stdout')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
@@ -1820,6 +1905,29 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         case 'llm':
         default: {
           const exporter = new LLMExporter(store, graph);
+          if (opts.all && !opts.repo) {
+            // F18 combined export: repo list, cross-repo dependencies, then one section per repo
+            // sharing the token budget (M0-10-R1).
+            const summaries = summarizeRepos(dir, config.repos, config.repo.name, store);
+            const pairs = crossRepoPairs(store);
+            const kept = new Set(filteredFiles);
+            const parts = [
+              `# Workspace: ${config.repo.name}`,
+              '',
+              `## Repos (${summaries.length})`,
+              ...summaries.map(r => `- ${r.name} (${r.type}) — ${r.files} files, ${r.symbols} symbols`),
+              '',
+              `## Cross-repo dependencies (${pairs.reduce((a, p) => a + p.count, 0)} edges)`,
+              ...(pairs.length ? pairs.map(p => `${p.from} → ${p.to}: ${p.count} ${p.types.join('/')}`) : ['none']),
+            ];
+            const budget = Math.max(512, Math.floor(tokenBudget / Math.max(1, summaries.length)));
+            for (const r of summaries) {
+              const files = store.getAllFiles(r.name).map(f => f.path as string).filter(f => kept.has(f));
+              parts.push('', `## ${r.name}`, '', exporter.export({ format: 'llm', tokenBudget: budget, repo: r.name, files }));
+            }
+            output = parts.join('\n');
+            break;
+          }
           output = exporter.export({
             format: 'llm',
             tokenBudget,
@@ -2712,24 +2820,41 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
     });
 
-  const workspacesCmd = program.command('workspaces').description('Manage multi-repository workspace contexts');
+  // Registered repos as the F18 table (Name, Path, Type, Files, Last scanned, HEAD), with
+  // uninitialised submodules listed after them (M0-10-R1).
+  const printWorkspacesTable = (dir: string, config: Config, store: Store) => {
+    const summaries = summarizeRepos(dir, config.repos, config.repo.name, store);
+    const registered = new Set(config.repos.map(r => resolve(dir, r.path)));
+    const uninitialised = WorkspaceManager.discoverSubmodules(dir).filter(s => !s.isInitialized && !registered.has(resolve(dir, s.path)));
+    const rows = summaries.map(r => [r.name, r.path, r.type, String(r.files), timeAgo(r.lastScanned), r.head ?? '-']);
+    for (const s of uninitialised) rows.push([s.name, s.path, 'submodule', '✗ not initialised', '', '']);
+    console.log(`\nWorkspace: ${dir}\n`);
+    for (const line of table(['Name', 'Path', 'Type', 'Files', 'Last scanned', 'HEAD'], rows)) console.log(line);
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    console.log(`\n${plural(summaries.length, 'registered repo')}${uninitialised.length ? `, ${plural(uninitialised.length, 'uninitialised submodule')}` : ''}.`);
+    for (const s of uninitialised) console.log(`Run \`git submodule update --init ${s.path}\` to initialise it.`);
+  };
+
+  const workspacesCmd = program
+    .command('workspaces')
+    .description('Manage multi-repository workspace contexts (without a subcommand: list registered repos)')
+    .action(async () => {
+      const dir = resolveDir({}, program.opts());
+      const { config, store } = await loadContext(dir);
+      printWorkspacesTable(dir, config, store);
+    });
 
   workspacesCmd
     .command('list')
     .alias('show')
     .description('List registered repositories and other discovered peer/submodule directories')
-    .action(async () => {
+    .option('--include-peers', 'Also list sibling git repositories of the workspace root')
+    .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir({}, program.opts());
-      const { config } = await loadContext(dir);
+      const { config, store } = await loadContext(dir);
 
-      console.log('\nRegistered repositories:');
-      const registeredPaths = new Set<string>();
-      for (const r of config.repos) {
-        const absPath = resolve(dir, r.path);
-        registeredPaths.add(absPath);
-        const fwStr = r.framework ? ` [${r.framework}]` : '';
-        console.log(`  - ${r.name.padEnd(15)} -> ${r.path} (active)${fwStr}`);
-      }
+      printWorkspacesTable(dir, config, store);
+      const registeredPaths = new Set<string>(config.repos.map(r => resolve(dir, r.path)));
 
       // Discover uninitialized submodules
       const submodules = WorkspaceManager.discoverSubmodules(dir);
@@ -2742,8 +2867,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
       }
 
-      // Discover peer repos
-      const peers = WorkspaceManager.discoverPeerRepos(dir);
+      // Peer repos are opt-in: sibling directories are often unrelated projects (F18)
+      const peers = opts.includePeers ? WorkspaceManager.discoverPeerRepos(dir) : [];
       const uninitPeers = peers.filter(p => !registeredPaths.has(resolve(dir, p.path)));
       if (uninitPeers.length > 0) {
         console.log('\nDiscovered peer repositories:');
@@ -2753,11 +2878,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       // Discover VS Code workspace files
-      const wsFiles = readdirSync(dir).filter(f => f.endsWith('.code-workspace'));
+      const wsFiles = codeWorkspaceFiles(dir);
       if (wsFiles.length > 0) {
         console.log('\nDiscovered VS Code Workspace folders:');
         for (const f of wsFiles) {
-          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(join(dir, f), dir);
+          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
           const uninitWs = wsFolderRepos.filter(p => !registeredPaths.has(resolve(dir, p.path)));
           for (const p of uninitWs) {
             console.log(`  - ${p.name.padEnd(15)} -> ${p.path} (available)`);
@@ -2864,7 +2989,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   workspacesCmd
     .command('discover')
     .description('Discover unregistered submodules, peer repos, and VS Code workspace folders (read-only)')
-    .action(async () => {
+    .option('--include-peers', 'Also list sibling git repositories of the workspace root')
+    .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir({}, program.opts());
       const { config } = await loadContext(dir);
 
@@ -2887,22 +3013,24 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         found += uninitSubs.length;
       }
 
-      // Peer repos
+      // Peer repos are opt-in (F18): without the flag only say that some exist
       const peers = WorkspaceManager.discoverPeerRepos(dir);
       const uninitPeers = peers.filter(p => !registeredPaths.has(resolve(dir, p.path)));
-      if (uninitPeers.length > 0) {
+      if (uninitPeers.length > 0 && opts.includePeers) {
         console.log('\nPeer repositories:');
         for (const p of uninitPeers) {
           console.log(`  - ${p.name.padEnd(20)} -> ${p.path} (available)`);
         }
         found += uninitPeers.length;
+      } else if (uninitPeers.length > 0) {
+        console.log(`\nPeer repositories: ${uninitPeers.length} sibling repo${uninitPeers.length === 1 ? '' : 's'} (use --include-peers to list them)`);
       }
 
       // VS Code workspace folders
-      const wsFiles = readdirSync(dir).filter(f => f.endsWith('.code-workspace'));
+      const wsFiles = codeWorkspaceFiles(dir);
       const vsEntries: Array<{ name: string; path: string }> = [];
       for (const f of wsFiles) {
-        const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(join(dir, f), dir);
+        const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
         for (const p of wsFolderRepos) {
           if (!registeredPaths.has(resolve(dir, p.path))) {
             vsEntries.push({ name: p.name, path: p.path });
@@ -2949,7 +3077,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   workspacesCmd
     .command('sync')
     .description('Sync all discovered submodules, peer repos, and VS Code workspace folders')
-    .action(async () => {
+    .option('--include-peers', 'Also register sibling git repositories of the workspace root')
+    .action(async (opts: Record<string, unknown>) => {
       const dir = resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
 
@@ -2972,8 +3101,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
       }
 
-      // 2. Peer repos
-      const peers = WorkspaceManager.discoverPeerRepos(dir);
+      // 2. Peer repos (opt-in)
+      const peers = opts.includePeers ? WorkspaceManager.discoverPeerRepos(dir) : [];
       for (const p of peers) {
         const abs = resolve(dir, p.path);
         if (!registeredPaths.has(abs)) {
@@ -2983,9 +3112,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       // 3. VS Code Workspaces
-      const wsFiles = readdirSync(dir).filter(f => f.endsWith('.code-workspace'));
-      for (const f of wsFiles) {
-        const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(join(dir, f), dir);
+      for (const f of codeWorkspaceFiles(dir)) {
+        const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
         for (const p of wsFolderRepos) {
           const abs = resolve(dir, p.path);
           if (!registeredPaths.has(abs)) {

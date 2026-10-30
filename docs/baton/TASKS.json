@@ -8664,20 +8664,52 @@
         "npx vitest run tests/legacy-workspaces.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T23:30:02.257Z",
+      "completedAt": "2026-10-30T23:38:00.546Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-10-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-workspaces.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-10-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-30T22:24:24.856Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-30T23:30:02.257Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T23:38:00.271Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T23:38:00.546Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-workspaces.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-10-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

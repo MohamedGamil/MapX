@@ -458,11 +458,12 @@ Intelligent, token-budgeted workspace context builder for LLM prompts.
 
 #### `mapx_workspaces`
 Workspace introspection with two actions:
-- **`list`** — Returns all registered repos with stats (fileCount, symbolCount, edgeCount, crossRepoEdgeCount)
-- **`discover`** — Discovers unregistered submodules, peer repos, and VS Code workspace folders
+- **`list`** — Returns all registered repos with stats: `type` (`primary`, `submodule`, `vscode-workspace`, `peer`), `fileCount`, `symbolCount`, `edgeCount`, `crossRepoEdgeCount`, `lastScanned` and `headCommit`. Also returns a top-level `crossRepoEdgeCount`, the per-pair `crossRepoEdges`, and the unregistered discoveries.
+- **`discover`** — Discovers unregistered submodules, VS Code workspace folders, nested repos and monorepo packages; peer repos only with `includePeers`
 
 Parameters:
 - `action` (string, required): `list` or `discover`
+- `includePeers` (boolean, optional, default false): also discover sibling git repositories
 - `dir` (string, optional): Target project directory
 
 ### Language Management

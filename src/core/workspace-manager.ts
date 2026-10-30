@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve, join, dirname, basename, relative } from 'node:path';
 import { discoverSubmodules } from './git-tracker.js';
+import { stripJsoncSyntax } from '../parsers/static-file-parser.js';
 import type { SubmoduleInfo, MonorepoPackageInfo } from '../types.js';
 
 /** Directories that are never git repository roots and should be skipped during deep scan. */
@@ -156,11 +157,8 @@ export class WorkspaceManager {
     const rushPath = join(absRoot, 'rush.json');
     if (globs.length === 0 && existsSync(rushPath)) {
       try {
-        // Rush uses JSONC — strip // comments and /* */ blocks before parsing
-        const raw = readFileSync(rushPath, 'utf-8')
-          .replace(/\/\*[\s\S]*?\*\//g, '')
-          .replace(/\/\/.*/g, '');
-        const rush = JSON.parse(raw);
+        // Rush uses JSONC (a regex strip would also cut `//` inside strings such as URLs)
+        const rush = JSON.parse(stripJsoncSyntax(readFileSync(rushPath, 'utf-8')));
         if (Array.isArray(rush.projects)) {
           for (const proj of rush.projects) {
             if (typeof proj.projectFolder === 'string') {
@@ -331,8 +329,8 @@ export class WorkspaceManager {
     const repos: SubmoduleInfo[] = [];
     try {
       const content = readFileSync(workspaceFile, 'utf-8');
-      // Simple parse allowing comments or basic trailing commas if possible, but JSON.parse is standard.
-      const ws = JSON.parse(content);
+      // .code-workspace files are JSONC: comments and trailing commas are normal (M0-10-R1).
+      const ws = JSON.parse(stripJsoncSyntax(content));
       const wsDir = dirname(resolve(workspaceFile));
 
       if (ws && Array.isArray(ws.folders)) {

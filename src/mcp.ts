@@ -30,6 +30,7 @@ import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
+import { codeWorkspaceFiles, crossRepoPairs, summarizeRepos } from './core/workspace-summary.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
@@ -603,6 +604,11 @@ EXAMPLES:
               enum: ['list', 'discover'],
               description: 'Action to perform. "list" returns registered repos with stats + discovered repos. "discover" returns only unregistered discoveries.',
               default: 'list',
+            },
+            includePeers: {
+              type: 'boolean',
+              description: 'Also discover sibling git repositories of the workspace root (opt-in; default false).',
+              default: false,
             },
             ...dirProperty,
           },
@@ -2032,13 +2038,10 @@ Callees: ${callees.length}`;
 
         // Discover unregistered repos
         const submodules = WorkspaceManager.discoverSubmodules(dir);
-        const peers = WorkspaceManager.discoverPeerRepos(dir);
-        const { readdirSync } = await import('node:fs');
-        const wsFiles = readdirSync(dir).filter((f: string) => f.endsWith('.code-workspace'));
-        const { join: pathJoin } = await import('node:path');
+        const peers = (args as any)?.includePeers ? WorkspaceManager.discoverPeerRepos(dir) : [];
         const vscodeFolders: Array<{ name: string; path: string; source: string; isInitialized: boolean }> = [];
-        for (const f of wsFiles) {
-          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(pathJoin(dir, f), dir);
+        for (const f of codeWorkspaceFiles(dir)) {
+          const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
           for (const p of wsFolderRepos) {
             if (!registeredPaths.has(resolve(dir, p.path))) {
               vscodeFolders.push({ name: p.name, path: p.path, source: 'vscode-workspace', isInitialized: p.isInitialized });
@@ -2084,32 +2087,30 @@ Callees: ${callees.length}`;
           };
         }
 
-        // "list" action — registered repos with stats
-        const repos: Array<Record<string, unknown>> = [];
-        for (const r of ctx.config.repos) {
-          const fileCount = ctx.store.getFileCount(r.name);
-          const symbolCount = ctx.store.getSymbolCount(r.name);
-          const edgeCount = ctx.store.getEdgeCount(r.name);
-          const crossRepoEdges = ctx.store.raw.prepare(
-            `SELECT COUNT(*) as cnt FROM edges WHERE repo = ? AND target_repo IS NOT NULL AND target_repo != ?`
-          ).get(r.name, r.name) as any;
-          const lastScanned = ctx.store.getMeta('last_scan_time:' + r.name) || ctx.store.getMeta('last_scan_time') || null;
-          repos.push({
-            name: r.name,
-            path: r.path,
-            type: ctx.config.repo.name === r.name ? 'primary' : 'peer',
-            fileCount,
-            symbolCount,
-            edgeCount,
-            crossRepoEdgeCount: crossRepoEdges?.cnt || 0,
-            lastScanned,
-          });
-        }
+        // "list" action — registered repos with stats (F18 shape; M0-10-R1)
+        const summaries = summarizeRepos(dir, ctx.config.repos, ctx.config.repo.name, ctx.store);
+        const pairs = crossRepoPairs(ctx.store);
+        const repos = summaries.map(r => ({
+          name: r.name,
+          path: r.path,
+          type: r.type,
+          fileCount: r.files,
+          symbolCount: r.symbols,
+          edgeCount: r.edges,
+          crossRepoEdgeCount: r.crossRepoEdgeCount,
+          lastScanned: r.lastScanned,
+          headCommit: r.head,
+        }));
 
         return {
           content: [{
             type: 'text',
-            text: JSON.stringify({ repos, discovered }, null, 2),
+            text: JSON.stringify({
+              repos,
+              crossRepoEdgeCount: pairs.reduce((a, p) => a + p.count, 0),
+              crossRepoEdges: pairs,
+              discovered,
+            }, null, 2),
           }],
         };
       }

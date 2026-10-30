@@ -23,7 +23,7 @@ mapx -d /path/to/project scan
 Initialize MapxGraph in the current project. Creates `.mapx/` directory, `AGENTS.md`, and auto-adds `.mapx/` to `.gitignore`.
 
 ```bash
-mapx init [/path] [--name <repo-name>] [--no-agents] [--no-suggestions] [--no-mcp-configs] [--no-discover]
+mapx init [/path] [--name <repo-name>] [--no-agents] [--no-suggestions] [--no-mcp-configs] [--no-discover] [--no-workspaces]
 ```
 
 Options:
@@ -33,12 +33,14 @@ Options:
 - `--no-suggestions` — Skip interactive framework suggestions
 - `--no-mcp-configs` — Skip auto-generating MCP config files for detected agent tools
 - `--no-discover` — Skip the monorepo / nested-repo discovery step
+- `--no-workspaces` — Skip the submodule and VS Code workspace step
 
 The init command also:
 - Detects Laravel projects and offers to add framework-specific exclusions
 - Prompts for LLM provider selection (generic, Claude, Cursor, VS Code, opencode)
 - **Auto-detects installed agent tools** (opencode, Gemini CLI, Cursor, VS Code, Antigravity) and generates MCP server config files so mapx is immediately available as an MCP server
 - **Discovers monorepo packages and nested git repositories** — prompts (Y/N, default Y) to register them immediately after init. Individual multi-select lets you choose exactly which packages / repos to track. Pass `--no-discover` to skip.
+- **Detects submodules and VS Code workspace folders**: lists the `.gitmodules` entries (initialised or not) and the repos named in a `*.code-workspace` file, then asks whether to register them. Without a TTY it only reports them and suggests `mapx workspaces sync`. Pass `--no-workspaces` to skip.
 - Auto-adds `.mapx/` to `.gitignore` if a `.gitignore` file exists or the project is a git repository
 
 ## `mapx uninit`
@@ -99,8 +101,10 @@ Options:
 Show scan metrics, collected data, graph statistics, and git changes since the last scan.
 
 ```bash
-mapx status [/path]
+mapx status [/path] [--all]
 ```
+
+`--all` prints one row per registered repository (Repo, Files, Symbols, Edges, HEAD, Last scan, Changed), the totals, and the cross-repo edge count per repo pair.
 
 Outputs:
 - **Scan info**: project name, directory, last scan time, last git commit, schema version
@@ -158,8 +162,10 @@ mapx search User --format json --limit 5    # JSON output
 Show dependencies (what the file depends on) and reverse dependencies (what depends on it).
 
 ```bash
-mapx deps <file> [--dir /path]
+mapx deps <file> [--dir /path] [--cross-repo]
 ```
+
+`--cross-repo` lists only the edges whose two ends are in different registered repositories: `→ [repo] file (type)` for dependencies and `← [repo] file (type)` for dependents.
 
 The file argument supports multiple matching strategies:
 1. **Exact path** — matches an indexed file directly
@@ -312,6 +318,7 @@ Options:
 - `--format` — Output format: `llm` (default), `json`, `dot`, `svg`, `toon`
 - `--tokens` — Token budget for LLM format (default: 8192)
 - `--repo` — Filter by repository name
+- `--all` — Every registered repository. The LLM format becomes a combined export: the repo list, the cross-repo dependencies, then one section per repo sharing the token budget
 - `-o, --output <file>` — Write output to file instead of stdout
 - `--exclude` — Exclude glob patterns
 - `--include` — Include glob patterns
@@ -393,12 +400,13 @@ Options:
 
 Manage multi-repository workspaces.
 
-### `mapx workspaces list`
+### `mapx workspaces` / `mapx workspaces list`
 
-List all registered repositories and their stats.
+List the registered repositories as a table: Name, Path, Type (`primary`, `submodule`, `vscode-workspace` or `peer`), Files, Last scanned and HEAD (each repo's own checkout). Uninitialised submodules are listed with `✗ not initialised` and the `git submodule update --init` command. `list` also shows unregistered discoveries.
 
 ```bash
-mapx workspaces list
+mapx workspaces
+mapx workspaces list [--include-peers]
 ```
 
 ### `mapx workspaces add <path>`
@@ -422,13 +430,13 @@ mapx workspaces remove my-repo
 Discover unregistered submodules, peer repos, VS Code workspace folders, **nested git repositories**, and **monorepo packages** (read-only).
 
 ```bash
-mapx workspaces discover
+mapx workspaces discover [--include-peers]
 ```
 
 Outputs grouped results by source type with status indicators:
 - **Submodules** — declared in `.gitmodules`
-- **Peer repositories** — sibling directories in the parent folder
-- **VS Code workspace folders** — folders listed in `.code-workspace` files
+- **Peer repositories** — sibling git repositories in the parent folder. They are listed only with `--include-peers`; without it, discover only says how many exist
+- **VS Code workspace folders** — folders listed in `.code-workspace` files (JSONC: comments and trailing commas are accepted)
 - **Nested git repositories** — any directory up to 3 levels deep that contains a `.git` entry (common noise paths like `node_modules`, `dist`, `build`, `.cache` are skipped automatically)
 - **Monorepo packages** — packages/apps declared in `pnpm-workspace.yaml`, `package.json` workspaces, `lerna.json`, `rush.json`, `Cargo.toml` `[workspace]`, `go.work`, or inferred from `apps/`, `packages/`, `libs/`, `services/` directories
 
@@ -436,10 +444,10 @@ Suggests `mapx workspaces add <path>` for registration.
 
 ### `mapx workspaces sync`
 
-Sync all discovered submodules, peer repos, and VS Code workspace folders (auto-registers them). For newly discovered **nested git repositories** and **monorepo packages**, interactive prompts let you choose which ones to register and scan.
+Sync all discovered submodules and VS Code workspace folders, plus peer repos with `--include-peers` (auto-registers them). For newly discovered **nested git repositories** and **monorepo packages**, interactive prompts let you choose which ones to register and scan.
 
 ```bash
-mapx workspaces sync
+mapx workspaces sync [--include-peers]
 ```
 
 ## `mapx agents mcp`

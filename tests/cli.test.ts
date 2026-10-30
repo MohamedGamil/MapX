@@ -112,6 +112,8 @@ vi.mock('../src/core/config.js', () => ({
     }),
     init: vi.fn().mockResolvedValue({
       repo: { name: 'test-repo', path: '.' },
+      repos: [{ name: 'test-repo', path: '.' }],
+      addRepo: vi.fn(),
       save: vi.fn()
     })
   }
@@ -1161,7 +1163,7 @@ describe('CLI module', () => {
   describe('workspaces commands', () => {
     it('lists workspaces', async () => {
       await runCLI(['workspaces', 'list']);
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Registered repositories'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/Name\s+Path\s+Type\s+Files\s+Last scanned\s+HEAD/));
     });
 
     it('discovers workspaces', async () => {
@@ -1587,7 +1589,7 @@ describe('CLI module', () => {
   describe('workspace subcommands', () => {
     it('workspaces list', async () => {
       await runCLI(['workspaces', 'list']);
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Registered'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('1 registered repo.'));
     });
 
     it('workspaces discover with no unregistered', async () => {
@@ -1624,8 +1626,8 @@ describe('CLI module', () => {
       vi.mocked(WorkspaceManager.discoverPeerRepos).mockReturnValueOnce([
         { name: 'peer-repo', path: '../peer-repo' }
       ] as any);
-      await runCLI(['workspaces', 'list']);
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Registered'));
+      await runCLI(['workspaces', 'list', '--include-peers']);
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('peer-repo'));
     });
 
     it('workspaces discover with discovered repos', async () => {
