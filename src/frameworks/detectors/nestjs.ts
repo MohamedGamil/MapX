@@ -4,6 +4,62 @@ import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../../types.js';
 import { hasPackageJsonDependency } from '../utils.js';
 
+/** Index of the bracket closing the one at `open` (strings and template literals skipped). */
+function closingBracket(text: string, open: number): number {
+  const pairs: Record<string, string> = { '(': ')', '{': '}', '[': ']' };
+  const stack: string[] = [];
+  for (let i = open; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === "'" || c === '"' || c === '`') {
+      for (i++; i < text.length && text[i] !== c; i++) if (text[i] === '\\') i++;
+      continue;
+    }
+    if (pairs[c]) stack.push(pairs[c]!);
+    else if (c === stack[stack.length - 1] && (stack.pop(), stack.length === 0)) return i;
+  }
+  return -1;
+}
+
+interface ClassSegment {
+  name: string;
+  /** Text between the previous class's closing brace and this class header: its decorators. */
+  decorators: string;
+  /** The class body, braces included. */
+  body: string;
+}
+
+/** Classes with their own decorator zone, so one class's decorators never leak into the next. */
+export function classSegments(content: string): ClassSegment[] {
+  const segments: ClassSegment[] = [];
+  let zoneStart = 0;
+  const header = /\bclass\s+([A-Za-z0-9_$]+)[^{]*\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = header.exec(content))) {
+    const open = m.index + m[0].length - 1;
+    const close = closingBracket(content, open);
+    const end = close < 0 ? content.length : close + 1;
+    segments.push({ name: m[1]!, decorators: content.slice(zoneStart, m.index), body: content.slice(m.index, end) });
+    zoneStart = end;
+    header.lastIndex = end;
+  }
+  return segments;
+}
+
+/** `@Name(args)` decorators in `text`, with balanced-bracket argument text. */
+export function decoratorCalls(text: string, names: string): { name: string; args: string; end: number }[] {
+  const out: { name: string; args: string; end: number }[] = [];
+  const re = new RegExp(`@(${names})\\s*\\(`, 'g');
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const open = m.index + m[0].length - 1;
+    const close = closingBracket(text, open);
+    if (close < 0) continue;
+    out.push({ name: m[1]!, args: text.slice(open + 1, close).trim(), end: close + 1 });
+    re.lastIndex = close + 1;
+  }
+  return out;
+}
+
 export class NestJSDetector implements FrameworkDetector {
   readonly name = 'nestjs';
   readonly language = 'typescript';
@@ -20,19 +76,7 @@ export class NestJSDetector implements FrameworkDetector {
       return [];
     }
 
-    // Split content into classes to isolate controller scopes
-    const classes = content.split(/\bclass\s+/);
-    // The first part is imports/file header, skip
-    for (let i = 1; i < classes.length; i++) {
-      const classBlock = classes[i];
-      const classNameMatch = classBlock.match(/^([a-zA-Z0-9_]+)/);
-      if (!classNameMatch) continue;
-      const className = classNameMatch[1];
-
-      // Look back in the content for class decorators
-      const classHeaderStart = content.indexOf(`class ${className}`);
-      const lookbackText = content.substring(Math.max(0, classHeaderStart - 1000), classHeaderStart);
-
+    for (const { name: className, decorators: lookbackText, body: classBlock } of classSegments(content)) {
       // Support controller decoration
       let classPrefix = '';
       const controllerMatch = lookbackText.match(/@Controller\s*\(\s*([^)]*)\)/);
@@ -101,17 +145,7 @@ export class NestJSDetector implements FrameworkDetector {
   async extractHooks(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]> {
     const hooks: HookBinding[] = [];
 
-    // Split content into classes to isolate scopes
-    const classes = content.split(/\bclass\s+/);
-    for (let i = 1; i < classes.length; i++) {
-      const classBlock = classes[i];
-      const classNameMatch = classBlock.match(/^([a-zA-Z0-9_]+)/);
-      if (!classNameMatch) continue;
-      const className = classNameMatch[1];
-
-      const classHeaderStart = content.indexOf(`class ${className}`);
-      const lookbackText = content.substring(Math.max(0, classHeaderStart - 1000), classHeaderStart);
-
+    for (const { name: className, decorators: lookbackText, body: classBlock } of classSegments(content)) {
       let resolvedFile = filePath;
       const resolvedPath = ctx.resolveSymbolToFile(className);
       if (resolvedPath) {
@@ -226,25 +260,14 @@ export class NestJSDetector implements FrameworkDetector {
       // 4. GraphQL Resolvers
       const isResolver = /@Resolver\s*\(/.test(lookbackText);
       if (isResolver) {
-        const resolverRegex = /@(Query|Mutation|Subscription)\s*\(\s*([^)]*)\)/g;
-        let gqlMatch;
-        while ((gqlMatch = resolverRegex.exec(classBlock)) !== null) {
-          const type = gqlMatch[1].toLowerCase();
-          const args = gqlMatch[2].trim();
-          let opName = '';
-          if (args) {
-            if (args.startsWith('{')) {
-              const nameMatch = args.match(/name\s*:\s*['"`]([^'"`]*)['"`]/);
-              if (nameMatch) {
-                opName = nameMatch[1];
-              }
-            } else {
-              opName = args.replace(/^['"`]|['"`]$/g, '');
-            }
-          }
+        for (const gql of decoratorCalls(classBlock, 'Query|Mutation|Subscription')) {
+          const type = gql.name.toLowerCase();
+          // @Query(() => [User], { name: 'users' }) / @Query('users') / @Query()
+          const named = gql.args.match(/\bname\s*:\s*['"`]([^'"`]*)['"`]/);
+          const literal = gql.args.match(/^['"`]([^'"`]*)['"`]$/);
+          let opName = named?.[1] ?? literal?.[1] ?? '';
 
-          const nextIndex = gqlMatch.index + gqlMatch[0].length;
-          const methodName = this.findMethodNameAfter(classBlock, nextIndex);
+          const methodName = this.findMethodNameAfter(classBlock, gql.end);
           if (methodName) {
             if (!opName) opName = methodName;
             hooks.push({

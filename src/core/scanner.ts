@@ -1593,6 +1593,16 @@ export class Scanner {
               const edgeType = (['graphql_resolver', 'message_handler', 'websocket_handler', 'middleware'].includes(hook.hookType)
                 ? hook.hookType
                 : 'hook') as any;
+              // An interface hook (OnModuleInit, CanActivate, …) handled in its own file would be a
+              // file-to-itself edge carrying nothing; handler hooks keep theirs for the metadata.
+              const handlerHook = ['graphql_resolver', 'message_handler', 'websocket_handler'].includes(hook.hookType);
+              if (hook.handlerFile === relPath && !handlerHook) continue;
+              const hookMeta = {
+                ...(hook.metadata ?? {}),
+                hookName: hook.hookName,
+                hookType: hook.hookType,
+                confidence: hook.metadata?.confidence || 'inferred',
+              };
 
               edgesToInsert.push({
                 sourceFile: relPath,
@@ -1603,11 +1613,7 @@ export class Scanner {
                 repo: repo.name,
                 weight: 1.0,
                 verifiability: 'inferred',
-                metadata: {
-                  hookName: hook.hookName,
-                  hookType: hook.hookType,
-                  confidence: hook.metadata?.confidence || 'inferred',
-                }
+                metadata: hookMeta
               });
               this.graph.addDependencyEdge({
                 sourceFile: relPath,
@@ -1618,11 +1624,7 @@ export class Scanner {
                 repo: repo.name,
                 weight: 1.0,
                 verifiability: 'inferred',
-                metadata: {
-                  hookName: hook.hookName,
-                  hookType: hook.hookType,
-                  confidence: hook.metadata?.confidence || 'inferred',
-                }
+                metadata: hookMeta
               });
             }
           }
