@@ -25,7 +25,7 @@ import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
-import { RouteRegistry } from './frameworks/route-registry.js';
+import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
@@ -941,8 +941,11 @@ Recommendation:
         const kind = (args as any)?.kind as string | undefined;
         const filePrefix = (args as any)?.file as string | undefined;
         const exact = !!(args as any)?.exact;
-        const limit = (args as any)?.limit as number | undefined;
         const format = ((args as any)?.format || 'text') as string;
+        const isWildcard = term === '*' || term === '';
+        // Listing a whole file (wildcard + file filter) returns every symbol unless a limit is given.
+        const limit = ((args as any)?.limit as number | undefined) ??
+          (isWildcard && filePrefix ? Math.max(1, ctx.store.countSymbolsFiltered({ term, kind, filePrefix, exact })) : undefined);
 
         let results = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact, limit });
         let broadened = false;
@@ -988,7 +991,7 @@ Recommendation:
           }
         }
 
-        const totalMatches = ctx.store.searchSymbolsFiltered({ term, kind, filePrefix, exact }).length;
+        const totalMatches = ctx.store.countSymbolsFiltered({ term, kind: broadened ? undefined : kind, filePrefix, exact });
 
         // F43: JSON format support
         if (format === 'json') {
@@ -1009,7 +1012,7 @@ Recommendation:
 
         // F43: Summary header
         let header = '';
-        if (limit !== undefined && results.length < totalMatches) {
+        if (results.length < totalMatches) {
           header = `Found ${results.length} of ${totalMatches} symbols`;
         } else {
           header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''}`;
@@ -1915,7 +1918,7 @@ Callees: ${callees.length}`;
         return {
           content: [{
             type: 'text',
-            text: JSON.stringify(routes, null, 2),
+            text: JSON.stringify(routes.map(toRouteView), null, 2),
           }],
         };
       }

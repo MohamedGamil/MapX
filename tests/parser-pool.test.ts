@@ -1,96 +1,40 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Parser } from 'web-tree-sitter';
+import { loadLanguage, parseWithQueries } from '../src/parsers/wasm-parser.js';
 
-/**
- * These tests verify the parser pool behavior from wasm-parser.ts.
- *
- * The `getPooledParser` function and `parserPool` map are module-private,
- * so we test the observable behavior through the public `parseWithQueries`
- * function which internally uses the pool.
- *
- * Since loading WASM languages requires actual binary files and is
- * integration-heavy, these tests mock the Parser and Language classes
- * to unit-test the pooling logic in isolation.
- */
+// M0-37: exercise the real parser pool in src/parsers/wasm-parser.ts (CHANGELOG 0.3.4). A pooled
+// parser is created and bound to its language once, then reused for every later parse.
+const SYMBOLS = '(function_declaration name: (identifier) @symbol.name) @symbol.kind_function';
 
-// Simulate the pool logic to test it directly
-function createParserPool() {
-  const pool = new Map<object, object>();
+describe('WASM parser pool', () => {
+  afterEach(() => vi.restoreAllMocks());
 
-  function getPooledParser(language: object): object {
-    let parser = pool.get(language);
-    if (!parser) {
-      parser = { id: Math.random(), language };
-      pool.set(language, parser);
+  it('binds one parser per language and reuses it across parses', async () => {
+    const js = await loadLanguage({ name: 'javascript', grammarWasm: 'wasm/tree-sitter-javascript.wasm' } as any);
+    const php = await loadLanguage({ name: 'php', grammarWasm: 'wasm/tree-sitter-php.wasm' } as any);
+    const setLanguage = vi.spyOn(Parser.prototype, 'setLanguage');
+
+    for (let i = 0; i < 5; i++) {
+      const parsed = await parseWithQueries(`function f${i}() {}`, js, SYMBOLS, '');
+      expect(parsed.symbols.get('symbol.name')?.[0]?.node.text).toBe(`f${i}`);
     }
-    return parser;
-  }
+    await parseWithQueries('<?php function g() {}', php, '(function_definition name: (name) @symbol.name)', '');
+    await parseWithQueries('<?php function h() {}', php, '(function_definition name: (name) @symbol.name)', '');
 
-  return { pool, getPooledParser };
-}
-
-describe('Parser pool behavior', () => {
-  it('should return the same parser for the same language object', () => {
-    const { getPooledParser } = createParserPool();
-    const langTs = { name: 'typescript' };
-
-    const parser1 = getPooledParser(langTs);
-    const parser2 = getPooledParser(langTs);
-
-    expect(parser1).toBe(parser2); // Same object reference
+    // At most one bind per language for the whole run (zero if an earlier test already pooled it).
+    const bound = setLanguage.mock.calls.map(([lang]) => lang);
+    expect(bound.filter((l) => l === js).length).toBeLessThanOrEqual(1);
+    expect(bound.filter((l) => l === php).length).toBeLessThanOrEqual(1);
   });
 
-  it('should return different parsers for different language objects', () => {
-    const { getPooledParser } = createParserPool();
-    const langTs = { name: 'typescript' };
-    const langPy = { name: 'python' };
-
-    const parserTs = getPooledParser(langTs);
-    const parserPy = getPooledParser(langPy);
-
-    expect(parserTs).not.toBe(parserPy);
-  });
-
-  it('should populate the pool on first access', () => {
-    const { pool, getPooledParser } = createParserPool();
-    const lang = { name: 'go' };
-
-    expect(pool.size).toBe(0);
-    getPooledParser(lang);
-    expect(pool.size).toBe(1);
-  });
-
-  it('should not grow the pool on repeated access with same language', () => {
-    const { pool, getPooledParser } = createParserPool();
-    const lang = { name: 'rust' };
-
-    getPooledParser(lang);
-    getPooledParser(lang);
-    getPooledParser(lang);
-
-    expect(pool.size).toBe(1);
-  });
-
-  it('should grow the pool by one for each new language', () => {
-    const { pool, getPooledParser } = createParserPool();
-
-    getPooledParser({ name: 'ts' });
-    getPooledParser({ name: 'py' });
-    getPooledParser({ name: 'go' });
-
-    expect(pool.size).toBe(3);
-  });
-
-  it('should distinguish languages by object identity, not value equality', () => {
-    const { pool, getPooledParser } = createParserPool();
-    // Two distinct objects with same content
-    const lang1 = { name: 'typescript' };
-    const lang2 = { name: 'typescript' };
-
-    const parser1 = getPooledParser(lang1);
-    const parser2 = getPooledParser(lang2);
-
-    // Different object references → different pool entries
-    expect(parser1).not.toBe(parser2);
-    expect(pool.size).toBe(2);
+  it('keeps languages isolated: parsing PHP between JS parses does not rebind the JS parser', async () => {
+    const js = await loadLanguage({ name: 'javascript', grammarWasm: 'wasm/tree-sitter-javascript.wasm' } as any);
+    const php = await loadLanguage({ name: 'php', grammarWasm: 'wasm/tree-sitter-php.wasm' } as any);
+    await parseWithQueries('function a() {}', js, SYMBOLS, '');
+    await parseWithQueries('<?php function b() {}', php, '(function_definition name: (name) @symbol.name)', '');
+    const setLanguage = vi.spyOn(Parser.prototype, 'setLanguage');
+    const parsed = await parseWithQueries('function c() {}', js, SYMBOLS, '');
+    expect(parsed.symbols.get('symbol.name')?.[0]?.node.text).toBe('c');
+    expect(setLanguage).not.toHaveBeenCalled();
   });
 });

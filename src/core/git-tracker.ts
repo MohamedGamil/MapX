@@ -18,7 +18,7 @@ export function getGitBlobHashes(repoRoot: string): Map<string, string> {
     //   100644 blob <hash>\t<path>
     const output = execSync('git ls-tree -r HEAD', {
       cwd: repoRoot,
-      encoding: 'utf-8',
+      encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
     });
 
@@ -52,7 +52,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
 
     const output = execSync(command, {
       cwd: repoRoot,
-      encoding: 'utf-8',
+      encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
     });
 
@@ -78,7 +78,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
   try {
     const stagedOutput = execSync('git diff --name-status --cached', {
       cwd: repoRoot,
-      encoding: 'utf-8',
+      encoding: 'utf-8', stdio: QUIET,
     }).trim();
 
     for (const line of stagedOutput.split('\n').filter(Boolean)) {
@@ -102,7 +102,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
 
 export function getCurrentCommitSha(repoRoot: string): string | null {
   try {
-    return execSync('git rev-parse HEAD', { cwd: repoRoot, encoding: 'utf-8' }).trim();
+    return execSync('git rev-parse HEAD', { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
   } catch {
     return null;
   }
@@ -110,7 +110,7 @@ export function getCurrentCommitSha(repoRoot: string): string | null {
 
 export function getPreviousCommitSha(repoRoot: string): string | null {
   try {
-    return execSync('git rev-parse HEAD~1', { cwd: repoRoot, encoding: 'utf-8' }).trim();
+    return execSync('git rev-parse HEAD~1', { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
   } catch {
     return null;
   }
@@ -127,7 +127,7 @@ export function isGitRepo(dir: string): boolean {
 
 export function getRepoName(repoRoot: string): string {
   try {
-    const remote = execSync('git remote get-url origin', { cwd: repoRoot, encoding: 'utf-8' }).trim();
+    const remote = execSync('git remote get-url origin', { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
     const basename = remote.split('/').pop() || 'unknown';
     return basename.replace(/\.git$/, '');
   } catch {
@@ -137,6 +137,9 @@ export function getRepoName(repoRoot: string): string {
 
 import { existsSync, readFileSync } from 'node:fs';
 import { SubmoduleInfo } from '../types.js';
+
+// Callers handle failures (e.g. a repo with no commits); keep git's stderr off the terminal.
+const QUIET: ['ignore', 'pipe', 'ignore'] = ['ignore', 'pipe', 'ignore'];
 
 export function discoverSubmodules(repoRoot: string): SubmoduleInfo[] {
   const gitmodulesPath = join(repoRoot, '.gitmodules');

@@ -107,6 +107,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 describe('Scanner module', () => {
   const createMockStore = (overrides?: any) => ({
     getMeta: vi.fn().mockReturnValue(null),
+    getSymbolCount: vi.fn().mockReturnValue(0),
+    getEdgeCount: vi.fn().mockReturnValue(0),
     setMeta: vi.fn(),
     getAllFiles: vi.fn().mockReturnValue([]),
     getAllEdges: vi.fn().mockReturnValue([]),
@@ -723,7 +725,7 @@ describe('Scanner module', () => {
       expect(result).toBe('src/parsers/languages/php.ts');
     });
 
-    it('does not create same-file bias when no sourcePath is provided', () => {
+    it('fails closed when no sourcePath is provided (M2-01)', () => {
       const store = createMockStore({
         searchSymbols: (name: string) => {
           if (name === 'cleanQuotes') return [
@@ -733,9 +735,10 @@ describe('Scanner module', () => {
         }
       });
       const scanner = new Scanner(store, makeConfig(), graph);
-      // No sourcePath → falls back to first match without same-file preference
-      const result = (scanner as any).resolveSymbolToFile('cleanQuotes', fileMap);
-      expect(result).toBe('src/frameworks/detectors/express.ts');
+      // No sourcePath → the source language is unknown, so no cross-file guess is made.
+      expect((scanner as any).resolveSymbolToFile('cleanQuotes', fileMap)).toBeNull();
+      // With a source in the same language family the match resolves as before.
+      expect((scanner as any).resolveSymbolToFile('cleanQuotes', fileMap, 'src/other.ts')).toBe('src/frameworks/detectors/express.ts');
     });
   });
 

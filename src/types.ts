@@ -305,6 +305,8 @@ export interface RouteBinding {
   handlerFile: string;
   handlerSymbol?: string;
   middlewares?: string[];
+  /** 1-based line of the declaration in its source file. */
+  line?: number;
   metadata?: Record<string, any>;
 }
 
@@ -324,5 +326,9 @@ export interface FrameworkDetector {
   detect(projectRoot: string, files: string[]): Promise<boolean>;
   extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]>;
   extractHooks?(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]>;
+  /** Called once before a repo's files are extracted; drop any per-workspace cache here. */
+  beginScan?(workspaceRoot: string): void;
+  /** Called with every route this detector extracted in the repo, before edges are built. */
+  finalizeRoutes?(routes: RouteBinding[]): void;
 }
 

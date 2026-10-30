@@ -34,6 +34,7 @@ flowchart LR
 - M0-22 ← none
 - M0-14-R1 ← M0-14 (hard)
 - M0-15-R1 ← M0-15 (hard)
+- M0-15-R2 ← M0-15-R1 (hard)
 - M0-19-R1 ← M0-19 (hard)
 - M0-22-R1 ← M0-22 (hard)
 - M0-23 ← none
@@ -48,7 +49,7 @@ flowchart LR
 - M1-08 ← M1-01 (fixture)
 - M1-09 ← M1-01 (fixture), M1-02 (hard)
 - M1-98 ← M1-02 (hard), M1-03 (hard), M1-04 (hard), M1-05 (hard), M1-06 (hard), M1-07 (hard), M1-08 (hard), M1-09 (hard)
-- M1-99 ← M1-98 (hard); gate G-REL-0.4.0
+- M1-99 ← none; gate G-RELEASE
 - M2-01 ← none
 - M2-02 ← M1-01 (fixture)
 - M2-03 ← M2-02 (fixture)
@@ -63,3 +64,17 @@ flowchart LR
 - M3-06 ← M3-02 (hard)
 - M4-01 ← M1-01 (hard), M2-02 (hard), M3-01 (hard)
 - M4-02 ← none
+- M0-31 ← none
+- M0-32 ← none
+- M0-33 ← none
+- M0-34 ← none
+- M0-35 ← none
+- M0-36 ← none
+- M0-37 ← none
+- M0-38 ← none
+- M0-39 ← none
+- M4-03 ← none
+- M4-04 ← none
+- M4-05 ← none
+- M4-06 ← none
+- M4-07 ← none

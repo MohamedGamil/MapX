@@ -52,4 +52,4 @@ Read `docs/baton/PROJECT_STATE.md` and `docs/baton/HANDOFF.md`, inspect git, and
 - **Plan and continue work** with the `baton` skill (`.claude/skills/baton/`). Use `npm run plan:scan` for ready/promotable/next-wave work, and `npm run plan:transition` for every status change.
 - **Review delivered work** with the `baton-review` skill (`.claude/skills/baton-review/`), which reviews since the marker in `docs/baton/reviews/state.json`.
 - **Baseline check:** `npm run check` (plan validation, typecheck, vitest, skill tests). Run `npm ci --legacy-peer-deps` first on a fresh clone.
-- **Ground rules:** fixtures before fixes; never use private or pilot code in fixtures; attach real evidence before DONE; one active iteration per owner. Publishing requires an approved `G-REL-*` gate. Commit only when asked.
+- **Ground rules:** fixtures before fixes; never use private or pilot code in fixtures; attach real evidence before DONE; one active iteration per owner. Releases are owner-initiated (D007): never bump the version, publish or request a release. Commit only when asked.

@@ -419,10 +419,13 @@ export class Scanner {
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
+    // A full scan reports what the repo now holds: raw reference counts include unresolved
+    // and external references, and skip unchanged files (M0-23).
+    const completed = !this.aborted;
     return {
       filesScanned: totalParsed,
-      symbolsFound: totalSymbols,
-      edgesFound: totalEdges,
+      symbolsFound: completed ? this.store.getSymbolCount(repo.name) : totalSymbols,
+      edgesFound: completed ? this.store.getEdgeCount(repo.name) : totalEdges,
       durationMs: Date.now() - startTime,
       languageBreakdown: langBreakdown,
       interrupted: this.aborted,
@@ -674,6 +677,12 @@ export class Scanner {
       this.onProgress?.({ phase: 'discover', current: 0, total: 0 });
     }
 
+    // Another registered repo nested inside this one indexes its own files; walking into it
+    // would index them twice under two repos and inflate counts (M0-23).
+    const ownRoot = resolve(repoRoot);
+    const registeredRoots = new Set(this.config.repos.map(r => resolve(workspaceRoot, r.path)));
+    const nestedRepoRoots = new Set([...registeredRoots].filter(p => p !== ownRoot));
+
     const walk = async (currentDir: string) => {
       const entries = await readdir(currentDir, { withFileTypes: true });
 
@@ -688,12 +697,13 @@ export class Scanner {
           const relDir = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
           if (this.shouldExcludeDir(relDir, excludes)) continue;
 
+          if (nestedRepoRoots.has(resolve(fullPath))) continue;
+
           // Check if this directory contains a .git entry (file or directory)
           // and is NOT the root or any registered repository path.
           const gitPath = join(fullPath, '.git');
           if (existsSync(gitPath)) {
-            const registeredAbsPaths = this.config.repos.map(r => resolve(workspaceRoot, r.path));
-            if (!registeredAbsPaths.map(p => resolve(p)).includes(resolve(fullPath))) {
+            if (!registeredRoots.has(resolve(fullPath))) {
               console.warn(`\n⚠️ Warning: Found unregistered nested git repository at ${fullPath}. Skipping walk inside this directory.`);
               continue;
             }
@@ -1256,8 +1266,10 @@ export class Scanner {
       }
     }
 
+    // Fail closed: without a known source language there is no safe way to pick a candidate
+    // across languages, so name-only resolution returns nothing (M2-01).
     const filterMatches = (matches: any[]): any[] => {
-      if (!sourceLang) return matches;
+      if (!sourceLang) return [];
       return matches.filter(m => {
         const targetPath = (m.file_path || m.file) as string;
         const targetLangDef = getLanguageForFile(targetPath, this.config.getResolvedUserLanguages());
@@ -1398,12 +1410,25 @@ export class Scanner {
     const files = await this.store.getAllFiles(repo.name);
     const filePaths = files.map(f => f.path as string);
 
-    const activeDetectors = await this.getActiveDetectors(repoRoot, filePaths);
+    const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
+    // frameworks.json is also an explicit override: frameworks listed there stay active even
+    // when detection misses them, and detection only ever adds to the list.
+    let listed: string[] = [];
+    if (existsSync(frameworksPath)) {
+      try {
+        const parsed = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
+        if (Array.isArray(parsed)) listed = parsed.filter((n): n is string => typeof n === 'string');
+      } catch {}
+    }
+    const detected = await this.getActiveDetectors(repoRoot, filePaths);
+    const missing = listed.filter(name => !detected.some(d => d.name === name));
+    const activeDetectors = missing.length
+      ? [...detected, ...FrameworkRegistry.getInstance().getDetectors().filter(d => missing.includes(d.name))]
+      : detected;
     if (activeDetectors.length === 0) return;
 
     // Save active frameworks
-    const frameworksPath = join(workspaceRoot, '.mapx', 'frameworks.json');
-    const activeNames = activeDetectors.map(d => d.name);
+    const activeNames = [...new Set([...listed, ...activeDetectors.map(d => d.name)])];
     await writeFile(frameworksPath, JSON.stringify(activeNames, null, 2), 'utf-8');
 
     // Clear all existing framework edges for this repo in the DB and Graph
@@ -1426,6 +1451,10 @@ export class Scanner {
     const edgesToInsert: any[] = [];
 
     for (const detector of activeDetectors) {
+      detector.beginScan?.(workspaceRoot);
+      // Routes are collected per detector so it can resolve cross-file rules (e.g. Laravel's
+      // last-registration-wins) before any edge is built.
+      const detectorRoutes: RouteBinding[] = [];
       // Find files that match the detector's pattern (e.g. routes/api.php)
       const matchingPaths = filePaths.filter(p => detector.filePattern.test(p));
       for (const relPath of matchingPaths) {
@@ -1435,11 +1464,10 @@ export class Scanner {
 
           const localCtx: ScanContext = {
             ...ctx,
-            resolveSymbolToFile: (symName: string, sourcePath?: string) => {
-              return sourcePath
-                ? this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath)
-                : ctx.resolveSymbolToFile(symName);
-            }
+            // Default the source to the file being extracted so name resolution stays within
+            // its language family (a PHP route must not resolve to a JS class, M2-01).
+            resolveSymbolToFile: (symName: string, sourcePath: string = relPath) =>
+              this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath),
           };
 
           const routes = await detector.extractRoutes(relPath, content, localCtx);
@@ -1462,42 +1490,7 @@ export class Scanner {
             if (!route.metadata) route.metadata = {};
             route.metadata.repo = repo.name;
             route.metadata.sourceFile = relPath;
-
-            routeRegistry.addRoute(route);
-
-            // Add as an edge in the db/graph
-            edgesToInsert.push({
-              sourceFile: relPath,
-              targetFile: route.handlerFile,
-              sourceSymbol: null,
-              targetSymbol: route.handlerSymbol || null,
-              edgeType: 'route',
-              repo: repo.name,
-              weight: 1.0,
-              verifiability: 'inferred',
-              metadata: {
-                httpVerb: route.method,
-                uri: route.path,
-                middlewares: route.middlewares,
-                confidence: route.metadata?.confidence || 'inferred',
-              }
-            });
-            this.graph.addDependencyEdge({
-              sourceFile: relPath,
-              targetFile: route.handlerFile,
-              sourceSymbol: null,
-              targetSymbol: route.handlerSymbol || null,
-              edgeType: 'route',
-              repo: repo.name,
-              weight: 1.0,
-              verifiability: 'inferred',
-              metadata: {
-                httpVerb: route.method,
-                uri: route.path,
-                middlewares: route.middlewares,
-                confidence: route.metadata?.confidence || 'inferred',
-              }
-            });
+            detectorRoutes.push(route);
           }
 
           if (detector.extractHooks) {
@@ -1563,6 +1556,40 @@ export class Scanner {
         } catch (err) {
           console.error(`Failed to extract routes/hooks for ${relPath}:`, err);
         }
+      }
+
+      try {
+        detector.finalizeRoutes?.(detectorRoutes);
+      } catch (err) {
+        console.error(`Failed to finalize ${detector.name} routes:`, err);
+      }
+      for (const route of detectorRoutes) {
+        routeRegistry.addRoute(route);
+        const meta = route.metadata ?? {};
+        const edge: GraphEdge = {
+          sourceFile: meta.sourceFile,
+          targetFile: route.handlerFile,
+          sourceSymbol: null,
+          targetSymbol: route.handlerSymbol || null,
+          edgeType: 'route',
+          repo: repo.name,
+          weight: 1.0,
+          verifiability: 'inferred',
+          metadata: {
+            httpVerb: route.method,
+            uri: route.path,
+            // Detectors put middlewares either on the route or in its metadata.
+            middlewares: route.middlewares ?? meta.middlewares ?? [],
+            confidence: meta.confidence || 'inferred',
+            ...(route.line !== undefined ? { line: route.line } : {}),
+            ...(meta.name ? { name: meta.name } : {}),
+            ...(meta.reachable === false ? { reachable: false } : {}),
+            ...(meta.overridden ? { overridden: true, overriddenBy: meta.overriddenBy } : {}),
+            ...(meta.conditional ? { conditional: true } : {}),
+          },
+        };
+        edgesToInsert.push(edge);
+        this.graph.addDependencyEdge(edge);
       }
     }
 
@@ -1666,7 +1693,7 @@ export class Scanner {
       } catch {}
     }
     const profiler = new CodebaseProfiler(this.store);
-    const profile = profiler.profile(repo.name, activeFrameworks);
+    const profile = profiler.profile(repo.name, activeFrameworks, this.config.settings.graphExcludePatterns);
     this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
 
     // 3. Classify all files

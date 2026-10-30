@@ -32,6 +32,7 @@
   },
   "files": [
     "dist/",
+    "!dist/**/*.map",
     "wasm/",
     "queries/",
     "VERSION",
@@ -99,7 +100,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "check": "npm run plan:validate && npm run typecheck && npm test && npm run test:skills",
+    "check": "npm run plan:validate && node scripts/baton/check-changelog-coverage.mjs && npm run typecheck && npm test && npm run test:skills",
     "test:skills": "node --test .claude/skills/baton/scripts/baton-scan.test.mjs .claude/skills/baton-review/scripts/review-scope.test.mjs",
     "plan:validate": "tsx scripts/baton/cli.ts validate",
     "plan:ready": "tsx scripts/baton/cli.ts ready",
@@ -133,6 +134,7 @@
     "nan": "^2.22.0"
   },
   "devDependencies": {
+    "@toon-format/toon": "^4.4.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cytoscape": "^3.21.9",
     "@types/cytoscape-dagre": "^2.3.4",

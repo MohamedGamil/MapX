@@ -7,3 +7,4 @@
 | R03 | Regex-based Laravel extraction may not scale to mount graphs (require, providers, conditionals). | medium | high | M1-01 fixture first; if M1-03 or M1-07 exceed their estimate, split them and consider an AST-based PHP pass. | maintainer |
 | R04 | `tsc` covers only `src/`; tests and scripts can carry type errors. | medium | low | Add a `tsconfig.check.json` including tests and scripts (unplanned). | maintainer |
 | R05 | The dashboard bundle (689 KB gzipped, plus a 7.8 MB source map) inflates the npm package. | high | low | M0-15-R1, after an owner decision. | owner |
+| R06 | Dashboard UI behaviour (graph explorer, layouts, health tab) has no automated test; only its server endpoints can be covered without a browser harness. | medium | medium | M0-39 covers the endpoints; a browser harness is unplanned. | maintainer |

@@ -23,7 +23,7 @@ import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impac
 import { getBuiltinLanguages } from './languages/registry.js';
 import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
 import type { ScanProgress, ProgressCallback } from './types.js';
-import { RouteRegistry } from './frameworks/route-registry.js';
+import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { VERSION } from './version.js';
 import { findSimilarSymbols, isGlobPattern, globToLike } from './core/fuzzy-matcher.js';
 import picomatch from 'picomatch';
@@ -1162,6 +1162,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('-d, --dir <path>', 'Target directory')
     .option('--source', 'Extract and display source code', false)
     .option('--format <format>', 'Output format: text | json', 'text')
+    .option('--include-members', 'List member symbols (methods, properties) of a class, interface or trait', false)
     .action(async (symbol: string, opts: Record<string, unknown>) => {
       const dir = resolveDir(opts, program.opts());
       const { store } = await loadContext(dir);
@@ -1186,6 +1187,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const callers = store.getCallersOfSymbol(symbol);
       const callees = store.getCalleesOfSymbol(symbol);
       const format = (opts.format as string) || 'text';
+      // Same member rule as mapx_node include_members: symbols in the file scoped to this one.
+      const members = opts.includeMembers
+        ? store.getSymbolsForFile(sym.file_path as string).filter((s: any) => s.scope === sym.name)
+        : [];
 
       // JSON format
       if (format === 'json') {
@@ -1200,6 +1205,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           callerCount: callers.length,
           calleeCount: callees.length,
         };
+        if (opts.includeMembers) {
+          result.members = members.map((m: any) => ({ name: m.name, kind: m.kind, startLine: m.start_line, endLine: m.end_line }));
+        }
         if (opts.source) {
           try {
             const absolutePath = resolve(dir, sym.file_path as string);
@@ -1223,6 +1231,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       console.log(`Signature: ${sym.signature}`);
       console.log(`Callers: ${callers.length}`);
       console.log(`Callees: ${callees.length}`);
+
+      if (opts.includeMembers) {
+        console.log('\nMembers:');
+        if (members.length === 0) console.log('  (none)');
+        for (const m of members) console.log(`  ${m.kind} ${m.name} (L${m.start_line}-${m.end_line})`);
+      }
 
       if (opts.source) {
         try {
@@ -2149,7 +2163,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       });
 
       if (opts.json) {
-        console.log(JSON.stringify(routes, null, 2));
+        console.log(JSON.stringify(routes.map(toRouteView), null, 2));
         return;
       }
 
@@ -2164,7 +2178,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       console.log(''.padEnd(80, '-'));
       for (const r of routes) {
         const handler = r.handlerSymbol || r.handlerFile;
-        console.log(`${r.framework.padEnd(12)} | ${r.method.toUpperCase().padEnd(8)} | ${r.path.padEnd(30)} | ${handler}`);
+        const v = toRouteView(r);
+        const flags = [!v.reachable && 'unreachable', v.overridden && 'overridden', v.conditional && 'conditional'].filter(Boolean);
+        console.log(`${r.framework.padEnd(12)} | ${r.method.toUpperCase().padEnd(8)} | ${r.path.padEnd(30)} | ${handler}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
       }
       console.log(''.padEnd(80, '-'));
       console.log('');

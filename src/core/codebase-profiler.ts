@@ -1,6 +1,7 @@
 import type { Store } from './store.js';
 import type { CodebaseProfile, CodebaseArchetype, ArchPattern } from '../types.js';
 import * as path from 'node:path';
+import picomatch from 'picomatch';
 
 export class CodebaseProfiler {
   constructor(private store: Store) {}
@@ -8,14 +9,15 @@ export class CodebaseProfiler {
   /**
    * Profiles the repository based on stored files, extensions, paths, and active frameworks.
    */
-  profile(repoName: string, activeFrameworks: string[] = []): CodebaseProfile {
+  profile(repoName: string, activeFrameworks: string[] = [], excludePatterns?: string[]): CodebaseProfile {
     const files = this.store.getAllFiles(repoName);
     const filePaths = files.map(f => f.path as string);
 
-    // Filter out scratch, benchmark, and test files so they don't skew
-    // framework confidence or archetype detection.
+    // Filter out scratch, benchmark, and test files so they don't skew framework confidence or
+    // archetype detection: by the configured graphExcludePatterns when given, else built-in rules.
+    const excluded = excludePatterns ? picomatch(excludePatterns, { dot: true }) : null;
     const scratchTestRe = /\.(test|spec)\.[a-z0-9]+$/i;
-    const filteredPaths = filePaths.filter(p => {
+    const filteredPaths = excluded ? filePaths.filter(p => !excluded(p)) : filePaths.filter(p => {
       const lower = p.toLowerCase();
       if (lower.startsWith('scratch/') || lower.startsWith('benchmarks/')) return false;
       if (lower.includes('/tests/') || lower.includes('/test/')) return false;

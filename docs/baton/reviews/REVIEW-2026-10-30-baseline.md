@@ -12,7 +12,7 @@ Environment: Linux 6.8, Node v26.9.0, npm 11.19.1, vitest 4.1.7, dependencies fr
   - 2 are **UNVERIFIABLE**: I19 (render edges are untested) and I22 (its own spec says in-progress).
   - 1 has a confirmed partial gap: I06 (the `$listen` stretch goal was not delivered).
   - The rest are UNVERIFIED at criterion level. Only their deliverables were spot-checked.
-- Three new defects were found:
+- Three new defects were found (the first was later withdrawn as incorrect; see Findings):
   - Laravel route edges always drop their middlewares.
   - The scan summary edge count disagrees with the stored count.
   - `composer.json` is excluded by default, which defeats nested Laravel detection.
@@ -70,7 +70,10 @@ The section 4 suggestions map to tasks M1-01 … M4-02. `REQUIREMENTS.json` trac
 
 ## Findings
 
-### P1 — Laravel route edges always lose middlewares (M0-13, `src/core/scanner.ts:1481`)
+### WITHDRAWN — Laravel route edges always lose middlewares (M0-13, `src/core/scanner.ts:1481`)
+
+> **Withdrawn 2026-10-30 (during M1-09):** this finding was wrong. The Laravel detector's `resolveRouteMiddlewares` copies middlewares onto `route.middlewares` before the scanner reads them, so Laravel route edges kept their middlewares. The claim came from reading the code, without running it. A mutation check in M1-09 exposed it. The scanner now also falls back to `metadata.middlewares` for other detectors, and `tests/laravel-mounts.test.ts` asserts edge middlewares.
+
 
 Scenario: any Laravel route inside `Route::middleware('auth')->group(...)` is stored with `metadata.middlewares` undefined. The scanner reads `route.middlewares`, but the Laravel detector writes `route.metadata.middlewares` (`laravel.ts:1569`). Reproduced: yes, by reading the code path. The probe shows the detector output carrying middlewares, and the edge builder drops them. Resolution: covered by **M1-09** acceptance.
 

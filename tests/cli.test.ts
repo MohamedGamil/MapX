@@ -234,7 +234,9 @@ const routeRegistryMocks = {
   queryHooks: vi.fn().mockReturnValue([]),
 };
 
-vi.mock('../src/frameworks/route-registry.js', () => ({
+vi.mock('../src/frameworks/route-registry.js', async (importOriginal) => ({
+  // toRouteView is a pure formatter; keep the real one.
+  toRouteView: ((await importOriginal()) as any).toRouteView,
   RouteRegistry: class { constructor() { Object.assign(this, routeRegistryMocks); } }
 }));
 

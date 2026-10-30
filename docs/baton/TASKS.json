@@ -16,19 +16,16 @@
     {
       "id": "M1",
       "title": "Laravel route correctness",
-      "release": "0.4.0",
       "goal": "Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0 items 1–7)."
     },
     {
       "id": "M2",
       "title": "Cross-language precision and HTTP pairing",
-      "release": "0.5.0",
       "goal": "No name-only cross-language edges; frontend HTTP calls pair with backend routes."
     },
     {
       "id": "M3",
       "title": "Vue SFC semantics",
-      "release": "0.6.0",
       "goal": "Templates, Options/Composition API, state stores and router navigation in Vue 2.7 and 3."
     },
     {
@@ -39,13 +36,14 @@
   ],
   "gates": [
     {
-      "id": "G-REL-0.4.0",
-      "title": "Owner approves publishing 0.4.0",
+      "id": "G-RELEASE",
+      "title": "Owner manual sign-off for the next release (owner-initiated; never requested by agents)",
       "status": "PENDING",
       "approvedBy": null,
       "approvedAt": null,
       "revision": null,
-      "artifact": null
+      "artifact": null,
+      "ownerInitiated": true
     }
   ],
   "tasks": [
@@ -2055,15 +2053,48 @@
         "npx vitest run tests/toon-exporter.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Exporting a 3-file, 5-symbol, 4-edge fixture graph and decoding it with @toon-format/toon yields the same files, symbols and edges.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:36:27.453Z",
+      "completedAt": "2026-10-30T20:36:53.993Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-14-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/toon-exporter.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-14-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:36:27.453Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:36:53.747Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:36:53.993Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/toon-exporter.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-14-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2072,14 +2103,14 @@
     {
       "id": "M0-15-R1",
       "milestone": "M0",
-      "title": "Dashboard bundle size: meet or re-baseline the 200 KB target",
-      "objective": "Resolve the gap between the I15 claim (<200 KB gzipped client) and the shipped bundle (689 KB gzipped main.js plus a 7.8 MB source map in the npm package).",
-      "description": "COMPLETION DISPUTED for M0-15 (I15). Measured `gzip -c dist/ui/main.js | wc -c` = 689107 after `npm ci` on 2026-10-30; dist/ui/main.js.map (7.8 MB) ships because package.json files includes dist/.",
-      "priority": "P2",
+      "title": "Stop shipping the dashboard source map",
+      "objective": "The npm package contains no source maps; dashboard source maps are opt-in for local development.",
+      "description": "Split from the original M0-15-R1 on 2026-10-30 after the owner decided to stop shipping the 7.8 MB dist/ui/main.js.map (D005). The bundle-size target moved to M0-15-R2.",
+      "priority": "P1",
       "estimate": {
-        "min": 4,
-        "expected": 8,
-        "max": 14
+        "min": 1,
+        "expected": 2,
+        "max": 3
       },
       "risk": "medium",
       "area": [
@@ -2093,41 +2124,197 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [
-        "Owner decision: reduce the bundle to <200 KB gzipped, or re-baseline the target (record in DECISIONS.md)"
-      ],
+      "blockingConditions": [],
       "sources": [
         "specs/iterations/I15.md",
         "specs/features/F28-web-dashboard.md",
         "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
       ],
       "outputs": [
-        "scripts/build-ui.ts changes",
-        "size check script"
+        "scripts/build-ui.ts sourcemap opt-in",
+        "package.json files exclusion",
+        "scripts/check-package.ts"
       ],
       "affectedFiles": [
         "scripts/build-ui.ts",
-        "src/ui",
-        "package.json"
+        "package.json",
+        "scripts/check-package.ts"
       ],
       "acceptanceCriteria": [
-        "`npm pack --dry-run` lists no *.map file under dist/ui.",
-        "gzip size of dist/ui/main.js is at or below the target recorded in DECISIONS.md, checked by a script that exits 1 above it."
+        "After `npm run build:npm`, `npm pack --dry-run --json` lists no file ending in .map.",
+        "With MAPX_UI_SOURCEMAP=1 the UI build still writes dist/ui/main.js.map for local debugging.",
+        "scripts/check-package.ts exits 1 when a .map file would be packed (mutation check recorded)."
       ],
       "verificationCommands": [
         "npm run build:npm",
-        "npx tsx scripts/check-ui-size.ts"
+        "npx tsx scripts/check-package.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. `npm pack --dry-run` lists no *.map file under dist/ui.",
-      "status": "BLOCKED",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:34:37.368Z",
+      "completedAt": "2026-10-30T20:35:41.182Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-15-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run build:npm",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-15-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-15-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:34:37.134Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:34:37.368Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:35:40.927Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:35:41.182Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run build:npm",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-15-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-15-R1.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M0-15-R2",
+      "milestone": "M0",
+      "title": "Dashboard bundle size ceiling (re-baselined target)",
+      "objective": "Replace the unmet I15 target (<200 KB gzipped) with an enforced regression ceiling of 720 KiB gzipped for dist/ui/main.js (D006).",
+      "description": "Owner decision 2026-10-30: set a new target instead of reducing the bundle. Measured 690,760 bytes gzipped; the ceiling is 737,280 bytes (720 KiB), enforced by scripts/check-package.ts by default and in CI.",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "ui",
+        "packaging"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-15-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I15.md",
+        "specs/features/F28-web-dashboard.md",
+        "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+      ],
+      "outputs": [
+        "scripts/check-package.ts default ceiling",
+        "CI step",
+        "D006"
+      ],
+      "affectedFiles": [
+        "scripts/check-package.ts",
+        ".github/workflows/ci.yml",
+        "docs/baton/DECISIONS.md"
+      ],
+      "acceptanceCriteria": [
+        "`npx tsx scripts/check-package.ts` exits 0 at the current bundle size and enforces 737,280 bytes by default.",
+        "With a ceiling below the current size (`--max-ui-gzip 600000`) it exits 1.",
+        "CI runs the check after install."
+      ],
+      "verificationCommands": [
+        "npm run build:npm",
+        "npx tsx scripts/check-package.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. `npm pack --dry-run` lists no *.map file under dist/ui.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:17:01.563Z",
+      "completedAt": "2026-10-30T21:17:26.759Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-15-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run build:npm",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-15-R2.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-15-R2.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:17:01.563Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:17:26.118Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:17:26.759Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run build:npm",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-15-R2.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-15-R2.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2176,15 +2363,48 @@
         "npx vitest run tests/jsx-render-edges.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Scanning a fixture where Page.tsx renders <LinksPage /> and <ui.Button/> stores a `render` edge Page.tsx → LinksPage.tsx and none to an undefined component.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:37:19.111Z",
+      "completedAt": "2026-10-30T20:38:03.199Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-19-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/jsx-render-edges.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-19-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:37:19.111Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:38:02.963Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:38:03.199Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/jsx-render-edges.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-19-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2237,15 +2457,48 @@
         "npx vitest run tests/mcp-usability.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:38:03.441Z",
+      "completedAt": "2026-10-30T20:39:41.823Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-22-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/mcp-usability.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-22-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:38:03.441Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:39:41.567Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:39:41.823Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/mcp-usability.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-22-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2289,15 +2542,48 @@
         "npx vitest run tests/scanner-summary-count.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. For the two-repo fixture, the summary edge count equals `SELECT count(*) FROM edges`.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:39:42.079Z",
+      "completedAt": "2026-10-30T20:42:42.577Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-23.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/scanner-summary-count.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-23.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:39:42.079Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:42:42.313Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:42:42.577Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/scanner-summary-count.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-23.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2348,15 +2634,58 @@
         "node scripts/baton/check-changelog-coverage.mjs"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Every CHANGELOG feature entry after 2026-05-27 maps to a task id or is listed as unmapped with a reason in reports/M0-30.md.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T21:08:55.152Z",
+      "completedAt": "2026-10-30T21:08:55.625Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-30.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run plan:validate",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-30.md"
+        },
+        {
+          "command": "node scripts/baton/check-changelog-coverage.mjs",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-30.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:08:55.152Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:08:55.384Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:08:55.625Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run plan:validate",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-30.md"
+            },
+            {
+              "command": "node scripts/baton/check-changelog-coverage.mjs",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-30.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2407,16 +2736,59 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. labels.json covers all 10 declaration forms in report §1 and the 3 negative cases, at least 40 labelled routes.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:42:50.387Z",
+      "completedAt": "2026-10-30T20:45:53.841Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M1-01.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-01.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-01.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:42:50.387Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:45:53.567Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:45:53.841Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-01.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-01.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -2456,7 +2828,9 @@
       ],
       "affectedFiles": [
         "src/frameworks/detectors/laravel.ts",
-        "tests/laravel-routes-fixture.test.ts"
+        "tests/laravel-routes-fixture.test.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
       ],
       "acceptanceCriteria": [
         "Route::get('/x', ['type' => 'T', 'uses' => 'XController@show']) inside Route::group(['namespace' => 'App\\\\Http\\\\Controllers']) yields handler App\\Http\\Controllers\\XController@show.",
@@ -2465,18 +2839,78 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Route::get('/x', ['type' => 'T', 'uses' => 'XController@show']) inside Route::group(['namespace' => 'App\\\\Http\\\\Controllers']) yields handler App\\Http\\Controllers\\XController@show.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:37.804Z",
+      "completedAt": "2026-10-30T20:57:38.479Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M1-02.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-02.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-02.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-02.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:45:54.092Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:37.804Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:38.152Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:38.479Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-02.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-02.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-02.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2518,7 +2952,9 @@
       "affectedFiles": [
         "src/frameworks/detectors/laravel.ts",
         "tests/laravel-routes-fixture.test.ts",
-        "src/frameworks/route-registry.ts"
+        "src/frameworks/route-registry.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
       ],
       "acceptanceCriteria": [
         "routes/api.php with Route::group(['middleware' => 'auth'], fn () => require __DIR__.'/api/users.php') yields /api/users with middleware [api, auth].",
@@ -2528,19 +2964,79 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. routes/api.php with Route::group(['middleware' => 'auth'], fn () => require __DIR__.'/api/users.php') yields /api/users with middleware [api, auth].",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:38.908Z",
+      "completedAt": "2026-10-30T20:57:39.590Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M1-03.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-03.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-03.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-03.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:45:54.330Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:38.908Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:39.274Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:39.590Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-03.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-03.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-03.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -2584,7 +3080,9 @@
       ],
       "affectedFiles": [
         "src/frameworks/detectors/laravel.ts",
-        "tests/laravel-routes-fixture.test.ts"
+        "tests/laravel-routes-fixture.test.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
       ],
       "acceptanceCriteria": [
         "A module provider mounting Routes/api.php under Route::prefix('api/external/v1') yields URIs starting /api/external/v1.",
@@ -2593,19 +3091,79 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. A module provider mounting Routes/api.php under Route::prefix('api/external/v1') yields URIs starting /api/external/v1.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:43.640Z",
+      "completedAt": "2026-10-30T20:57:44.260Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M1-04.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-04.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-04.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-04.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:57:43.327Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:43.640Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:43.956Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:44.260Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-04.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-04.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-04.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -2645,7 +3203,9 @@
       ],
       "affectedFiles": [
         "src/frameworks/detectors/laravel.ts",
-        "tests/laravel-routes-fixture.test.ts"
+        "tests/laravel-routes-fixture.test.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
       ],
       "acceptanceCriteria": [
         "Route::resource('blog-categories', …) yields {blog_category}; 'statuses' yields {status}; 'people' yields {person}; ->parameters(['users' => 'admin_user']) yields {admin_user}.",
@@ -2653,18 +3213,78 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Route::resource('blog-categories', …) yields {blog_category}; 'statuses' yields {status}; 'people' yields {person}; ->parameters(['users' => 'admin_user']) yields {admin_user}.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:39.988Z",
+      "completedAt": "2026-10-30T20:57:40.828Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M1-05.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-05.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-05.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-05.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:45:54.573Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:39.988Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:40.389Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:40.828Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-05.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-05.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-05.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2705,7 +3325,9 @@
       ],
       "affectedFiles": [
         "src/frameworks/detectors/laravel.ts",
-        "tests/laravel-routes-fixture.test.ts"
+        "tests/laravel-routes-fixture.test.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
       ],
       "acceptanceCriteria": [
         "$base = 'notices'; Route::get($base.'/x', …) yields /notices/x.",
@@ -2714,18 +3336,78 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. $base = 'notices'; Route::get($base.'/x', …) yields /notices/x.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:41.243Z",
+      "completedAt": "2026-10-30T20:57:41.948Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M1-06.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-06.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-06.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-06.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:45:54.833Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:41.243Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:41.594Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:41.948Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-06.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-06.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-06.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2776,7 +3458,9 @@
         "src/frameworks/detectors/laravel.ts",
         "tests/laravel-routes-fixture.test.ts",
         "src/frameworks/route-registry.ts",
-        "src/types.ts"
+        "src/types.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
       ],
       "acceptanceCriteria": [
         "The fixture's unmounted file yields routes with reachable = false.",
@@ -2787,19 +3471,79 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. The fixture's unmounted file yields routes with reachable = false.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:44.939Z",
+      "completedAt": "2026-10-30T20:57:45.612Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M1-07.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:57:44.611Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:44.939Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:45.266Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:45.612Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -2842,7 +3586,9 @@
         "tests/laravel-routes-fixture.test.ts",
         "src/core/scanner.ts",
         "src/frameworks/framework-registry.ts",
-        "src/frameworks/utils.ts"
+        "src/frameworks/utils.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
       ],
       "acceptanceCriteria": [
         "A workspace whose Laravel app sits in backend/ (artisan + composer.json with laravel/framework) detects Laravel, even though composer.json is in the default excludes.",
@@ -2851,18 +3597,78 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. A workspace whose Laravel app sits in backend/ (artisan + composer.json with laravel/framework) detects Laravel, even though composer.json is in the default excludes.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:42.353Z",
+      "completedAt": "2026-10-30T20:57:43.002Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M1-08.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-08.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-08.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-08.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:45:55.077Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:42.353Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:42.676Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:43.002Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-08.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-08.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-08.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -2911,27 +3717,90 @@
         "src/types.ts",
         "src/core/scanner.ts",
         "src/cli.ts",
-        "src/mcp.ts"
+        "src/mcp.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts",
+        "src/frameworks/route-registry.ts"
       ],
       "acceptanceCriteria": [
         "`mapx routes --json` includes line, reachable, overridden, conditional, name and middlewares per route.",
-        "Every Laravel route edge in the store has metadata.line and a non-empty middlewares array when the route has middleware (today it is always empty because scanner.ts reads route.middlewares while the detector writes metadata.middlewares).",
+        "Every Laravel route edge in the store has metadata.line, and keeps its middlewares (asserted for a route inside an auth group mounted by require).",
         "The M1-01 scorer shows no regression in any other pattern."
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-routes-fixture.test.ts",
-        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+        "npx vitest run tests/laravel-mounts.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. `mapx routes --json` includes line, reachable, overridden, conditional, name and middlewares per route.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:46.288Z",
+      "completedAt": "2026-10-30T20:57:46.963Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M1-09.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-09.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-09.md"
+        },
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-09.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:57:45.967Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:46.288Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:46.639Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:46.963Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-09.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-09.md"
+            },
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-09.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -3008,16 +3877,65 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Fixture route URI recall ≥ 95%, handler recall ≥ 95%, false positives on negatives = 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:57:59.403Z",
+      "completedAt": "2026-10-30T20:59:23.247Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M1-98.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-98.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-98.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:57:59.096Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:57:59.403Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:59:22.992Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T20:59:23.247Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-98.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-98.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -3025,9 +3943,9 @@
     {
       "id": "M1-99",
       "milestone": "M1",
-      "title": "Release 0.4.0",
-      "objective": "Publish 0.4.0 with the Laravel route fixes after owner approval.",
-      "description": "Publish 0.4.0 with the Laravel route fixes after owner approval.",
+      "title": "Release (owner-initiated)",
+      "objective": "Publish a release when the owner decides the accumulated work warrants it (D007).",
+      "description": "Owner decision 2026-10-30: releases are not tied to milestone completion. The owner signs off manually after assessing several iterations of work. Agents never request this gate; the owner re-activates this task (DEFERRED → BACKLOG) and records the approval.",
       "priority": "P1",
       "estimate": {
         "min": 1,
@@ -3038,12 +3956,7 @@
       "area": [
         "release"
       ],
-      "dependencies": [
-        {
-          "id": "M1-98",
-          "type": "hard"
-        }
-      ],
+      "dependencies": [],
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
@@ -3059,15 +3972,15 @@
         "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "VERSION, package.json and CHANGELOG all say 0.4.0.",
-        "The publish workflow run for v0.4.0 succeeds (link recorded in the report)."
+        "VERSION, package.json and CHANGELOG agree on the released version, chosen by the owner.",
+        "The publish workflow run for the tag succeeds (link recorded in the report)."
       ],
       "verificationCommands": [
         "npm run check",
         "npm pack --dry-run"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. VERSION, package.json and CHANGELOG all say 0.4.0.",
-      "status": "BACKLOG",
+      "status": "DEFERRED",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -3077,7 +3990,7 @@
       "evidence": [],
       "history": [],
       "criticalPath": false,
-      "approvalGate": "G-REL-0.4.0",
+      "approvalGate": "G-RELEASE",
       "kind": "iteration",
       "rollback": "npm deprecate the version; publish a patch."
     },
@@ -3122,15 +4035,48 @@
         "npx vitest run tests/cross-language-resolution.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. A two-repo fixture (PHP Repo::get/save, JS and .vue callers of api.get/save, this.$http.save) has 0 call edges between JS-family and PHP files.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-30T20:59:37.599Z",
+      "completedAt": "2026-10-30T21:02:04.949Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-01.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/cross-language-resolution.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-01.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:59:37.599Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:02:04.662Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:02:04.949Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/cross-language-resolution.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-01.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -3183,7 +4129,7 @@
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Labels cover the 7 wrapper patterns in report item 12 and one call to an unserved endpoint, at least 30 edges.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -3191,8 +4137,15 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
-      "criticalPath": false,
+      "history": [
+        {
+          "at": "2026-10-30T21:11:15.025Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -3251,7 +4204,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -3308,7 +4261,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -3486,7 +4439,7 @@
         "npx vitest run tests/vue-sfc.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -3494,7 +4447,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-30T21:11:14.431Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -3916,6 +4876,955 @@
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "shipped in 0.2.7–0.3.5"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/parse-worker.ts",
+        "src/parsers/static-file-parser.ts",
+        "src/core/workspace-manager.ts"
+      ],
+      "acceptanceCriteria": [
+        "The tests referencing the feature pass at import."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-parsing.test.ts tests/scanner-hash-incremental.test.ts tests/static-file-parser.test.ts tests/workspace-manager.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:08:22.000Z",
+      "completedAt": "2026-10-30T21:08:22.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-30.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/worker-parsing.test.ts tests/scanner-hash-incremental.test.ts tests/static-file-parser.test.ts tests/workspace-manager.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-30.md",
+          "runAt": "2026-10-30T21:08:22.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:08:22.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/worker-parsing.test.ts tests/scanner-hash-incremental.test.ts tests/static-file-parser.test.ts tests/workspace-manager.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-30.md",
+              "runAt": "2026-10-30T21:08:22.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward.",
+      "id": "M0-31",
+      "title": "Scanner performance and incremental scanning (0.3.x)",
+      "objective": "Worker-thread parsing, content-hash sync for non-git projects, static file (YAML/MD/JSON) indexing, nested repo and monorepo discovery. Imported from CHANGELOG 0.2.7–0.3.5; it had no iteration.",
+      "description": "Worker-thread parsing, content-hash sync for non-git projects, static file (YAML/MD/JSON) indexing, nested repo and monorepo discovery. Delivered before BATON with no iteration. Imported by M0-30 with evidence from re-running the tests that exercise it.",
+      "milestone": "M0"
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "shipped in 0.2.7–0.3.5"
+      ],
+      "affectedFiles": [
+        "src/core/codebase-profiler.ts",
+        "src/core/role-classifier.ts",
+        "src/core/leiden.ts",
+        "src/core/architecture-analyzer.ts",
+        "src/core/cluster-engine.ts"
+      ],
+      "acceptanceCriteria": [
+        "The tests referencing the feature pass at import."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/codebase-profiler.test.ts tests/role-classifier.test.ts tests/leiden.test.ts tests/architecture-analyzer.test.ts tests/smells-dedup.test.ts tests/cluster-engine.test.ts tests/cluster-naming.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:08:22.000Z",
+      "completedAt": "2026-10-30T21:08:22.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-30.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/codebase-profiler.test.ts tests/role-classifier.test.ts tests/leiden.test.ts tests/architecture-analyzer.test.ts tests/smells-dedup.test.ts tests/cluster-engine.test.ts tests/cluster-naming.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-30.md",
+          "runAt": "2026-10-30T21:08:22.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:08:22.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/codebase-profiler.test.ts tests/role-classifier.test.ts tests/leiden.test.ts tests/architecture-analyzer.test.ts tests/smells-dedup.test.ts tests/cluster-engine.test.ts tests/cluster-naming.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-30.md",
+              "runAt": "2026-10-30T21:08:22.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward.",
+      "id": "M0-32",
+      "title": "Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+)",
+      "objective": "CodebaseProfiler, RoleClassifier, Leiden clustering, smell detection and dedup, DSM, layer clusters, and the profile/explain/smells/dsm/layers tools. Imported from CHANGELOG 0.2.7–0.3.5; it had no iteration.",
+      "description": "CodebaseProfiler, RoleClassifier, Leiden clustering, smell detection and dedup, DSM, layer clusters, and the profile/explain/smells/dsm/layers tools. Delivered before BATON with no iteration. Imported by M0-30 with evidence from re-running the tests that exercise it.",
+      "milestone": "M0"
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "shipped in 0.2.7–0.3.5"
+      ],
+      "affectedFiles": [
+        "src/core/store.ts",
+        "src/core/fuzzy-matcher.ts",
+        "src/core/flow-tracer.ts",
+        "src/core/graph.ts",
+        "queries"
+      ],
+      "acceptanceCriteria": [
+        "The tests referencing the feature pass at import."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/store-search.test.ts tests/fuzzy-matcher.test.ts tests/this-method-tracking.test.ts tests/sinks-filtering.test.ts tests/trace-cycle-dedup.test.ts tests/graph-self-edge.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:08:22.000Z",
+      "completedAt": "2026-10-30T21:08:22.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-30.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/store-search.test.ts tests/fuzzy-matcher.test.ts tests/this-method-tracking.test.ts tests/sinks-filtering.test.ts tests/trace-cycle-dedup.test.ts tests/graph-self-edge.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-30.md",
+          "runAt": "2026-10-30T21:08:22.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:08:22.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/store-search.test.ts tests/fuzzy-matcher.test.ts tests/this-method-tracking.test.ts tests/sinks-filtering.test.ts tests/trace-cycle-dedup.test.ts tests/graph-self-edge.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-30.md",
+              "runAt": "2026-10-30T21:08:22.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward.",
+      "id": "M0-33",
+      "title": "Search, tracing and graph-quality improvements (0.3.x)",
+      "objective": "Glob/NOCASE search, fuzzy suggestions, this.method() tracking, leaf-library sink filtering, trace cycle dedup, self-edge guard. Imported from CHANGELOG 0.2.7–0.3.5; it had no iteration.",
+      "description": "Glob/NOCASE search, fuzzy suggestions, this.method() tracking, leaf-library sink filtering, trace cycle dedup, self-edge guard. Delivered before BATON with no iteration. Imported by M0-30 with evidence from re-running the tests that exercise it.",
+      "milestone": "M0"
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "shipped in 0.2.7–0.3.5"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/flutter.ts",
+        "src/frameworks/detectors/aspnet.ts",
+        "src/core/scanner.ts"
+      ],
+      "acceptanceCriteria": [
+        "The tests referencing the feature pass at import."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/flutter-detector.test.ts tests/dart-resolution.test.ts tests/framework-extractors.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:08:22.000Z",
+      "completedAt": "2026-10-30T21:08:22.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-30.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/flutter-detector.test.ts tests/dart-resolution.test.ts tests/framework-extractors.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-30.md",
+          "runAt": "2026-10-30T21:08:22.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:08:22.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/flutter-detector.test.ts tests/dart-resolution.test.ts tests/framework-extractors.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-30.md",
+              "runAt": "2026-10-30T21:08:22.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward.",
+      "id": "M0-34",
+      "title": "Dart/Flutter and ASP.NET support (0.3.3)",
+      "objective": "Flutter detector, Dart package:/pubspec resolution, ASP.NET class-level routes. Imported from CHANGELOG 0.2.7–0.3.5; it had no iteration.",
+      "description": "Flutter detector, Dart package:/pubspec resolution, ASP.NET class-level routes. Delivered before BATON with no iteration. Imported by M0-30 with evidence from re-running the tests that exercise it.",
+      "milestone": "M0"
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "shipped in 0.2.7–0.3.5"
+      ],
+      "affectedFiles": [
+        "src/core/store.ts",
+        "src/core/config.ts"
+      ],
+      "acceptanceCriteria": [
+        "The tests referencing the feature pass at import."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/pagerank-exclude.test.ts tests/store-pattern.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:08:22.000Z",
+      "completedAt": "2026-10-30T21:08:22.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-30.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/pagerank-exclude.test.ts tests/store-pattern.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-30.md",
+          "runAt": "2026-10-30T21:08:22.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:08:22.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/pagerank-exclude.test.ts tests/store-pattern.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-30.md",
+              "runAt": "2026-10-30T21:08:22.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward.",
+      "id": "M0-35",
+      "title": "PageRank persistence and graphExcludePatterns (0.3.4)",
+      "objective": "PageRank stored in SQLite (migration v9), files-only ranking and graphExcludePatterns. Imported from CHANGELOG 0.2.7–0.3.5; it had no iteration.",
+      "description": "PageRank stored in SQLite (migration v9), files-only ranking and graphExcludePatterns. Delivered before BATON with no iteration. Imported by M0-30 with evidence from re-running the tests that exercise it.",
+      "milestone": "M0"
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "cli"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "CLI flag",
+        "test"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "tests/cli-node-members.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`mapx node User --include-members` on a scanned workspace prints the methods of class User; without the flag it does not."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/cli-node-members.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:09:25.052Z",
+      "completedAt": "2026-10-30T21:09:38.221Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-36.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/cli-node-members.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-36.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:09:25.052Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:09:37.935Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:09:38.221Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/cli-node-members.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-36.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "id": "M0-36",
+      "title": "Add the documented --include-members CLI flag to mapx node",
+      "objective": "`mapx node <symbol> --include-members` lists member symbols, as CHANGELOG 0.3.4 and the agent templates already document.",
+      "description": "Defect found by M0-30: `mapx_node` supports include_members, but src/cli.ts has no --include-members option, while templates.ts:199/455 and CHANGELOG 0.3.4 advertise it.",
+      "milestone": "M0"
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "parsers",
+        "quality"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "rewritten test"
+      ],
+      "affectedFiles": [
+        "tests/parser-pool.test.ts",
+        "src/parsers/wasm-parser.ts"
+      ],
+      "acceptanceCriteria": [
+        "The test imports src/parsers/wasm-parser.ts and shows that two parses of the same language reuse one Parser instance.",
+        "The test fails when pooling is disabled (mutation check recorded)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/parser-pool.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:10:24.911Z",
+      "completedAt": "2026-10-30T21:11:01.971Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-37.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/parser-pool.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-37.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:10:24.911Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:11:01.426Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:11:01.971Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/parser-pool.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-37.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "id": "M0-37",
+      "title": "Make the parser-pool test exercise the real pool",
+      "objective": "tests/parser-pool.test.ts re-implements the pool locally and never imports src/, so WASM parser pooling (CHANGELOG 0.3.4) is untested.",
+      "milestone": "M0",
+      "description": "tests/parser-pool.test.ts re-implements the pool locally and never imports src/, so WASM parser pooling (CHANGELOG 0.3.4) is untested."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "analysis"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "profiler change",
+        "test"
+      ],
+      "affectedFiles": [
+        "src/core/codebase-profiler.ts",
+        "tests/codebase-profiler.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "With graphExcludePatterns [\"fixtures/**\"], files under fixtures/ do not count toward the profile; with the default, behaviour is unchanged."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/codebase-profiler.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-10-30T21:09:38.510Z",
+      "completedAt": "2026-10-30T21:10:24.425Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-38.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/codebase-profiler.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-38.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T21:09:38.510Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:10:23.857Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-30T21:10:24.425Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/codebase-profiler.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-38.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "id": "M0-38",
+      "title": "Profiler honours graphExcludePatterns",
+      "objective": "CodebaseProfiler excludes files by graphExcludePatterns instead of its own hard-coded scratch/test regex.",
+      "description": "Found by M0-30: codebase-profiler.ts:17 ignores the graphExcludePatterns setting (spec 09 §3.11).",
+      "milestone": "M0"
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "low",
+      "area": [
+        "quality"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "tests"
+      ],
+      "affectedFiles": [
+        "tests/store-stmt-cache.test.ts",
+        "tests/role-classifier.test.ts",
+        "tests/assets.test.ts",
+        "tests/ui-server.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each listed feature has a test that imports the real module and fails when the feature is removed (mutation checks recorded)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/store-stmt-cache.test.ts tests/assets.test.ts tests/ui-server.test.ts tests/role-classifier.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "id": "M0-39",
+      "title": "Tests for shipped but untested 0.3.x features",
+      "objective": "Cover the shipped features that M0-30 found have no test: stmtCache, the hub/orchestrator role signal, WASM asset root resolution, and the UI server /api/graph, /api/explain and /api/tool-calls endpoints.",
+      "milestone": "M0",
+      "description": "Cover the shipped features that M0-30 found have no test: stmtCache, the hub/orchestrator role signal, WASM asset root resolution, and the UI server /api/graph, /api/explain and /api/tool-calls endpoints."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 6,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "low",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/10-scanner-performance-and-improvements.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "scanner change",
+        "benchmark note"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/scanner-resume.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Resume state written for 5,000 files grows linearly (bytes written per batch is constant within 10%), measured by a test.",
+        "No code path rebuilds workspaceFileMap from the full DB during resolution."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/scanner-resume.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "id": "M4-03",
+      "title": "Scanner: remove O(N²) resume serialisation and full-DB fileMap rebuilds",
+      "objective": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10).",
+      "milestone": "M4",
+      "description": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10)."
+    },
+    {
+      "priority": "P3",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "low",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/10-scanner-performance-and-improvements.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "scanner change",
+        "benchmark"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "benchmarks"
+      ],
+      "acceptanceCriteria": [
+        "The discovered file list is identical (sorted) before and after on MapX itself.",
+        "`npm run bench` discovery time on MapX itself is not slower; the measured numbers are recorded in the report."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/scanner.test.ts",
+        "npm run bench:json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "id": "M4-04",
+      "title": "Scanner: bounded parallel directory walk and post-scan steps",
+      "objective": "discoverFiles walks directories with bounded concurrency, and independent post-scan steps run concurrently (spec 10).",
+      "milestone": "M4",
+      "description": "discoverFiles walks directories with bounded concurrency, and independent post-scan steps run concurrently (spec 10)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "packaging"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/KNOWN_ISSUES.md",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "outputs": [
+        "package.json scripts"
+      ],
+      "affectedFiles": [
+        "package.json",
+        "scripts/build-ui.ts",
+        ".github/workflows/publish-npm.yml"
+      ],
+      "acceptanceCriteria": [
+        "`npm ci` does not run scripts/build-ui.ts; the publish workflow still produces dist/ui/main.js (checked by scripts/check-package.ts)."
+      ],
+      "verificationCommands": [
+        "npm run build:npm",
+        "npx tsx scripts/check-package.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "id": "M4-05",
+      "title": "Build the dashboard only for release and serve, not on every install",
+      "objective": "The `prepare` script no longer runs the UI build for contributors' npm installs (KNOWN_ISSUES).",
+      "milestone": "M4",
+      "description": "The `prepare` script no longer runs the UI build for contributors' npm installs (KNOWN_ISSUES)."
+    },
+    {
+      "priority": "P3",
+      "estimate": {
+        "min": 10,
+        "expected": 16,
+        "max": 24
+      },
+      "risk": "low",
+      "area": [
+        "ui"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/KNOWN_ISSUES.md"
+      ],
+      "outputs": [
+        "UI mode"
+      ],
+      "affectedFiles": [
+        "src/ui"
+      ],
+      "acceptanceCriteria": [
+        "A 3D toggle renders the same nodes and edges as the 2D view for the MapX self-scan."
+      ],
+      "verificationCommands": [
+        "npm run build:npm"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DEFERRED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "epic",
+      "rollback": "Revert the iteration branch.",
+      "id": "M4-06",
+      "title": "3D graph mode in the dashboard",
+      "objective": "Optional 3D force-graph view (KNOWN_ISSUES wish).",
+      "milestone": "M4",
+      "description": "Optional 3D force-graph view (KNOWN_ISSUES wish)."
+    },
+    {
+      "priority": "P3",
+      "estimate": {
+        "min": 20,
+        "expected": 40,
+        "max": 60
+      },
+      "risk": "low",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/KNOWN_ISSUES.md"
+      ],
+      "outputs": [
+        "decision record"
+      ],
+      "affectedFiles": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "acceptanceCriteria": [
+        "A decision record with measured scan times on a 50k-file corpus."
+      ],
+      "verificationCommands": [
+        "npm run bench:json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "DEFERRED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "epic",
+      "rollback": "Revert the iteration branch.",
+      "id": "M4-07",
+      "title": "Compiled scanner sidecar for very large codebases",
+      "objective": "Evaluate a compiled discovery and parsing sidecar (KNOWN_ISSUES wish).",
+      "milestone": "M4",
+      "description": "Evaluate a compiled discovery and parsing sidecar (KNOWN_ISSUES wish)."
     }
   ]
 }

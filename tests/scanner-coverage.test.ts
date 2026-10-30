@@ -161,6 +161,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 describe('Scanner Coverage Boost', () => {
   const createMockStore = (overrides?: any) => ({
     getMeta: vi.fn().mockReturnValue(null),
+    getSymbolCount: vi.fn().mockReturnValue(0),
+    getEdgeCount: vi.fn().mockReturnValue(0),
     setMeta: vi.fn(),
     getAllFiles: vi.fn().mockReturnValue([]),
     getAllEdges: vi.fn().mockReturnValue([]),
@@ -345,9 +347,12 @@ describe('Scanner Coverage Boost', () => {
     const resExact = scanner['resolveSymbolToFile']('MyFunc', fileMap, 'other.ts');
     expect(resExact).toBe('a.ts');
 
-    // Test fallback to first compatible
-    const resFirst = scanner['resolveSymbolToFile']('myfunc', fileMap);
+    // Case-insensitive lookup falls back to the first compatible candidate
+    const resFirst = scanner['resolveSymbolToFile']('myfunc', fileMap, 'other.ts');
     expect(resFirst).toBe('a.ts');
+
+    // Without a source file the language is unknown, so resolution fails closed (M2-01)
+    expect(scanner['resolveSymbolToFile']('myfunc', fileMap)).toBeNull();
   });
 
   it('covers scanFull and scanIncremental options, locks, resume errors', async () => {

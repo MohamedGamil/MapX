@@ -119,4 +119,30 @@ describe('CodebaseProfiler', () => {
     expect(profile.detectedFrameworks).toContain('express');
     expect(profile.detectedFrameworks).toContain('react');
   });
+
+  // M0-38: graphExcludePatterns drive the profiler's exclusions when supplied.
+  it('excludes files matching the configured graphExcludePatterns', () => {
+    const files = [
+      { path: 'bin/mapx.ts' },
+      { path: 'src/cli.ts' },
+      { path: 'fixtures/app/routes/users.ts' },
+      { path: 'fixtures/app/controllers/UserController.ts' },
+    ];
+    const profiler = new CodebaseProfiler(makeStore(files));
+    // The fixture app's routes/controllers make the repo look like a web API by default...
+    expect(profiler.profile('test-repo').hasBackend).toBe(true);
+    // ...but not once fixtures/** is a graph exclude.
+    const profile = profiler.profile('test-repo', [], ['fixtures/**']);
+    expect(profile.hasBackend).toBe(false);
+    expect(profile.archetype).toBe('cli-tool');
+  });
+
+  it('keeps the built-in exclusions when no patterns are supplied', () => {
+    const profiler = new CodebaseProfiler(makeStore([
+      { path: 'bin/mapx.ts' },
+      { path: 'src/cli.ts' },
+      { path: 'scratch/routes/x.ts' },
+    ]));
+    expect(profiler.profile('test-repo').hasBackend).toBe(false);
+  });
 });

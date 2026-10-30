@@ -1,0 +1,334 @@
+{
+  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden or unreachable (must not be reported as live).",
+  "labels": [
+    {
+      "id": "L01",
+      "pattern": "class-array",
+      "method": "GET",
+      "uri": "",
+      "handler": "HomeController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L02",
+      "pattern": "closure",
+      "method": "GET",
+      "uri": "about",
+      "handler": null,
+      "expect": "live"
+    },
+    {
+      "id": "L03",
+      "pattern": "uses-array",
+      "method": "GET",
+      "uri": "api/legacy/items",
+      "handler": "ItemController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L04",
+      "pattern": "uses-array",
+      "method": "POST",
+      "uri": "api/legacy/items",
+      "handler": "ItemController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L05",
+      "pattern": "string-handler",
+      "method": "GET",
+      "uri": "api/legacy/items/{id}",
+      "handler": "ItemController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L06",
+      "pattern": "class-array",
+      "method": "GET",
+      "uri": "api/posts",
+      "handler": "PostController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L07",
+      "pattern": "match",
+      "method": "GET",
+      "uri": "api/posts/search",
+      "handler": "PostController@search",
+      "expect": "live"
+    },
+    {
+      "id": "L08",
+      "pattern": "match",
+      "method": "POST",
+      "uri": "api/posts/search",
+      "handler": "PostController@search",
+      "expect": "live"
+    },
+    {
+      "id": "L09",
+      "pattern": "controller-group",
+      "method": "GET",
+      "uri": "api/tags",
+      "handler": "TagController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L10",
+      "pattern": "controller-group",
+      "method": "GET",
+      "uri": "api/tags/{tag}",
+      "handler": "TagController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L11",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories",
+      "handler": "CategoryController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L12",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories/create",
+      "handler": "CategoryController@create",
+      "expect": "live"
+    },
+    {
+      "id": "L13",
+      "pattern": "resource",
+      "method": "POST",
+      "uri": "api/blog-categories",
+      "handler": "CategoryController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L14",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L15",
+      "pattern": "resource",
+      "method": "GET",
+      "uri": "api/blog-categories/{blog_category}/edit",
+      "handler": "CategoryController@edit",
+      "expect": "live"
+    },
+    {
+      "id": "L16",
+      "pattern": "resource",
+      "method": "PUT",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L17",
+      "pattern": "resource",
+      "method": "PATCH",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L18",
+      "pattern": "resource",
+      "method": "DELETE",
+      "uri": "api/blog-categories/{blog_category}",
+      "handler": "CategoryController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L19",
+      "pattern": "api-resource",
+      "method": "GET",
+      "uri": "api/statuses",
+      "handler": "StatusController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L20",
+      "pattern": "api-resource",
+      "method": "POST",
+      "uri": "api/statuses",
+      "handler": "StatusController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L21",
+      "pattern": "api-resource",
+      "method": "GET",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L22",
+      "pattern": "api-resource",
+      "method": "PUT",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L23",
+      "pattern": "api-resource",
+      "method": "PATCH",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L24",
+      "pattern": "api-resource",
+      "method": "DELETE",
+      "uri": "api/statuses/{status}",
+      "handler": "StatusController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L25",
+      "pattern": "dynamic-path",
+      "method": "GET",
+      "uri": "api/notices/latest",
+      "handler": "NoticeController@latest",
+      "expect": "live"
+    },
+    {
+      "id": "L26",
+      "pattern": "closure",
+      "method": "GET",
+      "uri": "api/health",
+      "handler": null,
+      "expect": "live"
+    },
+    {
+      "id": "L27",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/v1/users",
+      "handler": "UserController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L28",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/v1/people",
+      "handler": "PersonController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L29",
+      "pattern": "require-mount",
+      "method": "POST",
+      "uri": "api/v1/people",
+      "handler": "PersonController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L30",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L31",
+      "pattern": "require-mount",
+      "method": "PUT",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L32",
+      "pattern": "require-mount",
+      "method": "PATCH",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L33",
+      "pattern": "require-mount",
+      "method": "DELETE",
+      "uri": "api/v1/people/{person}",
+      "handler": "PersonController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L34",
+      "pattern": "overridden",
+      "method": "GET",
+      "uri": "api/dup",
+      "handler": "PostController@oldDup",
+      "expect": "overridden",
+      "note": "routes/api/late.php registers GET api/dup later"
+    },
+    {
+      "id": "L35",
+      "pattern": "require-mount",
+      "method": "GET",
+      "uri": "api/dup",
+      "handler": "PostController@newDup",
+      "expect": "live"
+    },
+    {
+      "id": "L36",
+      "pattern": "conditional",
+      "method": "GET",
+      "uri": "api/beta/feature",
+      "handler": "BetaController@show",
+      "expect": "conditional"
+    },
+    {
+      "id": "L37",
+      "pattern": "unmounted",
+      "method": "GET",
+      "uri": "ghost",
+      "handler": "GhostController@show",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L38",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "api/billing/v1/invoices",
+      "handler": "InvoiceController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L39",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "api/billing/v1/invoices/{invoice}",
+      "handler": "InvoiceController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L40",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "shop/products",
+      "handler": "ProductController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L41",
+      "pattern": "provider-mount",
+      "method": "GET",
+      "uri": "shop/products/{product}",
+      "handler": "ProductController@show",
+      "expect": "live"
+    }
+  ]
+}

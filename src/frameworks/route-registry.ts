@@ -3,6 +3,25 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { RouteBinding, HookBinding } from '../types.js';
 
+/**
+ * A route as shown by `mapx routes --json` and `mapx_routes`: the binding plus normalised
+ * declaration line, name, middlewares and live-ness flags, present on every route.
+ */
+export function toRouteView(route: RouteBinding) {
+  const meta = route.metadata ?? {};
+  return {
+    ...route,
+    line: route.line ?? meta.line ?? null,
+    name: meta.name ?? null,
+    middlewares: route.middlewares ?? meta.middlewares ?? [],
+    reachable: meta.reachable !== false,
+    overridden: meta.overridden === true,
+    ...(meta.overriddenBy ? { overriddenBy: meta.overriddenBy } : {}),
+    conditional: meta.conditional === true,
+    ...(meta.dynamic ? { dynamic: true } : {}),
+  };
+}
+
 export class RouteRegistry {
   private routes: RouteBinding[] = [];
   private hooks: HookBinding[] = [];

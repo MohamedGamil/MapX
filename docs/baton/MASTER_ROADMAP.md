@@ -28,45 +28,55 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-20** NestJS routes, hooks and DI — DONE, P1, 0h (legacy I20); depends on nothing.
 - **M0-21** Graph resolution and noise reduction — DONE, P1, 0h (legacy I21); depends on nothing.
 - **M0-22** CLI/MCP search and context usability — DONE, P1, 0h (legacy I22); depends on nothing.
-- **M0-14-R1** TOON exporter unit and round-trip tests — READY, P1, 5h; depends on M0-14.
-- **M0-15-R1** Dashboard bundle size: meet or re-baseline the 200 KB target — BLOCKED, P2, 8h; depends on M0-15.
-- **M0-19-R1** Tests for JSX render edges — READY, P2, 4h; depends on M0-19.
-- **M0-22-R1** Verify and test the I22 usability deliverables — READY, P2, 5h; depends on M0-22.
-- **M0-23** Scan summary edge count disagrees with stored edges — READY, P2, 4h; depends on nothing.
-- **M0-30** Reconcile untracked post-I22 work into the plan — READY, P1, 6h; depends on nothing.
+- **M0-14-R1** TOON exporter unit and round-trip tests — DONE, P1, 5h; depends on M0-14.
+- **M0-15-R1** Stop shipping the dashboard source map — DONE, P1, 2h; depends on M0-15.
+- **M0-15-R2** Dashboard bundle size ceiling (re-baselined target) — DONE, P2, 8h; depends on M0-15-R1.
+- **M0-19-R1** Tests for JSX render edges — DONE, P2, 4h; depends on M0-19.
+- **M0-22-R1** Verify and test the I22 usability deliverables — DONE, P2, 5h; depends on M0-22.
+- **M0-23** Scan summary edge count disagrees with stored edges — DONE, P2, 4h; depends on nothing.
+- **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
+- **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
+- **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.
+- **M0-33** Search, tracing and graph-quality improvements (0.3.x) — DONE, P1, 0h; depends on nothing.
+- **M0-34** Dart/Flutter and ASP.NET support (0.3.3) — DONE, P1, 0h; depends on nothing.
+- **M0-35** PageRank persistence and graphExcludePatterns (0.3.4) — DONE, P1, 0h; depends on nothing.
+- **M0-36** Add the documented --include-members CLI flag to mapx node — DONE, P1, 2h; depends on nothing.
+- **M0-37** Make the parser-pool test exercise the real pool — DONE, P2, 3h; depends on nothing.
+- **M0-38** Profiler honours graphExcludePatterns — DONE, P2, 3h; depends on nothing.
+- **M0-39** Tests for shipped but untested 0.3.x features — BACKLOG, P2, 10h; depends on nothing.
 
-## M1 — Laravel route correctness (0.4.0)
+## M1 — Laravel route correctness
 
 Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0 items 1–7).
 
-- **M1-01** Laravel route fixture and recall/precision scorer — READY, P0, 10h; depends on nothing.
-- **M1-02** Parse `uses` arrays in route handlers — BACKLOG, P0, 5h; depends on M1-01.
-- **M1-03** Follow require/include in route files with inherited group stack — BACKLOG, P0, 12h; depends on M1-01.
-- **M1-04** Read provider route mounts generally — BACKLOG, P0, 12h; depends on M1-01, M1-03.
-- **M1-05** Laravel-compatible resource parameter names — BACKLOG, P1, 5h; depends on M1-01.
-- **M1-06** Resolve local string variables in route paths — BACKLOG, P1, 5h; depends on M1-01.
-- **M1-07** Mount reachability and last-registration-wins — BACKLOG, P0, 14h; depends on M1-01, M1-03, M1-04.
-- **M1-08** Detect nested Laravel roots and honour frameworks.json — BACKLOG, P0, 8h; depends on M1-01.
-- **M1-09** Route line numbers, symbol targets and middleware metadata — BACKLOG, P0, 8h; depends on M1-01, M1-02.
-- **M1-98** M1 acceptance: re-score Laravel fixture — BACKLOG, P0, 3h; depends on M1-02, M1-03, M1-04, M1-05, M1-06, M1-07, M1-08, M1-09.
-- **M1-99** Release 0.4.0 — BACKLOG, P1, 2h; depends on M1-98.
+- **M1-01** Laravel route fixture and recall/precision scorer — DONE, P0, 10h; depends on nothing.
+- **M1-02** Parse `uses` arrays in route handlers — DONE, P0, 5h; depends on M1-01.
+- **M1-03** Follow require/include in route files with inherited group stack — DONE, P0, 12h; depends on M1-01.
+- **M1-04** Read provider route mounts generally — DONE, P0, 12h; depends on M1-01, M1-03.
+- **M1-05** Laravel-compatible resource parameter names — DONE, P1, 5h; depends on M1-01.
+- **M1-06** Resolve local string variables in route paths — DONE, P1, 5h; depends on M1-01.
+- **M1-07** Mount reachability and last-registration-wins — DONE, P0, 14h; depends on M1-01, M1-03, M1-04.
+- **M1-08** Detect nested Laravel roots and honour frameworks.json — DONE, P0, 8h; depends on M1-01.
+- **M1-09** Route line numbers, symbol targets and middleware metadata — DONE, P0, 8h; depends on M1-01, M1-02.
+- **M1-98** M1 acceptance: re-score Laravel fixture — DONE, P0, 3h; depends on M1-02, M1-03, M1-04, M1-05, M1-06, M1-07, M1-08, M1-09.
+- **M1-99** Release (owner-initiated) — DEFERRED, P1, 2h; depends on nothing.
 
-## M2 — Cross-language precision and HTTP pairing (0.5.0)
+## M2 — Cross-language precision and HTTP pairing
 
 No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 
-- **M2-01** Fail-closed cross-language name resolution — READY, P0, 6h; depends on nothing.
-- **M2-02** Vue 2.7 and Vue 3 HTTP client fixture with labels — BACKLOG, P1, 8h; depends on M1-01.
+- **M2-01** Fail-closed cross-language name resolution — DONE, P0, 6h; depends on nothing.
+- **M2-02** Vue 2.7 and Vue 3 HTTP client fixture with labels — READY, P1, 8h; depends on M1-01.
 - **M2-03** HTTP client call-site extraction — BACKLOG, P1, 14h; depends on M2-02.
 - **M2-04** URL constant, template and conditional resolution — BACKLOG, P1, 10h; depends on M2-03.
 - **M2-05** Base URL resolution — BACKLOG, P1, 8h; depends on M2-03.
 - **M2-06** Pair client calls with backend routes across repositories — BACKLOG, P1, 14h; depends on M2-04, M2-05, M1-98, M2-01.
 
-## M3 — Vue SFC semantics (0.6.0)
+## M3 — Vue SFC semantics
 
 Templates, Options/Composition API, state stores and router navigation in Vue 2.7 and 3.
 
-- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BACKLOG, P1, 6h; depends on nothing.
+- **M3-01** Vue SFC fixture set (2.7 and 3.x) — READY, P1, 6h; depends on nothing.
 - **M3-02** Vue template pass — BACKLOG, P1, 14h; depends on M3-01.
 - **M3-03** Options API member resolution — BACKLOG, P1, 12h; depends on M3-01.
 - **M3-04** <script setup> macros and composables — BACKLOG, P1, 10h; depends on M3-01.
@@ -79,4 +89,9 @@ Fixture scoring in CI; optional message edges.
 
 - **M4-01** Recall/precision scoring in CI — BACKLOG, P1, 5h; depends on M1-01, M2-02, M3-01.
 - **M4-02** postMessage / iframe message edges — DEFERRED, P3, 10h; depends on nothing.
+- **M4-03** Scanner: remove O(N²) resume serialisation and full-DB fileMap rebuilds — BACKLOG, P2, 8h; depends on nothing.
+- **M4-04** Scanner: bounded parallel directory walk and post-scan steps — BACKLOG, P3, 12h; depends on nothing.
+- **M4-05** Build the dashboard only for release and serve, not on every install — BACKLOG, P2, 4h; depends on nothing.
+- **M4-06** 3D graph mode in the dashboard — DEFERRED, P3, 16h; depends on nothing.
+- **M4-07** Compiled scanner sidecar for very large codebases — DEFERRED, P3, 40h; depends on nothing.
 

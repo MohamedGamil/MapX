@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdirSync, copyFileSync, existsSync } from 'node:fs';
+import { mkdirSync, copyFileSync, existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 async function main() {
@@ -14,6 +14,8 @@ async function main() {
   if (!existsSync(distDir)) {
     mkdirSync(distDir, { recursive: true });
   }
+  // Drop a map left over from an earlier opt-in build.
+  rmSync(resolve(distDir, 'main.js.map'), { force: true });
 
   console.log('Bundling Mapx Web Dashboard client...');
 
@@ -28,7 +30,8 @@ async function main() {
     entryPoints: [resolve(srcDir, 'main.ts')],
     bundle: true,
     minify: true,
-    sourcemap: true,
+    // Source maps are opt-in for local debugging; they are never shipped (docs/baton D005).
+    sourcemap: process.env.MAPX_UI_SOURCEMAP === '1',
     platform: 'browser',
     outfile: resolve(distDir, 'main.js'),
     define: {

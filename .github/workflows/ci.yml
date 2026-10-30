@@ -49,6 +49,10 @@ jobs:
       - name: Run tests with coverage
         run: npx vitest run --coverage
 
+      # npm ci already ran `prepare` (build:npm), so dist/ is current.
+      - name: Check package contents and dashboard size
+        run: npx tsx scripts/check-package.ts
+
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

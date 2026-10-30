@@ -63,6 +63,8 @@ export interface Gate {
   approvedAt: string | null;
   revision: string | null;
   artifact: string | null;
+  /** The owner raises this gate on their own schedule; agents never request it. */
+  ownerInitiated?: boolean;
 }
 export interface Milestone {
   id: string;
@@ -456,7 +458,7 @@ Run \`npm run plan:validate\`, inspect \`git status\`, then \`npm run check\`. N
 
 ## Next
 Remaining critical path: ${cp.path.join(' → ') || 'none'} (${cp.duration}h). Recompute with \`npm run plan:report\` after every completion.
-Pending gates: ${plan.gates.filter((g) => g.status !== 'APPROVED').map((g) => g.id).join(', ') || 'none'}; request approval only with reviewable evidence.
+Pending gates: ${plan.gates.filter((g) => g.status !== 'APPROVED' && !g.ownerInitiated).map((g) => g.id).join(', ') || 'none'}; request approval only with reviewable evidence. Owner-initiated (never request): ${plan.gates.filter((g) => g.ownerInitiated && g.status !== 'APPROVED').map((g) => g.id).join(', ') || 'none'}.
 External blockers: ${plan.tasks.flatMap((t) => t.blockingConditions.map((b) => `${t.id}: ${b}`)).join('; ') || 'none'}.
 `;
 }

@@ -8,6 +8,37 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- **Laravel route mount graph**: routes are now resolved through what actually loads each file: (M1-03, M1-04)
+  - `bootstrap/app.php` `withRouting(...)`, `RouteServiceProvider`, or the `routes/web.php` / `routes/api.php` defaults;
+  - service-provider mounts (`Route::prefix(..)->group(<path>)` and `$this->loadRoutesFrom(..)` inside prefixed groups);
+  - `require`/`include` inside route groups.
+
+  Routes inherit the enclosing prefix, middleware, namespace and controller, and a file mounted twice yields both sets of routes.
+- **Route liveness flags**: (M1-07)
+  - routes in files nothing loads are reported `reachable: false`;
+  - mounts inside `if`/`else` are `conditional: true`;
+  - when the same method and URI is registered twice, earlier registrations are `overridden: true`, with `overriddenBy` pointing at the winner, matching Laravel's last-registration-wins rule.
+- **Route line numbers and names**: every route carries its declaration `line` and its `name` (`->name()` or `'as'`). `mapx routes --json` and `mapx_routes` now always include `line`, `name`, `middlewares`, `reachable`, `overridden` and `conditional`, and route edges keep the same metadata. (M1-09)
+- **Laravel route fixture and scorer**: `tests/fixtures/laravel-routes` (41 labelled routes) and `scripts/eval/score-routes.ts`, which report per-pattern recall and precision. (M1-01)
+- `frameworks.json` is now honoured as an override: frameworks listed there stay active even when detection misses them. (M1-08)
+
+### Fixed
+- Laravel routes declared with array handlers (`['uses' => 'C@m', 'as' => ..., 'middleware' => ...]`) now resolve their handler; handler symbols are fully qualified using the group namespace. (M1-02)
+- Resource route parameters follow Laravel (`blog-categories` → `{blog_category}`, `statuses` → `{status}`, `people` → `{person}`); `->parameters()`, `->only()` and `->except()` are honoured. (M1-05)
+- Route paths built from local string variables (`$base.'/x'`) resolve; unresolvable dynamic paths are flagged `dynamic` instead of leaking PHP source. (M1-06)
+- `Route::prefix(..)->group(<path>)` inside a route file no longer leaks its prefix onto later routes. (M1-04)
+- Laravel is detected when the app sits below the scanned folder, and when `artisan`/`composer.json` are not in the indexed file list. (M1-08)
+- A long-running MCP server no longer keeps stale Laravel route context between scans. (M1-07)
+- A registered repository nested inside another registered repository (for example `.` plus `backend/` and `frontend/`) is no longer indexed twice; the scan summary now reports the stored symbol and edge counts. (M0-23)
+- Git's `fatal: ...` messages no longer leak into scan output for repositories without commits. (M0-23)
+- TOON export with `--delimiter tab` or `pipe` now declares the delimiter in array headers as the TOON spec requires, so the output decodes. (M0-14-R1)
+- `mapx_search` with `term: "*"` and a file filter returns every symbol in the file (previously capped at 20), and reports `Found N of M` with the real total whenever results are truncated. (M0-22-R1)
+- The npm package no longer ships the 7.8 MB dashboard source map (`MAPX_UI_SOURCEMAP=1` keeps it for local builds). (M0-15-R1)
+- Name-only symbol resolution no longer crosses languages: a PHP route whose controller is not indexed no longer links to a JavaScript class of the same name, and resolution without a known source language returns nothing instead of any match. (M2-01)
+- `mapx node --include-members` now exists, as documented, and lists the member symbols of a class, interface or trait (text and JSON). (M0-36)
+- The codebase profiler uses the configured `graphExcludePatterns` instead of fixed scratch/test rules. (M0-38)
+
 ## [0.3.5] — 2026-06-01
 
 ### Changed

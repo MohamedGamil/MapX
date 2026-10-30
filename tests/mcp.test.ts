@@ -31,6 +31,8 @@ const storeMocks = {
   close: vi.fn(),
   queryEdges: vi.fn().mockReturnValue([]),
   searchSymbolsFiltered: vi.fn().mockReturnValue([]),
+  // Count = the unlimited search, as the real store's COUNT(*) query would return.
+  countSymbolsFiltered: vi.fn((o: any) => (storeMocks.searchSymbolsFiltered({ ...o, limit: undefined }) ?? []).length),
   getFilesFiltered: vi.fn().mockReturnValue([]),
   getLanguageBreakdown: vi.fn().mockReturnValue({}),
   getClusters: vi.fn().mockReturnValue([]),
@@ -70,6 +72,7 @@ vi.mock('../src/core/store.js', () => ({
     close = storeMocks.close;
     queryEdges = storeMocks.queryEdges;
     searchSymbolsFiltered = storeMocks.searchSymbolsFiltered;
+    countSymbolsFiltered = storeMocks.countSymbolsFiltered;
     getFilesFiltered = storeMocks.getFilesFiltered;
     getLanguageBreakdown = storeMocks.getLanguageBreakdown;
     getClusters = storeMocks.getClusters;
@@ -258,7 +261,9 @@ vi.mock('../src/agents/generator.js', () => ({
   }
 }));
 
-vi.mock('../src/frameworks/route-registry.js', () => ({
+vi.mock('../src/frameworks/route-registry.js', async (importOriginal) => ({
+  // toRouteView is a pure formatter; keep the real one.
+  toRouteView: ((await importOriginal()) as any).toRouteView,
   RouteRegistry: class {
     load = vi.fn().mockResolvedValue(undefined);
     queryRoutes = vi.fn().mockReturnValue([]);

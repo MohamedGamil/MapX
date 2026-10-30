@@ -43,7 +43,7 @@ npm run check                         # plan:validate + typecheck + vitest + ski
 
 The scanner is also usable directly: `node .claude/skills/baton/scripts/baton-scan.mjs [TASKS.json] [--json]`.
 
-**Task ids** follow `M<n>-<nn>`, with remediation as `M<n>-<nn>-R<k>`. Milestones are declared in `TASKS.json` `milestones` (M1 = 0.4.0, M2 = 0.5.0, …). Dependency types are `hard`, `interface`, `research`, `fixture`, `quality` and `approval`.
+**Task ids** follow `M<n>-<nn>`, with remediation as `M<n>-<nn>-R<k>`. Milestones are declared in `TASKS.json` `milestones`. They are units of work, not releases (D007). Dependency types are `hard`, `interface`, `research`, `fixture`, `quality` and `approval`.
 
 ## 1. Baseline
 
@@ -74,7 +74,8 @@ For BLOCKED NOW items:
 An item is ready to start only when all of these hold:
 
 - **Bounded:** 4–16 h expected. Split anything larger into separately verifiable tasks with explicit dependencies, and log the split in `CHANGELOG.md`.
-- **Fixture first:** parser, detector and resolution work is measured against a labelled synthetic fixture under `tests/fixtures/<area>/`, with a scorer in `scripts/eval/` where recall or precision matters. Never use private or pilot source code in fixtures.
+- **Fixture first:** parser, detector and resolution work is measured against a labelled synthetic fixture under `tests/fixtures/<area>/`, with a scorer in `scripts/eval/` where recall or precision matters (see `scripts/eval/score-routes.ts` and its floors in `tests/laravel-routes-fixture.test.ts`). Never use private or pilot source code in fixtures.
+- **Prove behaviour end to end:** prefer `tests/helpers/e2e.ts` (temp workspace → real `mapx init`/`scan` → query `.mapx/mapx.db`) over tests that mock the store, since mocked-store tests have hidden real defects here.
 - **Concrete scope:** one objective, an explicit out-of-scope list naming the tasks that own the excluded work, and the files touched (`affectedFiles`).
 - **Falsifiable acceptance:** each criterion names an input, an observable output and the test that shows it. Reject vague wording such as "works well", "robust", "properly" or "optimized".
 - **Commands registered before starting:** task-specific `npx vitest run tests/<file>.test.ts` and scorer commands, not just `npm test`.
@@ -117,7 +118,7 @@ Start with `npm run plan:transition -- <ID> IN_PROGRESS --owner <name>`, then br
 ## 7. Next
 
 1. Run `npm run plan:report` (it also refreshes the `criticalPath` flags).
-2. Update `PROJECT_STATE.md`, plus `DECISIONS.md`, `RISKS.md` and `CHANGELOG.md` when they changed. For user-visible changes, add an entry to the root `CHANGELOG.md` under Unreleased.
+2. Update `PROJECT_STATE.md`, plus `DECISIONS.md`, `RISKS.md` and `CHANGELOG.md` when they changed. For user-visible changes, add an entry to the root `CHANGELOG.md` under Unreleased that ends with the task id, e.g. `(M1-03)`. `npm run check` fails on any Unreleased entry without a known task id (`scripts/baton/check-changelog-coverage.mjs`).
 3. Run `npm run plan:handoff`, then copy `HANDOFF.md` to `handoffs/<date>-<ID>.md`.
 4. Re-scan and loop.
 
@@ -126,7 +127,7 @@ Start with `npm run plan:transition -- <ID> IN_PROGRESS --owner <name>`, then br
 ## Approval boundaries
 
 Ask first for:
-- `npm publish`, tags and releases (always behind a `G-REL-*` gate);
+- `npm publish`, tags, version bumps and releases. Releases are **owner-initiated** (D007): never request the `G-RELEASE` gate, never propose a release because a milestone finished, and leave user-visible changes under CHANGELOG `[Unreleased]`. Gates marked `ownerInitiated` in TASKS.json are the owner's to raise;
 - pushing, or any destructive git operation;
 - changes to approved scope or milestones;
 - new runtime dependencies with non-permissive licences.
