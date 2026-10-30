@@ -97,7 +97,18 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run plan:validate && npm run typecheck && npm test && npm run test:skills",
+    "test:skills": "node --test .claude/skills/baton/scripts/baton-scan.test.mjs .claude/skills/baton-review/scripts/review-scope.test.mjs",
+    "plan:validate": "tsx scripts/baton/cli.ts validate",
+    "plan:ready": "tsx scripts/baton/cli.ts ready",
+    "plan:status": "tsx scripts/baton/cli.ts status",
+    "plan:critical-path": "tsx scripts/baton/cli.ts critical-path",
+    "plan:report": "tsx scripts/baton/cli.ts report",
+    "plan:handoff": "tsx scripts/baton/cli.ts handoff",
+    "plan:transition": "tsx scripts/baton/cli.ts transition",
+    "plan:scan": "node .claude/skills/baton/scripts/baton-scan.mjs docs/baton/TASKS.json"
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",

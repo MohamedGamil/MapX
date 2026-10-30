@@ -1,5 +1,7 @@
 # Mapx — Specs & Delivery Index
 
+> **Superseded on 2026-10-30.** Planning, iterations and status now live in [`docs/baton/`](../docs/baton/) (BATON; see `docs/baton/DECISIONS.md` D001). `docs/baton/TASKS.json` is authoritative. This directory is frozen history: feature specs `features/F*.md` remain design references cited from task `sources`; `ITERATIONS.md` and `iterations/I*.md` are imported as M0-01 … M0-22 and are no longer updated.
+
 This directory tracks all planned enhancements, feature specs, and delivery iterations for the mapx project. Each spec document is self-contained and describes a discrete unit of work that can be implemented and reviewed independently.
 
 ---

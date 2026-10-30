@@ -1,0 +1,192 @@
+[
+  {
+    "id": "REQ-LAR-001",
+    "category": "LAR",
+    "priority": "P0",
+    "requirement": "Route handlers declared as `uses` arrays resolve",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 item 1",
+    "taskIds": [
+      "M1-02"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-LAR-002",
+    "category": "LAR",
+    "priority": "P0",
+    "requirement": "Routes in required files inherit the enclosing group",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 items 2, 4",
+    "taskIds": [
+      "M1-03"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-LAR-003",
+    "category": "LAR",
+    "priority": "P0",
+    "requirement": "Provider mounts keep their prefix",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 item 3",
+    "taskIds": [
+      "M1-04"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-LAR-004",
+    "category": "LAR",
+    "priority": "P1",
+    "requirement": "Resource parameter names match Laravel",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 item 5",
+    "taskIds": [
+      "M1-05"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-LAR-005",
+    "category": "LAR",
+    "priority": "P1",
+    "requirement": "Dynamic paths from local variables resolve",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 item 6",
+    "taskIds": [
+      "M1-06"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-LAR-006",
+    "category": "LAR",
+    "priority": "P0",
+    "requirement": "Unmounted and overridden routes are not reported as live",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 item 7",
+    "taskIds": [
+      "M1-07"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-LAR-007",
+    "category": "LAR",
+    "priority": "P0",
+    "requirement": "Laravel detected in nested roots; frameworks.json honoured",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 item 8",
+    "taskIds": [
+      "M1-08"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-LAR-008",
+    "category": "LAR",
+    "priority": "P1",
+    "requirement": "Routes carry line numbers and symbol targets",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 items 9, 16",
+    "taskIds": [
+      "M1-09"
+    ],
+    "verificationTaskIds": [
+      "M1-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-X-001",
+    "category": "X",
+    "priority": "P0",
+    "requirement": "No name-only cross-language call edges",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 items 13, 15",
+    "taskIds": [
+      "M2-01"
+    ],
+    "verificationTaskIds": [
+      "M2-01"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-HTTP-001",
+    "category": "HTTP",
+    "priority": "P1",
+    "requirement": "Frontend HTTP calls pair with backend routes",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 items 12–14",
+    "taskIds": [
+      "M2-03",
+      "M2-04",
+      "M2-05",
+      "M2-06"
+    ],
+    "verificationTaskIds": [
+      "M2-06"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-VUE-001",
+    "category": "VUE",
+    "priority": "P1",
+    "requirement": "Vue templates and SFC members resolve",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 items 10, 11",
+    "taskIds": [
+      "M3-02",
+      "M3-03",
+      "M3-04"
+    ],
+    "verificationTaskIds": [
+      "M3-01"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-VUE-002",
+    "category": "VUE",
+    "priority": "P1",
+    "requirement": "Vuex/Pinia and router navigation resolve",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 items 10, 11",
+    "taskIds": [
+      "M3-05",
+      "M3-06"
+    ],
+    "verificationTaskIds": [
+      "M3-01"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-QA-001",
+    "category": "QA",
+    "priority": "P1",
+    "requirement": "Fixture recall/precision measured in CI",
+    "source": "docs/reports/2026-10-30-laravel-vue-coverage-findings.md §3–4 item 18",
+    "taskIds": [
+      "M1-01",
+      "M2-02",
+      "M3-01"
+    ],
+    "verificationTaskIds": [
+      "M4-01"
+    ],
+    "status": "PLANNED"
+  }
+]

@@ -1,0 +1,3921 @@
+{
+  "schemaVersion": 1,
+  "project": "MapX",
+  "baselineRevision": "develop@7e5aa19",
+  "capacity": {
+    "engineers": 1,
+    "productiveHoursPerWeek": 20,
+    "forecastStart": "2026-11-02"
+  },
+  "milestones": [
+    {
+      "id": "M0",
+      "title": "Delivered baseline and remediation",
+      "goal": "Legacy iterations I01–I22 imported as delivered, plus remediation for what the import review disputed."
+    },
+    {
+      "id": "M1",
+      "title": "Laravel route correctness",
+      "release": "0.4.0",
+      "goal": "Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0 items 1–7)."
+    },
+    {
+      "id": "M2",
+      "title": "Cross-language precision and HTTP pairing",
+      "release": "0.5.0",
+      "goal": "No name-only cross-language edges; frontend HTTP calls pair with backend routes."
+    },
+    {
+      "id": "M3",
+      "title": "Vue SFC semantics",
+      "release": "0.6.0",
+      "goal": "Templates, Options/Composition API, state stores and router navigation in Vue 2.7 and 3."
+    },
+    {
+      "id": "M4",
+      "title": "Measurement and developer experience",
+      "goal": "Fixture scoring in CI; optional message edges."
+    }
+  ],
+  "gates": [
+    {
+      "id": "G-REL-0.4.0",
+      "title": "Owner approves publishing 0.4.0",
+      "status": "PENDING",
+      "approvedBy": null,
+      "approvedAt": null,
+      "revision": null,
+      "artifact": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "M0-01",
+      "milestone": "M0",
+      "title": "Edge verifiability column and parser labelling",
+      "objective": "Legacy iteration I01 (F01), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I01.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I01.md",
+        "specs/features/F01-edge-verifiability.md"
+      ],
+      "outputs": [
+        "Features F01"
+      ],
+      "affectedFiles": [
+        "src/core/store.ts",
+        "src/parsers"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I01.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I01.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I01"
+    },
+    {
+      "id": "M0-02",
+      "milestone": "M0",
+      "title": "Include/exclude glob filters in scanner",
+      "objective": "Legacy iteration I02 (F03), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I02.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I02.md",
+        "specs/features/F03-glob-filters.md"
+      ],
+      "outputs": [
+        "Features F03"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/config.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I02.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I02.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I02"
+    },
+    {
+      "id": "M0-03",
+      "milestone": "M0",
+      "title": "metrics and edges CLI/MCP commands",
+      "objective": "Legacy iteration I03 (F02, F04), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I03.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I03.md",
+        "specs/features/F02-metrics-engine.md",
+        "specs/features/F04-edge-querying.md"
+      ],
+      "outputs": [
+        "Features F02, F04"
+      ],
+      "affectedFiles": [
+        "src/core/metrics.ts",
+        "src/cli.ts",
+        "src/mcp.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I03.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I03.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I03"
+    },
+    {
+      "id": "M0-04",
+      "milestone": "M0",
+      "title": "PHP parser fundamentals (FQN imports, type-hint edges, Laravel excludes)",
+      "objective": "Legacy iteration I04 (F05, F06, F10), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I04.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I04.md",
+        "specs/features/F05-php-fqn-resolution.md",
+        "specs/features/F06-php-type-hint-edges.md",
+        "specs/features/F10-laravel-noise-reduction.md"
+      ],
+      "outputs": [
+        "Features F05, F06, F10"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "src/core/config.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I04.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I04.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I04"
+    },
+    {
+      "id": "M0-05",
+      "milestone": "M0",
+      "title": "Laravel structural patterns (Eloquent, routes, IoC)",
+      "objective": "Legacy iteration I05 (F07, F08, F09), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I05.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I05.md",
+        "specs/features/F07-eloquent-relationships.md",
+        "specs/features/F08-route-controller-binding.md",
+        "specs/features/F09-service-provider-bindings.md"
+      ],
+      "outputs": [
+        "Features F07, F08, F09"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "src/frameworks/detectors/laravel.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I05.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I05.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I05"
+    },
+    {
+      "id": "M0-06",
+      "milestone": "M0",
+      "title": "Laravel facades and dispatch/notify edges",
+      "objective": "Legacy iteration I06 (F11, F12), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I06.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I06.md",
+        "specs/features/F11-facade-resolution.md",
+        "specs/features/F12-event-job-dispatch.md"
+      ],
+      "outputs": [
+        "Features F11, F12"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I06.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I06.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I06"
+    },
+    {
+      "id": "M0-07",
+      "milestone": "M0",
+      "title": "npm distribution and Node.js DX",
+      "objective": "Legacy iteration I07 (F13), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I07.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I07.md",
+        "specs/features/F13-npm-distribution.md"
+      ],
+      "outputs": [
+        "Features F13"
+      ],
+      "affectedFiles": [
+        "package.json",
+        "tsup.config.ts",
+        ".github/workflows"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I07.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I07.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I07"
+    },
+    {
+      "id": "M0-08",
+      "milestone": "M0",
+      "title": "Clusters, cluster-aware export and data-flow tracing",
+      "objective": "Legacy iteration I08 (F14, F15, F16), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I08.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I08.md",
+        "specs/features/F14-cluster-detection.md",
+        "specs/features/F15-cluster-visualization.md",
+        "specs/features/F16-data-flow-tracing.md"
+      ],
+      "outputs": [
+        "Features F14, F15, F16"
+      ],
+      "affectedFiles": [
+        "src/core/cluster-engine.ts",
+        "src/core/flow-tracer.ts",
+        "src/exporters"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I08.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I08.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I08"
+    },
+    {
+      "id": "M0-09",
+      "milestone": "M0",
+      "title": "LLM agent integration files",
+      "objective": "Legacy iteration I09 (F17), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I09.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I09.md",
+        "specs/features/F17-llm-integration-files.md"
+      ],
+      "outputs": [
+        "Features F17"
+      ],
+      "affectedFiles": [
+        "src/agents"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I09.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I09.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I09"
+    },
+    {
+      "id": "M0-10",
+      "milestone": "M0",
+      "title": "Git workspace and submodule awareness",
+      "objective": "Legacy iteration I10 (F18), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I10.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I10.md",
+        "specs/features/F18-git-workspace-submodules.md"
+      ],
+      "outputs": [
+        "Features F18"
+      ],
+      "affectedFiles": [
+        "src/core/workspace-manager.ts",
+        "src/core/scanner.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I10.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I10.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I10"
+    },
+    {
+      "id": "M0-11",
+      "milestone": "M0",
+      "title": "Smart context and search tools",
+      "objective": "Legacy iteration I11 (F19), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I11.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I11.md",
+        "specs/features/F19-smart-context-tools.md"
+      ],
+      "outputs": [
+        "Features F19"
+      ],
+      "affectedFiles": [
+        "src/core/context-builder.ts",
+        "src/mcp.ts",
+        "src/cli.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I11.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I11.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I11"
+    },
+    {
+      "id": "M0-12",
+      "milestone": "M0",
+      "title": "Language expansion to 22 languages",
+      "objective": "Legacy iteration I12 (F20), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I12.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I12.md",
+        "specs/features/F20-language-expansion.md"
+      ],
+      "outputs": [
+        "Features F20"
+      ],
+      "affectedFiles": [
+        "src/languages",
+        "src/parsers",
+        "queries",
+        "wasm"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I12.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I12.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I12"
+    },
+    {
+      "id": "M0-13",
+      "milestone": "M0",
+      "title": "Framework-aware route and hook extraction",
+      "objective": "Legacy iteration I13 (F21, F22, F23, F24, F25, F26), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I13.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I13.md",
+        "specs/features/F21-framework-infrastructure.md",
+        "specs/features/F22-python-frameworks.md",
+        "specs/features/F23-nodejs-frameworks.md",
+        "specs/features/F24-frontend-routing.md",
+        "specs/features/F25-backend-frameworks.md",
+        "specs/features/F26-php-cms-frameworks.md"
+      ],
+      "outputs": [
+        "Features F21, F22, F23, F24, F25, F26"
+      ],
+      "affectedFiles": [
+        "src/frameworks"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I13.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I13.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-23T00:00:00.000Z",
+      "completedAt": "2026-05-23T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I13"
+    },
+    {
+      "id": "M0-14",
+      "milestone": "M0",
+      "title": "TOON export format",
+      "objective": "Legacy iteration I14 (F27), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I14.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I14.md",
+        "specs/features/F27-toon-export.md"
+      ],
+      "outputs": [
+        "Features F27"
+      ],
+      "affectedFiles": [
+        "src/exporters/toon-exporter.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I14.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I14.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-22T00:00:00.000Z",
+      "completedAt": "2026-05-22T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I14"
+    },
+    {
+      "id": "M0-15",
+      "milestone": "M0",
+      "title": "Bundled web dashboard",
+      "objective": "Legacy iteration I15 (F28), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I15.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md. Start/complete dates were not recorded; import date used.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I15.md",
+        "specs/features/F28-web-dashboard.md"
+      ],
+      "outputs": [
+        "Features F28"
+      ],
+      "affectedFiles": [
+        "src/ui",
+        "src/ui-server.ts",
+        "src/ui-events.ts",
+        "scripts/build-ui.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I15.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I15.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-30T00:00:00.000Z",
+      "completedAt": "2026-10-30T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I15"
+    },
+    {
+      "id": "M0-16",
+      "milestone": "M0",
+      "title": "Audit compliance fixes",
+      "objective": "Legacy iteration I16 (F29, F30, F31, F32), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I16.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I16.md",
+        "specs/features/F29-mcp-workspaces.md",
+        "specs/features/F30-language-tier-alignment.md",
+        "specs/features/F31-cluster-export-flags.md",
+        "specs/features/F32-workspaces-discover.md"
+      ],
+      "outputs": [
+        "Features F29, F30, F31, F32"
+      ],
+      "affectedFiles": [
+        "src/mcp.ts",
+        "src/languages/registry.ts",
+        "src/cli.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I16.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I16.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-23T00:00:00.000Z",
+      "completedAt": "2026-05-23T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I16"
+    },
+    {
+      "id": "M0-17",
+      "milestone": "M0",
+      "title": "Language syntax coverage",
+      "objective": "Legacy iteration I17 (F33), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I17.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I17.md",
+        "specs/features/F33-language-syntax-coverage.md"
+      ],
+      "outputs": [
+        "Features F33"
+      ],
+      "affectedFiles": [
+        "queries",
+        "src/languages/registry.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I17.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I17.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-23T00:00:00.000Z",
+      "completedAt": "2026-05-23T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I17"
+    },
+    {
+      "id": "M0-18",
+      "milestone": "M0",
+      "title": "React and TSX parser fixes",
+      "objective": "Legacy iteration I18 (F34), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I18.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I18.md",
+        "specs/features/F34-react-tsx-parser-fixes.md"
+      ],
+      "outputs": [
+        "Features F34"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/typescript.ts",
+        "src/core/scanner.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I18.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I18.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-27T00:00:00.000Z",
+      "completedAt": "2026-05-27T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I18"
+    },
+    {
+      "id": "M0-19",
+      "milestone": "M0",
+      "title": "JSX render edges",
+      "objective": "Legacy iteration I19 (F35), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I19.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I19.md",
+        "specs/features/F35-jsx-render-edges.md"
+      ],
+      "outputs": [
+        "Features F35"
+      ],
+      "affectedFiles": [
+        "queries/typescript",
+        "queries/javascript",
+        "src/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I19.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I19.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-27T00:00:00.000Z",
+      "completedAt": "2026-05-27T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I19"
+    },
+    {
+      "id": "M0-20",
+      "milestone": "M0",
+      "title": "NestJS routes, hooks and DI",
+      "objective": "Legacy iteration I20 (F36), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I20.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I20.md",
+        "specs/features/F36-nestjs-decorators.md"
+      ],
+      "outputs": [
+        "Features F36"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/nestjs.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I20.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I20.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-27T00:00:00.000Z",
+      "completedAt": "2026-05-27T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I20"
+    },
+    {
+      "id": "M0-21",
+      "milestone": "M0",
+      "title": "Graph resolution and noise reduction",
+      "objective": "Legacy iteration I21 (F37), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I21.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I21.md",
+        "specs/features/F37-graph-resolution-filtering.md"
+      ],
+      "outputs": [
+        "Features F37"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/ignored-symbols.ts",
+        "src/core/impact-analyzer.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I21.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I21.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-27T00:00:00.000Z",
+      "completedAt": "2026-05-27T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I21"
+    },
+    {
+      "id": "M0-22",
+      "milestone": "M0",
+      "title": "CLI/MCP search and context usability",
+      "objective": "Legacy iteration I22 (F38), imported into BATON as delivered.",
+      "description": "Imported from specs/iterations/I22.md. Delivered before BATON adoption; completion evidence is the baseline re-run at import. Per-criterion verdicts are in docs/baton/reviews/REVIEW-2026-10-30-*.md.",
+      "priority": "P1",
+      "estimate": {
+        "min": 0,
+        "expected": 0,
+        "max": 0
+      },
+      "risk": "low",
+      "area": [
+        "legacy"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I22.md",
+        "specs/features/F38-mcp-usability-improvements.md"
+      ],
+      "outputs": [
+        "Features F38"
+      ],
+      "affectedFiles": [
+        "src/mcp.ts",
+        "src/core/context-builder.ts",
+        "src/exporters/llm-exporter.ts"
+      ],
+      "acceptanceCriteria": [
+        "Deliverables listed in specs/iterations/I22.md exist and the baseline suite passes."
+      ],
+      "verificationCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Deliverables listed in specs/iterations/I22.md exist and the baseline suite passes.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-05-27T00:00:00.000Z",
+      "completedAt": "2026-05-27T23:59:00.000Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-BASELINE.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run typecheck",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-BASELINE.md",
+          "runAt": "2026-10-30T20:09:14.000Z"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-30T20:09:14.000Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run typecheck",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-BASELINE.md",
+              "runAt": "2026-10-30T20:09:14.000Z"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Legacy work; fix forward through remediation tasks.",
+      "legacyId": "I22"
+    },
+    {
+      "id": "M0-14-R1",
+      "milestone": "M0",
+      "title": "TOON exporter unit and round-trip tests",
+      "objective": "Give the TOON exporter real tests, which I14 claimed but never delivered.",
+      "description": "COMPLETION DISPUTED for M0-14 (I14): ToonExporter is only mocked in tests/cli.test.ts and tests/mcp.test.ts, and @toon-format/toon is not a devDependency, so the claimed round-trip validation does not exist.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "exporters"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-14",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I14.md",
+        "specs/features/F27-toon-export.md",
+        "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+      ],
+      "outputs": [
+        "tests/toon-exporter.test.ts"
+      ],
+      "affectedFiles": [
+        "tests/toon-exporter.test.ts",
+        "package.json",
+        "package-lock.json",
+        "src/exporters/toon-exporter.ts"
+      ],
+      "acceptanceCriteria": [
+        "Exporting a 3-file, 5-symbol, 4-edge fixture graph and decoding it with @toon-format/toon yields the same files, symbols and edges.",
+        "With --tokens below the full size, the output ends with a `truncated:` footer and decodes without error.",
+        "--delimiter=tab and --delimiter=pipe each round-trip the fixture."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/toon-exporter.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Exporting a 3-file, 5-symbol, 4-edge fixture graph and decoding it with @toon-format/toon yields the same files, symbols and edges.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M0-15-R1",
+      "milestone": "M0",
+      "title": "Dashboard bundle size: meet or re-baseline the 200 KB target",
+      "objective": "Resolve the gap between the I15 claim (<200 KB gzipped client) and the shipped bundle (689 KB gzipped main.js plus a 7.8 MB source map in the npm package).",
+      "description": "COMPLETION DISPUTED for M0-15 (I15). Measured `gzip -c dist/ui/main.js | wc -c` = 689107 after `npm ci` on 2026-10-30; dist/ui/main.js.map (7.8 MB) ships because package.json files includes dist/.",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "ui",
+        "packaging"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-15",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [
+        "Owner decision: reduce the bundle to <200 KB gzipped, or re-baseline the target (record in DECISIONS.md)"
+      ],
+      "sources": [
+        "specs/iterations/I15.md",
+        "specs/features/F28-web-dashboard.md",
+        "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+      ],
+      "outputs": [
+        "scripts/build-ui.ts changes",
+        "size check script"
+      ],
+      "affectedFiles": [
+        "scripts/build-ui.ts",
+        "src/ui",
+        "package.json"
+      ],
+      "acceptanceCriteria": [
+        "`npm pack --dry-run` lists no *.map file under dist/ui.",
+        "gzip size of dist/ui/main.js is at or below the target recorded in DECISIONS.md, checked by a script that exits 1 above it."
+      ],
+      "verificationCommands": [
+        "npm run build:npm",
+        "npx tsx scripts/check-ui-size.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. `npm pack --dry-run` lists no *.map file under dist/ui.",
+      "status": "BLOCKED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M0-19-R1",
+      "milestone": "M0",
+      "title": "Tests for JSX render edges",
+      "objective": "Cover the JSX render edges delivered by I19, which have no test.",
+      "description": "UNVERIFIABLE for M0-19 (I19): queries/typescript/references-tsx.scm captures JSX elements and ReferenceType includes `render`, but no test asserts a render edge. specs/iterations/I19.md still says planned.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "parsers"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-19",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I19.md",
+        "specs/features/F35-jsx-render-edges.md",
+        "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+      ],
+      "outputs": [
+        "tests/jsx-render-edges.test.ts"
+      ],
+      "affectedFiles": [
+        "tests/jsx-render-edges.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Scanning a fixture where Page.tsx renders <LinksPage /> and <ui.Button/> stores a `render` edge Page.tsx → LinksPage.tsx and none to an undefined component.",
+        "The test fails when the jsx captures are removed from references-tsx.scm (mutation check recorded in the report)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/jsx-render-edges.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Scanning a fixture where Page.tsx renders <LinksPage /> and <ui.Button/> stores a `render` edge Page.tsx → LinksPage.tsx and none to an undefined component.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M0-22-R1",
+      "milestone": "M0",
+      "title": "Verify and test the I22 usability deliverables",
+      "objective": "Confirm each I22 deliverable with a test, since its own iteration file still says in-progress.",
+      "description": "UNVERIFIABLE for M0-22: specs/iterations/I22.md says in-progress with no completion date while ITERATIONS.md says done.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "mcp",
+        "cli"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-22",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "specs/iterations/I22.md",
+        "specs/features/F38-mcp-usability-improvements.md",
+        "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+      ],
+      "outputs": [
+        "tests/mcp-usability.test.ts"
+      ],
+      "affectedFiles": [
+        "tests/mcp-usability.test.ts",
+        "src/mcp.ts",
+        "src/core/context-builder.ts"
+      ],
+      "acceptanceCriteria": [
+        "mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+        "mapx_search kind \"CLASS\" and \"class\" return the same results.",
+        "mapx_context without `task` returns a validation error naming `task`."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/mcp-usability.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. mapx_search with query \"*\" and a file filter returns every symbol in that file.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M0-23",
+      "milestone": "M0",
+      "title": "Scan summary edge count disagrees with stored edges",
+      "objective": "Make the scan summary report the number of edges actually stored.",
+      "description": "Reproduced 2026-10-30: in a two-repo workspace (backend PHP + frontend JS/Vue, `mapx scan . --all`) the summary printed \"Found 14 symbols, 4 edges\" while `select count(*) from edges` returned 1.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "scanner",
+        "cli"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+      ],
+      "outputs": [
+        "regression test"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/core/scanner.ts",
+        "tests/scanner-summary-count.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "For the two-repo fixture, the summary edge count equals `SELECT count(*) FROM edges`."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/scanner-summary-count.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. For the two-repo fixture, the summary edge count equals `SELECT count(*) FROM edges`.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M0-30",
+      "milestone": "M0",
+      "title": "Reconcile untracked post-I22 work into the plan",
+      "objective": "Account for every feature shipped after I22 (0.2.x–0.3.5) and every open item in specs 09/10, KNOWN_ISSUES and ROADMAP.",
+      "description": "CHANGELOG lists smells, DSM, layers, profile, explain, Leiden clustering, PageRank caching, worker-thread scanning and a Flutter detector with no iteration. Specs 09 and 10 have no iterations. Each item becomes a DONE import (with a test reference) or a BACKLOG task.",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "low",
+      "area": [
+        "planning"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "ROADMAP.md",
+        "specs/09-llm-tool-usage-and-improvements.md",
+        "specs/10-scanner-performance-and-improvements.md",
+        "specs/KNOWN_ISSUES.md"
+      ],
+      "outputs": [
+        "docs/baton/reports/M0-30.md",
+        "TASKS.json additions",
+        "scripts/baton/check-changelog-coverage.mjs"
+      ],
+      "affectedFiles": [
+        "docs/baton/TASKS.json",
+        "docs/baton/reports/M0-30.md"
+      ],
+      "acceptanceCriteria": [
+        "Every CHANGELOG feature entry after 2026-05-27 maps to a task id or is listed as unmapped with a reason in reports/M0-30.md.",
+        "Every open KNOWN_ISSUES entry maps to a task id.",
+        "`npm run plan:validate` exits 0 afterwards."
+      ],
+      "verificationCommands": [
+        "npm run plan:validate",
+        "node scripts/baton/check-changelog-coverage.mjs"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Every CHANGELOG feature entry after 2026-05-27 maps to a task id or is listed as unmapped with a reason in reports/M0-30.md.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-01",
+      "milestone": "M1",
+      "title": "Laravel route fixture and recall/precision scorer",
+      "objective": "A synthetic Laravel app covering every declaration form and mount in the report, with labelled expected routes and a scorer that prints recall and precision.",
+      "description": "Report §4 item 18. Labels pin method, URI and handler per route; negative cases (unmounted file, overridden duplicate, conditional mount) carry `null` expectations. The scorer reports per-pattern recall and precision; this task records the 0.3.5 baseline without fixing anything.",
+      "priority": "P0",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "quality"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "tests/fixtures/laravel-routes/",
+        "tests/fixtures/laravel-routes/labels.json",
+        "scripts/eval/score-routes.ts",
+        "tests/laravel-routes-fixture.test.ts",
+        "docs/baton/reports/M1-01.md"
+      ],
+      "affectedFiles": [
+        "tests/fixtures/laravel-routes",
+        "scripts/eval",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "labels.json covers all 10 declaration forms in report §1 and the 3 negative cases, at least 40 labelled routes.",
+        "`npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json` prints per-pattern found/labelled and false positives, and exits 0.",
+        "The baseline numbers recorded in reports/M1-01.md reproduce the report's failure classes: uses-array handler recall 0, require-mounted prefix recall 0, ≥1 false positive on negatives."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. labels.json covers all 10 declaration forms in report §1 and the 3 negative cases, at least 40 labelled routes.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-02",
+      "milestone": "M1",
+      "title": "Parse `uses` arrays in route handlers",
+      "objective": "Resolve handlers declared as arrays with a `uses` key, plus `as` and `middleware` keys.",
+      "description": "Report §3 item 1. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P0",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-02.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Route::get('/x', ['type' => 'T', 'uses' => 'XController@show']) inside Route::group(['namespace' => 'App\\\\Http\\\\Controllers']) yields handler App\\Http\\Controllers\\XController@show.",
+        "uses-array handler recall on the fixture is 100%.",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Route::get('/x', ['type' => 'T', 'uses' => 'XController@show']) inside Route::group(['namespace' => 'App\\\\Http\\\\Controllers']) yields handler App\\Http\\Controllers\\XController@show.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-03",
+      "milestone": "M1",
+      "title": "Follow require/include in route files with inherited group stack",
+      "objective": "Routes in files pulled in by require/include inherit the enclosing prefix, middleware, namespace and controller.",
+      "description": "Report §3 items 2 and 4. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P0",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-03.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts",
+        "src/frameworks/route-registry.ts"
+      ],
+      "acceptanceCriteria": [
+        "routes/api.php with Route::group(['middleware' => 'auth'], fn () => require __DIR__.'/api/users.php') yields /api/users with middleware [api, auth].",
+        "A file required twice under different groups yields both mounts.",
+        "require-mounted URI recall on the fixture is 100%.",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. routes/api.php with Route::group(['middleware' => 'auth'], fn () => require __DIR__.'/api/users.php') yields /api/users with middleware [api, auth].",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-04",
+      "milestone": "M1",
+      "title": "Read provider route mounts generally",
+      "objective": "Read Route::prefix()->middleware()->group(path) and loadRoutesFrom mounts in any ServiceProvider boot(), and bootstrap/app.php withRouting(), keeping their prefix.",
+      "description": "Report §3 item 3. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P0",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        },
+        {
+          "id": "M1-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-04.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A module provider mounting Routes/api.php under Route::prefix('api/external/v1') yields URIs starting /api/external/v1.",
+        "packageRoutes never hard-codes an empty prefix when the provider declares one.",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. A module provider mounting Routes/api.php under Route::prefix('api/external/v1') yields URIs starting /api/external/v1.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-05",
+      "milestone": "M1",
+      "title": "Laravel-compatible resource parameter names",
+      "objective": "Resource parameters follow Str::singular with - replaced by _, irregular plurals and ->parameters() overrides.",
+      "description": "Report §3 item 5. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-05.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Route::resource('blog-categories', …) yields {blog_category}; 'statuses' yields {status}; 'people' yields {person}; ->parameters(['users' => 'admin_user']) yields {admin_user}.",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Route::resource('blog-categories', …) yields {blog_category}; 'statuses' yields {status}; 'people' yields {person}; ->parameters(['users' => 'admin_user']) yields {admin_user}.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-06",
+      "milestone": "M1",
+      "title": "Resolve local string variables in route paths",
+      "objective": "Route paths built from a string variable assigned earlier in the same scope resolve to the literal URI.",
+      "description": "Report §3 item 6. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-06.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "$base = 'notices'; Route::get($base.'/x', …) yields /notices/x.",
+        "An unresolvable dynamic path is emitted with metadata.dynamic = true instead of the raw PHP text.",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. $base = 'notices'; Route::get($base.'/x', …) yields /notices/x.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-07",
+      "milestone": "M1",
+      "title": "Mount reachability and last-registration-wins",
+      "objective": "Routes in unmounted files are marked unreachable, conditional mounts are flagged, and duplicate method+URI pairs mark all but the last overridden.",
+      "description": "Report §3 item 7. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P0",
+      "estimate": {
+        "min": 10,
+        "expected": 14,
+        "max": 18
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        },
+        {
+          "id": "M1-03",
+          "type": "hard"
+        },
+        {
+          "id": "M1-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-07.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts",
+        "src/frameworks/route-registry.ts",
+        "src/types.ts"
+      ],
+      "acceptanceCriteria": [
+        "The fixture's unmounted file yields routes with reachable = false.",
+        "Duplicate GET /dup across a parent and a later-required file marks the first overridden = true with a pointer to the winner.",
+        "if (...) { require ...; } mounts carry conditional = true.",
+        "False positives on the fixture negatives are 0.",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. The fixture's unmounted file yields routes with reachable = false.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-08",
+      "milestone": "M1",
+      "title": "Detect nested Laravel roots and honour frameworks.json",
+      "objective": "Laravel is detected in a parent-folder workspace, and an explicit frameworks.json override is respected.",
+      "description": "Report §3 item 8. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P0",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-08.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts",
+        "src/core/scanner.ts",
+        "src/frameworks/framework-registry.ts",
+        "src/frameworks/utils.ts"
+      ],
+      "acceptanceCriteria": [
+        "A workspace whose Laravel app sits in backend/ (artisan + composer.json with laravel/framework) detects Laravel, even though composer.json is in the default excludes.",
+        "A user-written frameworks.json listing [\"laravel\"] is not overwritten by detection.",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. A workspace whose Laravel app sits in backend/ (artisan + composer.json with laravel/framework) detects Laravel, even though composer.json is in the default excludes.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-09",
+      "milestone": "M1",
+      "title": "Route line numbers, symbol targets and middleware metadata",
+      "objective": "RouteBinding carries the declaration line; route edges target the controller method symbol and keep middlewares.",
+      "description": "Report §3 items 9 and 16. Verified at 7e5aa19 in REVIEW-2026-10-30-baseline.",
+      "priority": "P0",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "frameworks",
+        "laravel"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        },
+        {
+          "id": "M1-02",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "detector change",
+        "fixture labels updated",
+        "reports/M1-09.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-routes-fixture.test.ts",
+        "src/types.ts",
+        "src/core/scanner.ts",
+        "src/cli.ts",
+        "src/mcp.ts"
+      ],
+      "acceptanceCriteria": [
+        "`mapx routes --json` includes line, reachable, overridden, conditional, name and middlewares per route.",
+        "Every Laravel route edge in the store has metadata.line and a non-empty middlewares array when the route has middleware (today it is always empty because scanner.ts reads route.middlewares while the detector writes metadata.middlewares).",
+        "The M1-01 scorer shows no regression in any other pattern."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. `mapx routes --json` includes line, reachable, overridden, conditional, name and middlewares per route.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-98",
+      "milestone": "M1",
+      "title": "M1 acceptance: re-score Laravel fixture",
+      "objective": "Show that M1 meets its targets on the fixture and records the before/after table.",
+      "description": "Show that M1 meets its targets on the fixture and records the before/after table.",
+      "priority": "P0",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "quality"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-02",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03",
+          "type": "hard"
+        },
+        {
+          "id": "M1-04",
+          "type": "hard"
+        },
+        {
+          "id": "M1-05",
+          "type": "hard"
+        },
+        {
+          "id": "M1-06",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07",
+          "type": "hard"
+        },
+        {
+          "id": "M1-08",
+          "type": "hard"
+        },
+        {
+          "id": "M1-09",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "docs/baton/reports/M1-98.md"
+      ],
+      "affectedFiles": [
+        "docs/baton/reports/M1-98.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Fixture route URI recall ≥ 95%, handler recall ≥ 95%, false positives on negatives = 0.",
+        "reports/M1-98.md shows the 0.3.5 baseline and the new numbers per pattern."
+      ],
+      "verificationCommands": [
+        "npm run check",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Fixture route URI recall ≥ 95%, handler recall ≥ 95%, false positives on negatives = 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M1-99",
+      "milestone": "M1",
+      "title": "Release 0.4.0",
+      "objective": "Publish 0.4.0 with the Laravel route fixes after owner approval.",
+      "description": "Publish 0.4.0 with the Laravel route fixes after owner approval.",
+      "priority": "P1",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "medium",
+      "area": [
+        "release"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-98",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        ".github/workflows/publish-npm.yml"
+      ],
+      "outputs": [
+        "tag v0.4.0",
+        "CHANGELOG entry"
+      ],
+      "affectedFiles": [
+        "VERSION",
+        "package.json",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "VERSION, package.json and CHANGELOG all say 0.4.0.",
+        "The publish workflow run for v0.4.0 succeeds (link recorded in the report)."
+      ],
+      "verificationCommands": [
+        "npm run check",
+        "npm pack --dry-run"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. VERSION, package.json and CHANGELOG all say 0.4.0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": "G-REL-0.4.0",
+      "kind": "iteration",
+      "rollback": "npm deprecate the version; publish a patch."
+    },
+    {
+      "id": "M2-01",
+      "milestone": "M2",
+      "title": "Fail-closed cross-language name resolution",
+      "objective": "No call edge links a JS/TS/Vue source to a PHP symbol (or the reverse) by name alone.",
+      "description": "Report §3 item 13 / §4 item 15. Not reproduced on a minimal fixture at 7e5aa19: resolveSymbolToFile filters by areLanguagesCompatible (scanner.ts:1259). The filter is skipped when the source language is unknown (sourceLang null) and when called without sourcePath (framework ScanContext, scanner.ts:1422). Start with a spike reproducing the pilot's ~10k edges from its patterns (member calls on imported objects, Vue options API, multi-repo); then make the filter fail closed.",
+      "priority": "P0",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "resolution"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "tests/cross-language-resolution.test.ts",
+        "docs/baton/reports/M2-01.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/languages/registry.ts",
+        "tests/cross-language-resolution.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A two-repo fixture (PHP Repo::get/save, JS and .vue callers of api.get/save, this.$http.save) has 0 call edges between JS-family and PHP files.",
+        "resolveSymbolToFile with an unknown source language or no sourcePath returns only same-language-family candidates or null.",
+        "The spike outcome (reproduced or not, and the pattern) is recorded in reports/M2-01.md."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/cross-language-resolution.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. A two-repo fixture (PHP Repo::get/save, JS and .vue callers of api.get/save, this.$http.save) has 0 call edges between JS-family and PHP files.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-02",
+      "milestone": "M2",
+      "title": "Vue 2.7 and Vue 3 HTTP client fixture with labels",
+      "objective": "Synthetic Vue 2.7 and Vue 3 apps using every client wrapper pattern from report §3 item 12, labelled against the M1 Laravel fixture routes.",
+      "description": "Synthetic Vue 2.7 and Vue 3 apps using every client wrapper pattern from report §3 item 12, labelled against the M1 Laravel fixture routes.",
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "quality",
+        "http"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "tests/fixtures/vue-http/",
+        "tests/fixtures/vue-http/labels.json",
+        "scripts/eval/score-http.ts"
+      ],
+      "affectedFiles": [
+        "tests/fixtures/vue-http",
+        "scripts/eval/score-http.ts",
+        "tests/http-pairing-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Labels cover the 7 wrapper patterns in report item 12 and one call to an unserved endpoint, at least 30 edges.",
+        "score-http.ts prints recall and precision per pattern and exits 0; baseline recall 0 recorded."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing-fixture.test.ts",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Labels cover the 7 wrapper patterns in report item 12 and one call to an unserved endpoint, at least 30 edges.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-03",
+      "milestone": "M2",
+      "title": "HTTP client call-site extraction",
+      "objective": "Extract method + raw URL for axios, fetch, ky, axios.create instances, factories called as Api() and aliases, in .js/.ts/.vue, with configurable receivers.",
+      "description": "Extract method + raw URL for axios, fetch, ky, axios.create instances, factories called as Api() and aliases, in .js/.ts/.vue, with configurable receivers.",
+      "priority": "P1",
+      "estimate": {
+        "min": 10,
+        "expected": 14,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "http"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-02",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "src/frameworks/http/client-calls.ts"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http",
+        "src/core/config.ts",
+        "tests/http-pairing-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
+        "frameworks.http.clients in config adds a receiver name, shown by a test."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing-fixture.test.ts",
+        "npx vitest run tests/http-client-calls.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Every labelled call site in the fixture is extracted with the right method (URL resolution excluded).",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-04",
+      "milestone": "M2",
+      "title": "URL constant, template and conditional resolution",
+      "objective": "Resolve file-local and imported string constants, template literals with constant parts, split-line arguments and ternary URLs (one edge per branch).",
+      "description": "Resolve file-local and imported string constants, template literals with constant parts, split-line arguments and ternary URLs (one edge per branch).",
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "http"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "URL resolver"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http",
+        "tests/http-pairing-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "const BASE = 'settings/x'; api.get(`${BASE}/${id}`) resolves to settings/x/{param}.",
+        "cond ? '/a' : '/b' yields two call sites."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing-fixture.test.ts",
+        "npx vitest run tests/http-url-resolution.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. const BASE = 'settings/x'; api.get(`${BASE}/${id}`) resolves to settings/x/{param}.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-05",
+      "milestone": "M2",
+      "title": "Base URL resolution",
+      "objective": "Read baseURL from factories, .env* (VUE_APP_*, VITE_*) and config modules, and join with axios semantics.",
+      "description": "Read baseURL from factories, .env* (VUE_APP_*, VITE_*) and config modules, and join with axios semantics.",
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "http"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "base URL resolver"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http",
+        "tests/http-pairing-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "baseURL '/api/' joined with 'x' and with '/x' both give /api/x.",
+        "VITE_API_URL from .env.development is used when the factory reads import.meta.env.VITE_API_URL."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing-fixture.test.ts",
+        "npx vitest run tests/http-base-url.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. baseURL '/api/' joined with 'x' and with '/x' both give /api/x.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M2-06",
+      "milestone": "M2",
+      "title": "Pair client calls with backend routes across repositories",
+      "objective": "Emit typed `http` edges from call site to route handler by method and normalised path, with confidence, and `unmatched` markers.",
+      "description": "Emit typed `http` edges from call site to route handler by method and normalised path, with confidence, and `unmatched` markers.",
+      "priority": "P1",
+      "estimate": {
+        "min": 10,
+        "expected": 14,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "http",
+        "graph"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-04",
+          "type": "hard"
+        },
+        {
+          "id": "M2-05",
+          "type": "hard"
+        },
+        {
+          "id": "M1-98",
+          "type": "quality"
+        },
+        {
+          "id": "M2-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "http edge type",
+        "mapx routes --unmatched or equivalent"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http",
+        "src/core/scanner.ts",
+        "src/types.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "tests/http-pairing-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Fixture pairing recall ≥ 80% and precision ≥ 95%.",
+        "The call to the unserved endpoint is reported as unmatched.",
+        "{id} and {slug} placeholders match each other."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing-fixture.test.ts",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Fixture pairing recall ≥ 80% and precision ≥ 95%.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M3-01",
+      "milestone": "M3",
+      "title": "Vue SFC fixture set (2.7 and 3.x)",
+      "objective": "One SFC per style (Options API, Composition API, <script setup>) in both Vue 2.7 and 3.x syntax, with expected symbols and edges.",
+      "description": "One SFC per style (Options API, Composition API, <script setup>) in both Vue 2.7 and 3.x syntax, with expected symbols and edges.",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "quality",
+        "vue"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "tests/fixtures/vue-sfc/",
+        "expected edges JSON",
+        "tests/vue-sfc.test.ts"
+      ],
+      "affectedFiles": [
+        "tests/fixtures/vue-sfc",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
+        "The test records the 0.3.5 baseline (expected edges missing) as known failures, not passes."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M3-02",
+      "milestone": "M3",
+      "title": "Vue template pass",
+      "objective": "Parse <template> for event handlers, method calls in bindings, component tags and v-model.",
+      "description": "Report §3/§4 items 10 / 8.",
+      "priority": "P1",
+      "estimate": {
+        "min": 10,
+        "expected": 14,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "vue"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "parser change",
+        "reports/M3-02.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue.ts",
+        "src/parsers/ignored-symbols.ts",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "@click=\"save\" yields a call edge to the component's save method.",
+        "<UserCard/> registered locally or globally yields a render edge to UserCard.vue.",
+        "Works for Vue 2.7 and 3.x fixtures."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts",
+        "npx vitest run tests/parsers-integration.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. @click=\"save\" yields a call edge to the component's save method.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M3-03",
+      "milestone": "M3",
+      "title": "Options API member resolution",
+      "objective": "this.x() resolves to methods/computed/watch members, including mixins.",
+      "description": "Report §3/§4 item 11 / 9.",
+      "priority": "P1",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "vue"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "parser change",
+        "reports/M3-03.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue.ts",
+        "src/parsers/ignored-symbols.ts",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "this.save() inside methods resolves to methods.save in the same SFC.",
+        "A method defined in a mixin resolves through the mixins array."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts",
+        "npx vitest run tests/parsers-integration.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. this.save() inside methods resolves to methods.save in the same SFC.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M3-04",
+      "milestone": "M3",
+      "title": "<script setup> macros and composables",
+      "objective": "Model defineProps/defineEmits/defineExpose as component interface and useX() composables as edges to their definitions.",
+      "description": "Report §3/§4 item 11 / 9.",
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "vue"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "parser change",
+        "reports/M3-04.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue.ts",
+        "src/parsers/ignored-symbols.ts",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "defineProps<{ id: number }>() exposes prop id on the component symbol.",
+        "useUser() links to composables/useUser.ts."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts",
+        "npx vitest run tests/parsers-integration.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. defineProps<{ id: number }>() exposes prop id on the component symbol.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M3-05",
+      "milestone": "M3",
+      "title": "Vuex and Pinia resolution",
+      "objective": "Resolve mapActions/mapGetters/mapState, $store.dispatch/commit(\"ns/NAME\") and Pinia useXStore()/store.action().",
+      "description": "Report §3/§4 item 11 / 10.",
+      "priority": "P1",
+      "estimate": {
+        "min": 10,
+        "expected": 14,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "vue"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "parser change",
+        "reports/M3-05.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue.ts",
+        "src/parsers/ignored-symbols.ts",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "this.$store.dispatch('users/FETCH') links to the FETCH action in store/modules/users.js.",
+        "useCartStore().checkout() links to the checkout action."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts",
+        "npx vitest run tests/parsers-integration.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. this.$store.dispatch('users/FETCH') links to the FETCH action in store/modules/users.js.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M3-06",
+      "milestone": "M3",
+      "title": "Vue Router navigation edges",
+      "objective": "Link router.push({ name }), this.$router.push(path) and <router-link :to> to the route record and its component.",
+      "description": "Report §3/§4 item 11.",
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "parsers",
+        "vue"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-02",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+      ],
+      "outputs": [
+        "parser change",
+        "reports/M3-06.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue.ts",
+        "src/parsers/ignored-symbols.ts",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "router.push({ name: 'user' }) links to the route record named user and its component."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts",
+        "npx vitest run tests/parsers-integration.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. router.push({ name: 'user' }) links to the route record named user and its component.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M4-01",
+      "milestone": "M4",
+      "title": "Recall/precision scoring in CI",
+      "objective": "CI runs the route, HTTP and Vue fixture scorers and fails on regression below recorded floors.",
+      "description": "CI runs the route, HTTP and Vue fixture scorers and fails on regression below recorded floors.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "quality",
+        "ci"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-01",
+          "type": "hard"
+        },
+        {
+          "id": "M2-02",
+          "type": "hard"
+        },
+        {
+          "id": "M3-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md (item 18)"
+      ],
+      "outputs": [
+        ".github/workflows/ci.yml job",
+        "scripts/eval/floors.json",
+        "npm run eval script"
+      ],
+      "affectedFiles": [
+        ".github/workflows/ci.yml",
+        "scripts/eval"
+      ],
+      "acceptanceCriteria": [
+        "Lowering any floor-protected recall by breaking a detector makes `npm run eval` exit 1 (mutation check recorded)."
+      ],
+      "verificationCommands": [
+        "npm run eval"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Lowering any floor-protected recall by breaking a detector makes `npm run eval` exit 1 (mutation check recorded).",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "id": "M4-02",
+      "milestone": "M4",
+      "title": "postMessage / iframe message edges",
+      "objective": "Model window.postMessage(obj) and addEventListener(\"message\") flag keys as message edges between host and frame files.",
+      "description": "Model window.postMessage(obj) and addEventListener(\"message\") flag keys as message edges between host and frame files.",
+      "priority": "P3",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "parsers"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md (item 17)"
+      ],
+      "outputs": [
+        "message edge type"
+      ],
+      "affectedFiles": [
+        "src/frameworks",
+        "src/types.ts",
+        "tests/post-message.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A host posting {isReady: true} and a frame checking event.data?.isReady yields one message edge host → frame."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/post-message.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. A host posting {isReady: true} and a frame checking event.data?.isReady yields one message edge host → frame.",
+      "status": "DEFERRED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    }
+  ]
+}

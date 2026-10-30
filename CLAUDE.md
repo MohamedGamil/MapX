@@ -44,3 +44,12 @@ Add the following to your Claude Desktop configuration file (`~/.config/Claude/c
 5. If files are modified, call `mapx_sync` to update the graph.
 6. Call `mapx_trace` to trace data flow paths.
 <!-- /mapx -->
+
+## MapX development: BATON
+
+Read `docs/baton/PROJECT_STATE.md` and `docs/baton/HANDOFF.md`, inspect git, and run `npm run plan:validate` before any work. `docs/baton/TASKS.json` is authoritative for status, dependencies, gates and evidence; handoffs and reports are claims to verify against files and test output. `specs/` is frozen history (D001): cite `specs/features/F*.md` from task `sources`, and never update `specs/ITERATIONS.md`.
+
+- **Plan and continue work** with the `baton` skill (`.claude/skills/baton/`). Use `npm run plan:scan` for ready/promotable/next-wave work, and `npm run plan:transition` for every status change.
+- **Review delivered work** with the `baton-review` skill (`.claude/skills/baton-review/`), which reviews since the marker in `docs/baton/reviews/state.json`.
+- **Baseline check:** `npm run check` (plan validation, typecheck, vitest, skill tests). Run `npm ci --legacy-peer-deps` first on a fresh clone.
+- **Ground rules:** fixtures before fixes; never use private or pilot code in fixtures; attach real evidence before DONE; one active iteration per owner. Publishing requires an approved `G-REL-*` gate. Commit only when asked.
