@@ -27,6 +27,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **HTTP pairing fixture and scorer**: `tests/fixtures/vue-http` (32 labelled calls in Vue 2.7 and Vue 3 apps) and `scripts/eval/score-http.ts`. (M2-02)
 
 ### Fixed
+- Agent files: `agents generate --providers=all` works; Cursor and Windsurf rules keep their frontmatter first; `agents update` never overwrites a hand-edited mapx block without `--force`, even when the block is also outdated (sentinels now carry a content hash); `agents list` shows each file's status (missing, current, outdated, edited). (M0-09-R1)
 - JS/TS calls on untyped receivers (`obj.method()`) are captured as inferred call edges (built-in methods such as `map` or `push` are skipped), and DOT export dashes only inferred edges, so verified bindings and dispatches are no longer drawn as if guessed. (M0-01-R1)
 - Methods of an anonymous `export default class { … }` are scoped to the class name derived from the file. (M0-18-R1)
 - Filters: removing an `--exclude` restores the edges into the re-included files (a filter change re-parses once); `--exclude "dir/*"` no longer drops subdirectories; filtered exports no longer list clusters of excluded files; Laravel's default excludes apply at scan time to `framework: laravel` repos unless declined at init. (M0-02-R1)

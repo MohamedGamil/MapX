@@ -2477,11 +2477,18 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .action(() => {
       const generator = new AgentGenerator();
       const providers = generator.listProviders();
+      const dir = program.opts().dir ? resolve(program.opts().dir) : process.cwd();
+      // Status of each provider's file in this project, from the same plan `update` would run.
+      const STATUS: Record<string, string> = {
+        create: 'missing', append: 'missing', up_to_date: 'current', update_clean: 'outdated',
+        update_conflict: 'edited', no_sentinel: 'unmanaged (no mapx block)',
+      };
+      const statusOf = new Map(generator.plan(providers, { dir }).map(a => [a.provider, STATUS[a.status] ?? a.status]));
       console.log('\nSupported LLM integration providers:');
       for (const p of providers) {
         const temp = generator.getTemplate(p);
         const appendStr = temp?.isAppend ? ' (append-mode)' : '';
-        console.log(`  - ${p.padEnd(12)} -> ${temp?.filename}${appendStr}`);
+        console.log(`  - ${p.padEnd(12)} -> ${temp?.filename}${appendStr}  [${statusOf.get(p) ?? 'missing'}]`);
       }
       console.log('');
     });
@@ -2500,10 +2507,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const available = generator.listProviders();
       let targets: string[] = [];
 
-      if (opts.all) {
+      const listed: string[] = opts.providers ? opts.providers.split(',').map((s: string) => s.trim().toLowerCase()) : [];
+      if (opts.all || listed.includes('all')) {
         targets = available;
       } else if (opts.providers) {
-        targets = opts.providers.split(',').map((s: string) => s.trim().toLowerCase()).filter((p: string) => available.includes(p));
+        targets = listed.filter((p: string) => available.includes(p));
       } else {
         if (process.stdin.isTTY) {
           targets = await selectProvidersInteractive();
@@ -2529,6 +2537,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           clack.log.warn(`Conflict/Modification detected in ${action.filename}:`);
           if (action.diff) {
             console.log(action.diff);
+          }
+          if (!opts.force && !process.stdin.isTTY) {
+            clack.log.warn(`Skipped ${action.filename}: it was edited; re-run with --force to overwrite.`);
+            continue;
           }
           if (!opts.force) {
             const confirm = await clack.confirm({
@@ -2585,6 +2597,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           if (action.diff) {
             console.log(action.diff);
           }
+          if (!opts.force && !process.stdin.isTTY) {
+            clack.log.warn(`Skipped ${action.filename}: its mapx block was edited; re-run with --force to overwrite.`);
+            continue;
+          }
           if (!opts.force) {
             const confirm = await clack.confirm({
               message: `Overwrite customizations in ${action.filename}?`,
@@ -2599,6 +2615,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
         if (opts.dryRun) {
           clack.log.info(`[DRY RUN] Would update ${action.filepath}`);
+          if (action.diff && action.status !== 'update_conflict') console.log(action.diff);
         } else {
           generator.execute(action);
           clack.log.success(`Updated ${action.filename}`);

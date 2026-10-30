@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync, rmdirSync } from 'node:fs';
 import { join, dirname, basename, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,24 +29,29 @@ export interface McpConfigAction {
  * - `.mdc` → uses HTML-style but placed after frontmatter
  * - Everything else (`.md`, `.txt`, etc.) → `<!-- mapx -->` / `<!-- /mapx -->` (HTML comments)
  */
-function getSentinelMarkers(filename: string): { open: (v: string) => string; close: string; regex: RegExp } {
+function getSentinelMarkers(filename: string): { open: (v: string, hash?: string) => string; close: string; regex: RegExp } {
   const ext = extname(filename).toLowerCase();
   const base = basename(filename).toLowerCase();
 
   if (['.yaml', '.yml', '.sh', '.bash', '.py', '.toml', '.conf'].includes(ext) || base === '.clinerules') {
     return {
-      open: (v: string) => `# mapx v${v}`,
+      open: (v: string, hash?: string) => `# mapx v${v}${hash ? ` #${hash}` : ''}`,
       close: '# /mapx',
-      regex: /#\s*mapx\s+v([\d.]+)\s*\n([\s\S]*?)#\s*\/mapx/i,
+      regex: /#\s*mapx\s+v([\d.]+)(?:[ \t]+#([0-9a-f]+))?[ \t]*\n([\s\S]*?)#\s*\/mapx/i,
     };
   }
 
   // Default: HTML comment markers (markdown, mdc, etc.)
   return {
-    open: (v: string) => `<!-- mapx v${v} -->`,
+    open: (v: string, hash?: string) => `<!-- mapx v${v}${hash ? ` #${hash}` : ''} -->`,
     close: '<!-- /mapx -->',
-    regex: /<!--\s*mapx\s+v([\d.]+)\s*-->([\s\S]*?)<!--\s*\/mapx\s*-->/i,
+    regex: /<!--\s*mapx\s+v([\d.]+)(?:\s+#([0-9a-f]+))?\s*-->([\s\S]*?)<!--\s*\/mapx\s*-->/i,
   };
+}
+
+/** Short hash of a generated block body, ignoring surrounding whitespace. */
+function bodyHash(body: string): string {
+  return createHash('sha1').update(body.trim()).digest('hex').slice(0, 12);
 }
 
 export class AgentGenerator {
@@ -94,7 +100,13 @@ export class AgentGenerator {
       const filepath = join(dir, template.filename);
       const rawContent = this.substitute(template.content, dir, mcpPort);
       const markers = getSentinelMarkers(template.filename);
-      const wrappedNewContent = `${markers.open(this.version)}\n${rawContent}\n${markers.close}`;
+      // Frontmatter (Cursor .mdc, Windsurf rules) must stay at byte 0, so the sentinel block goes
+      // after it (M0-09-R1).
+      const frontmatter = rawContent.match(/^---\n[\s\S]*?\n---\n/)?.[0] ?? '';
+      const body = rawContent.slice(frontmatter.length);
+      // The hash of the generated body lets `update` tell a hand edit from an old version (M0-09-R1).
+      const block = `${markers.open(this.version, bodyHash(body))}\n${body}\n${markers.close}`;
+      const wrappedNewContent = `${frontmatter}${block}`;
 
       if (!existsSync(filepath)) {
         actions.push({
@@ -142,12 +154,17 @@ export class AgentGenerator {
 
       // Sentinel block exists
       const fileVersion = match[1];
-      const fileContentInside = match[2];
+      const recordedHash = match[2];
+      const fileContentInside = match[3]!;
+      // Edited: the block no longer matches the hash it was written with (any version). Blocks
+      // written before hashes existed fall back to the version rule.
+      const edited = recordedHash ? bodyHash(fileContentInside) !== recordedHash : fileVersion === this.version;
 
       const expectedContentOld = fileContentInside; // what's actually there
-      const expectedContentNew = rawContent;        // new template content
+      const expectedContentNew = body;              // new template content (frontmatter excluded)
+      const frontmatterInPlace = !!frontmatter && existingFileContent.slice(0, match.index).trimStart().startsWith('---');
 
-      if (expectedContentOld.trim() === expectedContentNew.trim() && fileVersion === this.version) {
+      if (expectedContentOld.trim() === expectedContentNew.trim() && fileVersion === this.version && (!frontmatter || frontmatterInPlace)) {
         actions.push({
           provider,
           filename: template.filename,
@@ -160,16 +177,17 @@ export class AgentGenerator {
       }
 
       // Content or version changed — replace sentinel block
-      const newFileContent = existingFileContent.replace(markers.regex, wrappedNewContent);
+      // A file already carrying the frontmatter above the block only gets its block replaced.
+      const newFileContent = existingFileContent.replace(markers.regex, () => (frontmatterInPlace ? block : wrappedNewContent));
 
       actions.push({
         provider,
         filename: template.filename,
         filepath,
-        status: fileVersion === this.version ? 'update_conflict' : 'update_clean',
+        status: edited ? 'update_conflict' : 'update_clean',
         oldContent: existingFileContent,
         newContent: newFileContent,
-        diff: this.diff(fileContentInside, rawContent),
+        diff: this.diff(fileContentInside, body),
       });
     }
 
