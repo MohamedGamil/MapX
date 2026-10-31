@@ -5191,15 +5191,28 @@
         "npx vitest run tests/legacy-globs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "lane-misc",
+      "status": "IN_PROGRESS",
+      "owner": "lane-cli",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T04:37:19.389Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T04:37:18.774Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T04:37:19.389Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
