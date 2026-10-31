@@ -19,6 +19,29 @@ export const LARAVEL_DEFAULT_EXCLUDES = [
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { canonicalPath } from './workspace-manager.js';
 
+export interface CollapsedRepo {
+  dropped: RepoConfig;
+  kept: RepoConfig;
+}
+
+/** Removes repo entries whose folder (symlinks resolved) an earlier entry already names; returns them. */
+function collapseDuplicateRepos(config: MapxConfig, workspaceRoot: string): CollapsedRepo[] {
+  if (!Array.isArray(config.repos)) return [];
+  const byKey = new Map<string, RepoConfig>();
+  const collapsed: CollapsedRepo[] = [];
+  config.repos = config.repos.filter(repo => {
+    const key = canonicalPath(resolve(workspaceRoot, repo.path));
+    const kept = byKey.get(key);
+    if (kept) {
+      collapsed.push({ dropped: repo, kept });
+      return false;
+    }
+    byKey.set(key, repo);
+    return true;
+  });
+  return collapsed;
+}
+
 const DEFAULT_CONFIG: MapxConfig = {
   version: '1.0.0',
   repos: [],
@@ -93,6 +116,8 @@ const DEFAULT_CONFIG: MapxConfig = {
 export class Config {
   private configPath: string;
   private config: MapxConfig;
+  /** Entries `load` dropped because an earlier entry names the same folder (M0-10-R3). */
+  private collapsed: CollapsedRepo[] = [];
 
   private constructor(configPath: string, config: MapxConfig) {
     this.configPath = configPath;
@@ -118,7 +143,12 @@ export class Config {
 
     const data = await readFile(configPath, 'utf-8');
     const config = JSON.parse(data) as MapxConfig;
-    return new Config(configPath, config);
+    const loaded = new Config(configPath, config);
+    // Configs written before M0-10-R2's de-dup, or by hand, can name one folder twice (a symlink,
+    // another spelling): keep the first entry and save, so the folder is not indexed twice (M0-10-R3).
+    loaded.collapsed = collapseDuplicateRepos(config, workspaceRoot);
+    if (loaded.collapsed.length) await loaded.save();
+    return loaded;
   }
 
   static async init(
@@ -277,6 +307,11 @@ export class Config {
 
   removeRepo(nameOrPath: string): void {
     this.config.repos = this.config.repos.filter(r => r.name !== nameOrPath && r.path !== nameOrPath);
+  }
+
+  /** Duplicate entries the last `load` removed from the config file; the loaders report them. */
+  get collapsedRepos(): CollapsedRepo[] {
+    return this.collapsed;
   }
 
   getWorkspaceRoot(): string {

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer } from '../src/mcp.js';
-import { cleanup, mapx, query, workspace } from './helpers/e2e.js';
+import { cleanup, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
 
 // M0-10-R1 / M0-10-R2: the F18 workspace surface. Layout: <tmp>/main is the primary repo with an
 // initialised submodule (libs/ui), an uninitialised one (libs/legacy), a JSONC .code-workspace
@@ -69,6 +69,8 @@ describe('workspace surface (F18)', () => {
     tmp = workspace(files, ['main', 'main/libs/ui', 'main/tools', 'peer']);
     root = join(tmp, 'main');
     symlinkSync('libs/ui', join(root, 'ui-link'));
+    // The uninitialised submodule's empty checkout folder, as `git clone` leaves it (M0-10-R3).
+    mkdirSync(join(root, 'libs/legacy'));
     commit(root, 'main: init');
     commit(join(root, 'libs/ui'), 'ui: init');
     commit(join(root, 'tools'), 'tools: init');
@@ -179,7 +181,7 @@ describe('workspace surface (F18)', () => {
       expect(json.root).toBe(root);
       expect(json.crossRepoEdgeCount).toBe(2);
       expect(json.crossRepoEdges).toEqual([{ from: 'main', to: 'ui', count: 2, types: ['import', 'instantiation'] }]);
-      const by = Object.fromEntries(json.repos.map((r: { name: string }) => [r.name, r]));
+      const by = Object.fromEntries(json.repos.filter((r: { isRegistered: boolean }) => r.isRegistered).map((r: { name: string }) => [r.name, r]));
       expect(Object.fromEntries(Object.entries(by).map(([n, r]: [string, any]) => [n, [r.type, r.headSha]]))).toEqual({
         main: ['primary', heads.main],
         ui: ['submodule', heads.ui],
@@ -190,6 +192,27 @@ describe('workspace surface (F18)', () => {
       expect(by.ui.crossRepoEdgeCount).toBe(0);
       expect(json.discovered.some((d: { source: string }) => d.source === 'peer')).toBe(false);
       expect(json.discovered.some((d: { path: string }) => d.path === 'ui-link')).toBe(false);
+    } finally {
+      await client.close();
+    }
+  });
+
+  // M0-10-R3: F18's RepoSummary fields: absolute path, relativePath, isRegistered, isInitialised.
+  it('mapx_workspaces entries carry F18 path, relativePath, isRegistered and isInitialised', async () => {
+    const client = await mcpClient();
+    try {
+      const json = JSON.parse(((await client.callTool({ name: 'mapx_workspaces', arguments: { dir: root } })) as any).content[0].text);
+      const f18 = json.repos.map((r: any) => ({ name: r.name, type: r.type, path: r.path, relativePath: r.relativePath, isRegistered: r.isRegistered, isInitialised: r.isInitialised }));
+      expect(f18).toEqual([
+        { name: 'main', type: 'primary', path: root, relativePath: '.', isRegistered: true, isInitialised: true },
+        { name: 'ui', type: 'submodule', path: join(root, 'libs/ui'), relativePath: 'libs/ui', isRegistered: true, isInitialised: true },
+        { name: 'tools', type: 'vscode-workspace', path: join(root, 'tools'), relativePath: 'tools', isRegistered: true, isInitialised: true },
+        { name: 'web', type: 'folder', path: join(root, 'packages/web'), relativePath: 'packages/web', isRegistered: true, isInitialised: true },
+        // The uninitialised submodule is listed, as in the CLI table, but not registered.
+        { name: 'legacy', type: 'submodule', path: join(root, 'libs/legacy'), relativePath: 'libs/legacy', isRegistered: false, isInitialised: false },
+      ]);
+      expect(json.repos.find((r: any) => r.name === 'legacy')).toMatchObject({ fileCount: 0, lastScanned: null, headSha: null });
+      expect(json.repos.find((r: any) => r.name === 'ui')).toMatchObject({ fileCount: 2, headSha: heads.ui });
     } finally {
       await client.close();
     }
@@ -238,4 +261,91 @@ describe('workspace surface: a registered repo that was never scanned (F18)', ()
     expect(status).toMatch(/\n  app\s+1\s+\d+\s+\d+\s+[0-9a-f]{7,}\s+\S.*\sclean\n/);
     expect(mapx(root, 'workspaces')).toMatch(/\n  lib\s+lib\s+peer\s+0\s+never\s+[0-9a-f]{7,}\n/);
   });
+});
+
+// M0-10-R3: a config that already holds the same folder twice (written before M0-10-R2's de-dup,
+// or by hand) is collapsed on load, and on `workspaces sync`, with a message.
+describe('workspace surface: duplicate repo entries already in the config (F18)', () => {
+  let tmp: string;
+  let root: string;
+  const configPath = () => join(root, '.mapx/config.json');
+  const setRepos = (repos: Array<{ name: string; path: string }>) => {
+    const config = JSON.parse(readFileSync(configPath(), 'utf8'));
+    config.repos = repos;
+    writeFileSync(configPath(), JSON.stringify(config, null, 2));
+  };
+  const repos = () => JSON.parse(readFileSync(configPath(), 'utf8')).repos as Array<{ name: string; path: string }>;
+  beforeAll(() => {
+    tmp = workspace({ 'app/src/a.ts': 'export const a = 1;\n', 'app/lib/b.ts': 'export const b = 2;\n' }, ['app', 'app/lib']);
+    root = join(tmp, 'app');
+    symlinkSync('lib', join(root, 'lib-link'));
+    commit(root, 'app: init');
+    commit(join(root, 'lib'), 'lib: init');
+    mapx(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover', '--no-workspaces');
+    // The symlink registered alone and scanned: its files are stored under lib-link/.
+    setRepos([{ name: 'app', path: '.' }, { name: 'lib-link', path: 'lib-link' }]);
+    mapx(root, 'scan', '--all');
+  }, 120000);
+  afterAll(() => cleanup(tmp));
+
+  it('collapses the same folder (a symlink, another spelling) to its first entry on load, and drops the duplicate\'s data', () => {
+    expect(query(root, "SELECT path, repo FROM files WHERE path LIKE 'lib-link/%'")).toEqual([{ path: 'lib-link/b.ts', repo: 'lib-link' }]);
+    setRepos([{ name: 'app', path: '.' }, { name: 'lib', path: 'lib' }, { name: 'lib-link', path: 'lib-link' }, { name: 'lib2', path: './lib/' }]);
+    const { stderr } = mapxWithStderr(root, 'workspaces');
+    expect(stderr).toContain('Removed duplicate repo entry lib-link (lib-link): same folder as lib (lib).');
+    expect(stderr).toContain('Removed duplicate repo entry lib2 (./lib/): same folder as lib (lib).');
+    expect(repos()).toEqual([{ name: 'app', path: '.' }, { name: 'lib', path: 'lib' }]);
+    expect(query(root, "SELECT path FROM files WHERE path LIKE 'lib-link/%'")).toEqual([]);
+    // Saved: the next load has nothing to report.
+    expect(mapxWithStderr(root, 'workspaces').stderr).not.toContain('duplicate');
+  });
+
+  it('workspaces sync collapses duplicates too', () => {
+    setRepos([{ name: 'app', path: '.' }, { name: 'lib', path: 'lib' }, { name: 'lib-link', path: 'lib-link' }]);
+    const { stderr } = mapxWithStderr(root, 'workspaces', 'sync');
+    expect(stderr).toContain('Removed duplicate repo entry lib-link (lib-link): same folder as lib (lib).');
+    expect(repos().map(r => r.path)).toEqual(['.', 'lib']);
+  });
+});
+
+// M0-10-R3 (found by M0-03-R4): `workspaces add` scans the new repo before the primary repo is
+// indexed, so its references into the primary repo are unresolved; a later plain `scan --all`
+// must resolve them although the new repo's files did not change. `update --all` (incremental)
+// must do the same.
+describe('workspace surface: scan --all after workspaces add (F18)', () => {
+  type Edge = { source_file: string; target_file: string; edge_type: string; repo: string; target_repo: string | null };
+  const edges = (root: string) => query<Edge>(root, 'SELECT source_file, target_file, edge_type, repo, target_repo FROM edges ORDER BY source_file, target_file, edge_type');
+  const roots: string[] = [];
+  const fresh = () => {
+    const root = workspace({
+      'src/theme.ts': "export const theme = { color: 'red' };\n",
+      'src/app.ts': "import { Button } from '../libs/ui/button';\nexport const app = () => new Button();\n",
+      'libs/ui/button.ts': "import { theme } from '../../src/theme';\nexport class Button { color = theme.color; }\n",
+      'libs/ui/icon.ts': "import { Button } from './button';\nexport const icon = new Button();\n",
+    }, ['.', 'libs/ui']);
+    roots.push(root);
+    // Committed, so `update` takes the git-diff path (an unborn HEAD lists every file as changed).
+    for (const dir of [join(root, 'libs/ui'), root]) {
+      execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+      commit(dir, 'init');
+    }
+    mapx(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover', '--no-workspaces');
+    mapx(root, 'workspaces', 'add', 'libs/ui');
+    // The scan `add` runs sees no primary-repo files: button.ts's import is unresolved.
+    expect(edges(root).filter(e => e.target_file === 'src/theme.ts')).toEqual([]);
+    return root;
+  };
+  afterAll(() => roots.forEach(cleanup));
+
+  for (const command of ['scan', 'update']) {
+    it(`a plain ${command} --all resolves the new repo's references into the primary repo, as scan --all --force does`, () => {
+      const root = fresh();
+      mapx(root, command, '--all');
+      const main = JSON.parse(readFileSync(join(root, '.mapx/config.json'), 'utf8')).repos[0].name;
+      const plain = edges(root);
+      expect(plain).toContainEqual({ source_file: 'libs/ui/button.ts', target_file: 'src/theme.ts', edge_type: 'import', repo: 'ui', target_repo: main });
+      mapx(root, 'scan', '--all', '--force');
+      expect(edges(root)).toEqual(plain);
+    }, 120000);
+  }
 });

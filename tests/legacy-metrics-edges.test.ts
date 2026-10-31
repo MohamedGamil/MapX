@@ -331,8 +331,8 @@ describe('edges <file> across the repos of a workspace', () => {
     }, ['.', 'libs/ui']);
     init(root);
     mapx(root, 'workspaces', 'add', 'libs/ui');
-    // --force: `workspaces add` scanned ui before the primary repo was indexed.
-    mapx(root, 'scan', '--all', '--force');
+    // `workspaces add` scanned ui before the primary repo was indexed; a plain scan --all re-parses it (M0-10-R3).
+    mapx(root, 'scan', '--all');
     client = await mcpClient();
   }, 120000);
   afterAll(async () => {

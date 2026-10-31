@@ -244,7 +244,12 @@ export class Scanner {
     const filterKey = 'scan_filters:' + repo.name;
     const filters = this.filterSignature(repo.name);
     const previousFilters = this.store.getMeta(filterKey);
-    const reparseAll = force || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
+    // Another repo whose files this repo could not see when it was last parsed (`workspaces add`
+    // before the primary repo was scanned): unchanged files keep unresolved references into it,
+    // so re-parse everything once, as for changed filters (M0-10-R3).
+    const newlyVisible = this.newlyVisibleRepos(repo.name, discovered.some(f => !f.isNew));
+    this.store.setMeta('resolution_repos:' + repo.name, JSON.stringify(this.visibleRepos(repo.name)));
+    const reparseAll = force || newlyVisible || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
     this.store.setMeta(filterKey, filters);
     // Unchanged files that had edges into a removed file now back: re-parse them (M0-02-R2).
     const referrers = this.takeReferrers(repo.name, newFiles.map(f => f.relativePath));
@@ -501,6 +506,10 @@ export class Scanner {
     const previousFilters = this.store.getMeta(filterKey);
     if (previousFilters === null) this.store.setMeta(filterKey, this.filterSignature(repo.name));
     else if (previousFilters !== this.filterSignature(repo.name)) return this._scanFullForRepo(repo);
+    // Likewise when another repo became visible since this one was parsed, and when nothing of the
+    // repo is indexed yet: a git diff from HEAD would list none of its committed files (M0-10-R3).
+    const indexed = this.store.getAllFiles(repo.name).length > 0;
+    if (!indexed || this.newlyVisibleRepos(repo.name, indexed)) return this._scanFullForRepo(repo);
 
     if (!isGitRepo(repoRoot)) {
       // Content-hash based incremental for non-git projects
@@ -1534,6 +1543,33 @@ export class Scanner {
    */
   private effectiveExcludes(repoName: string): string[] {
     return effectiveExcludesFor(this.config.settings, this.config.repos.find(r => r.name === repoName), this.cliExcludes);
+  }
+
+  /** The other repos whose files reference resolution sees for `repoName` in this scan (M0-10-R3). */
+  private visibleRepos(repoName: string): string[] {
+    const repos = this.workspaceFileMap.size > 0
+      ? new Set(this.workspaceFileMap.values())
+      : new Set(this.store.getAllFiles().map(f => f.repo as string));
+    repos.delete(repoName);
+    return [...repos].sort();
+  }
+
+  /**
+   * True when a repo is visible now that was not when `repoName` was last parsed, as recorded in
+   * `meta resolution_repos:<repo>`. Without a record (indexed before M0-10-R3), any other repo
+   * counts once, provided the repo already has indexed files.
+   */
+  private newlyVisibleRepos(repoName: string, indexed: boolean): boolean {
+    if (!indexed) return false;
+    const visible = this.visibleRepos(repoName);
+    const recorded = this.store.getMeta('resolution_repos:' + repoName);
+    if (recorded === null || recorded === undefined) return visible.length > 0;
+    try {
+      const before = new Set(JSON.parse(recorded) as string[]);
+      return visible.some(r => !before.has(r));
+    } catch {
+      return visible.length > 0;
+    }
   }
 
   /** The effective filters of a repo, as recorded in `meta scan_filters:<repo>` (M0-02-R1). */

@@ -31,7 +31,7 @@ import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
-import { codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, summarizeRepos, workspaceExport } from './core/workspace-summary.js';
+import { applyCollapsedRepos, codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, repoState, summarizeRepos, workspaceExport } from './core/workspace-summary.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
 
@@ -58,6 +58,8 @@ async function loadContext(dir: string) {
   const config = await Config.load(dir);
   const dbPath = resolve(dir, '.mapx', 'mapx.db');
   const store = new Store(dbPath);
+  // stderr: stdout is the stdio transport (M0-10-R3).
+  for (const message of applyCollapsedRepos(config, store)) console.error(message);
   const graph = new MapxGraph(config.repo.name);
 
   const files = store.getAllFiles();
@@ -2150,9 +2152,9 @@ Callees: ${callees.length}`;
         // "list" action — registered repos with stats (F18 shape; M0-10-R1)
         const summaries = summarizeRepos(dir, ctx.config.repos, ctx.config.repo.name, ctx.store);
         const pairs = crossRepoPairs(ctx.store);
-        const repos = summaries.map(r => ({
+        const repos: Array<Record<string, unknown>> = summaries.map(r => ({
           name: r.name,
-          path: r.path,
+          ...repoState(dir, r.path, r.type, true),
           type: r.type,
           fileCount: r.files,
           symbolCount: r.symbols,
@@ -2162,6 +2164,14 @@ Callees: ${callees.length}`;
           // F18's name for the repo's own HEAD; null for a folder without a checkout (M0-10-R2).
           headSha: r.head,
         }));
+        // Uninitialised submodules that are not registered, as the CLI table lists them (F18, M0-10-R3).
+        for (const sub of submodules) {
+          if (sub.isInitialized || registeredPaths.has(WorkspaceManager.repoKey(dir, sub.path))) continue;
+          repos.push({
+            name: sub.name, ...repoState(dir, sub.path, 'submodule', false), type: 'submodule',
+            fileCount: 0, symbolCount: 0, edgeCount: 0, crossRepoEdgeCount: 0, lastScanned: null, headSha: null,
+          });
+        }
 
         return {
           content: [{

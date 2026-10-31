@@ -12,7 +12,7 @@ import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { AgentGenerator, needsConsent, droppedCommentsWarning } from './agents/generator.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
-import { codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, summarizeRepos, table, timeAgo, workspaceExport } from './core/workspace-summary.js';
+import { applyCollapsedRepos, codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, summarizeRepos, table, timeAgo, workspaceExport } from './core/workspace-summary.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -3263,6 +3263,7 @@ export async function loadContext(dir: string): Promise<{
   const config = await Config.load(dir);
   const dbPath = resolve(dir, '.mapx', 'mapx.db');
   const store = new Store(dbPath);
+  for (const message of applyCollapsedRepos(config, store)) console.error(message);
 
   // Ensure the DB connection is closed when the process exits normally or
   // after an unhandled error — this prevents the process from hanging after

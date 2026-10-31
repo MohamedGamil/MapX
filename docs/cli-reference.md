@@ -414,6 +414,10 @@ Options:
 
 Manage multi-repository workspaces.
 
+A config that names the same folder twice (a symlink to a registered repo, or another spelling of its path) is collapsed when it is loaded, by any command: the first entry is kept, the config is saved, the dropped entry's stored data is removed, and stderr says `Removed duplicate repo entry <name> (<path>): same folder as <kept> (<path>).`
+
+Each repo's references are resolved against the files of the other repos indexed at the time. When a later `scan --all` or `update --all` finds a repo that was not indexed then (for example the primary repo, after `workspaces add` scanned the new repo first), it re-parses the earlier repo once, so its references into the newly indexed repo resolve without `--force`. `update` also takes the full-scan path for a repo with nothing indexed yet.
+
 ### `mapx workspaces` / `mapx workspaces list`
 
 List the registered repositories as a table: Name, Path, Type (`primary`, `submodule`, `vscode-workspace`, `peer`, or `folder` for a registered directory without a checkout of its own, such as a monorepo package), Files, Last scanned and HEAD (each repo's own checkout; `-` for a `folder`). Uninitialised submodules are listed with `✗ not initialised` and the `git submodule update --init` command. `list` also shows unregistered discoveries.
@@ -425,7 +429,7 @@ mapx workspaces list [--include-peers]
 
 ### `mapx workspaces add <path>`
 
-Register a new repository in the workspace. A path that resolves (through symlinks) to a registered repository is reported as already registered.
+Register a new repository in the workspace. A path that resolves (through symlinks) to a registered repository is reported as already registered. The new repository is scanned straight away; run `mapx scan --all` afterwards if the primary repository has not been scanned yet.
 
 ```bash
 mapx workspaces add ../sibling-repo --name my-repo

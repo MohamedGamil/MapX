@@ -6,6 +6,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Store } from './store.js';
 import type { RepoConfig } from '../types.js';
+import type { Config } from './config.js';
 import type { LLMExporter } from '../exporters/llm-exporter.js';
 import { WorkspaceManager } from './workspace-manager.js';
 
@@ -143,6 +144,27 @@ export function crossRepoDependencies(store: Store, file: string): string[] {
   if (out.length) lines.push('Cross-repo dependencies:', ...out.map(e => `  → [${e.target_repo}] ${e.target_file} (${e.edge_type})`));
   if (inc.length) lines.push(...(out.length ? [''] : []), 'Cross-repo dependents:', ...inc.map(e => `  ← [${e.repo}] ${e.source_file} (${e.edge_type})`));
   return lines;
+}
+
+/**
+ * Reports the duplicate repo entries `Config.load` collapsed and drops the stored data of a dropped
+ * entry whose name differs from the kept one (its files were indexed a second time under that
+ * name). Returns one message per dropped entry for the caller to print (M0-10-R3).
+ */
+export function applyCollapsedRepos(config: Pick<Config, 'collapsedRepos' | 'repos'>, store: Store): string[] {
+  const kept = new Set((config.repos ?? []).map(r => r.name));
+  return (config.collapsedRepos ?? []).map(({ dropped, kept: k }) => {
+    if (!kept.has(dropped.name)) store.deleteRepo(dropped.name);
+    return `Removed duplicate repo entry ${dropped.name} (${dropped.path}): same folder as ${k.name} (${k.path}).`;
+  });
+}
+
+/** F18's RepoSummary fields for mapx_workspaces: absolute path, path as registered, registration and checkout state (M0-10-R3). */
+export function repoState(dir: string, relativePath: string, type: RepoType, isRegistered: boolean) {
+  const path = resolve(dir, relativePath);
+  // A submodule is initialised once it has its own checkout; any other registered folder once it exists.
+  const isInitialised = existsSync(path) && (type !== 'submodule' || hasOwnGit(path));
+  return { path, relativePath, isRegistered, isInitialised };
 }
 
 /** "3 min ago", "2 hours ago", "never". */

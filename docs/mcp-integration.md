@@ -470,7 +470,7 @@ Intelligent, token-budgeted workspace context builder for LLM prompts.
 
 #### `mapx_workspaces`
 Workspace introspection with two actions:
-- **`list`** — Returns the workspace `root` and all registered repos with stats: `type` (`primary`, `submodule`, `vscode-workspace`, `peer`, or `folder` for a directory without its own checkout), `fileCount`, `symbolCount`, `edgeCount`, `crossRepoEdgeCount`, `lastScanned` and `headSha` (the repo's own HEAD; `null` for a `folder`). Also returns a top-level `crossRepoEdgeCount`, the per-pair `crossRepoEdges`, and the unregistered discoveries.
+- **`list`** — Returns the workspace `root` and all registered repos with stats: F18's `path` (absolute), `relativePath` (as registered, relative to the root), `isRegistered`, `isInitialised` (the folder exists and, for a submodule, has its own checkout), `type` (`primary`, `submodule`, `vscode-workspace`, `peer`, or `folder` for a directory without its own checkout), `fileCount`, `symbolCount`, `edgeCount`, `crossRepoEdgeCount`, `lastScanned` and `headSha` (the repo's own HEAD; `null` for a `folder`). Uninitialised submodules that are not registered follow, with `isRegistered: false`, `isInitialised: false` and empty stats, as in the `mapx workspaces` table. Also returns a top-level `crossRepoEdgeCount`, the per-pair `crossRepoEdges`, and the unregistered discoveries.
 - **`discover`** — Discovers unregistered submodules, VS Code workspace folders, nested repos and monorepo packages; peer repos only with `includePeers`
 
 Parameters:
