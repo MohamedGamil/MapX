@@ -32,7 +32,7 @@ describe('Agent Templates', () => {
       expect(TEMPLATES.copilot.filename).toBe('.github/copilot-instructions.md');
       expect(TEMPLATES.windsurf.filename).toBe('.windsurf/rules/mapx.md');
       expect(TEMPLATES.cline.filename).toBe('.clinerules');
-      expect(TEMPLATES.continue.filename).toBe('.continue/mapx.yaml');
+      expect(TEMPLATES.continue.filename).toBe('.continue/mcpServers/mapx.yaml');
       expect(TEMPLATES.zed.filename).toBe('.zed/mapx-instructions.md');
       expect(TEMPLATES.antigravity.filename).toBe('.agents/rules/mapx.md');
       expect(TEMPLATES.instructions.filename).toBe('.agents/rules/instructions.md');

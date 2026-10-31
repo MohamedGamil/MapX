@@ -13,17 +13,24 @@ export interface AgentAction {
   /**
    * `key_conflict`: the file already defines, outside the mapx block, a top-level YAML key the
    * block would add (Aider's `read:`). Never written; `note` says what to merge by hand.
+   * `remove`: a legacy file with a mapx block (`legacyFiles`). Its blocks are dropped and the file
+   * is deleted when nothing else is left (`newContent` is empty); `note` says why (M0-09-R4).
    */
-  status: 'create' | 'append' | 'update_clean' | 'update_conflict' | 'up_to_date' | 'no_sentinel' | 'key_conflict';
+  status: 'create' | 'append' | 'update_clean' | 'update_conflict' | 'up_to_date' | 'no_sentinel' | 'key_conflict' | 'remove';
   oldContent?: string;
   newContent: string;
   diff?: string;
   note?: string;
+  /** `remove` only: a block was edited after mapx wrote it. */
+  edited?: boolean;
 }
 
-/** Writing this action would replace user-written content: a file without a mapx block, or an edited block. */
+/**
+ * Writing this action would replace user-written content: a file without a mapx block, an edited
+ * block, or an edited legacy block about to be removed.
+ */
 export function needsConsent(action: AgentAction): boolean {
-  return action.status === 'no_sentinel' || action.status === 'update_conflict';
+  return action.status === 'no_sentinel' || action.status === 'update_conflict' || (action.status === 'remove' && !!action.edited);
 }
 
 export interface McpConfigAction {
@@ -103,6 +110,8 @@ export class AgentGenerator {
     const projectName = basename(projectDir);
     return content
       .replaceAll('{{PROJECT_NAME}}', projectName)
+      // A single-quoted YAML scalar: only `'` needs escaping, so Windows paths stay intact (M0-09-R4).
+      .replaceAll('{{PROJECT_DIR_YAML}}', `'${projectDir.replaceAll("'", "''")}'`)
       .replaceAll('{{PROJECT_DIR}}', projectDir)
       .replaceAll('{{MAPX_VERSION}}', this.version)
       .replaceAll('{{MCP_PORT}}', mcpPort.toString());
@@ -124,6 +133,10 @@ export class AgentGenerator {
       }
     }
 
+    // A provider still on a legacy file is migrated: its new files are created even by `update`.
+    const legacy = this.planLegacy(targetProviders, dir);
+    const migrating = new Set(legacy.flatMap((a) => [a.provider, ...(TEMPLATES[a.provider]?.companions ?? [])]));
+
     for (const provider of targetProviders) {
       const template = TEMPLATES[provider];
       if (!template) continue;
@@ -139,7 +152,7 @@ export class AgentGenerator {
       const lfBlock = `${markers.open(this.version, bodyHash(body))}\n${body}\n${markers.close}`;
 
       if (!existsSync(filepath)) {
-        if (options.onlyExisting) continue;
+        if (options.onlyExisting && !migrating.has(provider)) continue;
         actions.push({
           provider,
           filename: template.filename,
@@ -255,11 +268,58 @@ export class AgentGenerator {
       });
     }
 
+    // Legacy files go last, after their replacements are written.
+    return [...actions, ...legacy];
+  }
+
+  /**
+   * `remove` actions for legacy files that still carry a mapx block (M0-09-R4). A file without
+   * one is the user's and is left alone. A hashed block that no longer matches its hash was
+   * edited; a hashless block predates hashes and counts as mapx's own.
+   */
+  private planLegacy(providers: string[], dir: string): AgentAction[] {
+    const actions: AgentAction[] = [];
+    for (const provider of providers) {
+      const template = TEMPLATES[provider];
+      for (const filename of template?.legacyFiles ?? []) {
+        const filepath = join(dir, filename);
+        if (!existsSync(filepath)) continue;
+        const content = readFileSync(filepath, 'utf-8');
+        const matches = [...content.matchAll(getSentinelMarkers(filename).regex)];
+        if (!matches.length) continue;
+        // Drop each block with one line break; keep everything else byte for byte.
+        let rest = '';
+        let from = 0;
+        for (const m of matches) {
+          rest += content.slice(from, m.index);
+          from = m.index! + m[0].length;
+          from += content.startsWith('\r\n', from) ? 2 : content.startsWith('\n', from) ? 1 : 0;
+        }
+        rest += content.slice(from);
+        const newContent = rest.trim() ? rest : '';
+        const replacements = [template!.filename, ...(template!.companions ?? []).map((c) => TEMPLATES[c]?.filename)].filter(Boolean);
+        actions.push({
+          provider,
+          filename,
+          filepath,
+          status: 'remove',
+          edited: matches.some((m) => !!m[2] && bodyHash(m[3]!) !== m[2]),
+          oldContent: content,
+          newContent,
+          diff: this.diff(content, newContent),
+          note: `${newContent ? 'Removed its mapx block' : 'Removed'}: the ${provider} provider never loads this file; mapx now writes ${replacements.join(', ')}.`,
+        });
+      }
+    }
     return actions;
   }
 
   public execute(action: AgentAction): void {
     if (action.status === 'up_to_date' || action.status === 'key_conflict') return;
+    if (action.status === 'remove' && !action.newContent) {
+      if (existsSync(action.filepath)) unlinkSync(action.filepath);
+      return;
+    }
     const parentDir = dirname(action.filepath);
     if (!existsSync(parentDir)) {
       mkdirSync(parentDir, { recursive: true });
@@ -269,25 +329,28 @@ export class AgentGenerator {
 
   public revert(options: { dir: string }): void {
     const dir = options.dir;
-    for (const provider of Object.keys(TEMPLATES)) {
-      const template = TEMPLATES[provider];
-      if (!template) continue;
-
-      const filepath = join(dir, template.filename);
+    // Every file mapx writes or once wrote, with the front matter it puts above the block.
+    const files = Object.values(TEMPLATES).flatMap((t) => [
+      { filename: t.filename, frontmatter: t.content.match(/^---\n[\s\S]*?\n---\n/)?.[0].trim() },
+      ...(t.legacyFiles ?? []).map((filename) => ({ filename, frontmatter: undefined })),
+    ]);
+    for (const { filename, frontmatter } of files) {
+      const filepath = join(dir, filename);
       if (!existsSync(filepath)) continue;
 
       try {
         const content = readFileSync(filepath, 'utf-8');
-        const markers = getSentinelMarkers(template.filename);
+        const markers = getSentinelMarkers(filename);
         const match = content.match(markers.regex);
 
         if (match) {
           // Found our sentinel block, let's remove it
           const cleaned = content.replace(markers.regex, '').trim();
-          if (cleaned.length === 0) {
+          // A file left with only mapx's own front matter (Continue prompts, rules) is removed too.
+          if (cleaned.length === 0 || (frontmatter && lf(cleaned) === frontmatter)) {
             // Delete the file
             unlinkSync(filepath);
-            console.log(`  ✓ Removed ${template.filename}`);
+            console.log(`  ✓ Removed ${filename}`);
             
             // Optionally remove parent directory if empty (like .cursor/rules, .windsurf/rules, .continue, .zed)
             let parentDir = dirname(filepath);
@@ -303,11 +366,11 @@ export class AgentGenerator {
           } else {
             // Write cleaned content back
             writeFileSync(filepath, cleaned, 'utf-8');
-            console.log(`  ✓ Cleaned mapx integration from ${template.filename}`);
+            console.log(`  ✓ Cleaned mapx integration from ${filename}`);
           }
         }
       } catch (err: any) {
-        console.error(`  ✗ Failed to revert agent file ${template.filename}: ${err.message}`);
+        console.error(`  ✗ Failed to revert agent file ${filename}: ${err.message}`);
       }
     }
   }

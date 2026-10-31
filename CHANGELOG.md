@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Changed
+- `mapx agents generate --providers continue` now writes Continue's documented layout, an MCP server block in `.continue/mcpServers/mapx.yaml` and `/mapx-impact`, `/mapx-callers`, `/mapx-context` and `/mapx-sync` prompts in `.continue/prompts/`, and removes the `.continue/mapx.yaml` that earlier versions wrote and Continue never loaded (M0-09-R4)
 - `mapx metrics` / `mapx_metrics` and `mapx edges <file>` / `mapx_edges` now return the F02/F04 structures (camelCase), metrics shows 20 rows by default with `--top 0` for all and a new `--exclude`, and invalid `--top`, `--format` or a file-less `--direction` exit with an error (M0-03-R3).
 
 ### Added

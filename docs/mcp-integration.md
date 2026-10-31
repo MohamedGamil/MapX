@@ -509,4 +509,4 @@ Generate or update project-level agent integration instructions and rule files.
 - `force` (boolean, optional): Overwrite files without prompting
 - `dir` (string, optional): Target project directory
 
-The result lists each file. It also reports when a merged JSONC settings file lost its comments, and when `.aider.conf.yml` was skipped because it already sets `read:`.
+The result lists each file. For `continue` these are `.continue/mcpServers/mapx.yaml` and the four `.continue/prompts/mapx-*.md` slash-command prompts; a legacy `.continue/mapx.yaml` that still has a mapx block is reported as `Removed` (a legacy block edited after mapx wrote it needs `force: true`). It also reports when a merged JSONC settings file lost its comments, and when `.aider.conf.yml` was skipped because it already sets `read:`.

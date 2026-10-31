@@ -1961,7 +1961,10 @@ Callees: ${callees.length}`;
           } else if (action.status === 'key_conflict') {
             results.push(`${action.filename}: Skipped, ${action.note}`);
           } else if (needsConsent(action) && !requestArgs.force) {
-            results.push(`${action.filename}: Skipped, it has content mapx did not write (${action.status}); pass force: true to overwrite.`);
+            results.push(`${action.filename}: Skipped, it has content mapx did not write (${action.status}); pass force: true to ${action.status === 'remove' ? 'remove' : 'overwrite'} it.`);
+          } else if (action.status === 'remove') {
+            generator.execute(action);
+            results.push(`${action.filename}: ${action.note}`);
           } else {
             generator.execute(action);
             results.push(`${action.filename}: Successfully generated/updated (${action.status}).`);

@@ -359,14 +359,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
               continue;
             }
             if (needsConsent(action)) {
-              const confirm = await clack.confirm({ message: `${action.filename} has content mapx did not write. Overwrite it?`, initialValue: false });
+              const confirm = await clack.confirm({ message: `${action.filename} has content mapx did not write. ${action.status === 'remove' ? 'Remove' : 'Overwrite'} it?`, initialValue: false });
               if (clack.isCancel(confirm) || !confirm) {
                 clack.log.warn(`Skipped ${action.filename}.`);
                 continue;
               }
             }
             generator.execute(action);
-            clack.log.success(`Generated ${action.filename} (${action.status})`);
+            clack.log.success(action.status === 'remove' ? `${action.filename}: ${action.note}` : `Generated ${action.filename} (${action.status})`);
           }
         } else {
           const generator = new AgentGenerator();
@@ -2616,13 +2616,23 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const STATUS: Record<string, string> = {
         create: 'missing', append: 'missing', up_to_date: 'current', update_clean: 'outdated',
         update_conflict: 'edited', no_sentinel: 'unmanaged (no mapx block)', key_conflict: 'conflicting keys',
+        remove: 'legacy, removed by agents generate/update',
       };
-      const statusOf = new Map(generator.plan(providers, { dir }).map(a => [a.provider, STATUS[a.status] ?? a.status]));
+      const plan = generator.plan(providers, { dir });
+      const statusOf = new Map(plan.map(a => [a.filename, STATUS[a.status] ?? a.status]));
       console.log('\nSupported LLM integration providers:');
       for (const p of providers) {
         const temp = generator.getTemplate(p);
         const appendStr = temp?.isAppend ? ' (append-mode)' : '';
-        console.log(`  - ${p.padEnd(12)} -> ${temp?.filename}${appendStr}  [${statusOf.get(p) ?? 'missing'}]`);
+        console.log(`  - ${p.padEnd(12)} -> ${temp?.filename}${appendStr}  [${statusOf.get(temp?.filename ?? '') ?? 'missing'}]`);
+        // Companion files (Continue's prompts, Aider's config) and legacy files still present (M0-09-R4).
+        for (const c of temp?.companions ?? []) {
+          const f = generator.getTemplate(c)?.filename;
+          if (f) console.log(`      + ${f}  [${statusOf.get(f) ?? 'missing'}]`);
+        }
+        for (const a of plan.filter(a => a.provider === p && a.status === 'remove')) {
+          console.log(`      - ${a.filename}  [${STATUS.remove}]`);
+        }
       }
       console.log('');
     });
@@ -2671,7 +2681,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           continue;
         }
 
-        if (action.status === 'update_conflict' || action.status === 'no_sentinel') {
+        if (needsConsent(action)) {
           clack.log.warn(`Conflict/Modification detected in ${action.filename}:`);
           if (action.diff) {
             console.log(action.diff);
@@ -2693,10 +2703,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
 
         if (opts.dryRun) {
-          clack.log.info(`[DRY RUN] Would write to ${action.filepath} (status: ${action.status})`);
+          clack.log.info(`[DRY RUN] Would ${action.status === 'remove' ? 'remove' : 'write to'} ${action.filepath} (status: ${action.status})`);
         } else {
           generator.execute(action);
-          clack.log.success(`Wrote to ${action.filename} (status: ${action.status})`);
+          clack.log.success(action.status === 'remove' ? `${action.filename}: ${action.note}` : `Wrote to ${action.filename} (status: ${action.status})`);
         }
       }
 
@@ -2727,9 +2737,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const generator = new AgentGenerator();
       const available = generator.listProviders();
 
+      // A provider whose legacy file is still there is migrated (M0-09-R4).
       const existingProviders = available.filter(p => {
         const temp = generator.getTemplate(p);
-        return temp && existsSync(join(dir, temp.filename));
+        return temp && [temp.filename, ...(temp.legacyFiles ?? [])].some(f => existsSync(join(dir, f)));
       });
 
       if (existingProviders.length === 0) {
@@ -2772,11 +2783,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
 
         if (opts.dryRun) {
-          clack.log.info(`[DRY RUN] Would update ${action.filepath}`);
+          clack.log.info(`[DRY RUN] Would ${action.status === 'remove' ? 'remove' : 'update'} ${action.filepath}`);
           if (action.diff && action.status !== 'update_conflict') console.log(action.diff);
         } else {
           generator.execute(action);
-          clack.log.success(`Updated ${action.filename}`);
+          clack.log.success(action.status === 'remove' ? `${action.filename}: ${action.note}` : `Updated ${action.filename}`);
           updatedCount++;
         }
       }

@@ -17,7 +17,7 @@ describe('agent integration files', () => {
   afterAll(() => cleanup(root));
 
   it('accepts --providers=all and writes every provider file', () => {
-    for (const f of ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', 'AIDER.md', '.clinerules', '.cursor/rules/mapx.mdc', '.windsurf/rules/mapx.md', '.github/copilot-instructions.md', '.continue/mapx.yaml', '.zed/mapx-instructions.md'])
+    for (const f of ['CLAUDE.md', 'AGENTS.md', 'GEMINI.md', 'AIDER.md', '.clinerules', '.cursor/rules/mapx.mdc', '.windsurf/rules/mapx.md', '.github/copilot-instructions.md', '.continue/mcpServers/mapx.yaml', '.continue/prompts/mapx-impact.md', '.zed/mapx-instructions.md'])
       expect(read(f).length, f).toBeGreaterThan(0);
   });
 
@@ -113,7 +113,7 @@ describe('user-written agent files are never replaced without consent', () => {
 
 // M0-09-R3: line endings, final newlines, legacy and duplicate blocks, update scope.
 describe('agent files: line endings, legacy blocks and update scope', () => {
-  const SENTINEL_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'AIDER.md', '.aider.conf.yml', '.clinerules', '.cursor/rules/mapx.mdc', '.windsurf/rules/mapx.md', '.github/copilot-instructions.md', '.continue/mapx.yaml', '.zed/mapx-instructions.md', '.agents/rules/mapx.md', '.agents/rules/instructions.md'];
+  const SENTINEL_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'AIDER.md', '.aider.conf.yml', '.clinerules', '.cursor/rules/mapx.mdc', '.windsurf/rules/mapx.md', '.github/copilot-instructions.md', '.continue/mcpServers/mapx.yaml', '.continue/prompts/mapx-impact.md', '.continue/prompts/mapx-callers.md', '.continue/prompts/mapx-context.md', '.continue/prompts/mapx-sync.md', '.zed/mapx-instructions.md', '.agents/rules/mapx.md', '.agents/rules/instructions.md'];
   const OPEN = /^(?:<!--|#) mapx v[\d.]+(?: #[0-9a-f]+)?(?: -->)?\r?$/gm;
   const blocks = (s: string) => (s.match(OPEN) ?? []).length;
   const tmp: string[] = [];

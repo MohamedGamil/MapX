@@ -56,7 +56,7 @@ Options:
 - `-f, --force` — Skip confirmation prompt
 
 The uninit command will:
-- Revert LLM integration files (deleting files created solely by mapx, or removing sentinel blocks from files that were appended to)
+- Revert LLM integration files (deleting files created solely by mapx, including files left with only mapx's front matter such as Continue prompts and the legacy `.continue/mapx.yaml`, or removing sentinel blocks from files that were appended to)
 - Remove `.mapx/` directory from `.gitignore`
 - Delete `.mapx/` directory completely
 
@@ -796,6 +796,8 @@ List all supported LLM integration providers.
 mapx agents list
 ```
 
+Each provider line shows its file and that file's status in this project (`missing`, `current`, `outdated`, `edited`, `unmanaged (no mapx block)` or `conflicting keys`). Companion files a provider also writes are listed under it with `+`, and a legacy file that `agents generate` or `agents update` will remove with `-`.
+
 ## `mapx agents generate`
 
 Generate or overwrite LLM integration files.
@@ -816,7 +818,7 @@ When run interactively without flags, presents a multi-select prompt to choose p
 Some providers write more than their instruction file:
 - `claude`: `CLAUDE.md` documents both the stdio stanza and the SSE stanza (`mapx serve --sse --port <mcp-port>`, URL `http://localhost:<mcp-port>/sse`).
 - `aider`: also writes `.aider.conf.yml` with `read: [AIDER.md]`, so Aider loads the instructions on startup (`aider --read AIDER.md` does the same by hand). If the file already has its own top-level `read:` key, it is left untouched and the output says which lines to merge by hand.
-- `continue`: `.continue/mapx.yaml` adds `slashCommands` (`/mapx-impact`, `/mapx-callers`, `/mapx-context`, `/mapx-sync`).
+- `continue`: writes Continue's documented layout. `.continue/mcpServers/mapx.yaml` is a block with `name`, `version` and `schema: v1` whose `mcpServers` entry runs `mapx serve --dir <project>`. `.continue/prompts/mapx-impact.md`, `mapx-callers.md`, `mapx-context.md` and `mapx-sync.md` are prompts with `invokable: true` front matter, so they appear as `/mapx-impact`, `/mapx-callers`, `/mapx-context` and `/mapx-sync` in Continue. Continue never loaded the `.continue/mapx.yaml` that earlier versions wrote: if it still has a mapx block, that block is removed (and the file deleted when nothing else is left), with a message. A `.continue/mapx.yaml` without a mapx block is left alone. A legacy block edited after mapx wrote it is only removed when you confirm or pass `--force`.
 - `zed`: also registers the mapx server under `context_servers` in `.zed/settings.json`. Existing keys and string values are kept; comments and trailing commas are accepted, but the merged file is written back as plain JSON, and the output warns when comments were dropped. A settings file that cannot be parsed is left untouched, with a warning.
 
 Generated files end with a newline. A block written into an existing file uses that file's line endings (LF or CRLF).
@@ -834,7 +836,7 @@ Options:
 - `--force` — Force overwrite of customized blocks without prompt
 - `--mcp-port` — Port for the MCP SSE transport server (default: 3456)
 
-Only updates files that already exist; does not create new ones. That includes the shared `.agents/rules/instructions.md` and companion files such as `.aider.conf.yml`. A mapx block that was edited, or a block written before content hashes existed whose body differs from the current template, is kept unless you confirm or pass `--force`. Duplicate mapx blocks in one file are merged into one.
+Only updates files that already exist; does not create new ones. That includes the shared `.agents/rules/instructions.md` and companion files such as `.aider.conf.yml`. The exception is a provider still on a legacy file (Continue's `.continue/mapx.yaml` with a mapx block): it is migrated, so its new files are written and the legacy block is removed. A mapx block that was edited, or a block written before content hashes existed whose body differs from the current template, is kept unless you confirm or pass `--force`. Duplicate mapx blocks in one file are merged into one.
 
 ## Static File Indexing
 

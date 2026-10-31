@@ -10,6 +10,11 @@ export interface ProviderTemplate {
   hidden?: boolean;
   /** MCP_CONFIGS entries written whenever this provider is generated (Zed's .zed/settings.json). */
   mcpConfigs?: string[];
+  /**
+   * Files earlier mapx versions wrote for this provider. One that still carries the mapx block is
+   * removed when the provider is generated (Continue's `.continue/mapx.yaml`, M0-09-R4).
+   */
+  legacyFiles?: string[];
 }
 
 /**
@@ -164,6 +169,16 @@ export const MCP_CONFIGS: McpConfigEntry[] = [
     },
   },
 ];
+
+/** A Continue slash command: a markdown prompt with `invokable: true` front matter (M0-09-R4). */
+function continuePrompt(name: string, description: string, prompt: string): ProviderTemplate {
+  return {
+    filename: `.continue/prompts/${name}.md`,
+    isAppend: false,
+    hidden: true,
+    content: `---\nname: ${name}\ndescription: ${description}\ninvokable: true\n---\n${prompt}`,
+  };
+}
 
 export const TEMPLATES: Record<string, ProviderTemplate> = {
   generic: {
@@ -508,34 +523,33 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
 - Run \`mapx layers\` to view files grouped by architectural roles.
 - Run \`mapx sync\` after file edits to update the graph.`
   },
+  // Continue loads MCP server blocks from .continue/mcpServers/ and invokable markdown prompts
+  // (slash commands) from .continue/prompts/; it never loaded .continue/mapx.yaml (D014, M0-09-R4).
   continue: {
-    filename: '.continue/mapx.yaml',
+    filename: '.continue/mcpServers/mapx.yaml',
     isAppend: false,
-    content: `# Continue configuration for MapxGraph (22 languages, 33 MCP tools)
-contextProviders:
-  - name: cmd
+    companions: ['continue-impact', 'continue-callers', 'continue-context', 'continue-sync'],
+    legacyFiles: ['.continue/mapx.yaml'],
+    content: `# MapxGraph MCP server for Continue (22 languages, 33 MCP tools)
+name: MapxGraph
+version: '{{MAPX_VERSION}}'
+schema: v1
+mcpServers:
+  - name: mapx
+    command: mapx
     args:
-      name: mapx-export
-      cmd: mapx export --tokens=4000
-  - name: cmd
-    args:
-      name: mapx-status
-      cmd: mapx status
-slashCommands:
-  - name: mapx-impact
-    description: Blast radius of changing a symbol (mapx impact)
-    prompt: Run \`mapx impact {{{ input }}}\` in the terminal and summarise the affected files by risk.
-  - name: mapx-callers
-    description: Who calls a symbol (mapx callers)
-    prompt: Run \`mapx callers {{{ input }}}\` in the terminal and list the call sites.
-  - name: mapx-context
-    description: Token-budgeted context for a task (mapx context)
-    prompt: Run \`mapx context "{{{ input }}}"\` in the terminal and use its output as context for the task.
-  - name: mapx-sync
-    description: Update the graph after edits (mapx sync)
-    prompt: Run \`mapx sync\` in the terminal and report what changed.
-`
+      - serve
+      - --dir
+      - {{PROJECT_DIR_YAML}}`
   },
+  'continue-impact': continuePrompt('mapx-impact', 'Blast radius of changing a symbol (mapx impact)',
+    'Run `mapx impact <symbol>` in the terminal, where `<symbol>` is the symbol named after this command, and summarise the affected files by risk.'),
+  'continue-callers': continuePrompt('mapx-callers', 'Who calls a symbol (mapx callers)',
+    'Run `mapx callers <symbol>` in the terminal, where `<symbol>` is the symbol named after this command, and list the call sites.'),
+  'continue-context': continuePrompt('mapx-context', 'Token-budgeted context for a task (mapx context)',
+    'Run `mapx context "<task>"` in the terminal, where `<task>` is the task described after this command, and use its output as context for the task.'),
+  'continue-sync': continuePrompt('mapx-sync', 'Update the graph after edits (mapx sync)',
+    'Run `mapx sync` in the terminal and report what changed.'),
   'aider-conf': {
     filename: '.aider.conf.yml',
     isAppend: true,
