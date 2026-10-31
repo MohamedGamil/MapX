@@ -41,6 +41,15 @@ describe('UI server endpoints', () => {
     expect(body).toContain('src/b.ts');
   });
 
+  it('serves /api/metrics fileMetrics as D012 file rows (M0-03-R3)', async () => {
+    const res = await get('/api/metrics');
+    expect(res.status).toBe(200);
+    const { fileMetrics } = await res.json();
+    const b = fileMetrics.find((f: { path: string }) => f.path === 'src/b.ts');
+    expect(Object.keys(b)).toEqual(['path', 'language', 'inDegree', 'outDegree', 'totalDegree', 'instability', 'pagerank']);
+    expect(b).toMatchObject({ inDegree: 1, outDegree: 0, totalDegree: 1, instability: 0 });
+  });
+
   it('serves explain signals and paged tool calls as JSON', async () => {
     const explain = await get('/api/explain?file=src/a.ts');
     expect(explain.status).toBe(200);

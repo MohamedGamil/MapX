@@ -221,12 +221,6 @@ vi.mock('../src/exporters/toon-exporter.js', () => ({
   }
 }));
 
-vi.mock('../src/core/metrics.js', () => ({
-  calculateMetrics: vi.fn().mockReturnValue([
-    { path: 'src/main.ts', language: 'typescript', afferent: 1, efferent: 2, instability: 0.5 }
-  ])
-}));
-
 vi.mock('../src/core/context-builder.js', () => ({
   ContextBuilder: class {
     buildContext = vi.fn().mockResolvedValue({
@@ -1002,15 +996,12 @@ describe('MCP module', () => {
     it('returns metrics table', async () => {
       const res = await callTool('mapx_metrics');
       const text = getText(res);
-      expect(text).toContain('Coupling');
+      expect(text).toMatch(/RANK {2}FILE/);
       expect(text).toContain('src/main.ts');
     });
 
     it('returns no metrics message when empty', async () => {
-      const { calculateMetrics } = await import('../src/core/metrics.js');
-      vi.mocked(calculateMetrics).mockReturnValue([]);
-
-      const res = await callTool('mapx_metrics');
+      const res = await callTool('mapx_metrics', { lang: 'cobol' });
       expect(getText(res)).toContain('No metrics found');
     });
   });

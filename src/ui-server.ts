@@ -7,7 +7,7 @@ import { pipeline, Readable } from 'node:stream';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { calculateMetrics, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
+import { buildMetricsReport, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { UiEventBus, getToolCallsLogPath } from './ui-events.js';
@@ -427,7 +427,9 @@ export function startUiServer(opts: ServerOpts) {
           const symbolCount = store.getSymbolCount();
           const edgeCount = store.getEdgeCount();
 
-          const fileMetrics = calculateMetrics(store, { repo: config.repo.name });
+          // D012 file rows, every file, with the PageRank the scan stored.
+          const storedRank = new Map(store.getAllFiles(config.repo.name).map(f => [f.path as string, Number(f.pagerank ?? 0)]));
+          const fileMetrics = buildMetricsReport(store, storedRank, { dir, repo: config.repo.name, top: 0 }).report.files;
           const graphMetrics = calculateGraphMetrics(store, config.repo.name);
           const topFiles = store.getTopFilesByPageRank(null, 10);
           const topSymbols = store.getTopSymbolsByPageRank(null, 10);

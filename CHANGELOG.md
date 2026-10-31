@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Changed
+- `mapx metrics` / `mapx_metrics` and `mapx edges <file>` / `mapx_edges` now return the F02/F04 structures (camelCase), metrics shows 20 rows by default with `--top 0` for all and a new `--exclude`, and invalid `--top`, `--format` or a file-less `--direction` exit with an error (M0-03-R3).
+
 ### Added
 - **Laravel route mount graph**: routes are now resolved through what actually loads each file: (M1-03, M1-04)
   - `bootstrap/app.php` `withRouting(...)`, `RouteServiceProvider`, or the `routes/web.php` / `routes/api.php` defaults;

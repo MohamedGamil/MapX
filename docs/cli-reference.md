@@ -564,19 +564,49 @@ mapx context 'Fix auth bug' --format json                              # JSON ou
 
 ## `mapx metrics`
 
-Show coupling and instability metrics for files.
+Show coupling and instability metrics for files, ranked by total degree (in + out, then PageRank).
 
 ```bash
-mapx metrics [path] [--dir /path] [--lang <language>] [--verified-only] [--format text|json] [--top <n>]
+mapx metrics [path] [--dir /path] [--lang <language>] [--verified-only] [--format text|json]
+             [--top <n>] [--exclude <glob,...>]
 ```
 
 Options:
-- `--lang` — Filter metrics by language
+- `--lang` — Only list files of this language (degrees still count every file)
 - `--verified-only` — Only compute metrics using verified edges
-- `--format json` — A JSON array ranked by total degree (Ca + Ce, then PageRank); each entry has `path`, `language`, `afferent`, `efferent`, `totalDegree`, `instability` and `pagerank`
-- `--top <n>` — Only the N files with the highest total degree (text output is then ranked the same way)
+- `--format` — `text` (default; `llm` is an alias) or `json`. Any other value exits 1
+- `--top <n>` — Number of rows (default 20); `0` lists every file. Must be a whole number ≥ 0, otherwise the command exits 1
+- `--exclude <glob,...>` — Leave out matching files and their edges (globs or bare path segments, as in `scan --exclude`; comma-separated or repeated)
 
-Outputs a table with afferent coupling (Ca), efferent coupling (Ce), and instability index for each file.
+Text output (F02):
+
+```
+Metrics for: /repo   (last scan: 2026-10-31 01:48)
+Files: 3 | Edges: 6 | Graph density: 0.667
+
+Top coupled files (by total degree):
+
+  RANK  FILE              IN  OUT  TOTAL  INSTABILITY
+  ───────────────────────────────────────────────────
+     1  src/store.ts       2    0      2     0.00
+     2  src/service.ts     1    1      2     0.50
+     3  src/api.ts         0    2      2     1.00
+
+Instability = out / (in + out).  Range: 0 (stable) → 1 (unstable).
+High in-degree  → depended-on bottleneck.
+High out-degree → many outgoing deps (potential God Class / low cohesion).
+```
+
+`IN` counts the distinct files that depend on the file, `OUT` the distinct files it depends on. When `--top` cuts the list, a `... N more` line follows the table.
+
+JSON output (`--format json`, decision D012):
+
+```json
+{ "dir": "/repo", "generatedAt": "2026-10-31T01:48:00.000Z", "summary": { "files": 3, "edges": 6, "density": 0.667 },
+  "files": [ { "path": "src/store.ts", "language": "typescript", "inDegree": 2, "outDegree": 0, "totalDegree": 2, "instability": 0, "pagerank": 0.5209 } ] }
+```
+
+`summary` describes the graph the degrees are computed on: the repository's files and edges after `--exclude` and `--verified-only`; `density` is edges / (files × (files − 1)). `--lang` and `--top` only select rows.
 
 ## `mapx edges`
 
@@ -589,16 +619,40 @@ mapx edges [file] [--dir /path] [--direction outgoing|incoming|both] [--type <ty
 
 Options:
 - `[file]` — List the edges of this file (workspace-relative or absolute). A directory is still accepted as the target directory
-- `--direction` — With a file: `outgoing` (edges leaving it), `incoming` (edges reaching it) or `both` (default)
+- `--direction` — Needs a file: `outgoing` (edges leaving it), `incoming` (edges reaching it) or `both` (default). Without a file, or with another value, the command exits 1
 - `--type` — Filter edges by type; comma-separated for several (e.g. `relation,extends`)
 - `--verified-only` — Leave out inferred edges
-- `--format json` — A JSON array of `{ sourceFile, sourceSymbol, targetFile, targetSymbol, type, verifiability, weight, targetRepo, metadata }`
+- `--format` — `text` (default; `llm` is an alias) or `json`. Any other value exits 1
 - `--from` — Filter edges originating from a file pattern
 - `--to` — Filter edges targeting a file pattern
 
 ```bash
 mapx edges app/Models/User.php --direction outgoing --type relation,extends --verified-only --format=json
 ```
+
+With a file, text output (F04) lists both sides; inferred edges end in `(inferred)`, and a file without edges prints `No edges for <file>.` (exit 0):
+
+```
+Edges for: src/service.ts
+
+  Incoming (2):
+    ← src/api.ts  [import]  ./service
+    ← src/api.ts  [instantiation]  Service
+
+  Outgoing (2):
+    → src/store.ts  [import]  ./store
+    → src/store.ts  [instantiation]  Store
+```
+
+With a file, JSON output (decision D012) is `{ file, direction, incoming[], outgoing[] }`; with `--direction incoming` the `outgoing` list is empty, and vice versa:
+
+```json
+{ "file": "src/service.ts", "direction": "both",
+  "incoming": [ { "sourceFile": "src/api.ts", "type": "instantiation", "sourceSymbol": "handler", "targetSymbol": "Service", "verifiability": "verified", "weight": 1, "line": 3 } ],
+  "outgoing": [ { "targetFile": "src/store.ts", "targetRepo": null, "type": "instantiation", "sourceSymbol": "Service", "targetSymbol": "Store", "verifiability": "verified", "weight": 1, "line": 2 } ] }
+```
+
+Without a file (`--from` / `--to` / `--type` only), the output is the flat list: text lines `source → target (type)`, or a JSON array of `{ sourceFile, sourceSymbol, targetFile, targetSymbol, type, verifiability, weight, targetRepo, metadata }`.
 
 ## `mapx routes`
 

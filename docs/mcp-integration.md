@@ -387,12 +387,12 @@ Show hooks from detected frameworks.
 - `dir` (string, optional): Target project directory
 
 #### `mapx_edges`
-Granular query of graph dependency edges. Returns a JSON array by default (`format: "text"` for the line listing).
+Structured edge neighbourhood of a file, JSON by default. With `file` it returns the same `{ file, direction, incoming[], outgoing[] }` object as `mapx edges <file> --format json` (decision D012): incoming rows carry `sourceFile`, outgoing rows `targetFile` and `targetRepo`, and both carry `type`, `sourceSymbol`, `targetSymbol`, `verifiability`, `weight` and `line`. Without `file` it returns the flat JSON array of edges (`sourceFile`, `targetFile`, …, `metadata`). `format: "text"` gives the CLI's text output.
 - `file` (string, optional): File whose edges to list (workspace-relative or absolute)
-- `direction` (string, optional): `outgoing`, `incoming` or `both` (default)
-- `type` (string, optional): Filter by edge type; comma-separated for several
+- `direction` (string, optional): Needs `file`: `outgoing`, `incoming` or `both` (default)
+- `type` (string array, optional): Edge types to include, e.g. `["relation", "extends"]`; a comma-separated string also works
 - `verifiedOnly` (boolean, optional): Leave out inferred edges
-- `format` (string, optional): `json` (default) or `text`
+- `format` (string, optional): `json` (default) or `text` (alias `llm`)
 - `from` (string, optional): Originating file path pattern
 - `to` (string, optional): Target file path pattern
 - `dir` (string, optional): Target project directory
@@ -415,11 +415,12 @@ Check scan status, language breakdown, PageRank rankings, and index recommendati
 - `dir` (string, optional): Target project directory
 
 #### `mapx_metrics`
-Compute afferent/efferent coupling and instability metrics for codebase files.
-- `lang` (string, optional): Filter by language
+Structural coupling metrics per file, ranked by total degree (in + out, then PageRank). Same output as `mapx metrics`: the F02 ranked table, or with `format: "json"` the D012 object `{ dir, generatedAt, summary: { files, edges, density }, files: [{ path, language, inDegree, outDegree, totalDegree, instability, pagerank }] }`.
+- `lang` (string, optional): Only list files of this language
 - `verifiedOnly` (boolean, optional): Only verified edges
-- `format` (string, optional): `json` returns an array ranked by total degree (Ca + Ce), each entry with `pagerank`
-- `top` (number, optional): Only the N files with the highest total degree
+- `format` (string, optional): `text` (default; alias `llm`) or `json`
+- `top` (number, optional): Number of files (default 20); `0` returns every file
+- `exclude` (string, optional): Comma-separated globs; matching files and their edges are left out
 - `dir` (string, optional): Target project directory
 
 #### `mapx_profile`

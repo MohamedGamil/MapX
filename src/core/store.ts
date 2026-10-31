@@ -506,12 +506,12 @@ export class Store {
   }
 
   /**
-   * Edge query behind `mapx edges` and mapx_edges. `type` may be a comma-separated list; `file`
-   * with `direction` selects edges leaving it (outgoing), reaching it (incoming) or both;
-   * `from` / `to` are substring filters (M0-03-R2).
+   * Edge query behind `mapx edges` and mapx_edges. `type` is a list, as an array or comma-separated
+   * (M0-03-R3: an array used to throw); `file` with `direction` selects edges leaving it (outgoing),
+   * reaching it (incoming) or both; `from` / `to` are substring filters (M0-03-R2).
    */
   queryEdges(options: {
-    type?: string;
+    type?: string | string[];
     from?: string;
     to?: string;
     repo?: string;
@@ -526,7 +526,7 @@ export class Store {
       sql += ' AND repo = ?';
       params.push(options.repo);
     }
-    const types = (options.type ?? '').split(',').map(t => t.trim()).filter(Boolean);
+    const types = [options.type ?? []].flat().flatMap(t => String(t).split(',')).map(t => t.trim()).filter(Boolean);
     if (types.length) {
       sql += ` AND edge_type IN (${types.map(() => '?').join(', ')})`;
       params.push(...types);

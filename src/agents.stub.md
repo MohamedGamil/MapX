@@ -65,7 +65,7 @@ mapx deps <file-path> [--dir /path]
 # Edges of one file, filtered, as JSON
 mapx edges <file-path> --direction outgoing --type relation,extends --verified-only --format=json
 
-# Most connected files (Ca + Ce) with PageRank
+# Most connected files (in + out degree) with PageRank
 mapx metrics --format=json --top 10
 
 # Project summary
@@ -85,8 +85,8 @@ When running as an MCP server, MapxGraph exposes 32 tools:
 
 - **Graph building:** `mapx_scan`, `mapx_sync`
 - **Symbol discovery:** `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files`
-- **Dependencies and flow:** `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` (JSON by default; `file`, `direction`, `type`, `verifiedOnly`)
-- **Analysis:** `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics` (`format: "json"`, `top`), `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers`
+- **Dependencies and flow:** `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` (JSON by default: `{ file, direction, incoming[], outgoing[] }` with `file`; `direction`, `type` array, `verifiedOnly`)
+- **Analysis:** `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics` (`format: "json"` gives `{ dir, generatedAt, summary, files[] }`; `top`, default 20, 0 = all; `exclude`), `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers`
 - **Export:** `mapx_export` (llm, json, dot, svg, toon), `mapx_context`
 - **Workspaces:** `mapx_workspaces` (list, discover)
 - **Languages:** `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall`

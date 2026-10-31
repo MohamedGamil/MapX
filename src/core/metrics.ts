@@ -1,3 +1,4 @@
+import picomatch from 'picomatch';
 import { Store } from './store.js';
 
 export interface FileMetrics {
@@ -8,12 +9,32 @@ export interface FileMetrics {
   instability: number;
 }
 
-export function calculateMetrics(
-  store: Store,
-  options: { repo?: string; language?: string; verifiedOnly?: boolean } = {}
-): FileMetrics[] {
-  const files = store.getAllFiles(options.repo);
-  const edges = store.getAllEdges(options.repo);
+export interface MetricsOptions {
+  repo?: string;
+  language?: string;
+  verifiedOnly?: boolean;
+  /** Globs, or bare path segments as in `scan --exclude`: matching files and their edges are left out (M0-03-R3). */
+  exclude?: string[];
+}
+
+function excludeMatcher(patterns: string[] = []): (path: string) => boolean {
+  if (patterns.length === 0) return () => false;
+  return (path: string) =>
+    patterns.some(p => picomatch.isMatch(path, p, { dot: true }) || path.split('/').includes(p));
+}
+
+/** Files and edges the metrics are computed on: the repo minus excluded files, inferred edges dropped on request. */
+function metricsGraph(store: Store, options: MetricsOptions) {
+  const excluded = excludeMatcher(options.exclude);
+  const files = store.getAllFiles(options.repo).filter(f => !excluded(f.path as string));
+  const edges = store.getAllEdges(options.repo).filter(e =>
+    !(options.verifiedOnly && e.verifiability === 'inferred') &&
+    !excluded(e.source_file as string) && !excluded(e.target_file as string));
+  return { files, edges };
+}
+
+export function calculateMetrics(store: Store, options: MetricsOptions = {}): FileMetrics[] {
+  const { files, edges } = metricsGraph(store, options);
 
   const afferentMap = new Map<string, Set<string>>();
   const efferentMap = new Map<string, Set<string>>();
@@ -24,9 +45,6 @@ export function calculateMetrics(
   }
 
   for (const e of edges) {
-    if (options.verifiedOnly && e.verifiability === 'inferred') {
-      continue;
-    }
     const src = e.source_file as string;
     const tgt = e.target_file as string;
 
@@ -43,7 +61,7 @@ export function calculateMetrics(
   const results: FileMetrics[] = [];
   for (const f of files) {
     const path = f.path as string;
-    const lang = f.language as string;
+    const lang = (f.language as string | null) ?? '';
 
     if (options.language && lang.toLowerCase() !== options.language.toLowerCase()) {
       continue;
@@ -81,6 +99,109 @@ export function rankMetrics(metrics: FileMetrics[], pagerank: Map<string, number
     .map(m => ({ ...m, totalDegree: m.afferent + m.efferent, pagerank: pagerank.get(m.path) ?? 0 }))
     .sort((a, b) => b.totalDegree - a.totalDegree || b.pagerank - a.pagerank || a.path.localeCompare(b.path));
   return top && top > 0 ? ranked.slice(0, top) : ranked;
+}
+
+/** One file row of `mapx metrics --format json` / mapx_metrics (D012). */
+export interface MetricsFileRow {
+  path: string;
+  language: string;
+  inDegree: number;
+  outDegree: number;
+  totalDegree: number;
+  instability: number;
+  pagerank: number;
+}
+
+/** `mapx metrics --format json` / mapx_metrics: F02's envelope with camelCase keys (D012). */
+export interface MetricsReport {
+  dir: string;
+  generatedAt: string;
+  summary: { files: number; edges: number; density: number };
+  files: MetricsFileRow[];
+}
+
+/** Default number of rows (F02). */
+export const METRICS_DEFAULT_TOP = 20;
+
+/**
+ * `--top` / `top` as a row count: a whole number >= 0, 0 meaning every file. Anything else is an
+ * error message (M0-03-R3: `abc` and `-1` used to be silent no-ops).
+ */
+export function parseTop(value: unknown): number | { error: string } {
+  if (value === undefined || value === null || value === '') return METRICS_DEFAULT_TOP;
+  const text = String(value).trim();
+  if (!/^\d+$/.test(text)) return { error: `Invalid top value "${String(value)}": expected a whole number >= 0 (0 lists every file).` };
+  return Number(text);
+}
+
+/** Output format of metrics and edges: `text` (alias `llm`, the F02/F04 name) or `json`. */
+export function parseFormat(value: unknown, fallback: 'text' | 'json'): 'text' | 'json' | { error: string } {
+  if (value === undefined || value === null || value === '') return fallback;
+  const v = String(value).toLowerCase();
+  if (v === 'json') return 'json';
+  if (v === 'text' || v === 'llm') return 'text';
+  return { error: `Unknown format "${String(value)}": use text or json.` };
+}
+
+/**
+ * The D012 metrics report. `summary` describes the graph the degrees are computed on (repo files and
+ * edges after `exclude` / `verifiedOnly`); `language` and `top` only select rows. `total` is the row
+ * count before `top`, for the text footer.
+ */
+export function buildMetricsReport(
+  store: Store,
+  pagerank: Map<string, number>,
+  options: MetricsOptions & { dir: string; top?: number },
+): { report: MetricsReport; total: number } {
+  const ranked = rankMetrics(calculateMetrics(store, options), pagerank);
+  const { files, edges } = metricsGraph(store, options);
+  const n = files.length;
+  const top = options.top ?? METRICS_DEFAULT_TOP;
+  return {
+    total: ranked.length,
+    report: {
+      dir: options.dir,
+      generatedAt: new Date().toISOString(),
+      summary: { files: n, edges: edges.length, density: n > 1 ? Number((edges.length / (n * (n - 1))).toPrecision(3)) : 0 },
+      files: (top > 0 ? ranked.slice(0, top) : ranked).map(m => ({
+        path: m.path,
+        language: m.language,
+        inDegree: m.afferent,
+        outDegree: m.efferent,
+        totalDegree: m.totalDegree,
+        instability: Number(m.instability.toFixed(4)),
+        pagerank: Number(m.pagerank.toPrecision(4)),
+      })),
+    },
+  };
+}
+
+/** F02's text rendering of a metrics report. `total` is the row count before `top`; `lastScan` an ISO time. */
+export function formatMetricsText(report: MetricsReport, total: number, lastScan?: string | null): string {
+  const scan = lastScan ? `   (last scan: ${lastScan.replace('T', ' ').slice(0, 16)})` : '';
+  const { files, edges, density } = report.summary;
+  const width = Math.max(4, ...report.files.map(f => f.path.length)) + 2;
+  const header = `  RANK  ${'FILE'.padEnd(width)}${'IN'.padStart(4)}${'OUT'.padStart(5)}${'TOTAL'.padStart(7)}  INSTABILITY`;
+  const lines = [
+    `Metrics for: ${report.dir}${scan}`,
+    `Files: ${files} | Edges: ${edges} | Graph density: ${density}`,
+    '',
+    'Top coupled files (by total degree):',
+    '',
+    header,
+    `  ${'─'.repeat(header.length - 2)}`,
+    ...report.files.map((f, i) =>
+      `${String(i + 1).padStart(6)}  ${f.path.padEnd(width)}${String(f.inDegree).padStart(4)}${String(f.outDegree).padStart(5)}` +
+      `${String(f.totalDegree).padStart(7)}${f.instability.toFixed(2).padStart(9)}`),
+  ];
+  if (total > report.files.length) lines.push(`  ... ${total - report.files.length} more (--top 0 lists every file)`);
+  lines.push(
+    '',
+    'Instability = out / (in + out).  Range: 0 (stable) → 1 (unstable).',
+    'High in-degree  → depended-on bottleneck.',
+    'High out-degree → many outgoing deps (potential God Class / low cohesion).',
+  );
+  return lines.join('\n');
 }
 
 export interface GraphMetrics {

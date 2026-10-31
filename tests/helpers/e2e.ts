@@ -40,6 +40,16 @@ export function mapxWithStderr(cwd: string, ...args: string[]): { stdout: string
   return { stdout: r.stdout, stderr: r.stderr };
 }
 
+/** Runs the CLI without throwing, for asserting exit codes and error messages. */
+export function mapxResult(cwd: string, ...args: string[]): { status: number | null; stdout: string; stderr: string } {
+  const r = spawnSync(process.execPath, ['--import', TSX, MAIN, ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1' },
+  });
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
+}
+
 export function init(root: string): void {
   mapx(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover');
 }

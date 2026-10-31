@@ -18,10 +18,10 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
-import { calculateMetrics, calculateDSM, rankMetrics } from './core/metrics.js';
+import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
-import { edgeView, indexedPath } from './core/edge-view.js';
+import { directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
 import { describeRelation, modelRelations } from './core/relations.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
@@ -2126,42 +2126,41 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('-d, --dir <path>', 'Target directory')
     .option('--lang <language>', 'Filter metrics by language')
     .option('--verified-only', 'Only compute metrics using verified edges')
-    .option('--format <format>', 'Output format: text or json', 'text')
-    .option('--top <n>', 'Only the N files with the highest total degree (Ca + Ce)')
+    .option('--format <format>', 'Output format: text (alias llm) or json', 'text')
+    .option('--top <n>', 'Rows to show, ranked by total degree (in + out); 0 lists every file', String(METRICS_DEFAULT_TOP))
+    .option('--exclude <glob>', 'Leave out matching files and their edges (comma-separated or repeated)', collectPatterns, [])
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      // Validate before loading anything (M0-03-R3: bad values were silent no-ops).
+      const format = parseFormat(opts.format, 'text');
+      const top = parseTop(opts.top);
+      for (const v of [format, top]) {
+        if (typeof v === 'object') {
+          console.error(v.error);
+          process.exit(1);
+        }
+      }
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const { config, store, graph } = await loadContext(dir);
-      if (opts.format !== 'json') checkAndPrintStaleness(store, dir);
-      let metrics = calculateMetrics(store, {
+      if (format !== 'json') checkAndPrintStaleness(store, dir);
+
+      // F02's envelope with camelCase keys (D012); text renders the same report.
+      const { report, total } = buildMetricsReport(store, new Map(graph.getRankedFiles().map(f => [f.path, f.pagerank])), {
+        dir,
         repo: config.repo.name,
         language: opts.lang as string | undefined,
         verifiedOnly: !!opts.verifiedOnly,
+        exclude: (opts.exclude as string[]).filter(Boolean),
+        top: top as number,
       });
-
-      // JSON and --top rank by total degree and carry PageRank (M0-03-R2).
-      const top = opts.top !== undefined ? parseInt(opts.top as string, 10) : undefined;
-      if (opts.format === 'json' || top) {
-        const ranked = rankMetrics(metrics, new Map(graph.getRankedFiles().map(f => [f.path, f.pagerank])), top);
-        if (opts.format === 'json') {
-          console.log(JSON.stringify(ranked, null, 2));
-          return;
-        }
-        metrics = ranked;
+      if (format === 'json') {
+        console.log(JSON.stringify(report, null, 2));
+        return;
       }
-
-      if (metrics.length === 0) {
+      if (report.files.length === 0) {
         console.log('No metrics found.');
         return;
       }
-
-      console.log('\n── Coupling & Instability Metrics ─────────────────────');
-      console.log(`${'File Path'.padEnd(45)} | ${'Lang'.padEnd(10)} | ${'Ca'.padStart(4)} | ${'Ce'.padStart(4)} | ${'Instability'.padStart(11)}`);
-      console.log('-'.repeat(85));
-      for (const m of metrics) {
-        const pathTrunc = m.path.length > 45 ? '...' + m.path.substring(m.path.length - 42) : m.path;
-        console.log(`${pathTrunc.padEnd(45)} | ${m.language.padEnd(10)} | ${String(m.afferent).padStart(4)} | ${String(m.efferent).padStart(4)} | ${m.instability.toFixed(4).padStart(11)}`);
-      }
-      console.log('');
+      console.log(formatMetricsText(report, total, store.getMeta('last_scan_time:' + config.repo.name)));
     });
 
   program
@@ -2301,33 +2300,45 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .argument('[file]', 'File whose edges to list (relative or absolute); a directory is taken as the target directory')
     .option('-d, --dir <path>', 'Target directory')
     .option('--type <types>', 'Filter edges by type (comma-separated: relation,extends)')
-    .option('--direction <dir>', 'With a file: outgoing, incoming or both', 'both')
+    .option('--direction <dir>', 'With a file: outgoing, incoming or both (default both)')
     .option('--verified-only', 'Leave out inferred edges')
-    .option('--format <format>', 'Output format: text or json', 'text')
+    .option('--format <format>', 'Output format: text (alias llm) or json', 'text')
     .option('--from <file>', 'Filter edges originating from a file pattern')
     .option('--to <file>', 'Filter edges targeting a file pattern')
     .action(async (fileArg: string | undefined, opts: Record<string, unknown>) => {
       // The positional used to be the target directory; a directory still means that.
       const isDir = !!fileArg && existsSync(resolve(fileArg)) && statSync(resolve(fileArg)).isDirectory();
-      const dir = isDir ? resolve(fileArg!) : resolveDir(opts, program.opts());
-      const { config, store } = await loadContext(dir);
-      if (opts.format !== 'json') checkAndPrintStaleness(store, dir);
+      const hasFile = !!fileArg && !isDir;
+      // Validate before loading anything (M0-03-R3: bad values were silent no-ops).
+      const format = parseFormat(opts.format, 'text');
       const direction = String(opts.direction ?? 'both');
-      if (!['outgoing', 'incoming', 'both'].includes(direction)) {
-        console.error(`Unknown --direction "${direction}" (use outgoing, incoming or both).`);
+      const error = typeof format === 'object' ? format.error : directionError(opts.direction, hasFile);
+      if (error) {
+        console.error(error);
         process.exit(1);
       }
+      const dir = isDir ? resolve(fileArg!) : resolveDir(opts, program.opts());
+      const { config, store } = await loadContext(dir);
+      if (format !== 'json') checkAndPrintStaleness(store, dir);
+      const file = hasFile ? indexedPath(dir, fileArg!) : undefined;
       const edges = store.queryEdges({
         repo: config.repo.name,
         type: opts.type as string | undefined,
-        file: fileArg && !isDir ? indexedPath(dir, fileArg) : undefined,
-        direction: direction as 'outgoing' | 'incoming' | 'both',
+        file,
+        direction: direction as EdgeDirection,
         verifiedOnly: !!opts.verifiedOnly,
         from: opts.from as string | undefined,
         to: opts.to as string | undefined,
       });
 
-      if (opts.format === 'json') {
+      // With a file: F04's incoming / outgoing neighbourhood (D012). Without: the flat list.
+      if (file) {
+        const neighbourhood = fileEdges(file, direction as EdgeDirection, edges);
+        console.log(format === 'json' ? JSON.stringify(neighbourhood, null, 2) : formatFileEdgesText(neighbourhood));
+        return;
+      }
+
+      if (format === 'json') {
         console.log(JSON.stringify(edges.map(edgeView), null, 2));
         return;
       }

@@ -223,12 +223,6 @@ vi.mock('../src/mcp.js', () => ({
   startMcpServer: vi.fn().mockResolvedValue(undefined)
 }));
 
-vi.mock('../src/core/metrics.js', () => ({
-  calculateMetrics: vi.fn().mockReturnValue([
-    { path: 'src/main.ts', language: 'typescript', afferent: 1, efferent: 2, instability: 0.5 }
-  ])
-}));
-
 vi.mock('../src/version.js', () => ({
   VERSION: '0.1.0-test'
 }));
@@ -306,6 +300,7 @@ const graphMocks = {
   getDependencies: vi.fn().mockReturnValue([]),
   getReverseDependencies: vi.fn().mockReturnValue([]),
   getRankedSymbols: vi.fn().mockReturnValue([]),
+  getRankedFiles: vi.fn().mockReturnValue([]),
 };
 
 vi.mock('../src/core/graph.js', () => ({
@@ -314,7 +309,6 @@ vi.mock('../src/core/graph.js', () => ({
 
 import { buildCLI, getStaleFilesCount, checkAndPrintStaleness, checkTryCatch } from '../src/cli.js';
 import { Store } from '../src/core/store.js';
-import { calculateMetrics } from '../src/core/metrics.js';
 
 describe('CLI module', () => {
   let logSpy: any;
@@ -919,12 +913,11 @@ describe('CLI module', () => {
   describe('metrics command', () => {
     it('shows metrics results', async () => {
       await runCLI(['metrics']);
-      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Coupling'));
+      expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(/RANK {2}FILE[\s\S]*src\/main\.ts/));
     });
 
     it('shows no metrics message', async () => {
-      vi.mocked(calculateMetrics).mockReturnValueOnce([]);
-      await runCLI(['metrics']);
+      await runCLI(['metrics', '--lang', 'cobol']);
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('No metrics found'));
     });
   });

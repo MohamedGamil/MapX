@@ -46,8 +46,8 @@ mapx -d /path/to/project scan
 - `mapx context <task> [--dir path] [--seeds seeds] [--tokens budget] [--depth n] [--format fmt]` - Generate task-specific workspace context
 - `mapx callers <symbol> [--dir path] [--depth depth]` - Trace callers of a symbol (fuzzy fallback on typos)
 - `mapx callees <symbol> [--dir path] [--depth depth]` - Trace callees of a symbol (fuzzy fallback on typos)
-- `mapx metrics [path]` - Show coupling and instability metrics for files
-- `mapx edges [path] [--type type] [--from file] [--to file]` - Query dependency edges
+- `mapx metrics [path] [--top n] [--exclude globs] [--format json]` - Files ranked by coupling (in/out/total degree, instability, PageRank)
+- `mapx edges [file] [--direction dir] [--type types] [--format json]` - Incoming and outgoing edges of a file (without a file: --from/--to filtered list)
 - `mapx routes [path] [--framework name] [--method verb] [--json]` - Show framework routes
 - `mapx hooks [path] [--framework name] [--type type] [--json]` - Show framework hooks
 - `mapx profile [path]` - Show codebase profile (archetype, frameworks, active taxonomy)

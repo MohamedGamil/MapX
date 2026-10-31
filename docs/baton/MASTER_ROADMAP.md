@@ -76,7 +76,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — IN_PROGRESS, P1, 6h; depends on M0-12-R1, M0-12-R2.
 - **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — BACKLOG, P2, 6h; depends on M0-12-R3.
 - **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — BACKLOG, P2, 6h; depends on M0-17-R1, M0-01-R1.
-- **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — IN_PROGRESS, P2, 5h; depends on M0-03-R2.
+- **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
 - **M0-05-R4** MCP parity for Laravel relationships and bindings — BACKLOG, P2, 3h; depends on M0-05-R2.
 - **M0-07-R2** Binary build test writes outside the repo; package check rejects binaries — BACKLOG, P2, 2h; depends on M0-07-R1.
 
@@ -113,7 +113,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06** Pair client calls with backend routes across repositories — DONE, P1, 14h; depends on M2-04, M2-05, M1-98, M2-01, M2-03-R1, M2-04-R1.
 - **M2-07** HTTP pairing follow-ups from the M2 review — DONE, P2, 10h; depends on M2-06.
 - **M2-04-R2** Scoped URL constants; dotenv quoting and expansion — DONE, P1, 4h; depends on M2-04-R1, M2-05.
-- **M2-06-R1** HTTP pairing needs literal evidence; host affinity; honest pairing tests — READY, P1, 6h; depends on M2-06, M2-07.
+- **M2-06-R1** HTTP pairing needs literal evidence; host affinity; honest pairing tests — IN_PROGRESS, P1, 6h; depends on M2-06, M2-07.
 
 ## M3 — Vue SFC semantics
 

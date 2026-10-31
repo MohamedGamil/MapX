@@ -214,8 +214,8 @@ mapx -d /path/to/project export
 | `mapx sources` | Find entry points (data sources) in the codebase |
 | `mapx sinks` | Find terminal consumers (data sinks) in the codebase (supports `--include-leaf-libraries` to show filtered leaf libraries) |
 | `mapx context <task>` | Generate task-specific workspace context within a token budget |
-| `mapx metrics` | Show coupling and instability metrics for files |
-| `mapx edges` | Granular query of dependency edges |
+| `mapx metrics` | Files ranked by coupling: in/out/total degree, instability and PageRank (`--top`, default 20; `--exclude`; `--format json`) |
+| `mapx edges [file]` | Incoming and outgoing edges of a file (`--direction`, `--type`, `--verified-only`, `--format json`); without a file, a filtered edge list |
 | `mapx routes` | Show routes from all detected frameworks |
 | `mapx hooks` | Show hooks from all detected frameworks |
 | `mapx node <symbol>` | Inspect a symbol with metadata, `--source`, `--format json`, and `--include-members` to list class/interface members |

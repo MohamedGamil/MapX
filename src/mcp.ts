@@ -19,8 +19,8 @@ import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
-import { calculateMetrics, calculateClusterMetrics, calculateDSM, rankMetrics } from './core/metrics.js';
-import { edgeView, indexedPath } from './core/edge-view.js';
+import { calculateClusterMetrics, calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop } from './core/metrics.js';
+import { directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
@@ -217,27 +217,28 @@ EXAMPLES:
       },
       {
         name: 'mapx_metrics',
-        description: 'Get coupling (afferent/efferent) and instability metrics for all files, optionally filtered by language and verified-only.',
+        description: 'Compute structural coupling metrics per file: in-degree, out-degree, total degree, instability and PageRank, ranked by total degree. json: { dir, generatedAt, summary { files, edges, density }, files[] }.',
         inputSchema: {
           type: 'object',
           properties: {
             lang: { type: 'string', description: 'Filter metrics by language' },
             verifiedOnly: { type: 'boolean', description: 'Only compute metrics using verified edges', default: false },
-            format: { type: 'string', enum: ['text', 'json'], description: 'json: array ranked by total degree (Ca + Ce), each entry with pagerank', default: 'text' },
-            top: { type: 'number', description: 'Only the N files with the highest total degree' },
+            format: { type: 'string', enum: ['text', 'llm', 'json'], description: 'text (alias llm): ranked table; json: { dir, generatedAt, summary, files[{ path, language, inDegree, outDegree, totalDegree, instability, pagerank }] }', default: 'text' },
+            top: { type: 'number', description: 'Number of files to return, ranked by total degree (default 20; 0 returns every file)', default: 20 },
+            exclude: { type: 'string', description: 'Comma-separated globs: matching files and their edges are left out' },
             ...dirProperty,
           },
         },
       },
       {
         name: 'mapx_edges',
-        description: 'Granular query of dependency edges in the code graph. Returns a JSON array by default.',
+        description: 'Structured edge neighbourhood of a file: { file, direction, incoming[], outgoing[] } (JSON by default). Without file, a flat JSON list of edges filtered by from / to / type.',
         inputSchema: {
           type: 'object',
           properties: {
             file: { type: 'string', description: 'File whose edges to list (workspace-relative or absolute)' },
-            direction: { type: 'string', enum: ['outgoing', 'incoming', 'both'], description: 'With file: edges leaving it, reaching it, or both', default: 'both' },
-            type: { type: 'string', description: 'Filter edges by type; comma-separated for several (relation,extends)' },
+            direction: { type: 'string', enum: ['outgoing', 'incoming', 'both'], description: 'Needs file: edges leaving it, reaching it, or both (default both)' },
+            type: { type: 'array', items: { type: 'string' }, description: 'Edge types to include, e.g. ["relation", "extends"] (a comma-separated string also works)' },
             verifiedOnly: { type: 'boolean', description: 'Leave out inferred edges', default: false },
             format: { type: 'string', enum: ['json', 'text'], description: 'Output format', default: 'json' },
             from: { type: 'string', description: 'Filter edges originating from a file pattern (substring match)' },
@@ -1442,79 +1443,70 @@ Callees: ${callees.length}`;
       }
 
       case 'mapx_metrics': {
+        // Same validation and report as `mapx metrics` (D012, M0-03-R3).
+        const format = parseFormat((args as any)?.format, 'text');
+        const top = parseTop((args as any)?.top);
+        for (const v of [format, top]) {
+          if (typeof v === 'object') return { content: [{ type: 'text', text: v.error }], isError: true };
+        }
         const resolved = resolveOrFail(args || {});
         if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
         const dir = resolved.dir;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const lang = (args as any)?.lang;
-        const verifiedOnly = !!(args as any)?.verifiedOnly;
-
-        let metrics = calculateMetrics(ctx.store, {
+        const { report, total } = buildMetricsReport(ctx.store, new Map(ctx.graph.getRankedFiles().map(f => [f.path, f.pagerank])), {
+          dir,
           repo: ctx.config.repo.name,
-          language: lang,
-          verifiedOnly,
+          language: (args as any)?.lang,
+          verifiedOnly: !!(args as any)?.verifiedOnly,
+          exclude: String((args as any)?.exclude ?? '').split(',').map(s => s.trim()).filter(Boolean),
+          top: top as number,
         });
-
-        // Same ranking as `mapx metrics --format json --top N` (M0-03-R2).
-        const top = (args as any)?.top !== undefined ? Number((args as any).top) : undefined;
-        if ((args as any)?.format === 'json' || top) {
-          const ranked = rankMetrics(metrics, new Map(ctx.graph.getRankedFiles().map(f => [f.path, f.pagerank])), top);
-          if ((args as any)?.format === 'json') {
-            return { content: [{ type: 'text', text: JSON.stringify(ranked, null, 2) }] };
-          }
-          metrics = ranked;
+        if (format === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(report, null, 2) }] };
         }
-
-        if (metrics.length === 0) {
+        if (report.files.length === 0) {
           return { content: [{ type: 'text', text: 'No metrics found.' }] };
         }
-
-        const lines = [
-          '── Coupling & Instability Metrics ─────────────────────',
-          `${'File Path'.padEnd(45)} | ${'Lang'.padEnd(10)} | ${'Ca'.padStart(4)} | ${'Ce'.padStart(4)} | ${'Instability'.padStart(11)}`,
-          '-'.repeat(85),
-        ];
-
-        for (const m of metrics) {
-          const pathTrunc = m.path.length > 45 ? '...' + m.path.substring(m.path.length - 42) : m.path;
-          lines.push(`${pathTrunc.padEnd(45)} | ${m.language.padEnd(10)} | ${String(m.afferent).padStart(4)} | ${String(m.efferent).padStart(4)} | ${m.instability.toFixed(4).padStart(11)}`);
-        }
-
         const warning = getMcpStalenessWarning(ctx.store, dir);
-        return {
-          content: [{
-            type: 'text',
-            text: warning + lines.join('\n'),
-          }],
-        };
+        const lastScan = ctx.store.getMeta('last_scan_time:' + ctx.config.repo.name);
+        return { content: [{ type: 'text', text: warning + formatMetricsText(report, total, lastScan) }] };
       }
 
       case 'mapx_edges': {
+        // Same validation as `mapx edges` (M0-03-R3).
+        const format = parseFormat((args as any)?.format, 'json');
+        const fileArg = (args as any)?.file as string | undefined;
+        const optionError = typeof format === 'object' ? format.error : directionError((args as any)?.direction, !!fileArg);
+        if (optionError) return { content: [{ type: 'text', text: optionError }], isError: true };
         const resolved = resolveOrFail(args || {});
         if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }] };
         const dir = resolved.dir;
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        const type = (args as any)?.type;
-        const from = (args as any)?.from;
-        const to = (args as any)?.to;
-        const file = (args as any)?.file as string | undefined;
-
+        const file = fileArg ? indexedPath(dir, fileArg) : undefined;
+        const direction = ((args as any)?.direction ?? 'both') as EdgeDirection;
         const edges = ctx.store.queryEdges({
           repo: ctx.config.repo.name,
-          type,
-          from,
-          to,
-          file: file ? indexedPath(dir, file) : undefined,
-          direction: (args as any)?.direction ?? 'both',
+          type: (args as any)?.type,
+          from: (args as any)?.from,
+          to: (args as any)?.to,
+          file,
+          direction,
           verifiedOnly: !!(args as any)?.verifiedOnly,
         });
 
-        // JSON by default (M0-03-R2); `format: "text"` keeps the line listing.
-        if (((args as any)?.format ?? 'json') === 'json') {
+        // With a file: F04's incoming / outgoing neighbourhood, JSON by default (D012).
+        if (file) {
+          const neighbourhood = fileEdges(file, direction, edges);
+          if (format === 'json') return { content: [{ type: 'text', text: JSON.stringify(neighbourhood, null, 2) }] };
+          return { content: [{ type: 'text', text: getMcpStalenessWarning(ctx.store, dir) + formatFileEdgesText(neighbourhood) }] };
+        }
+
+        // Without a file: the flat list, JSON by default (M0-03-R2); `format: "text"` keeps the line listing.
+        if (format === 'json') {
           return { content: [{ type: 'text', text: JSON.stringify(edges.map(edgeView), null, 2) }] };
         }
 
