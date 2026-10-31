@@ -6148,6 +6148,10 @@
         {
           "id": "M0-02-R5",
           "type": "quality"
+        },
+        {
+          "id": "M0-04-R3",
+          "type": "quality"
         }
       ],
       "optionalDependencies": [],
@@ -10454,6 +10458,80 @@
       "objective": "Make PHP import and class resolution precise on stock Laravel apps.",
       "milestone": "M0",
       "description": "Review 2026-10-31 P1: resolvePhpImport accepts any 2-segment suffix, so `use Illuminate\\Foundation\\Http\\Kernel as HttpKernel` in app/Http/Kernel.php is a verified self-import, `Illuminate\\Support\\Collection` → app/Support/Collection.php, and `use App\\Billing\\Invoice; new Invoice()` → app/Models/Invoice.php (verified). P1: $listen is read with a raw-text regex (first match, even in a comment; string-keyed form ignored). P2: `use function`/`use const` enter the class table; a comment before the first argument garbles targets; `\\Event::dispatch`/`event(new \\X)` missed; double-quoted bind() arguments are not captured; route middleware edges to external middleware point at Kernel.php; `->middleware(X::class)` makes no edge; a closure route containing `::class` is verified. Tests: worker parity ignores metadata and fileMetadata; metrics --verified-only test passes with route verifiability forced inferred; import test uses arrayContaining."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-04-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-04-R2.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-04-R3.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`Route::get(...)->middleware(EnsureX::class)` and `Route::middleware([EnsureX::class])->group(...)` with `use App\\Http\\Middleware\\EnsureX;` give the route that middleware (FQN) and a route→middleware edge to app/Http/Middleware/EnsureX.php (e2e test).",
+        "A middleware class not imported or not indexed gives no edge and no Kernel.php fallback (test).",
+        "The routes scorer stays at 0 false positives with recall not lower than before."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-laravel",
+      "actualHours": null,
+      "startedAt": "2026-10-31T05:28:13.210Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T05:28:12.923Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T05:28:13.210Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-04-R3",
+      "title": "Laravel: ->middleware(X::class) route middleware edges via the route file use table",
+      "objective": "Make PHP import and class resolution precise on stock Laravel apps.",
+      "milestone": "M0",
+      "description": "Left from M0-04-R2 (2026-10-31): the route walker keeps only quoted middleware names, so ->middleware(X::class) makes no edge; it needs the route file use table."
     },
     {
       "priority": "P1",
