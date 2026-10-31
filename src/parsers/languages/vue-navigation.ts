@@ -1,9 +1,10 @@
 // Vue Router navigation (docs/baton M3-06): rule 9 of the Vue edge contract (docs/baton/iterations/M3-01.md).
 // `router.push` / `replace`, `this.$router.push` and `<router-link :to>` give a `navigate` edge from
 // the caller to the component of the route record they reach. Pure text analysis in three parts:
-// the parser finds navigation targets in an SFC, `routeRecords` reads a router file's route table,
-// and the scanner matches the two with `matchRoute` (by exact name or path, never by similarity).
-import type { ExtractedReference } from '../../types.js';
+// the parser finds navigation targets in an SFC or a plain JS/TS module (M3-11), `routeRecords`
+// reads a router file's route table, and the scanner matches the two with `matchRoute` (by exact
+// name or path, never by similarity).
+import type { ExtractedReference, ExtractedSymbol } from '../../types.js';
 import { maskCode, matchBracket } from '../../frameworks/http/client-calls.js';
 import { maskBlocks, moduleImports, templateNodes, templateRange } from './vue-template.js';
 
@@ -134,12 +135,14 @@ export function navTarget(expr: string): NavTarget | null {
 
 /**
  * `push` / `replace` calls on the router in JS code: `this.$router` (or any `$router`), a local bound
- * to `useRouter()` or `this.$router`, `useRouter()` itself, and the router module's import.
+ * to `useRouter()` or `this.$router`, `useRouter()` itself, the router module's import, and a local
+ * holding the router the file creates (`createRouter(…)`, `new VueRouter(…)`), which its guards use.
  */
 function routerCalls(code: string): { index: number; target: NavTarget }[] {
   const masked = maskCode(code);
   const receivers = new Set<string>();
-  for (const m of masked.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:useRouter\s*\(\s*\)|this\s*\.\s*\$router\b)/g)) receivers.add(m[1]!);
+  const bound = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::\s*[\w$.<>]+\s*)?=\s*(?:useRouter\s*\(\s*\)|this\s*\.\s*\$router\b|createRouter\s*\(|new\s+(?:VueRouter|Router)\s*\()/g;
+  for (const m of masked.matchAll(bound)) receivers.add(m[1]!);
   for (const [local, { specifier, imported }] of moduleImports(code, masked)) {
     if ((imported === 'default' || imported === 'router') && ROUTER_MODULE.test(specifier)) receivers.add(local);
   }
@@ -165,6 +168,26 @@ function navigateRef(target: NavTarget, startLine: number): ExtractedReference {
     startLine,
     metadata: { navigate: target },
   };
+}
+
+/**
+ * Parser side, plain JS/TS modules (M3-11): the navigations of a store, a guard or a composable,
+ * each owned by the narrowest function or method symbol around it (bare name, rule 2); outside any,
+ * by none. `.vue` files are read by `navigationReferences` instead.
+ */
+export function moduleNavigationReferences(source: string, symbols: ExtractedSymbol[]): ExtractedReference[] {
+  if (!/\b(?:push|replace)\s*\(/.test(source) || !/router/i.test(source)) return [];
+  const owners = symbols.filter((s) => s.kind === 'function' || s.kind === 'method');
+  return routerCalls(source).map(({ index, target }) => {
+    const ref = navigateRef(target, lineAt(source, index));
+    let best: ExtractedSymbol | null = null;
+    for (const s of owners) {
+      if (s.startLine <= ref.startLine && ref.startLine <= s.endLine
+        && (!best || s.endLine - s.startLine < best.endLine - best.startLine)) best = s;
+    }
+    ref.sourceSymbol = best?.name ?? null;
+    return ref;
+  });
 }
 
 /**

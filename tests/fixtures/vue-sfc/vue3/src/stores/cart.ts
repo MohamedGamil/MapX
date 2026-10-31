@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import router from '../router';
 
 interface CartItem {
   id: number;
@@ -18,6 +19,7 @@ export const useCartStore = defineStore('cart', {
     async checkout() {
       await fetch('/api/checkout', { method: 'POST', body: JSON.stringify(this.items) });
       this.items = [];
+      router.replace('/order/confirmed');
     },
     clear() {
       this.items = [];

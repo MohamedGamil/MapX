@@ -20,7 +20,7 @@ const labels = expected.labels;
 const PATTERNS = [
   'template-handler', 'template-binding-call', 'component-local', 'component-global', 'v-model-component',
   'options-this-call', 'mixin-method', 'script-setup-macro', 'script-setup-call', 'component-symbol', 'composable',
-  'vuex-map-helpers', 'vuex-dispatch', 'pinia', 'router', 'router-record',
+  'vuex-map-helpers', 'vuex-dispatch', 'pinia', 'router', 'router-record', 'router-module',
 ] as const;
 type Pattern = (typeof PATTERNS)[number];
 
@@ -52,11 +52,12 @@ const FLOORS: {
     pinia: labelledCount('pinia'), // M3-05: through the store's import
     router: labelledCount('router'), // M3-06: rule 9 navigate edges
     'router-record': labelledCount('router-record'), // M3-06: the vue-router detector's route edges reach the component
+    'router-module': labelledCount('router-module'), // M3-11: navigation in stores, guards and composables
   },
   falsePositives: {
     composable: 1, // generic: formatter.format() inside format() resolves to itself
   },
-  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02; 0.989 (90/91) after M3-05; 0.990 (100/101) after M3-06. */
+  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02; 0.989 (90/91) after M3-05; 0.990 (100/101) after M3-06; 0.990 (104/105) after M3-11. */
   minPrecision: 0.95,
 };
 

@@ -3,16 +3,16 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import type { ScanContext } from '../src/types.js';
+import type { ExtractedSymbol, ScanContext } from '../src/types.js';
 import {
-  matchRoute, navigationReferences, navTarget, routeRecords, withSrcAlias, type ResolvedRoute,
+  matchRoute, moduleNavigationReferences, navigationReferences, navTarget, routeRecords, withSrcAlias, type ResolvedRoute,
 } from '../src/parsers/languages/vue-navigation.js';
 import { VueRouterDetector } from '../src/frameworks/detectors/vue-router.js';
 import { buildServer } from '../src/mcp.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
-// M3-06: Vue Router navigation (edge contract rule 9 in docs/baton/iterations/M3-01.md). The
-// labelled yardstick is tests/fixtures/vue-sfc (patterns `router` and `router-record`); these tests
+// M3-06 / M3-11: Vue Router navigation (edge contract rule 9 in docs/baton/iterations/M3-01.md). The
+// labelled yardstick is tests/fixtures/vue-sfc (patterns `router`, `router-record`, `router-module`); these tests
 // pin the module and the cases the fixture does not cover (redirects, nested routes, aliases,
 // patterns, fail-closed targets) and the edge type's life in a real scan, sync and the CLI/MCP.
 
@@ -324,5 +324,123 @@ describe('navigate edges in a real scan, sync and the CLI/MCP route views', () =
     const status = mapx(root, 'status');
     expect(status).toMatch(new RegExp(`\\n\\s+navigate\\s+${NAVIGATE.length}\\n`));
     expect(status).toMatch(new RegExp(`\\n\\s+route\\s+${edgesOf(root, 'route').length}\\n`));
+  });
+});
+
+// ── M3-11: navigation from plain JS/TS modules ──────────────────────────────────────────────────
+
+describe('moduleNavigationReferences (M3-11)', () => {
+  it('owns each router call by the narrowest function or method; other push() calls give nothing', () => {
+    const code = [
+      "import router from '@/router';", // 1
+      "import { useRouter } from 'vue-router';", // 2
+      'export const useAuth = defineStore("auth", {', // 3
+      '  actions: {', // 4
+      '    logout() {', // 5
+      "      this.items.push('/users');", // 6
+      "      router.push({ name: 'login' });", // 7
+      '    },', // 8
+      '  },', // 9
+      '});', // 10
+      'export function useFlow() {', // 11
+      '  const nav = useRouter();', // 12
+      '  const queue = { push(x) { return x; } };', // 13
+      '  function next() {', // 14
+      "    queue.push('/a');", // 15
+      "    nav.replace('/done');", // 16
+      '  }', // 17
+      '  return { next };', // 18
+      '}', // 19
+      "router.push('/top');", // 20
+    ].join('\n');
+    const symbols = [
+      { name: 'useAuth', kind: 'constant', scope: null, startLine: 3, endLine: 10 },
+      { name: 'logout', kind: 'method', scope: 'actions', startLine: 5, endLine: 8 },
+      { name: 'useFlow', kind: 'function', scope: null, startLine: 11, endLine: 19 },
+      { name: 'push', kind: 'method', scope: null, startLine: 13, endLine: 13 },
+      { name: 'next', kind: 'function', scope: null, startLine: 14, endLine: 17 },
+    ] as ExtractedSymbol[];
+    expect(moduleNavigationReferences(code, symbols).map((r) => [r.sourceSymbol, r.targetName, r.startLine, r.referenceType])).toEqual([
+      ['logout', 'login', 7, 'navigate'],
+      ['next', '/done', 16, 'navigate'],
+      [null, '/top', 20, 'navigate'],
+    ]);
+    expect(moduleNavigationReferences("const list = [];\nlist.push('/users');\n", [])).toEqual([]);
+  });
+});
+
+const moduleFiles: Record<string, string> = {
+  'package.json': JSON.stringify({ name: 'shop', private: true, dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0', pinia: '^2.1.0' } }),
+  'src/router/index.js': [
+    "import { createRouter, createWebHistory } from 'vue-router';",
+    "import Home from '../views/Home.vue';",
+    "import Login from '../views/Login.vue';",
+    '',
+    'const router = createRouter({',
+    '  history: createWebHistory(),',
+    '  routes: [',
+    "    { path: '/', name: 'home', component: Home },",
+    "    { path: '/login', name: 'login', component: Login },",
+    "    { path: '/orders', name: 'orders', component: () => import('../views/Orders.vue') },",
+    '  ],',
+    '});',
+    '',
+    'function requireAuth(to) {',
+    "  if (to.meta.auth && !localStorage.token) router.push({ name: 'login' });",
+    '}',
+    'router.beforeEach(requireAuth);',
+    '',
+    'export default router;',
+    '',
+  ].join('\n'),
+  'src/stores/auth.js': [
+    "import { defineStore } from 'pinia';",
+    "import router from '../router';",
+    '',
+    "export const useAuthStore = defineStore('auth', {",
+    '  state: () => ({ history: [] }),',
+    '  actions: {',
+    '    logout() {',
+    "      this.history.push('/orders');",
+    "      router.replace('/login');",
+    '    },',
+    '  },',
+    '});',
+    '',
+  ].join('\n'),
+  'src/composables/useOrders.ts': [
+    "import { useRouter } from 'vue-router';",
+    '',
+    'export function useOrders() {',
+    '  const router = useRouter();',
+    '  const recent = { items: [] as string[], push(path: string) { this.items.push(path); } };',
+    '  function openAll() {',
+    "    recent.push('/orders');",
+    "    router.push({ name: 'orders' });",
+    '  }',
+    '  return { openAll };',
+    '}',
+    '',
+  ].join('\n'),
+  'src/views/Home.vue': '<template>\n  <p>home</p>\n</template>\n',
+  'src/views/Login.vue': '<template>\n  <p>login</p>\n</template>\n',
+  'src/views/Orders.vue': '<template>\n  <p>orders</p>\n</template>\n',
+};
+
+describe('navigate edges from stores, guards and composables (M3-11, real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace(moduleFiles);
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('links each router call to the route component, owned by its function, and nothing for other push() calls', () => {
+    expect(edgesOf(root, 'navigate')).toEqual([
+      { source_file: 'src/composables/useOrders.ts', source_symbol: 'openAll', target_file: 'src/views/Orders.vue', target_symbol: 'Orders' },
+      { source_file: 'src/router/index.js', source_symbol: 'requireAuth', target_file: 'src/views/Login.vue', target_symbol: 'Login' },
+      { source_file: 'src/stores/auth.js', source_symbol: 'logout', target_file: 'src/views/Login.vue', target_symbol: 'Login' },
+    ]);
   });
 });

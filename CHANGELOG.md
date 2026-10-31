@@ -13,6 +13,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx metrics` / `mapx_metrics` and `mapx edges <file>` / `mapx_edges` now return the F02/F04 structures (camelCase), metrics shows 20 rows by default with `--top 0` for all and a new `--exclude`, and invalid `--top`, `--format` or a file-less `--direction` exit with an error (M0-03-R3).
 
 ### Added
+- Vue Router navigation written in plain JS/TS modules (Pinia/Vuex store actions, navigation guards, composables) now gives `navigate` edges from that function to the route's component (M3-11).
 - JS/TS/Vue imports through path aliases now resolve with the project's own configuration (tsconfig/jsconfig `paths` with `baseUrl`/`extends`, or a vite / vue-cli / webpack / Laravel Mix alias, read statically, from the nearest config folder), so Laravel's `@` → `resources/js` and multi-app repositories get their import, render, mixin and composable edges (M3-09).
 - Vue Router navigation (`router.push` / `replace`, `this.$router.push`, `<router-link :to>`) now gives `navigate` edges to the component of the route it reaches, and Vue Router routes resolve statically imported components to their `.vue` file instead of the router file (M3-06).
 - Vue components now expose their `props` / `emits` (from `defineProps`, `withDefaults`, `defineEmits` or the Options API) on the component symbol, and composable `useX()` calls and the functions destructured from them link to the composable's file through the import, including through barrel files and Laravel's `@` alias (M3-04).
