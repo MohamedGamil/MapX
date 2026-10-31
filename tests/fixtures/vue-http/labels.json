@@ -288,6 +288,60 @@
       "method": "POST",
       "url": "/api/posts/search",
       "route": "POST /api/posts/search"
+    },
+    {
+      "id": "L33",
+      "pattern": "constant-scoped",
+      "file": "vue2/src/services/scopedService.js",
+      "line": 8,
+      "method": "GET",
+      "url": "/api/tags",
+      "route": "GET /api/tags"
+    },
+    {
+      "id": "L34",
+      "pattern": "constant-scoped",
+      "file": "vue2/src/services/scopedService.js",
+      "line": 13,
+      "method": "GET",
+      "url": "/api/statuses",
+      "route": "GET /api/statuses"
+    },
+    {
+      "id": "L35",
+      "pattern": "constant-scoped",
+      "file": "vue2/src/services/scopedService.js",
+      "line": 17,
+      "method": "GET",
+      "url": "/api/posts",
+      "route": "GET /api/posts"
+    },
+    {
+      "id": "L36",
+      "pattern": "env-quoted",
+      "file": "vue3/src/services/envClients.ts",
+      "line": 7,
+      "method": "GET",
+      "url": "/shop/products",
+      "route": "GET /shop/products"
+    },
+    {
+      "id": "L37",
+      "pattern": "env-expanded",
+      "file": "vue3/src/services/envClients.ts",
+      "line": 8,
+      "method": "GET",
+      "url": "/api/billing/v1/invoices",
+      "route": "GET /api/billing/v1/invoices"
+    },
+    {
+      "id": "L38",
+      "pattern": "constant-scoped",
+      "file": "vue2/src/services/scopedService.js",
+      "line": 22,
+      "method": "GET",
+      "url": "/api/health",
+      "route": "GET /api/health"
     }
   ]
 }

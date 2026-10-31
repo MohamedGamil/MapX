@@ -24,6 +24,8 @@ export interface HttpCallSite {
   /** First argument exactly as written (minus surrounding whitespace). */
   rawUrl: string;
   client: HttpClientRef;
+  /** Offset of the call in the file, for scoped constant lookup (M2-04-R2); not persisted. */
+  offset?: number;
 }
 export interface HttpClientConfig {
   receiver: string;
@@ -398,7 +400,7 @@ export function extractHttpCalls(
       if (!args[0]) continue;
       seen.add(m.index!);
       for (const rawUrl of urlBranches(args[0]))
-        calls.push({ file, line: lineAt(m.index!), method: m[1]!.toUpperCase(), rawUrl, client: r.client });
+        calls.push({ file, line: lineAt(m.index!), method: m[1]!.toUpperCase(), rawUrl, client: r.client, offset: m.index! });
     }
   }
   for (const m of masked.matchAll(/(?<![\w.$])(?:window\.|globalThis\.)?fetch\s*\(/g)) {
@@ -411,7 +413,7 @@ export function extractHttpCalls(
     const method = args[1]?.startsWith('{') ? objectProperty(args[1].slice(1, -1), 'method') : undefined;
     const literal = method?.match(/^['"`](\w+)['"`]$/)?.[1];
     for (const rawUrl of urlBranches(args[0]))
-      calls.push({ file, line: lineAt(m.index!), method: (literal ?? 'GET').toUpperCase(), rawUrl, client: { kind: 'fetch', name: 'fetch' } });
+      calls.push({ file, line: lineAt(m.index!), method: (literal ?? 'GET').toUpperCase(), rawUrl, client: { kind: 'fetch', name: 'fetch' }, offset: m.index! });
   }
   return calls.sort((a, b) => a.line - b.line);
 }

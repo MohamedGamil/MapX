@@ -25,7 +25,7 @@ import { collectProviders, extractHttpCalls, HTTP_SKIP, HTTP_SOURCE, type HttpCl
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall } from '../frameworks/http/pairing.js';
 import { importResolverFor } from './import-resolvers.js';
-import { collectConstants, envCandidates, evaluate, joinURL, parseDotenv, visibleConstants } from '../frameworks/http/url-resolver.js';
+import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
@@ -1849,16 +1849,19 @@ export class Scanner {
     const calls = files.flatMap(f => extractHttpCalls(f.path, f.content, { providers, files: fileSet, clients }));
 
     // Resolve each URL: constants and templates (M2-04), then the client's base URL (M2-05).
+    // Constants are looked up in the call's scope (M2-04-R2).
     const constantIndex = collectConstants(files);
     const contentOf = new Map(files.map(f => [f.path, f.content]));
-    const visible = new Map<string, Map<string, string>>();
-    const constantsFor = (file: string) => {
-      if (!visible.has(file)) visible.set(file, visibleConstants(file, contentOf.get(file) ?? '', constantIndex, fileSet));
-      return visible.get(file)!;
+    const imported = new Map<string, Map<string, string>>();
+    // With no offset (a client's baseURL), names the whole file agrees on also count.
+    const constantsFor = (file: string, offset?: number) => {
+      if (!imported.has(file)) imported.set(file, importedConstants(file, contentOf.get(file) ?? '', constantIndex, fileSet));
+      const bindings = constantIndex.bindings.get(file) ?? [];
+      return offset === undefined ? constantsAnywhere(bindings, imported.get(file)) : constantsAt(bindings, offset, imported.get(file));
     };
     const dotenv = new Map<string, Map<string, string> | null>();
     const repoRoot = repo.path === '.' ? '' : repo.path.replace(/^\.\//, '');
-    const envFor = (file: string) => (key: string) => {
+    const rawEnv = (file: string) => (key: string) => {
       for (const candidate of envCandidates(file, repoRoot)) {
         if (!dotenv.has(candidate)) {
           const abs = resolve(workspaceRoot, candidate);
@@ -1869,8 +1872,13 @@ export class Scanner {
       }
       return undefined;
     };
-    const records: HttpCallRecord[] = calls.map(call => {
-      const path = evaluate(call.rawUrl, constantsFor(call.file), envFor(call.file));
+    // Values expand ${VAR} references across the env files, as Vite does.
+    const envFor = (file: string) => (key: string) => {
+      const value = rawEnv(file)(key);
+      return value === undefined ? undefined : expandDotenv(value, rawEnv(file), key);
+    };
+    const records: HttpCallRecord[] = calls.map(({ offset, ...call }) => {
+      const path = evaluate(call.rawUrl, constantsFor(call.file, offset), envFor(call.file));
       if (!path.known) return call;
       // A path that starts with something unknown (an undefined env value, a runtime prefix) is
       // relative to that prefix: keep the rest and let pairing match it as a suffix.

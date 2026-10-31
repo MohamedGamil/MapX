@@ -96,7 +96,7 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-98** M1 acceptance: re-score Laravel fixture — DONE, P0, 3h; depends on M1-02, M1-03, M1-04, M1-05, M1-06, M1-07, M1-08, M1-09.
 - **M1-99** Release (owner-initiated) — DEFERRED, P1, 2h; depends on nothing.
 - **M1-03-R1** Laravel route-file walker: string/comment-aware lexing and brace-less groups — DONE, P1, 10h; depends on M1-03, M1-06.
-- **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — READY, P1, 8h; depends on M1-07, M1-04.
+- **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — IN_PROGRESS, P1, 8h; depends on M1-07, M1-04.
 - **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — BACKLOG, P2, 4h; depends on M1-05.
 
 ## M2 — Cross-language precision and HTTP pairing
@@ -112,7 +112,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-04-R1** Fix URL resolution defects found in the M2 review — DONE, P1, 5h; depends on M2-04, M2-05.
 - **M2-06** Pair client calls with backend routes across repositories — DONE, P1, 14h; depends on M2-04, M2-05, M1-98, M2-01, M2-03-R1, M2-04-R1.
 - **M2-07** HTTP pairing follow-ups from the M2 review — DONE, P2, 10h; depends on M2-06.
-- **M2-04-R2** Scoped URL constants; dotenv quoting and expansion — IN_PROGRESS, P1, 4h; depends on M2-04-R1, M2-05.
+- **M2-04-R2** Scoped URL constants; dotenv quoting and expansion — DONE, P1, 4h; depends on M2-04-R1, M2-05.
 - **M2-06-R1** HTTP pairing needs literal evidence; host affinity; honest pairing tests — READY, P1, 6h; depends on M2-06, M2-07.
 
 ## M3 — Vue SFC semantics

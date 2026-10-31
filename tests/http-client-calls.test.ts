@@ -53,7 +53,8 @@ describe('HTTP call-site extraction', () => {
     const files = { 'src/v.vue': "<script setup>\nimport { apiService } from './apiService';\nconst a = await apiService.get('billing/v1/invoices');\n</script>\n" };
     expect(extract(files, 'src/v.vue')).toEqual([]);
     const calls = extract(files, 'src/v.vue', [{ receiver: 'apiService', baseURL: '/api' }]);
-    expect(calls).toEqual([{ file: 'src/v.vue', line: 3, method: 'GET', rawUrl: "'billing/v1/invoices'", client: { kind: 'configured', name: 'apiService', baseURL: "'/api'" } }]);
+    expect(calls).toEqual([{ file: 'src/v.vue', line: 3, method: 'GET', rawUrl: "'billing/v1/invoices'", client: { kind: 'configured', name: 'apiService', baseURL: "'/api'" },
+      offset: files['src/v.vue'].indexOf('apiService.get') }]);
   });
 
   it('splits conditional URLs into one call site per branch and keeps split-line arguments', () => {

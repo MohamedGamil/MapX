@@ -10000,10 +10000,10 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-laravel",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T02:16:38.883Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -10013,6 +10013,12 @@
           "at": "2026-10-31T00:30:47.256Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:16:38.883Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -10132,14 +10138,27 @@
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-http",
       "actualHours": null,
       "startedAt": "2026-10-31T01:53:55.228Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T02:19:12.245Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-04-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-url-resolution.test.ts tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04-R2.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T00:30:47.521Z",
@@ -10152,6 +10171,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:19:11.489Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:19:12.245Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-url-resolution.test.ts tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04-R2.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

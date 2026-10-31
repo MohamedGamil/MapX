@@ -18,7 +18,9 @@ describe('vue-http fixture labels', () => {
     expect(labels.length).toBeGreaterThanOrEqual(30);
     const patterns = new Set(labels.map((l) => l.pattern));
     for (const p of ['axios-direct', 'fetch', 'axios-instance', 'factory', 'alias', 'constant-local', 'constant-imported',
-      'template', 'split-line', 'conditional', 'env-base', 'configured-receiver', 'unserved', 'overridden-route', 'unmounted-route'])
+      'template', 'split-line', 'conditional', 'env-base', 'configured-receiver', 'unserved', 'overridden-route', 'unmounted-route',
+      // M2-04-R2: shadowed constants, a quoted .env value with a comment, ${VAR} expansion
+      'constant-scoped', 'env-quoted', 'env-expanded'])
       expect(patterns, p).toContain(p);
     expect(labels.filter((l) => l.route === null).length).toBeGreaterThanOrEqual(2);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
