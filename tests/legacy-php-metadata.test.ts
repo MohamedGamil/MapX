@@ -76,3 +76,34 @@ describe('PHP reference metadata and route verifiability', () => {
     expect(out).toContain('routes/api.php');
   });
 });
+
+// Review 2026-10-31 (post-acceptance defect): class names given as strings got the file's
+// namespace prefixed (`App\Models\App\Models\Team`).
+describe('PHP class names in strings are fully qualified', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'app/Models/Team.php': '<?php\nnamespace App\\Models;\nclass Team {}\n',
+      'app/Contracts/Gateway.php': '<?php\nnamespace App\\Contracts;\ninterface Gateway {}\n',
+      'app/Services/Stripe.php': '<?php\nnamespace App\\Services;\nclass Stripe {}\n',
+      'app/Models/User.php': "<?php\nnamespace App\\Models;\nclass User {\n  public function team() { return $this->belongsTo('App\\Models\\Team'); }\n}\n",
+      'app/Providers/AppServiceProvider.php':
+        '<?php\nnamespace App\\Providers;\nuse Illuminate\\Support\\ServiceProvider;\nclass AppServiceProvider extends ServiceProvider {\n  public function register() {\n    $this->app->bind(\'App\\Contracts\\Gateway\', \'\\App\\Services\\Stripe\');\n  }\n}\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('keeps string relation and binding targets as written', () => {
+    const rows = query<{ edge_type: string; target_symbol: string; target_file: string | null; metadata: string }>(
+      root, "SELECT edge_type, target_symbol, target_file, metadata FROM edges WHERE edge_type IN ('relation', 'binding')");
+    const relation = rows.find((r) => r.edge_type === 'relation')!;
+    expect(relation.target_symbol).toBe('App\\Models\\Team');
+    expect(relation.target_file).toBe('app/Models/Team.php');
+    const binding = rows.find((r) => r.edge_type === 'binding')!;
+    expect(binding.target_symbol).toBe('App\\Contracts\\Gateway');
+    expect(JSON.parse(binding.metadata).concreteClass).toBe('App\\Services\\Stripe');
+  });
+});

@@ -8,6 +8,8 @@ node_modules/
 dist/
 coverage/
 .env
+# Fixture .env files are test inputs (M2-02), not secrets.
+!tests/fixtures/**/.env
 .idea
 *.log
 *.tsbuildinfo

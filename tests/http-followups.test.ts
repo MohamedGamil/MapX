@@ -6,7 +6,7 @@ import { evaluate, fileConstants } from '../src/frameworks/http/url-resolver.js'
 import { pairCall } from '../src/frameworks/http/pairing.js';
 import { MapxGraph } from '../src/core/graph.js';
 import type { RouteBinding } from '../src/types.js';
-import { cleanup, init, mapx, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M2-07: the P2 findings of the independent M2 review.
 const extract = (files: Record<string, string>, file: string) => {
@@ -126,5 +126,37 @@ describe('env-only edits refresh records', () => {
     writeFileSync(join(root, 'web/.env'), 'VITE_API=/v2\n');
     mapx(root, 'sync', root);
     expect(url()).toBe('/v2/users');
+  });
+});
+
+// Review 2026-10-31 (post-acceptance defect): when the last HTTP record disappeared, pairing
+// returned before clearing, so the old `http` edges stayed in the store.
+describe('http edges follow the records', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'frontend/src/svc.js': "export const a = () => apiService.get('/api/users');\n",
+      'backend/artisan': '#!/usr/bin/env php\n<?php\n',
+      'backend/app/Http/Controllers/UserController.php': '<?php\nnamespace App\\Http\\Controllers;\nclass UserController { public function index() {} }\n',
+      'backend/routes/api.php': "<?php\nuse App\\Http\\Controllers\\UserController;\nRoute::get('users', [UserController::class, 'index']);\n",
+    }, ['frontend', 'backend']);
+    init(root);
+    mapx(root, 'workspaces', 'add', 'frontend');
+    mapx(root, 'workspaces', 'add', 'backend');
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('removes http edges when no call is left', () => {
+    const configPath = join(root, '.mapx', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.settings.http = { clients: [{ receiver: 'apiService' }] };
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    mapx(root, 'scan', root, '--all');
+    const httpEdges = () => query<{ target_symbol: string }>(root, "SELECT target_symbol FROM edges WHERE edge_type = 'http'").map((e) => e.target_symbol);
+    expect(httpEdges()).toEqual(['App\\Http\\Controllers\\UserController@index']);
+    delete config.settings.http;
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    mapx(root, 'scan', root, '--all');
+    expect(httpEdges()).toEqual([]);
   });
 });

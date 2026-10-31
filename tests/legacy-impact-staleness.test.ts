@@ -61,3 +61,22 @@ describe('impact, callees, staleness and globals', () => {
     expect(query(root, "SELECT name FROM symbols WHERE name = 'Late'")).toHaveLength(1);
   });
 });
+
+// Review 2026-10-31 (post-acceptance defect): PHP namespaced callees printed the call-site line.
+describe('callees of PHP namespaced classes', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'app/Models/User.php': '<?php\nnamespace App\\Models;\n\nclass User {}\n',
+      'app/Http/Controllers/UserController.php':
+        '<?php\nnamespace App\\Http\\Controllers;\nuse App\\Models\\User;\nclass UserController {\n  public function a() { return new User(); }\n}\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+
+  it("prints the class's own declaration line", () => {
+    expect(mapx(root, 'callees', 'a', '-d', root)).toMatch(/App\\Models\\User[\s\S]*app\/Models\/User\.php:4\b/);
+  });
+});

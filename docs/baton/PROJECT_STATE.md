@@ -1,15 +1,15 @@
 # MapX project state
 
-Updated 2026-10-31, end of session 5. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. All session 5 work is committed, one commit per task (`fa0a6e5` … `b371030`).
+Updated 2026-10-31, after the session 5 review (`reviews/REVIEW-2026-10-31-fb75474ba377.md`). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. All session 5 work is committed, one commit per task (`fa0a6e5` … `b371030`).
 
 ## Milestones
 
 | Milestone | Status | Notes |
 | --- | --- | --- |
-| M0 Delivered baseline and remediation | **all 18 M0-41 audit remediation tasks DONE** | M0-05-R3 (P2, hook edge verifiability) added to BACKLOG; not an M3 blocker |
-| M1 Laravel route correctness | **10 of 10 active tasks DONE** | M1-99 (release) DEFERRED: owner-initiated (D007) |
-| M2 Cross-language precision and HTTP pairing | **8 of 9 DONE** | M2-01 … M2-06 plus M2-03-R1 and M2-04-R1 done; M2-07 (P2 review follow-ups) promotable |
-| M3 Vue SFC semantics | 0 of 6 | **M3-01 promotable**: its remediation quality dependencies are DONE |
+| M0 Delivered baseline and remediation | 18 M0-41 remediation tasks DONE; **review 2026-10-31 added 12 more** | READY (P1): M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-12-R3. BACKLOG (P2): M0-05-R3, M0-05-R4, M0-10-R2, M0-12-R4, M0-17-R2, M0-07-R2, M0-03-R3 (owner decision) |
+| M1 Laravel route correctness | 10 active tasks DONE; **M1-06 and M1-09 completion disputed** | READY: M1-03-R1, M1-07-R1 (P1); BACKLOG: M1-05-R1 (P2). M1-99 (release) DEFERRED (D007) |
+| M2 Cross-language precision and HTTP pairing | 9 of 9 original tasks DONE | READY: M2-04-R2, M2-06-R1 (P1, review 2026-10-31) |
+| M3 Vue SFC semantics | 0 of 6 | M3-01 BLOCKED: per D010 it depends on every remediation task, now including the 17 added by the review and M0-05-R3 |
 | M4 Measurement and DX | 0 of 7 | M4-03 and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
 
 Live list: `npm run plan:scan`.
@@ -28,6 +28,19 @@ Live list: `npm run plan:scan`.
 - **M0-38:** the profiler honours `graphExcludePatterns`.
 - **M1-01 … M1-09, M1-98:** Laravel mount graph. On the 41-route fixture: URI recall 67% → 100%, handler recall 57% → 100%, precision 60% → 100%, false positives 2 → 0.
 - **M2-01:** reproduced name-only PHP → JS edges through the framework resolver; resolution now fails closed. MapX's own edge counts are unchanged.
+
+## Review 2026-10-31 (independent, six reviewers)
+
+Scope: `40be3e4..fb75474` (M1, M2, M0-22-R2, M0-39, M0-40, M0-41 and the 18 session 5 remediation tasks). Report: `reviews/REVIEW-2026-10-31-fb75474ba377.md`.
+
+- **Verdicts** (78 DONE items in scope): 20 CONFIRMED, 18 DEFECTIVE, 3 FALSELY COMPLETE (M1-06, M1-09, M0-12-R2), 37 UNVERIFIED (legacy and earlier-reviewed items, re-verified by command only).
+- **Fixed in the review** (regression test + mutation check each):
+  - P0: init / agents update / MCP replaced user-written agent files (M0-09-R1);
+  - P1: the HTTP fixture `.env` files were never committed, so `npm run check` failed on a clean clone (M2-02);
+  - P1: `**/_*` dropped every file and directory patterns stopped pruning (M0-02-R1);
+  - P1: stale `http` edges (M2-07); `-ses` singulars (M1-05); cross-app overrides (M1-07); namespace-prefixed string class names (M0-04-R1); PHP callee lines (M0-11-R1); sync ignored shebang scripts (M0-12-R2).
+- **Remediation:** 10 P1 tasks READY and 7 P2 in BACKLOG (listed in the milestone table); all are M3-01 dependencies per D010.
+- **Pending commit:** the review's working-tree changes, including `tests/fixtures/vue-http/vue{2,3}/.env`.
 
 ## Session 5 (2026-10-31): M0-41 remediation (D010)
 
@@ -72,9 +85,9 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 ## Next
 
-- **M3-01** (Vue SFC fixture set, critical path) is promotable. It was planned to start in a fresh session; get the owner's go-ahead first.
-- Also promotable: M4-03, M4-05 and M4-04. In backlog: M0-05-R3 (P2).
-- Consider an independent `/baton-review` of the session 5 remediation commits before M3. The reports record self-run mutation checks, not independent reviews.
+- The 10 READY P1 remediation tasks from the 2026-10-31 review, then the P2s (D010: all remediation before M3). `npm run plan:scan` lists them.
+- M0-03-R3 needs an owner decision: implement the F02/F04 JSON shapes as specified, or record the current shapes as the contract.
+- M3-01 (Vue SFC fixture set) once its dependencies are DONE; get the owner's go-ahead first.
 
 ## Done in session 3
 
@@ -91,7 +104,7 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 ## Latest validation
 
-`npm run check` exit 0 (2026-10-30, end of session 3): plan valid (71 tasks); every Unreleased changelog entry cites a task; typecheck clean; 1136 tests passed; skill tests 5/5. `npx tsx scripts/check-package.ts`: 234 files, 4.29 MB packed, no source maps.
+2026-10-31 review: `npm run check` exit 0 after the review fixes: plan valid (111 tasks), 86 test files, 1253 tests, skill tests 5/5; routes scorer recall 1.0 / precision 1.0 / 0 FP; HTTP scorer 1.0 on all metrics; `scripts/check-package.ts` 256 files, 4.33 MB packed, dashboard 690,760 B gzipped (ceiling 737,280).
 
 ## Owner decisions recorded
 
@@ -102,5 +115,5 @@ No owner decisions are pending.
 
 ## Known gaps
 
-- R01: criterion-level review of most legacy iterations is still pending; run `baton-review --full`.
+- R01: the legacy iterations were audited (M0-41) and remediated; the 2026-10-31 review found further defects outside the fixtures (see above).
 - R06: dashboard UI behaviour has no automated tests.

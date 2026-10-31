@@ -1,13 +1,23 @@
 {
   "schemaVersion": 1,
   "lastReviewed": {
-    "snapshot": "40be3e4ebea943ecfeba5049f9bba806ed88ccff",
-    "head": "7e5aa1944315a6970599ffd6423050fc269a2dc4",
+    "snapshot": "3ac0d6dac5d16d7533760115cdd58940fa986a6e",
+    "head": "fb75474ba377854bcb439bfc9f84e906e745e0ea",
     "workingTreeIncluded": true,
-    "mode": "full",
-    "base": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
-    "reviewedAt": "2026-10-30T20:13:58.150Z",
-    "report": "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+    "mode": "incremental",
+    "base": "40be3e4ebea943ecfeba5049f9bba806ed88ccff",
+    "reviewedAt": "2026-10-31T00:36:14.379Z",
+    "report": "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md"
   },
-  "history": []
+  "history": [
+    {
+      "snapshot": "40be3e4ebea943ecfeba5049f9bba806ed88ccff",
+      "head": "7e5aa1944315a6970599ffd6423050fc269a2dc4",
+      "workingTreeIncluded": true,
+      "mode": "full",
+      "base": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      "reviewedAt": "2026-10-30T20:13:58.150Z",
+      "report": "docs/baton/reviews/REVIEW-2026-10-30-baseline.md"
+    }
+  ]
 }

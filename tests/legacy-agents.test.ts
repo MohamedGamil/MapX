@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { buildServer } from '../src/mcp.js';
 import { cleanup, mapx, workspace } from './helpers/e2e.js';
 
 // M0-09-R1: agent integration file defects.
@@ -62,4 +65,47 @@ describe('agent integration files', () => {
     expect(out).toMatch(/gemini\s+-> GEMINI\.md\s+\[outdated\]/);
     expect(out).toMatch(/aider\s+-> AIDER\.md\s+\[edited\]/);
   });
+});
+
+// Review 2026-10-31 (post-acceptance defect): init, agents update and the MCP tool replaced
+// user-written files that have no mapx block.
+describe('user-written agent files are never replaced without consent', () => {
+  const USER_AGENTS = '# Team agent rules\nAlways run make lint.\n';
+  const USER_CLAUDE = '# My claude notes\nKeep me.\n';
+  let root: string;
+  const read = (f: string) => readFileSync(join(root, f), 'utf8');
+  beforeAll(() => {
+    root = workspace({ 'src/a.ts': 'export const a = 1;\n', 'AGENTS.md': USER_AGENTS, 'CLAUDE.md': USER_CLAUDE });
+  });
+  afterAll(() => cleanup(root));
+
+  it('mapx init keeps an AGENTS.md without a mapx block', () => {
+    mapx(root, 'init', root, '--no-suggestions', '--no-mcp-configs', '--no-discover', '--no-workspaces');
+    expect(read('AGENTS.md')).toBe(USER_AGENTS);
+  });
+
+  it('agents update keeps a CLAUDE.md without a mapx block unless --force', () => {
+    mapx(root, 'agents', 'update');
+    expect(read('CLAUDE.md')).toBe(USER_CLAUDE);
+  });
+
+  it('mapx_agents_generate skips user-written and edited files unless force is passed', async () => {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    try {
+      const call = async (args: Record<string, unknown>) =>
+        ((await client.callTool({ name: 'mapx_agents_generate', arguments: { dir: root, ...args } })) as any).content[0].text as string;
+      expect(await call({ providers: ['claude'] })).toMatch(/CLAUDE\.md: Skipped/);
+      expect(read('CLAUDE.md')).toBe(USER_CLAUDE);
+      // providers: ['all'] is accepted like the CLI's --providers=all.
+      expect(await call({ providers: ['all'] })).not.toContain('No valid providers');
+      expect(read('AGENTS.md')).toBe(USER_AGENTS);
+      await call({ providers: ['claude'], force: true });
+      expect(read('CLAUDE.md')).toContain('<!-- mapx v');
+    } finally {
+      await client.close();
+    }
+  }, 60000);
 });

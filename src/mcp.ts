@@ -14,7 +14,7 @@ import { MapxGraph } from './core/graph.js';
 import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
-import { AgentGenerator } from './agents/generator.js';
+import { AgentGenerator, needsConsent } from './agents/generator.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -382,6 +382,10 @@ EXAMPLES:
             all: {
               type: 'boolean',
               description: 'Generate files for all available providers.'
+            },
+            force: {
+              type: 'boolean',
+              description: 'Overwrite files that have no mapx block or whose mapx block was edited. Without it those files are skipped.'
             }
           }
         }
@@ -1895,7 +1899,7 @@ Callees: ${callees.length}`;
         let targetProviders: string[] = [];
 
         const requestArgs = args as any || {};
-        if (requestArgs.all) {
+        if (requestArgs.all || (Array.isArray(requestArgs.providers) && requestArgs.providers.includes('all'))) {
           targetProviders = available;
         } else if (requestArgs.providers && Array.isArray(requestArgs.providers)) {
           targetProviders = requestArgs.providers.filter((p: string) => available.includes(p));
@@ -1914,6 +1918,8 @@ Callees: ${callees.length}`;
         for (const action of actions) {
           if (action.status === 'up_to_date') {
             results.push(`${action.filename}: Up to date.`);
+          } else if (needsConsent(action) && !requestArgs.force) {
+            results.push(`${action.filename}: Skipped, it has content mapx did not write (${action.status}); pass force: true to overwrite.`);
           } else {
             generator.execute(action);
             results.push(`${action.filename}: Successfully generated/updated (${action.status}).`);

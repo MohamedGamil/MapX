@@ -486,7 +486,8 @@ export class LaravelDetector implements FrameworkDetector {
       if (r.framework !== this.name || r.metadata?.reachable === false || !Array.isArray(r.metadata?.order)) continue;
       const path = r.path.replace(/\{[^}]*\}/g, '{}');
       for (const method of r.method.split('|')) {
-        const key = `${method} ${path}`;
+        // order[0] is the Laravel root: separate apps never override each other.
+        const key = `${r.metadata.order[0]} ${method} ${path}`;
         byKey.set(key, [...(byKey.get(key) ?? []), r]);
       }
     }

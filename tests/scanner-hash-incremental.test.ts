@@ -64,6 +64,7 @@ describe('Non-git incremental scan (hash-based)', () => {
     getMeta: vi.fn().mockReturnValue(null),
     setMeta: vi.fn(),
     getAllFiles: vi.fn().mockReturnValue([]),
+    deleteEdgesByType: vi.fn(),
     getAllEdges: vi.fn().mockReturnValue([]),
     getAllSymbols: vi.fn().mockReturnValue([]),
     getSymbolsForFile: vi.fn().mockReturnValue([]),

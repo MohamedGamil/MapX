@@ -332,6 +332,11 @@ export class PhpParser extends GenericWasmParser {
           const classNode = valNode.namedChild(0);
           if (classNode) return classNode.text;
         }
+        if (valNode.type === 'string' || valNode.type === 'encapsed_string') {
+          // A class name in a string is always fully qualified: mark it so resolveToFqn keeps it.
+          const name = cleanQuotes(valNode.text).replace(/\\\\/g, '\\').replace(/^\\/, '');
+          return name ? `\\${name}` : null;
+        }
         return cleanQuotes(valNode.text);
       };
 

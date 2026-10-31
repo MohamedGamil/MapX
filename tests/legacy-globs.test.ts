@@ -43,6 +43,20 @@ describe('glob filters', () => {
     mapx(root, 'scan', root);
   });
 
+  // Review 2026-10-31 (post-acceptance defect): directory pruning tested a synthetic file name,
+  // so `**/_*` pruned every directory and directory-name patterns stopped pruning.
+  it('prunes directories named by a pattern, and only those', () => {
+    const paths = () => query<{ path: string }>(root, "SELECT path FROM files WHERE path LIKE 'app/%' ORDER BY path").map((f) => f.path);
+    const all = (mapx(root, 'scan', root), paths());
+    mapx(root, 'scan', root, '--exclude', '**/_*');
+    expect(paths()).toEqual(all);
+    mapx(root, 'scan', root, '--exclude', '**/Controllers');
+    expect(paths()).toEqual(all.filter((p) => !p.startsWith('app/Http/Controllers/')));
+    mapx(root, 'scan', root, '--exclude', 'app/*/Controllers');
+    expect(paths()).toEqual(all.filter((p) => !p.startsWith('app/Http/Controllers/')));
+    mapx(root, 'scan', root);
+  });
+
   it('does not list clusters of excluded files in filtered exports', () => {
     const full = mapx(root, 'export', '-d', root, '--format', 'llm', '--tokens', '20000');
     expect(full).toContain('App.Models');

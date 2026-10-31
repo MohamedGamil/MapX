@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { chmodSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getLanguageForFile, languageFromShebang } from '../src/languages/registry.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
@@ -65,5 +66,26 @@ describe('shebang detection and extensions', () => {
     expect(files).toEqual([{ path: 'bin/deploy', language: 'bash' }, { path: 'bin/tool', language: 'python' }]);
     const symbols = query<{ name: string }>(root, 'SELECT name FROM symbols ORDER BY name').map((s) => s.name);
     expect(symbols).toEqual(expect.arrayContaining(['greet', 'main']));
+  });
+});
+
+// Review 2026-10-31 (post-acceptance defect): sync ignored extensionless shebang scripts.
+describe('sync and shebang scripts', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({ 'bin/deploy': '#!/bin/bash\ngreet() { echo hi; }\n' }, ['.']);
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'add', '.']);
+    execFileSync('git', ['-C', root, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'init']);
+    init(root);
+    mapx(root, 'scan', root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+
+  it('indexes new and changed extensionless scripts', () => {
+    writeFileSync(join(root, 'bin/deploy'), '#!/bin/bash\ngreet() { echo hi; }\nbye() { echo bye; }\n');
+    writeFileSync(join(root, 'bin/newrb'), '#!/usr/bin/env ruby\nclass NewThing\nend\n');
+    mapx(root, 'sync', root);
+    const symbols = query<{ name: string }>(root, 'SELECT name FROM symbols').map((s) => s.name);
+    expect(symbols).toEqual(expect.arrayContaining(['greet', 'bye', 'NewThing']));
   });
 });

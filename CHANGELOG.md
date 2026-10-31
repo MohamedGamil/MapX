@@ -34,6 +34,15 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `mapx init`, `mapx agents update` and the `mapx_agents_generate` MCP tool no longer replace a user-written `AGENTS.md`/`CLAUDE.md` that has no mapx block, or an edited block: without a TTY they skip the file (MCP: pass `force: true` to overwrite). `mapx_agents_generate` accepts `providers: ["all"]`. (M0-09-R1)
+- `--exclude '**/_*'` no longer drops every file in a subdirectory, and directory patterns such as `**/generated` and `packages/*/generated` exclude again; `app/Http/*` still keeps `app/Http/Controllers`. (M0-02-R1)
+- PHP class names given as strings (`belongsTo('App\Models\Team')`, `bind('App\Contracts\X', ...)`) are no longer prefixed with the file's namespace. (M0-04-R1)
+- `mapx callees` prints the declaration line of PHP namespaced callees instead of the call-site line. (M0-11-R1)
+- `mapx sync` indexes new and changed extensionless scripts by their shebang, like a full scan. (M0-12-R2)
+- `http` edges are removed when the last frontend HTTP call disappears. (M2-07)
+- Laravel resource parameters for words ending in `-ses`/`-zes` (`courses` → `{course}`, `sizes` → `{size}`) follow `Str::singular`. (M1-05)
+- Routes of two separate Laravel apps in one workspace no longer mark each other overridden. (M1-07)
+- The HTTP fixture's `.env` files are committed, so the test suite passes on a clean clone. (M2-02)
 - Language extraction accuracy: (M0-17-R1)
   - Ruby `class Foo < Base` extends `Base` (not `< Base`), `include M` is recorded as implements, and `include`/`extend` are no longer call edges;
   - C++ methods defined inside a class or as `Foo::run` are methods of `Foo`, and template functions are named by their identifier (not their whole source);
@@ -77,6 +86,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx search "*" --file <path>` lists every symbol in the file (previously 20), and reports `Found N of M` with the real total when results are truncated; JSON output includes `totalMatches`. (M0-22-R2)
 - `mapx node --include-members` now exists, as documented, and lists the member symbols of a class, interface or trait (text and JSON). (M0-36)
 - The codebase profiler uses the configured `graphExcludePatterns` instead of fixed scratch/test rules. (M0-38)
+
+### Notes
+- Completion disputed by the 2026-10-31 review (`docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md`): M1-06 and M1-09 (an acceptance criterion is unmet) and M0-12-R2 (F20 extensions); defects in M1-03, M1-04, M0-20-R1, M2-04, M2-06, M0-12-R1 and M0-03-R2. Remediation is planned as M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-12-R3, M1-03-R1, M1-07-R1, M2-04-R2 and M2-06-R1 (P1), plus M0-10-R2, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2 and M1-05-R1 (P2). (M0-41)
 
 ## [0.3.5] — 2026-06-01
 

@@ -5133,6 +5133,78 @@
         {
           "id": "M0-10-R1",
           "type": "quality"
+        },
+        {
+          "id": "M0-05-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M0-20-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-11-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-02-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-04-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-09-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M0-10-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-12-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M0-12-R4",
+          "type": "quality"
+        },
+        {
+          "id": "M0-17-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-03-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M0-05-R4",
+          "type": "quality"
+        },
+        {
+          "id": "M0-07-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M1-03-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M1-07-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M1-05-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M2-04-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M2-06-R1",
+          "type": "quality"
         }
       ],
       "optionalDependencies": [],
@@ -8886,6 +8958,1181 @@
       "objective": "Store framework hook edges (Kernel middleware aliases, NestJS guards, …) as verified when the detector declares them.",
       "milestone": "M0",
       "description": "Found during M0-05-R2: scanner hook edges are always stored inferred, even with metadata.confidence = declared, so Kernel alias → middleware edges are inferred while the new route → middleware edges are verified. Source: docs/baton/reports/M0-05-R2.md (Findings outside scope)."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-20-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F36-nestjs-decorators.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-20-R2.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/nestjs.ts",
+        "tests/legacy-nestjs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A controller preceded by a JSDoc containing \"class\" keeps its routes.",
+        "An apostrophe or an unbalanced brace in a comment inside a controller does not leak its prefix to a later plain class (no phantom route) and does not misattribute routes.",
+        "A controller with a generic `<T extends { id: string }>` keeps its routes.",
+        "`@Query(returns => Post, { description: \"the post's name: 'x'\" })` keeps the method name as operation name."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-nestjs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:45.070Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-20-R2",
+      "title": "NestJS class segmentation ignores comments, strings and generics",
+      "objective": "Attribute NestJS decorators to the right class whatever comments, strings or generics the file contains.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P1 (regression from M0-20-R1): closingBracket treats a quote in a comment as a string start and the class-header regex matches \"class X\" in comments and stops at a generic `{`. A JSDoc mentioning \"class\" loses all routes; an apostrophe in a comment brings back the phantom route M0-20-R1 removed; `Generic<T extends { id: string }>` loses routes; an unbalanced `{` in a comment misattributes routes. Also P2: a GraphQL `name:` inside a description string wins."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-11-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F19-smart-context-tools.md",
+        "specs/features/F37-graph-resolution-filtering.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-11-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/staleness.ts",
+        "src/core/impact-analyzer.ts",
+        "src/core/store.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "tests/legacy-impact-staleness.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "With includePatterns [\"src/**\"], a new scripts/tool.ts is not reported stale; with framework laravel and no globs, a new migration and Blade view are not reported stale; .eslintrc.js is not reported stale after scan.",
+        "impact lists an import-only dependant only when it imports the changed symbol.",
+        "callees prints the line of the called method, not of a same-named method earlier in the file, and prints no line rather than the call-site line when the declaration is unknown.",
+        "No globals edge from new Date() in .cjs, .cts and .svelte files (tested)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-impact-staleness.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:45.437Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-11-R2",
+      "title": "Staleness uses the scanner file rules; precise import-only dependants and callee lines",
+      "objective": "Never report a file as stale that scan or sync will not index, and make impact/callees precise.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P1: staleness applies only settings.excludePatterns, so files outside includePatterns, Laravel default excludes, dotfiles and DEFAULT_IGNORE names are flagged \"(new)\" forever. P2: import-only dependants are file-level (files importing other symbols are listed); callee line takes the first homonym in the file and falls back to the call-site line; globals test covers .mjs only; staleness exclude test missing."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F03-glob-filters.md",
+        "specs/features/F10-laravel-noise-reduction.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/exporters/json-exporter.ts",
+        "docs/configuration.md",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Inbound edges to a file that is deleted, scanned and restored return after a plain scan and after sync.",
+        "sync after an exclude is added or removed in config gives the same edges as scan.",
+        "export --format json --exclude app/Models/** lists no cluster or membership naming an excluded file; the same is tested for TOON.",
+        "A user can drop a single Laravel default exclude, and laravelDefaultExcludes is documented."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:45.756Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-02-R2",
+      "title": "Inbound edges survive a file disappearing and coming back; filters in sync and JSON export",
+      "objective": "Incremental scans restore edges into re-added files and honour filter changes in every path.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P1 (pre-existing, same root cause as M0-02-R1): delete a file, scan or sync, restore it, scan or sync → its inbound edges stay lost until --force (branch switching triggers it). P2: sync ignores config filter changes; JSON export keeps clusters and memberships of excluded files; Laravel default excludes cannot be dropped one by one and laravelDefaultExcludes is undocumented; `**/*.blade.php` applies to sibling repos; TOON cluster filter untested; scan-time Windows/`./` patterns untested."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-04-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F05-php-fqn-resolution.md",
+        "specs/features/F06-php-type-hint-edges.md",
+        "specs/features/F12-event-job-dispatch.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-04-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/import-resolvers.ts",
+        "src/core/scanner.ts",
+        "src/parsers/languages/php.ts",
+        "src/frameworks/detectors/laravel.ts",
+        "tests/legacy-php-resolution.test.ts",
+        "tests/legacy-php-worker.test.ts",
+        "tests/legacy-php-metadata.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A stock Laravel skeleton (Kernel, Authenticate, EventServiceProvider, Handler) has no import edge from a file to itself and no Illuminate\\ name resolved to an app file; import edges are asserted exactly.",
+        "A use-imported FQN with no matching file resolves to nothing rather than to a homonym in another namespace.",
+        "$listen is read from the property declaration node: a docblock example is ignored and the string-keyed form yields bindings.",
+        "The worker parity test compares edge metadata, verifiability and file metadata; the --verified-only test fails when route verifiability is forced inferred."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-php-resolution.test.ts tests/legacy-php-worker.test.ts tests/legacy-php-metadata.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:46.046Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-04-R2",
+      "title": "PHP resolution never maps vendor names to app files; tree-sitter $listen",
+      "objective": "Make PHP import and class resolution precise on stock Laravel apps.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P1: resolvePhpImport accepts any 2-segment suffix, so `use Illuminate\\Foundation\\Http\\Kernel as HttpKernel` in app/Http/Kernel.php is a verified self-import, `Illuminate\\Support\\Collection` → app/Support/Collection.php, and `use App\\Billing\\Invoice; new Invoice()` → app/Models/Invoice.php (verified). P1: $listen is read with a raw-text regex (first match, even in a comment; string-keyed form ignored). P2: `use function`/`use const` enter the class table; a comment before the first argument garbles targets; `\\Event::dispatch`/`event(new \\X)` missed; double-quoted bind() arguments are not captured; route middleware edges to external middleware point at Kernel.php; `->middleware(X::class)` makes no edge; a closure route containing `::class` is verified. Tests: worker parity ignores metadata and fileMetadata; metrics --verified-only test passes with route verifiability forced inferred; import test uses arrayContaining."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-09-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F17-llm-integration-files.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-09-R3.md"
+      ],
+      "affectedFiles": [
+        "src/agents/generator.ts",
+        "src/agents/templates.ts",
+        "src/parsers/static-file-parser.ts",
+        "tests/legacy-agents.test.ts",
+        "tests/legacy-agent-templates.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Generating twice on CRLF files yields one block per file and agents list reports current.",
+        "Every generated file ends with a newline; text appended after generation stays on its own line after update.",
+        "A JSONC settings file with `\"**/[,]\"` and comments keeps its string values (comments preserved or the loss documented in the output).",
+        "agents update only touches files that exist."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-agents.test.ts tests/legacy-agent-templates.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:46.375Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-09-R3",
+      "title": "Agent files: line endings, legacy edited blocks and JSONC merges",
+      "objective": "Agent file updates are idempotent and never corrupt or silently replace user content.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P1: CRLF files get duplicate .clinerules/.aider.conf.yml blocks and false \"edited\" status (regex needs \\n, hash of raw \\r\\n). P2: generated files lack a final newline so appended text joins the close marker; hashless legacy blocks that are edited and outdated are overwritten; update creates files that do not exist; a second stale block is ignored; stripJsoncSyntax removes `,}` inside strings and drops comments; Aider `read:` duplicated; companionMcpConfigs matches by provider name; Continue output does not follow Continue's documented config format (verify the format or amend F17)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-10-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F18-git-workspace-submodules.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-10-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/workspace-summary.ts",
+        "src/core/workspace-manager.ts",
+        "src/mcp.ts",
+        "tests/legacy-workspaces.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A plain folder shows no HEAD; a symlink to a registered repo is not registered twice; a never-scanned repo is shown as unscanned.",
+        "The tests use repos with distinct HEADs and assert export --all file sections and crossRepoEdgeCount exactly."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-workspaces.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-10-R2",
+      "title": "Workspace table and discovery edge cases; stronger workspace tests",
+      "objective": "Correct HEAD, type and de-duplication for every registered folder, and tests that would catch regressions.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P2: a non-git folder shows the parent repo HEAD and is typed peer; a symlinked folder is registered and indexed twice (resolve, not realpath); a never-scanned repo shows \"clean\"; export --all heading levels nest wrongly; MCP uses headCommit (spec headSha) and has no root, no export --all or deps --cross-repo equivalent. Tests: repos have identical HEADs, export --all content and exact crossRepoEdgeCount are not asserted (mutants survived)."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F20-language-expansion.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-12-R3.md"
+      ],
+      "affectedFiles": [
+        "src/core/import-resolvers.ts",
+        "src/core/scanner.ts",
+        "src/languages/registry.ts",
+        "src/agents/templates.ts",
+        "src/mcp.ts",
+        "README.md",
+        "docs/mcp-integration.md",
+        "tests/legacy-imports.test.ts",
+        "tests/legacy-languages.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Resolution builds its indexes once per scan; a 2,000-file Java repo with 10 imports per file scans within 1.5× the time without imports (measured, recorded in the report).",
+        "A python shebang script with main calling helper gets the call edge.",
+        "No doc or generated template describes installing a language; MCP and CLI agree on lang list/info.",
+        ".fish, Rakefile and Gemfile are indexed, or F20 is amended in the plan with a decision."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-imports.test.ts tests/legacy-languages.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:46.667Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-12-R3",
+      "title": "Linear-time import resolution; shebang scripts resolve references; D010 docs",
+      "objective": "Import resolution scales to large repos, shebang scripts take part in the graph, and docs match D010.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P1: bySuffix and the Go/PHP resolvers scan every file per import (2,000 Java files × 10 imports: 16.6 s vs 5.9 s without imports; 10,000 files/50,000 imports: 37 s). P2: shebang scripts produce no edges (language derived from the path in reference resolution); `#!/usr/bin/env ts-node` maps to javascript; README, AGENTS templates and docs/mcp-integration.md still describe installing languages; mapx_lang_list says \"Installed\", no mapx_lang_info, unknown-language errors lack isError; F20 `.fish`, Rakefile, Gemfile missing without a plan amendment; worker shebang path untested (fixture below the parallel threshold)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F20-language-expansion.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-12-R4.md"
+      ],
+      "affectedFiles": [
+        "src/core/import-resolvers.ts",
+        "queries/python/references.scm",
+        "queries/c_sharp/references.scm",
+        "queries/rust/references.scm",
+        "tests/legacy-imports.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each case listed in the description has a test with the exact expected edge (or none)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-imports.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-12-R4",
+      "title": "Import resolution precision for Ruby, Java, Python, C#, Rust and Go",
+      "objective": "Import edges follow each language's own lookup rules.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P2: Ruby require and require_relative are conflated (require_relative 'missing' links ../missing.rb; plain require prefers the file's own directory); Java multi-module picks the wrong module (first segment only); Python aliased imports, multi-name `from pkg import a, b` and sibling packages; target_symbol holds the whole statement; C# using static/alias/nested namespace and target file choice; Rust `mod foo;` and uniform paths; Go nested module importing its parent. Untested: Java top-dir preference, C# store fallback."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-17-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-01-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F33-language-syntax-coverage.md",
+        "specs/features/F01-edge-verifiability.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-17-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "src/exporters/dot-exporter.ts",
+        "tests/legacy-language-accuracy.test.ts",
+        "tests/legacy-verifiability.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A parameter call `config()` makes no edge to a constant named config.",
+        "C++ `Box<T>::f` is scoped Box; `ns::K::a` yields method a in K.",
+        "C# `class E : IOException` extends IOException.",
+        "Math.max() makes no edge to a user function max; the built-in skip and edge-style tests fail when their code is removed."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-17-R2",
+      "title": "Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers",
+      "objective": "No call edge targets a constant, and qualified names extract correctly.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P2: new JS/Python constant and variable symbols become verified call targets (`config()` param → a.js const config); C++ `Box<T>::f` keeps template args, `Outer::In::z` and `ns::K::a` make no symbol; C# `: IOException` is implements, generic bases keep arguments; Go qualified embedding has no extends edge; JS member calls on Math/Date/Array/process link to user functions; DOT styles a file pair by its first edge. Tests: built-in method skip, dispatch/implements solid lines are vacuous (mutants survived)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-03-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [
+        "Owner decision: implement the F02/F04 JSON shapes and options as specified, or record the current shapes as the contract (D010 says implement as specified)."
+      ],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F02-metrics-engine.md",
+        "specs/features/F04-edge-querying.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-03-R3.md"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/mcp.ts",
+        "src/core/store.ts",
+        "tests/legacy-metrics-edges.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "JSON shapes, defaults and options match F02/F04 or the decision that replaces them.",
+        "Invalid --top or --format values exit non-zero with a message.",
+        "mapx_edges type accepts an array; verifiedOnly is tested through MCP."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-metrics-edges.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-03-R3",
+      "title": "metrics/edges output shapes and option validation per F02/F04",
+      "objective": "metrics and edges JSON, defaults and options match F02/F04, or a decision records the divergence.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P2: F02 specifies `{dir, generated_at, summary, files:[{in_degree,…}]}`, --top default 20, --exclude and a RANK/TOTAL text table; F04 specifies `{file, direction, incoming[], outgoing[]}` and MCP type as an array (an array currently throws in queryEdges). --top abc/-1/0 and --format yaml are silent no-ops; edges --direction without a file is ignored. MCP verifiedOnly is untested (mutant survived)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-05-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F07-eloquent-relationships.md",
+        "specs/features/F09-service-provider-bindings.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-05-R4.md"
+      ],
+      "affectedFiles": [
+        "src/mcp.ts",
+        "tests/legacy-laravel-surface.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "mapx_query on a model lists its relationships; mapx_dependencies on a provider lists its bindings (tested through an MCP client)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-laravel-surface.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-05-R4",
+      "title": "MCP parity for Laravel relationships and bindings",
+      "objective": "mapx_query shows relationships and mapx_dependencies shows bindings like the CLI.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P2: query User lists relationships and deps prints a bindings block in the CLI, but mapx_query and mapx_dependencies do not (src/mcp.ts query and dependencies handlers)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-07-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "specs/features/F13-npm-distribution.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-07-R2.md"
+      ],
+      "affectedFiles": [
+        "scripts/build-all.ts",
+        "scripts/check-package.ts",
+        "tests/legacy-distribution.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The binary test builds into a temporary directory; check-package fails if a native binary is in the pack list."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-distribution.test.ts",
+        "npm run build:npm",
+        "npx tsx scripts/check-package.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-07-R2",
+      "title": "Binary build test writes outside the repo; package check rejects binaries",
+      "objective": "npm test never writes build output into the repository.",
+      "milestone": "M0",
+      "description": "Review 2026-10-31 P2: tests/legacy-distribution.test.ts runs `npm run build:linux` in the repo whenever bun exists, rewriting the 96 MB dist/mapx-linux-x64 on every npm test; files: [\"dist/\"] would pack it if prepare did not clean; without bun the criterion is not tested."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "laravel",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-03",
+          "type": "hard"
+        },
+        {
+          "id": "M1-06",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "docs/baton/reports/M1-03.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M1-03-R1.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/fixtures/laravel-routes",
+        "tests/laravel-mounts.test.ts",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The fixture gains labelled cases for each scenario in the description and the scorer stays at URI/handler recall 1.0 with 0 false positives.",
+        "The M1-03 arrow form `Route::group([...], fn () => require …)` does not leak to later routes.",
+        "Interpolated or variable URIs and prefixes are evaluated or flagged dynamic, never emitted as raw PHP.",
+        "A commented-out `$this->mapLegacyRoutes()` or `Route::prefix(...)->group(...)` mount makes its routes unreachable."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:46.954Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M1-03-R1",
+      "title": "Laravel route-file walker: string/comment-aware lexing and brace-less groups",
+      "objective": "Route files are read with a lexer that skips strings, comments and heredocs, and every group form is scoped correctly.",
+      "milestone": "M1",
+      "description": "Review 2026-10-31 P1 (regressions from 0.3.5): `glob(__DIR__.'/modules/*.php')` opens a never-closed block comment and drops later routes; `['middleware' => 'require-2fa']` is taken for an include; braces in `'prefix' => '{locale}'` pop the group; `# Route::get` and routes inside strings are emitted; a URL string on the same line drops a route. P1: group frames without a brace body leak (`Route::group([...], fn () => require …)`, `->group(fn () => Route::get(…))`, legacy `Route::group(attrs, base_path(...))` is not a mount). P1: interpolated strings and variable prefixes emit raw PHP text without dynamic (M1-06 AC2). P1: commented-out or uncalled RouteServiceProvider mounts count as reachable."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "laravel",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-07",
+          "type": "hard"
+        },
+        {
+          "id": "M1-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "docs/baton/reports/M1-07.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M1-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "src/frameworks/route-registry.ts",
+        "scripts/eval/score-routes.ts",
+        "tests/laravel-mounts.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "module_path, then: closures, glob loops and DIRECTORY_SEPARATOR mounts are evaluated; any mount that still cannot be evaluated marks its routes reachability unknown, and pairing keeps them.",
+        "When a route overrides another with the same handler, both appear in routes.json with the override pointer asserted.",
+        "The M1-08 test detects a nested app from composer.json without a seeded frameworks.json."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:47.256Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M1-07-R1",
+      "title": "Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates",
+      "objective": "Live routes are never reported dead because a mount expression could not be evaluated, and the overriding route is always listed.",
+      "milestone": "M1",
+      "description": "Review 2026-10-31 P1: nwidart `module_path()` providers, `withRouting(then: …)` mounts, `foreach (glob(...)) require $f` and `DIRECTORY_SEPARATOR` paths make live routes reachable:false, which also removes them from HTTP pairing. P1: route-registry dedup on method/path/handler/handlerFile hides the winning duplicate (routes.json keeps only the overridden copy). P2: override key collapses parameter names and ignores domain; brace-less `if (...) require` not flagged conditional and `routesAreCached()` flagged; attribute routes have no line; route edges drop dynamic and mountedBy. Tests: overriddenBy and M1-08 nested detection (confounded by frameworks.json) are not mutation-sensitive; scorer credits a negative label when a route is absent."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "laravel",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "docs/baton/reports/M1-05.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M1-05-R1.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each form in the description is tested with Laravel's exact route list."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M1-05-R1",
+      "title": "Laravel resources: array options, nested and plural registration; array handler attributes",
+      "objective": "Every resource registration form yields Laravel's route set.",
+      "milestone": "M1",
+      "description": "Review 2026-10-31 P2: third-argument options (`['only' => …]`, `['parameters' => …]`) are ignored; `photos.comments` gives `/photos.comments/{comment}`; `Route::resources([...])` emits nothing; array handlers without `uses` lose middleware and name; group name prefixes (`->name('admin.')`) are not applied."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "http",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-04-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M2-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "docs/baton/iterations/M2-04.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M2-04-R2.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/url-resolver.ts",
+        "tests/http-url-resolution.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Two functions declaring `const url` with different values resolve each call to its own value, or leave both unresolved.",
+        "A quoted value with a trailing comment and a `${VAR}` reference resolve as Vite does."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-url-resolution.test.ts tests/http-pairing-fixture.test.ts",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:47.521Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-04-R2",
+      "title": "Scoped URL constants; dotenv quoting and expansion",
+      "objective": "A URL constant resolves to the declaration in scope, or to nothing.",
+      "milestone": "M2",
+      "description": "Review 2026-10-31 P1: fileConstants keeps one map per file, so two functions each declaring `const url` resolve both calls to the last value and pair the wrong one [exact]. P2: `VITE_API_URL=\"/api\" # c` keeps quotes; `${VAR}` expansion unsupported (Vite expands it)."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "http",
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-06",
+          "type": "hard"
+        },
+        {
+          "id": "M2-07",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
+        "docs/baton/iterations/M2-06.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M2-06-R1.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/pairing.ts",
+        "src/frameworks/http/client-calls.ts",
+        "src/core/scanner.ts",
+        "scripts/eval/score-http.ts",
+        "tests/http-pairing.test.ts",
+        "tests/http-followups.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Calls without a literal path segment stay unmatched; absolute URLs to another host never pair with a workspace route; `{dynamic}` routes need a literal match.",
+        "The scorer compares handlers; the scan-order test fails under the pair-once mutant.",
+        "The fixture scores pairing recall ≥ 0.8 and precision ≥ 0.95."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing.test.ts tests/http-followups.test.ts tests/http-pairing-fixture.test.ts",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T00:30:47.781Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-06-R1",
+      "title": "HTTP pairing needs literal evidence; host affinity; honest pairing tests",
+      "objective": "A call pairs only with a route its literal path supports, on the right host.",
+      "milestone": "M2",
+      "description": "Review 2026-10-31 P1: a URL with no literal segment (`${endpoint}?page=…`, `${base}/${id}`, `DELETE '/'`) scores 0 and matches any route of that method. P2: the host is ignored (an api.github.com URL pairs with a local route); `{dynamic}` routes act as wildcards; fetch method from a variable or nested `method:` is wrong; HTTP_SKIP skips any public/build/vendor directory; JSX closing tags mask calls. Tests: the scan-order test re-scans the frontend, so a pair-once mutant survives; the scorer never compares the handler; M2-07 AC4 no longer asserts <1 s; M2-03 AC2 and M2-05 AC2 are proven only manually."
     }
   ]
 }

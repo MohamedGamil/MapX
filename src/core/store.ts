@@ -1087,7 +1087,8 @@ export class Store {
 
   /** Start line of `name` (or `Scope::name`) declared in `file`, or null. */
   getSymbolLineInFile(file: string, name: string): number | null {
-    const short = name.split(/::|\./).pop() ?? name;
+    // `A::m`, `a.b` and PHP `App\Models\User` all end in the declared name.
+    const short = name.split(/::|\.|\\/).pop() ?? name;
     const row = this.backend
       .prepare('SELECT start_line FROM symbols WHERE file_path = ? AND name = ? ORDER BY start_line LIMIT 1')
       .get(file, short) as { start_line: number } | undefined;

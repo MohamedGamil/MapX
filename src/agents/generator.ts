@@ -16,6 +16,11 @@ export interface AgentAction {
   diff?: string;
 }
 
+/** Writing this action would replace user-written content: a file without a mapx block, or an edited block. */
+export function needsConsent(action: AgentAction): boolean {
+  return action.status === 'no_sentinel' || action.status === 'update_conflict';
+}
+
 export interface McpConfigAction {
   tool: string;
   filename: string;

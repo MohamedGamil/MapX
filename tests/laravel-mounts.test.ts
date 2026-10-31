@@ -32,6 +32,9 @@ describe('laravel-mounts helpers', () => {
   it("singularises resource names like Laravel's Str::singular, with - replaced by _", () => {
     expect(['blog-categories', 'statuses', 'people', 'children', 'addresses', 'boxes', 'news', 'photos.comments'].map(resourceParam))
       .toEqual(['blog_category', 'status', 'person', 'child', 'address', 'box', 'news', 'comment']);
+    // Review 2026-10-31 (post-acceptance defect): `-ses`/`-zes` words lost their final `e`.
+    expect(['courses', 'responses', 'sizes', 'cases', 'houses', 'licenses', 'databases', 'phases', 'prizes', 'branches', 'dishes', 'glasses'].map(resourceParam))
+      .toEqual(['course', 'response', 'size', 'case', 'house', 'license', 'database', 'phase', 'prize', 'branch', 'dish', 'glass']);
   });
 
   it('recognises conditional blocks', () => {
@@ -133,6 +136,8 @@ describe('M1-08: nested Laravel roots and frameworks.json', () => {
     root = workspace({
       'backend/artisan': '#!/usr/bin/env php\n<?php\n',
       'backend/routes/api.php': "<?php\nRoute::get('health', 'HealthController@show');\n",
+      'admin/artisan': '#!/usr/bin/env php\n<?php\n',
+      'admin/routes/api.php': "<?php\nRoute::get('health', 'HealthController@show');\n",
       'docs/readme.md': '# parent folder\n',
     });
     init(root);
@@ -145,6 +150,14 @@ describe('M1-08: nested Laravel roots and frameworks.json', () => {
   it('detects a Laravel app below a parent-folder workspace root', () => {
     const routes: RouteView[] = JSON.parse(mapx(root, 'routes', root, '--json'));
     expect(routes.map((r) => `${r.method} ${r.path}`)).toContain('GET /api/health');
+  });
+
+  // Review 2026-10-31 (post-acceptance defect): last-registration-wins ignored the app root.
+  it('never marks a route overridden by the same route of another Laravel app', () => {
+    const routes: RouteView[] = JSON.parse(mapx(root, 'routes', root, '--json'));
+    const health = routes.filter((r) => r.path === '/api/health');
+    expect(health).toHaveLength(2);
+    expect(health.map((r) => r.overridden)).toEqual([false, false]);
   });
 
   it('keeps frameworks listed in frameworks.json', () => {

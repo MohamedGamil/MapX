@@ -1,6 +1,6 @@
 import { readFile, writeFile, unlink, stat, readdir, open } from 'node:fs/promises';
 import { existsSync, readFileSync, closeSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
-import { resolve, relative, extname, join } from 'node:path';
+import { resolve, relative, extname, join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
 import { Worker } from 'node:worker_threads';
@@ -1456,16 +1456,18 @@ export class Scanner {
     return null;
   }
   /**
-   * Prune a directory only when everything beneath it is excluded: `app/Http/**` prunes
-   * app/Http/Controllers, `app/Http/*` (files directly in app/Http) does not (M0-02-R1).
-   * An exact non-glob directory path or a bare directory name also prunes.
+   * Prune a directory when the pattern names it (`**\/generated`, `packages/*\/generated`,
+   * `app/Http/**`, an exact path or a bare directory name). A pattern ending in a bare `/*`
+   * means the files directly in that directory: `app/Http/*` does not prune
+   * app/Http/Controllers (M0-02-R1). Never match against a synthetic file name: `**\/_*`
+   * must not prune every directory (review 2026-10-31).
    */
   private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
-    const deepProbe = `${relDir}/__mapx_probe__/__mapx_probe__.x`;
     return excludes.some(p => {
-      if (picomatch.isMatch(deepProbe, p, { dot: true })) return true;
-      if (!/[*?[\]{}!]/.test(p) && p.replace(/\/+$/, '') === relDir) return true;
-      return relDir.split('/').some(seg => seg === p);
+      const pattern = p.replace(/\/+$/, '');
+      if (!pattern.endsWith('/*') && picomatch.isMatch(relDir, pattern, { dot: true })) return true;
+      if (pattern.endsWith('/**') && picomatch.isMatch(relDir, pattern.slice(0, -3), { dot: true })) return true;
+      return relDir.split('/').some(seg => seg === pattern);
     });
   }
 
@@ -1484,7 +1486,9 @@ export class Scanner {
   }
 
   private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {
-    const langDef = getLanguageForFile(absolutePath, this.config.getResolvedUserLanguages());
+    // Same rule as the full-scan walk: extensionless files fall back to their shebang.
+    const langDef = getLanguageForFile(absolutePath, this.config.getResolvedUserLanguages())
+      ?? (basename(absolutePath).includes('.') ? null : shebangLanguage(absolutePath));
     if (!langDef) return null;
 
     try {
@@ -1934,6 +1938,9 @@ export class Scanner {
     const workspaceRoot = this.config.getWorkspaceRoot();
     const registry = new HttpCallRegistry();
     await registry.load(workspaceRoot);
+    // Clear before the early return: when the last call disappears its edges must go too.
+    this.store.deleteEdgesByType('http');
+    this.graph.dropEdgesByType('http');
     if (!registry.getRecords().length) return;
     const routeRegistry = new RouteRegistry();
     await routeRegistry.load(workspaceRoot);
@@ -1944,8 +1951,6 @@ export class Scanner {
     registry.setRecords(records);
     await registry.save(workspaceRoot);
 
-    this.store.deleteEdgesByType('http');
-    this.graph.dropEdgesByType('http');
     const edges: GraphEdge[] = records
       .filter(r => r.route && repoOf.has(r.file))
       .map(r => ({

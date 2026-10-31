@@ -135,7 +135,7 @@ function singularWord(word: string): string {
     [/(quiz)zes$/i, '$1'],
     [/(matr|vert|ind)ices$/i, '$1ix'],
     [/(alias|status|campus|bus|virus|census|bonus|octopus|corpus|prospectus)(es)?$/i, '$1'],
-    [/(s|x|z|ch|sh)es$/i, '$1'],
+    [/(x|ch|ss|sh)es$/i, '$1'],
     [/(o)es$/i, '$1'],
     [/([^aeiouy]|qu)ies$/i, '$1y'],
     [/(ss|us|is)$/i, '$1'],

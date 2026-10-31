@@ -255,6 +255,7 @@ vi.mock('../src/core/flow-tracer.js', () => ({
 }));
 
 vi.mock('../src/agents/generator.js', () => ({
+  needsConsent: (a: { status: string }) => a.status === 'no_sentinel' || a.status === 'update_conflict',
   AgentGenerator: class {
     generateAll = vi.fn().mockResolvedValue(true);
     listProviders = vi.fn().mockReturnValue(['generic', 'claude', 'cursor']);

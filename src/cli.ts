@@ -10,7 +10,7 @@ import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { ContextBuilder } from './core/context-builder.js';
-import { AgentGenerator } from './agents/generator.js';
+import { AgentGenerator, needsConsent } from './agents/generator.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
 import { codeWorkspaceFiles, crossRepoPairs, summarizeRepos, table, timeAgo } from './core/workspace-summary.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
@@ -387,6 +387,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const generator = new AgentGenerator();
           const actions = generator.plan(selected, { dir });
           for (const action of actions) {
+            if (needsConsent(action)) {
+              const confirm = await clack.confirm({ message: `${action.filename} has content mapx did not write. Overwrite it?`, initialValue: false });
+              if (clack.isCancel(confirm) || !confirm) {
+                clack.log.warn(`Skipped ${action.filename}.`);
+                continue;
+              }
+            }
             generator.execute(action);
             clack.log.success(`Generated ${action.filename} (${action.status})`);
           }
@@ -394,6 +401,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const generator = new AgentGenerator();
           const actions = generator.plan(['generic'], { dir });
           for (const action of actions) {
+            if (needsConsent(action)) {
+              clack.log.warn(`Skipped ${action.filename}: it has content mapx did not write; run \`mapx agents generate --force\` to overwrite it.`);
+              continue;
+            }
             generator.execute(action);
             clack.log.success(`Generated ${action.filename} (${action.status})`);
           }
@@ -2775,7 +2786,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           continue;
         }
 
-        if (action.status === 'update_conflict') {
+        if (needsConsent(action)) {
           clack.log.warn(`Customized content detected in ${action.filename}:`);
           if (action.diff) {
             console.log(action.diff);
