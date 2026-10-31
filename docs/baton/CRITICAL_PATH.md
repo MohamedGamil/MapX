@@ -6,11 +6,11 @@ Remaining longest dependency path: **62h** (full-plan path: 126h).
 
 M5-01 → M5-03 → M5-04 → M5-05 → M5-08 → M5-16 → M5-98
 
-Remaining effort min/expected/max: **204 / 280 / 377h**. Capacity: 1 engineer(s) × 20 h/week → **14.0 weeks**, conditional finish **2027-02-08** (as of 2026-11-02).
+Remaining effort min/expected/max: **206 / 284 / 383h**. Capacity: 1 engineer(s) × 20 h/week → **14.2 weeks**, conditional finish **2027-02-09** (as of 2026-11-02).
 
 ## Open items and blockers
-- M1-05-R3 (BACKLOG): prerequisites satisfied
-- M3-01 (BLOCKED): prerequisites satisfied
+- M1-05-R3 (IN_PROGRESS): prerequisites satisfied
+- M3-01 (BLOCKED): M0-09-R4; M1-05-R3
 - M3-02 (BACKLOG): M3-01
 - M3-03 (BACKLOG): M3-01
 - M3-04 (BACKLOG): M3-01
@@ -20,6 +20,7 @@ Remaining effort min/expected/max: **204 / 280 / 377h**. Capacity: 1 engineer(s)
 - M4-03 (BACKLOG): prerequisites satisfied
 - M4-04 (BACKLOG): prerequisites satisfied
 - M4-05 (BACKLOG): prerequisites satisfied
+- M0-09-R4 (IN_PROGRESS): prerequisites satisfied
 - M5-01 (BACKLOG): prerequisites satisfied
 - M5-02 (BACKLOG): prerequisites satisfied
 - M5-03 (BACKLOG): M5-01; M5-02
@@ -43,14 +44,15 @@ Remaining effort min/expected/max: **204 / 280 / 377h**. Capacity: 1 engineer(s)
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
 |---|---:|---:|---:|---:|---:|
-| M1-05-R3 | 0 | 4 | 58 | 62 | 58 |
-| M3-01 | 0 | 6 | 20 | 26 | 20 |
-| M3-02 | 6 | 20 | 40 | 54 | 34 |
-| M3-03 | 6 | 18 | 36 | 48 | 30 |
-| M3-04 | 6 | 16 | 26 | 36 | 20 |
-| M3-05 | 18 | 32 | 48 | 62 | 30 |
-| M3-06 | 20 | 28 | 54 | 62 | 34 |
-| M4-01 | 6 | 11 | 51 | 56 | 45 |
+| M1-05-R3 | 0 | 4 | 16 | 20 | 16 |
+| M0-09-R4 | 0 | 4 | 16 | 20 | 16 |
+| M3-01 | 4 | 10 | 20 | 26 | 16 |
+| M3-02 | 10 | 24 | 40 | 54 | 30 |
+| M3-03 | 10 | 22 | 36 | 48 | 26 |
+| M3-04 | 10 | 20 | 26 | 36 | 16 |
+| M3-05 | 22 | 36 | 48 | 62 | 26 |
+| M3-06 | 24 | 32 | 54 | 62 | 30 |
+| M4-01 | 10 | 15 | 51 | 56 | 41 |
 | M4-03 | 0 | 8 | 30 | 38 | 30 |
 | M4-04 | 0 | 12 | 50 | 62 | 50 |
 | M4-05 | 0 | 4 | 58 | 62 | 58 |
@@ -63,8 +65,8 @@ Remaining effort min/expected/max: **204 / 280 / 377h**. Capacity: 1 engineer(s)
 | M5-07 | 42 | 48 | 50 | 56 | 8 |
 | M5-08 | 42 | 52 | 42 | 52 | 0 |
 | M5-09 | 22 | 30 | 54 | 62 | 32 |
-| M5-10 | 16 | 32 | 36 | 52 | 20 |
-| M5-11 | 34 | 42 | 52 | 60 | 18 |
+| M5-10 | 20 | 36 | 36 | 52 | 16 |
+| M5-11 | 36 | 44 | 52 | 60 | 16 |
 | M5-12 | 22 | 46 | 38 | 62 | 16 |
 | M5-13 | 34 | 40 | 44 | 50 | 10 |
 | M5-14 | 52 | 60 | 54 | 62 | 2 |

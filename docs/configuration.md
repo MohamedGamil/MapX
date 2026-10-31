@@ -83,12 +83,12 @@ See [Adding Languages](adding-languages.md) for details on writing query files.
 
 ## Built-in Language Coverage
 
-All 22 supported languages are pre-configured. No `languages` entry is needed unless you want to override defaults or add a completely new language:
+All 23 supported languages are pre-configured. No `languages` entry is needed unless you want to override defaults or add a completely new language:
 
 | Tier | Languages | Count |
 |------|-----------|-------|
 | **Built-in** | PHP, JavaScript, TypeScript, Vue | 4 |
-| **Bundled** | Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, Pascal | 18 |
+| **Bundled** | Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, Fish, Pascal | 19 |
 
 List all available languages and status with:
 ```bash

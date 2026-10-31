@@ -141,7 +141,7 @@ describe('shebang scripts in the graph, F20 file names (M0-12-R3)', () => {
     expect(calls('app.py')).toEqual([{ source_symbol: 'run', target_symbol: 'ops_entry', target_file: 'bin/ops' }]);
   });
 
-  it('indexes Rakefile and Gemfile as Ruby and .fish files (without symbols), through the workers', () => {
+  it('indexes Rakefile and Gemfile as Ruby and .fish files (with their functions, M0-12-R5), through the workers', () => {
     const files = query<{ path: string; language: string }>(root, "SELECT path, language FROM files WHERE path NOT LIKE 'pad/%' ORDER BY path");
     expect(files).toEqual([
       { path: 'Gemfile', language: 'ruby' },
@@ -155,7 +155,61 @@ describe('shebang scripts in the graph, F20 file names (M0-12-R3)', () => {
     const symbols = (file: string) => query<{ name: string }>(root, 'SELECT name FROM symbols WHERE file_path = ? ORDER BY name', file).map((s) => s.name);
     expect(symbols('Rakefile')).toEqual(expect.arrayContaining(['BuildTasks', 'build']));
     expect(symbols('bin/tool')).toEqual(['helper', 'main']);
-    expect(symbols('config/fish/config.fish')).toEqual([]);
+    expect(symbols('config/fish/config.fish')).toEqual(['greet']);
+  });
+});
+
+// M0-12-R5 (D014): a bundled fish grammar gives .fish files function symbols and call edges.
+// Fewer than 10 files, so this scan parses on the main thread; the fixture above covers the workers.
+describe('fish functions and calls (M0-12-R5)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'functions/deploy.fish': 'function deploy; build; end\n',
+      'functions/build.fish': "function build --description 'compile everything'\n    compile (count $argv)\n    echo built\nend\n\nfunction compile\n    set -l n $argv[1]\nend\n",
+      'bin/release': '#!/usr/bin/env fish\nfunction release\n    deploy\nend\n',
+      'conf.d/env.fish': 'source ../functions/deploy.fish\n',
+      // Same-named functions in other languages must not capture fish calls.
+      'tools/build.py': 'def build():\n    return 1\n',
+      'scripts/build.sh': 'build() { echo bash; }\n',
+    });
+    chmodSync(join(root, 'bin/release'), 0o755);
+    init(root);
+    mapx(root, 'scan', root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+
+  const calls = (source: string) =>
+    query<{ source_symbol: string; target_symbol: string; target_file: string }>(
+      root, "SELECT source_symbol, target_symbol, target_file FROM edges WHERE source_file = ? AND edge_type = 'call' ORDER BY target_symbol", source);
+
+  it('reports the fish grammar in lang list and lang info', () => {
+    expect(mapx(root, 'lang', 'list')).toMatch(/- fish \(\.fish \| tier: bundled \| status: bundled\)/);
+    const info = mapx(root, 'lang', 'info', 'fish');
+    expect(info).toMatch(/Grammar:\s+\S+tree-sitter-fish\.wasm\n/);
+    expect(info).toMatch(/Queries:\s+\S+queries\/fish\/symbols\.scm, \S+queries\/fish\/references\.scm/);
+  });
+
+  it('extracts fish functions as function symbols', () => {
+    const symbols = query<{ file_path: string; kind: string; name: string }>(
+      root, "SELECT file_path, kind, name FROM symbols WHERE file_path LIKE '%.fish' OR file_path = 'bin/release' ORDER BY file_path, name");
+    expect(symbols).toEqual([
+      { file_path: 'bin/release', kind: 'function', name: 'release' },
+      { file_path: 'functions/build.fish', kind: 'function', name: 'build' },
+      { file_path: 'functions/build.fish', kind: 'function', name: 'compile' },
+      { file_path: 'functions/deploy.fish', kind: 'function', name: 'deploy' },
+    ]);
+  });
+
+  it('links fish calls to fish functions, in the same file and across files', () => {
+    expect(calls('functions/deploy.fish')).toEqual([{ source_symbol: 'deploy', target_symbol: 'build', target_file: 'functions/build.fish' }]);
+    expect(calls('functions/build.fish')).toEqual([{ source_symbol: 'build', target_symbol: 'compile', target_file: 'functions/build.fish' }]);
+    expect(calls('bin/release')).toEqual([{ source_symbol: 'release', target_symbol: 'deploy', target_file: 'functions/deploy.fish' }]);
+  });
+
+  it('resolves `source FILE` relative to the sourcing file', () => {
+    expect(query(root, "SELECT target_file FROM edges WHERE source_file = 'conf.d/env.fish' AND edge_type = 'import'"))
+      .toEqual([{ target_file: 'functions/deploy.fish' }]);
   });
 });
 
@@ -186,7 +240,7 @@ describe('language tools: MCP and CLI agree (M0-12-R3)', () => {
     expect(isError).toBe(false);
     expect(text).toBe(mapx(root, 'lang', 'list').trimEnd());
     expect(text).toMatch(/- ruby \(\.rb, \.rake, \.gemspec, Rakefile, Gemfile \| tier: bundled \| status: bundled\)/);
-    expect(text).toMatch(/- fish \(\.fish \| tier: static/);
+    expect(text).toMatch(/- fish \(\.fish \| tier: bundled \| status: bundled\)/);
     expect(text).not.toMatch(/Installed/);
   });
 

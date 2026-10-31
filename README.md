@@ -79,7 +79,7 @@
 
 ## Features
 
-- **22 languages + static file indexing** — all built-in or bundled out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart) plus static indexing for Markdown, HTML, CSS/SCSS, JSON, YAML and fish scripts.
+- **23 languages + static file indexing** — all built-in or bundled out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Fish, Pascal, Dart) plus static indexing for Markdown, HTML, CSS/SCSS, JSON and YAML.
 - **Parallel Scanning Workers** — Offloads AST parsing to multi-threaded worker pools based on CPU core availability (up to 8x speedups).
 - **Parser Pooling** — In-memory parser cache that reuses active WASM tree-sitter grammars to avoid initialization overhead.
 - **O(1) Pre-Scan Indexing** — Fast lookup index mapping imports, scopes, and namespace resolutions instantly.
@@ -387,6 +387,7 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | Elixir | `.ex`, `.exs` | modules, functions, macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests |
 | Bash | `.sh`, `.bash`, `.zsh` | functions, variables, aliases |
+| Fish | `.fish` | functions (calls and `source` imports tracked) |
 | Pascal | `.pas`, `.pp` | classes, records, interfaces, methods, functions, constants, units |
 | Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types, constants, library namespaces |
 
@@ -398,7 +399,6 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
 | CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
 | JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
-| Fish | `.fish` | none (indexed as files; no fish grammar is bundled) |
 
 Extensionless scripts are indexed by their `#!` line (bash/sh/zsh, python, node/deno/bun, ts-node/tsx, ruby, php, lua, elixir, fish).
 

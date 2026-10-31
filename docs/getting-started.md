@@ -146,6 +146,7 @@ The content is wrapped in markers:
 | Elixir | `.ex`, `.exs` | modules, functions (def/defp), macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests, error sets |
 | Bash | `.sh`, `.bash` | functions, variables, aliases |
+| Fish | `.fish` | functions |
 | Pascal | `.pas`, `.pp` | procedures, functions, classes, records, interfaces, methods, constants, units |
 | Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types (Dart 3.3+), constants, library namespaces |
 

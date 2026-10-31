@@ -8,7 +8,9 @@ PHP, JavaScript, TypeScript, and Vue are built-in and always available. They use
 
 ## Tier 2: Bundled Languages (Generic WASM Parsers)
 
-Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, and Pascal are bundled — their WASM grammars and queries ship with the tool and are available out-of-the-box. They use relative paths and are parsed dynamically via the `GenericWasmParser` base class.
+Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, Fish, and Pascal are bundled — their WASM grammars and queries ship with the tool and are available out-of-the-box. They use relative paths and are parsed dynamically via the `GenericWasmParser` base class.
+
+Most grammars come from their npm packages. The fish grammar is not on npm: `npm run build:wasm` builds it from the pinned upstream archive, [ram02z/tree-sitter-fish](https://github.com/ram02z/tree-sitter-fish) 3.7.0 (Unlicense), with `tree-sitter build --wasm` (emscripten, or docker when emscripten is not installed).
 
 ## Tier 3: User-Defined Languages
 

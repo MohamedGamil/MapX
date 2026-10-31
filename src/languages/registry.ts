@@ -484,15 +484,20 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     nodeMappings: {},
     tier: 'static',
   },
-  // F20 lists `.fish` under Bash, but fish syntax is not bash (the bash grammar mis-parses it) and
-  // no fish grammar is bundled: fish scripts are indexed as files without symbols (M0-12-R3).
+  // F20 lists `.fish` under Bash, but fish syntax is not bash (the bash grammar mis-parses it), so
+  // fish has its own grammar: ram02z/tree-sitter-fish 3.7.0, Unlicense (D014, M0-12-R5).
   fish: {
     name: 'fish',
     extensions: ['.fish'],
-    grammarWasm: '',
-    queries: { symbols: '', references: '' },
-    nodeMappings: {},
-    tier: 'static',
+    grammarWasm: 'wasm/tree-sitter-fish.wasm',
+    queries: {
+      symbols: 'queries/fish/symbols.scm',
+      references: 'queries/fish/references.scm',
+    },
+    nodeMappings: {
+      function: 'function_definition',
+    },
+    tier: 'bundled',
   },
 };
 

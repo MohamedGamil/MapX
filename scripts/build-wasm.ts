@@ -1,11 +1,12 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
 const PROJECT_ROOT = resolve(import.meta.dirname, '..');
 const WASM_DIR = join(PROJECT_ROOT, 'wasm');
 
-const GRAMMARS = [
+// `tarball`: a grammar not published to npm, built from a pinned upstream source archive.
+const GRAMMARS: { name: string; files: string[]; tarball?: string }[] = [
   { name: 'tree-sitter-php', files: ['tree-sitter-php.wasm'] },
   { name: 'tree-sitter-javascript', files: ['tree-sitter-javascript.wasm'] },
   { name: 'tree-sitter-typescript', files: ['tree-sitter-typescript.wasm', 'tree-sitter-tsx.wasm'] },
@@ -28,6 +29,8 @@ const GRAMMARS = [
   { name: 'tree-sitter-zig', files: ['tree-sitter-zig.wasm'] },
   { name: 'tree-sitter-bash', files: ['tree-sitter-bash.wasm'] },
   { name: 'tree-sitter-pascal', files: ['tree-sitter-pascal.wasm'] },
+  // ram02z/tree-sitter-fish 3.7.0 (commit fa2143f), Unlicense (D014, M0-12-R5).
+  { name: 'tree-sitter-fish', files: ['tree-sitter-fish.wasm'], tarball: 'https://github.com/ram02z/tree-sitter-fish/archive/refs/tags/3.7.0.tar.gz' },
 ];
 
 async function downloadFile(url: string, destPath: string): Promise<boolean> {
@@ -49,12 +52,30 @@ async function downloadFile(url: string, destPath: string): Promise<boolean> {
   }
 }
 
+/**
+ * Downloads and unpacks a grammar source archive; returns its directory, or '' on failure.
+ * Unpacked under the ignored build/, on the project's filesystem: `tree-sitter build` renames
+ * its output into the working directory, which fails across devices (e.g. from /tmp).
+ */
+async function fetchSource(url: string): Promise<string> {
+  mkdirSync(join(PROJECT_ROOT, 'build'), { recursive: true });
+  const dir = mkdtempSync(join(PROJECT_ROOT, 'build', 'grammar-'));
+  const archive = join(dir, 'source.tar.gz');
+  if (!(await downloadFile(url, archive))) return '';
+  try {
+    execSync(`tar xzf "${archive}" -C "${dir}" --strip-components=1`, { stdio: 'ignore' });
+    return dir;
+  } catch {
+    return '';
+  }
+}
+
 async function run() {
   console.log('Building/fetching WASM grammars...');
   mkdirSync(WASM_DIR, { recursive: true });
 
   for (const grammar of GRAMMARS) {
-    const grammarDir = join(PROJECT_ROOT, 'node_modules', grammar.name);
+    let grammarDir = join(PROJECT_ROOT, 'node_modules', grammar.name);
 
     for (const file of grammar.files) {
       const dest = join(WASM_DIR, file);
@@ -62,6 +83,7 @@ async function run() {
         console.log(`  ${file} already exists`);
         continue;
       }
+      if (grammar.tarball && !existsSync(grammarDir)) grammarDir = await fetchSource(grammar.tarball);
 
       let foundPath = '';
       if (existsSync(grammarDir)) {
