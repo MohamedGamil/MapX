@@ -104,8 +104,9 @@ export class VueRouterDetector implements FrameworkDetector {
         componentsList.push({ symbol: componentSymbol, file: resolvedFile });
       }
 
-      // 2. Dynamic import matches: component: () => import('./Home.vue')
-      const importMatches = ownBody.matchAll(/import\s*\(\s*['"`]([^'"`]+)['"`]\s*\)/g);
+      // 2. Dynamic import matches: component: () => import('./Home.vue'), also with a magic comment
+      // before the specifier: import(/* webpackChunkName: "home" */ './Home.vue')
+      const importMatches = ownBody.matchAll(/import\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*['"`]([^'"`]+)['"`]\s*\)/g);
       for (const impMatch of importMatches) {
         const importPath = impMatch[1];
         let resolvedFile = resolver?.module(importPath) ?? filePath;
@@ -118,7 +119,7 @@ export class VueRouterDetector implements FrameworkDetector {
 
       // 3. Legacy require/resolve matches: component: resolve => require(['./Home.vue'], resolve)
       // or require('./Home.vue').default
-      const requireMatches = ownBody.matchAll(/require\s*\(\s*(?:\[\s*)?['"`]([^'"`]+)['"`]/g);
+      const requireMatches = ownBody.matchAll(/require\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*(?:\[\s*)?['"`]([^'"`]+)['"`]/g);
       for (const reqMatch of requireMatches) {
         const importPath = reqMatch[1];
         let resolvedFile = resolver?.module(importPath) ?? filePath;

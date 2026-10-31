@@ -292,6 +292,9 @@ describe('symbol name lookup is case-sensitive except where the language is not'
       'php/use.php': '<?php\nfunction run() { $u = new user(); return HELPER(); }\n',
       'php/app/Models/Role.php': '<?php\nnamespace App\\Models;\nclass Role {}\n',
       'php/app/use.php': '<?php\nnamespace App;\nfunction go() { return new \\App\\Models\\ROLE(); }\n',
+      // and methods (review 2026-10-31: only the mocked unit test covered methods).
+      'php/Basket.php': '<?php\nclass Basket { public function addItem() {} }\n',
+      'php/method.php': '<?php\nfunction fill($b) { $b->ADDITEM(); }\n',
       // Pascal identifiers ignore case.
       'pas/Store.pas': 'unit Store;\ninterface\nfunction Total: Integer;\nimplementation\nfunction Total: Integer;\nbegin\n  Result := 1;\nend;\nend.\n',
       'pas/Use.pas': 'unit Use;\ninterface\nimplementation\nuses Store;\nprocedure Run;\nvar x: Integer;\nbegin\n  x := TOTAL();\nend;\nend.\n',
@@ -315,6 +318,12 @@ describe('symbol name lookup is case-sensitive except where the language is not'
     ]);
     expect(from('php/app/use.php')).toEqual([
       { source_file: 'php/app/use.php', edge_type: 'instantiation', target_symbol: 'App\\Models\\ROLE', target_file: 'php/app/Models/Role.php' },
+    ]);
+  });
+
+  it('PHP: `$b->ADDITEM()` reaches the method `addItem`', () => {
+    expect(from('php/method.php')).toEqual([
+      { source_file: 'php/method.php', edge_type: 'call', target_symbol: 'ADDITEM', target_file: 'php/Basket.php' },
     ]);
   });
 

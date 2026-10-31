@@ -787,8 +787,9 @@ export class LaravelDetector implements FrameworkDetector {
     const lowerPath = normalizedPath.toLowerCase();
     const hooks: HookBinding[] = [];
 
-    // 1. Kernel.php file (Middlewares)
-    if (lowerPath.endsWith('app/http/kernel.php') || normalizedPath.endsWith('Kernel.php')) {
+    // 1. app/Http/Kernel.php (Middlewares): the only file the aliases and groups are parsed from,
+    // so not the Console Kernel or any other Kernel.php.
+    if (lowerPath.endsWith('app/http/kernel.php')) {
       const wctx = await ensureWorkspaceInitialized(ctx.workspaceRoot, ctx);
       
       // Add all aliases
@@ -2238,8 +2239,9 @@ function processRouteChain(
   }
 
   // Evaluate the URI as PHP: literals, concatenation, interpolation and local string variables.
-  // Anything else becomes {dynamic}, never raw PHP text.
-  if (uriExpr && verb !== 'ANY') uri = pathArg(uriExpr, scope);
+  // Anything else becomes {dynamic}, never raw PHP text. Route::any too; fallback() sets no
+  // uriExpr (review 2026-10-31).
+  if (uriExpr) uri = pathArg(uriExpr, scope);
 
   // Action arrays: ['as' => 'name', 'middleware' => ..., 'uses' => 'C@m'], or without `uses`, the
   // first positional callable (Laravel's RouteAction::findCallable): a closure or [C::class, 'm'].

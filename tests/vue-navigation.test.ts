@@ -109,6 +109,17 @@ describe('routeRecords', () => {
       { name: 'not-found', path: '/:pathMatch(.*)*', component: '../views/NotFound.vue', redirect: null, parent: false },
     ]);
   });
+
+  it('reads a lazy component whose import carries a webpack magic comment (the `vue create` router)', () => {
+    const router = `const routes = [
+  { path: '/about', name: 'about', component: () => import(/* webpackChunkName: "about" */ '../views/AboutView.vue') },
+  { path: '/old', name: 'old', component: resolve => require(/* legacy */ ['../views/Old.vue'], resolve) },
+];`;
+    expect(routeRecords(router).map((r) => [r.name, r.component])).toEqual([
+      ['about', '../views/AboutView.vue'],
+      ['old', '../views/Old.vue'],
+    ]);
+  });
 });
 
 describe('matchRoute (scanner side)', () => {
@@ -174,6 +185,16 @@ export default new VueRouter({ routes: [
       // A package import that resolves nowhere keeps the old fallback (the router file).
       ['/nested', 'src/router/index.js', 'RouterView'],
     ]);
+  });
+
+  it('resolves a lazy import that carries a webpack magic comment (review 2026-10-31)', async () => {
+    const lazy = `export default new VueRouter({ routes: [
+  { path: '/about', component: () => import(/* webpackChunkName: "about" */ '../views/AboutView.vue') },
+] });`;
+    const routes = await new VueRouterDetector().extractRoutes('src/router/index.js', lazy, ctx({
+      '../views/AboutView.vue': 'src/views/AboutView.vue',
+    }));
+    expect(routes.map((r) => [r.path, r.handlerFile, r.handlerSymbol])).toEqual([['/about', 'src/views/AboutView.vue', 'AboutView']]);
   });
 });
 

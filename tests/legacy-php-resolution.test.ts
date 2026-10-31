@@ -374,3 +374,46 @@ describe('PHP function calls and includes', () => {
     expect(rows(where)).toEqual(parallel);
   }, 120000);
 });
+
+// Review 2026-10-31: two Laravel apps in one repo (M1-08) declare the same classes and helpers.
+// A name resolves to the declaration nearest the caller, as `use` imports already do, never to the
+// first app found.
+describe('two Laravel apps with the same names in one repo', () => {
+  const app = (name: string) => ({
+    [`${name}/artisan`]: '#!/usr/bin/env php\n<?php\n',
+    [`${name}/composer.json`]: JSON.stringify({ require: { 'laravel/framework': '^12.0' }, autoload: { 'psr-4': { 'App\\': 'app/' } } }),
+    [`${name}/app/Models/User.php`]: '<?php\nnamespace App\\Models;\nclass User {}\n',
+    [`${name}/app/helpers.php`]: '<?php\nfunction format_money($v) { return $v; }\n',
+    [`${name}/app/Http/Controllers/UserController.php`]: [
+      '<?php',
+      'namespace App\\Http\\Controllers;',
+      'use App\\Models\\User;',
+      'class UserController',
+      '{',
+      '    public function show() { format_money(1); return new User(); }',
+      '}',
+    ].join('\n'),
+    [`${name}/routes/web.php`]: "<?php\nuse Illuminate\\Support\\Facades\\Route;\nuse App\\Http\\Controllers\\UserController;\nRoute::get('/users', [UserController::class, 'show']);\n",
+  });
+  let root: string;
+  beforeAll(() => {
+    root = workspace({ ...app('admin'), ...app('backend') });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('links instantiations, function calls and routes inside each app', () => {
+    const rows = query<{ s: string; t: string; e: string }>(
+      root,
+      "SELECT source_file AS s, target_file AS t, edge_type AS e FROM edges WHERE edge_type IN ('import', 'instantiation', 'call', 'route') AND source_file LIKE 'backend/%' ORDER BY e, s, t",
+    );
+    expect(rows.filter((r) => r.t.startsWith('admin/'))).toEqual([]);
+    expect(rows.map((r) => `${r.e} ${r.s} -> ${r.t}`)).toEqual(expect.arrayContaining([
+      'call backend/app/Http/Controllers/UserController.php -> backend/app/helpers.php',
+      'import backend/app/Http/Controllers/UserController.php -> backend/app/Models/User.php',
+      'instantiation backend/app/Http/Controllers/UserController.php -> backend/app/Models/User.php',
+      'route backend/routes/web.php -> backend/app/Http/Controllers/UserController.php',
+    ]));
+  });
+});

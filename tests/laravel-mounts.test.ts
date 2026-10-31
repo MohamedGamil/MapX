@@ -190,6 +190,9 @@ describe('M1-03-R1: brace-less groups, comments and dynamic paths through the re
         "Route::prefix($nope)->group(function () { Route::get('z', 'DynController@z'); });",
         "Route::group(['prefix' => $nope], function () { Route::get('w', 'DynController@w'); });",
         "Route::prefix($nope)->group(__DIR__.'/api/mounted.php');",
+        // Route::any URIs are evaluated like every other verb's (review 2026-10-31).
+        "Route::any(\"a/$unknownVar\", 'DynController@a');",
+        "Route::any('b/' . SOME_CONST, 'DynController@b');",
         "Route::get('last', 'LastController@index');",
       ].join('\n'),
       'routes/api/users.php': "<?php\nRoute::get('users', 'UserController@index');\n",
@@ -219,6 +222,8 @@ describe('M1-03-R1: brace-less groups, comments and dynamic paths through the re
   it('flags unresolvable interpolated URIs and variable prefixes as dynamic instead of emitting PHP text', () => {
     const dyn = routes.filter((r) => r.handlerSymbol?.includes('DynController@'));
     expect(dyn.map((r) => `${r.handlerSymbol!.split('\\').pop()} ${r.path} ${r.dynamic}`).sort()).toEqual([
+      'DynController@a /api/a/{dynamic} true',
+      'DynController@b /api/b/{dynamic} true',
       'DynController@m /api/{dynamic}/m true',
       'DynController@w /api/{dynamic}/w true',
       'DynController@x /api/{dynamic}/x true',

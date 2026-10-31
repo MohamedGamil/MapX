@@ -247,11 +247,14 @@ export function componentBindings(text: string): Map<string, string> {
   return bindings;
 }
 
-/** The module a route's component comes from: a bound identifier, `import('s')` or `require('s')`. */
+/**
+ * The module a route's component comes from: a bound identifier, `import('s')` or `require('s')`,
+ * also with block comments before the specifier (`import(/* webpackChunkName: "x" *\/ 's')`).
+ */
 function componentSpecifier(value: string, bindings: Map<string, string>): string | null {
   const v = value.trim();
   if (IDENT.test(v)) return bindings.get(v) ?? null;
-  return /\b(?:import|require)\s*\(\s*\[?\s*(['"`])([^'"`]+)\1/.exec(v)?.[2] ?? null;
+  return /\b(?:import|require)\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*\[?\s*(?:\/\*[\s\S]*?\*\/\s*)*(['"`])([^'"`]+)\1/.exec(v)?.[2] ?? null;
 }
 
 function joinPath(parent: string, child: string): string {

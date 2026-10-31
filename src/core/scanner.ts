@@ -21,11 +21,11 @@ import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedS
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { isInScopes } from '../frameworks/utils.js';
 import { canonicalPath } from './workspace-manager.js';
-import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, normalizePattern, shebangLanguage } from './file-rules.js';
+import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isScannablePath, normalizePattern, shebangLanguage } from './file-rules.js';
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, urlHost } from '../frameworks/http/pairing.js';
-import { importResolverFor, type ImportHit } from './import-resolvers.js';
+import { closest, importResolverFor, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -562,7 +562,10 @@ export class Scanner {
       ...this.config.settings.includePatterns,
       ...this.cliIncludes,
     ];
-    const matcher = buildMatcher(excludes, includes);
+    // The scan walk's rules, not only the matcher: git lists dot-named files, DEFAULT_IGNORE folders
+    // and files under pruned directories, which scan never indexes (review 2026-10-31).
+    const repoPath = relative(workspaceRoot, repoRoot).replace(/\\/g, '/');
+    const matcher = (p: string) => isScannablePath(p, excludes, includes, repoPath);
 
     const lastCommit = this.store.getMeta('last_scan_commit:' + repo.name);
     this.onProgress?.({ phase: 'detect', current: 0, total: 0 });
@@ -1719,9 +1722,10 @@ export class Scanner {
 
   /**
    * A PHP function call: the first candidate FQN (`App\fmt`, then the global `fmt`) that a PHP file
-   * declaring that namespace declares as a function, preferring the calling file. Never a method,
-   * class or constant; built-ins are declared nowhere, so they resolve to nothing. The edge names
-   * the matched candidate (M0-04-R5).
+   * declaring that namespace declares as a function, preferring the calling file, then the
+   * declaration nearest it (two apps in one repo, review 2026-10-31). Never a method, class or
+   * constant; built-ins are declared nowhere, so they resolve to nothing. The edge names the
+   * matched candidate (M0-04-R5).
    */
   private resolvePhpFunction(candidates: string[], sourcePath: string): { file: string; symbol: string }[] {
     for (const fqn of candidates) {
@@ -1733,7 +1737,7 @@ export class Scanner {
           && this.phpNamespaces.has(e.file) && this.phpNamespaces.get(e.file)!.toLowerCase() === namespace)
         .map(e => e.file)
         .sort();
-      if (files.length) return [{ file: files.includes(sourcePath) ? sourcePath : files[0]!, symbol: fqn }];
+      if (files.length) return [{ file: files.includes(sourcePath) ? sourcePath : closest(files, sourcePath), symbol: fqn }];
     }
     return [];
   }
@@ -1795,12 +1799,14 @@ export class Scanner {
             : (symbolName.includes('.') ? symbolName.split('.').pop()! : symbolName);
           // A namespaced name (App\Models\Role) is the class declared in that namespace or nothing:
           // never another namespace's Role, nor an app file for an Illuminate\… name (M0-04-R1, M0-04-R2).
+          // Of several (two apps in one repo), the one nearest the caller (review 2026-10-31).
           if (sourceLang === 'php' && symbolName.includes('\\')) {
             const namespace = symbolName.replace(/^\\/, '').split('\\').slice(0, -1).join('\\').toLowerCase();
-            const declared = compatible.filter(m => m.name.toLowerCase() === shortName.toLowerCase()
+            const declared = [...new Set(compatible.filter(m => m.name.toLowerCase() === shortName.toLowerCase()
               && (TYPE_KINDS.has(m.kind ?? '') || m.kind === 'function')
-              && this.phpNamespaces.get(m.file)?.toLowerCase() === namespace);
-            return (declared.find(m => m.file === sourcePath) ?? declared[0])?.file ?? null;
+              && this.phpNamespaces.get(m.file)?.toLowerCase() === namespace).map(m => m.file as string))].sort();
+            if (!declared.length) return null;
+            return declared.includes(sourcePath ?? '') ? sourcePath! : closest(declared, sourcePath ?? '');
           }
           if (sourcePath) {
             const sameFile = compatible.find(m => m.file === sourcePath && m.name === key);

@@ -5353,10 +5353,10 @@
       "description": "Found and reproduced by M0-02-R4 (2026-10-31): git sync never drops a deleted file that was untracked or only staged at the last scanned commit; git sync stores null blob hashes for files it re-indexes."
     },
     {
-      "priority": "P2",
+      "priority": "P1",
       "estimate": {
         "min": 1,
-        "expected": 3,
+        "expected": 2,
         "max": 4
       },
       "risk": "low",
@@ -5372,6 +5372,7 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
         "docs/baton/reports/M3-08.md"
       ],
       "outputs": [
@@ -5385,13 +5386,14 @@
         "tests/legacy-globs.test.ts"
       ],
       "acceptanceCriteria": [
-        "Reproduce first: edit a committed file, sync, revert it to HEAD (git checkout -- f), sync: the index equals scan --force (e2e test). If it already holds, record the evidence and close with the test."
+        "Edit a committed file, sync, revert it to HEAD (git checkout -- f), sync: the index equals scan --force (e2e test).",
+        "The same for a staged edit reverted to HEAD (git reset and checkout) (e2e test)."
       ],
       "verificationCommands": [
         "npx vitest run tests/legacy-globs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -5399,7 +5401,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T11:56:44.438Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -5408,7 +5417,7 @@
       "title": "git sync re-parses a file whose working-tree edit was reverted to HEAD",
       "objective": "After an edit is synced and then reverted to HEAD content, the next sync restores the HEAD symbols and edges.",
       "milestone": "M0",
-      "description": "Observed by M3-08 (2026-10-31), not yet reproduced in isolation: git sync seems to miss a working-tree edit later reverted to HEAD content, so the file is never re-parsed."
+      "description": "Reproduced by review 2026-10-31 (first observed by M3-08): git sync never re-indexes a file whose working-tree or staged edit was reverted to HEAD, because git diff from the last scanned commit no longer lists it; the stale symbols and content hash stay, and staleness reports the file as changed until a full scan."
     },
     {
       "priority": "P2",
@@ -5654,7 +5663,8 @@
         "queries/typescript/references.scm",
         "src/parsers/generic-wasm-parser.ts",
         "src/core/scanner.ts",
-        "tests/legacy-language-accuracy.test.ts"
+        "tests/legacy-language-accuracy.test.ts",
+        "docs/adding-languages.md"
       ],
       "acceptanceCriteria": [
         "`class A extends Base<T>` (Java, Kotlin, TypeScript) yields an extends edge to Base (test per language).",
@@ -6487,7 +6497,8 @@
         "src/parsers/ignored-symbols.ts",
         "tests/vue-sfc.test.ts",
         "src/parsers/languages/vue-template.ts",
-        "tests/vue-template.test.ts"
+        "tests/vue-template.test.ts",
+        "docs/getting-started.md"
       ],
       "acceptanceCriteria": [
         "@click=\"save\" yields a call edge to the component's save method.",
@@ -6757,7 +6768,8 @@
         "tests/vue-sfc.test.ts",
         "tests/vue-script-setup.test.ts",
         "src/core/scanner.ts",
-        "tests/fixtures/vue-sfc"
+        "tests/fixtures/vue-sfc",
+        "docs/getting-started.md"
       ],
       "acceptanceCriteria": [
         "defineProps<{ id: number }>() exposes prop id on the component symbol.",
@@ -7027,7 +7039,8 @@
         "src/types.ts",
         "src/core/store.ts",
         "src/frameworks/detectors/vue-router.ts",
-        "tests/fixtures/vue-sfc"
+        "tests/fixtures/vue-sfc",
+        "docs/getting-started.md"
       ],
       "acceptanceCriteria": [
         "router.push({ name: 'user' }) links to the route record named user and its component.",
@@ -7388,7 +7401,8 @@
         "src/core/import-resolvers.ts",
         "src/core/scanner.ts",
         "tests/legacy-imports.test.ts",
-        "tests/vue-script-setup.test.ts"
+        "tests/vue-script-setup.test.ts",
+        "docs/getting-started.md"
       ],
       "acceptanceCriteria": [
         "`@/x` resolves through `compilerOptions.paths` in tsconfig.json/jsconfig.json (with baseUrl, extends) when present, else the `@` alias in vite.config.* / vue.config.js when statically readable, else `src/` (e2e tests for each).",
@@ -11595,7 +11609,8 @@
         "src/exporters/graph-exporter.ts",
         "docs/configuration.md",
         "tests/legacy-globs.test.ts",
-        "src/core/file-rules.ts"
+        "src/core/file-rules.ts",
+        "src/core/staleness.ts"
       ],
       "acceptanceCriteria": [
         "Inbound edges to a file that is deleted, scanned and restored return after a plain scan and after sync.",
@@ -11914,7 +11929,8 @@
         "src/parsers/languages/php.ts",
         "queries/php/references.scm",
         "src/core/scanner.ts",
-        "tests/legacy-php-resolution.test.ts"
+        "tests/legacy-php-resolution.test.ts",
+        "src/core/import-resolvers.ts"
       ],
       "acceptanceCriteria": [
         "`function run() { return helper_fmt(1); }` with `helper_fmt` declared in another file (loaded by require_once) gives a call edge run → helpers.php#helper_fmt; a call inside a class method likewise (e2e test).",
@@ -12135,7 +12151,10 @@
         "queries/fish/symbols.scm",
         "queries/fish/references.scm",
         "package.json",
-        "tests/legacy-languages.test.ts"
+        "tests/legacy-languages.test.ts",
+        "docs/adding-languages.md",
+        "docs/architecture.md",
+        "docs/getting-started.md"
       ],
       "acceptanceCriteria": [
         "A licence-compatible fish grammar is bundled (licence recorded in the report) and `mapx lang list` / `lang info fish` report it (test).",
@@ -12254,7 +12273,9 @@
         "src/mcp.ts",
         "README.md",
         "tests/legacy-languages.test.ts",
-        "tests/legacy-agent-templates.test.ts"
+        "tests/legacy-agent-templates.test.ts",
+        "docs/research/deptrac",
+        "src/agents.stub.md"
       ],
       "acceptanceCriteria": [
         "Every language count in templates, README and docs is derived from or matches the registry (23); a test fails if a hard-coded count disagrees with the registry.",
@@ -12566,7 +12587,9 @@
         "README.md",
         "docs/mcp-integration.md",
         "tests/legacy-imports.test.ts",
-        "tests/legacy-languages.test.ts"
+        "tests/legacy-languages.test.ts",
+        "docs/adding-languages.md",
+        "docs/architecture.md"
       ],
       "acceptanceCriteria": [
         "Resolution builds its indexes once per scan; a 2,000-file Java repo with 10 imports per file scans within 1.5× the time without imports (measured, recorded in the report).",
@@ -12878,7 +12901,8 @@
         "src/cli.ts",
         "src/mcp.ts",
         "src/core/store.ts",
-        "tests/legacy-metrics-edges.test.ts"
+        "tests/legacy-metrics-edges.test.ts",
+        "AGENTS.md"
       ],
       "acceptanceCriteria": [
         "metrics --format json and mapx_metrics return the D012 envelope {dir, generatedAt, summary{files,edges,density}, files[{path,language,inDegree,outDegree,totalDegree,instability,pagerank}]}.",
@@ -15073,6 +15097,1260 @@
       "objective": "The routes and HTTP scorers reject malformed flags and thresholds.",
       "milestone": "M4",
       "description": "Found by M3-01 review (2026-10-31): the routes and HTTP scorers accept malformed thresholds silently."
+    },
+    {
+      "id": "M3-08-R1",
+      "milestone": "M3",
+      "title": "Vue app boundary: one global registry and route table per app folder, whatever the root manifest lists",
+      "objective": "A Vue app folder (its own package.json) sees only its own global components and route records, also when the repo root's package.json lists vue or vue-router.",
+      "description": "Review 2026-10-31 (P1, reproduced). M3-08: vueScope follows the vue-router detector scopes (M3-07), so a root package.json listing vue makes one registry for the whole repo and app B renders app A's components. M3-06/M3-11: the navigation route table is built from every JS/TS file of the repo, so navigate edges cross app folders and reach folders where vue-router is not active (backend/ beside frontend/). Also P2: the winner between two registrations of one name depends on index history.",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-08",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M3-08.md",
+        "docs/baton/reports/M3-06.md",
+        "docs/baton/reports/M3-11.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-08-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/languages/vue-navigation.ts",
+        "src/frameworks/framework-registry.ts",
+        "tests/vue-template.test.ts",
+        "tests/vue-navigation.test.ts",
+        "docs/cli-reference.md",
+        "docs/framework-integration.md"
+      ],
+      "acceptanceCriteria": [
+        "Two Vue apps (apps/a, apps/b, each with its own package.json) under a root package.json that lists vue (devDependencies) or only vue-router: a tag registered globally only in app A gives no render edge in app B, and app B's own registration of a shared name wins for app B (e2e; sync equals scan --force).",
+        "A route record defined only in app A gives no navigate edge from app B, by name or by path, and a folder where vue-router is not active (backend/ beside frontend/) is never a navigate target (e2e).",
+        "When two files of one app register the same global name, the same registration wins after a fresh index and after any incremental history (test).",
+        "docs/cli-reference.md, docs/framework-integration.md and CHANGELOG describe the app boundary; the edges scorer does not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-template.test.ts tests/vue-navigation.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T11:56:43.889Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M3-09-R1",
+      "milestone": "M3",
+      "title": "JS/TS aliases stop at the app's own boundary",
+      "objective": "An app folder with its own package.json, tsconfig/jsconfig or bundler config resolves aliases from its own configuration (or the @/ → src fallback), never from a parent project's.",
+      "description": "Review 2026-10-31 (P1, reproduced). M3-09/M3-12: js-aliases walks upwards until any config matches, so a Laravel root's vite alias '@' → resources/js applies to a nested Vue CLI app (frontend/) and its import, render, route and navigate edges point into resources/js. legacy-imports.test.ts asserts the root config's '~' applies to web/ although web/ has its own vite.config.js. P2: chained alias.set(...).set(...) reads only the first; path.resolve(__dirname, 'resources\\\\js') never matches; docs/framework-integration.md still says '@/ for src/'.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-09",
+          "type": "hard"
+        },
+        {
+          "id": "M3-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M3-09.md",
+        "docs/baton/reports/M3-12.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-09-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/js-aliases.ts",
+        "tests/legacy-imports.test.ts",
+        "tests/vue-script-setup.test.ts",
+        "tests/http-client-calls.test.ts",
+        "docs/framework-integration.md",
+        "docs/getting-started.md"
+      ],
+      "acceptanceCriteria": [
+        "A nested app with its own package.json and no alias config, under a root whose vite.config maps '@' elsewhere, resolves '@/…' to '<app>/src/…' for import, render, route and navigate edges (e2e).",
+        "`paths` come from the nearest tsconfig/jsconfig (with its extends chain) and bundler aliases from the nearest folder holding a package.json or bundler config; the legacy-imports case that applies the root '~' to web/ (which has its own vite.config.js) is corrected (test).",
+        "Chained `.set('@', …).set('x', …)` registers every alias, and `path.resolve(__dirname, 'resources\\\\js')` resolves (test).",
+        "docs/framework-integration.md describes alias resolution; the edges scorer and the HTTP gate do not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-imports.test.ts tests/vue-script-setup.test.ts tests/http-client-calls.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T11:56:44.162Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-02-R7",
+      "milestone": "M0",
+      "title": "git sync: registered folder repos, per-name settling of moved targets, rename plus copy, export pruning",
+      "objective": "Every git sync sequence gives the index scan --force gives: folder repos inside the primary checkout keep their files, moved targets re-link after unrelated additions, and exports prune directories as scan does.",
+      "description": "Review 2026-10-31 (P1, reproduced). M0-02-R3: a plain sync of the primary repo takes over the files of a registered folder repo inside its checkout (git diff and ls-files list them). M0-02-R4: settleMovedNames drops a removed file's whole record once any one name is declared anywhere, so re-adding the file elsewhere later leaves its referrers unlinked. P2: git mv plus an identical untracked copy at the old path drops the old path; export --format json --exclude '**/Http' still lists memberships under app/Http; gitignored files are indexed by scan but never added or updated by git sync.",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-02-R3.md",
+        "docs/baton/reports/M0-02-R4.md",
+        "docs/baton/reports/M0-02-R5.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R7.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/git-tracker.ts",
+        "src/exporters/graph-exporter.ts",
+        "tests/legacy-globs.test.ts",
+        "docs/configuration.md"
+      ],
+      "acceptanceCriteria": [
+        "A registered repo folder inside the primary checkout (no .git of its own) keeps its files under its own repo after a plain sync of the primary, and a repo registered through a symlink is not indexed twice (e2e; equals scan --all --force).",
+        "Removing UserService.php, adding an unrelated file declaring find(), then re-adding UserService elsewhere restores the import, param_type and call edges of its referrers (e2e; equals scan --force).",
+        "`git mv a b` with an identical untracked copy left at a keeps both files indexed (test).",
+        "`export --format json --exclude '**/Http'` prunes the folder as scan does (test).",
+        "Gitignored files: scan and git sync agree (both index them or both skip them), documented in docs/configuration.md (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T11:56:44.714Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-10-R4",
+      "milestone": "M0",
+      "title": "Multi-repo resolution independent of repo order; cross-repo edges after delete/restore and re-add",
+      "objective": "Cross-repo edges are the same whatever the repo order, and come back after a target file is deleted and restored or a repo is removed and re-added, without --force.",
+      "description": "Review 2026-10-31 (P1, reproduced). M0-10-R3: the first scan --all parses the primary repo before the other repo's symbols exist, so the cross-repo instantiation edge is missing, and resolution_repos already marks the repo visible, so a later scan never repairs it. M0-02-R2: a cross-repo inbound edge does not come back after its target is deleted and restored (takeReferrers skips other-repo referrers). P2: workspaces remove + add needs --force to restore cross-repo edges; Config.load (ui-server) collapses duplicate repos without deleting the dropped entry's rows.",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-10-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-10-R3.md",
+        "docs/baton/reports/M0-02-R2.md",
+        "specs/features/F18-git-workspace-submodules.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-10-R4.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/store.ts",
+        "src/core/config.ts",
+        "tests/legacy-workspaces.test.ts",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The first scan --all of a two-repo workspace gives the cross-repo instantiation edge whatever the repo order, and equals scan --all --force (e2e).",
+        "Deleting and restoring a file another repo imports, followed by sync --all or scan --all, restores the cross-repo inbound edges (e2e).",
+        "workspaces remove then workspaces add of a repo restores its cross-repo edges without --force (e2e).",
+        "Collapsing duplicate repo entries on Config.load deletes the dropped entry's rows and reports it (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-workspaces.test.ts tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T11:56:44.997Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M1-07-R2",
+      "milestone": "M1",
+      "title": "RouteServiceProvider mounts walked like other providers; prefixes, names and domains evaluated",
+      "objective": "Routes mounted from a RouteServiceProvider by any form are evaluated or reported as unknown, never unreachable, with evaluated prefixes and their name and domain attributes.",
+      "description": "Review 2026-10-31 (P1, reproduced). M1-07-R1: the generic provider walk skips the RSP and parseRouteServiceProvider only reads Route::…->group(<path>), so glob loops, require, loadRoutesFrom and ->group($var) mounts in the RSP leave their routes 'unreachable' (also dropping them from HTTP pairing). M1-03-R1 AC3: RSP prefixes are taken raw (config('app.api_prefix') and \"admin/{$this->version}\" appear in URIs, not flagged dynamic). P2: RSP ->name() and ->domain() are dropped. (Route::any URIs were fixed in the review.)",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M1-05-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M1-07-R1.md",
+        "docs/baton/reports/M1-03-R1.md",
+        "docs/baton/reports/M1-05-R1.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M1-07-R2.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/fixtures/laravel-routes",
+        "tests/laravel-mounts.test.ts",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "RSP mounts through glob loops, require, loadRoutesFrom and ->group($var) are evaluated (their routes reachable) or, when not evaluable, recorded as unresolved with reachability unknown, never unreachable (fixture labels and test).",
+        "RSP prefixes are evaluated like route-file prefixes: config(...) gives {dynamic} with dynamic: true, \"admin/{$this->version}\" uses the provider's string properties, and no URI contains PHP text (fixture labels).",
+        "RSP ->name() and ->domain() apply to the mounted routes (fixture labels).",
+        "Routes scorer: recall not lower than before, 0 false positives."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T11:56:45.277Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-04-R6",
+      "milestone": "M0",
+      "title": "Laravel middleware: X::class.':param', no short-name guessing, one Kernel per app",
+      "objective": "Route middleware with parameters names its class, bare names never link by short class name, and each Laravel app's Kernel aliases and groups stay its own.",
+      "description": "Review 2026-10-31 (P1, reproduced). M0-04-R3 AC2: ->middleware(EnsureRole::class.':editor') stores the raw text, the array form gives a bogus ':admin' middleware, and the scanner fallback splits on ':' and resolves the bare short name, so Unimported::class.':admin' without a use (PHP: \\Unimported) links to app/Http/Middleware/Unimported.php and the string 'Thing' links to App\\Other\\Thing. P2: variadic ->middleware('auth', 'verified') keeps only 'auth'; group use App\\Http\\Middleware\\{X as U2} is not read. Reviewer observation: the workspace context merges the Kernel aliases and groups of every Laravel root, so each app's HTTP Kernel emits the other app's middleware (reproduce first).",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-04-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-04-R3.md",
+        "docs/baton/reports/M0-05-R3.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-04-R6.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/core/scanner.ts",
+        "tests/laravel-mounts.test.ts",
+        "tests/legacy-laravel-surface.test.ts",
+        "tests/legacy-hook-verifiability.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`->middleware(EnsureRole::class.':editor')` and `[EnsureRole::class.':admin', 'auth']` give the middleware App\\…\\EnsureRole with parameters editor/admin and no ':admin' entry (test).",
+        "A middleware name without a namespace separator that is not a Kernel alias or group never links by short class name: Unimported::class.':admin' without a use and the string 'Thing' give no edge (test).",
+        "`->middleware('auth', 'verified')` keeps both names, and `use App\\Http\\Middleware\\{X as U2};` resolves U2 (test).",
+        "Two Laravel apps in one repo keep separate Kernel aliases and groups: an alias declared only in app A gives no edge from app B's routes or Kernel (e2e)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/legacy-laravel-surface.test.ts tests/legacy-hook-verifiability.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T11:56:45.560Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M3-02-R1",
+      "milestone": "M3",
+      "title": "Vue template and Options API precision: scoped names, v-pre, custom blocks, nested functions",
+      "objective": "Names bound inside the template and nested non-component functions never resolve to component members or same-named functions elsewhere.",
+      "description": "Review 2026-10-31 (P2, reproduced). M3-02: v-for aliases and v-slot/#slot/slot-scope props resolve to same-named component methods; v-pre content is scanned; a top-level custom block containing <template> (e.g. <docs>) before the real template replaces it. M3-03: this.x() inside a nested function () {} in a method falls back to name lookup and links an unrelated file.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-02",
+          "type": "hard"
+        },
+        {
+          "id": "M3-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M3-02.md",
+        "docs/baton/reports/M3-03.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-02-R1.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue-template.ts",
+        "src/parsers/languages/vue-options.ts",
+        "src/core/scanner.ts",
+        "tests/vue-template.test.ts",
+        "tests/vue-options.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "v-for aliases, v-slot/#slot destructured props and slot-scope names never resolve to same-named component methods (test).",
+        "v-pre subtrees produce no edges, and a top-level custom block containing <template> before the real template does not replace it (test).",
+        "this.x() inside a nested function () {} within a method is not resolved by name to another file (test).",
+        "The edges scorer does not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-template.test.ts tests/vue-options.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M3-05-R1",
+      "milestone": "M3",
+      "title": "Vuex map-helper path forms and Pinia outside SFCs",
+      "objective": "Every documented Vuex helper form links to the module member, and Pinia stores resolve in plain TS composables and whatever their hook is named.",
+      "description": "Review 2026-10-31 (P2, reproduced). M3-05: mapGetters(['users/activeCount']), mapGetters({ count: 'users/activeCount' }), mapActions({ load: 'users/FETCH' }) and createNamespacedHelpers give no edge; module members held in imported objects are not found. M3-04/M3-05: in a .ts composable, const { checkout } = useCartStore(); checkout() links to a same-named function in api/; a setup store whose hook is not named use…Store is not recognised.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-05",
+          "type": "hard"
+        },
+        {
+          "id": "M3-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M3-05.md",
+        "docs/baton/reports/M3-04.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-05-R1.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue-stores.ts",
+        "src/parsers/languages/vue-script-setup.ts",
+        "src/parsers/languages/typescript.ts",
+        "src/parsers/languages/javascript.ts",
+        "tests/vue-stores.test.ts",
+        "tests/vue-script-setup.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "mapGetters(['users/activeCount']), mapGetters({ count: 'users/activeCount' }), mapActions({ load: 'users/FETCH' }) and createNamespacedHelpers('users') link to the module member, and this.load() follows (test).",
+        "Module members defined in imported objects are found (test).",
+        "In a .ts composable, `const { checkout } = useCartStore(); checkout()` links to the store action, a setup store with any hook name is recognised from defineStore, and neither falls back to a same-named function elsewhere (test).",
+        "The edges scorer does not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-stores.test.ts tests/vue-script-setup.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M3-11-R1",
+      "milestone": "M3",
+      "title": "More Vue Router navigation and route-table forms",
+      "objective": "Common navigation and route-module forms give navigate edges.",
+      "description": "Review 2026-10-31 (P2, reproduced; missed edges, no wrong ones). Destructured push, router.push in a script-setup template, guard redirects next({ name }) / return { name }, Pinia this.router.push, route modules exported as export default [ … ] or spread (...adminRoutes), and <script setup generic=\"T extends …\"> give no edge.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-11",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M3-11.md",
+        "docs/baton/reports/M3-06.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-11-R1.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue-navigation.ts",
+        "src/parsers/languages/vue.ts",
+        "tests/vue-navigation.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`const { push } = useRouter(); push({ name })`, `@click=\"router.push(...)\"` in a script-setup template, guard `next({ name })` and `return { name }`, and Pinia `this.router.push` each give the navigate edge (test).",
+        "Route modules exported as `export default [ … ]` and spread into the routes array (`...adminRoutes`) are in the route table (test).",
+        "`<script setup generic=\"T extends Record<string, unknown>\">` is read as a script setup block (test).",
+        "The edges scorer does not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-navigation.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M3-07-R1",
+      "milestone": "M3",
+      "title": "Framework detection keeps its folder scope when package.json files are indexed",
+      "objective": "A detector activated by a sub-folder manifest stays scoped to that folder even when the user's filters index package.json files.",
+      "description": "Review 2026-10-31 (P2, reproduced). hasPackageJsonDependency reads every package.json in the file list, so with package.json not excluded detect() is true for the whole repo and backend/tools/routes.js gains a vue-router route edge.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-07",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M3-07.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/utils.ts",
+        "src/frameworks/framework-registry.ts",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "With package.json files indexed, a backend/ folder beside a Vue frontend/ gets no vue-router route edges, and detect() reads only the repo-root manifest (e2e)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-12-R7",
+      "milestone": "M0",
+      "title": "Import precision follow-ups: Python package-dir absolute imports, from-import comments, Rust bin crates, quoted go.mod",
+      "objective": "Python, Rust and Go imports link the files the language loads in these cases.",
+      "description": "Review 2026-10-31 (P2, reproduced). M0-12-R4: `import json` inside a package directory links pkg/json.py (Python 3 loads the stdlib); a # comment inside a parenthesised from-import drops the next name; src/bin/*.rs is not a crate root for mod/crate::; module \"example.com/q\" in go.mod is not read.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-12-R4.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-12-R7.md"
+      ],
+      "affectedFiles": [
+        "src/core/import-resolvers.ts",
+        "tests/legacy-imports.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`import json` in a package directory that contains json.py gives no edge to it (test).",
+        "`from pkg import (a,  # c\\n    b)` links pkg/a.py and pkg/b.py (test).",
+        "src/bin/tool.rs is a crate root: `mod helper;` links src/bin/helper.rs and `crate::` paths resolve from it (test).",
+        "A quoted module path in go.mod is read (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-imports.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-17-R5",
+      "milestone": "M0",
+      "title": "Extraction follow-ups: factory-made callables, qualified Go embedding, deep C++ qualifiers, block arrows, class expressions",
+      "objective": "Call and type edges follow callables bound from factories, package-qualified embedded types and nested C++ definitions.",
+      "description": "Review 2026-10-31 (P2, reproduced). M0-17-R2: calls skip constant/variable symbols, so `export const useAppSelector = useSelector`, createAsyncThunk(...) results and Python functools.partial values get no call edge (docs/adding-languages.md claims such bindings are function symbols); Go `struct { log.Logger }` drops the package and links a project Logger; `void a::b::c::D::g()` and `ns::K::~K()` give no symbol. M0-17-R3 (minor): a module-level block arrow is a top-level function; `export const Klass = class {}` gives no symbol.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-17-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-17-R2.md",
+        "docs/baton/reports/M0-17-R3.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-17-R5.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "src/parsers/languages/typescript.ts",
+        "src/parsers/languages/javascript.ts",
+        "queries/go/references.scm",
+        "queries/cpp/symbols.scm",
+        "docs/adding-languages.md",
+        "tests/legacy-language-accuracy.test.ts",
+        "tests/legacy-verifiability.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Calls to `export const useAppSelector = useSelector`, a createAsyncThunk(...) result and a Python functools.partial value link to the binding; a constant or variable is skipped only when its value is a literal (test).",
+        "`type S struct { log.Logger }` gives no extends edge to a project Logger unless the import resolves to a project package (test).",
+        "`void a::b::c::D::g()` and `ns::K::~K()` give symbols (test).",
+        "A block-scoped arrow at module level is not a top-level function, and `export const Klass = class {}` gives a class symbol with an instantiation edge from `new Klass()` (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-20-R3",
+      "milestone": "M0",
+      "title": "NestJS: trailing commas, generic handlers, regex after a parenthesis",
+      "objective": "NestJS routes keep their path and handler name for Prettier-formatted decorators, generic handlers and regex literals.",
+      "description": "Review 2026-10-31 (P2, reproduced). `@Get(\\n  ':id',\\n)` gives the path `/multi/:id',`; `async list<T>()` is named after the first call in its body; `if (s) /{'/.test(s)` is read as division and swallows the class, giving a phantom route.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-20-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-20-R2.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-20-R3.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/nestjs.ts",
+        "tests/legacy-nestjs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`@Get(\\n  ':id',\\n)` gives `/x/:id` (test).",
+        "`@Get() async list<T>(): Promise<T[]> { return this.svc.findAll(); }` is named list (test).",
+        "A regex literal after the `)` of an if/while/for condition does not swallow the class (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-nestjs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M2-06-R2",
+      "milestone": "M2",
+      "title": "HTTP pairing honours Route::domain",
+      "objective": "A call with a host pairs only with routes on a matching domain.",
+      "description": "Review 2026-10-31 (P2, reproduced). Two /users routes under domain admin.example.com and api.example.com: a call to https://api.example.com/users pairs with the admin route (lexicographic tie-break), and still does when only the admin route exists.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-06-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M2-06-R1.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M2-06-R2.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/pairing.ts",
+        "tests/http-pairing.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A call to https://api.example.com/users pairs only with a /users route whose domain matches ({param} domain segments as wildcards), never with an admin-domain route (test).",
+        "The HTTP scorer gate holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing.test.ts",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M2-04-R3",
+      "milestone": "M2",
+      "title": "HTTP URL follow-ups: shadowed baseURL constants, nested dotenv defaults",
+      "objective": "baseURL constants resolve in scope and dotenv defaults expand as Vite does.",
+      "description": "Review 2026-10-31 (P2, reproduced). axios.create({ baseURL: BASE }) inside a function with a local BASE resolves to the top-level BASE (constantsFor without an offset); `${VITE_X:-${VITE_Y:-/deep}}` leaves a literal `${…}` (single replace pass).",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-04-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M2-04-R2.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M2-04-R3.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/url-resolver.ts",
+        "src/core/scanner.ts",
+        "tests/http-url-resolution.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "axios.create({ baseURL: BASE }) inside a function with a local BASE resolves to the local value or to nothing, never the top-level one (test).",
+        "`${A:-${B:-/deep}}` expands as Vite loadEnv does (test).",
+        "The HTTP scorer gate holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-url-resolution.test.ts",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-09-R5",
+      "milestone": "M0",
+      "title": "Agent files: consent for edited hashless legacy blocks; JSONC configs already up to date",
+      "objective": "An edited legacy block is never removed without consent, and an MCP config that already holds the mapx entry is left untouched.",
+      "description": "Review 2026-10-31 (P2, reproduced). generator.ts treats a hashless legacy block as unedited, so an edited .continue/mapx.yaml is deleted without consent, contrary to docs/cli-reference.md; a JSONC MCP config already holding the identical mapx entry is rewritten as plain JSON and loses its comments (raw text compared with JSON.stringify output).",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-09-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-09-R3.md",
+        "docs/baton/reports/M0-09-R4.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-09-R5.md"
+      ],
+      "affectedFiles": [
+        "src/agents/generator.ts",
+        "tests/legacy-agents.test.ts",
+        "tests/legacy-agent-templates.test.ts",
+        "docs/cli-reference.md"
+      ],
+      "acceptanceCriteria": [
+        "A hashless legacy block whose body differs from every known template body is removed only with consent or --force, as docs/cli-reference.md says (test).",
+        "A JSONC MCP config that already holds the identical mapx entry reports up_to_date and keeps its comments (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-agents.test.ts tests/legacy-agent-templates.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M1-03-R2",
+      "milestone": "M1",
+      "title": "Laravel route walker: require_once and cycles, trailing slashes, dynamic resource names, match verbs, invokable controllers",
+      "objective": "Route files load as PHP loads them, and route keys, resource names, verbs and handlers follow Laravel's.",
+      "description": "Review 2026-10-31 (P2, reproduced; most predate the range). A file loaded by two require_once is mounted twice and a require cycle emits routes up to the depth cap, all kept since M1-07-R1's registry identity; prefix('admin') + get('/') gives /admin/ and is not overridden by a later get('admin'); Route::resource($unknown) gives /{dynamic}/{{dynamic}}; Route::match(['get','post']) gives the method \"GET\"|\"POST\"; Route::get('x', ShowProfile::class) loses its handler.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-03-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M1-03-R1.md",
+        "docs/baton/reports/M1-07-R1.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M1-03-R2.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/fixtures/laravel-routes",
+        "tests/laravel-mounts.test.ts",
+        "tests/laravel-routes-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A file loaded by two require_once calls is mounted once, and a require cycle emits each route once (test).",
+        "`Route::prefix('admin')->group(fn () => Route::get('/', …))` gives /admin and is overridden by a later Route::get('admin') (test).",
+        "`Route::resource($unknown, …)` is flagged dynamic without `{{dynamic}}`; `Route::match(['get','post'], …)` gives GET|POST; `Route::get('x', ShowProfile::class)` keeps its __invoke handler (test).",
+        "Routes scorer: 0 false positives."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-11-R3",
+      "milestone": "M0",
+      "title": "Impact through default-import aliases; deps path forms; status lists only indexable changes; .svelte globals test",
+      "objective": "impact, deps and status agree with what the scanner indexes and links.",
+      "description": "Review 2026-10-31 (P2, reproduced). M0-11-R2: `export default function formatDate` imported as `import fmt from './format'` makes impact say \"No callers found — safe to change\" (disclosed); its AC4 test has no .svelte reference that would link without the fix (vacuous for .svelte). M0-03-R4: deps and mapx_dependencies reject src\\\\x.ts, .\\\\src\\\\x.ts and absolute paths that edges/mapx_edges accept. `mapx status` lists raw git changes, including files the scanner never indexes, as stale forever.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-11-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-03-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md",
+        "docs/baton/reports/M0-11-R2.md",
+        "docs/baton/reports/M0-03-R4.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-11-R3.md"
+      ],
+      "affectedFiles": [
+        "src/core/impact-analyzer.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "src/core/staleness.ts",
+        "tests/legacy-impact-staleness.test.ts",
+        "tests/legacy-metrics-edges.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`impact formatDate` lists callers that import the default export under another name (test).",
+        "deps and mapx_dependencies accept the backslash, ./ and absolute path forms that edges accepts (CLI and MCP test).",
+        "`mapx status` lists only changes the scanner's file rules would index (test).",
+        "The M0-11-R2 AC4 test includes a .svelte reference that links to a project symbol when the built-in globals check is removed (mutation-checked)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-impact-staleness.test.ts tests/legacy-metrics-edges.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
     }
   ]
 }

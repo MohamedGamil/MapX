@@ -153,6 +153,14 @@ describe('edge scorer', () => {
     expect(scoreEdges([neg], []).totals).toMatchObject({ falsePositives: 0, negatives: 1, labelled: 0, recall: 1 });
   });
 
+  it('counts a negative of an unscored edge type as a false positive (review 2026-10-31)', () => {
+    // `route` is not scored for precision, but a label naming that exact edge still catches it.
+    const route = E({ source_file: 'v/src/router.js', source_symbol: null, target_file: 'v/src/B.vue', target_symbol: 'B', edge_type: 'route' });
+    const s = scoreEdges([L({ id: 'N', expect: 'absent', edge: route })], [route]);
+    expect(s.totals).toMatchObject({ negatives: 1, falsePositives: 1, reported: 0 });
+    expect(s.falsePositiveEdges).toHaveLength(1);
+  });
+
   it('ignores unscored edge types for precision and counts unlabelled scored edges against it', () => {
     const s = scoreEdges([L()], [E(), E({ edge_type: 'import', target_symbol: './B.vue' }), E({ target_symbol: 'load' })]);
     expect(s.totals).toMatchObject({ reported: 2, correct: 1, unlabelled: 1, precision: 0.5 });

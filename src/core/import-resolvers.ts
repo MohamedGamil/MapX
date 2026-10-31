@@ -106,7 +106,7 @@ function sharedDirs(a: string, b: string): number {
 }
 
 /** The candidate in the importing file's own module: most shared leading directories, then shortest (multi-module builds). */
-function closest(hits: string[], sourcePath: string): string {
+export function closest(hits: string[], sourcePath: string): string {
   let best = hits[0]!;
   for (const h of hits) if (sharedDirs(h, sourcePath) > sharedDirs(best, sourcePath)) best = h;
   return best;

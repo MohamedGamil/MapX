@@ -47,7 +47,12 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
-- `scan` and `sync` now re-link Vue render and navigate edges when a global component registration (`app.component`, `Vue.component` or an auto-registered folder) or a Vue Router route record changes, without re-parsing unrelated components, and each app folder with its own `package.json` keeps its own global registry (M3-08).
+- `scan` and `sync` now re-link Vue render and navigate edges when a global component registration (`app.component`, `Vue.component` or an auto-registered folder) or a Vue Router route record changes, without re-parsing unrelated components, and each app folder with its own `package.json` keeps its own global registry, except when the root `package.json` also lists `vue` or `vue-router` (planned: M3-08-R1) (M3-08).
+- The Laravel Console Kernel (and any `Kernel.php` other than `app/Http/Kernel.php`) no longer gets verified `middleware` edges to every HTTP middleware (M0-05-R3).
+- Vue Router lazy route components written with a webpack magic comment (`() => import(/* webpackChunkName: "about" */ '../views/AboutView.vue')`, the `vue create` default) resolve, so their route and navigate edges exist (M3-06).
+- `mapx sync` in a git repo no longer indexes dot-named files, `DEFAULT_IGNORE` folders (`coverage/`, …) or files under directories pruned by an exclude pattern, which `scan` never indexes (M0-02-R2).
+- PHP: when two Laravel apps in one repo declare the same classes or functions, `new X()`, function calls and route handlers resolve to the declaration nearest the caller instead of the first app's (M0-04-R2, M0-04-R5).
+- Laravel `Route::any` URIs are evaluated like other verbs: unknown variables and constants become `{dynamic}`, never raw PHP text (M1-03-R1).
 - The HTTP pass and Vue Router route components follow imports through the same alias resolution as the rest of the graph (tsconfig/jsconfig `paths`, vite / webpack aliases), so an axios client imported through Laravel's `@` → `resources/js` keeps its base URL (M3-12).
 - Symbol resolution is now case-sensitive except where the language is not (PHP class, function and method names; Pascal), so `Cart` no longer links to a `cart` function or constant and global calls like `fetch()` no longer link to a Vuex `FETCH` mutation (M3-10).
 - PHP calls to plain and namespaced functions now link to the file that declares the function, and `require` / `include` statements (with or without parentheses, including `__DIR__ . '/…'`) link to the included file (M0-04-R5).
@@ -136,6 +141,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Notes
 - Completion disputed by the 2026-10-31 review (`docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md`): M1-06 and M1-09 (an acceptance criterion is unmet) and M0-12-R2 (F20 extensions); defects in M1-03, M1-04, M0-20-R1, M2-04, M2-06, M0-12-R1 and M0-03-R2. Remediation is planned as M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-12-R3, M1-03-R1, M1-07-R1, M2-04-R2 and M2-06-R1 (P1), plus M0-10-R2, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2 and M1-05-R1 (P2). (M0-41)
+- Completion disputed by the 2026-10-31 review of `3ac0d6d..2db08bd` (`docs/baton/reviews/REVIEW-2026-10-31-2db08bd25e13.md`): M3-08, M1-03-R1, M1-07-R1, M0-04-R3 and M0-02-R2 (an acceptance criterion is unmet); P1 defects in M3-06, M3-09, M3-11, M3-12, M0-02-R3, M0-02-R4 and M0-10-R3. Remediation is planned as M3-08-R1, M3-09-R1, M0-02-R6, M0-02-R7, M0-10-R4, M1-07-R2 and M0-04-R6 (P1), plus M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2 and M0-11-R3 (P2).
 
 ## [0.3.5] — 2026-06-01
 

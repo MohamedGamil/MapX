@@ -595,3 +595,37 @@ describe('git sync: uncommitted files and blob ids', () => {
     expect(symbolRows(root, MAIL)).toEqual(rows);
   }, 60000);
 });
+
+// Review 2026-10-31: git sync lists every tracked or untracked change; it indexes only what the
+// scan walk would reach (no dot-named or DEFAULT_IGNORE segment, no pruned directory).
+describe('git sync applies the scan walk file rules', () => {
+  it('never indexes dot-named, ignored-folder or pruned-directory files that scan skips', () => {
+    const skipped = ['.eslintrc.js', '.storybook/main.ts', 'coverage/prettify.js', 'app/Http/Controllers/UserController.php'];
+    const root = workspace({ ...files, '.eslintrc.js': 'module.exports = { root: true };\n', '.storybook/main.ts': 'export function story() { return 1; }\n', 'coverage/prettify.js': 'function cov() { return 1; }\n', '.gitignore': '.mapx/\n' }, ['.']);
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      const path = join(root, '.mapx', 'config.json');
+      const config = JSON.parse(readFileSync(path, 'utf8'));
+      config.settings.excludePatterns = [...config.settings.excludePatterns, '**/Controllers'];
+      writeFileSync(path, JSON.stringify(config));
+      mapx(root, 'scan', root);
+      const indexed = () => query<{ path: string }>(root, 'SELECT path FROM files ORDER BY path').map((f) => f.path);
+      expect(indexed().filter((p) => skipped.includes(p))).toEqual([]);
+
+      writeFileSync(join(root, '.eslintrc.js'), 'module.exports = { root: false };\n');
+      writeFileSync(join(root, '.storybook/main.ts'), 'export function story() { return 2; }\n');
+      writeFileSync(join(root, '.storybook/preview.ts'), 'export function preview() { return 1; }\n');
+      writeFileSync(join(root, 'coverage/prettify.js'), 'function cov() { return 2; }\n');
+      writeFileSync(join(root, 'app/Http/Controllers/UserController.php'), php('App\\Http\\Controllers', 'UserController', 'use App\\Models\\User;'));
+      mapx(root, 'sync', root);
+      expect(indexed().filter((p) => [...skipped, '.storybook/preview.ts'].includes(p))).toEqual([]);
+      const synced = snapshot(root);
+      mapx(root, 'scan', root, '--force');
+      expect(synced).toEqual(snapshot(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});

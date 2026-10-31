@@ -102,12 +102,15 @@ export function effectiveExcludesFor(
 /**
  * Would the scan walk reach this workspace-relative file? Same rules as `Scanner.discoverFiles`:
  * no ignored or dot-prefixed segment, no pruned ancestor directory, and the include/exclude
- * matcher accepts it. The language check is separate (it may need to read the file).
+ * matcher accepts it. The language check is separate (it may need to read the file). `repoPath` is
+ * the repo's workspace-relative folder ('' at the root): as in the walk, which starts there, the
+ * segment and directory rules apply below it only.
  */
-export function isScannablePath(rel: string, excludes: string[], includes: string[]): boolean {
+export function isScannablePath(rel: string, excludes: string[], includes: string[], repoPath = ''): boolean {
   const segments = rel.split('/');
-  if (segments.some(s => DEFAULT_IGNORE.has(s) || s.startsWith('.'))) return false;
-  for (let i = 1; i < segments.length; i++) {
+  const start = repoPath ? repoPath.split('/').filter(Boolean).length : 0;
+  if (segments.slice(start).some(s => DEFAULT_IGNORE.has(s) || s.startsWith('.'))) return false;
+  for (let i = start + 1; i < segments.length; i++) {
     if (isExcludedDir(segments.slice(0, i).join('/'), excludes)) return false;
   }
   return buildMatcher(excludes, includes)(rel);

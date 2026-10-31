@@ -18,6 +18,9 @@ const files: Record<string, string> = {
     '    ];',
     '}',
   ].join('\n'),
+  // Declares no middleware; only the HTTP Kernel's aliases and groups are hooks (review 2026-10-31).
+  'app/Console/Kernel.php':
+    '<?php\nnamespace App\\Console;\nclass Kernel\n{\n    protected function schedule($schedule) { }\n}\n',
   'package.json': JSON.stringify({ dependencies: { '@nestjs/core': '^10', '@nestjs/common': '^10' } }),
   'src/users.controller.ts': [
     "import { Controller, Get, UseGuards } from '@nestjs/common';",
@@ -62,6 +65,11 @@ describe('hook edge verifiability (F01)', () => {
     expect(guard.map((e) => [e.target_file, e.verifiability, JSON.parse(e.metadata).hookName, JSON.parse(e.metadata).confidence])).toEqual([
       ['src/auth.guard.ts', 'inferred', 'UseGuards:AuthGuard', 'inferred'],
     ]);
+  });
+
+  it('gives the Console Kernel no middleware edges: it declares none', () => {
+    expect(edgesFrom('app/Console/Kernel.php')).toEqual([]);
+    expect(degrees('--verified-only')['app/Console/Kernel.php']).toEqual([0, 0]);
   });
 
   it('metrics --verified-only keeps the declared middleware edge and drops the inferred guard edge', () => {

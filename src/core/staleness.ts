@@ -54,7 +54,7 @@ function scannableFilter(store: Store, dir: string): (path: string) => boolean {
     const owner = repos.find(r => path.startsWith(r.prefix));
     if (!owner) return false;
     const { excludes, includes } = filtersFor(owner.repo);
-    if (!isScannablePath(path, excludes, includes)) return false;
+    if (!isScannablePath(path, excludes, includes, owner.prefix)) return false;
     return getLanguageForFile(path) !== null || (!basename(path).includes('.') && shebangLanguage(resolve(dir, path)) !== null);
   };
 }

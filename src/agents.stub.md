@@ -81,7 +81,7 @@ mapx serve --sse --port 3456 --dir /path/to/project # SSE (HTTP) transport
 
 ## MCP Tools
 
-When running as an MCP server, MapxGraph exposes 32 tools:
+When running as an MCP server, MapxGraph exposes 33 tools:
 
 - **Graph building:** `mapx_scan`, `mapx_sync`
 - **Symbol discovery:** `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files`

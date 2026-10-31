@@ -1,15 +1,15 @@
 # MapX project state
 
-Updated 2026-10-31, after session 7 (M3 Vue SFC semantics). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-10-31, after session 7 (M3 Vue SFC semantics) and the review of `3ac0d6d..2db08bd`. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
 | Milestone | Status | Notes |
 | --- | --- | --- |
-| M0 Delivered baseline and remediation | All review 2026-10-31 remediation DONE (session 6) | Follow-ups found during session 6 also DONE (M0-02-R3/R4/R5, M0-03-R4, M0-10-R3, M0-17-R3, M0-32-R1/R2) and M0-04-R3 |
-| M1 Laravel route correctness | M1-03-R1, M1-07-R1, M1-05-R1, M1-05-R2 DONE | M1-05-R3 DONE (D014). M1-99 (release) DEFERRED (D007) |
-| M2 Cross-language precision and HTTP pairing | M2-04-R2, M2-06-R1 DONE | |
-| M3 Vue SFC semantics | **12 of 12 DONE** (session 7) | Edge scorer 13.5% → 100% recall, 62.5% → 99.0% precision (119 labels, 23 negatives, 1 FP: `formatter.format()` → enclosing `format`, see M0-17-R4) |
+| M0 Delivered baseline and remediation | Review 2026-10-31 (2db08bd): P1 remediation READY | M0-02-R6 (raised to P1), M0-02-R7, M0-10-R4, M0-04-R6 READY; P2 M0-12-R7, M0-17-R5, M0-20-R3, M0-09-R5, M0-11-R3 and M0-17-R4 in BACKLOG |
+| M1 Laravel route correctness | M1-07-R2 READY (P1) | M1-03-R1 and M1-07-R1 disputed (RouteServiceProvider mounts and prefixes); M1-03-R2 (P2) in BACKLOG. M1-99 (release) DEFERRED (D007) |
+| M2 Cross-language precision and HTTP pairing | M2-04-R2, M2-06-R1 DONE | P2 M2-04-R3, M2-06-R2 in BACKLOG |
+| M3 Vue SFC semantics | 12 of 12 DONE; M3-08-R1, M3-09-R1 READY (P1) | App-boundary defects (global registry, route table, aliases); P2 M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1 in BACKLOG. Edge scorer 13.5% → 100% recall, 62.5% → 99.0% precision (119 labels, 23 negatives, 1 FP: `formatter.format()` → enclosing `format`, see M0-17-R4) |
 | M4 Measurement and DX | 0 of 7 | M4-03 (scan superlinear past ~5,000 files, measured in session 6) and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
 | M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 (fixture + scorer) and M5-02 (config schema) are promotable and parallel-safe with M3 (new `src/arch/` paths). M5-12 is an epic. Interface deps: M5-10 → M3-04, M5-12 → M4-03, M5-18 → M4-01 |
 
@@ -33,6 +33,15 @@ Deptrac analysed and abstracted for MapX (`docs/research/deptrac/`, six document
 - **M0-38:** the profiler honours `graphExcludePatterns`.
 - **M1-01 … M1-09, M1-98:** Laravel mount graph. On the 41-route fixture: URI recall 67% → 100%, handler recall 57% → 100%, precision 60% → 100%, false positives 2 → 0.
 - **M2-01:** reproduced name-only PHP → JS edges through the framework resolver; resolution now fails closed. MapX's own edge counts are unchanged.
+
+## Review 2026-10-31 of `3ac0d6d..2db08bd` (independent, six reviewers)
+
+Scope: sessions 6 and 7 (78 commits, 45 newly DONE items). Report: `reviews/REVIEW-2026-10-31-2db08bd25e13.md`.
+
+- **Evidence:** all 75 distinct registered commands exit 0; the three scorers reproduce the recorded numbers exactly; test counts match the reports.
+- **Verdicts** (45 items): 17 CONFIRMED, 23 DEFECTIVE, 5 FALSELY COMPLETE (M3-08, M1-03-R1, M1-07-R1, M0-04-R3, M0-02-R2). Real-world shapes the fixtures lack keep breaking: two apps in one repo (Vue registry, route table, aliases, PHP names, Kernel), RouteServiceProvider mounts, and git sync sequences.
+- **Fixed in the review** (regression test + mutation check each): Console Kernel verified middleware edges (M0-05-R3); webpack magic-comment lazy routes (M3-06); git sync ignored the scan walk's file rules (M0-02-R2); two-app PHP resolution (M0-04-R2/R5); raw PHP in `Route::any` URIs (M1-03-R1). Test gaps closed for M3-01 (scorer) and M3-10 (PHP methods).
+- **Remediation:** 7 P1 READY (M3-08-R1, M3-09-R1, M0-02-R6, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6), 12 P2 BACKLOG.
 
 ## Session 7 (2026-10-31): M3 Vue SFC semantics
 
@@ -112,8 +121,10 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 ## Next
 
+- **Owner decision pending:** whether the seven READY P1 remediation tasks of the 2db08bd review (M3-08-R1, M3-09-R1, M0-02-R6, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6) go before M5 (as D010 did before M3) or run beside it. None blocks M5 by dependency.
 - M5-01 and M5-02 (architecture rules fixture and config schema) are promotable; specs in `iterations/M5-01.md` and `M5-02.md` (D013).
-- M0-17-R4 (library/DOM receivers; the last edges false positive) and M0-02-R6 (sync after revert) in BACKLOG.
+- Lane conflicts: M0-02-R6, M0-02-R7, M0-10-R4 and M3-08-R1 all change `src/core/scanner.ts` (as do M4-03/M4-04); M1-07-R2, M0-04-R6 and M1-03-R2 change `src/frameworks/detectors/laravel.ts`.
+- M0-17-R4 (library/DOM receivers; the last edges false positive) in BACKLOG.
 - M4-03: scan time is superlinear past ~5,000 files (80–133 s at 10,000, 323 s at 20,000).
 
 ## Done in session 3
@@ -131,7 +142,7 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 ## Latest validation
 
-2026-10-31, end of session 7 (`develop@db0c8b1`): `npm run check` exit 0: plan valid (154 tasks), changelog coverage 99 entries, typecheck, 94 test files with 1596 passed and 1 skipped (`MAPX_SLOW_TESTS`), skill tests. Edges scorer: 119 labels, recall 1.0, precision 0.990, 1 FP of 23 negatives. Routes scorer: 114 labels, URI 90/90, handler 87/87, precision 1, 0 FP. HTTP scorer: 46 labels, every metric 1.0. `scripts/check-package.ts`: 259 files, 4.36 MB packed, dashboard 690,760 B gzipped (ceiling 737,280).
+2026-10-31, after the review of `3ac0d6d..2db08bd` (review fixes uncommitted on `develop@2db08bd`): `npm run check` exit 0: plan valid (172 tasks), changelog coverage 105 entries, typecheck, 94 test files with 1603 passed and 1 skipped (`MAPX_SLOW_TESTS`), skill tests 5/5. Edges scorer: 119 labels, recall 1.0, precision 0.990, 1 FP of 23 negatives. Routes scorer: 114 labels, URI 90/90, handler 87/87, precision 1, 0 FP. HTTP scorer: 46 labels, every metric 1.0. `scripts/check-package.ts` (measured at `2db08bd`): 277 files, 4,419,578 B packed, dashboard 690,760 B gzipped (ceiling 737,280).
 
 ## Owner decisions recorded
 
