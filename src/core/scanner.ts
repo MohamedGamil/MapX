@@ -553,6 +553,16 @@ export class Scanner {
       }
     }
 
+    // A file indexed while untracked or only staged is in neither tree git diff compares, and
+    // ls-files --others stops listing it once it is deleted: an indexed file missing from HEAD's
+    // tree and from disk is a removal (M0-02-R5).
+    const committed = getGitBlobHashes(repoRoot, workspaceRoot);
+    for (const f of this.store.getAllFiles(repo.name)) {
+      const absolutePath = resolve(workspaceRoot, f.path as string);
+      if (committed.has(f.path as string) || listed.has(absolutePath) || existsSync(absolutePath)) continue;
+      changes.push({ path: relative(repoRoot, absolutePath).replace(/\\/g, '/'), status: 'removed' });
+    }
+
     if (changes.length === 0) {
       await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
@@ -565,7 +575,7 @@ export class Scanner {
     }
 
     const toRemove: string[] = [];
-    const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string }> = [];
+    const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string; blobHash: string }> = [];
     const contents = new Map<string, string>();
 
     // A rename is listed by its new path; its old path leaves the index, and the files with edges
@@ -585,21 +595,24 @@ export class Scanner {
         toRemove.push(relativePath);
         continue;
       }
-      if (change.status === 'removed') {
+      // A listed file that is gone is removed too: a staged-only file deleted from the working tree
+      // is still listed as added by `git diff --cached` (M0-02-R5).
+      if (change.status === 'removed' || !existsSync(absolutePath)) {
         toRemove.push(relativePath);
         continue;
       }
       const fileInfo = await this.getFileInfo(absolutePath, relativePath);
       if (fileInfo) {
         const bytes = await readFile(absolutePath);
-        // Listed, but the indexed blob is still the content (a mode change): nothing to re-parse.
-        // Blob hashes are stored under workspace paths, so this holds for a repo that is not at the
-        // root too (M0-02-R4).
+        // Listed, but the indexed blob is still the content (a mode change, or a commit of what an
+        // earlier sync indexed): nothing to re-parse. Blob hashes are stored under workspace paths,
+        // so this holds for a repo that is not at the root too (M0-02-R4).
+        const blobHash = gitBlobId(bytes);
         const stored = this.store.getFile(relativePath);
-        if (stored?.repo === repo.name && stored.git_blob_hash && stored.git_blob_hash === gitBlobId(bytes)) continue;
+        if (stored?.repo === repo.name && stored.git_blob_hash === blobHash) continue;
         const content = bytes.toString('utf-8');
         const contentHash = createHash('md5').update(content).digest('hex');
-        toReindex.push({ path: relativePath, fileInfo, contentHash });
+        toReindex.push({ path: relativePath, fileInfo, contentHash, blobHash });
         contents.set(relativePath, content);
       }
     }
@@ -616,19 +629,22 @@ export class Scanner {
       const absolutePath = resolve(workspaceRoot, r);
       const fileInfo = existsSync(absolutePath) ? await this.getFileInfo(absolutePath, r) : null;
       if (!fileInfo) continue;
-      const contentHash = createHash('md5').update(await readFile(absolutePath, 'utf-8')).digest('hex');
-      toReindex.push({ path: r, fileInfo, contentHash });
+      const bytes = await readFile(absolutePath);
+      const contentHash = createHash('md5').update(bytes.toString('utf-8')).digest('hex');
+      toReindex.push({ path: r, fileInfo, contentHash, blobHash: gitBlobId(bytes) });
     }
 
     this.store.inTransaction(() => {
-      for (const { path: p, fileInfo, contentHash } of toReindex) {
+      for (const { path: p, fileInfo, contentHash, blobHash } of toReindex) {
         this.store.deleteSymbolsForFile(p);
         this.store.deleteEdgesForFile(p);
         this.store.upsertFile({
           path: p,
           repo: repo.name,
           language: fileInfo.language,
-          gitBlobHash: null,
+          // The blob id of the indexed bytes (`git hash-object`), which the skip above compares
+          // with: the next sync skips the file while its content stays the same (M0-02-R5).
+          gitBlobHash: blobHash,
           contentHash,
           lastScanned: new Date().toISOString(),
           sizeBytes: fileInfo.sizeBytes,

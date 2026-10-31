@@ -90,7 +90,8 @@ Incremental scan. Detects changed files via git, or via content hashes outside g
 - When the effective include/exclude filters differ from the last scan (config or flags), every file is re-parsed once, as `mapx scan` does.
 - When git reports a rename, the old path leaves the index and the files that referenced it are re-parsed.
 - When a removed file's referenced names appear in a new or changed file (a class moved to another file, in one sync or across two, with or without git), the files that referenced it are re-parsed, as `mapx scan` does.
-- A file git lists whose content is still the blob that was indexed (a mode change, for example) is not re-parsed.
+- A file git lists whose content is still the blob that was indexed (a mode change, or the commit of an edit an earlier sync indexed) is not re-parsed. Sync records the blob id of every file it indexes.
+- A file that was indexed while untracked or only staged leaves the index once it is deleted, although git lists neither side of it.
 
 In a repo that sits inside a larger git checkout, only changes under the repo's folder count, with paths relative to it.
 

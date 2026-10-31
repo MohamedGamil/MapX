@@ -37,6 +37,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
 - **M0-02-R3** Git renames, nested-repo diffs and symlinked nested repos in incremental sync — DONE, P2, 4h; depends on M0-02-R2.
 - **M0-02-R4** Incremental scans re-resolve references to moved files; blob-hash keys for non-root repos — DONE, P2, 4h; depends on M0-02-R3, M0-10-R3.
+- **M0-02-R5** git sync drops deleted untracked/staged files; blob hashes for re-indexed files — DONE, P2, 3h; depends on M0-02-R4.
 - **M0-10-R3** Workspaces: F18 fields, duplicate config cleanup, cross-repo references after workspaces add — DONE, P2, 5h; depends on M0-10-R2.
 - **M0-03-R4** edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching — DONE, P2, 4h; depends on M0-03-R3, M0-05-R4.
 - **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — DONE, P2, 5h; depends on M0-17-R2.
@@ -77,7 +78,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-20-R2** NestJS class segmentation ignores comments, strings and generics — DONE, P1, 4h; depends on M0-20-R1.
 - **M0-11-R2** Staleness uses the scanner file rules; precise import-only dependants and callee lines — DONE, P1, 5h; depends on M0-11-R1.
 - **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — DONE, P1, 6h; depends on M0-02-R1.
-- **M0-04-R2** PHP resolution never maps vendor names to app files; tree-sitter $listen — READY, P1, 8h; depends on M0-04-R1.
+- **M0-04-R2** PHP resolution never maps vendor names to app files; tree-sitter $listen — IN_PROGRESS, P1, 8h; depends on M0-04-R1.
 - **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — DONE, P2, 4h; depends on M0-10-R1.
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — DONE, P1, 6h; depends on M0-12-R1, M0-12-R2.
@@ -128,7 +129,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 
 Templates, Options/Composition API, state stores and router navigation in Vue 2.7 and 3.
 
-- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BLOCKED, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1, M0-02-R3, M0-10-R3, M0-03-R4, M0-17-R3, M1-05-R2, M0-32-R2, M0-02-R4.
+- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BLOCKED, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1, M0-02-R3, M0-10-R3, M0-03-R4, M0-17-R3, M1-05-R2, M0-32-R2, M0-02-R4, M0-02-R5.
 - **M3-02** Vue template pass — BACKLOG, P1, 14h; depends on M3-01.
 - **M3-03** Options API member resolution — BACKLOG, P1, 12h; depends on M3-01.
 - **M3-04** <script setup> macros and composables — BACKLOG, P1, 10h; depends on M3-01.

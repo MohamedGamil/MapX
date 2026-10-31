@@ -522,3 +522,72 @@ describe('incremental scans: moved targets and non-root blob hashes', () => {
     }
   }, 90000);
 });
+
+// M0-02-R5: git sync kept a deleted file that was never committed (git diff compares two trees
+// without it, and ls-files --others stops listing it), and stored no blob ids for what it indexed.
+// The tests share one committed workspace and run in order.
+describe('git sync: uncommitted files and blob ids', () => {
+  const UNTRACKED = 'app/Services/AuditService.php';
+  const STAGED = 'app/Services/ReportService.php';
+  const MAIL = 'app/Services/MailService.php';
+  const usesUser = (cls: string) =>
+    `<?php\nnamespace App\\Services;\nclass ${cls} { public function run(UserService $u) {} }\n`;
+  const of = (root: string, path: string) => ({
+    file: query(root, 'SELECT path FROM files WHERE path = ?', path).length,
+    symbols: query<{ name: string }>(root, 'SELECT name FROM symbols WHERE file_path = ? ORDER BY name', path).map((s) => s.name),
+    edges: touching(root, path),
+  });
+  const symbolRows = (root: string, path: string) => query(root, 'SELECT id, name FROM symbols WHERE file_path = ? ORDER BY id', path);
+  const hashObject = (root: string, path: string) => git(root, 'hash-object', path).toString().trim();
+  const storedBlob = (root: string, path: string) =>
+    query<{ h: string | null }>(root, 'SELECT git_blob_hash AS h FROM files WHERE path = ?', path)[0]?.h;
+  let root: string;
+  beforeAll(() => {
+    root = workspace({ ...files, '.gitignore': '.mapx/\n' }, ['.']);
+    git(root, 'add', '-A');
+    git(root, 'commit', '-qm', 'init');
+    init(root);
+    mapx(root, 'scan', root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+
+  it('drops a deleted untracked file and a deleted staged-only file, as scan --force', () => {
+    writeFileSync(join(root, UNTRACKED), usesUser('AuditService'));
+    writeFileSync(join(root, STAGED), usesUser('ReportService'));
+    git(root, 'add', STAGED);
+    mapx(root, 'sync', root);
+    expect(of(root, UNTRACKED)).toEqual({
+      file: 1,
+      symbols: ['AuditService', 'run'],
+      edges: [`${UNTRACKED} -> ${USER_SERVICE} param_type`],
+    });
+    expect(of(root, STAGED).edges).toEqual([`${STAGED} -> ${USER_SERVICE} param_type`]);
+
+    // Deleted from the working tree; the staged copy stays in the index, so git diff --cached
+    // still lists it as added.
+    rmSync(join(root, UNTRACKED));
+    rmSync(join(root, STAGED));
+    mapx(root, 'sync', root);
+    const gone = { file: 0, symbols: [], edges: [] };
+    expect(of(root, UNTRACKED)).toEqual(gone);
+    expect(of(root, STAGED)).toEqual(gone);
+    const synced = snapshot(root);
+    mapx(root, 'scan', root, '--force');
+    expect(synced).toEqual(snapshot(root));
+  }, 60000);
+
+  it('stores the blob id of what it re-indexes, so the file is skipped once committed', () => {
+    writeFileSync(join(root, MAIL), php('App\\Services', 'MailService', 'interface Mailer {}'));
+    mapx(root, 'sync', root);
+    expect(storedBlob(root, MAIL)).toBe(hashObject(root, MAIL));
+    const rows = symbolRows(root, MAIL);
+    expect(rows.map((r) => (r as { name: string }).name).sort()).toEqual(['MailService', 'Mailer']);
+
+    // The commit makes git list MailService.php against the last scanned commit, with the content
+    // that was indexed: it is not re-parsed, so its symbols keep their ids.
+    git(root, 'commit', '-qam', 'mailer');
+    expect(git(root, 'diff', '--name-only', 'HEAD~1').toString()).toContain(MAIL);
+    mapx(root, 'sync', root);
+    expect(symbolRows(root, MAIL)).toEqual(rows);
+  }, 60000);
+});

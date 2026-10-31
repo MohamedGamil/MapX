@@ -305,7 +305,7 @@ Full scan: parse all files, build graph. Unchanged files are not re-parsed, exce
 - `dir` (string, optional): Target project directory
 
 #### `mapx_sync`
-Incremental update: sync changed files only. Like `mapx sync`, it re-parses the referrers of a removed file that comes back, drops the old path of a git rename and re-parses its referrers, re-parses the referrers of a removed file when a new or changed file names what they referenced in it (the target moved), skips a file git lists whose blob is the one indexed, and re-parses everything once when the include/exclude filters have changed since the last scan.
+Incremental update: sync changed files only. Like `mapx sync`, it re-parses the referrers of a removed file that comes back, drops the old path of a git rename and re-parses its referrers, re-parses the referrers of a removed file when a new or changed file names what they referenced in it (the target moved), skips a file git lists whose blob is the one indexed, drops a deleted file that was indexed while untracked or only staged, and re-parses everything once when the include/exclude filters have changed since the last scan.
 - `dir` (string, optional): Target project directory
 
 ### Symbol & File Discovery

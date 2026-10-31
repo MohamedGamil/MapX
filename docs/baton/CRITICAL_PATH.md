@@ -20,7 +20,7 @@ Remaining effort min/expected/max: **69 / 105 / 142h**. Capacity: 1 engineer(s) 
 - M4-03 (BACKLOG): prerequisites satisfied
 - M4-04 (BACKLOG): prerequisites satisfied
 - M4-05 (BACKLOG): prerequisites satisfied
-- M0-04-R2 (READY): prerequisites satisfied
+- M0-04-R2 (IN_PROGRESS): prerequisites satisfied
 
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
