@@ -133,12 +133,13 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 
 Templates, Options/Composition API, state stores and router navigation in Vue 2.7 and 3.
 
-- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BLOCKED, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1, M0-02-R3, M0-10-R3, M0-03-R4, M0-17-R3, M1-05-R2, M0-32-R2, M0-02-R4, M0-02-R5, M0-04-R3, M0-09-R4, M0-12-R5, M1-05-R3, M0-12-R6.
+- **M3-01** Vue SFC fixture set (2.7 and 3.x) — DONE, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1, M0-02-R3, M0-10-R3, M0-03-R4, M0-17-R3, M1-05-R2, M0-32-R2, M0-02-R4, M0-02-R5, M0-04-R3, M0-09-R4, M0-12-R5, M1-05-R3, M0-12-R6.
 - **M3-02** Vue template pass — BACKLOG, P1, 14h; depends on M3-01.
 - **M3-03** Options API member resolution — BACKLOG, P1, 12h; depends on M3-01.
 - **M3-04** <script setup> macros and composables — BACKLOG, P1, 10h; depends on M3-01.
 - **M3-05** Vuex and Pinia resolution — BACKLOG, P1, 14h; depends on M3-03.
 - **M3-06** Vue Router navigation edges — BACKLOG, P1, 8h; depends on M3-02.
+- **M3-07** Framework detection from package.json files below the repo root — BACKLOG, P2, 4h; depends on M3-01.
 
 ## M4 — Measurement and developer experience
 
@@ -151,6 +152,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-05** Build the dashboard only for release and serve, not on every install — BACKLOG, P2, 4h; depends on nothing.
 - **M4-06** 3D graph mode in the dashboard — DEFERRED, P3, 16h; depends on nothing.
 - **M4-07** Compiled scanner sidecar for very large codebases — DEFERRED, P3, 40h; depends on nothing.
+- **M4-08** Strict flag handling in score-routes and score-http — BACKLOG, P3, 2h; depends on M3-01.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 

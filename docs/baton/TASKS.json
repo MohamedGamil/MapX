@@ -6250,14 +6250,27 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-vue",
       "actualHours": null,
       "startedAt": "2026-10-31T06:49:06.803Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T07:24:36.469Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-01.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-sfc.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-01.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-01.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-30T21:11:14.431Z",
@@ -6283,6 +6296,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:24:36.169Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:24:36.469Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-sfc.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-01.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-01.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -6536,7 +6572,7 @@
       "milestone": "M3",
       "title": "Vue Router navigation edges",
       "objective": "Link router.push({ name }), this.$router.push(path) and <router-link :to> to the route record and its component.",
-      "description": "Report §3/§4 item 11.",
+      "description": "Report §3/§4 item 11. M3-01 (2026-10-31): the vue-router detector resolves statically imported components to the router file; edge contract uses a new navigate edge type.",
       "priority": "P1",
       "estimate": {
         "min": 5,
@@ -6557,7 +6593,8 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
-        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md"
+        "docs/reports/2026-10-30-laravel-vue-coverage-findings.md",
+        "docs/baton/reports/M3-01.md"
       ],
       "outputs": [
         "parser change",
@@ -6569,7 +6606,9 @@
         "tests/vue-sfc.test.ts"
       ],
       "acceptanceCriteria": [
-        "router.push({ name: 'user' }) links to the route record named user and its component."
+        "router.push({ name: 'user' }) links to the route record named user and its component.",
+        "A statically imported route component (`import HomeView from \"../views/HomeView.vue\"`) resolves to the .vue file, not to the router file itself (fixture label + test).",
+        "`navigate` is a ReferenceType, survives a real scan (not deleted with framework route edges) and is not counted as a backend route by CLI/MCP."
       ],
       "verificationCommands": [
         "npx vitest run tests/vue-sfc.test.ts",
@@ -6589,6 +6628,65 @@
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-01.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-07.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/framework-registry.ts",
+        "src/frameworks/utils.ts",
+        "tests/vue-sfc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A repo whose only package.json listing vue is in a sub-folder (e.g. frontend/package.json) activates the Vue detector for files under that folder (e2e test).",
+        "The vue-sfc scorer can scan the whole fixture root as one project with the same results as scanning vue2/ and vue3/ separately (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-sfc.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-07",
+      "title": "Framework detection from package.json files below the repo root",
+      "objective": ".fish files yield function symbols and call edges.",
+      "milestone": "M3",
+      "description": "Found by M3-01 (2026-10-31): only the root package.json enables framework detection, so monorepos with a frontend sub-folder get no Vue detection."
     },
     {
       "id": "M4-01",
@@ -13672,6 +13770,65 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "description": "Re-score the M5-01 fixture and record per-kind recall/precision against the 0.0 baseline; mark each REQ-ARCH requirement VERIFIED or open a follow-up."
+    },
+    {
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-01.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M4-08.md"
+      ],
+      "affectedFiles": [
+        "scripts/eval/score-routes.ts",
+        "scripts/eval/score-http.ts",
+        "tests/laravel-routes-fixture.test.ts",
+        "tests/http-pairing-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Unknown flags, `--x=v` forms, repeats and out-of-range thresholds exit 2 with a message in both scorers, as score-edges.ts does (tests)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-08",
+      "title": "Strict flag handling in score-routes and score-http",
+      "objective": ".fish files yield function symbols and call edges.",
+      "milestone": "M4",
+      "description": "Found by M3-01 review (2026-10-31): the routes and HTTP scorers accept malformed thresholds silently."
     }
   ]
 }

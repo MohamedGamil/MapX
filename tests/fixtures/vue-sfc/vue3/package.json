@@ -1,0 +1,10 @@
+{
+  "name": "vue3-shop",
+  "private": true,
+  "dependencies": {
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0",
+    "vuex": "^4.1.0"
+  }
+}
