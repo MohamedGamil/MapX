@@ -5679,6 +5679,72 @@
       ],
       "dependencies": [
         {
+          "id": "M3-10",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-10.md",
+        "docs/baton/reports/M0-17-R2.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-17-R4.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "tests/legacy-language-accuracy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`axios.create()`, `el.classList.remove()`, `fetch()` (global) and `lodash.get()` give no call edge to a project symbol named create/remove/fetch/get when the receiver is an imported npm package, a DOM property or a global (e2e test).",
+        "A call on a receiver typed or imported from a project file still resolves (test).",
+        "The edges, routes and HTTP scorers do not drop; MapX self-scan call-edge changes are listed and justified."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-language-accuracy.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-17-R4",
+      "title": "Calls on library and DOM receivers do not link to same-named project symbols",
+      "objective": "A method call whose receiver is an imported package, a DOM/global object or a browser API never resolves to an unrelated project symbol.",
+      "milestone": "M0",
+      "description": "Found by M3-10 (2026-10-31): calls like fetch(), classList.remove() and axios.create() still link to any project symbol with exactly that name (e.g. a Vuex FETCH action once case-insensitive matching is off, or a project create function)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
           "id": "M1-05-R1",
           "type": "hard"
         }
