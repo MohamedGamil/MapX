@@ -10371,10 +10371,10 @@
         "npx vitest run tests/legacy-php-resolution.test.ts tests/legacy-php-worker.test.ts tests/legacy-php-metadata.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-imports",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T05:01:35.403Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -10384,6 +10384,12 @@
           "at": "2026-10-31T00:30:46.046Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T05:01:35.403Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
