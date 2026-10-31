@@ -9603,14 +9603,22 @@
         "npx vitest run tests/legacy-workspaces.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-cli",
       "actualHours": null,
       "startedAt": "2026-10-31T02:51:26.459Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T03:45:37.665Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-10-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-workspaces.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-10-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T02:51:25.576Z",
@@ -9623,6 +9631,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T03:45:36.412Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T03:45:37.665Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-workspaces.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-10-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

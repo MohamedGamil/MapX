@@ -17,6 +17,7 @@ export const LARAVEL_DEFAULT_EXCLUDES = [
   'vendor/**',
 ];
 import { getBuiltinLanguages } from '../languages/registry.js';
+import { canonicalPath } from './workspace-manager.js';
 
 const DEFAULT_CONFIG: MapxConfig = {
   version: '1.0.0',
@@ -265,10 +266,13 @@ export class Config {
     return result;
   }
 
-  addRepo(name: string, path: string): void {
-    if (!this.config.repos.find(r => r.path === path)) {
-      this.config.repos.push({ name, path });
-    }
+  /** Registers a repo unless its folder is already registered, under any spelling or symlink (M0-10-R2). */
+  addRepo(name: string, path: string): boolean {
+    const root = this.getWorkspaceRoot();
+    const key = canonicalPath(resolve(root, path));
+    if (this.config.repos.some(r => r.path === path || canonicalPath(resolve(root, r.path)) === key)) return false;
+    this.config.repos.push({ name, path });
+    return true;
   }
 
   removeRepo(nameOrPath: string): void {

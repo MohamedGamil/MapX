@@ -30,7 +30,7 @@ import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
-import { codeWorkspaceFiles, crossRepoPairs, summarizeRepos } from './core/workspace-summary.js';
+import { codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, summarizeRepos, workspaceExport } from './core/workspace-summary.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
 
@@ -167,6 +167,7 @@ Prefer mapx_search for filtered queries (by kind, file path, exact match). Use m
           type: 'object',
           properties: {
             file: { type: 'string', description: 'File path to analyze (relative to project root)' },
+            crossRepo: { type: 'boolean', description: 'Only dependencies that cross into or come from another registered repository, like `mapx deps --cross-repo`', default: false },
             ...dirProperty,
           },
           required: ['file'],
@@ -194,6 +195,7 @@ EXAMPLES:
             format: { type: 'string', enum: ['llm', 'json', 'dot', 'svg', 'toon'], description: 'Output format', default: 'llm' },
             tokens: { type: 'number', description: 'Token budget for LLM/TOON format', default: 8192 },
             repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            all: { type: 'boolean', description: 'LLM format: one combined export of every registered repo (repo list, cross-repo dependencies, one section per repo), like `mapx export --all`', default: false },
             exclude: { type: 'string', description: 'Comma-separated exclude glob patterns' },
             include: { type: 'string', description: 'Comma-separated include glob patterns' },
             cluster: { type: 'string', enum: ['none', 'auto'], description: 'Cluster rendering mode for DOT/SVG', default: 'none' },
@@ -829,6 +831,12 @@ EXAMPLE:
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
+        if ((args as any)?.crossRepo) {
+          // As `deps --cross-repo` (F18, M0-10-R2).
+          const warning = getMcpStalenessWarning(ctx.store, dir);
+          return { content: [{ type: 'text', text: warning + crossRepoDependencies(ctx.store, file).join('\n') }] };
+        }
+
         const deps = ctx.graph.getDependencies(file);
         const rdeps = ctx.graph.getReverseDependencies(file);
 
@@ -902,7 +910,10 @@ EXAMPLE:
         }
 
         const exporter = new LLMExporter(ctx.store, ctx.graph);
-        const output = exporter.export({ format: 'llm', tokenBudget: tokens, repo, files: filteredFiles });
+        // Combined multi-repo export, as `export --all` (F18, M0-10-R2).
+        const output = (args as any)?.all && !repo
+          ? workspaceExport(dir, ctx.config.repos, ctx.config.repo.name, ctx.store, exporter, tokens, filteredFiles)
+          : exporter.export({ format: 'llm', tokenBudget: tokens, repo, files: filteredFiles });
         return { content: [{ type: 'text', text: output }] };
       }
 
@@ -2069,7 +2080,7 @@ Callees: ${callees.length}`;
         const action = (args as any)?.action || 'list';
         const registeredPaths = new Set<string>();
         for (const r of ctx.config.repos) {
-          registeredPaths.add(resolve(dir, r.path));
+          registeredPaths.add(WorkspaceManager.repoKey(dir, r.path));
         }
 
         // Discover unregistered repos
@@ -2079,7 +2090,7 @@ Callees: ${callees.length}`;
         for (const f of codeWorkspaceFiles(dir)) {
           const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
           for (const p of wsFolderRepos) {
-            if (!registeredPaths.has(resolve(dir, p.path))) {
+            if (!registeredPaths.has(WorkspaceManager.repoKey(dir, p.path))) {
               vscodeFolders.push({ name: p.name, path: p.path, source: 'vscode-workspace', isInitialized: p.isInitialized });
             }
           }
@@ -2087,12 +2098,12 @@ Callees: ${callees.length}`;
 
         const discovered: Array<{ name: string; path: string; source: string; isInitialized: boolean }> = [];
         for (const s of submodules) {
-          if (!registeredPaths.has(resolve(dir, s.path))) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, s.path))) {
             discovered.push({ name: s.name, path: s.path, source: 'submodule', isInitialized: s.isInitialized });
           }
         }
         for (const p of peers) {
-          if (!registeredPaths.has(resolve(dir, p.path))) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, p.path))) {
             discovered.push({ name: p.name, path: p.path, source: 'peer', isInitialized: p.isInitialized });
           }
         }
@@ -2101,7 +2112,7 @@ Callees: ${callees.length}`;
         // Deep-scan nested git repos (up to 3 levels)
         const nestedGitRepos = WorkspaceManager.discoverNestedGitRepos(dir);
         for (const n of nestedGitRepos) {
-          if (!registeredPaths.has(resolve(dir, n.path))) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, n.path))) {
             discovered.push({ name: n.name, path: n.path, source: 'nested-git', isInitialized: true });
           }
         }
@@ -2109,7 +2120,7 @@ Callees: ${callees.length}`;
         // Monorepo packages (same git repo, separate apps/packages dirs)
         const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
         for (const p of monoPkgs) {
-          if (!registeredPaths.has(resolve(dir, p.path))) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, p.path))) {
             discovered.push({ name: p.name, path: p.path, source: 'monorepo', isInitialized: true });
           }
         }
@@ -2135,13 +2146,15 @@ Callees: ${callees.length}`;
           edgeCount: r.edges,
           crossRepoEdgeCount: r.crossRepoEdgeCount,
           lastScanned: r.lastScanned,
-          headCommit: r.head,
+          // F18's name for the repo's own HEAD; null for a folder without a checkout (M0-10-R2).
+          headSha: r.head,
         }));
 
         return {
           content: [{
             type: 'text',
             text: JSON.stringify({
+              root: dir,
               repos,
               crossRepoEdgeCount: pairs.reduce((a, p) => a + p.count, 0),
               crossRepoEdges: pairs,

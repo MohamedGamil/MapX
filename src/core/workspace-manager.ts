@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { resolve, join, dirname, basename, relative } from 'node:path';
 import { discoverSubmodules } from './git-tracker.js';
 import { stripJsoncSyntax } from '../parsers/static-file-parser.js';
@@ -29,7 +29,21 @@ const PACKAGE_MANIFESTS = [
   'composer.json', 'build.gradle', 'build.gradle.kts', 'pom.xml',
 ];
 
+/** Absolute path with symlinks resolved, so two spellings of one folder compare equal (M0-10-R2). */
+export function canonicalPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
 export class WorkspaceManager {
+  /** Identity of a repo path relative to `dir`: a symlink and its target are the same repo (M0-10-R2). */
+  static repoKey(dir: string, path: string): string {
+    return canonicalPath(resolve(dir, path));
+  }
+
   static discoverSubmodules(repoRoot: string): SubmoduleInfo[] {
     return discoverSubmodules(repoRoot);
   }

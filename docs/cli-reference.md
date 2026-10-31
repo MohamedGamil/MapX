@@ -107,7 +107,7 @@ Show scan metrics, collected data, graph statistics, and git changes since the l
 mapx status [/path] [--all]
 ```
 
-`--all` prints one row per registered repository (Repo, Files, Symbols, Edges, HEAD, Last scan, Changed), the totals, and the cross-repo edge count per repo pair.
+`--all` prints one row per registered repository (Repo, Files, Symbols, Edges, HEAD, Last scan, Changed), the totals, and the cross-repo edge count per repo pair. Changed reads `unscanned` for a repo that is registered but has never been scanned, `clean` when nothing indexed has changed, and otherwise the number of changed files.
 
 Outputs:
 - **Scan info**: project name, directory, last scan time, last git commit, schema version
@@ -333,7 +333,7 @@ Options:
 - `--format` — Output format: `llm` (default), `json`, `dot`, `svg`, `toon`
 - `--tokens` — Token budget for LLM format (default: 8192)
 - `--repo` — Filter by repository name
-- `--all` — Every registered repository. The LLM format becomes a combined export: the repo list, the cross-repo dependencies, then one section per repo sharing the token budget
+- `--all` — Every registered repository. The LLM format becomes a combined export: the repo list, the cross-repo dependencies, then one `## <repo>` section per repo sharing the token budget, with that repo's own export nested two heading levels below it
 - `-o, --output <file>` — Write output to file instead of stdout
 - `--exclude` — Exclude glob patterns
 - `--include` — Include glob patterns
@@ -413,7 +413,7 @@ Manage multi-repository workspaces.
 
 ### `mapx workspaces` / `mapx workspaces list`
 
-List the registered repositories as a table: Name, Path, Type (`primary`, `submodule`, `vscode-workspace` or `peer`), Files, Last scanned and HEAD (each repo's own checkout). Uninitialised submodules are listed with `✗ not initialised` and the `git submodule update --init` command. `list` also shows unregistered discoveries.
+List the registered repositories as a table: Name, Path, Type (`primary`, `submodule`, `vscode-workspace`, `peer`, or `folder` for a registered directory without a checkout of its own, such as a monorepo package), Files, Last scanned and HEAD (each repo's own checkout; `-` for a `folder`). Uninitialised submodules are listed with `✗ not initialised` and the `git submodule update --init` command. `list` also shows unregistered discoveries.
 
 ```bash
 mapx workspaces
@@ -422,7 +422,7 @@ mapx workspaces list [--include-peers]
 
 ### `mapx workspaces add <path>`
 
-Register a new repository in the workspace.
+Register a new repository in the workspace. A path that resolves (through symlinks) to a registered repository is reported as already registered.
 
 ```bash
 mapx workspaces add ../sibling-repo --name my-repo
@@ -455,7 +455,7 @@ Suggests `mapx workspaces add <path>` for registration.
 
 ### `mapx workspaces sync`
 
-Sync all discovered submodules and VS Code workspace folders, plus peer repos with `--include-peers` (auto-registers them). For newly discovered **nested git repositories** and **monorepo packages**, interactive prompts let you choose which ones to register and scan.
+Sync all discovered submodules and VS Code workspace folders, plus peer repos with `--include-peers` (auto-registers them). For newly discovered **nested git repositories** and **monorepo packages**, interactive prompts let you choose which ones to register and scan. Without a TTY those prompts are skipped (sync says how many it found) and the other discoveries are still registered. A folder reached through a symlink to an already registered repository is not registered again.
 
 ```bash
 mapx workspaces sync [--include-peers]

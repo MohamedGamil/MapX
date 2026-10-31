@@ -343,6 +343,7 @@ List and filter project files.
 #### `mapx_dependencies`
 Get file-level dependencies and reverse dependencies. A file that declares service-container bindings also gets a `Bindings (abstract → concrete)` block, as `mapx deps` does: closures show as `(closure)`, and `$listen` entries read `Event → Listener (listen)`.
 - `file` (string, required): File path to analyze
+- `crossRepo` (boolean, optional): List only the edges that cross into or come from another registered repository, as `mapx deps --cross-repo` does (`→ [repo] file (type)` / `← [repo] file (type)`)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_callers`
@@ -454,6 +455,7 @@ Export compact graph summary.
 - `format` (string, optional): `llm`, `json`, `dot`, `svg`, `toon` (default: `llm`)
 - `tokens` (number, optional): Token budget for LLM format (default: 8192)
 - `repo` (string, optional): Filter by repo name
+- `all` (boolean, optional): LLM format only. Produces the combined multi-repo export of `mapx export --all`: the repo list, the cross-repo dependencies, then one `## <repo>` section per repo
 - `dir` (string, optional): Target project directory
 
 #### `mapx_context`
@@ -468,7 +470,7 @@ Intelligent, token-budgeted workspace context builder for LLM prompts.
 
 #### `mapx_workspaces`
 Workspace introspection with two actions:
-- **`list`** — Returns all registered repos with stats: `type` (`primary`, `submodule`, `vscode-workspace`, `peer`), `fileCount`, `symbolCount`, `edgeCount`, `crossRepoEdgeCount`, `lastScanned` and `headCommit`. Also returns a top-level `crossRepoEdgeCount`, the per-pair `crossRepoEdges`, and the unregistered discoveries.
+- **`list`** — Returns the workspace `root` and all registered repos with stats: `type` (`primary`, `submodule`, `vscode-workspace`, `peer`, or `folder` for a directory without its own checkout), `fileCount`, `symbolCount`, `edgeCount`, `crossRepoEdgeCount`, `lastScanned` and `headSha` (the repo's own HEAD; `null` for a `folder`). Also returns a top-level `crossRepoEdgeCount`, the per-pair `crossRepoEdges`, and the unregistered discoveries.
 - **`discover`** — Discovers unregistered submodules, VS Code workspace folders, nested repos and monorepo packages; peer repos only with `includePeers`
 
 Parameters:

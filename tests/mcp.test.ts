@@ -127,7 +127,10 @@ vi.mock('../src/core/scanner.js', () => ({
 }));
 
 vi.mock('../src/core/workspace-manager.js', () => ({
+  canonicalPath: (p: string) => p,
   WorkspaceManager: {
+    // Path identity without touching the filesystem (M0-10-R2).
+    repoKey: (dir: string, p: string) => `${dir}/${p}`,
     discoverSubmodules: vi.fn().mockReturnValue([]),
     discoverPeerRepos: vi.fn().mockReturnValue([]),
     discoverVSCodeWorkspace: vi.fn().mockReturnValue([]),

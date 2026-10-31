@@ -12,7 +12,7 @@ import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { AgentGenerator, needsConsent, droppedCommentsWarning } from './agents/generator.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
-import { codeWorkspaceFiles, crossRepoPairs, summarizeRepos, table, timeAgo } from './core/workspace-summary.js';
+import { codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, summarizeRepos, table, timeAgo, workspaceExport } from './core/workspace-summary.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -456,16 +456,23 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // Submodules and VS Code workspace folders (F18; skip with --no-workspaces). Registering
       // needs a TTY prompt; otherwise init only reports what it found (M0-10-R1).
       if (opts.workspaces !== false) {
-        const registered = new Set(config.repos.map(r => resolve(dir, r.path)));
+        const registered = new Set(config.repos.map(r => WorkspaceManager.repoKey(dir, r.path)));
         const groups: { title: string; question: string; repos: { name: string; path: string }[] }[] = [];
         const submodules = WorkspaceManager.discoverSubmodules(dir);
         if (submodules.length > 0) {
           console.log(`\nDetected .gitmodules with ${submodules.length} submodule(s):`);
           for (const s of submodules) console.log(`  ${s.name.padEnd(20)} (${s.path}) ${s.isInitialized ? '✓ initialised' : '✗ not initialised'}`);
-          groups.push({ title: 'submodule', question: 'Register initialised submodules?', repos: submodules.filter(s => s.isInitialized && !registered.has(resolve(dir, s.path))) });
+          groups.push({ title: 'submodule', question: 'Register initialised submodules?', repos: submodules.filter(s => s.isInitialized && !registered.has(WorkspaceManager.repoKey(dir, s.path))) });
         }
+        // A folder offered once (e.g. a submodule, or a symlink to it) is not offered again (M0-10-R2).
+        const offered = new Set([...registered, ...submodules.filter(s => s.isInitialized).map(s => WorkspaceManager.repoKey(dir, s.path))]);
         for (const file of codeWorkspaceFiles(dir)) {
-          const folders = WorkspaceManager.discoverVSCodeWorkspace(file, dir).filter(f => !registered.has(resolve(dir, f.path)));
+          const folders = WorkspaceManager.discoverVSCodeWorkspace(file, dir).filter(f => {
+            const key = WorkspaceManager.repoKey(dir, f.path);
+            if (offered.has(key)) return false;
+            offered.add(key);
+            return true;
+          });
           if (!folders.length) continue;
           console.log(`\nDetected VS Code workspace file: ${basename(file)}`);
           console.log(`  Additional repos: ${folders.map(f => `${f.name} (${f.path})`).join(', ')}`);
@@ -480,7 +487,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           if (clack.isCancel(ok) || !ok) continue;
           for (const r of group.repos) {
             config.addRepo(r.name, r.path);
-            registered.add(resolve(dir, r.path));
+            registered.add(WorkspaceManager.repoKey(dir, r.path));
           }
           await config.save();
           clack.log.success(`Registered ${group.repos.length} ${group.title}(s). Run \`mapx scan --all\` to index all repos.`);
@@ -491,9 +498,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       if (opts.discover !== false && process.stdin.isTTY) {
         const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
         const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
-        const registeredPaths = new Set(config.repos.map(r => resolve(dir, r.path)));
-        const newNested = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
-        const newMono   = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+        const registeredPaths = new Set(config.repos.map(r => WorkspaceManager.repoKey(dir, r.path)));
+        const newNested = nestedRepos.filter(n => !registeredPaths.has(WorkspaceManager.repoKey(dir, n.path)));
+        const newMono   = monoPkgs.filter(p => !registeredPaths.has(WorkspaceManager.repoKey(dir, p.path)));
 
         if (newNested.length > 0 || newMono.length > 0) {
           const totalFound = newNested.length + newMono.length;
@@ -754,7 +761,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const n = (v: number) => v.toLocaleString('en-US');
         const rows = summaries.map(r => {
           const c = changed.get(r.name) ?? 0;
-          return [r.name, n(r.files), n(r.symbols), n(r.edges), r.head ?? '-', timeAgo(r.lastScanned), c ? `${c} file${c === 1 ? '' : 's'}` : 'clean'];
+          // A repo registered but never scanned has nothing indexed to be stale: not "clean" (M0-10-R2).
+          const state = !r.lastScanned ? 'unscanned' : c ? `${c} file${c === 1 ? '' : 's'}` : 'clean';
+          return [r.name, n(r.files), n(r.symbols), n(r.edges), r.head ?? '-', timeAgo(r.lastScanned), state];
         });
         console.log('');
         for (const line of table(['Repo', 'Files', 'Symbols', 'Edges', 'HEAD', 'Last scan', 'Changed'], rows)) console.log(line);
@@ -1417,22 +1426,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         if (resolved.length > 1) console.log(`\n── ${filePath} ──`);
 
         if (opts.crossRepo) {
-          // F18: edges whose two ends live in different registered repos (M0-10-R1).
-          const out = store.raw.prepare(
-            'SELECT DISTINCT target_file, edge_type, repo, target_repo FROM edges WHERE source_file = ? AND target_repo IS NOT NULL AND target_repo != repo ORDER BY target_file'
-          ).all(filePath) as { target_file: string; edge_type: string; repo: string; target_repo: string }[];
-          const inc = store.raw.prepare(
-            'SELECT DISTINCT source_file, edge_type, repo, target_repo FROM edges WHERE target_file = ? AND target_repo IS NOT NULL AND target_repo != repo ORDER BY source_file'
-          ).all(filePath) as { source_file: string; edge_type: string; repo: string; target_repo: string }[];
-          if (!out.length && !inc.length) console.log('No cross-repo dependencies found');
-          if (out.length) {
-            console.log('Cross-repo dependencies:');
-            for (const e of out) console.log(`  → [${e.target_repo}] ${e.target_file} (${e.edge_type})`);
-          }
-          if (inc.length) {
-            console.log(`${out.length ? '\n' : ''}Cross-repo dependents:`);
-            for (const e of inc) console.log(`  ← [${e.repo}] ${e.source_file} (${e.edge_type})`);
-          }
+          // F18: edges whose two ends live in different registered repos (M0-10-R1); shared with
+          // mapx_dependencies {crossRepo} (M0-10-R2).
+          for (const line of crossRepoDependencies(store, filePath)) console.log(line);
           continue;
         }
 
@@ -1943,26 +1939,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         default: {
           const exporter = new LLMExporter(store, graph);
           if (opts.all && !opts.repo) {
-            // F18 combined export: repo list, cross-repo dependencies, then one section per repo
-            // sharing the token budget (M0-10-R1).
-            const summaries = summarizeRepos(dir, config.repos, config.repo.name, store);
-            const pairs = crossRepoPairs(store);
-            const kept = new Set(filteredFiles);
-            const parts = [
-              `# Workspace: ${config.repo.name}`,
-              '',
-              `## Repos (${summaries.length})`,
-              ...summaries.map(r => `- ${r.name} (${r.type}) — ${r.files} files, ${r.symbols} symbols`),
-              '',
-              `## Cross-repo dependencies (${pairs.reduce((a, p) => a + p.count, 0)} edges)`,
-              ...(pairs.length ? pairs.map(p => `${p.from} → ${p.to}: ${p.count} ${p.types.join('/')}`) : ['none']),
-            ];
-            const budget = Math.max(512, Math.floor(tokenBudget / Math.max(1, summaries.length)));
-            for (const r of summaries) {
-              const files = store.getAllFiles(r.name).map(f => f.path as string).filter(f => kept.has(f));
-              parts.push('', `## ${r.name}`, '', exporter.export({ format: 'llm', tokenBudget: budget, repo: r.name, files }));
-            }
-            output = parts.join('\n');
+            // F18 combined export, shared with mapx_export {all} (M0-10-R1, M0-10-R2).
+            output = workspaceExport(dir, config.repos, config.repo.name, store, exporter, tokenBudget, filteredFiles);
             break;
           }
           output = exporter.export({
@@ -2906,8 +2884,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   // uninitialised submodules listed after them (M0-10-R1).
   const printWorkspacesTable = (dir: string, config: Config, store: Store) => {
     const summaries = summarizeRepos(dir, config.repos, config.repo.name, store);
-    const registered = new Set(config.repos.map(r => resolve(dir, r.path)));
-    const uninitialised = WorkspaceManager.discoverSubmodules(dir).filter(s => !s.isInitialized && !registered.has(resolve(dir, s.path)));
+    const registered = new Set(config.repos.map(r => WorkspaceManager.repoKey(dir, r.path)));
+    const uninitialised = WorkspaceManager.discoverSubmodules(dir).filter(s => !s.isInitialized && !registered.has(WorkspaceManager.repoKey(dir, s.path)));
     const rows = summaries.map(r => [r.name, r.path, r.type, String(r.files), timeAgo(r.lastScanned), r.head ?? '-']);
     for (const s of uninitialised) rows.push([s.name, s.path, 'submodule', '✗ not initialised', '', '']);
     console.log(`\nWorkspace: ${dir}\n`);
@@ -2936,11 +2914,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const { config, store } = await loadContext(dir);
 
       printWorkspacesTable(dir, config, store);
-      const registeredPaths = new Set<string>(config.repos.map(r => resolve(dir, r.path)));
+      const registeredPaths = new Set<string>(config.repos.map(r => WorkspaceManager.repoKey(dir, r.path)));
 
       // Discover uninitialized submodules
       const submodules = WorkspaceManager.discoverSubmodules(dir);
-      const uninitSubmodules = submodules.filter(s => !registeredPaths.has(resolve(dir, s.path)));
+      const uninitSubmodules = submodules.filter(s => !registeredPaths.has(WorkspaceManager.repoKey(dir, s.path)));
       if (uninitSubmodules.length > 0) {
         console.log('\nDiscovered submodules:');
         for (const s of uninitSubmodules) {
@@ -2951,7 +2929,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // Peer repos are opt-in: sibling directories are often unrelated projects (F18)
       const peers = opts.includePeers ? WorkspaceManager.discoverPeerRepos(dir) : [];
-      const uninitPeers = peers.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      const uninitPeers = peers.filter(p => !registeredPaths.has(WorkspaceManager.repoKey(dir, p.path)));
       if (uninitPeers.length > 0) {
         console.log('\nDiscovered peer repositories:');
         for (const p of uninitPeers) {
@@ -2965,7 +2943,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log('\nDiscovered VS Code Workspace folders:');
         for (const f of wsFiles) {
           const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
-          const uninitWs = wsFolderRepos.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+          const uninitWs = wsFolderRepos.filter(p => !registeredPaths.has(WorkspaceManager.repoKey(dir, p.path)));
           for (const p of uninitWs) {
             console.log(`  - ${p.name.padEnd(15)} -> ${p.path} (available)`);
           }
@@ -2974,7 +2952,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // Deep-scan for nested git repos (up to 3 levels)
       const nested = WorkspaceManager.discoverNestedGitRepos(dir);
-      const uninitNested = nested.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      const uninitNested = nested.filter(n => !registeredPaths.has(WorkspaceManager.repoKey(dir, n.path)));
       if (uninitNested.length > 0) {
         console.log('\nNested git repositories (deep scan):');
         for (const n of uninitNested) {
@@ -2984,7 +2962,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // Monorepo packages discovered via workspace manifests or common dirs
       const monoPkgs = WorkspaceManager.discoverMonorepoPackages(dir);
-      const uninitMono = monoPkgs.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      const uninitMono = monoPkgs.filter(p => !registeredPaths.has(WorkspaceManager.repoKey(dir, p.path)));
       if (uninitMono.length > 0) {
         console.log('\nMonorepo packages:');
         for (const p of uninitMono) {
@@ -3016,8 +2994,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const relPath = relative(dir, absPath);
       const name = (opts.name as string) || basename(absPath);
 
-      if (config.repos.some(r => r.name === name || r.path === relPath)) {
-        clack.log.warn(`Repository already registered: ${name} (${relPath})`);
+      // A symlink to a registered repo is the same repo (M0-10-R2).
+      const existing = config.repos.find(r => r.name === name || WorkspaceManager.repoKey(dir, r.path) === WorkspaceManager.repoKey(dir, relPath));
+      if (existing) {
+        clack.log.warn(`Repository already registered: ${existing.name} (${existing.path})`);
         return;
       }
 
@@ -3078,14 +3058,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const registeredPaths = new Set<string>();
       for (const r of config.repos) {
-        registeredPaths.add(resolve(dir, r.path));
+        registeredPaths.add(WorkspaceManager.repoKey(dir, r.path));
       }
 
       let found = 0;
 
       // Submodules
       const submodules = WorkspaceManager.discoverSubmodules(dir);
-      const uninitSubs = submodules.filter(s => !registeredPaths.has(resolve(dir, s.path)));
+      const uninitSubs = submodules.filter(s => !registeredPaths.has(WorkspaceManager.repoKey(dir, s.path)));
       if (uninitSubs.length > 0) {
         console.log('\nSubmodules:');
         for (const s of uninitSubs) {
@@ -3097,7 +3077,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // Peer repos are opt-in (F18): without the flag only say that some exist
       const peers = WorkspaceManager.discoverPeerRepos(dir);
-      const uninitPeers = peers.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      const uninitPeers = peers.filter(p => !registeredPaths.has(WorkspaceManager.repoKey(dir, p.path)));
       if (uninitPeers.length > 0 && opts.includePeers) {
         console.log('\nPeer repositories:');
         for (const p of uninitPeers) {
@@ -3114,7 +3094,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const f of wsFiles) {
         const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
         for (const p of wsFolderRepos) {
-          if (!registeredPaths.has(resolve(dir, p.path))) {
+          if (!registeredPaths.has(WorkspaceManager.repoKey(dir, p.path))) {
             vsEntries.push({ name: p.name, path: p.path });
           }
         }
@@ -3129,7 +3109,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // Deep-scan for nested git repos (up to 3 levels)
       const nestedRepos = WorkspaceManager.discoverNestedGitRepos(dir);
-      const uninitNestedDiscover = nestedRepos.filter(n => !registeredPaths.has(resolve(dir, n.path)));
+      const uninitNestedDiscover = nestedRepos.filter(n => !registeredPaths.has(WorkspaceManager.repoKey(dir, n.path)));
       if (uninitNestedDiscover.length > 0) {
         console.log('\nNested git repositories (deep scan ≤3 levels):');
         for (const n of uninitNestedDiscover) {
@@ -3140,7 +3120,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // Monorepo packages
       const monoDiscover = WorkspaceManager.discoverMonorepoPackages(dir);
-      const uninitMonoDiscover = monoDiscover.filter(p => !registeredPaths.has(resolve(dir, p.path)));
+      const uninitMonoDiscover = monoDiscover.filter(p => !registeredPaths.has(WorkspaceManager.repoKey(dir, p.path)));
       if (uninitMonoDiscover.length > 0) {
         console.log('\nMonorepo packages:');
         for (const p of uninitMonoDiscover) {
@@ -3166,7 +3146,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const registeredPaths = new Set<string>();
       for (const r of config.repos) {
-        registeredPaths.add(resolve(dir, r.path));
+        registeredPaths.add(WorkspaceManager.repoKey(dir, r.path));
       }
 
       const toAdd: Array<{ name: string; path: string }> = [];
@@ -3175,7 +3155,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const submodules = WorkspaceManager.discoverSubmodules(dir);
       for (const s of submodules) {
         if (s.isInitialized) {
-          const abs = resolve(dir, s.path);
+          const abs = WorkspaceManager.repoKey(dir, s.path);
           if (!registeredPaths.has(abs)) {
             toAdd.push({ name: s.name, path: s.path });
             registeredPaths.add(abs);
@@ -3186,7 +3166,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // 2. Peer repos (opt-in)
       const peers = opts.includePeers ? WorkspaceManager.discoverPeerRepos(dir) : [];
       for (const p of peers) {
-        const abs = resolve(dir, p.path);
+        const abs = WorkspaceManager.repoKey(dir, p.path);
         if (!registeredPaths.has(abs)) {
           toAdd.push({ name: p.name, path: p.path });
           registeredPaths.add(abs);
@@ -3197,7 +3177,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const f of codeWorkspaceFiles(dir)) {
         const wsFolderRepos = WorkspaceManager.discoverVSCodeWorkspace(f, dir);
         for (const p of wsFolderRepos) {
-          const abs = resolve(dir, p.path);
+          const abs = WorkspaceManager.repoKey(dir, p.path);
           if (!registeredPaths.has(abs)) {
             toAdd.push({ name: p.name, path: p.path });
             registeredPaths.add(abs);
@@ -3207,8 +3187,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // 4. Nested git repositories — prompt user to select which to add
       const nestedReposSync = WorkspaceManager.discoverNestedGitRepos(dir);
-      const newNestedRepos = nestedReposSync.filter(n => !registeredPaths.has(resolve(dir, n.path)));
-      if (newNestedRepos.length > 0) {
+      const newNestedRepos = nestedReposSync.filter(n => !registeredPaths.has(WorkspaceManager.repoKey(dir, n.path)));
+      // Choosing nested repos and packages needs a TTY; without one, sync registers the rest
+      // instead of cancelling everything at the prompt (M0-10-R2).
+      const canPrompt = !!process.stdin.isTTY;
+      const notPrompted = (what: string) =>
+        clack.log.info(`${what} found; run sync in a terminal to choose, or \`mapx workspaces add <path>\`.`);
+      if (newNestedRepos.length > 0 && !canPrompt) notPrompted(`${newNestedRepos.length} nested repositor${newNestedRepos.length === 1 ? 'y' : 'ies'}`);
+      if (newNestedRepos.length > 0 && canPrompt) {
         clack.log.step(`Found ${newNestedRepos.length} nested git repositor${newNestedRepos.length === 1 ? 'y' : 'ies'} via deep scan (up to 3 levels):`);
         const chosen = await clack.multiselect({
           message: 'Select nested repositories to register and scan:',
@@ -3222,14 +3208,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         for (const chosenPath of chosen as string[]) {
           const nested = newNestedRepos.find(n => n.path === chosenPath)!;
           toAdd.push({ name: nested.name, path: nested.path });
-          registeredPaths.add(resolve(dir, nested.path));
+          registeredPaths.add(WorkspaceManager.repoKey(dir, nested.path));
         }
       }
 
       // 5. Monorepo packages — prompt user to select which to register
       const monoPkgsSync = WorkspaceManager.discoverMonorepoPackages(dir);
-      const newMonoPkgs = monoPkgsSync.filter(p => !registeredPaths.has(resolve(dir, p.path)));
-      if (newMonoPkgs.length > 0) {
+      const newMonoPkgs = monoPkgsSync.filter(p => !registeredPaths.has(WorkspaceManager.repoKey(dir, p.path)));
+      if (newMonoPkgs.length > 0 && !canPrompt) notPrompted(`${newMonoPkgs.length} monorepo package${newMonoPkgs.length === 1 ? '' : 's'}`);
+      if (newMonoPkgs.length > 0 && canPrompt) {
         const mgr = newMonoPkgs[0].packageManager;
         clack.log.step(`Found ${newMonoPkgs.length} monorepo package${newMonoPkgs.length === 1 ? '' : 's'} [${mgr}]:`);
         const chosenMono = await clack.multiselect({
@@ -3245,7 +3232,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const pkg = newMonoPkgs.find(p => p.path === chosenPath);
           if (pkg) {
             toAdd.push({ name: pkg.name, path: pkg.path });
-            registeredPaths.add(resolve(dir, pkg.path));
+            registeredPaths.add(WorkspaceManager.repoKey(dir, pkg.path));
           }
         }
       }
@@ -3256,14 +3243,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       }
 
       clack.log.step(`Syncing ${toAdd.length} newly discovered repositories:`);
+      const newNames: string[] = [];
       for (const item of toAdd) {
-        config.addRepo(item.name, item.path);
+        if (!config.addRepo(item.name, item.path)) continue;
+        newNames.push(item.name);
         clack.log.success(`Registered: ${item.name} -> ${item.path}`);
       }
       await config.save();
 
       clack.log.step('Running initial full scan for new repositories...');
-      const newNames = toAdd.map(item => item.name);
       const onProgress = createProgressRenderer();
       const scanner = new Scanner(store, config, graph, onProgress);
 

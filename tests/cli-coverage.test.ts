@@ -107,7 +107,10 @@ vi.mock('../src/ui-server.js', () => ({
 }));
 
 vi.mock('../src/core/workspace-manager.js', () => ({
+  canonicalPath: (p: string) => p,
   WorkspaceManager: {
+    // Path identity without touching the filesystem (M0-10-R2).
+    repoKey: (dir: string, p: string) => `${dir}/${p}`,
     discoverSubmodules: () => [
       { name: 'sub1', path: 'packages/sub1', isInitialized: true },
       { name: 'sub2', path: 'packages/sub2', isInitialized: false }
