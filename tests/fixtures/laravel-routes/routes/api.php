@@ -112,3 +112,9 @@ Route::get('guarded', ['middleware' => 'auth', [HomeController::class, 'guarded'
 Route::get('named-closure', ['as' => 'named', function () {
     return ['ok' => true];
 }]);
+
+// M1-05-R2: singletons and route-level prefix keys (the route prefix goes before the group prefix).
+Route::singleton('profile', ProfileController::class)->except('edit');
+Route::apiSingleton('teams.logo', LogoController::class)->creatable();
+Route::get('status', ['prefix' => 'v3', 'uses' => 'HomeController@status']);
+Route::prefix('lead')->get('chained', [HomeController::class, 'chained']);

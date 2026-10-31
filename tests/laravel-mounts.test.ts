@@ -439,6 +439,137 @@ describe('M1-05-R1: resource forms, array handlers and group name prefixes match
   });
 });
 
+// M1-05-R2: EXPECTED is the output of Laravel's own router (laravel/framework 12.70.2 installed
+// fresh with composer into a scratch directory) for the synthetic route file below, loaded inside
+// an `api` prefix + middleware group: method, URI, name, action, middleware, domain and the
+// non-null binding fields. As in M1-05-R1, Laravel's single `PUT|PATCH` update route is listed
+// as MapX's two routes.
+describe('M1-05-R2: singletons, scoped(), middlewareFor() and route-level prefix/domain keys match Laravel', () => {
+  let root: string;
+  let routes: (RouteView & { domain?: string; metadata?: { bindingFields?: Record<string, string>; confidence?: string } })[];
+  const EXPECTED = [
+    'GET /api/profile profile.show ProfileController@show [api] -',
+    'GET /api/profile/edit profile.edit ProfileController@edit [api] -',
+    'PUT /api/profile profile.update ProfileController@update [api] -',
+    'PATCH /api/profile profile.update ProfileController@update [api] -',
+    'GET /api/photos/{photo}/thumbnail photos.thumbnail.show ThumbnailController@show [api] -',
+    'PUT /api/photos/{photo}/thumbnail photos.thumbnail.update ThumbnailController@update [api] -',
+    'PATCH /api/photos/{photo}/thumbnail photos.thumbnail.update ThumbnailController@update [api] -',
+    'GET /api/photos/{photo}/thumbnail/create photos.thumbnail.create ThumbnailController@create [api] -',
+    'POST /api/photos/{photo}/thumbnail photos.thumbnail.store ThumbnailController@store [api] -',
+    'DELETE /api/photos/{photo}/thumbnail photos.thumbnail.destroy ThumbnailController@destroy [api] -',
+    'GET /api/admin/settings settings.view SettingsController@show [api,auth] -',
+    'PUT /api/admin/settings settings.update SettingsController@update [api,auth] -',
+    'PATCH /api/admin/settings settings.update SettingsController@update [api,auth] -',
+    'GET /api/avatar avatar.show UserController@show [api] -',
+    'PUT /api/avatar avatar.update UserController@update [api] -',
+    'PATCH /api/avatar avatar.update UserController@update [api] -',
+    'DELETE /api/avatar avatar.destroy UserController@destroy [api] -',
+    'GET /api/teams/{squad}/logo teams.logo.show LogoController@show [api] -',
+    'PUT /api/teams/{squad}/logo teams.logo.update LogoController@update [api] -',
+    'PATCH /api/teams/{squad}/logo teams.logo.update LogoController@update [api] -',
+    'POST /api/teams/{squad}/logo teams.logo.store LogoController@store [api] -',
+    'DELETE /api/teams/{squad}/logo teams.logo.destroy LogoController@destroy [api] -',
+    'GET /api/account my.account.show AccountController@show [api,verified] -',
+    'GET /api/account/edit my.account.edit AccountController@edit [api] -',
+    'GET /api/cart cart.show CartController@show [api] -',
+    'GET /api/wallet wallet.show WalletController@show [api] -',
+    'GET /api/plan plan.show PlanController@show [api] -',
+    'PUT /api/plan plan.update PlanController@update [api] -',
+    'PATCH /api/plan plan.update PlanController@update [api] -',
+    'GET /api/posts/{post}/comments posts.comments.index CommentController@index [api] -',
+    'GET /api/posts/{post}/comments/{comment} posts.comments.show CommentController@show [api] - {"comment":"slug"}',
+    'GET /api/users/{user}/notes users.notes.index NoteController@index [api] - {"user":"uuid"}',
+    'GET /api/users/{user}/notes/{note} users.notes.show NoteController@show [api] - {"user":"uuid","note":"slug"}',
+    'GET /api/orders orders.index OrderController@index [api,auth] -',
+    'POST /api/orders orders.store OrderController@store [api,auth,verified,can:write] -',
+    'GET /api/orders/{order} orders.show OrderController@show [api,auth,verified] -',
+    'DELETE /api/orders/{order} orders.destroy OrderController@destroy [api,auth,verified,can:write] -',
+    'GET /api/invoices invoices.index InvoiceController@index [api,cache,auth] -',
+    'GET /api/invoices/{invoice} invoices.show InvoiceController@show [api,auth] -',
+    'GET /api/carts carts.index CartItemController@index [api,throttle] -',
+    'GET /api/carts/{cart} carts.show CartItemController@show [api,throttle,auth] -',
+    'GET /api/refunds refunds.index RefundController@index [api] -',
+    'GET /api/refunds/{refund} refunds.show RefundController@show [api,audit] -',
+    'GET /v9/api/ping - PingController@show [api] -',
+    'GET /outer/api/inner/pong pong PingController@pong [api] -',
+    'GET /lead/api/inner/chained - PingController@chained [api] -',
+    'GET /kept/api/inner/both - PingController@both [api] -',
+    'GET /tail/api/inner/after - PingController@after [api] -',
+    'GET /api/tenant - TenantController@show [api] {account}.example.com',
+    'GET /api/dash - DashController@index [api] ops.example.com',
+    'GET /api/home - DashController@home [api] admin.example.com',
+    'GET /p/api/closure - Closure [api,auth] x.test',
+  ];
+  const line = (r: (typeof routes)[number]) => {
+    const fields = r.metadata?.bindingFields;
+    return `${r.method} ${r.path} ${r.name ?? '-'} ${r.handlerSymbol?.split('\\').pop() ?? 'Closure'} [${r.middlewares.join(',')}] ${r.domain ?? '-'}` +
+      (fields && Object.keys(fields).length ? ` ${JSON.stringify(fields)}` : '');
+  };
+
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'routes/api.php': [
+        '<?php',
+        'use App\\Http\\Controllers\\UserController;',
+        'use Illuminate\\Support\\Facades\\Route;',
+        '',
+        // Singletons: defaults, creatable/destroyable, nesting, prefixes, options and plural forms.
+        "Route::singleton('profile', 'ProfileController');",
+        "Route::singleton('photos.thumbnail', 'ThumbnailController')->creatable()->except('edit');",
+        "Route::singleton('admin/settings', 'SettingsController', ['only' => ['show', 'update'], 'names' => ['show' => 'settings.view'], 'middleware' => 'auth']);",
+        "Route::apiSingleton('avatar', UserController::class)->destroyable();",
+        "Route::apiSingleton('teams.logo', 'LogoController')->creatable()->parameters(['teams' => 'squad']);",
+        "Route::name('my')->singleton('account', 'AccountController')->only(['show', 'edit'])->middlewareFor('show', 'verified');",
+        "Route::singletons(['cart' => 'CartController', 'wallet' => 'WalletController'], ['only' => ['show']]);",
+        "Route::apiSingletons(['plan' => 'PlanController']);",
+        // scoped(): URIs keep plain wildcards, binding fields go to the routes that carry them.
+        "Route::resource('posts.comments', 'CommentController')->scoped(['comment' => 'slug'])->only(['index', 'show']);",
+        "Route::apiResource('users.notes', 'NoteController')->scoped(['user' => 'uuid', 'note' => 'slug'])->only(['index', 'show']);",
+        // middlewareFor(): per-action middleware, merged with middleware() in either order.
+        "Route::resource('orders', 'OrderController')->middleware('auth')->middlewareFor('show', 'verified')->middlewareFor(['store', 'destroy'], ['verified', 'can:write'])->only(['index', 'store', 'show', 'destroy']);",
+        "Route::apiResource('invoices', 'InvoiceController')->middlewareFor('index', 'cache')->middleware('auth')->only(['index', 'show']);",
+        "Route::middleware('throttle')->resource('carts', 'CartItemController')->middlewareFor('show', ['auth', 'throttle'])->only(['index', 'show']);",
+        "Route::resource('refunds', 'RefundController', ['middleware_for' => ['show' => 'audit']])->only(['index', 'show']);",
+        // Route-level prefix (action array key or chained) goes before the group prefix; domain keys win.
+        "Route::get('ping', ['prefix' => 'v9', 'uses' => 'PingController@show']);",
+        "Route::group(['prefix' => 'inner'], function () {",
+        "    Route::get('pong', ['prefix' => 'outer', 'as' => 'pong', 'uses' => 'PingController@pong']);",
+        "    Route::prefix('lead')->get('chained', 'PingController@chained');",
+        "    Route::prefix('lost')->get('both', ['prefix' => 'kept', 'uses' => 'PingController@both']);",
+        "    Route::get('after', 'PingController@after')->prefix('tail');",
+        '});',
+        "Route::get('tenant', ['domain' => '{account}.example.com', 'uses' => 'TenantController@show']);",
+        "Route::domain('admin.example.com')->group(function () {",
+        "    Route::get('dash', ['domain' => 'ops.example.com', 'uses' => 'DashController@index']);",
+        "    Route::get('home', 'DashController@home');",
+        '});',
+        "Route::get('closure', ['prefix' => 'p', 'domain' => 'x.test', 'middleware' => 'auth', function () { return 1; }]);",
+      ].join('\n'),
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    routes = JSON.parse(mapx(root, 'routes', root, '--json'));
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it("reports exactly Laravel's route list: URIs, names, handlers, middleware, domains and binding fields", () => {
+    expect(routes.map(line).sort()).toEqual([...EXPECTED].sort());
+  });
+
+  it('resolves singleton controllers to fully-qualified classes and marks them declared', () => {
+    const avatar = routes.filter((r) => r.path === '/api/avatar');
+    expect(avatar.map((r) => r.handlerSymbol).sort()).toEqual([
+      'App\\Http\\Controllers\\UserController@destroy',
+      'App\\Http\\Controllers\\UserController@show',
+      'App\\Http\\Controllers\\UserController@update',
+      'App\\Http\\Controllers\\UserController@update',
+    ]);
+    expect(avatar.map((r) => r.metadata?.confidence)).toEqual(['declared', 'declared', 'declared', 'declared']);
+  });
+});
+
 // Review 2026-10-31: the M1-08 test seeded frameworks.json and used artisan, so detection from
 // composer.json alone was never exercised.
 describe('M1-08: a nested Laravel app found from composer.json alone', () => {

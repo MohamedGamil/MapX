@@ -1313,7 +1313,17 @@ interface ResourceOptions {
   as?: string;
   middleware?: string[];
   shallow?: boolean;
+  /** Singletons: `creatable` adds create/store/destroy, `destroyable` adds destroy. */
+  creatable?: boolean;
+  destroyable?: boolean;
+  /** `->scoped([...])`: the binding field of a wildcard (`comment => slug`). */
+  bindingFields?: Record<string, string>;
+  /** `middleware_for` / `->middlewareFor()`: an action's middleware, replacing `middleware`. */
+  middlewareFor?: Record<string, string[]>;
 }
+
+/** Laravel's Router::uniqueMiddleware: first occurrence wins. */
+const uniqueMiddleware = (list: string[]) => [...new Set(list)];
 
 /** The options array of `Route::resource($name, $controller, $options)` and `Route::resources($map, $options)`. */
 function parseResourceOptions(arg: string | undefined, scope: PhpScope): ResourceOptions {
@@ -1325,6 +1335,13 @@ function parseResourceOptions(arg: string | undefined, scope: PhpScope): Resourc
     else if (key === 'as') options.as = phpString(value, scope) ?? undefined;
     else if (key === 'middleware') options.middleware = listArg(value);
     else if (key === 'shallow') options.shallow = /^true$/i.test(value);
+    // ResourceRegistrar tests these with isset(), so any non-null value counts.
+    else if (key === 'creatable' || key === 'destroyable') options[key] = !/^null$/i.test(value);
+    else if (key === 'bindingFields') options.bindingFields = stringMap(value, scope);
+    else if (key === 'middleware_for') {
+      options.middlewareFor = {};
+      for (const e of phpArrayEntries(value) ?? []) if (e.key !== null) options.middlewareFor[e.key] = listArg(e.value);
+    }
   }
   return options;
 }
@@ -1357,13 +1374,18 @@ function getResourceParam(resourceName: string): string {
 }
 
 const API_RESOURCE_ACTIONS = ['index', 'store', 'show', 'update', 'destroy'];
+const API_SINGLETON_ACTIONS = ['store', 'show', 'update', 'destroy'];
 
 /**
  * The routes of one resource registration, following Laravel's ResourceRegistrar: everything
  * before the last `/` is a URI prefix; `a.b` nests `b` under `a/{a}`; every segment's wildcard is
  * its `parameters` entry or its singular; `shallow` drops the parents from member routes; route
  * names are `[as.]<name>.<action>` unless `names` overrides them, behind the group name prefix.
- * MapX keeps `update` as two routes (PUT and PATCH) where Laravel registers one PUT|PATCH route.
+ * A singleton (`singleton`) has no wildcard of its own and registers show/edit/update, plus
+ * create/store/destroy when `creatable` or destroy when `destroyable`. Each action takes its
+ * `middlewareFor` entry instead of `middleware`, and `bindingFields` (scoped()) of the wildcards
+ * in its URI. MapX keeps `update` as two routes (PUT and PATCH) where Laravel registers one
+ * PUT|PATCH route.
  */
 function expandResourceRoute(
   frameworkName: string,
@@ -1375,6 +1397,7 @@ function expandResourceRoute(
   isApi: boolean,
   options: ResourceOptions = {},
   namePrefix = '',
+  singleton = false,
 ): RouteBinding[] {
   const clean = resourceName.replace(/^\/+|\/+$/g, '');
   const name = clean.slice(clean.lastIndexOf('/') + 1);
@@ -1394,11 +1417,26 @@ function expandResourceRoute(
     const base = typeof options.names === 'string' ? options.names : n;
     return namePrefix + `${options.as ? `${options.as}.` : ''}${base}.${action}`.replace(/^\.+|\.+$/g, '');
   };
-  // apiResource() is resource() with `only` defaulting to the API actions minus `except`.
-  const only = options.only ?? (isApi ? API_RESOURCE_ACTIONS.filter(a => !options.except?.includes(a)) : undefined);
-  const middlewares = [...groupMiddlewares, ...(options.middleware ?? [])];
+  // apiResource()/apiSingleton() are resource()/singleton() with `only` defaulting to the API
+  // actions minus `except`.
+  const apiActions = singleton ? API_SINGLETON_ACTIONS : API_RESOURCE_ACTIONS;
+  const only = options.only ?? (isApi ? apiActions.filter(a => !options.except?.includes(a)) : undefined);
+  const middlewaresFor = (action: string) =>
+    [...groupMiddlewares, ...(options.middlewareFor?.[action] ?? options.middleware ?? [])];
 
-  const routesDefs = [
+  // Singletons: the URI is the resource URI itself (getResourceUri drops the last wildcard), and
+  // show/create/store keep the full nested name even when shallow.
+  const routesDefs = singleton ? [
+    { method: 'GET', pathSuffix: '', action: 'show', member: false },
+    { method: 'GET', pathSuffix: '/edit', action: 'edit', member: true },
+    { method: 'PUT', pathSuffix: '', action: 'update', member: true },
+    { method: 'PATCH', pathSuffix: '', action: 'update', member: true },
+    ...(options.creatable ? [
+      { method: 'GET', pathSuffix: '/create', action: 'create', member: false },
+      { method: 'POST', pathSuffix: '', action: 'store', member: false },
+    ] : []),
+    ...(options.creatable || options.destroyable ? [{ method: 'DELETE', pathSuffix: '', action: 'destroy', member: true }] : []),
+  ] : [
     { method: 'GET', pathSuffix: '', action: 'index', member: false },
     { method: 'GET', pathSuffix: '/create', action: 'create', member: false },
     { method: 'POST', pathSuffix: '', action: 'store', member: false },
@@ -1414,6 +1452,9 @@ function expandResourceRoute(
     .map(def => {
     const n = def.member ? memberName : name;
     const fullPath = ('/' + [...cleanPrefixes, resourceUri(n)].join('/') + def.pathSuffix).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+    // setResourceBindingFields: the scoped field of each wildcard in the route's URI, in URI order.
+    const bindingFields = Object.fromEntries([...fullPath.matchAll(/\{(\w+)\}/g)]
+      .filter(m => options.bindingFields?.[m[1]!] !== undefined).map(m => [m[1]!, options.bindingFields![m[1]!]!]));
     return {
       framework: frameworkName,
       method: def.method,
@@ -1422,9 +1463,10 @@ function expandResourceRoute(
       handlerSymbol: `${controllerName}@${def.action}`,
       metadata: {
         confidence: 'inferred',
-        resourceType: isApi ? 'apiResource' : 'resource',
-        middlewares,
+        resourceType: isApi ? (singleton ? 'apiSingleton' : 'apiResource') : singleton ? 'singleton' : 'resource',
+        middlewares: middlewaresFor(def.action),
         name: routeName(n, def.action),
+        ...(Object.keys(bindingFields).length ? { bindingFields } : {}),
       }
     };
   });
@@ -1948,8 +1990,13 @@ function processRouteChain(
   let nameAttribute: string | undefined;
   const nameSuffixes: string[] = [];
   let chainDomain: string | null = null;
+  /** Route-level prefix: the RouteRegistrar attribute chained before the verb (the last one wins). */
+  let prefixAttribute: string | undefined;
+  /** `->prefix()` / `->domain()` called on the route after the verb. */
+  const postPrefixes: string[] = [];
+  let postDomain: string | undefined;
   let isGroup = false;
-  const isResourceVerb = () => ['RESOURCE', 'APIRESOURCE', 'RESOURCES', 'APIRESOURCES'].includes(verb ?? '');
+  const isResourceVerb = () => /^(API)?(RESOURCE|SINGLETON)S?$/.test(verb ?? '');
 
   for (const call of calls) {
     if (call.name === 'group') {
@@ -1979,9 +2026,21 @@ function processRouteChain(
       resourceOptions.names = phpArrayEntries(raw) ? stringMap(raw, scope) : phpString(raw, scope) ?? undefined;
     } else if (call.name === 'shallow') {
       resourceOptions.shallow = !/^\s*false\s*$/i.test(call.args);
+    } else if (call.name === 'creatable' || call.name === 'destroyable') {
+      resourceOptions[call.name] = true;
+    } else if (call.name === 'scoped') {
+      resourceOptions.bindingFields = stringMap(parseArgs(call.args, true)[0] ?? '', scope);
+    } else if (call.name === 'middlewareFor') {
+      // PendingResourceRegistration::middlewareFor(): merged after the current `middleware`.
+      const [methods, list] = parseArgs(call.args, true);
+      if (methods && list) {
+        const merged = uniqueMiddleware([...(resourceOptions.middleware ?? []), ...listArg(list)]);
+        for (const m of listArg(methods)) resourceOptions.middlewareFor = { ...resourceOptions.middlewareFor, [m]: merged };
+      }
     } else if (call.name === 'domain') {
       const raw = parseArgs(call.args, true)[0];
-      if (raw) chainDomain = pathArg(raw, scope);
+      if (raw && verb) postDomain = pathArg(raw, scope);
+      else if (raw) chainDomain = pathArg(raw, scope);
     } else if (call.name === 'controller') {
       const args = parseArgs(call.args);
       if (args[0]) {
@@ -1990,7 +2049,8 @@ function processRouteChain(
           chainController = classMatch[1];
         }
       }
-    } else if (['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'resource', 'apiResource', 'resources', 'apiResources'].includes(call.name)) {
+    } else if (['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'resource', 'apiResource', 'resources', 'apiResources',
+      'singleton', 'apiSingleton', 'singletons', 'apiSingletons'].includes(call.name)) {
       verb = call.name.toUpperCase();
       const args = parseArgs(call.args);
       verbArgs = parseArgs(call.args, true);
@@ -2033,12 +2093,21 @@ function processRouteChain(
       handlerStr = `View(${args[1] || ''})`;
     } else if (call.name === 'prefix') {
       const raw = parseArgs(call.args, true)[0];
-      if (raw) chainPrefixes.push(pathArg(raw, scope));
+      if (raw && verb) postPrefixes.push(pathArg(raw, scope));
+      else if (raw) {
+        chainPrefixes.push(pathArg(raw, scope));
+        prefixAttribute = pathArg(raw, scope);
+      }
     } else if (call.name === 'middleware') {
       const list = listArg(call.args);
       chainMiddlewares.push(...list);
-      // PendingResourceRegistration::middleware() replaces the resource's middleware option.
-      if (isResourceVerb()) resourceOptions.middleware = list;
+      // PendingResourceRegistration::middleware() replaces the resource's middleware option and
+      // is appended to every middlewareFor entry.
+      if (isResourceVerb()) {
+        resourceOptions.middleware = list;
+        for (const [m, value] of Object.entries(resourceOptions.middlewareFor ?? {}))
+          resourceOptions.middlewareFor![m] = uniqueMiddleware([...value, ...list]);
+      }
     } else if (call.name === 'namespace') {
       const args = parseArgs(call.args);
       if (args[0]) chainNamespaces.push(args[0]);
@@ -2059,6 +2128,8 @@ function processRouteChain(
   // Action arrays: ['as' => 'name', 'middleware' => ..., 'uses' => 'C@m'], or without `uses`, the
   // first positional callable (Laravel's RouteAction::findCallable): a closure or [C::class, 'm'].
   let actionName: string | undefined;
+  let actionPrefix: string | undefined;
+  let actionDomain: string | undefined;
   const actionMiddlewares: string[] = [];
   const action = verb && !isResourceVerb() ? phpArrayEntries(handlerStr ?? undefined) : null;
   if (action?.some(e => e.key !== null)) {
@@ -2069,6 +2140,8 @@ function processRouteChain(
         const concat = value.match(/^\\?([\w\\]+)::class\s*\.\s*['"]@(\w+)['"]$/);
         uses = concat ? `${concat[1]}@${concat[2]}` : value.match(/^(['"])([^'"]+)\1$/)?.[2] ?? null;
       } else if (key === 'as') actionName = phpString(value, scope) ?? undefined;
+      else if (key === 'prefix') actionPrefix = pathArg(value, scope);
+      else if (key === 'domain') actionDomain = pathArg(value, scope);
       else if (key === 'middleware') actionMiddlewares.push(...listArg(value));
       else if (key === null && callable === null && /^(function\b|fn\b|static\b|\[)/.test(value)) callable = value;
     }
@@ -2080,7 +2153,11 @@ function processRouteChain(
   const groupNamespaces = groupStack.flatMap(g => g.namespaces);
   const groupNames: string = groupStack.flatMap(g => g.names ?? []).join('');
 
-  const fullPrefixes = [...groupPrefixes, ...chainPrefixes];
+  // A route-level prefix is applied by the Route constructor to a URI that already carries the
+  // group prefixes, so it goes in front of them: the action array's `prefix` (it wins over a chained
+  // attribute: `array_merge($attributes, $action)`), then each `->prefix()` called on the route.
+  const routePrefix = actionPrefix ?? prefixAttribute;
+  const fullPrefixes = [...[...postPrefixes].reverse(), ...(routePrefix !== undefined ? [routePrefix] : []), ...groupPrefixes];
   const fullMiddlewares = [...groupMiddlewares, ...actionMiddlewares, ...chainMiddlewares];
   const fullNamespaces = [...groupNamespaces, ...chainNamespaces];
   // Laravel's route name: group prefixes, then the action's `as` (or a `->name()` attribute set
@@ -2139,15 +2216,15 @@ function processRouteChain(
       const register = (resName: string, ctrl: string, declared: boolean) => {
         const fqn = controllerFqn(ctrl, useImports, groupNamespaces);
         const expanded = expandResourceRoute(frameworkName, resName, fqn, ctx.resolveSymbolToFile(fqn) ?? filePath,
-          groupPrefixes, groupMiddlewares, verb!.startsWith('APIRESOURCE'), resourceOptions, groupNames);
+          groupPrefixes, groupMiddlewares, verb!.startsWith('API'), resourceOptions, groupNames, verb!.includes('SINGLETON'));
         if (declared) for (const r of expanded) r.metadata!.confidence = 'declared';
         routes.push(...expanded);
       };
-      if (verb === 'RESOURCE' || verb === 'APIRESOURCE') {
+      if (!verb.endsWith('S')) {
         if (controllerClass) register(uri, controllerClass, false);
       } else {
-        // Route::resources([...]) / apiResources([...]): one resource per `name => controller`,
-        // all sharing the options array.
+        // Route::resources([...]) / apiResources([...]) / singletons([...]) / apiSingletons([...]):
+        // one resource per `name => controller`, all sharing the options array.
         for (const { key, value } of phpArrayEntries(verbArgs[0]) ?? []) {
           const ctrl = classArg(value, scope);
           if (key !== null && ctrl) register(phpString(`'${key}'`, scope) ?? key, ctrl, /::class$/.test(value));
@@ -2183,11 +2260,13 @@ function processRouteChain(
   }
   // Handlers given as Class::class (array form or resource controller) are declared, not inferred.
   // (Route::resources() decides per controller above.)
-  if (handlerStr && /::class\b/.test(handlerStr) && verb !== 'RESOURCES' && verb !== 'APIRESOURCES')
+  if (handlerStr && /::class\b/.test(handlerStr) && !(isResourceVerb() && verb!.endsWith('S')))
     for (const r of routes.slice(routesBefore)) (r.metadata ??= {}).confidence = 'declared';
   // A {dynamic} URI part or prefix (from this chain, a group or the mount) flags the route.
-  // A domain chained before a resource is not a resource option, so Laravel ignores it.
-  const domain = (isResourceVerb() ? null : chainDomain) ?? [...groupStack].reverse().find(g => g.domain)?.domain ?? null;
+  // A domain chained before a resource is not a resource option, so Laravel ignores it. On a
+  // route, `->domain()` after the verb wins over the action's `domain`, which wins over the
+  // attribute chained before the verb; any of them replaces the group domain.
+  const domain = (isResourceVerb() ? null : postDomain ?? actionDomain ?? chainDomain) ?? [...groupStack].reverse().find(g => g.domain)?.domain ?? null;
   for (const r of routes.slice(routesBefore)) {
     if (r.path.split('/').includes(DYNAMIC)) (r.metadata ??= {}).dynamic = true;
     if (domain && !isGroup) (r.metadata ??= {}).domain = domain;

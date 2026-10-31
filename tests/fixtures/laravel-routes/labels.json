@@ -777,6 +777,126 @@
       "uri": "api/named-closure",
       "handler": null,
       "expect": "live"
+    },
+    {
+      "id": "L98",
+      "pattern": "singleton",
+      "method": "GET",
+      "uri": "api/profile",
+      "handler": "ProfileController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L99",
+      "pattern": "singleton",
+      "method": "PUT",
+      "uri": "api/profile",
+      "handler": "ProfileController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L100",
+      "pattern": "singleton",
+      "method": "GET",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L101",
+      "pattern": "singleton",
+      "method": "POST",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L102",
+      "pattern": "singleton",
+      "method": "DELETE",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@destroy",
+      "expect": "live"
+    },
+    {
+      "id": "L103",
+      "pattern": "singleton",
+      "method": "PATCH",
+      "uri": "api/profile",
+      "handler": "ProfileController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L104",
+      "pattern": "singleton",
+      "method": "PUT",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L105",
+      "pattern": "singleton",
+      "method": "PATCH",
+      "uri": "api/teams/{team}/logo",
+      "handler": "LogoController@update",
+      "expect": "live"
+    },
+    {
+      "id": "L106",
+      "pattern": "singleton-excluded",
+      "method": "GET",
+      "uri": "api/profile/edit",
+      "handler": "ProfileController@edit",
+      "expect": "absent"
+    },
+    {
+      "id": "L107",
+      "pattern": "singleton-excluded",
+      "method": "GET",
+      "uri": "api/teams/{team}/logo/create",
+      "handler": "LogoController@create",
+      "expect": "absent"
+    },
+    {
+      "id": "L108",
+      "pattern": "singleton-excluded",
+      "method": "GET",
+      "uri": "api/teams/{team}/logo/{logo}",
+      "handler": "LogoController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L109",
+      "pattern": "route-prefix",
+      "method": "GET",
+      "uri": "v3/api/status",
+      "handler": "HomeController@status",
+      "expect": "live"
+    },
+    {
+      "id": "L110",
+      "pattern": "route-prefix",
+      "method": "GET",
+      "uri": "lead/api/chained",
+      "handler": "HomeController@chained",
+      "expect": "live"
+    },
+    {
+      "id": "L111",
+      "pattern": "route-prefix-wrong",
+      "method": "GET",
+      "uri": "api/v3/status",
+      "handler": "HomeController@status",
+      "expect": "absent"
+    },
+    {
+      "id": "L112",
+      "pattern": "route-prefix-wrong",
+      "method": "GET",
+      "uri": "api/lead/chained",
+      "handler": "HomeController@chained",
+      "expect": "absent"
     }
   ]
 }
