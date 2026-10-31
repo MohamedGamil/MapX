@@ -99,3 +99,9 @@ Context: the owner asked for an analysis of Deptrac (PHP architecture-conformanc
 - **External references (G3):** stored outside `edges`, in a separate table with ecosystem, package, direct/transitive and dev/prod attribution, so existing metrics, PageRank and exports are unchanged (REQ-ARCH-008, REQ-ARCH-014).
 - **Ratchet:** `--compare <base-report.json>` is the MUST; `--since <git-ref>` is COULD (REQ-ARCH-021, no task yet).
 - **Research home:** `docs/research/deptrac/`; task `sources` cite it. `specs/` stays frozen (D001).
+
+## D014 — Final gaps before M3 (owner Q&A, 2026-10-31)
+
+- **Continue (amends F17):** MapX writes Continue's documented layout instead of `.continue/mapx.yaml`, which Continue never loads: `.continue/mcpServers/mapx.yaml` for the MCP server and `.continue/prompts/*.md` for the slash commands. A leftover `.continue/mapx.yaml` written by mapx is migrated or reported. Task M0-09-R4.
+- **`.fish` (F20):** bundle a licence-compatible tree-sitter fish grammar and extract `function` definitions and calls. If no usable WASM build exists, fall back to file-level indexing and record that here. Task M0-12-R5.
+- **M1-05-R3:** promoted from P3 to P2 and made an M3-01 dependency (D010 applies).

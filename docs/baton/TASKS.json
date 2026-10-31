@@ -5776,7 +5776,7 @@
       "description": "Found by M1-05-R1 (2026-10-31): singleton, scoped(), middlewareFor and per-route prefix/domain keys are not modelled."
     },
     {
-      "priority": "P3",
+      "priority": "P2",
       "estimate": {
         "min": 2,
         "expected": 4,
@@ -5795,7 +5795,8 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
-        "docs/baton/reports/M1-05-R2.md"
+        "docs/baton/reports/M1-05-R2.md",
+        "docs/baton/DECISIONS.md"
       ],
       "outputs": [
         "fix",
@@ -5818,15 +5819,28 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "IN_PROGRESS",
       "owner": "lane-laravel",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T06:07:44.676Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T06:07:44.391Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T06:07:44.676Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -5835,7 +5849,7 @@
       "title": "Laravel routes: withoutMiddleware, implicit binding fields on plain routes, repeated chained attributes",
       "objective": "The remaining resource registration forms match Laravel's router.",
       "milestone": "M1",
-      "description": "Feature gaps found by M1-05-R2 (2026-10-31); not defects of delivered criteria, so P3 and not an M3-01 dependency (owner may change). PUT/PATCH update stays two routes by design."
+      "description": "Feature gaps found by M1-05-R2 (2026-10-31); not defects of delivered criteria, promoted to P2 and an M3-01 dependency by D014. PUT/PATCH update stays two routes by design."
     },
     {
       "priority": "P2",
@@ -6156,6 +6170,18 @@
         },
         {
           "id": "M0-04-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M0-09-R4",
+          "type": "quality"
+        },
+        {
+          "id": "M0-12-R5",
+          "type": "quality"
+        },
+        {
+          "id": "M1-05-R3",
           "type": "quality"
         }
       ],
@@ -10574,6 +10600,164 @@
       "objective": "Make PHP import and class resolution precise on stock Laravel apps.",
       "milestone": "M0",
       "description": "Left from M0-04-R2 (2026-10-31): the route walker keeps only quoted middleware names, so ->middleware(X::class) makes no edge; it needs the route file use table."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-09-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-09-R3.md",
+        "specs/features/F17-llm-integration-files.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-09-R4.md"
+      ],
+      "affectedFiles": [
+        "src/agents/templates.ts",
+        "src/agents/generator.ts",
+        "docs/agents.md",
+        "tests/legacy-agent-templates.test.ts",
+        "tests/legacy-agents.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`mapx agents generate --providers continue` writes `.continue/mcpServers/mapx.yaml` with Continue's required name/version/schema keys and an mcpServers entry running `mapx serve`, and one `.continue/prompts/<name>.md` per slash command with invokable front matter; each file validates against the shape in Continue's reference (test).",
+        "Generating twice is idempotent and user edits need consent, as for the other providers (test).",
+        "A `.continue/mapx.yaml` previously written by mapx (has the mapx sentinel) is removed with a message; one without the sentinel is left alone (test).",
+        "`agents list`, the MCP tool and the docs describe the new files."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-agent-templates.test.ts tests/legacy-agents.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-agents",
+      "actualHours": null,
+      "startedAt": "2026-10-31T06:07:43.591Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T06:07:43.331Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T06:07:43.591Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-09-R4",
+      "title": "Continue integration in Continue's documented format (D014, amends F17)",
+      "objective": "The Continue provider writes files Continue actually loads.",
+      "milestone": "M0",
+      "description": "Owner decision D014: amend F17 to Continue's documented config layout (docs.continue.dev reference)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-12-R3.md",
+        "specs/features/F20-language-expansion.md"
+      ],
+      "outputs": [
+        "grammar",
+        "queries",
+        "regression tests",
+        "reports/M0-12-R5.md"
+      ],
+      "affectedFiles": [
+        "src/languages/registry.ts",
+        "queries/fish/symbols.scm",
+        "queries/fish/references.scm",
+        "package.json",
+        "tests/legacy-languages.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A licence-compatible fish grammar is bundled (licence recorded in the report) and `mapx lang list` / `lang info fish` report it (test).",
+        "`function deploy; build; end` in a .fish file gives `function:deploy` and a call edge deploy → build, also across files (e2e test).",
+        "Package check passes and the dashboard/package size ceilings hold; the size added by the grammar is measured and reported.",
+        "If no usable WASM grammar exists, the task records that with evidence and D014's fallback is documented instead."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-languages.test.ts",
+        "npx tsx scripts/check-package.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-languages",
+      "actualHours": null,
+      "startedAt": "2026-10-31T06:07:44.120Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T06:07:43.858Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T06:07:44.120Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-12-R5",
+      "title": "Fish shell grammar: functions and calls (D014)",
+      "objective": ".fish files yield function symbols and call edges.",
+      "milestone": "M0",
+      "description": "Owner decision D014: bundle a fish grammar so .fish files are indexed with symbols (F20)."
     },
     {
       "priority": "P1",
