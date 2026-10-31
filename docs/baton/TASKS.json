@@ -5252,6 +5252,78 @@
     {
       "priority": "P2",
       "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-02-R4.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R5.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/git-tracker.ts",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Add an untracked file, sync, delete it, sync: the file, its symbols and edges are gone, matching scan --force (e2e test, also for a staged-only file).",
+        "Files re-indexed by git sync store their blob hash, so an unchanged file is skipped on the next sync (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-misc",
+      "actualHours": null,
+      "startedAt": "2026-10-31T05:01:00.507Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T05:01:00.245Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T05:01:00.507Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-02-R5",
+      "title": "git sync drops deleted untracked/staged files; blob hashes for re-indexed files",
+      "objective": "sync after a git rename leaves no stale path, and nested or symlinked repos resolve diff paths correctly.",
+      "milestone": "M0",
+      "description": "Found and reproduced by M0-02-R4 (2026-10-31): git sync never drops a deleted file that was untracked or only staged at the last scanned commit; git sync stores null blob hashes for files it re-indexes."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
         "min": 3,
         "expected": 5,
         "max": 7
@@ -6045,6 +6117,10 @@
         },
         {
           "id": "M0-02-R4",
+          "type": "quality"
+        },
+        {
+          "id": "M0-02-R5",
           "type": "quality"
         }
       ],
