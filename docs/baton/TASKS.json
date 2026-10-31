@@ -7130,12 +7130,17 @@
         {
           "id": "M3-07",
           "type": "hard"
+        },
+        {
+          "id": "M3-06",
+          "type": "hard"
         }
       ],
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
-        "docs/baton/reports/M3-02.md"
+        "docs/baton/reports/M3-02.md",
+        "docs/baton/reports/M3-06.md"
       ],
       "outputs": [
         "fix",
@@ -7149,7 +7154,8 @@
       ],
       "acceptanceCriteria": [
         "Adding or removing `app.component(\"X\", X)` in main.js and running sync (no .vue file changed) adds or removes the render edges from every component using <X/>, matching scan --force (e2e test).",
-        "Two Vue apps in one repo (two package.json folders) keep separate global registries: a tag registered globally only in app A gives no render edge in app B (test)."
+        "Two Vue apps in one repo (two package.json folders) keep separate global registries: a tag registered globally only in app A gives no render edge in app B (test).",
+        "Renaming a route or changing its component in the router file alone and running sync updates the navigate edges of every caller, matching scan --force (e2e test)."
       ],
       "verificationCommands": [
         "npx vitest run tests/vue-template.test.ts",
@@ -7263,6 +7269,153 @@
       "objective": ".fish files yield function symbols and call edges.",
       "milestone": "M3",
       "description": "Found by M3-04 (2026-10-31): resolveImportPath maps @/ only to src/, affecting Vue render edges, mixins and composables; M3-04 added a path-suffix fallback only."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-06",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-06.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-10.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/legacy-language-accuracy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A reference to `Cart` does not resolve to `const cart` (or `cart()`) in another file in case-sensitive languages (JS/TS, Java, Go, Rust, Python, Ruby, C#, Kotlin, Swift…) (e2e test).",
+        "PHP class and function names, which PHP treats case-insensitively, still resolve across case (test).",
+        "The edges, routes and HTTP scorers do not drop; MapX self-scan edge counts are reported before/after."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-language-accuracy.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-resolve",
+      "actualHours": null,
+      "startedAt": "2026-10-31T08:37:19.921Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T08:37:19.626Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T08:37:19.921Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-10",
+      "title": "Case-sensitive symbol name lookup in resolution",
+      "objective": ".fish files yield function symbols and call edges.",
+      "milestone": "M3",
+      "description": "Found by M3-06 (2026-10-31): name lookup is case-insensitive, so Cart matched const cart in CartView.vue."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-06",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-06.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-11.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue-navigation.ts",
+        "src/core/scanner.ts",
+        "tests/vue-navigation.test.ts",
+        "tests/fixtures/vue-sfc"
+      ],
+      "acceptanceCriteria": [
+        "`router.push({ name })` / `router.replace(path)` in a store action, a navigation guard or a composable (with `router` imported from the router module or from `useRouter()`) gives a navigate edge from that function to the route component (fixture labels + e2e test).",
+        "An unrelated object with a push() method gives no edge (negative label)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-navigation.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-router",
+      "actualHours": null,
+      "startedAt": "2026-10-31T08:37:20.587Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T08:37:20.265Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T08:37:20.587Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-11",
+      "title": "Vue Router navigation from plain JS/TS modules (stores, guards, composables)",
+      "objective": ".fish files yield function symbols and call edges.",
+      "milestone": "M3",
+      "description": "Found by M3-06 (2026-10-31): navigation written in plain JS/TS modules is not read."
     },
     {
       "id": "M4-01",
