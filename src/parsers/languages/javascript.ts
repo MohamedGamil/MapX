@@ -1,9 +1,18 @@
 import { GenericWasmParser } from '../generic-wasm-parser.js';
 import type { LanguageDefinition } from '../../languages/registry.js';
+import type { ParseResult } from '../../types.js';
+import { annotateStoreRefs } from './vue-stores.js';
 
 export class JavaScriptParser extends GenericWasmParser {
   constructor(langDef: LanguageDefinition) {
     super(langDef);
+  }
+
+  override async parse(filePath: string, source: string, options?: any): Promise<ParseResult> {
+    const result = await super.parse(filePath, source, options);
+    // Vuex / Pinia store references and store models (M3-05).
+    await annotateStoreRefs(filePath, source, result);
+    return result;
   }
 
   protected override extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {

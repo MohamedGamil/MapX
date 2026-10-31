@@ -48,6 +48,8 @@ export interface ExtractedReference {
    * name, then the global fallback). Resolves only to `function` symbols (M0-04-R5). Not stored.
    */
   phpFunction?: string[];
+  /** A Vuex or Pinia member, resolved in its store file (M3-05). Not stored. */
+  vueStore?: VueStoreTarget;
 }
 
 /** Edge contract rule 6 (docs/baton/iterations/M3-01.md): the candidates for `this.x()`. */
@@ -56,18 +58,27 @@ export interface VueThisScope {
   own: boolean;
   /** Mixin module specifiers in merge order (`extends` first); null = the component's file. */
   mixins: (string | null)[];
-  /** The map helper that introduces `x`, resolved by M3-05. */
+  /** The map helper that introduces `x`. */
   mapped?: VueMappedMember;
 }
 
 /** A name spread from `mapActions` / `mapGetters` / `mapState` / `mapMutations` / `mapWritableState`. */
 export interface VueMappedMember {
   helper: string;
-  /** The namespace string (`'tickets'`) or the store expression (`useCartStore`); null without one. */
-  namespace: string | null;
-  /** The mapped name in the store; null when the helper maps it to a function. */
+  /** The member's name in the store; null when the helper maps it to a function. */
   name: string | null;
+  /** Where the member lives; null when the helper's first argument is not understood. */
+  target: VueStoreTarget | null;
 }
+
+export type VuexKind = 'actions' | 'mutations' | 'getters' | 'state';
+
+/** Edge contract rules 7 and 8: the store a Vuex or Pinia reference names. */
+export type VueStoreTarget =
+  /** A Vuex member by namespace path (null = the root namespace), or in the referring module itself. */
+  | { store: 'vuex'; kind: VuexKind; namespace: string | null; local?: boolean }
+  /** A member of the Pinia store `hook` (`useCartStore`), imported from `specifier` (null = this file). */
+  | { store: 'pinia'; hook: string; specifier: string | null };
 
 export type ReferenceType =
   | 'import'

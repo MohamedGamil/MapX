@@ -47,17 +47,16 @@ const FLOORS: {
     // M3-02: setup-level useX() calls owned by the component (rule 2) and {{ format() }} (rule 4). Still by unique
     // name: persist, addReply (script calls to destructured composable functions, M3-04).
     composable: labelledCount('composable'),
-    'vuex-map-helpers': 2, // M3-05 (both `created` calls; vue2's picks tickets' FETCH_ALL by name, not by namespace)
-    'vuex-dispatch': 0, // M3-05
-    pinia: 0, // M3-05
+    'vuex-map-helpers': labelledCount('vuex-map-helpers'), // M3-05: by namespace through the store root
+    'vuex-dispatch': labelledCount('vuex-dispatch'), // M3-05
+    pinia: labelledCount('pinia'), // M3-05: through the store's import
     router: 0, // M3-06
   },
   falsePositives: {
     composable: 1, // generic: formatter.format() inside format() resolves to itself
-    pinia: 2, // M3-05: session.touch() → presence store; cart.checkout() → CartView's own checkout()
   },
-  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02. */
-  minPrecision: 0.9,
+  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02; 0.989 (90/91) after M3-05. */
+  minPrecision: 0.95,
 };
 
 const ALLOWED_EDGE_TYPES = new Set(expected.scoredTypes ?? []);

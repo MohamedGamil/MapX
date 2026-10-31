@@ -83,6 +83,9 @@ export default {
 `,
       'src/utils/notify.js': 'export function notify(message) { return message; }\nexport function onDone() { return 0; }\n',
       'src/store/docs.js': 'export default {\n  namespaced: true,\n  actions: {\n    publish() { return 1; },\n  },\n};\n',
+      // Registers docs as the `docs` namespace; drafts also has publish() but is not registered (M3-05).
+      'src/store/index.js': "import Vuex from 'vuex';\nimport docs from './docs';\nexport default new Vuex.Store({ modules: { docs } });\n",
+      'src/store/drafts.js': 'export default {\n  namespaced: true,\n  actions: {\n    publish() { return 0; },\n  },\n};\n',
       'src/components/Other.vue': '<script>\nexport default { methods: { save() { return 0; }, format(t) { return t; } } };\n</script>\n',
     });
     init(root);
@@ -110,7 +113,7 @@ export default {
     expect(targetsOf('title', 'onDone')).toEqual([]);
   });
 
-  it('keeps map-helper names resolvable until M3-05 resolves their namespace', () => {
+  it('resolves a map-helper name in the module registered under its namespace (M3-05)', () => {
     expect(targetsOf('submit', 'publish')).toEqual(['src/store/docs.js']);
   });
 });

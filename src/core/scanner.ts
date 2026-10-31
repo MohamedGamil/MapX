@@ -30,7 +30,8 @@ import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evalua
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
-import { resolveThisMember, type ThisMemberContext } from '../parsers/languages/vue-options.js';
+import { resolveThisMember } from '../parsers/languages/vue-options.js';
+import { collectVuexFiles, resolveStoreTarget, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { globalRegistrations, vueComponentName, type VueResolveHint } from '../parsers/languages/vue-template.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
@@ -1195,15 +1196,18 @@ export class Scanner {
       } else if (ref.phpFunction) {
         // A PHP function call: the first candidate declared as a function in its namespace (M0-04-R5).
         targets = this.resolvePhpFunction(ref.phpFunction, sourcePath);
+      } else if (ref.vueThis || ref.vueStore) {
+        // Options API `this.x()` (M3-03) and Vuex / Pinia members (M3-05): resolved by the Vue
+        // rules in their component, mixin or store file, never by name alone.
+        const ctx = this.vueResolveContext(sourcePath, fileMap);
+        const hit = ref.vueStore ? resolveStoreTarget(ref.targetName, ref.vueStore, ctx) : resolveThisMember(ref.targetName, ref.vueThis!, ctx);
+        targets = hit ? [hit] : [];
       } else {
         let targetFile: string | null = null;
         if (ref.referenceType === 'require') {
           targetFile = this.resolveRequirePath(ref.targetName, sourcePath, fileMap);
         } else if (ref.referenceType === 'import') {
           targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
-        } else if (ref.vueThis) {
-          // `this.x()` in a Vue Options API component: own member, then mixins, never by name alone (M3-03).
-          targetFile = resolveThisMember(ref.targetName, ref.vueThis, this.thisMemberContext(sourcePath, fileMap));
         } else {
           // Calls and instantiations skip value symbols (constants, variables) (M0-17-R2).
           const callable = ref.referenceType === 'call' || ref.referenceType === 'instantiation';
@@ -1260,13 +1264,13 @@ export class Scanner {
     return edges;
   }
 
-  /** What `resolveThisMember` needs for a `this.x()` (or Options API template) call in `sourcePath`. */
-  private thisMemberContext(sourcePath: string, fileMap: Map<string, string>): ThisMemberContext {
+  /** What the Vue resolvers need from the scanner (M3-03, M3-05). */
+  private vueResolveContext(sourcePath: string, fileMap: Map<string, string>): VueResolveContext {
     return {
       sourceFile: sourcePath,
-      resolveImport: (specifier) => this.resolveImportPath(specifier, sourcePath, fileMap),
+      resolveImport: (specifier, from = sourcePath) => this.resolveImportPath(specifier, from, fileMap),
       defines: (file, name) => this.fileDefines(file, name),
-      byName: (name) => this.resolveSymbolToFile(name, fileMap, sourcePath, true),
+      vuexFiles: () => this.vuexFiles,
     };
   }
 
@@ -1290,8 +1294,8 @@ export class Scanner {
       const file = this.resolveImportPath(specifier, sourcePath, fileMap);
       if (file && this.fileDefines(file, name)) return [{ file, symbol: name }];
     }
-    const file = ref.vueThis ? resolveThisMember(ref.targetName, ref.vueThis, this.thisMemberContext(sourcePath, fileMap)) : null;
-    return file ? [{ file, symbol: ref.targetName }] : [];
+    const hit = ref.vueThis ? resolveThisMember(ref.targetName, ref.vueThis, this.vueResolveContext(sourcePath, fileMap)) : null;
+    return hit ? [hit] : [];
   }
 
   /** Whether `file` declares a symbol named exactly `name` (this phase's index, else the store). */
@@ -1388,6 +1392,8 @@ export class Scanner {
   private phpNamespaces = new Map<string, string>();
   // Repo → its globally registered Vue components (M3-02).
   private vueGlobals = new Map<string, Map<string, string>>();
+  /** Vuex store models by file, per resolution phase (M3-05). */
+  private vuexFiles = new Map<string, VuexModuleInfo>();
 
   /** Language of an indexed path: its extension or file name, else what discovery stored (shebang scripts). */
   private languageOf(path: string): string | null {
@@ -2209,9 +2215,11 @@ export class Scanner {
     }
 
     // PHP namespaces: stored ones, replaced by this phase's parse results.
-    for (const f of this.store.getAllFiles()) {
+    const files = this.store.getAllFiles();
+    for (const f of files) {
       if (f.language === 'php') this.phpNamespaces.set(f.path as string, (f.namespace as string | null) ?? '');
     }
+    this.vuexFiles = collectVuexFiles(files, parsedPaths, results);
 
     if (parsedPaths && results) {
       for (let i = 0; i < parsedPaths.length; i++) {

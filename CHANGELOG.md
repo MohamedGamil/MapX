@@ -13,6 +13,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx metrics` / `mapx_metrics` and `mapx edges <file>` / `mapx_edges` now return the F02/F04 structures (camelCase), metrics shows 20 rows by default with `--top 0` for all and a new `--exclude`, and invalid `--top`, `--format` or a file-less `--direction` exit with an error (M0-03-R3).
 
 ### Added
+- Vuex map helpers, `$store.dispatch/commit('ns/NAME')`, in-module dispatch/commit and Pinia `useXStore()` / `store.action()` calls now link to the member in the right store module, by namespace or store import, never to a same-named function elsewhere (M3-05).
 - Vue SFCs now get a component symbol, template event handlers and binding calls become call edges, and component tags (registered locally, with `Vue.component` / `app.component`, or by `require.context` / `import.meta.glob` auto-registration) become render edges to the child component (M3-02).
 - Vue Options API `this.x()` calls now resolve to the component's own member, then to a mixin listed in its `mixins` array, and no longer to an unrelated file that merely defines the same name (M3-03).
 - `.fish` files now get function symbols, call edges and `source` imports from a bundled tree-sitter fish grammar (M0-12-R5).
