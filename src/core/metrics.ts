@@ -156,13 +156,19 @@ export function buildMetricsReport(
   const ranked = rankMetrics(calculateMetrics(store, options), pagerank);
   const { files, edges } = metricsGraph(store, options);
   const n = files.length;
+  // Density counts distinct directed file pairs (no self-pairs), so several symbol-level edges between
+  // the same two files count once and the value stays in [0, 1]. `edges` stays the raw edge-row count.
+  const paths = new Set(files.map(f => f.path as string));
+  const pairs = new Set(edges
+    .filter(e => e.source_file !== e.target_file && paths.has(e.source_file as string) && paths.has(e.target_file as string))
+    .map(e => `${e.source_file}\0${e.target_file}`));
   const top = options.top ?? METRICS_DEFAULT_TOP;
   return {
     total: ranked.length,
     report: {
       dir: options.dir,
       generatedAt: new Date().toISOString(),
-      summary: { files: n, edges: edges.length, density: n > 1 ? Number((edges.length / (n * (n - 1))).toPrecision(3)) : 0 },
+      summary: { files: n, edges: edges.length, density: n > 1 ? Number((pairs.size / (n * (n - 1))).toPrecision(3)) : 0 },
       files: (top > 0 ? ranked.slice(0, top) : ranked).map(m => ({
         path: m.path,
         language: m.language,

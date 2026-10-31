@@ -150,7 +150,7 @@ describe('D012 output contract (synthetic TS fixture)', () => {
     expect(Object.keys(report)).toEqual(['dir', 'generatedAt', 'summary', 'files']);
     expect(report.dir).toBe(root);
     expect(Number.isNaN(Date.parse(report.generatedAt))).toBe(false);
-    expect(report.summary).toEqual({ files: 26, edges: 6, density: Number((6 / (26 * 25)).toPrecision(3)) });
+    expect(report.summary).toEqual({ files: 26, edges: 6, density: Number((3 / (26 * 25)).toPrecision(3)) });
     expect(report.files).toHaveLength(20); // F02 default --top 20
     expect(Object.keys(report.files[0])).toEqual(['path', 'language', 'inDegree', 'outDegree', 'totalDegree', 'instability', 'pagerank']);
     const byPath = new Map(report.files.map((f) => [f.path, f]));
@@ -169,10 +169,21 @@ describe('D012 output contract (synthetic TS fixture)', () => {
     expect({ ...viaMcp, generatedAt: '' }).toEqual({ ...report, generatedAt: '' });
   });
 
+  // Post-acceptance defect (2026-10-31): density divided raw edge rows (symbol-level, several per
+  // file pair) and printed 1 for this 3-file graph. It counts distinct directed file pairs: 3 / (3 × 2).
+  it('summary.density counts distinct directed file pairs and stays in [0, 1]; summary.edges stays the raw count', async () => {
+    const core: Report = JSON.parse(mapx(root, 'metrics', '--format', 'json', '--exclude', 'leaves,src/lonely.ts'));
+    expect(core.summary).toEqual({ files: 3, edges: 6, density: 0.5 });
+    expect(mapx(root, 'metrics', '--exclude', 'leaves,src/lonely.ts')).toContain('Files: 3 | Edges: 6 | Graph density: 0.5\n');
+    // two files, three edges between them (import, instantiation, inferred call): one pair of two possible
+    const pair: Report = JSON.parse(await call('mapx_metrics', { format: 'json', exclude: 'leaves,src/lonely.ts,src/api.ts' }));
+    expect(pair.summary).toEqual({ files: 2, edges: 3, density: 0.5 });
+  });
+
   it('metrics text: F02 table, 20 rows by default, --top 0 lists every file, --exclude drops files', async () => {
     const text = mapx(root, 'metrics');
     expect(text).toContain(`Metrics for: ${root}   (last scan: `);
-    expect(text).toContain(`Files: 26 | Edges: 6 | Graph density: ${Number((6 / 650).toPrecision(3))}`);
+    expect(text).toContain(`Files: 26 | Edges: 6 | Graph density: ${Number((3 / 650).toPrecision(3))}`);
     expect(text).toContain('Top coupled files (by total degree):');
     expect(text).toMatch(/^ {2}RANK {2}FILE +IN {2}OUT {2}TOTAL {2}INSTABILITY$/m);
     expect(text).toMatch(/^ {5}1 {2}src\/store\.ts +2 +0 +2 +0\.00$/m);

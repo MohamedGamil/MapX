@@ -582,7 +582,7 @@ Text output (F02):
 
 ```
 Metrics for: /repo   (last scan: 2026-10-31 01:48)
-Files: 3 | Edges: 6 | Graph density: 0.667
+Files: 3 | Edges: 6 | Graph density: 0.5
 
 Top coupled files (by total degree):
 
@@ -602,11 +602,11 @@ High out-degree → many outgoing deps (potential God Class / low cohesion).
 JSON output (`--format json`, decision D012):
 
 ```json
-{ "dir": "/repo", "generatedAt": "2026-10-31T01:48:00.000Z", "summary": { "files": 3, "edges": 6, "density": 0.667 },
+{ "dir": "/repo", "generatedAt": "2026-10-31T01:48:00.000Z", "summary": { "files": 3, "edges": 6, "density": 0.5 },
   "files": [ { "path": "src/store.ts", "language": "typescript", "inDegree": 2, "outDegree": 0, "totalDegree": 2, "instability": 0, "pagerank": 0.5209 } ] }
 ```
 
-`summary` describes the graph the degrees are computed on: the repository's files and edges after `--exclude` and `--verified-only`; `density` is edges / (files × (files − 1)). `--lang` and `--top` only select rows.
+`summary` describes the graph the degrees are computed on: the repository's files and edges after `--exclude` and `--verified-only`. `edges` counts edge rows, so several symbol-level edges between the same two files (an import, a call, an instantiation) each count. `density` counts distinct directed file pairs instead: pairs / (files × (files − 1)), self-edges and edges to files outside the set left out, so it stays between 0 and 1. `--lang` and `--top` only select rows.
 
 ## `mapx edges`
 

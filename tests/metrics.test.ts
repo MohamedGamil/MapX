@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateMetrics, calculateGraphMetrics, calculateClusterMetrics, calculateDSM } from '../src/core/metrics.js';
+import { buildMetricsReport, calculateMetrics, calculateGraphMetrics, calculateClusterMetrics, calculateDSM } from '../src/core/metrics.js';
 import type { Store } from '../src/core/store.js';
 
 // ─────────────────────────────────────────────────────────────────
@@ -113,6 +113,27 @@ describe('calculateMetrics', () => {
     // known.ts is targeted by unknown.ts → afferent = 1 (target is tracked, source need not be)
     expect(metrics[0].afferent).toBe(1);
     expect(metrics[0].efferent).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// buildMetricsReport summary (M0-03-R3 post-acceptance defect, 2026-10-31)
+// ─────────────────────────────────────────────────────────────────
+
+describe('buildMetricsReport summary.density', () => {
+  it('counts distinct directed file pairs: duplicates, self-edges and edges to unknown files do not count', () => {
+    const store = makeStore(
+      [{ path: 'a.ts' }, { path: 'b.ts' }],
+      [
+        // ten symbol-level edges a → b: one pair
+        ...Array.from({ length: 10 }, () => ({ source_file: 'a.ts', target_file: 'b.ts', edge_type: 'call' })),
+        { source_file: 'a.ts', target_file: 'a.ts', edge_type: 'call' },
+        { source_file: 'b.ts', target_file: 'b.ts', edge_type: 'call' },
+        { source_file: 'b.ts', target_file: 'vendor/x.ts' },
+      ],
+    );
+    const { report } = buildMetricsReport(store, new Map(), { dir: '/repo' });
+    expect(report.summary).toEqual({ files: 2, edges: 13, density: 0.5 });
   });
 });
 
