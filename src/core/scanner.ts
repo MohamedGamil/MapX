@@ -46,6 +46,14 @@ const NAMESPACE_KINDS = new Set(['namespace']);
 const TYPE_KINDS = new Set(['class', 'struct', 'interface', 'enum', 'record', 'trait']);
 /** Sources whose imports may use JS/TS path aliases (M3-09). */
 const JS_MODULE_SOURCE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/;
+/**
+ * Whether a declaration of `kind` in `language` matches its name whatever the case: PHP class-like,
+ * function and method names (PHP's constants, variables and properties are case-sensitive) and
+ * Pascal identifiers. Every other language's names are case-sensitive (M3-10).
+ */
+function foldsCase(language: string | null, kind: string | undefined): boolean {
+  return language === 'pascal' || (language === 'php' && (TYPE_KINDS.has(kind ?? '') || kind === 'function' || kind === 'method'));
+}
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -1662,14 +1670,21 @@ export class Scanner {
       });
     };
 
+    // Declarations named `name` under their language's case rules: `Cart` is not `cart` (M3-10).
+    const named = (name: string, matches: any[]): any[] => matches.filter(m => m.name === name
+      || (foldsCase(this.languageOf((m.file_path || m.file) as string), m.kind) && m.name.toLowerCase() === name.toLowerCase()));
+
     // Use pre-built symbol index for O(1) lookup when available
     if (this.symbolIndex) {
-      let indexed = this.symbolIndex.get(symbolName) || this.symbolIndex.get(symbolName.toLowerCase());
-      if (!indexed) {
+      // The lowercased key holds every case variant of a name.
+      const lookup = (name: string) => named(name, this.symbolIndex!.get(name.toLowerCase()) ?? []);
+      let key = symbolName;
+      let indexed = lookup(key);
+      if (!indexed.length) {
         if (symbolName.includes('\\')) {
           const parts = symbolName.split('\\');
-          const shortName = parts[parts.length - 1];
-          indexed = this.symbolIndex.get(shortName) || this.symbolIndex.get(shortName.toLowerCase());
+          key = parts[parts.length - 1];
+          indexed = lookup(key);
         } else if (symbolName.includes('.')) {
           const parts = symbolName.split('.');
           const last = parts[parts.length - 1];
@@ -1679,12 +1694,12 @@ export class Scanner {
             'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
           ]);
           if (!commonExtensions.has(last.toLowerCase())) {
-            const shortName = last;
-            indexed = this.symbolIndex.get(shortName) || this.symbolIndex.get(shortName.toLowerCase());
+            key = last;
+            indexed = lookup(key);
           }
         }
       }
-      if (indexed && indexed.length > 0) {
+      if (indexed.length > 0) {
         const compatible = filterMatches(indexed);
         if (compatible.length > 0) {
           const shortName = symbolName.includes('\\') 
@@ -1700,10 +1715,11 @@ export class Scanner {
             return (declared.find(m => m.file === sourcePath) ?? declared[0])?.file ?? null;
           }
           if (sourcePath) {
-            const sameFile = compatible.find(m => m.file === sourcePath && m.name === shortName);
+            const sameFile = compatible.find(m => m.file === sourcePath && m.name === key);
             if (sameFile) return sameFile.file;
           }
-          const exact = compatible.find(m => m.name === shortName);
+          // An exact-case declaration first, else a PHP or Pascal one in another case.
+          const exact = compatible.find(m => m.name === key);
           if (exact) return exact.file;
           return compatible[0].file;
         }
@@ -1711,8 +1727,8 @@ export class Scanner {
       return null; // O(1) short-circuit: if not in symbolIndex, it's a third-party/external symbol not in this workspace.
     }
 
-    let matches = this.store.searchSymbols(symbolName);
-    matches = filterMatches(matches);
+    // The store's search is a case-insensitive substring match: keep only declarations of the name.
+    let matches = named(symbolName, filterMatches(this.store.searchSymbols(symbolName)));
     if (matches.length > 0) {
       // Prefer a definition in the same file as the caller to avoid false cross-file edges
       if (sourcePath) {
@@ -1726,8 +1742,7 @@ export class Scanner {
     if (symbolName.includes('\\')) {
       const parts = symbolName.split('\\');
       const shortName = parts[parts.length - 1];
-      matches = this.store.searchSymbols(shortName);
-      matches = filterMatches(matches);
+      matches = named(shortName, filterMatches(this.store.searchSymbols(shortName)));
       if (matches.length > 0) {
         if (sourcePath) {
           const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === shortName);
@@ -1747,8 +1762,7 @@ export class Scanner {
       ]);
       if (!commonExtensions.has(last.toLowerCase())) {
         const shortName = last;
-        matches = this.store.searchSymbols(shortName);
-        matches = filterMatches(matches);
+        matches = named(shortName, filterMatches(this.store.searchSymbols(shortName)));
         if (matches.length > 0) {
           if (sourcePath) {
             const sameFileMatch = matches.find(m => m.file_path === sourcePath && m.name === shortName);
@@ -1760,7 +1774,7 @@ export class Scanner {
         }
       }
     } else if (matches.length > 0) {
-      // Multiple matches, none exact — prefer same-file over arbitrary first result
+      // A PHP or Pascal declaration in another case: prefer the same file
       if (sourcePath) {
         const sameFile = matches.find(m => m.file_path === sourcePath);
         if (sameFile) return sameFile.file_path as string;
@@ -2240,7 +2254,8 @@ export class Scanner {
 
   /**
    * Build an in-memory symbol index for O(1) lookups during reference resolution.
-   * Maps symbol names (case-insensitive) to their file locations.
+   * Maps lowercased symbol names (every case variant) and exact names to their file locations;
+   * resolveSymbolToFile applies each language's case rules (M3-10).
    */
   private buildSymbolIndex(
     repoName: string,

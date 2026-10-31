@@ -7335,7 +7335,9 @@
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "tests/legacy-language-accuracy.test.ts"
+        "tests/legacy-language-accuracy.test.ts",
+        "tests/scanner.test.ts",
+        "tests/scanner-coverage.test.ts"
       ],
       "acceptanceCriteria": [
         "A reference to `Cart` does not resolve to `const cart` (or `cart()`) in another file in case-sensitive languages (JS/TS, Java, Go, Rust, Python, Ruby, C#, Kotlin, Swift…) (e2e test).",
@@ -7347,14 +7349,27 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-resolve",
       "actualHours": null,
       "startedAt": "2026-10-31T08:37:19.921Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T09:08:25.209Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-10.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-language-accuracy.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-10.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-10.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T08:37:19.626Z",
@@ -7367,6 +7382,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T09:08:24.904Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T09:08:25.209Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-language-accuracy.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-10.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-10.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

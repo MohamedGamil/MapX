@@ -431,7 +431,7 @@ describe('Scanner module', () => {
     const symRes = (scanner as any).resolveSymbolToFile('App\\Controller\\UserController', fileMap, 'src/main.php');
     expect(symRes).toBe('src/controllers/UserController.php');
 
-    // 2. Symbol with '\\' and non-exact match
+    // 2. Symbol with '\\' and a candidate of another name: the store's substring search is not a match (M3-10)
     const mockStore2 = createMockStore({
       getAllFiles: () => [],
       searchSymbols: (name: string) => {
@@ -443,7 +443,7 @@ describe('Scanner module', () => {
     });
     const scanner2 = new Scanner(mockStore2, mockConfig, graph);
     const symRes2 = (scanner2 as any).resolveSymbolToFile('App\\Controller\\UserController', fileMap, 'src/main.php');
-    expect(symRes2).toBe('src/controllers/UserController.php');
+    expect(symRes2).toBeNull();
 
     // 3. Symbol without '\\' and exact match
     const mockStore3 = createMockStore({
@@ -459,7 +459,7 @@ describe('Scanner module', () => {
     const symRes3 = (scanner3 as any).resolveSymbolToFile('UserController', fileMap, 'src/main.php');
     expect(symRes3).toBe('src/controllers/UserController.php');
 
-    // 4. Symbol without '\\' and non-exact match
+    // 4. Symbol without '\\' and a candidate of another name: no match (M3-10)
     const mockStore4 = createMockStore({
       getAllFiles: () => [],
       searchSymbols: (name: string) => {
@@ -471,7 +471,7 @@ describe('Scanner module', () => {
     });
     const scanner4 = new Scanner(mockStore4, mockConfig, graph);
     const symRes4 = (scanner4 as any).resolveSymbolToFile('UserController', fileMap, 'src/main.php');
-    expect(symRes4).toBe('src/controllers/UserController.php');
+    expect(symRes4).toBeNull();
   });
 
   it('handles route/hook confidence suppression and error handling', async () => {
@@ -709,8 +709,7 @@ describe('Scanner module', () => {
       expect(result).toBe('src/parsers/languages/php.ts');
     });
 
-    it('prefers same-file match in first-result fallback (no exact name match)', () => {
-      // Multiple non-exact matches — same file should still win
+    it('never takes another name from the substring search (M3-10)', () => {
       const store = createMockStore({
         searchSymbols: (name: string) => {
           if (name === 'helper') return [
@@ -724,7 +723,25 @@ describe('Scanner module', () => {
       const result = (scanner as any).resolveSymbolToFile(
         'helper', fileMap, 'src/parsers/languages/php.ts'
       );
-      expect(result).toBe('src/parsers/languages/php.ts');
+      expect(result).toBeNull();
+    });
+
+    it('prefers the same file among PHP functions named in another case (M3-10)', () => {
+      const store = createMockStore({
+        searchSymbols: (name: string) => {
+          if (name === 'helper') return [
+            { name: 'HELPER', kind: 'function', file_path: 'app/a.php' },
+            { name: 'Helper', kind: 'function', file_path: 'app/b.php' },
+          ];
+          return [];
+        }
+      });
+      const scanner = new Scanner(store, makeConfig(), graph);
+      // This file mocks every language as TypeScript.
+      (scanner as any).languageOf = (path: string) => (path.endsWith('.php') ? 'php' : 'typescript');
+      const phpMap = new Map([['app/a.php', 'repo1'], ['app/b.php', 'repo1']]);
+      expect((scanner as any).resolveSymbolToFile('helper', phpMap, 'app/b.php')).toBe('app/b.php');
+      expect((scanner as any).resolveSymbolToFile('helper', phpMap, 'app/c.php')).toBe('app/a.php');
     });
 
     it('fails closed when no sourcePath is provided (M2-01)', () => {

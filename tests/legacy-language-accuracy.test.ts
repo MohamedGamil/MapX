@@ -253,3 +253,74 @@ describe('generic bases and C# base kinds end to end', () => {
     ]);
   });
 });
+
+// M3-10: name lookup follows the target language's case rules. `Cart` is not `cart` in
+// case-sensitive languages; PHP class and function names ignore case.
+describe('symbol name lookup is case-sensitive except where the language is not', () => {
+  let root: string;
+  type Edge = { source_file: string; edge_type: string; target_symbol: string; target_file: string };
+  const from = (file: string) => query<Edge>(root,
+    "SELECT source_file, edge_type, target_symbol, target_file FROM edges WHERE source_file = ? AND edge_type NOT IN ('import', 'require') ORDER BY edge_type, target_symbol, target_file", file);
+
+  beforeAll(() => {
+    // Each `*/use.*` names `Cart`; only a lowercase `cart` is declared elsewhere in its language.
+    root = workspace({
+      'js/cart.js': 'export function cart() { return 1; }\n',
+      'js/use.js': 'export function run() { return new Cart(); }\n',
+      'ts/cart.ts': 'export function cart(): number { return 1; }\n',
+      'ts/use.ts': 'export function run() { return Cart(); }\n',
+      'vue/CartView.vue': '<template><div>{{ cart }}</div></template>\n<script setup>\nimport { ref } from "vue";\nconst cart = ref([]);\n</script>\n',
+      'vue/use.ts': 'export class Big extends Cart {}\n',
+      'py/cart.py': 'def cart():\n    return 1\n',
+      'py/use.py': 'def run():\n    return Cart()\n',
+      'go/cart.go': 'package shop\n\nfunc cart() int { return 1 }\n',
+      'go/use.go': 'package shop\n\nfunc Run() int { return Cart() }\n',
+      'rs/cart.rs': 'pub fn cart() -> i32 { 1 }\n',
+      'rs/use.rs': 'pub fn run() -> i32 { Cart() }\n',
+      'java/Store.java': 'public class Store { static int cart() { return 1; } }\n',
+      'java/Use.java': 'public class Use { Object run() { return new Cart(); } }\n',
+      'kt/Store.kt': 'fun cart() = 1\n',
+      'kt/Use.kt': 'fun run() = Cart()\n',
+      'swift/Store.swift': 'func cart() -> Int { return 1 }\n',
+      'swift/Use.swift': 'func run() -> Int { return Cart() }\n',
+      'rb/store.rb': 'def cart\n  1\nend\n',
+      'rb/use.rb': 'def run\n  Cart.new\nend\n',
+      'cs/Store.cs': 'public class Store { public static int cart() { return 1; } }\n',
+      'cs/Use.cs': 'public class Use { object Run() { return new Cart(); } }\n',
+      // PHP: classes and functions match whatever the case.
+      'php/User.php': '<?php\nclass User { public function save() {} }\nfunction helper() { return 1; }\n',
+      'php/use.php': '<?php\nfunction run() { $u = new user(); return HELPER(); }\n',
+      'php/app/Models/Role.php': '<?php\nnamespace App\\Models;\nclass Role {}\n',
+      'php/app/use.php': '<?php\nnamespace App;\nfunction go() { return new \\App\\Models\\ROLE(); }\n',
+      // Pascal identifiers ignore case.
+      'pas/Store.pas': 'unit Store;\ninterface\nfunction Total: Integer;\nimplementation\nfunction Total: Integer;\nbegin\n  Result := 1;\nend;\nend.\n',
+      'pas/Use.pas': 'unit Use;\ninterface\nimplementation\nuses Store;\nprocedure Run;\nvar x: Integer;\nbegin\n  x := TOTAL();\nend;\nend.\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it.each([
+    'js/use.js', 'ts/use.ts', 'vue/use.ts', 'py/use.py', 'go/use.go', 'rs/use.rs',
+    'java/Use.java', 'kt/Use.kt', 'swift/Use.swift', 'rb/use.rb', 'cs/Use.cs',
+  ])('%s: `Cart` does not resolve to a lowercase `cart`', (file) => {
+    expect(from(file)).toEqual([]);
+  });
+
+  it('PHP: `new user()` and `HELPER()` reach `User` and `helper`; `\\App\\Models\\ROLE` reaches Role', () => {
+    expect(from('php/use.php')).toEqual([
+      { source_file: 'php/use.php', edge_type: 'call', target_symbol: 'HELPER', target_file: 'php/User.php' },
+      { source_file: 'php/use.php', edge_type: 'instantiation', target_symbol: 'user', target_file: 'php/User.php' },
+    ]);
+    expect(from('php/app/use.php')).toEqual([
+      { source_file: 'php/app/use.php', edge_type: 'instantiation', target_symbol: 'App\\Models\\ROLE', target_file: 'php/app/Models/Role.php' },
+    ]);
+  });
+
+  it('Pascal: `TOTAL()` reaches `Total`', () => {
+    expect(from('pas/Use.pas')).toEqual([
+      { source_file: 'pas/Use.pas', edge_type: 'call', target_symbol: 'TOTAL', target_file: 'pas/Store.pas' },
+    ]);
+  });
+});

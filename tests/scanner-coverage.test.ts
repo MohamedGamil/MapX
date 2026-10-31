@@ -355,9 +355,8 @@ describe('Scanner Coverage Boost', () => {
     const resExact = scanner['resolveSymbolToFile']('MyFunc', fileMap, 'other.ts');
     expect(resExact).toBe('a.ts');
 
-    // Case-insensitive lookup falls back to the first compatible candidate
-    const resFirst = scanner['resolveSymbolToFile']('myfunc', fileMap, 'other.ts');
-    expect(resFirst).toBe('a.ts');
+    // TypeScript names are case-sensitive: `myfunc` is not `MyFunc` (M3-10)
+    expect(scanner['resolveSymbolToFile']('myfunc', fileMap, 'other.ts')).toBeNull();
 
     // Without a source file the language is unknown, so resolution fails closed (M2-01)
     expect(scanner['resolveSymbolToFile']('myfunc', fileMap)).toBeNull();

@@ -143,7 +143,7 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-07** Framework detection from package.json files below the repo root — DONE, P2, 4h; depends on M3-01.
 - **M3-08** Vue global registry: re-link on sync, scope per manifest folder — IN_PROGRESS, P2, 4h; depends on M3-02, M3-07, M3-06.
 - **M3-09** JS/TS import aliases from tsconfig/jsconfig paths and Vite/webpack alias config — DONE, P2, 4h; depends on M3-04.
-- **M3-10** Case-sensitive symbol name lookup in resolution — IN_PROGRESS, P2, 3h; depends on M3-06.
+- **M3-10** Case-sensitive symbol name lookup in resolution — DONE, P2, 3h; depends on M3-06.
 - **M3-11** Vue Router navigation from plain JS/TS modules (stores, guards, composables) — DONE, P2, 4h; depends on M3-06.
 - **M3-12** HTTP pass and vue-router detector use the shared alias resolver — IN_PROGRESS, P2, 3h; depends on M3-09, M3-06.
 
