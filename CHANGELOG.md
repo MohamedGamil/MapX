@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `sync` and `scan` now restore the edges into a file that was deleted and comes back (a branch switch, a restored file), `sync` applies config filter changes, filtered JSON exports drop excluded files' clusters and memberships, `./` and Windows-style patterns work, and `laravelDefaultExcludes` can list the Laravel defaults to keep (M0-02-R2).
 - HTTP pairing now needs literal path evidence, ignores calls to third-party hosts (own hosts come from `.env` files or `settings.http.hosts`), reads `fetch` methods only from the top level of the options, and no longer skips source directories named `public/` or `build/`. Also fixed: JSX closing tags hid calls on the same line (M2-06-R1).
 - Import resolution no longer slows down with repository size (Java/Kotlin/Scala, Go and PHP imports use an index built once per scan), shebang scripts get call edges, `Rakefile`/`Gemfile` index as Ruby and `.fish` files are indexed, and `mapx_lang_info` matches `mapx lang info` (M0-12-R3).
 - `mapx_query` now lists an Eloquent model's relationships and `mapx_dependencies` lists a provider's abstract → concrete bindings, matching the CLI (M0-05-R4).

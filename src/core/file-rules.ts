@@ -29,7 +29,17 @@ export function shebangLanguage(path: string) {
   }
 }
 
+/**
+ * Paths are matched with `/` and no leading `./`, so `./app/**` and Windows-style `app\Models\**`
+ * name the same files as `app/**` and `app/Models/**` (M0-02-R2).
+ */
+export function normalizePattern(pattern: string): string {
+  return pattern.replace(/\\/g, '/').replace(/^(\.\/)+/, '');
+}
+
 export function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
+  excludes = excludes.map(normalizePattern);
+  includes = includes.map(normalizePattern);
   return (rel: string) => {
     if (excludes.some(p => {
       if (picomatch.isMatch(rel, p, { dot: true })) return true;
@@ -61,23 +71,27 @@ export function buildMatcher(excludes: string[], includes: string[]): (rel: stri
  */
 export function isExcludedDir(relDir: string, excludes: string[]): boolean {
   return excludes.some(p => {
-    const pattern = p.replace(/\/+$/, '');
+    const pattern = normalizePattern(p).replace(/\/+$/, '');
     if (!pattern.endsWith('/*') && picomatch.isMatch(relDir, pattern, { dot: true })) return true;
     if (pattern.endsWith('/**') && picomatch.isMatch(relDir, pattern.slice(0, -3), { dot: true })) return true;
     return relDir.split('/').some(seg => seg === pattern);
   });
 }
 
-/** Config + CLI excludes, plus Laravel's defaults for `framework: laravel` repos unless declined (F10). */
+/**
+ * Config + CLI excludes, plus Laravel's defaults for `framework: laravel` repos (F10):
+ * `laravelDefaultExcludes` false declines them, a list keeps only the defaults it names (M0-02-R2).
+ */
 export function effectiveExcludesFor(
   settings: Pick<MapxConfig['settings'], 'excludePatterns' | 'laravelDefaultExcludes'>,
   repo: Pick<RepoConfig, 'path' | 'framework'> | undefined,
   cliExcludes: string[] = [],
 ): string[] {
-  const excludes = [...(settings.excludePatterns ?? []), ...cliExcludes];
-  if (repo?.framework === 'laravel' && settings.laravelDefaultExcludes !== false) {
+  const excludes = [...(settings.excludePatterns ?? []), ...cliExcludes].map(normalizePattern);
+  const laravelDefaults = settings.laravelDefaultExcludes;
+  if (repo?.framework === 'laravel' && laravelDefaults !== false) {
     const prefix = !repo.path || repo.path === '.' ? '' : `${repo.path.replace(/^\.\//, '').replace(/\/+$/, '')}/`;
-    for (const p of LARAVEL_DEFAULT_EXCLUDES) {
+    for (const p of Array.isArray(laravelDefaults) ? laravelDefaults.map(normalizePattern) : LARAVEL_DEFAULT_EXCLUDES) {
       const scoped = p.startsWith('**/') ? p : `${prefix}${p}`;
       if (!excludes.includes(scoped)) excludes.push(scoped);
     }

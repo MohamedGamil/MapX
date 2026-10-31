@@ -9310,9 +9310,10 @@
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "src/exporters/json-exporter.ts",
+        "src/exporters/graph-exporter.ts",
         "docs/configuration.md",
-        "tests/legacy-globs.test.ts"
+        "tests/legacy-globs.test.ts",
+        "src/core/file-rules.ts"
       ],
       "acceptanceCriteria": [
         "Inbound edges to a file that is deleted, scanned and restored return after a plain scan and after sync.",
@@ -9324,14 +9325,22 @@
         "npx vitest run tests/legacy-globs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-misc",
       "actualHours": null,
       "startedAt": "2026-10-31T02:43:15.433Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T03:44:00.928Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-globs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T00:30:45.756Z",
@@ -9344,6 +9353,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T03:43:59.688Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T03:44:00.928Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-globs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -9843,15 +9870,28 @@
         "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-parsers",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T03:31:42.975Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T03:31:42.639Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T03:31:42.975Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

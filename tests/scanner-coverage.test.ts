@@ -173,6 +173,9 @@ describe('Scanner Coverage Boost', () => {
     getSymbolsForFile: vi.fn().mockReturnValue([]),
     upsertFile: vi.fn(),
     deleteFile: vi.fn(),
+    // removeFiles (M0-02-R2) deletes only tracked files and records their referrers.
+    getFile: vi.fn().mockReturnValue({}),
+    getReferrers: vi.fn().mockReturnValue([]),
     deleteSymbolsForFile: vi.fn(),
     deleteEdgesForFile: vi.fn(),
     insertSymbol: vi.fn(),

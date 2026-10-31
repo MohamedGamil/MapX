@@ -103,6 +103,33 @@ mapx lang list
 | `excludePatterns` | string[] | (see above) | Glob patterns for files to exclude from scanning |
 | `includePatterns` | string[] | [] | If set, only include matching files |
 | `graphExcludePatterns` | string[] | `["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]` | Glob patterns for files to exclude from PageRank rankings and graph analysis (files are still indexed but deprioritized) |
+| `laravelDefaultExcludes` | boolean \| string[] | `true` | Laravel's default excludes for repos with `"framework": "laravel"` (see below). `false` turns them off; a list applies only the patterns it names. |
+
+Patterns match workspace-relative paths with `/` separators. A leading `./` is ignored, and `\` is read as `/`, so `./app/Models/**` and `app\Models\**` both mean `app/Models/**`. Because of this, a backslash cannot escape a glob character. Changing the patterns makes the next `scan` or `sync` re-parse every file once, so that edges into files that come back in are restored.
+
+### Laravel default excludes
+
+For a repo with `"framework": "laravel"`, every scan also excludes these patterns:
+
+```
+database/migrations/**  database/seeders/**  database/factories/**  storage/**
+bootstrap/cache/**  public/**  resources/views/**  **/*.blade.php  vendor/**
+```
+
+When the repo is not at the workspace root, each pattern is scoped to its path (`api/public/**`). `mapx init` offers to add the same patterns to `excludePatterns`. If you decline, init records `"laravelDefaultExcludes": false`.
+
+To drop a single default, list the ones to keep. Also remove the pattern from `excludePatterns` if init added it there. For example, to index `public/`:
+
+```json
+{
+  "settings": {
+    "laravelDefaultExcludes": [
+      "database/migrations/**", "database/seeders/**", "database/factories/**", "storage/**",
+      "bootstrap/cache/**", "resources/views/**", "**/*.blade.php", "vendor/**"
+    ]
+  }
+}
+```
 
 ## Architecture & Role Classification
 

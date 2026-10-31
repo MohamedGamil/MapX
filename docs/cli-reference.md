@@ -82,7 +82,10 @@ Options:
 
 ## `mapx update` / `mapx sync`
 
-Incremental scan. Detects changed files via git and only re-scans those.
+Incremental scan. Detects changed files via git, or via content hashes outside git, and only re-scans those. The exceptions are re-scans that keep the graph identical to `mapx scan`:
+
+- When a file that was removed comes back (a restored file, or a branch switch), the files that referenced it are re-parsed, so its inbound edges return.
+- When the effective include/exclude filters differ from the last scan (config or flags), every file is re-parsed once, as `mapx scan` does.
 
 ```bash
 mapx update [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--no-parallel]

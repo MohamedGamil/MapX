@@ -305,7 +305,7 @@ Full scan: parse all files, build graph.
 - `dir` (string, optional): Target project directory
 
 #### `mapx_sync`
-Incremental update: sync changed files only.
+Incremental update: sync changed files only. Like `mapx sync`, it re-parses the referrers of a removed file that comes back, and re-parses everything once when the include/exclude filters have changed since the last scan.
 - `dir` (string, optional): Target project directory
 
 ### Symbol & File Discovery

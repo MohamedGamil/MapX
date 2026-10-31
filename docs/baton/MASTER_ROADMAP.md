@@ -37,7 +37,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
 - **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.
-- **M0-32-R1** Architecture analysis: iterative SCC, no stack overflow on large cyclic graphs — READY, P1, 4h; depends on M0-32.
+- **M0-32-R1** Architecture analysis: iterative SCC, no stack overflow on large cyclic graphs — IN_PROGRESS, P1, 4h; depends on M0-32.
 - **M0-33** Search, tracing and graph-quality improvements (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-34** Dart/Flutter and ASP.NET support (0.3.3) — DONE, P1, 0h; depends on nothing.
 - **M0-35** PageRank persistence and graphExcludePatterns (0.3.4) — DONE, P1, 0h; depends on nothing.
@@ -70,13 +70,13 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-05-R3** Hook edges honour declared confidence (verifiability) — DONE, P2, 3h; depends on M0-05-R2.
 - **M0-20-R2** NestJS class segmentation ignores comments, strings and generics — DONE, P1, 4h; depends on M0-20-R1.
 - **M0-11-R2** Staleness uses the scanner file rules; precise import-only dependants and callee lines — DONE, P1, 5h; depends on M0-11-R1.
-- **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — IN_PROGRESS, P1, 6h; depends on M0-02-R1.
+- **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — DONE, P1, 6h; depends on M0-02-R1.
 - **M0-04-R2** PHP resolution never maps vendor names to app files; tree-sitter $listen — READY, P1, 8h; depends on M0-04-R1.
 - **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — IN_PROGRESS, P2, 4h; depends on M0-10-R1.
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — DONE, P1, 6h; depends on M0-12-R1, M0-12-R2.
 - **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — IN_PROGRESS, P2, 6h; depends on M0-12-R3.
-- **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — BACKLOG, P2, 6h; depends on M0-17-R1, M0-01-R1.
+- **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — IN_PROGRESS, P2, 6h; depends on M0-17-R1, M0-01-R1.
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
 - **M0-05-R4** MCP parity for Laravel relationships and bindings — DONE, P2, 3h; depends on M0-05-R2.
 - **M0-07-R2** Binary build test writes outside the repo; package check rejects binaries — DONE, P2, 2h; depends on M0-07-R1.

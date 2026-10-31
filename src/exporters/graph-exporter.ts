@@ -1,5 +1,6 @@
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
+import { filterClustersToFiles } from './cluster-filter.js';
 
 export class GraphExporter {
   private store: Store;
@@ -30,8 +31,12 @@ export class GraphExporter {
       graphData.edges = graphData.edges.filter((e: any) => allowed.has(e.source) && allowed.has(e.target));
     }
 
-    const clusters = this.store.getClusters(repo);
-    const memberships = this.store.getClusterMemberships(repo);
+    // A filtered export lists only memberships of exported files and the clusters still holding
+    // one (or ancestors of one), as the LLM and TOON exports do (M0-02-R2).
+    const allowedFiles = filesFilter ? new Set(filesFilter) : null;
+    let memberships = this.store.getClusterMemberships(repo);
+    const clusters = filterClustersToFiles(this.store.getClusters(repo), memberships, allowedFiles);
+    if (allowedFiles) memberships = memberships.filter(m => allowedFiles.has(m.file_path as string));
 
     return {
       version: '1.0.0',

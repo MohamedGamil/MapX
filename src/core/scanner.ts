@@ -19,7 +19,7 @@ import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
-import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, shebangLanguage } from './file-rules.js';
+import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, normalizePattern, shebangLanguage } from './file-rules.js';
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, urlHost } from '../frameworks/http/pairing.js';
@@ -233,12 +233,17 @@ export class Scanner {
     // resolved (their referrers are unchanged and would not be re-parsed): re-parse everything
     // once when the effective filters differ from the last scan (M0-02-R1).
     const filterKey = 'scan_filters:' + repo.name;
-    const filters = JSON.stringify({ excludes: this.effectiveExcludes(repo.name), includes: [...this.config.settings.includePatterns, ...this.cliIncludes] });
+    const filters = this.filterSignature(repo.name);
     const previousFilters = this.store.getMeta(filterKey);
     const reparseAll = force || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
     this.store.setMeta(filterKey, filters);
-    const unchangedFiles = reparseAll ? [] : discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
-    const filesToParse = reparseAll ? discovered : [...newFiles, ...changedFiles, ...incompleteFiles];
+    // Unchanged files that had edges into a removed file now back: re-parse them (M0-02-R2).
+    const referrers = this.takeReferrers(repo.name, newFiles.map(f => f.relativePath));
+    const stableFiles = discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
+    const unchangedFiles = reparseAll ? [] : stableFiles.filter(f => !referrers.has(f.relativePath));
+    const filesToParse = reparseAll
+      ? discovered
+      : [...newFiles, ...changedFiles, ...incompleteFiles, ...stableFiles.filter(f => referrers.has(f.relativePath))];
 
     const resumeState = this.loadResumeState(repo.name);
     const resumedCompleted = new Set(resumeState?.completedFiles || []);
@@ -374,11 +379,7 @@ export class Scanner {
 
     const deletedPaths = this.detectDeletedFiles(discovered, repo.name);
     if (deletedPaths.length > 0) {
-      this.store.inTransaction(() => {
-        for (const p of deletedPaths) {
-          this.store.deleteFile(p);
-        }
-      });
+      this.store.inTransaction(() => this.removeFiles(repo.name, deletedPaths));
     }
 
     const langBreakdown: Record<string, number> = {};
@@ -485,14 +486,38 @@ export class Scanner {
     const workspaceRoot = this.config.getWorkspaceRoot();
     const repoRoot = resolve(workspaceRoot, repo.path);
 
+    // Changed include/exclude filters: take the full-scan path, which re-parses every file once,
+    // so sync gives the edges scan gives (M0-02-R2).
+    const filterKey = 'scan_filters:' + repo.name;
+    const previousFilters = this.store.getMeta(filterKey);
+    if (previousFilters === null) this.store.setMeta(filterKey, this.filterSignature(repo.name));
+    else if (previousFilters !== this.filterSignature(repo.name)) return this._scanFullForRepo(repo);
+
     if (!isGitRepo(repoRoot)) {
       // Content-hash based incremental for non-git projects
       return this._scanIncrementalByHash(repo);
     }
 
+    const excludes = this.effectiveExcludes(repo.name);
+    const includes = [
+      ...this.config.settings.includePatterns,
+      ...this.cliIncludes,
+    ];
+    const matcher = buildMatcher(excludes, includes);
+
     const lastCommit = this.store.getMeta('last_scan_commit:' + repo.name);
     this.onProgress?.({ phase: 'detect', current: 0, total: 0 });
     const changes = getChangedFiles(repoRoot, lastCommit || undefined);
+
+    // A file removed and restored while HEAD stayed at the last scanned commit is not in the diff:
+    // look for the removed files on disk (M0-02-R2).
+    const listed = new Set(changes.map(c => resolve(repoRoot, c.path)));
+    for (const p of Object.keys(this.removedFiles(repo.name))) {
+      const absolutePath = resolve(workspaceRoot, p);
+      if (!listed.has(absolutePath) && matcher(p) && existsSync(absolutePath)) {
+        changes.push({ path: relative(repoRoot, absolutePath).replace(/\\/g, '/'), status: 'added' });
+      }
+    }
 
     if (changes.length === 0) {
       await this.refreshHttpIfInputsChanged(repo, repoRoot);
@@ -504,13 +529,6 @@ export class Scanner {
         languageBreakdown: {},
       };
     }
-
-    const excludes = this.effectiveExcludes(repo.name);
-    const includes = [
-      ...this.config.settings.includePatterns,
-      ...this.cliIncludes,
-    ];
-    const matcher = buildMatcher(excludes, includes);
 
     const toRemove: string[] = [];
     const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string }> = [];
@@ -534,10 +552,19 @@ export class Scanner {
       }
     }
 
+    // Unchanged files of this repo that had edges into a removed file now back (M0-02-R2).
+    const reindexed = new Set(toReindex.map(r => r.path));
+    for (const r of this.takeReferrers(repo.name, [...reindexed])) {
+      if (reindexed.has(r) || toRemove.includes(r) || this.store.getFile(r)?.repo !== repo.name) continue;
+      const absolutePath = resolve(workspaceRoot, r);
+      const fileInfo = existsSync(absolutePath) ? await this.getFileInfo(absolutePath, r) : null;
+      if (!fileInfo) continue;
+      const contentHash = createHash('md5').update(await readFile(absolutePath, 'utf-8')).digest('hex');
+      toReindex.push({ path: r, fileInfo, contentHash });
+    }
+
     this.store.inTransaction(() => {
-      for (const p of toRemove) {
-        this.store.deleteFile(p);
-      }
+      this.removeFiles(repo.name, toRemove);
       for (const { path: p, fileInfo, contentHash } of toReindex) {
         this.store.deleteSymbolsForFile(p);
         this.store.deleteEdgesForFile(p);
@@ -1427,9 +1454,59 @@ export class Scanner {
     return isExcludedDir(relDir, excludes);
   }
 
-  /** Config + CLI excludes, plus Laravel's defaults for `framework: laravel` repos unless declined (F10). */
+  /**
+   * Config + CLI excludes, plus Laravel's defaults for `framework: laravel` repos (F10):
+   * `laravelDefaultExcludes` false declines them, a list keeps only the defaults it names (M0-02-R2).
+   */
   private effectiveExcludes(repoName: string): string[] {
     return effectiveExcludesFor(this.config.settings, this.config.repos.find(r => r.name === repoName), this.cliExcludes);
+  }
+
+  /** The effective filters of a repo, as recorded in `meta scan_filters:<repo>` (M0-02-R1). */
+  private filterSignature(repoName: string): string {
+    const includes = [...this.config.settings.includePatterns, ...this.cliIncludes].map(normalizePattern);
+    return JSON.stringify({ excludes: this.effectiveExcludes(repoName), includes });
+  }
+
+  private removedFiles(repoName: string): Record<string, string[]> {
+    try {
+      return JSON.parse(this.store.getMeta('removed_files:' + repoName) ?? '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Drop files from the index and remember which files had edges into them, so those edges come
+   * back when a file does (a restored file, a branch switch) although its referrers did not change
+   * (M0-02-R2). Call inside a transaction.
+   */
+  private removeFiles(repoName: string, paths: string[]): void {
+    const removed = this.removedFiles(repoName);
+    let changed = false;
+    for (const p of paths) {
+      if (!this.store.getFile(p)) continue;
+      removed[p] = [...new Set([...(removed[p] ?? []), ...this.store.getReferrers(p)])];
+      changed = true;
+      this.store.deleteFile(p);
+    }
+    if (changed) this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
+  }
+
+  /** The recorded referrers of removed files that are indexed again; their entries are consumed. */
+  private takeReferrers(repoName: string, paths: string[]): Set<string> {
+    const removed = this.removedFiles(repoName);
+    const referrers = new Set<string>();
+    let changed = false;
+    for (const p of paths) {
+      if (!removed[p]) continue;
+      for (const r of removed[p]) referrers.add(r);
+      delete removed[p];
+      changed = true;
+    }
+    if (changed) this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
+    for (const p of paths) referrers.delete(p);
+    return referrers;
   }
 
   private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {
@@ -2134,6 +2211,11 @@ export class Scanner {
         toReindex.push(f);
       }
     }
+    // Unchanged files that had edges into a removed file now back (M0-02-R2).
+    const referrers = this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath));
+    for (const f of discovered) {
+      if (!f.isNew && !f.contentChanged && referrers.has(f.relativePath)) toReindex.push(f);
+    }
 
     // Detect deleted files
     const currentPaths = new Set(discovered.map(f => f.relativePath));
@@ -2153,9 +2235,7 @@ export class Scanner {
     }
 
     this.store.inTransaction(() => {
-      for (const p of toRemove) {
-        this.store.deleteFile(p);
-      }
+      this.removeFiles(repo.name, toRemove);
       for (const f of toReindex) {
         this.store.deleteSymbolsForFile(f.relativePath);
         this.store.deleteEdgesForFile(f.relativePath);

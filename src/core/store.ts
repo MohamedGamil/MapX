@@ -358,6 +358,12 @@ export class Store {
     this.backend.prepare('DELETE FROM files WHERE path = ?').run(filePath);
   }
 
+  /** Other files with an edge into `filePath`. */
+  getReferrers(filePath: string): string[] {
+    return this.backend.prepare('SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND source_file != ?')
+      .all(filePath, filePath).map(r => r.source_file as string);
+  }
+
   getFile(filePath: string): Record<string, unknown> | undefined {
     return this.backend.prepare('SELECT * FROM files WHERE path = ?').get(filePath);
   }
