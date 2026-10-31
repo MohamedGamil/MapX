@@ -10905,6 +10905,82 @@
       "description": "Left from M0-04-R2 (2026-10-31): the route walker keeps only quoted middleware names, so ->middleware(X::class) makes no edge; it needs the route file use table."
     },
     {
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-04-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-07.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-04-R5.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "queries/php/references.scm",
+        "src/core/scanner.ts",
+        "tests/legacy-php-resolution.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`function run() { return helper_fmt(1); }` with `helper_fmt` declared in another file (loaded by require_once) gives a call edge run → helpers.php#helper_fmt; a call inside a class method likewise (e2e test).",
+        "`require_once \"helpers.php\"` / `include __DIR__.\"/x.php\"` give an import edge to the resolved file when it exists (e2e test).",
+        "Namespaced functions (`use function App\\fmt;`, `\\App\\fmt()`) resolve only to the function declared in that namespace; PHP built-ins (strlen, array_map) give no edge (test).",
+        "The routes scorer is unchanged."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-php-resolution.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-php",
+      "actualHours": null,
+      "startedAt": "2026-10-31T07:52:19.039Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T07:52:18.686Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:52:19.039Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-04-R5",
+      "title": "PHP global function calls and require/include produce edges",
+      "objective": "Make PHP import and class resolution precise on stock Laravel apps.",
+      "milestone": "M0",
+      "description": "Reported by M3-07 and reproduced 2026-10-31: a PHP file calling a global function from a require_once-d file gets zero edges (no call, no require)."
+    },
+    {
       "priority": "P2",
       "estimate": {
         "min": 2,
