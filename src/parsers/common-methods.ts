@@ -13,6 +13,14 @@ export const BUILTIN_GLOBALS = new Set([
   'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError', 'URIError', 'EvalError'
 ]);
 
+/**
+ * Built-in JS objects and namespaces. `Math.max()`, `Date.now()` or `process.exit()` call the
+ * runtime, never a user function of the same name (M0-17-R2).
+ */
+export const JS_BUILTIN_RECEIVERS = new Set([
+  ...BUILTIN_GLOBALS, 'Reflect', 'Intl', 'Atomics', 'BigInt', 'WebAssembly', 'globalThis',
+  'process', 'Buffer', 'window', 'document', 'navigator', 'localStorage', 'sessionStorage',
+]);
 
 /**
  * Built-in method names of JS values (arrays, strings, promises, maps, objects). Calls such as

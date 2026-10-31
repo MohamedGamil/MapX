@@ -76,7 +76,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — DONE, P2, 4h; depends on M0-10-R1.
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — DONE, P1, 6h; depends on M0-12-R1, M0-12-R2.
 - **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — IN_PROGRESS, P2, 6h; depends on M0-12-R3.
-- **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — IN_PROGRESS, P2, 6h; depends on M0-17-R1, M0-01-R1.
+- **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — DONE, P2, 6h; depends on M0-17-R1, M0-01-R1.
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
 - **M0-05-R4** MCP parity for Laravel relationships and bindings — DONE, P2, 3h; depends on M0-05-R2.
 - **M0-07-R2** Binary build test writes outside the repo; package check rejects binaries — DONE, P2, 2h; depends on M0-07-R1.

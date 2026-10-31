@@ -26,6 +26,14 @@
         name: (identifier) @symbol.name)
       (qualified_identifier
         name: (destructor_name (identifier) @symbol.name))
+      ; Nested qualifiers: `void ns::K::a()`, `void A::B::C::f()` (M0-17-R2)
+      (qualified_identifier
+        name: (qualified_identifier
+          name: (identifier) @symbol.name))
+      (qualified_identifier
+        name: (qualified_identifier
+          name: (qualified_identifier
+            name: (identifier) @symbol.name)))
     ])) @symbol.kind_function
 
 ; Template classes and functions need no pattern of their own: the class_specifier and

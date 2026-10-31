@@ -28,3 +28,8 @@
 (field_declaration
   !name
   type: (type_identifier) @ref.target_extends) @ref.type_extends
+
+; Qualified struct embedding: `struct { sync.Mutex }` (M0-17-R2)
+(field_declaration
+  !name
+  type: (qualified_type name: (type_identifier) @ref.target_extends)) @ref.type_extends

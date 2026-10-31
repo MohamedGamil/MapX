@@ -29,6 +29,9 @@ import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 
+/** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
+const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
+
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
 interface ScanResumeState {
@@ -67,7 +70,7 @@ export class Scanner {
   private workspaceFileMap = new Map<string, string>();
   private dartPackageMap = new Map<string, string>();
   private cachedActiveDetectors = new Map<string, any[]>();
-  private symbolIndex: Map<string, Array<{ name: string; file: string; scope: string | null }>> | null = null;
+  private symbolIndex: Map<string, Array<{ name: string; file: string; scope: string | null; kind?: string }>> | null = null;
   private parallel: boolean;
 
   constructor(
@@ -1104,7 +1107,9 @@ export class Scanner {
       } else if (ref.referenceType === 'import') {
         targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
       } else {
-        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath);
+        // Calls and instantiations skip value symbols (constants, variables) (M0-17-R2).
+        const callable = ref.referenceType === 'call' || ref.referenceType === 'instantiation';
+        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable);
       }
 
       if (targetFile) {
@@ -1323,7 +1328,7 @@ export class Scanner {
     }
   }
 
-  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string): string | null {
+  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string, callableOnly = false): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
 
     const sourceLang = sourcePath ? this.languageOf(sourcePath) : null;
@@ -1334,7 +1339,12 @@ export class Scanner {
       if (!sourceLang) return [];
       return matches.filter(m => {
         const targetPath = (m.file_path || m.file) as string;
-        return areLanguagesCompatible(sourceLang!, this.languageOf(targetPath) ?? '');
+        const targetLang = this.languageOf(targetPath) ?? '';
+        // `config()` on a parameter must not link to a JS/TS/Python `const config` or module
+        // variable (M0-17-R2). Other languages keep their constants as targets: C function-like
+        // macros, Rust tuple variants, Lua function values and Bash aliases are callable.
+        if (callableOnly && (m.kind === 'constant' || m.kind === 'variable') && VALUE_SYMBOL_LANGUAGES.has(targetLang)) return false;
+        return areLanguagesCompatible(sourceLang!, targetLang);
       });
     };
 
@@ -1805,17 +1815,17 @@ export class Scanner {
     repoName: string,
     parsedPaths?: string[],
     results?: ParseResult[]
-  ): Map<string, Array<{ name: string; file: string; scope: string | null }>> {
+  ): Map<string, Array<{ name: string; file: string; scope: string | null; kind?: string }>> {
     // A new symbol index starts a resolution phase: the file set, go.mod texts and languages
     // may have changed since the last one (long-lived scanners: watch, MCP).
     this.importFiles = null;
     this.importTextCache.clear();
     this.languageCache.clear();
-    const index = new Map<string, Array<{ name: string; file: string; scope: string | null }>>();
+    const index = new Map<string, Array<{ name: string; file: string; scope: string | null; kind?: string }>>();
     const excludeSet = new Set(parsedPaths || []);
 
-    const addEntry = (name: string, file: string, scope: string | null) => {
-      const entry = { name, file, scope };
+    const addEntry = (name: string, file: string, scope: string | null, kind?: string) => {
+      const entry = { name, file, scope, kind };
       const key = name.toLowerCase();
       const existing = index.get(key);
       if (existing) {
@@ -1840,7 +1850,7 @@ export class Scanner {
       const filePath = sym.file_path as string;
       const symRepo = sym.repo as string;
       if (symRepo === repoName && excludeSet.has(filePath)) continue;
-      addEntry(sym.name as string, filePath, (sym.scope as string) || null);
+      addEntry(sym.name as string, filePath, (sym.scope as string) || null, sym.kind as string);
     }
 
     if (parsedPaths && results) {
@@ -1849,7 +1859,7 @@ export class Scanner {
         const res = results[i];
         if (!res) continue;
         for (const sym of res.symbols) {
-          addEntry(sym.name, filePath, sym.scope);
+          addEntry(sym.name, filePath, sym.scope, sym.kind);
         }
       }
     }

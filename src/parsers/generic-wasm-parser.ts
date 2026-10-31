@@ -2,7 +2,7 @@ import type { LanguageParser } from './parser-interface.js';
 import type { ParseResult, ExtractedSymbol, ExtractedReference, SymbolKind } from '../types.js';
 import type { LanguageDefinition } from '../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from './wasm-parser.js';
-import { COMMON_FRAMEWORK_METHODS, JS_BUILTIN_METHODS } from './common-methods.js';
+import { COMMON_FRAMEWORK_METHODS, JS_BUILTIN_METHODS, JS_BUILTIN_RECEIVERS } from './common-methods.js';
 
 /** `import a.b.C` → [a.b.C]; `import a.b.{C, D => E}` → [a.b.C, a.b.D]; `import a.b._` → [a.b._]. */
 function scalaImportTargets(node: any): string[] {
@@ -21,7 +21,9 @@ function scalaImportTargets(node: any): string[] {
 /**
  * C# `class A : Base, IRun`: the base list mixes one base class and interfaces. Only the first
  * entry of a class or record can be a class, and C# names interfaces `I<Upper>…`; structs only
- * implement; interfaces extend interfaces (M0-17-R1). Null for anything that is not a base-list entry.
+ * implement; interfaces extend interfaces (M0-17-R1). `IOException`, `IPAddressAttribute` and
+ * the like are classes: the .NET suffixes Exception, Attribute and EventArgs override the `I`
+ * prefix (M0-17-R2). Null for anything that is not a base-list entry.
  */
 function csharpBaseType(node: any): 'extends' | 'implements' | null {
   const list = node.parent;
@@ -31,8 +33,8 @@ function csharpBaseType(node: any): 'extends' | 'implements' | null {
   if (owner === 'struct_declaration' || owner === 'record_struct_declaration') return 'implements';
   const first = list.namedChildren?.[0] ?? list.namedChild?.(0);
   if (first?.id !== node.id) return 'implements';
-  const name = String(node.text).replace(/<.*$/, '').split('.').pop() ?? '';
-  return /^I[A-Z]/.test(name) ? 'implements' : 'extends';
+  const name = String(node.text).replace(/<[\s\S]*$/, '').split('.').pop() ?? '';
+  return /^I[A-Z]/.test(name) && !/(Exception|Attribute|EventArgs)$/.test(name) ? 'implements' : 'extends';
 }
 
 export class GenericWasmParser implements LanguageParser {
@@ -127,10 +129,16 @@ export class GenericWasmParser implements LanguageParser {
               else if (tokens.includes('enum')) kind = 'enum';
             }
 
-            // C++ out-of-line definition `void Foo::run() {}`: a method of Foo (M0-17-R1).
+            // C++ out-of-line definition `void Foo::run() {}`: a method of Foo (M0-17-R1). The
+            // owner is the innermost qualifier (`ns::K::a` → K), without template arguments
+            // (`Box<T>::f` → Box) (M0-17-R2).
             if (kind === 'function' && capture.node.type === 'function_definition') {
-              const qualified = capture.node.childForFieldName('declarator')?.childForFieldName('declarator');
-              const owner = qualified?.type === 'qualified_identifier' ? qualified.childForFieldName('scope') : null;
+              let qualified = capture.node.childForFieldName('declarator')?.childForFieldName('declarator');
+              while (qualified?.type === 'qualified_identifier' && qualified.childForFieldName('name')?.type === 'qualified_identifier') {
+                qualified = qualified.childForFieldName('name');
+              }
+              let owner = qualified?.type === 'qualified_identifier' ? qualified.childForFieldName('scope') : null;
+              if (owner?.type === 'template_type') owner = owner.childForFieldName('name');
               if (owner) {
                 kind = 'method';
                 extractedScope = owner.text;
@@ -211,7 +219,9 @@ export class GenericWasmParser implements LanguageParser {
               : [capture.node.text];
             for (const targetText of targetTexts) {
             if (!targetText || typeof targetText !== 'string') continue;
-            const targetName = this.cleanTarget(targetText, refType);
+            const csharpBase = csharpBaseType(capture.node);
+            // A C# generic base `List<int>` names the type List (M0-17-R2).
+            const targetName = csharpBase ? targetText.replace(/<[\s\S]*$/, '').trim() : this.cleanTarget(targetText, refType);
             if (!targetName || typeof targetName !== 'string') continue;
 
             if (refType === 'render') {
@@ -220,7 +230,7 @@ export class GenericWasmParser implements LanguageParser {
             }
 
             const startLine = capture.node.startPosition.row + 1;
-            const referenceType = csharpBaseType(capture.node) ?? this.mapRefType(refType);
+            const referenceType = csharpBase ?? this.mapRefType(refType);
 
             let verifiability: 'verified' | 'inferred' = 'verified';
             if (referenceType === 'call' && COMMON_FRAMEWORK_METHODS.has(targetName)) {
@@ -228,8 +238,10 @@ export class GenericWasmParser implements LanguageParser {
             }
             // obj.method() on an untyped receiver (not `this`): name-only, so inferred (F01).
             const member = capture.node.parent;
-            if (referenceType === 'call' && member?.type === 'member_expression' && member.childForFieldName?.('object')?.type === 'identifier') {
-              if (JS_BUILTIN_METHODS.has(targetName)) continue;
+            const receiver = member?.type === 'member_expression' ? member.childForFieldName?.('object') : null;
+            if (referenceType === 'call' && receiver?.type === 'identifier') {
+              // `Math.max()`, `process.exit()`: a built-in object's method, not user code (M0-17-R2).
+              if (JS_BUILTIN_METHODS.has(targetName) || JS_BUILTIN_RECEIVERS.has(receiver.text)) continue;
               verifiability = 'inferred';
             }
 

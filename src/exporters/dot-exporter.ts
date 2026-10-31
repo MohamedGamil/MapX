@@ -174,6 +174,12 @@ export class DotExporter {
       render: 'dotted',
     };
 
+    // One line per file pair and edge type, dashed only when no verified edge backs it; the
+    // first edge's verifiability alone depended on edge order (M0-17-R2).
+    const verifiedKeys = new Set<string>();
+    for (const edge of edges) {
+      if (edge.verifiability !== 'inferred') verifiedKeys.add(`${edge.source_file}->${edge.target_file}:${edge.edge_type}`);
+    }
     const seen = new Set<string>();
     for (const edge of edges) {
       const src = edge.source_file as string;
@@ -184,7 +190,7 @@ export class DotExporter {
       seen.add(key);
 
       let style = edgeStyles[type] || 'solid';
-      if (edge.verifiability === 'inferred') {
+      if (!verifiedKeys.has(key)) {
         style = 'dashed';
       }
       let colorAttr = '';

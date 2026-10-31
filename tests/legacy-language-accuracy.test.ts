@@ -104,6 +104,40 @@ describe('language extraction accuracy', () => {
     expect(r.symbols).toEqual(expect.arrayContaining(['method:Point::new', 'method:Point::clone', 'method:W::get']));
   });
 
+  // M0-17-R2: qualified names and base lists the review found mis-extracted.
+  it('C++: template and nested qualifiers scope out-of-line methods by their class', async () => {
+    const r = await parse('a.cpp', [
+      'template <class T> class Box { public: void f(); };',
+      'template <class T> void Box<T>::f() {}',
+      'namespace ns { class K { void a(); }; }',
+      'void ns::K::a() {}',
+      'class Outer { class In { void z(); }; };',
+      'void Outer::In::z() {}',
+      'void free_fn() {}',
+    ].join('\n'));
+    expect(r.symbols).toEqual(expect.arrayContaining(['method:Box::f', 'method:K::a', 'method:In::z', 'function:free_fn']));
+    expect(r.symbols.filter((s) => s.startsWith('method:'))).toEqual(['method:Box::f', 'method:K::a', 'method:In::z']);
+  });
+
+  it('C#: `: IOException` extends it; generic bases drop their type arguments', async () => {
+    const r = await parse('a.cs', [
+      'namespace N {',
+      'class E : IOException {}',
+      'class L : List<int>, IFoo<int> {}',
+      'class Q : System.Collections.Generic.Dictionary<string, List<int>>, IDisposable {}',
+      'class U : IPhoneHandler {}',
+      '}',
+    ].join('\n'));
+    expect(r.refs.filter((x) => /^(extends|implements):/.test(x))).toEqual([
+      'extends:IOException', 'extends:List', 'implements:IFoo', 'extends:System.Collections.Generic.Dictionary', 'implements:IDisposable', 'implements:IPhoneHandler',
+    ]);
+  });
+
+  it('Go: a qualified embedded struct field is extends', async () => {
+    const r = await parse('a.go', 'package a\nimport "sync"\ntype S struct {\n  *Base\n  sync.Mutex\n  x int\n  m sync.Mutex\n}\n');
+    expect(r.refs.filter((x) => x.startsWith('extends:')).sort()).toEqual(['extends:Base', 'extends:Mutex']);
+  });
+
   it('Swift: init is named init; Scala: import targets are clean paths', async () => {
     expect((await parse('a.swift', 'class Box {\n  init(size: Int) {}\n}\n')).symbols).toContain('method:Box::init');
     const scala = await parse('a.scala', 'import scala.collection.mutable.ListBuffer\nimport com.ex.lib.{Bar, Baz => Q}\nimport com.ex._\nobject M\n');
