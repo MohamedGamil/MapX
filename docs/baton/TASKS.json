@@ -5517,6 +5517,68 @@
       "description": "Found by M1-05-R1 (2026-10-31): singleton, scoped(), middlewareFor and per-route prefix/domain keys are not modelled."
     },
     {
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-05-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M1-05-R2.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M1-05-R3.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-mounts.test.ts",
+        "tests/fixtures/laravel-routes"
+      ],
+      "acceptanceCriteria": [
+        "withoutMiddleware / withoutMiddlewareFor remove the named middleware from the reported routes, matching frozen router output from synthetic routes (e2e test).",
+        "`{post:slug}` on a plain route is reported as `{post}` with the binding field, as resources already are (test).",
+        "Repeated chained middleware attributes follow the router (test).",
+        "The routes scorer stays at 0 false positives with recall not lower than before."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "lane-laravel",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M1-05-R3",
+      "title": "Laravel routes: withoutMiddleware, implicit binding fields on plain routes, repeated chained attributes",
+      "objective": "The remaining resource registration forms match Laravel's router.",
+      "milestone": "M1",
+      "description": "Feature gaps found by M1-05-R2 (2026-10-31); not defects of delivered criteria, so P3 and not an M3-01 dependency (owner may change). PUT/PATCH update stays two routes by design."
+    },
+    {
       "priority": "P2",
       "estimate": {
         "min": 1,
