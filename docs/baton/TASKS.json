@@ -6361,7 +6361,9 @@
       "affectedFiles": [
         "src/parsers/languages/vue.ts",
         "src/parsers/ignored-symbols.ts",
-        "tests/vue-sfc.test.ts"
+        "tests/vue-sfc.test.ts",
+        "src/parsers/languages/vue-template.ts",
+        "tests/vue-template.test.ts"
       ],
       "acceptanceCriteria": [
         "@click=\"save\" yields a call edge to the component's save method.",
@@ -6370,17 +6372,42 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/vue-sfc.test.ts",
-        "npx vitest run tests/parsers-integration.test.ts"
+        "npx vitest run tests/parsers-integration.test.ts",
+        "npx vitest run tests/vue-template.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. @click=\"save\" yields a call edge to the component's save method.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-vue-template",
       "actualHours": null,
       "startedAt": "2026-10-31T07:27:04.431Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T07:59:06.312Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-02.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-sfc.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-02.md"
+        },
+        {
+          "command": "npx vitest run tests/parsers-integration.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-02.md"
+        },
+        {
+          "command": "npx vitest run tests/vue-template.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-02.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-02.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T07:27:04.136Z",
@@ -6393,6 +6420,39 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:59:04.510Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:59:06.312Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-sfc.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-02.md"
+            },
+            {
+              "command": "npx vitest run tests/parsers-integration.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-02.md"
+            },
+            {
+              "command": "npx vitest run tests/vue-template.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-02.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-02.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

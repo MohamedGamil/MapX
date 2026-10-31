@@ -124,7 +124,7 @@ The content is wrapped in markers:
 | PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
 | JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
 | TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
-| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks) |
+| Vue | `.vue` | functions, classes, methods, properties (SFC script blocks); a component symbol per file; template handler and binding calls, and render edges for locally or globally registered component tags |
 
 ### Bundled (Tier 2) — Generic WASM Parsers (Always Available)
 

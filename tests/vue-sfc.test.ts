@@ -34,17 +34,19 @@ const FLOORS: {
   minPrecision: number;
 } = {
   found: {
-    'template-handler': 0, // M3-02
-    'template-binding-call': 0, // M3-02
-    'component-local': 0, // M3-02
-    'component-global': 0, // M3-02
-    'v-model-component': 0, // M3-02
-    'component-symbol': 0, // M3-02
+    'template-handler': labelledCount('template-handler'), // M3-02
+    'template-binding-call': labelledCount('template-binding-call'), // M3-02
+    'component-local': labelledCount('component-local'), // M3-02
+    'component-global': labelledCount('component-global'), // M3-02
+    'v-model-component': labelledCount('v-model-component'), // M3-02
+    'component-symbol': labelledCount('component-symbol'), // M3-02
     'options-this-call': labelledCount('options-this-call'), // already works (same-file this.x())
     'mixin-method': labelledCount('mixin-method'), // M3-03: through the component's own mixins array
     'script-setup-macro': 0, // M3-04
     'script-setup-call': labelledCount('script-setup-call'), // already works (local emit constant)
-    composable: 2, // M3-04 (persist, addReply: found by unique name; setup-level calls lack the component owner)
+    // M3-02: setup-level useX() calls owned by the component (rule 2) and {{ format() }} (rule 4). Still by unique
+    // name: persist, addReply (script calls to destructured composable functions, M3-04).
+    composable: labelledCount('composable'),
     'vuex-map-helpers': 2, // M3-05 (both `created` calls; vue2's picks tickets' FETCH_ALL by name, not by namespace)
     'vuex-dispatch': 0, // M3-05
     pinia: 0, // M3-05
@@ -54,8 +56,8 @@ const FLOORS: {
     composable: 1, // generic: formatter.format() inside format() resolves to itself
     pinia: 2, // M3-05: session.touch() → presence store; cart.checkout() → CartView's own checkout()
   },
-  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03. */
-  minPrecision: 0.7,
+  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02. */
+  minPrecision: 0.9,
 };
 
 const ALLOWED_EDGE_TYPES = new Set(expected.scoredTypes ?? []);

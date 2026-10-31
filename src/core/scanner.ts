@@ -30,7 +30,8 @@ import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evalua
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
-import { resolveThisMember } from '../parsers/languages/vue-options.js';
+import { resolveThisMember, type ThisMemberContext } from '../parsers/languages/vue-options.js';
+import { globalRegistrations, vueComponentName, type VueResolveHint } from '../parsers/languages/vue-template.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
@@ -1181,12 +1182,15 @@ export class Scanner {
 
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
-      if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
+      const vueHint = ref.metadata?.vue as VueResolveHint | undefined;
+      if (isJsOrTs && !vueHint && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
       // named by the module/namespace rather than the raw statement (M0-12-R4).
       let targets: { file: string; symbol: string }[];
 
-      if (resolver && (ref.referenceType === 'import' || ref.referenceType === 'require')) {
+      if (vueHint) {
+        targets = this.resolveVueReference(ref, vueHint, sourcePath, fileMap);
+      } else if (resolver && (ref.referenceType === 'import' || ref.referenceType === 'require')) {
         targets = this.resolveModuleImport(resolver, ref.targetName, sourcePath, fileMap, usedNames);
       } else {
         let targetFile: string | null = null;
@@ -1196,14 +1200,7 @@ export class Scanner {
           targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
         } else if (ref.vueThis) {
           // `this.x()` in a Vue Options API component: own member, then mixins, never by name alone (M3-03).
-          targetFile = resolveThisMember(ref.targetName, ref.vueThis, {
-            sourceFile: sourcePath,
-            resolveImport: (specifier) => this.resolveImportPath(specifier, sourcePath, fileMap),
-            defines: (file, name) => this.symbolIndex
-              ? (this.symbolIndex.get(name) ?? []).some(e => e.file === file && e.name === name)
-              : this.store.getSymbolsForFile(file).some((s: any) => s.name === name),
-            byName: (name) => this.resolveSymbolToFile(name, fileMap, sourcePath, true),
-          });
+          targetFile = resolveThisMember(ref.targetName, ref.vueThis, this.thisMemberContext(sourcePath, fileMap));
         } else {
           // Calls and instantiations skip value symbols (constants, variables) (M0-17-R2).
           const callable = ref.referenceType === 'call' || ref.referenceType === 'instantiation';
@@ -1238,6 +1235,8 @@ export class Scanner {
         const edgeType = sourceLanguage === 'c-sharp' && (ref.referenceType === 'extends' || ref.referenceType === 'implements') && symbols
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
+        // The Vue resolution hint has served its purpose; the edge keeps the rest.
+        const { vue: _vueHint, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -1250,12 +1249,98 @@ export class Scanner {
           verifiability: ref.verifiability ?? 'verified',
           targetRepo: (targetRepoName && targetRepoName !== repoName) ? targetRepoName : undefined,
           // Keep what the parser recorded (relationship, binding, facade, dispatch details).
-          metadata: { ...(ref.metadata ?? {}), startLine: ref.startLine },
+          metadata: { ...metadata, startLine: ref.startLine },
         });
       }
     }
 
     return edges;
+  }
+
+  /** What `resolveThisMember` needs for a `this.x()` (or Options API template) call in `sourcePath`. */
+  private thisMemberContext(sourcePath: string, fileMap: Map<string, string>): ThisMemberContext {
+    return {
+      sourceFile: sourcePath,
+      resolveImport: (specifier) => this.resolveImportPath(specifier, sourcePath, fileMap),
+      defines: (file, name) => this.fileDefines(file, name),
+      byName: (name) => this.resolveSymbolToFile(name, fileMap, sourcePath, true),
+    };
+  }
+
+  /**
+   * Vue template references (M3-02, edge contract rules 4 and 5) resolve only through their hint:
+   * a call to a symbol of the SFC itself, then of the first hinted module that defines it, then (in
+   * an Options API component) as `this.x()` would; a render to the `.vue` file of the local
+   * registration, or of the global one. Never by name elsewhere.
+   */
+  private resolveVueReference(
+    ref: ExtractedReference, hint: VueResolveHint, sourcePath: string, fileMap: Map<string, string>,
+  ): { file: string; symbol: string }[] {
+    if (ref.referenceType === 'render') {
+      const file = hint.global
+        ? this.vueGlobalComponents(fileMap.get(sourcePath), fileMap).get(ref.targetName)
+        : hint.from?.[0] && this.resolveImportPath(hint.from[0].specifier, sourcePath, fileMap);
+      return file && file.endsWith('.vue') ? [{ file, symbol: vueComponentName(file) }] : [];
+    }
+    if (hint.sameFile && this.fileDefines(sourcePath, ref.targetName)) return [{ file: sourcePath, symbol: ref.targetName }];
+    for (const { specifier, name } of hint.from ?? []) {
+      const file = this.resolveImportPath(specifier, sourcePath, fileMap);
+      if (file && this.fileDefines(file, name)) return [{ file, symbol: name }];
+    }
+    const file = ref.vueThis ? resolveThisMember(ref.targetName, ref.vueThis, this.thisMemberContext(sourcePath, fileMap)) : null;
+    return file ? [{ file, symbol: ref.targetName }] : [];
+  }
+
+  /** Whether `file` declares a symbol named exactly `name` (this phase's index, else the store). */
+  private fileDefines(file: string, name: string): boolean {
+    const entries = this.symbolIndex?.get(name);
+    if (this.symbolIndex) return !!entries?.some((e) => e.file === file && e.name === name);
+    return this.store.getSymbolsForFile(file).some((s: any) => s.name === name);
+  }
+
+  /**
+   * Globally registered Vue components of a repo (PascalCase name → `.vue` file), from its JS/TS
+   * files that call `.component(`: `Vue.component('Name', X)` / `app.component('Name', X)` through
+   * X's import, and `require.context` / `import.meta.glob` auto-registration by basename. Built
+   * once per resolution phase; the first registration of a name wins.
+   */
+  private vueGlobalComponents(repo: string | undefined, fileMap: Map<string, string>): Map<string, string> {
+    const key = repo ?? '';
+    let registry = this.vueGlobals.get(key);
+    if (registry) return registry;
+    registry = new Map();
+    this.vueGlobals.set(key, registry);
+    const vueFiles = [...fileMap.keys()].filter((f) => f.endsWith('.vue') && fileMap.get(f) === repo);
+    for (const [path, fileRepo] of fileMap) {
+      if (fileRepo !== repo || !/\.[cm]?[jt]sx?$/.test(path)) continue;
+      const text = this.readWorkspaceText(path);
+      if (!text || !/\.component\s*\(/.test(text)) continue;
+      const { named, globs } = globalRegistrations(text);
+      for (const { name, specifier } of named) {
+        const file = this.resolveImportPath(specifier, path, fileMap);
+        if (file?.endsWith('.vue') && !registry.has(name)) registry.set(name, file);
+      }
+      for (const { dir, deep } of globs) {
+        if (!dir.startsWith('.')) continue;
+        const prefix = join(path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '', dir).replace(/\\/g, '/').replace(/^\.$/, '');
+        for (const file of vueFiles) {
+          const rest = prefix ? (file.startsWith(prefix + '/') ? file.slice(prefix.length + 1) : null) : file;
+          if (rest === null || (!deep && rest.includes('/'))) continue;
+          const name = vueComponentName(file);
+          if (!registry.has(name)) registry.set(name, file);
+        }
+      }
+    }
+    return registry;
+  }
+
+  /** A workspace file's text, cached for the resolution phase (null when it does not exist). */
+  private readWorkspaceText(path: string): string | null {
+    if (!this.importTextCache.has(path)) {
+      const abs = resolve(this.config.getWorkspaceRoot(), path);
+      this.importTextCache.set(path, existsSync(abs) ? readFileSync(abs, 'utf-8') : null);
+    }
+    return this.importTextCache.get(path)!;
   }
 
   /**
@@ -1298,6 +1383,8 @@ export class Scanner {
   private languageCache = new Map<string, string | null>();
   // PHP file → the namespace it declares ('' for none), built with the symbol index (M0-04-R2).
   private phpNamespaces = new Map<string, string>();
+  // Repo → its globally registered Vue components (M3-02).
+  private vueGlobals = new Map<string, Map<string, string>>();
 
   /** Language of an indexed path: its extension or file name, else what discovery stored (shebang scripts). */
   private languageOf(path: string): string | null {
@@ -1321,7 +1408,6 @@ export class Scanner {
     // One Set per phase and file map, so the resolvers' index over it is built once.
     if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
     const files = this.importFiles.files;
-    const workspaceRoot = this.config.getWorkspaceRoot();
     // The symbol index holds every stored symbol plus this phase's parse results, so a namespace
     // declared in a file the scan does not re-parse is found too.
     const declaring = (name: string, kinds: Set<string>) => [...new Set(
@@ -1329,13 +1415,7 @@ export class Scanner {
     )];
     return resolver(target, sourcePath, {
       files,
-      readText: (path) => {
-        if (!this.importTextCache.has(path)) {
-          const abs = resolve(workspaceRoot, path);
-          this.importTextCache.set(path, existsSync(abs) ? readFileSync(abs, 'utf-8') : null);
-        }
-        return this.importTextCache.get(path)!;
-      },
+      readText: (path) => this.readWorkspaceText(path),
       namespaceFiles: (namespace) => declaring(namespace, NAMESPACE_KINDS),
       typeFiles: (name) => declaring(name, TYPE_KINDS),
       fileNamespace: (file) => this.phpNamespaces.get(file) ?? null,
@@ -2071,6 +2151,7 @@ export class Scanner {
     this.importTextCache.clear();
     this.languageCache.clear();
     this.phpNamespaces.clear();
+    this.vueGlobals.clear();
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 

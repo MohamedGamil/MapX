@@ -365,7 +365,7 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
 | JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, enums, properties |
 | TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, enums, properties, namespaces |
-| Vue | `.vue` | functions, classes, methods, properties (supports `@/` alias resolution) |
+| Vue | `.vue` | functions, classes, methods, properties (supports `@/` alias resolution); a component symbol per file; template calls and component-tag render edges |
 
 ### Bundled (Tier 2) — Generic WASM Parsers (Always Available)
 
