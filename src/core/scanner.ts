@@ -1801,8 +1801,10 @@ export class Scanner {
     const ctx: ScanContext = {
       workspaceRoot,
       repoName: repo.name,
-      resolveSymbolToFile: (symName: string) => {
-        return this.resolveSymbolToFile(symName, this.workspaceFileMap);
+      // Without a source path, name resolution fails closed (M2-01); route middleware classes pass
+      // the route file, which this used to drop, so they never resolved (M0-04-R3).
+      resolveSymbolToFile: (symName: string, sourcePath?: string) => {
+        return this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath);
       }
     };
 

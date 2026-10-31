@@ -570,6 +570,76 @@ describe('M1-05-R2: singletons, scoped(), middlewareFor() and route-level prefix
   });
 });
 
+// M0-04-R3: middleware named by class constant. The route walker kept only quoted names, so
+// `->middleware(EnsureAdmin::class)` gave the route no middleware and the route file no edge.
+describe('M0-04-R3: ->middleware(X::class) through the route file use table', () => {
+  let root: string;
+  const mw = (name: string) => `<?php\nnamespace App\\Http\\Middleware;\nclass ${name} { public function handle($request, $next) { return $next($request); } }\n`;
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'app/Http/Kernel.php': [
+        '<?php',
+        'namespace App\\Http;',
+        'class Kernel {',
+        '    protected $middlewareAliases = [',
+        "        'verified' => \\Illuminate\\Auth\\Middleware\\EnsureEmailIsVerified::class,",
+        '    ];',
+        '}',
+      ].join('\n'),
+      'app/Http/Middleware/EnsureAdmin.php': mw('EnsureAdmin'),
+      'app/Http/Middleware/EnsureTeam.php': mw('EnsureTeam'),
+      'app/Http/Middleware/Audit.php': mw('Audit'),
+      'app/Http/Middleware/Unimported.php': mw('Unimported'),
+      'app/Http/Controllers/HomeController.php': '<?php\nnamespace App\\Http\\Controllers;\nclass HomeController { public function admin() {} public function team() {} public function audit() {} public function loose() {} public function verify() {} }\n',
+      'routes/web.php': [
+        '<?php',
+        'use App\\Http\\Controllers\\HomeController;',
+        'use App\\Http\\Middleware\\EnsureAdmin;',
+        'use App\\Http\\Middleware\\EnsureTeam;',
+        'use App\\Http\\Middleware as Mw;',
+        'use Illuminate\\Auth\\Middleware\\EnsureEmailIsVerified;',
+        'use Illuminate\\Support\\Facades\\Route;',
+        "Route::get('/admin', [HomeController::class, 'admin'])->middleware(EnsureAdmin::class);",
+        "Route::middleware([EnsureTeam::class, 'auth'])->group(function () {",
+        "    Route::get('/team', [HomeController::class, 'team']);",
+        '});',
+        "Route::get('/audit', [HomeController::class, 'audit'])->middleware([Mw\\Audit::class]);",
+        // Not imported: the global \\Unimported, which no file declares.
+        "Route::get('/loose', [HomeController::class, 'loose'])->middleware(Unimported::class);",
+        // Vendor middleware: not indexed.
+        "Route::get('/verify', [HomeController::class, 'verify'])->middleware(EnsureEmailIsVerified::class);",
+        // The same vendor class through its Kernel alias: the Kernel registers it but cannot resolve it.
+        "Route::get('/verified', [HomeController::class, 'verify'])->middleware('verified');",
+      ].join('\n'),
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('gives each route its middleware classes by FQN', () => {
+    const routes: RouteView[] = JSON.parse(mapx(root, 'routes', root, '--json'));
+    const of = (path: string) => routes.find((r) => r.path === path)?.middlewares.filter((m) => m !== 'web');
+    expect(of('/admin')).toEqual(['App\\Http\\Middleware\\EnsureAdmin']);
+    expect(of('/team')).toEqual(['App\\Http\\Middleware\\EnsureTeam', 'auth']);
+    expect(of('/audit')).toEqual(['App\\Http\\Middleware\\Audit']);
+    expect(of('/loose')).toEqual(['\\Unimported']);
+    expect(of('/verify')).toEqual(['Illuminate\\Auth\\Middleware\\EnsureEmailIsVerified']);
+  });
+
+  it('links the route file to each indexed middleware class, and to nothing else', () => {
+    const edges = query<{ target_file: string; target_symbol: string; metadata: string }>(root,
+      "SELECT target_file, target_symbol, metadata FROM edges WHERE source_file = 'routes/web.php' AND edge_type = 'middleware' ORDER BY target_file")
+      .map((e) => `${e.target_file} ${e.target_symbol} ${JSON.parse(e.metadata).routes.join(',')}`);
+    expect(edges).toEqual([
+      'app/Http/Middleware/Audit.php App\\Http\\Middleware\\Audit GET /audit',
+      'app/Http/Middleware/EnsureAdmin.php App\\Http\\Middleware\\EnsureAdmin GET /admin',
+      'app/Http/Middleware/EnsureTeam.php App\\Http\\Middleware\\EnsureTeam GET /team',
+    ]);
+  });
+});
+
 // Review 2026-10-31: the M1-08 test seeded frameworks.json and used artisan, so detection from
 // composer.json alone was never exercised.
 describe('M1-08: a nested Laravel app found from composer.json alone', () => {

@@ -270,13 +270,7 @@ function parseRouteServiceProvider(source: string, providerPath: string, wctx: L
               }
             }
           } else if (call.name === 'middleware') {
-            if (call.args.trim().startsWith('[')) {
-              const matches = call.args.match(/['"]([^'"]+)['"]/g) || [];
-              middlewares.push(...matches.map(m => m.replace(/['"]/g, '')));
-            } else {
-              const args = parseArgs(call.args);
-              if (args[0]) middlewares.push(args[0]);
-            }
+            middlewares.push(...listArg(call.args));
           } else if (call.name === 'group' && (call.args.trim().startsWith('[') || call.args.trim().startsWith('array('))) {
             const groupAttrs = parseGroupAttributes(call.args);
             if (groupAttrs.prefixes[0]) {
@@ -292,7 +286,8 @@ function parseRouteServiceProvider(source: string, providerPath: string, wctx: L
         wctx.routeServiceProvider.routes[relativeRoutePath] = {
           prefix,
           namespace,
-          middlewares
+          // Class constants are named by the provider's own use table (M0-04-R3).
+          middlewares: middlewareClassNames(middlewares, parseUseImports(text), fileNamespace(text)),
         };
       }
     }
@@ -1247,22 +1242,17 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
     const mwIndex = arrayContent.search(/['"]middleware['"]\s*=>/);
     if (mwIndex !== -1) {
       const afterMw = arrayContent.substring(mwIndex).replace(/^['"]middleware['"]\s*=>\s*/, '').trim();
+      // Quoted names and class constants (M0-04-R3), named later through the file's use table.
       if (afterMw.startsWith('[')) {
         const bracket = getBracketedContent(afterMw, 0);
-        if (bracket) {
-          const matches = bracket.content.match(/['"]([^'"]+)['"]/g) || [];
-          middlewares.push(...matches.map(m => m.replace(/['"]/g, '')));
-        }
+        if (bracket) middlewares.push(...listItems(bracket.content));
       } else if (afterMw.startsWith('array(')) {
         const paren = getParenthesizedContent(afterMw, 5);
-        if (paren) {
-          const matches = paren.content.match(/['"]([^'"]+)['"]/g) || [];
-          middlewares.push(...matches.map(m => m.replace(/['"]/g, '')));
-        }
+        if (paren) middlewares.push(...listItems(paren.content));
       } else {
-        const match = afterMw.match(/^['"]([^'"]+)['"]/);
+        const match = afterMw.match(/^['"]([^'"]+)['"]|^\\?[A-Za-z_][\w\\]*::class\b/);
         if (match) {
-          middlewares.push(match[1]);
+          middlewares.push(match[1] ?? match[0]);
         }
       }
     }
@@ -1750,12 +1740,43 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
   return { prefixes, middlewares, namespaces, controller, domain, names };
 }
 
-/** A string or array-of-strings argument, e.g. 'auth' or ['auth', 'verified']. */
+/** Quoted names and class constants of a PHP list: 'auth', "verified", EnsureX::class, \A\B::class. */
+const LIST_ITEM = /['"]([^'"]+)['"]|\\?[A-Za-z_][\w\\]*::class\b/g;
+const listItems = (text: string) => (text.match(LIST_ITEM) || []).map(m => /::class$/.test(m) ? m : m.replace(/['"]/g, ''));
+
+/**
+ * A string or array-of-strings argument, e.g. 'auth' or ['auth', 'verified']. Class constants
+ * stay `X::class` (a single argument already does) until the route file's use table names them
+ * (`middlewareClassNames`, M0-04-R3).
+ */
 function listArg(args: string): string[] {
   const trimmed = args.trim();
-  if (/^(\[|array\s*\()/i.test(trimmed)) return (trimmed.match(/['"]([^'"]+)['"]/g) || []).map(m => m.replace(/['"]/g, ''));
+  if (/^(\[|array\s*\()/i.test(trimmed)) return listItems(trimmed);
   const a = parseArgs(trimmed)[0];
   return a ? [a] : [];
+}
+
+/** The namespace a PHP file declares, '' for none. */
+function fileNamespace(text: string): string {
+  return text.match(/^\s*namespace\s+([\w\\]+)\s*[;{]/m)?.[1] ?? '';
+}
+
+/**
+ * Middleware given as class constants, named as PHP does in `useImports`' file: `EnsureX::class`
+ * with `use App\Http\Middleware\EnsureX` (or a first segment imported, `Mw\EnsureX` with
+ * `use App\Http\Middleware as Mw`) → App\Http\Middleware\EnsureX; `\A\B::class` → A\B; any other
+ * name is relative to the file's namespace, the global `\X` without one (M0-04-R3).
+ */
+function middlewareClassNames(names: string[], useImports: Map<string, string>, namespace: string): string[] {
+  return names.map(name => {
+    const cls = name.match(/^(\\?[\w\\]+)::class$/)?.[1];
+    if (!cls) return name;
+    if (cls.startsWith('\\')) return cls.slice(1);
+    const [head, ...rest] = cls.split('\\');
+    const imported = useImports.get(head!);
+    if (imported) return [imported.replace(/^\\/, ''), ...rest].join('\\');
+    return namespace ? `${namespace}\\${cls}` : `\\${cls}`;
+  });
 }
 
 const lineAt = (content: string, index: number) => content.slice(0, index).split('\n').length;
@@ -1824,6 +1845,9 @@ function walkRouteFile(
   const dir = posix.dirname(filePath) === '.' ? '' : posix.dirname(filePath);
   const assignments = stringAssignments(text, code);
   const useImports = parseUseImports(text);
+  // Middleware class constants (`EnsureX::class`) named through this file's use table (M0-04-R3).
+  const namespace = fileNamespace(text);
+  const middlewareNames = (list: string[]) => middlewareClassNames(list, useImports, namespace);
   const scopeAt = (index: number): PhpScope => ({ dir, root: options.root, vars: varsAt(assignments, index) });
   const conditionalBraces: boolean[] = [];
   const groupStack: GroupFrame[] = [{
@@ -1864,7 +1888,7 @@ function walkRouteFile(
       file: normalizeMountPath(file),
       frame: {
         prefixes: [...base.prefixes, ...extra.prefixes],
-        middlewares: [...base.middlewares, ...extra.middlewares],
+        middlewares: middlewareNames([...base.middlewares, ...extra.middlewares]),
         namespaces: [...base.namespaces, ...extra.namespaces],
         names: [...base.names, ...(extra.names ?? [])],
         controller: extra.controller ?? base.controller,
@@ -1948,7 +1972,9 @@ function walkRouteFile(
       const line = lineAt(content, i);
       for (const r of routes.slice(before)) {
         r.line = line;
+        if (r.middlewares) r.middlewares = middlewareNames(r.middlewares);
         const meta = (r.metadata ??= {});
+        if (Array.isArray(meta.middlewares)) meta.middlewares = middlewareNames(meta.middlewares);
         meta.line = line;
         meta.order = [i];
         if (inConditional() || bracelessIf(i)) meta.conditional = true;

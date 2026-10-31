@@ -48,9 +48,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 62,
-        "latestFinish": 62,
-        "slack": 62
+        "latestStart": 61,
+        "latestFinish": 61,
+        "slack": 61
       },
       {
         "id": "M0-05",
@@ -741,9 +741,9 @@
         "duration": 12,
         "earliestStart": 0,
         "earliestFinish": 12,
-        "latestStart": 64,
-        "latestFinish": 76,
-        "slack": 64
+        "latestStart": 61,
+        "latestFinish": 73,
+        "slack": 61
       },
       {
         "id": "M0-12-R1",
@@ -831,9 +831,9 @@
         "duration": 8,
         "earliestStart": 12,
         "earliestFinish": 20,
-        "latestStart": 76,
-        "latestFinish": 84,
-        "slack": 64
+        "latestStart": 73,
+        "latestFinish": 81,
+        "slack": 61
       },
       {
         "id": "M0-12-R3",
@@ -879,6 +879,15 @@
         "latestStart": 80,
         "latestFinish": 84,
         "slack": 33
+      },
+      {
+        "id": "M0-04-R3",
+        "duration": 3,
+        "earliestStart": 20,
+        "earliestFinish": 23,
+        "latestStart": 81,
+        "latestFinish": 84,
+        "slack": 61
       },
       {
         "id": "M3-01",
@@ -1106,7 +1115,7 @@
         "slack": 86
       }
     ],
-    "totalEffort": 697
+    "totalEffort": 700
   },
   "remaining": {
     "duration": 32,
@@ -1981,6 +1990,15 @@
         "slack": 0
       },
       {
+        "id": "M0-04-R3",
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 0,
+        "latestFinish": 0,
+        "slack": 0
+      },
+      {
         "id": "M3-01",
         "duration": 6,
         "earliestStart": 0,
@@ -2786,6 +2804,12 @@
       },
       {
         "id": "M2-04-R2",
+        "worker": 0,
+        "start": 4,
+        "finish": 4
+      },
+      {
+        "id": "M0-04-R3",
         "worker": 0,
         "start": 4,
         "finish": 4
