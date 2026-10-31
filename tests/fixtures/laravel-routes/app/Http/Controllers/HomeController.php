@@ -22,4 +22,11 @@ class HomeController
     public function adminPanel() {}
     public function legacyPage() {}
     public function oldPage() {}
+    public function alpha() {}
+    public function betaModule() {}
+    public function tools() {}
+    public function separator() {}
+    public function exports() {}
+    public function afterExports() {}
+    public function commentedEntry() {}
 }

@@ -15,7 +15,7 @@ export interface Label {
   method: string;
   uri: string;
   handler: string | null;
-  expect: 'live' | 'conditional' | 'overridden' | 'unreachable';
+  expect: 'live' | 'conditional' | 'overridden' | 'unreachable' | 'absent';
 }
 export interface ReportedRoute {
   method: string;
@@ -70,17 +70,32 @@ export function score(labels: Label[], routes: ReportedRoute[], strictParams = f
       labelled: 0, uriFound: 0, handlerLabelled: 0, handlerFound: 0, exactParams: 0, flagged: 0, falsePositives: 0,
     });
     const candidates = routes.filter((r) => same(l, r));
+    if (l.expect === 'absent') {
+      // Route code that must never be reported (comments, strings, a prefix that never mounts).
+      p.labelled++;
+      for (const r of candidates) matched.add(r);
+      if (candidates.length) {
+        p.falsePositives += candidates.length;
+        misses.push(`${l.id} absent ${l.method} ${l.uri} reported`);
+      } else p.flagged++;
+      continue;
+    }
     if (l.expect === 'overridden' || l.expect === 'unreachable') {
-      // Negative: the losing or unmounted declaration must not be reported as live.
+      // Negative: the losing or unmounted declaration must be reported, flagged, and not live.
+      // An absent route is a miss, not a credit: it proves nothing about the flag.
       const offending = candidates.filter(
         (r) => live(r) && (l.expect === 'unreachable' || shortHandler(r.handlerSymbol) === l.handler),
       );
+      const own = (r: ReportedRoute) => !l.handler || shortHandler(r.handlerSymbol) === l.handler;
+      const flaggedRoute = candidates.find((r) =>
+        own(r) && (l.expect === 'overridden' ? r.metadata?.overridden === true : r.metadata?.reachable === false));
       for (const r of candidates) if (!live(r) || shortHandler(r.handlerSymbol) === l.handler) matched.add(r);
       p.labelled++;
       if (offending.length) {
         p.falsePositives += offending.length;
         misses.push(`${l.id} ${l.expect} ${l.method} ${l.uri} reported as live`);
-      } else p.flagged++;
+      } else if (flaggedRoute) p.flagged++;
+      else misses.push(`${l.id} ${l.expect} ${l.method} ${l.uri} not reported with the ${l.expect} flag`);
       continue;
     }
     p.labelled++;

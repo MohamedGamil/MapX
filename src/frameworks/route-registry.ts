@@ -14,7 +14,10 @@ export function toRouteView(route: RouteBinding) {
     line: route.line ?? meta.line ?? null,
     name: meta.name ?? null,
     middlewares: route.middlewares ?? meta.middlewares ?? [],
+    // false only when no mount can load the route; `reachability` also tells "unknown" apart.
     reachable: meta.reachable !== false,
+    reachability: meta.reachable === false ? 'unreachable' : meta.reachability === 'unknown' ? 'unknown' : 'reachable',
+    ...(meta.domain ? { domain: meta.domain } : {}),
     overridden: meta.overridden === true,
     ...(meta.overriddenBy ? { overriddenBy: meta.overriddenBy } : {}),
     conditional: meta.conditional === true,
@@ -34,12 +37,20 @@ export class RouteRegistry {
     return this.hooks;
   }
 
+  /**
+   * Adds a route unless the same declaration is already there. The declaring file, line and load
+   * order are part of the identity, so a route and the later one that overrides it with the same
+   * handler are both kept.
+   */
   addRoute(route: RouteBinding): void {
+    const where = (r: RouteBinding) =>
+      `${r.metadata?.sourceFile ?? ''}:${r.line ?? r.metadata?.line ?? ''}:${Array.isArray(r.metadata?.order) ? r.metadata.order.join('.') : ''}`;
     const exists = this.routes.some(r =>
       r.method === route.method &&
       r.path === route.path &&
       r.handlerSymbol === route.handlerSymbol &&
-      r.handlerFile === route.handlerFile
+      r.handlerFile === route.handlerFile &&
+      where(r) === where(route)
     );
     if (!exists) {
       this.routes.push(route);

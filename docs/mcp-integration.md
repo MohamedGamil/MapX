@@ -380,6 +380,8 @@ Show routes extracted from framework controllers or configuration.
 - `clients` (`"all"` | `"unmatched"`, optional): Instead of routes, list frontend HTTP call sites with their resolved URL and the backend route each reaches; `"unmatched"` lists only calls that reach no live route
 - `dir` (string, optional): Target project directory
 
+Each route has the same fields as `mapx routes --json`: `line`, `name`, `middlewares`, `reachable`, `reachability` (`reachable`, `unreachable` or `unknown`), `overridden` (with `overriddenBy`), `conditional`, and `dynamic` and `domain` when they apply.
+
 #### `mapx_hooks`
 Show hooks from detected frameworks.
 - `framework` (string, optional): Filter by framework name

@@ -1698,8 +1698,12 @@ export class Scanner {
             ...(meta.name ? { name: meta.name } : {}),
             ...(meta.resourceType ? { resourceType: meta.resourceType } : {}),
             ...(meta.reachable === false ? { reachable: false } : {}),
+            ...(meta.reachability === 'unknown' ? { reachability: 'unknown' } : {}),
             ...(meta.overridden ? { overridden: true, overriddenBy: meta.overriddenBy } : {}),
             ...(meta.conditional ? { conditional: true } : {}),
+            ...(meta.dynamic ? { dynamic: true } : {}),
+            ...(meta.domain ? { domain: meta.domain } : {}),
+            ...(meta.mountedBy ? { mountedBy: meta.mountedBy } : {}),
           },
         };
         edgesToInsert.push(edge);

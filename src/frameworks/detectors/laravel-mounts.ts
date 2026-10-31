@@ -152,6 +152,37 @@ function splitConcat(expr: string): string[] {
   return parts;
 }
 
+/** Splits a PHP argument list on top-level commas (strings and brackets respected). */
+function splitArgs(expr: string): string[] {
+  const args: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let current = '';
+  for (let i = 0; i < expr.length; i++) {
+    const c = expr[i]!;
+    if (quote) {
+      current += c;
+      if (c === '\\') current += expr[++i] ?? '';
+      else if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') quote = c;
+    else if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    else if (c === ',' && depth === 0) {
+      args.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current.trim()) args.push(current.trim());
+  return args;
+}
+
+/** nwidart/laravel-modules' default `config('modules.paths.modules')`, relative to the app root. */
+const MODULES_DIR = 'Modules';
+
 const PATH_HELPERS: Record<string, string> = {
   base_path: '',
   app_path: 'app',
@@ -161,8 +192,10 @@ const PATH_HELPERS: Record<string, string> = {
 };
 
 /**
- * Evaluates a PHP string expression made of literals, local variables, interpolation, `__DIR__`,
- * `dirname(__DIR__)` and Laravel path helpers. Path-like results are workspace-relative.
+ * Evaluates a PHP string expression made of literals, local variables (and `$this->prop`, read
+ * from the class's string property declarations), interpolation, `__DIR__`, `dirname(__DIR__)`,
+ * `DIRECTORY_SEPARATOR`, Laravel path helpers and nwidart's `module_path(name, path)`.
+ * Path-like results are workspace-relative.
  * When any part is dynamic, returns null, or puts `fallback` in that part's place when one is
  * given (so `SOME_CONST.'/x'` gives `{dynamic}/x` with fallback `{dynamic}`).
  */
@@ -177,14 +210,22 @@ export function phpString(expr: string, scope: PhpScope, fallback?: string): str
       out += value;
     } else if (part === '__DIR__') {
       out += scope.dir;
+    } else if (part === 'DIRECTORY_SEPARATOR') {
+      out += '/';
     } else if ((m = part.match(/^dirname\s*\(\s*__DIR__\s*(?:,\s*(\d+)\s*)?\)$/))) {
       let dir = scope.dir;
       for (let i = 0; i < Number(m[1] ?? 1); i++) dir = posix.dirname(dir) === '.' ? '' : posix.dirname(dir);
       out += dir;
-    } else if ((m = part.match(/^\$(\w+)$/))) {
+    } else if ((m = part.match(/^\$(?:this\s*->\s*)?(\w+)$/))) {
       const value = scope.vars.get(m[1]!) ?? fallback;
       if (value === undefined) return null;
       out += value;
+    } else if ((m = part.match(/^module_path\s*\(\s*(.*?)\s*\)$/s))) {
+      const [nameExpr, pathExpr] = splitArgs(m[1]!);
+      const name = nameExpr ? phpString(nameExpr, scope) : null;
+      const inner = pathExpr ? phpString(pathExpr, scope) : '';
+      if ((name === null || inner === null) && fallback === undefined) return null;
+      out += name === null || inner === null ? fallback : posix.join(scope.root, MODULES_DIR, name, inner);
     } else if ((m = part.match(/^(\w+)\s*\(\s*(.*?)\s*\)$/s)) && m[1]! in PATH_HELPERS) {
       const inner = m[2] ? phpString(m[2], scope) : '';
       if (inner === null && fallback === undefined) return null;
@@ -229,7 +270,7 @@ export function varsAt(assignments: { name: string; value: string; index: number
 }
 
 /** Index just past the bracket that closes the one at `open` in masked code, or -1. */
-function closingBracket(code: string, open: number): number {
+export function closingBracket(code: string, open: number): number {
   const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
   const stack: string[] = [];
   for (let i = open; i < code.length; i++) {
@@ -374,7 +415,11 @@ export function findLaravelRoots(workspaceRoot: string, maxDepth = 3): string[] 
   return roots.sort();
 }
 
-/** True when the text before a `{` opens an `if`/`elseif`/`else`/`switch` block. */
+/**
+ * True when the text before a `{` (or before a brace-less statement) opens an
+ * `if`/`elseif`/`else`/`switch` body. `if (! $this->app->routesAreCached())` is not conditional:
+ * Laravel loads the same routes from its cache otherwise.
+ */
 export function opensConditionalBlock(before: string): boolean {
   const tail = before.slice(-300).replace(/\s+$/, '');
   if (/\belse$/.test(tail)) return true;
@@ -384,7 +429,41 @@ export function opensConditionalBlock(before: string): boolean {
   for (let i = tail.length - 1; i >= 0; i--) {
     const c = tail[i];
     if (c === ')') depth++;
-    else if (c === '(' && --depth === 0) return /\b(if|elseif|else\s+if|switch)\s*$/.test(tail.slice(0, i));
+    else if (c === '(' && --depth === 0) {
+      if (!/\b(if|elseif|else\s+if|switch)\s*$/.test(tail.slice(0, i))) return false;
+      return !/^\(\s*!?\s*(?:(?:\$this\s*->\s*app|app\s*\(\s*\))\s*->\s*|App::)routesAreCached\s*\(\s*\)\s*\)$/.test(tail.slice(i));
+    }
   }
   return false;
+}
+
+/**
+ * Files matching a PHP `glob()` pattern (workspace-relative, `*`, `?` and `[...]` in any
+ * segment), sorted as PHP's glob() returns them.
+ */
+export function expandGlob(workspaceRoot: string, pattern: string): string[] {
+  const segments = normalizeMountPath(pattern).split('/').filter(Boolean);
+  let matches = [''];
+  for (const [i, segment] of segments.entries()) {
+    const last = i === segments.length - 1;
+    const next: string[] = [];
+    for (const dir of matches) {
+      if (!/[*?[]/.test(segment)) {
+        const child = dir ? `${dir}/${segment}` : segment;
+        if (existsSync(join(workspaceRoot, child))) next.push(child);
+        continue;
+      }
+      const re = new RegExp(`^${segment.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]')}$`);
+      let entries;
+      try {
+        entries = readdirSync(join(workspaceRoot, dir), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const e of entries)
+        if (re.test(e.name) && !e.name.startsWith('.') && (last || e.isDirectory())) next.push(dir ? `${dir}/${e.name}` : e.name);
+    }
+    matches = next.sort();
+  }
+  return matches;
 }

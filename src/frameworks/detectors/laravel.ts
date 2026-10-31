@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs';
 import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '../../types.js';
 import { hasComposerDependency } from '../utils.js';
 import {
+  closingBracket,
+  expandGlob,
   findLaravelRoots,
   liveProviderCode,
   maskPhp,
@@ -43,6 +45,11 @@ interface LaravelWorkspaceContext {
   mounts: Map<string, RouteMount[]>;
   /** Laravel app roots (workspace-relative) whose mount graph is known. */
   knownRoots: string[];
+  /**
+   * Per app root, mounts that could not be evaluated (`file:line`). While any exist, a route file
+   * nothing visibly mounts may still be loaded, so its reachability is unknown, not false.
+   */
+  unresolved: Map<string, string[]>;
   initialized: boolean;
 }
 
@@ -52,6 +59,8 @@ interface RouteMount {
   middlewares: string[];
   namespaces: string[];
   controller: string | null;
+  /** Route::domain() / 'domain' => of the enclosing groups, when any. */
+  domain?: string | null;
   /** Registration order: compare lexicographically; later wins for duplicate method + URI. */
   order: number[];
   conditional: boolean;
@@ -63,6 +72,8 @@ interface MountRequest {
   file: string;
   frame: Omit<RouteMount, 'order' | 'via'>;
   offset: number;
+  /** Position among the files one statement mounts (a glob loop), in glob order. */
+  sub?: number;
   line: number;
 }
 
@@ -82,6 +93,7 @@ function ensureWorkspaceInitialized(workspaceRoot: string, ctx: ScanContext): Pr
         },
         mounts: new Map(),
         knownRoots: [],
+        unresolved: new Map(),
         initialized: true
       };
       
@@ -308,28 +320,50 @@ const emptyFrame = (): Omit<RouteMount, 'order' | 'via'> => ({
   prefixes: [], middlewares: [], namespaces: [], controller: null, conditional: false,
 });
 
-/** Entry points declared by bootstrap/app.php `withRouting(...)`. */
-function withRoutingEntries(content: string, root: string): { file: string; frame: Omit<RouteMount, 'order' | 'via'> }[] {
-  const at = content.search(/->\s*withRouting\s*\(/);
-  if (at < 0) return [];
-  const paren = getParenthesizedContent(content, content.indexOf('(', at));
-  if (!paren) return [];
+/**
+ * Entry points declared by bootstrap/app.php `withRouting(...)`: the `web:` and `api:` files,
+ * then whatever the `then:` closure mounts (Laravel runs it after loading them). A `using:`
+ * closure replaces the default files. Read through the masking lexer, so a commented-out call or
+ * argument declares nothing. `unresolved` lists the lines of mounts that could not be evaluated.
+ */
+function withRoutingEntries(content: string, path: string, root: string, ctx: ScanContext): { entries: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; via: string }[]; unresolved: number[] } {
+  const { code, text } = maskPhp(content);
+  const at = code.search(/->\s*withRouting\s*\(/);
+  if (at < 0) return { entries: [], unresolved: [] };
+  const open = code.indexOf('(', at);
+  const paren = parenAt(code, text, open);
+  if (!paren) return { entries: [], unresolved: [] };
   const scope = { dir: posix.join(root, 'bootstrap'), root, vars: new Map<string, string>() };
   const named = new Map<string, string>();
   for (const arg of parseArgs(paren.content, true)) {
     const m = arg.match(/^(\w+)\s*:\s*([\s\S]+)$/);
     if (m) named.set(m[1]!, m[2]!.trim());
   }
+  const unresolved: number[] = [];
   const files = (expr: string | undefined) => {
     if (!expr) return [];
     const items = expr.startsWith('[') ? parseArgs(expr.slice(1, expr.lastIndexOf(']')), true) : [expr];
-    return items.map(e => phpString(e, scope)).filter((f): f is string => !!f).map(normalizeMountPath);
+    const evaluated = items.map(e => phpString(e, scope));
+    if (evaluated.some(f => f === null)) unresolved.push(lineAt(content, at));
+    return evaluated.filter((f): f is string => !!f).map(normalizeMountPath);
   };
   const apiPrefix = named.has('apiPrefix') ? phpString(named.get('apiPrefix')!, scope) ?? 'api' : 'api';
-  return [
-    ...files(named.get('web')).map(file => ({ file, frame: { ...emptyFrame(), middlewares: ['web'] } })),
-    ...files(named.get('api')).map(file => ({ file, frame: { ...emptyFrame(), prefixes: apiPrefix ? [apiPrefix] : [], middlewares: ['api'] } })),
+  const entries: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; via: string }[] = named.has('using') ? [] : [
+    ...files(named.get('web')).map(file => ({ file, frame: { ...emptyFrame(), middlewares: ['web'] }, via: path })),
+    ...files(named.get('api')).map(file => ({ file, frame: { ...emptyFrame(), prefixes: apiPrefix ? [apiPrefix] : [], middlewares: ['api'] }, via: path })),
   ];
+  // The closure's mounts: walk the file with everything outside the closure blanked.
+  const closure = /\b(then|using)\s*:/g;
+  closure.lastIndex = open;
+  for (let m: RegExpExecArray | null; (m = closure.exec(code)) && m.index < paren.endIndex;) {
+    const start = m.index + m[0].length;
+    const end = expressionEnd(code, start);
+    const body = content.slice(0, end).replace(/[^\r\n]/g, (c, k: number) => (k >= start ? c : ' '));
+    const walked = walkRouteFile(body, path, emptyFrame(), ctx, { collectRoutes: false, root });
+    entries.push(...walked.mounts.map(mount => ({ file: mount.file, frame: mount.frame, via: `${path}:${mount.line}` })));
+    unresolved.push(...walked.unresolved);
+  }
+  return { entries, unresolved };
 }
 
 /**
@@ -341,6 +375,8 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
   const read = async (rel: string) => (existsSync(join(workspaceRoot, rel)) ? readFile(join(workspaceRoot, rel), 'utf-8') : null);
   const queue: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; order: number[]; via: string; depth: number }[] = [];
   const rel = (p: string) => (root ? posix.join(root, p) : p);
+  const unresolved: string[] = [];
+  const orderOf = (m: MountRequest) => (m.sub !== undefined ? [m.offset, m.sub] : [m.offset]);
 
   // Providers boot before the application's route files are loaded, so their mounts come first.
   const rspPath = rel('app/Providers/RouteServiceProvider.php');
@@ -349,13 +385,19 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
     if (provider === rspPath) continue;
     const content = await read(provider);
     if (!content) continue;
-    for (const m of walkRouteFile(content, provider, emptyFrame(), ctx, { collectRoutes: false, root, provider: true }).mounts)
-      queue.push({ file: m.file, frame: m.frame, order: [rootIndex, 0, pi, m.offset], via: `${provider}:${m.line}`, depth: 0 });
+    const walked = walkRouteFile(content, provider, emptyFrame(), ctx, { collectRoutes: false, root, provider: true });
+    unresolved.push(...walked.unresolved.map(line => `${provider}:${line}`));
+    for (const m of walked.mounts)
+      queue.push({ file: m.file, frame: m.frame, order: [rootIndex, 0, pi, ...orderOf(m)], via: `${provider}:${m.line}`, depth: 0 });
   }
 
   const entries: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; via: string }[] = [];
   const bootstrap = await read(rel('bootstrap/app.php'));
-  if (bootstrap) entries.push(...withRoutingEntries(bootstrap, root).map(e => ({ ...e, via: rel('bootstrap/app.php') })));
+  if (bootstrap) {
+    const routing = withRoutingEntries(bootstrap, rel('bootstrap/app.php'), root, ctx);
+    entries.push(...routing.entries);
+    unresolved.push(...routing.unresolved.map(line => `${rel('bootstrap/app.php')}:${line}`));
+  }
   const rsp = await read(rspPath);
   if (rsp) {
     const legacy = { routeServiceProvider: { routes: {} } } as LaravelWorkspaceContext;
@@ -382,6 +424,7 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
   entries.forEach((e, i) => queue.push({ ...e, order: [rootIndex, 1, i], depth: 0 }));
   if (!queue.length) return;
   wctx.knownRoots.push(root);
+  wctx.unresolved.set(root, unresolved);
 
   while (queue.length) {
     const next = queue.shift()!;
@@ -392,11 +435,13 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
     wctx.mounts.set(next.file, mounts);
     const content = await read(next.file);
     if (!content) continue;
-    for (const m of walkRouteFile(content, next.file, next.frame, ctx, { collectRoutes: false, root }).mounts)
+    const walked = walkRouteFile(content, next.file, next.frame, ctx, { collectRoutes: false, root });
+    unresolved.push(...walked.unresolved.map(line => `${next.file}:${line}`));
+    for (const m of walked.mounts)
       queue.push({
         file: m.file,
         frame: { ...m.frame, conditional: next.frame.conditional || m.frame.conditional },
-        order: [...next.order, m.offset],
+        order: [...next.order, ...orderOf(m)],
         via: `${next.file}:${m.line}`,
         depth: next.depth + 1,
       });
@@ -489,11 +534,12 @@ export class LaravelDetector implements FrameworkDetector {
   finalizeRoutes(routes: RouteBinding[]): void {
     const byKey = new Map<string, RouteBinding[]>();
     for (const r of routes) {
-      if (r.framework !== this.name || r.metadata?.reachable === false || !Array.isArray(r.metadata?.order)) continue;
-      const path = r.path.replace(/\{[^}]*\}/g, '{}');
+      if (r.framework !== this.name || r.metadata?.reachable === false || r.metadata?.reachability === 'unknown' || !Array.isArray(r.metadata?.order)) continue;
+      // Laravel's route collection keys on domain + exact URI: `{id}` and `{slug}` are two routes.
+      const path = r.path;
       for (const method of r.method.split('|')) {
         // order[0] is the Laravel root: separate apps never override each other.
-        const key = `${r.metadata.order[0]} ${method} ${path}`;
+        const key = `${r.metadata.order[0]} ${r.metadata.domain ?? ''} ${method} ${path}`;
         byKey.set(key, [...(byKey.get(key) ?? []), r]);
       }
     }
@@ -545,17 +591,19 @@ export class LaravelDetector implements FrameworkDetector {
 
     if (isRouteFile) {
       const root = wctx.knownRoots.find(r => !r || normalizedPath.startsWith(`${r}/`));
-      let frames: { frame: Omit<RouteMount, 'order' | 'via'>; order: number[]; reachable?: boolean; via?: string }[];
+      type Reachability = 'reachable' | 'unreachable' | 'unknown';
+      let frames: { frame: Omit<RouteMount, 'order' | 'via'>; order: number[]; reachability?: Reachability; via?: string }[];
       if (mounts) {
-        frames = mounts.map(m => ({ frame: m, order: m.order, reachable: true, via: m.via }));
+        frames = mounts.map(m => ({ frame: m, order: m.order, reachability: 'reachable', via: m.via }));
       } else {
-        // Not loaded by anything we can see: name-based defaults, and unreachable when the app's
-        // mount graph is known.
+        // Not loaded by anything we can see: name-based defaults. Unreachable when the app's mount
+        // graph is known and complete; unknown while some mount of the app can't be evaluated.
         const config = getInitialGroupConfig(normalizedPath, wctx);
+        const unknown = root !== undefined && (wctx.unresolved.get(root)?.length ?? 0) > 0;
         frames = [{
           frame: { ...emptyFrame(), prefixes: config.prefix ? [config.prefix] : [], middlewares: config.middlewares, namespaces: config.namespace ? [config.namespace] : [] },
           order: [],
-          reachable: root !== undefined ? false : undefined,
+          reachability: root === undefined ? undefined : unknown ? 'unknown' : 'unreachable',
         }];
       }
       const routes: RouteBinding[] = [];
@@ -564,7 +612,9 @@ export class LaravelDetector implements FrameworkDetector {
         for (const r of walked) {
           const meta = (r.metadata ??= {});
           meta.order = [...f.order, ...(meta.order ?? [])];
-          if (f.reachable !== undefined) meta.reachable = f.reachable;
+          if (f.reachability) meta.reachability = f.reachability;
+          if (f.reachability === 'unreachable') meta.reachable = false;
+          if (f.reachability === 'unknown') meta.unresolvedMounts = wctx.unresolved.get(root!)!.slice(0, 5);
           if (f.via) meta.mountedBy = f.via;
           if (f.frame.conditional) meta.conditional = true;
         }
@@ -631,6 +681,8 @@ export class LaravelDetector implements FrameworkDetector {
     }
 
     const parts = content.substring(classIndex).split(/\bfunction\s+/);
+    // Offset of each `function ` the split consumed: parts[idx] follows methodOffsets[idx - 1].
+    const methodOffsets = [...content.substring(classIndex).matchAll(/\bfunction\s+/g)].map(m => classIndex + m.index!);
     let previousText = parts[0];
 
     for (let idx = 1; idx < parts.length; idx++) {
@@ -688,6 +740,10 @@ export class LaravelDetector implements FrameworkDetector {
         const cleanUri = uri.replace(/^\/|\/$/g, '').trim();
         const fullPath = '/' + [cleanClassPrefix, cleanUri].filter(Boolean).join('/');
         const allMiddlewares = Array.from(new Set([...classMiddlewares, ...methodMiddlewares]));
+        // The attribute's own line (M1-09): the last occurrence of its text before the method.
+        const methodAt = methodOffsets[idx - 1] ?? classIndex;
+        const attrAt = content.lastIndexOf(attr, methodAt);
+        const line = lineAt(content, attrAt >= 0 ? attrAt : methodAt);
 
         routes.push({
           framework: this.name,
@@ -695,9 +751,11 @@ export class LaravelDetector implements FrameworkDetector {
           path: fullPath,
           handlerFile: filePath,
           handlerSymbol: `${classFqn}@${methodName}`,
+          line,
           metadata: {
             confidence: 'inferred',
             middlewares: allMiddlewares,
+            line,
           },
         });
       }
@@ -1142,10 +1200,11 @@ function pathArg(raw: string, scope: PhpScope): string {
   return phpString(raw, scope, DYNAMIC) ?? DYNAMIC;
 }
 
-function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], namespaces: string[] } {
+function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], namespaces: string[], domain: string | null } {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
   const namespaces: string[] = [];
+  let domain: string | null = null;
 
   const trimmed = argsStr.trim();
   let arrayContent = '';
@@ -1156,17 +1215,17 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
     const paren = getParenthesizedContent(trimmed, 5);
     if (paren) arrayContent = paren.content;
   } else {
-    return { prefixes, middlewares, namespaces };
+    return { prefixes, middlewares, namespaces, domain };
   }
 
   if (arrayContent) {
-    // 1. Extract prefix, evaluated like a URI (literals, concatenation, variables, interpolation)
+    // 1. Extract prefix and domain, evaluated like a URI (literals, concatenation, variables, interpolation)
     for (const entry of parseArgs(arrayContent, true)) {
-      const m = entry.match(/^(['"])prefix\1\s*=>\s*([\s\S]+)$/);
-      if (m) {
-        const prefix = pathArg(m[2]!.trim(), scope);
-        if (prefix) prefixes.push(prefix);
-      }
+      const m = entry.match(/^(['"])(prefix|domain)\1\s*=>\s*([\s\S]+)$/);
+      if (!m) continue;
+      const value = pathArg(m[3]!.trim(), scope);
+      if (m[2] === 'domain') domain = value || null;
+      else if (value) prefixes.push(value);
     }
 
     // 2. Extract namespace
@@ -1200,7 +1259,7 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
     }
   }
 
-  return { prefixes, middlewares, namespaces };
+  return { prefixes, middlewares, namespaces, domain };
 }
 
 function parseResourceDict(argsStr: string): Record<string, string> {
@@ -1542,10 +1601,14 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
   const middlewares: string[] = [];
   const namespaces: string[] = [];
   let controller: string | null = null;
+  let domain: string | null = null;
   for (const call of calls) {
     if (call.name === 'prefix') {
       const a = parseArgs(call.args, true)[0];
       if (a) prefixes.push(pathArg(a, scope));
+    } else if (call.name === 'domain') {
+      const a = parseArgs(call.args, true)[0];
+      if (a) domain = pathArg(a, scope);
     } else if (call.name === 'middleware' || call.name === 'withoutMiddleware') {
       if (call.name === 'withoutMiddleware') continue;
       middlewares.push(...listArg(call.args));
@@ -1559,9 +1622,10 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
       prefixes.push(...attrs.prefixes);
       middlewares.push(...attrs.middlewares);
       namespaces.push(...attrs.namespaces);
+      domain = attrs.domain ?? domain;
     }
   }
-  return { prefixes, middlewares, namespaces, controller };
+  return { prefixes, middlewares, namespaces, controller, domain };
 }
 
 /** A string or array-of-strings argument, e.g. 'auth' or ['auth', 'verified']. */
@@ -1617,45 +1681,78 @@ function walkRouteFile(
   frame: Omit<RouteMount, 'order' | 'via'>,
   ctx: ScanContext,
   options: WalkOptions,
-): { routes: RouteBinding[]; mounts: MountRequest[] } {
+): { routes: RouteBinding[]; mounts: MountRequest[]; unresolved: number[] } {
   const routes: RouteBinding[] = [];
   const mounts: MountRequest[] = [];
+  /** Lines of mounts whose path could not be evaluated. */
+  const unresolved: number[] = [];
   const { code, text } = options.provider ? liveProviderCode(content) : maskPhp(content);
   const dir = posix.dirname(filePath) === '.' ? '' : posix.dirname(filePath);
   const assignments = stringAssignments(text, code);
   const useImports = parseUseImports(text);
   const scopeAt = (index: number): PhpScope => ({ dir, root: options.root, vars: varsAt(assignments, index) });
   const conditionalBraces: boolean[] = [];
-  const groupStack: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; end: number }[] = [{
+  const groupStack: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; domain?: string | null; end: number }[] = [{
     prefixes: frame.prefixes,
     middlewares: frame.middlewares,
     namespaces: frame.namespaces,
     controller: frame.controller,
+    domain: frame.domain ?? null,
     end: Infinity,
   }];
+  // A statement that is the brace-less body of an if/else (`if (x) require ...;`).
+  const bracelessIf = (index: number) => opensConditionalBlock(code.slice(Math.max(0, index - 300), index));
   const inConditional = () => conditionalBraces.some(Boolean);
   const current = () => ({
     prefixes: groupStack.flatMap(g => g.prefixes),
     middlewares: groupStack.flatMap(g => g.middlewares),
     namespaces: groupStack.flatMap(g => g.namespaces),
     controller: [...groupStack].reverse().find(g => g.controller)?.controller ?? null,
+    domain: [...groupStack].reverse().find(g => g.domain)?.domain ?? null,
   });
-  const mountAt = (expr: string, index: number, extra = { prefixes: [] as string[], middlewares: [] as string[], namespaces: [] as string[], controller: null as string | null }) => {
-    const path = phpString(expr, scopeAt(index));
-    if (!path || !path.endsWith('.php')) return false;
+  // `foreach (glob(<pattern>) as $file) { require $file; }`, braced or not: expanded on disk.
+  const globLoops: { variable: string; pattern: string; at: number; start: number; end: number }[] = [];
+  for (const m of code.matchAll(/\bforeach\s*\(/g)) {
+    const head = parenAt(code, text, m.index! + m[0].length - 1);
+    const loop = head?.content.match(/^\s*glob\s*\(([\s\S]*)\)\s+as\s+(?:\$\w+\s*=>\s*)?\$(\w+)\s*$/);
+    if (!head || !loop) continue;
+    let body = head.endIndex;
+    while (/\s/.test(code[body] ?? '')) body++;
+    const closed = code[body] === '{' ? closingBracket(code, body) : expressionEnd(code, body) + 1;
+    const end = closed > 0 ? closed : code.length;
+    globLoops.push({ variable: loop[2]!, pattern: parseArgs(loop[1]!, true)[0] ?? '', at: m.index!, start: head.endIndex, end });
+  }
+  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; domain?: string | null } = { prefixes: [], middlewares: [], namespaces: [], controller: null }) => {
     const base = current();
-    mounts.push({
-      file: normalizeMountPath(path),
+    const push = (file: string, sub?: number) => mounts.push({
+      file: normalizeMountPath(file),
       frame: {
         prefixes: [...base.prefixes, ...extra.prefixes],
         middlewares: [...base.middlewares, ...extra.middlewares],
         namespaces: [...base.namespaces, ...extra.namespaces],
         controller: extra.controller ?? base.controller,
-        conditional: inConditional(),
+        domain: extra.domain ?? base.domain,
+        conditional: inConditional() || bracelessIf(index),
       },
       offset: index,
+      ...(sub !== undefined ? { sub } : {}),
       line: lineAt(content, index),
     });
+    const loopVar = expr.trim().match(/^\$(\w+)$/)?.[1];
+    const loop = loopVar ? globLoops.find(l => l.variable === loopVar && l.start <= index && index < l.end) : undefined;
+    if (loop) {
+      const pattern = phpString(loop.pattern, scopeAt(loop.at));
+      if (pattern === null) {
+        unresolved.push(lineAt(content, index));
+        return false;
+      }
+      expandGlob(ctx.workspaceRoot, pattern).filter(f => f.endsWith('.php')).forEach((f, k) => push(f, k));
+      return true;
+    }
+    const path = phpString(expr, scopeAt(index));
+    if (path === null) unresolved.push(lineAt(content, index));
+    if (!path || !path.endsWith('.php')) return false;
+    push(path);
     return true;
   };
 
@@ -1718,13 +1815,13 @@ function walkRouteFile(
         const meta = (r.metadata ??= {});
         meta.line = line;
         meta.order = [i];
-        if (inConditional()) meta.conditional = true;
+        if (inConditional() || bracelessIf(i)) meta.conditional = true;
         if (name && !meta.resourceType) meta.name = parseArgs(name.args)[0];
       }
       i = parsed.endIndex - 1;
     }
   }
-  return { routes: options.collectRoutes ? routes : [], mounts };
+  return { routes: options.collectRoutes ? routes : [], mounts, unresolved };
 }
 
 function processRouteChain(
@@ -1751,6 +1848,7 @@ function processRouteChain(
   const chainPrefixes: string[] = [];
   const chainMiddlewares: string[] = [];
   const chainNamespaces: string[] = [];
+  let chainDomain: string | null = null;
   let isGroup = false;
 
   for (const call of calls) {
@@ -1761,7 +1859,11 @@ function processRouteChain(
         chainPrefixes.push(...groupAttrs.prefixes);
         chainMiddlewares.push(...groupAttrs.middlewares);
         chainNamespaces.push(...groupAttrs.namespaces);
+        chainDomain = groupAttrs.domain ?? chainDomain;
       }
+    } else if (call.name === 'domain') {
+      const raw = parseArgs(call.args, true)[0];
+      if (raw) chainDomain = pathArg(raw, scope);
     } else if (call.name === 'controller') {
       const args = parseArgs(call.args);
       if (args[0]) {
@@ -1858,6 +1960,7 @@ function processRouteChain(
       middlewares: chainMiddlewares,
       namespaces: chainNamespaces,
       controller: activeController,
+      domain: chainDomain,
       end: groupEnd
     });
   } else if (verb && uri) {
@@ -1972,6 +2075,9 @@ function processRouteChain(
   if (handlerStr && /::class\b/.test(handlerStr))
     for (const r of routes.slice(routesBefore)) (r.metadata ??= {}).confidence = 'declared';
   // A {dynamic} URI part or prefix (from this chain, a group or the mount) flags the route.
-  for (const r of routes.slice(routesBefore))
+  const domain = chainDomain ?? [...groupStack].reverse().find(g => g.domain)?.domain ?? null;
+  for (const r of routes.slice(routesBefore)) {
     if (r.path.split('/').includes(DYNAMIC)) (r.metadata ??= {}).dynamic = true;
+    if (domain && !isGroup) (r.metadata ??= {}).domain = domain;
+  }
 }

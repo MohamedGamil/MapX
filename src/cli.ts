@@ -2429,7 +2429,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const r of routes) {
         const handler = r.handlerSymbol || r.handlerFile;
         const v = toRouteView(r);
-        const flags = [!v.reachable && 'unreachable', v.overridden && 'overridden', v.conditional && 'conditional'].filter(Boolean);
+        const flags = [!v.reachable && 'unreachable', v.reachability === 'unknown' && 'reachability unknown', v.overridden && 'overridden', v.conditional && 'conditional'].filter(Boolean);
         console.log(`${r.framework.padEnd(12)} | ${r.method.toUpperCase().padEnd(8)} | ${r.path.padEnd(30)} | ${handler}${flags.length ? ` [${flags.join(', ')}]` : ''}`);
       }
       console.log(''.padEnd(80, '-'));

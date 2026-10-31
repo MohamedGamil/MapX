@@ -1,5 +1,5 @@
 {
-  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden or unreachable (must not be reported as live; the not-a-route pattern labels route code inside comments, strings and heredocs, which must never be reported).",
+  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden (must be reported with this handler and flagged overridden), unreachable (must be reported, with this handler when one is given, and flagged unreachable; never live), absent (must not be reported at all: route code inside comments, strings and heredocs, or a file under a prefix that never mounts it).",
   "labels": [
     {
       "id": "L01",
@@ -384,7 +384,7 @@
       "method": "GET",
       "uri": "api/hash-commented",
       "handler": "GhostController@show",
-      "expect": "unreachable"
+      "expect": "absent"
     },
     {
       "id": "L49",
@@ -392,7 +392,7 @@
       "method": "GET",
       "uri": "api/slash-commented",
       "handler": "GhostController@show",
-      "expect": "unreachable"
+      "expect": "absent"
     },
     {
       "id": "L50",
@@ -400,7 +400,7 @@
       "method": "GET",
       "uri": "api/block-commented",
       "handler": "GhostController@show",
-      "expect": "unreachable"
+      "expect": "absent"
     },
     {
       "id": "L51",
@@ -408,7 +408,7 @@
       "method": "GET",
       "uri": "api/in-string",
       "handler": "GhostController@show",
-      "expect": "unreachable"
+      "expect": "absent"
     },
     {
       "id": "L52",
@@ -416,7 +416,7 @@
       "method": "GET",
       "uri": "api/in-heredoc",
       "handler": "GhostController@show",
-      "expect": "unreachable"
+      "expect": "absent"
     },
     {
       "id": "L53",
@@ -510,7 +510,7 @@
       "id": "L64",
       "pattern": "rsp-unmounted",
       "method": "GET",
-      "uri": "legacy/page",
+      "uri": "page",
       "handler": "HomeController@legacyPage",
       "expect": "unreachable"
     },
@@ -518,8 +518,96 @@
       "id": "L65",
       "pattern": "rsp-unmounted",
       "method": "GET",
+      "uri": "page",
+      "handler": "HomeController@oldPage",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L66",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
+      "uri": "legacy/page",
+      "handler": "HomeController@legacyPage",
+      "expect": "absent"
+    },
+    {
+      "id": "L67",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
       "uri": "old/page",
       "handler": "HomeController@oldPage",
+      "expect": "absent"
+    },
+    {
+      "id": "L68",
+      "pattern": "then-mount",
+      "method": "POST",
+      "uri": "webhooks/stripe",
+      "handler": "WebhookController@stripe",
+      "expect": "live"
+    },
+    {
+      "id": "L69",
+      "pattern": "glob-mount",
+      "method": "GET",
+      "uri": "api/alpha",
+      "handler": "HomeController@alpha",
+      "expect": "live"
+    },
+    {
+      "id": "L70",
+      "pattern": "glob-mount",
+      "method": "GET",
+      "uri": "api/beta-module",
+      "handler": "HomeController@betaModule",
+      "expect": "live"
+    },
+    {
+      "id": "L71",
+      "pattern": "glob-mount",
+      "method": "GET",
+      "uri": "api/extra/tools",
+      "handler": "HomeController@tools",
+      "expect": "live"
+    },
+    {
+      "id": "L72",
+      "pattern": "separator-mount",
+      "method": "GET",
+      "uri": "api/separator",
+      "handler": "HomeController@separator",
+      "expect": "live"
+    },
+    {
+      "id": "L73",
+      "pattern": "module-path",
+      "method": "GET",
+      "uri": "api/blog/posts",
+      "handler": "BlogPostController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L74",
+      "pattern": "braceless-if",
+      "method": "GET",
+      "uri": "api/exports",
+      "handler": "HomeController@exports",
+      "expect": "conditional"
+    },
+    {
+      "id": "L75",
+      "pattern": "braceless-if",
+      "method": "GET",
+      "uri": "api/after-exports",
+      "handler": "HomeController@afterExports",
+      "expect": "live"
+    },
+    {
+      "id": "L76",
+      "pattern": "unmounted-entry",
+      "method": "GET",
+      "uri": "commented-entry",
+      "handler": "HomeController@commentedEntry",
       "expect": "unreachable"
     }
   ]

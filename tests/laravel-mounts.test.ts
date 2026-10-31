@@ -230,6 +230,132 @@ describe('M1-03-R1: brace-less groups, comments and dynamic paths through the re
   });
 });
 
+describe('M1-07-R1: unknown reachability, duplicate winners and override keys through the real scanner', () => {
+  let root: string;
+  let routes: (RouteView & { reachability?: string; overriddenBy?: string; domain?: string })[];
+  const find = (method: string, path: string) => routes.filter((r) => r.method.split('|').includes(method) && r.path === path);
+  const short = (r: RouteView) => r.handlerSymbol?.split('\\').pop();
+
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'routes/api.php': [
+        '<?php',
+        'use App\\Http\\Controllers\\DupController;',
+        "Route::get('same', [DupController::class, 'show']);",
+        "require __DIR__.'/api/again.php';",
+        // Nothing can evaluate this mount, so unmounted files may still be loaded by it.
+        'require $pluginRoutes;',
+        "Route::get('items/{id}', 'ItemController@byId');",
+        "Route::get('items/{slug}', 'ItemController@bySlug');",
+        "Route::domain('admin.example.com')->group(function () { Route::get('home', 'AdminController@home'); });",
+        "Route::get('home', 'SiteController@home');",
+        "Route::get(SOME_CONST.'/z', 'DynController@z');",
+      ].join('\n'),
+      'routes/api/again.php': "<?php\nuse App\\Http\\Controllers\\DupController;\n\nRoute::get('same', [DupController::class, 'show']);\n",
+      'routes/hidden.php': "<?php\nRoute::get('hidden', 'HiddenController@show');\n",
+      'routes/cached.php': "<?php\nRoute::get('cached', 'CachedController@show');\n",
+      'app/Providers/CacheServiceProvider.php': [
+        '<?php',
+        'namespace App\\Providers;',
+        'use Illuminate\\Support\\ServiceProvider;',
+        'class CacheServiceProvider extends ServiceProvider',
+        '{',
+        '    public function boot(): void',
+        '    {',
+        '        if (! $this->app->routesAreCached()) {',
+        "            $this->loadRoutesFrom(base_path('routes/cached.php'));",
+        '        }',
+        '    }',
+        '}',
+      ].join('\n'),
+      'app/Http/Controllers/DupController.php': '<?php\nnamespace App\\Http\\Controllers;\nclass DupController { public function show() {} }\n',
+      'app/Http/Controllers/AttrController.php': [
+        '<?php',
+        'namespace App\\Http\\Controllers;',
+        'use Spatie\\RouteAttributes\\Attributes\\Get;',
+        'class AttrController',
+        '{',
+        "    #[Get('/attr')]",
+        '    public function show() {}',
+        '}',
+      ].join('\n'),
+      'resources/js/client.js': "import axios from 'axios';\nexport const hidden = () => axios.get('/hidden');\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    routes = JSON.parse(mapx(root, 'routes', root, '--json'));
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('keeps both copies of a route overridden with the same handler, pointing at the winner', () => {
+    const same = find('GET', '/api/same');
+    expect(same.map((r) => `${r.line} ${r.overridden} ${r.overriddenBy ?? '-'}`).sort()).toEqual([
+      '3 true routes/api/again.php:4',
+      '4 false -',
+    ]);
+  });
+
+  it('marks routes of unmounted files unknown, not unreachable, when a mount cannot be evaluated, and pairs them', () => {
+    const hidden = find('GET', '/hidden');
+    expect(hidden).toHaveLength(1);
+    expect(hidden[0]!.reachable).toBe(true);
+    expect(hidden[0]!.reachability).toBe('unknown');
+    expect(find('GET', '/api/same').every((r) => r.reachability === 'reachable')).toBe(true);
+    expect(mapx(root, 'routes', root).split('\n').find((l) => l.includes('/hidden'))).toContain('[reachability unknown]');
+    const http = query<{ source_file: string; target_symbol: string }>(root, "SELECT source_file, target_symbol FROM edges WHERE edge_type = 'http'");
+    expect(http.map((e) => `${e.source_file} ${e.target_symbol?.split('\\').pop()}`)).toContain('resources/js/client.js HiddenController@show');
+    const edge = query<{ metadata: string }>(root, "SELECT metadata FROM edges WHERE edge_type = 'route' AND source_file = 'routes/hidden.php'");
+    expect(JSON.parse(edge[0]!.metadata)).toMatchObject({ reachability: 'unknown' });
+  });
+
+  it('keys overrides on the exact URI and the domain', () => {
+    expect(find('GET', '/api/items/{id}').map((r) => r.overridden)).toEqual([false]);
+    expect(find('GET', '/api/items/{slug}').map((r) => r.overridden)).toEqual([false]);
+    const home = find('GET', '/api/home');
+    expect(home.map((r) => `${short(r)} ${r.domain ?? '-'} ${r.overridden}`).sort()).toEqual([
+      'AdminController@home admin.example.com false',
+      'SiteController@home - false',
+    ]);
+  });
+
+  it('does not treat `if (! $this->app->routesAreCached())` as a conditional mount', () => {
+    const cached = find('GET', '/cached');
+    expect(cached).toHaveLength(1);
+    expect(cached[0]).toMatchObject({ reachable: true, conditional: false });
+  });
+
+  it('gives attribute routes a line, and route edges keep dynamic and mountedBy', () => {
+    expect(find('GET', '/attr').map((r) => r.line)).toEqual([6]);
+    const metas = query<{ metadata: string }>(root, "SELECT metadata FROM edges WHERE edge_type = 'route'").map((e) => JSON.parse(e.metadata));
+    expect(metas.every((m) => typeof m.line === 'number')).toBe(true);
+    expect(metas.find((m) => m.uri === '/api/{dynamic}/z')).toMatchObject({ dynamic: true });
+    expect(metas.find((m) => m.uri === '/api/same' && m.overridden === undefined)).toMatchObject({ mountedBy: 'routes/api.php:4' });
+  });
+});
+
+// Review 2026-10-31: the M1-08 test seeded frameworks.json and used artisan, so detection from
+// composer.json alone was never exercised.
+describe('M1-08: a nested Laravel app found from composer.json alone', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'backend/composer.json': JSON.stringify({ require: { php: '^8.2', 'laravel/framework': '^12.0' } }),
+      'backend/routes/api.php': "<?php\nRoute::get('health', 'HealthController@show');\n",
+      'backend/routes/orphan.php': "<?php\nRoute::get('orphan', 'OrphanController@show');\n",
+      'docs/readme.md': '# parent folder\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('detects Laravel and builds the app mount graph without a seeded frameworks.json', () => {
+    const routes: RouteView[] = JSON.parse(mapx(root, 'routes', root, '--json'));
+    expect(routes.map((r) => `${r.method} ${r.path} ${r.reachable}`).sort()).toEqual(['GET /api/health true', 'GET /orphan false']);
+  });
+});
+
 describe('M1-08: nested Laravel roots and frameworks.json', () => {
   let root: string;
   beforeAll(() => {

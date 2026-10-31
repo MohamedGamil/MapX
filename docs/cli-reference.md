@@ -667,7 +667,7 @@ Options:
 - `--framework` — Filter by framework name
 - `--method` — Filter by HTTP method (GET, POST, etc.)
 - `--path-pattern` — Filter by route path pattern (with `--clients`: by request URL)
-- `--json` — Output as JSON. Every route carries `line`, `name`, `middlewares`, `reachable`, `overridden` and `conditional`
+- `--json` — Output as JSON. Every route carries `line`, `name`, `middlewares`, `reachable`, `reachability`, `overridden` and `conditional`. `reachable` is false only when no mount can load the route; `reachability` is `reachable`, `unreachable` or `unknown` (Laravel: the file is not visibly mounted, but a mount of the app could not be evaluated, so it may be loaded). Overridden routes carry `overriddenBy` (`file:line` of the winner), and routes in a `Route::domain()` group carry `domain`
 - `--clients` — Instead of routes, list frontend HTTP call sites (axios, `fetch`, `axios.create` instances, factories, aliases and configured receivers) with their resolved URL and the backend route each reaches
 - `--unmatched` — With `--clients`: only calls that reach no live route (dead or broken calls)
 

@@ -69,7 +69,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-05-R3** Hook edges honour declared confidence (verifiability) — DONE, P2, 3h; depends on M0-05-R2.
 - **M0-20-R2** NestJS class segmentation ignores comments, strings and generics — DONE, P1, 4h; depends on M0-20-R1.
 - **M0-11-R2** Staleness uses the scanner file rules; precise import-only dependants and callee lines — IN_PROGRESS, P1, 5h; depends on M0-11-R1.
-- **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — READY, P1, 6h; depends on M0-02-R1.
+- **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — IN_PROGRESS, P1, 6h; depends on M0-02-R1.
 - **M0-04-R2** PHP resolution never maps vendor names to app files; tree-sitter $listen — READY, P1, 8h; depends on M0-04-R1.
 - **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — BACKLOG, P2, 4h; depends on M0-10-R1.
@@ -96,7 +96,7 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-98** M1 acceptance: re-score Laravel fixture — DONE, P0, 3h; depends on M1-02, M1-03, M1-04, M1-05, M1-06, M1-07, M1-08, M1-09.
 - **M1-99** Release (owner-initiated) — DEFERRED, P1, 2h; depends on nothing.
 - **M1-03-R1** Laravel route-file walker: string/comment-aware lexing and brace-less groups — DONE, P1, 10h; depends on M1-03, M1-06.
-- **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — IN_PROGRESS, P1, 8h; depends on M1-07, M1-04.
+- **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — DONE, P1, 8h; depends on M1-07, M1-04.
 - **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — BACKLOG, P2, 4h; depends on M1-05.
 
 ## M2 — Cross-language precision and HTTP pairing

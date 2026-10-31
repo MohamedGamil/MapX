@@ -31,7 +31,9 @@ describe('Laravel route fixture labels', () => {
     for (const p of ['uses-array', 'class-array', 'string-handler', 'controller-group', 'match', 'resource', 'api-resource',
       'dynamic-path', 'closure', 'require-mount', 'provider-mount', 'conditional', 'overridden', 'unmounted',
       // M1-03-R1: lexing (strings, comments, heredocs), brace-less groups, interpolation, provider reachability.
-      'string-lexing', 'not-a-route', 'braceless-group', 'legacy-group-mount', 'interpolated-path', 'rsp-mount', 'rsp-unmounted'])
+      'string-lexing', 'not-a-route', 'braceless-group', 'legacy-group-mount', 'interpolated-path', 'rsp-mount', 'rsp-unmounted',
+      // M1-07-R1: evaluated mount forms, brace-less conditionals, commented-out withRouting.
+      'then-mount', 'glob-mount', 'separator-mount', 'module-path', 'braceless-if', 'unmounted-entry'])
       expect(patterns, p).toContain(p);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
     for (const l of labels) {
@@ -69,6 +71,22 @@ describe('route scorer', () => {
       R({ path: '/ghost', handlerSymbol: 'G@m', metadata: { reachable: false } }),
     ]);
     expect(good.totals).toMatchObject({ falsePositives: 0, flagged: 2, unlabelled: 0 });
+  });
+
+  // Review 2026-10-31: a negative label was credited when its route was not reported at all.
+  it('does not credit an overridden or unreachable label whose route is absent', () => {
+    const neg = [L({ expect: 'overridden', handler: 'C@old' }), L({ id: 'Y', uri: 'ghost', expect: 'unreachable', handler: 'G@m' })];
+    const s = score(neg, []);
+    expect(s.totals).toMatchObject({ falsePositives: 0, flagged: 0 });
+    expect(s.misses).toHaveLength(2);
+    // A flagged route with another handler does not count either.
+    expect(score([neg[0]!], [R({ handlerSymbol: 'C@other', metadata: { overridden: true } })]).totals.flagged).toBe(0);
+  });
+
+  it('scores absent labels: any reported route is a false positive, live or not', () => {
+    const l = L({ expect: 'absent', uri: 'in-comment' });
+    expect(score([l], []).totals).toMatchObject({ flagged: 1, falsePositives: 0 });
+    expect(score([l], [R({ path: '/in-comment', metadata: { reachable: false } })]).totals).toMatchObject({ flagged: 0, falsePositives: 1 });
   });
 
   it('requires conditional routes to be flagged', () => {

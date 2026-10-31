@@ -89,3 +89,14 @@ Route::prefix($section)->group(function () {
 Route::group(['prefix' => $section], function () {
     Route::get('yearly', [HomeController::class, 'yearly']);
 });
+
+// M1-07-R1: mounts built from glob loops and DIRECTORY_SEPARATOR, and a brace-less conditional.
+foreach (glob(__DIR__.'/api/modules/*.php') as $moduleFile) {
+    require $moduleFile;
+}
+Route::prefix('extra')->group(function () {
+    foreach (glob(__DIR__ . '/api/extra/*.php') as $file) require_once $file;
+});
+require __DIR__ . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'separator.php';
+if (env('LEGACY_EXPORTS')) require __DIR__.'/api/exports.php';
+Route::get('after-exports', [HomeController::class, 'afterExports']);
