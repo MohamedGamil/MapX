@@ -34,7 +34,7 @@ import { resolveThisMember } from '../parsers/languages/vue-options.js';
 import { collectVuexFiles, resolveStoreTarget, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { globalRegistrations, vueComponentName, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
-import { buildRouteTable, matchRoute, withSrcAlias, type NavTarget, type ResolvedRoute } from '../parsers/languages/vue-navigation.js';
+import { buildRouteTable, matchRoute, type NavTarget, type ResolvedRoute } from '../parsers/languages/vue-navigation.js';
 import { jsAliasTargets, type AliasContext } from './js-aliases.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
@@ -1346,7 +1346,7 @@ export class Scanner {
     let table = this.vueRoutes.get(repo);
     if (!table) {
       const files = [...fileMap].filter(([path, r]) => r === repo && /\.[cm]?[jt]sx?$/.test(path)).map(([path]) => path);
-      table = buildRouteTable(files, (path) => this.readWorkspaceText(path), withSrcAlias((spec, from) => this.resolveImportPath(spec, from, fileMap)));
+      table = buildRouteTable(files, (path) => this.readWorkspaceText(path), (spec, from) => this.resolveImportPath(spec, from, fileMap));
       this.vueRoutes.set(repo, table);
     }
     const hit = matchRoute(target, table, sourcePath);
@@ -2041,7 +2041,8 @@ export class Scanner {
             // its language family (a PHP route must not resolve to a JS class, M2-01).
             resolveSymbolToFile: (symName: string, sourcePath: string = relPath) =>
               this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath),
-            resolveImport: withSrcAlias((specifier, fromFile) => this.resolveImportPath(specifier, fromFile, this.workspaceFileMap)),
+            // Aliases (`@/views/X.vue`) resolve through the shared resolver in resolveImportPath (M3-09, M3-12).
+            resolveImport: (specifier, fromFile) => this.resolveImportPath(specifier, fromFile, this.workspaceFileMap),
           };
 
           const routes = await detector.extractRoutes(relPath, content, localCtx);
@@ -2346,10 +2347,12 @@ export class Scanner {
         files.push({ path, content: await readFile(resolve(workspaceRoot, path), 'utf-8') });
       } catch {}
     }
-    const providers = collectProviders(files);
+    // Imports follow the shared alias resolver, which reads tsconfig / vite.config & co. (M3-12).
+    const readText = (path: string) => this.readWorkspaceText(path);
+    const providers = collectProviders(files, readText);
     const fileSet = new Set(sources);
     const clients = (this.config.settings.http?.clients ?? []) as HttpClientConfig[];
-    const calls = files.flatMap(f => extractHttpCalls(f.path, f.content, { providers, files: fileSet, clients }));
+    const calls = files.flatMap(f => extractHttpCalls(f.path, f.content, { providers, files: fileSet, clients, readText }));
 
     // Resolve each URL: constants and templates (M2-04), then the client's base URL (M2-05).
     // Constants are looked up in the call's scope (M2-04-R2).
@@ -2358,7 +2361,7 @@ export class Scanner {
     const imported = new Map<string, Map<string, string>>();
     // With no offset (a client's baseURL), names the whole file agrees on also count.
     const constantsFor = (file: string, offset?: number) => {
-      if (!imported.has(file)) imported.set(file, importedConstants(file, contentOf.get(file) ?? '', constantIndex, fileSet));
+      if (!imported.has(file)) imported.set(file, importedConstants(file, contentOf.get(file) ?? '', constantIndex, fileSet, readText));
       const bindings = constantIndex.bindings.get(file) ?? [];
       return offset === undefined ? constantsAnywhere(bindings, imported.get(file)) : constantsAt(bindings, offset, imported.get(file));
     };

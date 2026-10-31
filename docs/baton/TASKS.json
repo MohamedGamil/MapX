@@ -7628,7 +7628,11 @@
         "src/frameworks/http/client-calls.ts",
         "src/frameworks/detectors/vue-router.ts",
         "tests/http-client-calls.test.ts",
-        "tests/vue-navigation.test.ts"
+        "tests/vue-navigation.test.ts",
+        "src/frameworks/http/url-resolver.ts",
+        "src/core/scanner.ts",
+        "src/parsers/languages/vue-navigation.ts",
+        "src/core/js-aliases.ts"
       ],
       "acceptanceCriteria": [
         "An axios client imported through a Laravel `@` → resources/js alias (vite.config.js) is followed by the HTTP pass, so its base URL applies (e2e test).",
@@ -7641,14 +7645,32 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-vue-setup",
       "actualHours": null,
       "startedAt": "2026-10-31T08:48:43.817Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T09:13:46.860Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-12.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-client-calls.test.ts tests/vue-navigation.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-12.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-12.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-12.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T08:48:42.066Z",
@@ -7661,6 +7683,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T09:13:46.499Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T09:13:46.860Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-client-calls.test.ts tests/vue-navigation.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-12.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-12.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-12.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

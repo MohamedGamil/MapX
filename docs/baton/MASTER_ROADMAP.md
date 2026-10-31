@@ -41,6 +41,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-10-R3** Workspaces: F18 fields, duplicate config cleanup, cross-repo references after workspaces add — DONE, P2, 5h; depends on M0-10-R2.
 - **M0-03-R4** edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching — DONE, P2, 4h; depends on M0-03-R3, M0-05-R4.
 - **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — DONE, P2, 5h; depends on M0-17-R2.
+- **M0-17-R4** Calls on library and DOM receivers do not link to same-named project symbols — BACKLOG, P2, 4h; depends on M3-10, M0-17-R3.
 - **M0-32-R2** Cycle smells keep their path order; small follow-ups from integration — DONE, P2, 3h; depends on M0-32-R1, M2-06-R1, M0-07-R2, M0-09-R3.
 - **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.
@@ -145,7 +146,7 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-09** JS/TS import aliases from tsconfig/jsconfig paths and Vite/webpack alias config — DONE, P2, 4h; depends on M3-04.
 - **M3-10** Case-sensitive symbol name lookup in resolution — DONE, P2, 3h; depends on M3-06.
 - **M3-11** Vue Router navigation from plain JS/TS modules (stores, guards, composables) — DONE, P2, 4h; depends on M3-06.
-- **M3-12** HTTP pass and vue-router detector use the shared alias resolver — IN_PROGRESS, P2, 3h; depends on M3-09, M3-06.
+- **M3-12** HTTP pass and vue-router detector use the shared alias resolver — DONE, P2, 3h; depends on M3-09, M3-06.
 
 ## M4 — Measurement and developer experience
 

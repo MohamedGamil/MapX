@@ -5,7 +5,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { ExtractedSymbol, ScanContext } from '../src/types.js';
 import {
-  matchRoute, moduleNavigationReferences, navigationReferences, navTarget, routeRecords, withSrcAlias, type ResolvedRoute,
+  matchRoute, moduleNavigationReferences, navigationReferences, navTarget, routeRecords, type ResolvedRoute,
 } from '../src/parsers/languages/vue-navigation.js';
 import { VueRouterDetector } from '../src/frameworks/detectors/vue-router.js';
 import { buildServer } from '../src/mcp.js';
@@ -145,17 +145,6 @@ describe('matchRoute (scanner side)', () => {
     const two = [...table('admin/src/router/index.ts', 'admin/src'), ...table('shop/src/router/index.ts', 'shop/src')];
     expect(hit({ name: 'users' }, 'shop/src/views/Home.vue', two)).toEqual({ file: 'shop/src/views/UserList.vue', exact: true });
     expect(hit({ name: 'users' }, 'shared/Nav.vue', two)).toBeNull();
-  });
-});
-
-describe('withSrcAlias', () => {
-  const files = new Set(['frontend/src/views/Home.vue', 'src/views/Home.vue']);
-  const resolve = withSrcAlias((spec) => (files.has(spec) ? spec : null));
-  it('maps @/ to the nearest src/ folder above the importing file', () => {
-    expect(resolve('@/views/Home.vue', 'frontend/src/router/index.js')).toBe('frontend/src/views/Home.vue');
-    expect(resolve('@/views/Home.vue', 'src/router/index.js')).toBe('src/views/Home.vue');
-    expect(resolve('@/views/Home.vue', 'lib/router.js')).toBeNull();
-    expect(resolve('~/views/Home.vue', 'src/router/index.js')).toBeNull();
   });
 });
 
@@ -441,6 +430,68 @@ describe('navigate edges from stores, guards and composables (M3-11, real scan)'
       { source_file: 'src/composables/useOrders.ts', source_symbol: 'openAll', target_file: 'src/views/Orders.vue', target_symbol: 'Orders' },
       { source_file: 'src/router/index.js', source_symbol: 'requireAuth', target_file: 'src/views/Login.vue', target_symbol: 'Login' },
       { source_file: 'src/stores/auth.js', source_symbol: 'logout', target_file: 'src/views/Login.vue', target_symbol: 'Login' },
+    ]);
+  });
+});
+
+// M3-12: route components imported through a configured alias resolve through the shared resolver
+// (M3-09); the vue-router detector and the route table no longer guess `@/` → the nearest src/.
+// Laravel layout: vite.config.js aliases `@` to resources/js; the resources/js/src/ files are traps
+// for that guess.
+describe('route components through a configured alias (M3-12)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'laravel-app', private: true, dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0' } }),
+      'vite.config.js': "import { defineConfig } from 'vite';\nexport default defineConfig({ resolve: { alias: { '@': '/resources/js' } } });\n",
+      'resources/js/src/router/index.js': [
+        "import { createRouter, createWebHistory } from 'vue-router';",
+        "import Home from '@/Pages/Home.vue';",
+        'export default createRouter({',
+        '  history: createWebHistory(),',
+        '  routes: [',
+        "    { path: '/', name: 'home', component: Home },",
+        "    { path: '/about', name: 'about', component: () => import('@/Pages/About.vue') },",
+        // Not under resources/js: the alias decides, so the src/ copy is not a fallback.
+        "    { path: '/gone', name: 'gone', component: () => import('@/Pages/Gone.vue') },",
+        '  ],',
+        '});',
+        '',
+      ].join('\n'),
+      'resources/js/Pages/Home.vue': '<template>\n  <p>home</p>\n</template>\n',
+      'resources/js/Pages/About.vue': '<template>\n  <p>about</p>\n</template>\n',
+      'resources/js/Components/Nav.vue': [
+        '<template>',
+        "  <router-link :to=\"{ name: 'about' }\">About</router-link>",
+        '</template>',
+        '',
+        '<script setup>',
+        "import { useRouter } from 'vue-router';",
+        'const router = useRouter();',
+        'function home() {',
+        "  router.push({ name: 'home' });",
+        '}',
+        '</script>',
+        '',
+      ].join('\n'),
+      'resources/js/src/Pages/Home.vue': '<template>\n  <p>trap</p>\n</template>\n',
+      'resources/js/src/Pages/About.vue': '<template>\n  <p>trap</p>\n</template>\n',
+      'resources/js/src/Pages/Gone.vue': '<template>\n  <p>trap</p>\n</template>\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('gives route and navigate edges to the aliased components, not to the nearest src/', () => {
+    const components = edgesOf(root, 'route').filter((e) => e.target_file.endsWith('.vue'));
+    expect([...new Set(components.map((e) => `${e.source_file} -> ${e.target_file}#${e.target_symbol}`))].sort()).toEqual([
+      'resources/js/src/router/index.js -> resources/js/Pages/About.vue#About',
+      'resources/js/src/router/index.js -> resources/js/Pages/Home.vue#Home',
+    ]);
+    expect(edgesOf(root, 'navigate').map((e) => `${e.source_symbol} -> ${e.target_file}`)).toEqual([
+      'Nav -> resources/js/Pages/About.vue',
+      'home -> resources/js/Pages/Home.vue',
     ]);
   });
 });

@@ -2,6 +2,7 @@
 // JS/TS/Vue sources: find HTTP clients (axios, fetch, axios.create instances, factories returning
 // one, aliases and configured receivers) and every call made through them.
 import { posix } from 'node:path';
+import { jsAliasTargets } from '../../core/js-aliases.js';
 
 export const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
 export const HTTP_SOURCE = /\.(m?[jt]sx?|cjs|vue|svelte)$/;
@@ -276,7 +277,7 @@ function lineIndex(text: string): (index: number) => number {
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Exported clients: `export const http = axios.create(..)`, `export default () => axios.create(..)`, … */
-export function collectProviders(files: { path: string; content: string }[]): ProviderIndex {
+export function collectProviders(files: { path: string; content: string }[], readText?: ReadText): ProviderIndex {
   const index: ProviderIndex = { named: new Map(), defaults: new Map() };
   for (const { path, content } of files) {
     if (/(?:window|globalThis)\.axios\s*=/.test(maskCode(content))) index.globalAxios = true;
@@ -311,9 +312,10 @@ export function collectProviders(files: { path: string; content: string }[]): Pr
     if (named.size) index.named.set(path, named);
   }
   // Re-exports: export { default as http, api } from './http'
+  const paths = new Set(files.map(f => f.path));
   for (const { path, content } of files)
     for (const m of content.matchAll(/export\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
-      const target = resolveImport(path, m[2]!, new Set(files.map(f => f.path)));
+      const target = resolveImport(path, m[2]!, paths, readText);
       if (!target) continue;
       for (const item of m[1]!.split(',')) {
         const [imported, exported] = item.trim().split(/\s+as\s+/);
@@ -328,18 +330,21 @@ export function collectProviders(files: { path: string; content: string }[]): Pr
   return index;
 }
 
-/** Resolves an import specifier to an indexed file: relative paths and the `@/` → `src/` alias. */
-export function resolveImport(fromFile: string, spec: string, files: Set<string>): string | null {
-  let base: string;
-  if (spec.startsWith('.')) base = posix.normalize(posix.join(posix.dirname(fromFile), spec));
-  else if (spec.startsWith('@/') || spec.startsWith('~/')) {
-    const parts = fromFile.split('/');
-    const src = parts.lastIndexOf('src');
-    if (src < 0) return null;
-    base = posix.join(...parts.slice(0, src + 1), spec.slice(2));
-  } else return null;
-  for (const ext of ['', '.ts', '.js', '.tsx', '.jsx', '.mjs', '.vue', '/index.ts', '/index.js'])
-    if (files.has(base + ext)) return base + ext;
+/** Reads a workspace-relative file (alias configs such as vite.config.js, tsconfig.json); null when absent. */
+export type ReadText = (path: string) => string | null;
+
+/**
+ * Resolves an import specifier to an indexed file: a relative path, or an alias through the
+ * shared resolver (M3-09: tsconfig/jsconfig `paths`, vite / vue-cli / webpack aliases, else `@/` →
+ * src/), which reads the alias configs with `readText` (M3-12).
+ */
+export function resolveImport(fromFile: string, spec: string, files: Set<string>, readText: ReadText = () => null): string | null {
+  const bases = spec.startsWith('.')
+    ? [posix.normalize(posix.join(posix.dirname(fromFile), spec))]
+    : jsAliasTargets(spec, fromFile, { files, readText });
+  for (const base of bases)
+    for (const ext of ['', '.ts', '.js', '.tsx', '.jsx', '.mjs', '.vue', '/index.ts', '/index.js'])
+      if (files.has(base + ext)) return base + ext;
   return null;
 }
 
@@ -348,7 +353,7 @@ interface Receiver {
   client: HttpClientRef;
 }
 
-function receiversFor(file: string, content: string, providers: ProviderIndex, files: Set<string>, configured: HttpClientConfig[]): Receiver[] {
+function receiversFor(file: string, content: string, providers: ProviderIndex, files: Set<string>, configured: HttpClientConfig[], readText?: ReadText): Receiver[] {
   const receivers: Receiver[] = [];
   const own = (name: string, provider: Provider): HttpClientRef => ({
     kind: provider.kind, name, baseURL: provider.baseURL, ...(provider.definedIn !== file ? { definedIn: provider.definedIn } : {}),
@@ -370,7 +375,7 @@ function receiversFor(file: string, content: string, providers: ProviderIndex, f
       if (def) receivers.push({ pattern: escape(def), client: { kind: 'axios', name: def } });
       continue;
     }
-    const target = resolveImport(file, spec!, files);
+    const target = resolveImport(file, spec!, files, readText);
     if (!target) continue;
     if (def && providers.defaults.has(target)) addProvider(def, providers.defaults.get(target)!);
     for (const item of (namedList ?? '').split(',')) {
@@ -423,7 +428,7 @@ export function urlBranches(arg: string): string[] {
 export function extractHttpCalls(
   file: string,
   content: string,
-  ctx: { providers: ProviderIndex; files: Set<string>; clients?: HttpClientConfig[] },
+  ctx: { providers: ProviderIndex; files: Set<string>; clients?: HttpClientConfig[]; readText?: ReadText },
 ): HttpCallSite[] {
   const calls: HttpCallSite[] = [];
   const seen = new Set<number>();
@@ -431,7 +436,7 @@ export function extractHttpCalls(
   // Search the masked source: calls in comments, strings or SFC templates are not calls.
   const masked = maskSource(file, content);
   const lineAt = lineIndex(content);
-  for (const r of receiversFor(file, content, ctx.providers, ctx.files, ctx.clients ?? [])) {
+  for (const r of receiversFor(file, content, ctx.providers, ctx.files, ctx.clients ?? [], ctx.readText)) {
     const re = new RegExp(`(?<![\\w.$])${r.pattern}\\s*\\.\\s*(${methods})\\s*\\(`, 'g');
     for (const m of masked.matchAll(re)) {
       if (seen.has(m.index!)) continue;

@@ -40,7 +40,8 @@ const caches = new WeakMap<Set<string>, Map<string, DirAliases | null>>();
  * order: the first directory, from the importing file's upwards, whose config declares an alias
  * matching `target` decides (tsconfig/jsconfig `compilerOptions.paths` before a vite / vue-cli /
  * webpack / Laravel Mix alias). `@/x` with no declared alias falls back to `src/x` under the
- * nearest package.json folder, then under the workspace root. Empty for relative or bare imports.
+ * nearest package.json folder, then under the nearest `src` folder above the importing file, then
+ * under the workspace root. Empty for relative or bare imports.
  */
 export function jsAliasTargets(target: string, sourcePath: string, ctx: AliasContext): string[] {
   if (target.startsWith('.') || target.startsWith('/')) return [];
@@ -64,8 +65,13 @@ export function jsAliasTargets(target: string, sourcePath: string, ctx: AliasCon
     }
     if (!dir) break;
   }
-  if (!out.includes(`src/${rest}`)) out.push(`src/${rest}`);
-  return out;
+  // The src/ folder the importing file sits in (`app/src/views/x.vue`), as the HTTP pass and the
+  // vue-router detector used to guess (M3-12), then the workspace root's.
+  const parts = sourcePath.split('/');
+  const src = parts.lastIndexOf('src', parts.length - 2);
+  if (src >= 0) out.push(posix.join(...parts.slice(0, src + 1), rest));
+  out.push(`src/${rest}`);
+  return [...new Set(out)];
 }
 
 /** TypeScript's matching: an exact pattern wins, else the wildcard pattern with the longest prefix. */

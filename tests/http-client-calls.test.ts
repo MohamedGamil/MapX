@@ -88,6 +88,43 @@ describe('http-calls.json through the scanner', () => {
   });
 });
 
+// M3-12: the HTTP pass follows imports through the shared alias resolver (M3-09), so a client
+// imported through a Laravel `@` → resources/js alias (vite.config.js) keeps its base URL. The
+// src/ files are traps for the old guess (`@/` → the nearest src/ folder, `~/` → src/).
+describe('http-calls.json through configured import aliases (M3-12)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'laravel-app', private: true, dependencies: { axios: '^1.7.0', vue: '^3.4.0' } }),
+      'vite.config.js': "import { defineConfig } from 'vite';\nexport default defineConfig({ resolve: { alias: { '@': '/resources/js' } } });\n",
+      'resources/js/api/client.js': "import axios from 'axios';\nexport default axios.create({ baseURL: '/api/v2' });\n",
+      'resources/js/api/routes.js': "export const USERS = 'users';\n",
+      'resources/js/Pages/Users.vue': [
+        '<script setup>',
+        "import api from '@/api/client';",
+        "import { USERS } from '@/api/routes';",
+        'api.get(`${USERS}/active`);',
+        '</script>',
+        '',
+      ].join('\n'),
+      'resources/js/src/legacy.js': "import api from '@/api/client';\napi.post('legacy');\n",
+      'resources/js/src/api/client.js': "import axios from 'axios';\nexport default axios.create({ baseURL: '/wrong' });\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('resolves the client and its constants through the vite.config.js alias', () => {
+    const records = JSON.parse(readFileSync(join(root, '.mapx', 'http-calls.json'), 'utf8')) as
+      { file: string; method: string; url: string | null; client: { kind: string; definedIn?: string } }[];
+    expect(records.map((r) => `${r.file} ${r.method} ${r.url} ${r.client.kind} ${r.client.definedIn}`)).toEqual([
+      'resources/js/Pages/Users.vue GET /api/v2/users/active instance resources/js/api/client.js',
+      'resources/js/src/legacy.js POST /api/v2/legacy instance resources/js/api/client.js',
+    ]);
+  });
+});
+
 // M2-03-R1: defects found by the independent M2 review.
 describe('extraction defects (M2-03-R1)', () => {
   it('recognises a global window.axios and a required axios', () => {

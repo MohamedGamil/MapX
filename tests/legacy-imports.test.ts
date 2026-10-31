@@ -318,10 +318,13 @@ describe('JS/TS import aliases (M3-09)', () => {
     expect(at('@/x', 'other/a.ts')).toEqual(['root/x']);
   });
 
-  it('without an alias, @/ is src/ under the nearest package.json folder, then under the workspace root', () => {
+  it('without an alias, @/ is src/ under the nearest package.json folder, the enclosing src/, then the workspace root', () => {
     const at = aliases({ 'apps/legacy/package.json': '{}', 'apps/legacy/src/main.js': '' });
     expect(at('@/utils/format', 'apps/legacy/src/main.js')).toEqual(['apps/legacy/src/utils/format', 'src/utils/format']);
     expect(at('~/utils/format', 'apps/legacy/src/main.js')).toEqual([]);
+    // No package.json (the HTTP pass's unit inputs, M3-12): the src/ folder the file sits in.
+    expect(at('@/views/Home.vue', 'frontend/src/router/index.js')).toEqual(['frontend/src/views/Home.vue', 'src/views/Home.vue']);
+    expect(at('@/views/Home.vue', 'lib/router.js')).toEqual(['src/views/Home.vue']);
   });
 });
 

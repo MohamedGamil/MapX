@@ -2,7 +2,7 @@
 // concatenation, template literals and string constants (M2-04), joined to the client's base URL
 // read from literals, constants or .env files with axios semantics (M2-05). Unknown parts → {}.
 import { posix } from 'node:path';
-import { maskSource, resolveImport } from './client-calls.js';
+import { maskSource, resolveImport, type ReadText } from './client-calls.js';
 
 const QUOTED = /^(['"])((?:\\.|(?!\1).)*)\1$/s;
 const TEMPLATE = /^`((?:\\.|[^`])*)`$/s;
@@ -216,10 +216,10 @@ export function collectConstants(files: { path: string; content: string }[]): Co
 }
 
 /** Named imports of exported constants into `file`. */
-export function importedConstants(file: string, content: string, index: ConstantIndex, files: Set<string>): Map<string, string> {
+export function importedConstants(file: string, content: string, index: ConstantIndex, files: Set<string>, readText?: ReadText): Map<string, string> {
   const imported = new Map<string, string>();
   for (const m of content.matchAll(/import\s+(?:\w+\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
-    const target = resolveImport(file, m[2]!, files);
+    const target = resolveImport(file, m[2]!, files, readText);
     if (!target) continue;
     for (const item of m[1]!.split(',')) {
       const [name, local] = item.trim().split(/\s+as\s+/);
@@ -234,8 +234,8 @@ export function importedConstants(file: string, content: string, index: Constant
  * Constants visible in `file` at `offset` (top level when omitted): named imports of exported
  * constants, shadowed by the file's own bindings in scope there.
  */
-export function visibleConstants(file: string, content: string, index: ConstantIndex, files: Set<string>, offset?: number): Map<string, string> {
-  return constantsAt(index.bindings.get(file) ?? [], offset, importedConstants(file, content, index, files));
+export function visibleConstants(file: string, content: string, index: ConstantIndex, files: Set<string>, offset?: number, readText?: ReadText): Map<string, string> {
+  return constantsAt(index.bindings.get(file) ?? [], offset, importedConstants(file, content, index, files, readText));
 }
 
 function balancedParens(text: string): boolean {

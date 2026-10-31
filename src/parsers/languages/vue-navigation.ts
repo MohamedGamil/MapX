@@ -403,21 +403,6 @@ export function matchRoute(target: NavTarget, routes: ResolvedRoute[], sourcePat
 }
 
 /**
- * `resolve` with Vue CLI / Vite's `@/` alias for the `src/` folder: a specifier the resolver does
- * not find is retried against the nearest `src/` folder above the importing file
- * (`frontend/src/router/index.js` + `@/views/Home.vue` → `frontend/src/views/Home.vue`).
- */
-export function withSrcAlias(resolve: (specifier: string, fromFile: string) => string | null): (specifier: string, fromFile: string) => string | null {
-  return (specifier, fromFile) => {
-    const direct = resolve(specifier, fromFile);
-    if (direct || !specifier.startsWith('@/')) return direct;
-    const at = `/${fromFile}`.lastIndexOf('/src/');
-    if (at < 0) return null;
-    return resolve(`${at ? `${fromFile.slice(0, at - 1)}/` : ''}src/${specifier.slice(2)}`, fromFile);
-  };
-}
-
-/**
  * The route table of a set of files: the records of every file that holds one, each component
  * resolved by `resolveImport` from its router file.
  */
