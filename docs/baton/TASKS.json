@@ -6641,15 +6641,28 @@
         "npx vitest run tests/parsers-integration.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. defineProps<{ id: number }>() exposes prop id on the component symbol.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-setup",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T07:59:39.556Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T07:59:38.359Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:59:39.556Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -6776,15 +6789,28 @@
         "npx vitest run tests/parsers-integration.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. router.push({ name: 'user' }) links to the route record named user and its component.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-router",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T07:59:41.610Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T07:59:40.606Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:59:41.610Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -6900,6 +6926,70 @@
       "objective": ".fish files yield function symbols and call edges.",
       "milestone": "M3",
       "description": "Found by M3-01 (2026-10-31): only the root package.json enables framework detection, so monorepos with a frontend sub-folder get no Vue detection."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-02",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-02.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-08.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue-template.ts",
+        "src/core/scanner.ts",
+        "tests/vue-template.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Adding or removing `app.component(\"X\", X)` in main.js and running sync (no .vue file changed) adds or removes the render edges from every component using <X/>, matching scan --force (e2e test).",
+        "Two Vue apps in one repo (two package.json folders) keep separate global registries: a tag registered globally only in app A gives no render edge in app B (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-template.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-08",
+      "title": "Vue global registry: re-link on sync, scope per manifest folder",
+      "objective": ".fish files yield function symbols and call edges.",
+      "milestone": "M3",
+      "description": "Found by M3-02 (2026-10-31): editing only main.js does not update existing .vue render edges on sync; the global registry is per repo, not per manifest folder."
     },
     {
       "id": "M4-01",
