@@ -5045,6 +5045,400 @@
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
     },
     {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-02-R2.md",
+        "docs/baton/reports/M0-10-R2.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R3.md"
+      ],
+      "affectedFiles": [
+        "src/core/git-tracker.ts",
+        "src/core/scanner.ts",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "After `git mv a.ts b.ts` and a commit, sync indexes b.ts and removes a.ts (files and edges), matching scan --force (e2e test).",
+        "In a repo nested inside a larger git repo, sync after a change indexes the changed file under the right repo-relative path (e2e test).",
+        "The scanner's nested-repo check treats a symlink to a registered repo as the same repo (test).",
+        "legacy-globs tests finish under their timeout on a loaded machine (no single test above 15 s locally)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-02-R3",
+      "title": "Git renames, nested-repo diffs and symlinked nested repos in incremental sync",
+      "objective": "sync after a git rename leaves no stale path, and nested or symlinked repos resolve diff paths correctly.",
+      "milestone": "M0",
+      "description": "Found by M0-02-R2 and M0-10-R2 (2026-10-31): git renames are reported by the new path only, so the old path stays indexed until a full scan; diff paths in nested repos are unverified; the scanner nested-repo check compares unresolved paths. legacy-globs hits the 30 s timeout under load."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-10-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-10-R2.md",
+        "specs/features/F18-git-workspace-submodules.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-10-R3.md"
+      ],
+      "affectedFiles": [
+        "src/core/workspace-summary.ts",
+        "src/core/config.ts",
+        "src/mcp.ts",
+        "tests/legacy-workspaces.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "mapx_workspaces entries carry absolute path, relativePath, isRegistered and isInitialised as F18 specifies (MCP test).",
+        "A config holding the same repo twice (also via a symlink) is collapsed to one entry on load or sync, with a message (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-workspaces.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-10-R3",
+      "title": "mapx_workspaces F18 fields and duplicate config cleanup",
+      "objective": "mapx_workspaces returns every F18 field and existing duplicate repo entries are collapsed.",
+      "milestone": "M0",
+      "description": "Found by M0-10-R2 (2026-10-31): mapx_workspaces lacks F18 path/relativePath/isRegistered/isInitialised (D010: implement as specified); duplicate entries already in configs are not cleaned up."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-03-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-05-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-03-R3.md",
+        "docs/baton/reports/M0-05-R4.md",
+        "specs/features/F04-edge-querying.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-03-R4.md"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/mcp.ts",
+        "src/core/store.ts",
+        "tests/legacy-metrics-edges.test.ts",
+        "tests/legacy-laravel-surface.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "In a two-repo workspace, edges <file> --format json lists the other repo's edge into the file under incoming with its source repo (e2e test).",
+        "edges <file> on a path that is not indexed prints a distinct 'not indexed' message, unlike a file with no edges (test).",
+        "mapx_dependencies accepts a partial name or glob as CLI deps does (MCP test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-metrics-edges.test.ts tests/legacy-laravel-surface.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-03-R4",
+      "title": "edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching",
+      "objective": "edges <file> lists incoming cross-repo edges and says when a file is not indexed; mapx_dependencies accepts the same path forms as CLI deps.",
+      "milestone": "M0",
+      "description": "Found by M0-03-R3 and M0-05-R4 (2026-10-31)."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-17-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-17-R2.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-17-R3.md"
+      ],
+      "affectedFiles": [
+        "queries/java/references.scm",
+        "queries/kotlin/references.scm",
+        "queries/typescript/references.scm",
+        "src/parsers/generic-wasm-parser.ts",
+        "src/core/scanner.ts",
+        "tests/legacy-language-accuracy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`class A extends Base<T>` (Java, Kotlin, TypeScript) yields an extends edge to Base (test per language).",
+        "`export let x` / `export var x` yield a JS/TS symbol (test).",
+        "A `const f = () => …` declared inside a function is not a top-level function symbol (test).",
+        "C# extends vs implements uses the resolved target kind when it is indexed, not only the I-prefix convention (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-language-accuracy.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-17-R3",
+      "title": "Extraction: generic bases, exported let/var, local arrows, callable constants in other languages",
+      "objective": "Inheritance through generic bases and JS exported bindings are extracted; local arrows stay local.",
+      "milestone": "M0",
+      "description": "Found by M0-17-R2 (2026-10-31). Callable constants in C/Rust/Lua/Bash remain call targets by design; document it."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-05-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M1-05-R1.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M1-05-R2.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "tests/laravel-mounts.test.ts",
+        "tests/fixtures/laravel-routes"
+      ],
+      "acceptanceCriteria": [
+        "Route::singleton, ->scoped(), ->middlewareFor() and prefix/domain keys in a single route's action array each produce Laravel's exact route list (e2e test against frozen router output from synthetic routes).",
+        "The routes scorer stays at 0 false positives with recall not lower than before."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+        "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M1-05-R2",
+      "title": "Laravel resources: singleton, scoped, middlewareFor, per-route prefix/domain keys",
+      "objective": "The remaining resource registration forms match Laravel's router.",
+      "milestone": "M1",
+      "description": "Found by M1-05-R1 (2026-10-31): singleton, scoped(), middlewareFor and per-route prefix/domain keys are not modelled."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-32-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-32-R1.md",
+        "docs/baton/reports/M2-06-R1.md",
+        "docs/baton/reports/M0-07-R2.md",
+        "docs/baton/reports/M0-09-R3.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-32-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/architecture-analyzer.ts",
+        "src/frameworks/http/client-calls.ts",
+        "src/parsers/parse-worker.ts",
+        "package.json",
+        "tests/architecture-scc.test.ts",
+        "tests/http-client-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A cycle smell's involvedFiles follow the cycle path order, deduplicated without sorting (test).",
+        "Extraction of a large multi-line bundle stays linear: a test with many lines fails on a quadratic line lookup.",
+        "package.json files excludes dist/mapx-* binaries (check-package test).",
+        "parse-worker.ts uses the shared JSONC parser from M0-09-R3 instead of its own copy (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/architecture-scc.test.ts tests/http-client-calls.test.ts tests/legacy-distribution.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-32-R2",
+      "title": "Cycle smells keep their path order; small follow-ups from integration",
+      "objective": "Stored cycle smells list files in cycle order; HTTP line lookup and package files are guarded.",
+      "milestone": "M0",
+      "description": "Small findings from the 2026-10-31 remediation lanes (M0-32-R1, M2-06-R1, M0-07-R2, M0-09-R3)."
+    },
+    {
       "id": "M3-01",
       "milestone": "M3",
       "title": "Vue SFC fixture set (2.7 and 3.x)",
@@ -5208,6 +5602,30 @@
         },
         {
           "id": "M0-32-R1",
+          "type": "quality"
+        },
+        {
+          "id": "M0-02-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M0-10-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M0-03-R4",
+          "type": "quality"
+        },
+        {
+          "id": "M0-17-R3",
+          "type": "quality"
+        },
+        {
+          "id": "M1-05-R2",
+          "type": "quality"
+        },
+        {
+          "id": "M0-32-R2",
           "type": "quality"
         }
       ],
@@ -6558,7 +6976,7 @@
       "title": "Scanner: remove O(N²) resume serialisation and full-DB fileMap rebuilds",
       "objective": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10).",
       "milestone": "M4",
-      "description": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10)."
+      "description": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10). Measured 2026-10-31 (M0-12-R3, M0-32-R1): plain scan 80–133 s at 10,000 files vs ~6 s at 2,000, and 323 s at 20,000 — some scan phase is superlinear."
     },
     {
       "priority": "P3",
