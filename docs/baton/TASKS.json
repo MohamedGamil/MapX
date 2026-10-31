@@ -5250,7 +5250,7 @@
       "rollback": "Revert the task commit.",
       "id": "M0-02-R4",
       "title": "Incremental scans re-resolve references to moved files; blob-hash keys for non-root repos",
-      "objective": "sync after a git rename leaves no stale path, and nested or symlinked repos resolve diff paths correctly.",
+      "objective": "Incremental scans re-link referrers of moved targets, and non-root repos store matching blob hashes.",
       "milestone": "M0",
       "description": "Found by M0-02-R3 (2026-10-31): plain scan / non-git sync treat a rename as delete+add and leave referrers unresolved until --force; getGitBlobHashes keys do not match workspace paths for non-root repos; a normalizePattern mutant survives."
     },
@@ -5348,7 +5348,7 @@
       "rollback": "Revert the task commit.",
       "id": "M0-02-R5",
       "title": "git sync drops deleted untracked/staged files; blob hashes for re-indexed files",
-      "objective": "sync after a git rename leaves no stale path, and nested or symlinked repos resolve diff paths correctly.",
+      "objective": "git sync drops deleted untracked or staged files and records blob ids for re-indexed files.",
       "milestone": "M0",
       "description": "Found and reproduced by M0-02-R4 (2026-10-31): git sync never drops a deleted file that was untracked or only staged at the last scanned commit; git sync stores null blob hashes for files it re-indexes."
     },
@@ -5883,7 +5883,7 @@
       "rollback": "Revert the task commit.",
       "id": "M1-05-R3",
       "title": "Laravel routes: withoutMiddleware, implicit binding fields on plain routes, repeated chained attributes",
-      "objective": "The remaining resource registration forms match Laravel's router.",
+      "objective": "withoutMiddleware, implicit binding fields on plain routes and repeated chained attributes follow Laravel's router.",
       "milestone": "M1",
       "description": "Feature gaps found by M1-05-R2 (2026-10-31); not defects of delivered criteria, promoted to P2 and an M3-01 dependency by D014. PUT/PATCH update stays two routes by design."
     },
@@ -7107,7 +7107,7 @@
       "rollback": "Revert the task commit.",
       "id": "M3-07",
       "title": "Framework detection from package.json files below the repo root",
-      "objective": ".fish files yield function symbols and call edges.",
+      "objective": "Frameworks declared in a sub-folder package.json are detected and scoped to that folder.",
       "milestone": "M3",
       "description": "Found by M3-01 (2026-10-31): only the root package.json enables framework detection, so monorepos with a frontend sub-folder get no Vue detection."
     },
@@ -7190,7 +7190,7 @@
       "rollback": "Revert the task commit.",
       "id": "M3-08",
       "title": "Vue global registry: re-link on sync, scope per manifest folder",
-      "objective": ".fish files yield function symbols and call edges.",
+      "objective": "Vue global registrations and route records re-link dependent edges on sync, scoped per manifest folder.",
       "milestone": "M3",
       "description": "Found by M3-02 (2026-10-31): editing only main.js does not update existing .vue render edges on sync; the global registry is per repo, not per manifest folder."
     },
@@ -7302,7 +7302,7 @@
       "rollback": "Revert the task commit.",
       "id": "M3-09",
       "title": "JS/TS import aliases from tsconfig/jsconfig paths and Vite/webpack alias config",
-      "objective": ".fish files yield function symbols and call edges.",
+      "objective": "JS/TS path aliases resolve from tsconfig/jsconfig paths and bundler alias config, per nearest config.",
       "milestone": "M3",
       "description": "Found by M3-04 (2026-10-31): resolveImportPath maps @/ only to src/, affecting Vue render edges, mixins and composables; M3-04 added a path-suffix fallback only."
     },
@@ -7375,7 +7375,7 @@
       "rollback": "Revert the task commit.",
       "id": "M3-10",
       "title": "Case-sensitive symbol name lookup in resolution",
-      "objective": ".fish files yield function symbols and call edges.",
+      "objective": "Symbol name lookup is case-sensitive except where the language is not (PHP).",
       "milestone": "M3",
       "description": "Found by M3-06 (2026-10-31): name lookup is case-insensitive, so Cart matched const cart in CartView.vue."
     },
@@ -7449,7 +7449,7 @@
       "rollback": "Revert the task commit.",
       "id": "M3-11",
       "title": "Vue Router navigation from plain JS/TS modules (stores, guards, composables)",
-      "objective": ".fish files yield function symbols and call edges.",
+      "objective": "Vue Router navigation in plain JS/TS modules gives navigate edges.",
       "milestone": "M3",
       "description": "Found by M3-06 (2026-10-31): navigation written in plain JS/TS modules is not read."
     },
@@ -11512,7 +11512,7 @@
       "rollback": "Revert the task commit.",
       "id": "M0-04-R3",
       "title": "Laravel: ->middleware(X::class) route middleware edges via the route file use table",
-      "objective": "Make PHP import and class resolution precise on stock Laravel apps.",
+      "objective": "->middleware(X::class) gives the route its middleware by FQN and a route→middleware edge.",
       "milestone": "M0",
       "description": "Left from M0-04-R2 (2026-10-31): the route walker keeps only quoted middleware names, so ->middleware(X::class) makes no edge; it needs the route file use table."
     },
@@ -11624,7 +11624,7 @@
       "rollback": "Revert the task commit.",
       "id": "M0-04-R5",
       "title": "PHP global function calls and require/include produce edges",
-      "objective": "Make PHP import and class resolution precise on stock Laravel apps.",
+      "objective": "PHP global and namespaced function calls and require/include produce edges.",
       "milestone": "M0",
       "description": "Reported by M3-07 and reproduced 2026-10-31: a PHP file calling a global function from a require_once-d file gets zero edges (no call, no require)."
     },
@@ -11951,7 +11951,7 @@
       "rollback": "Revert the task commit.",
       "id": "M0-12-R6",
       "title": "Language count after fish (23) in templates and docs; lang list flags missing grammars",
-      "objective": ".fish files yield function symbols and call edges.",
+      "objective": "Language counts derive from the registry and lang list reports missing grammars.",
       "milestone": "M0",
       "description": "Found by M0-12-R5 (2026-10-31): language counts still say 22 after fish; lang list says bundled even when the WASM is missing (isLanguageInstalled only checks the registry)."
     },
@@ -14703,7 +14703,7 @@
       "rollback": "Revert the task commit.",
       "id": "M4-08",
       "title": "Strict flag handling in score-routes and score-http",
-      "objective": ".fish files yield function symbols and call edges.",
+      "objective": "The routes and HTTP scorers reject malformed flags and thresholds.",
       "milestone": "M4",
       "description": "Found by M3-01 review (2026-10-31): the routes and HTTP scorers accept malformed thresholds silently."
     }
