@@ -6,10 +6,10 @@ Remaining longest dependency path: **44h** (full-plan path: 113h).
 
 M0-12-R3 → M0-12-R4 → M3-01 → M3-03 → M3-05
 
-Remaining effort min/expected/max: **103 / 160 / 227h**. Capacity: 1 engineer(s) × 20 h/week → **8.0 weeks**, conditional finish **2026-12-28** (as of 2026-11-02).
+Remaining effort min/expected/max: **102 / 158 / 224h**. Capacity: 1 engineer(s) × 20 h/week → **7.9 weeks**, conditional finish **2026-12-27** (as of 2026-11-02).
 
 ## Open items and blockers
-- M3-01 (BLOCKED): M0-05-R3; M0-11-R2; M0-02-R2; M0-04-R2; M0-10-R2; M0-12-R3; M0-12-R4; M0-17-R2; M0-05-R4; M0-07-R2; M1-07-R1; M1-05-R1; M2-06-R1
+- M3-01 (BLOCKED): M0-05-R3; M0-11-R2; M0-02-R2; M0-04-R2; M0-10-R2; M0-12-R3; M0-12-R4; M0-17-R2; M0-05-R4; M1-07-R1; M1-05-R1; M2-06-R1
 - M3-02 (BACKLOG): M3-01
 - M3-03 (BACKLOG): M3-01
 - M3-04 (BACKLOG): M3-01
@@ -28,7 +28,6 @@ Remaining effort min/expected/max: **103 / 160 / 227h**. Capacity: 1 engineer(s)
 - M0-12-R4 (BACKLOG): M0-12-R3
 - M0-17-R2 (BACKLOG): prerequisites satisfied
 - M0-05-R4 (BACKLOG): prerequisites satisfied
-- M0-07-R2 (BACKLOG): prerequisites satisfied
 - M1-07-R1 (IN_PROGRESS): prerequisites satisfied
 - M1-05-R1 (BACKLOG): prerequisites satisfied
 - M2-06-R1 (IN_PROGRESS): prerequisites satisfied
@@ -45,7 +44,6 @@ Remaining effort min/expected/max: **103 / 160 / 227h**. Capacity: 1 engineer(s)
 | M0-12-R4 | 6 | 12 | 6 | 12 | 0 |
 | M0-17-R2 | 0 | 6 | 6 | 12 | 6 |
 | M0-05-R4 | 0 | 3 | 9 | 12 | 9 |
-| M0-07-R2 | 0 | 2 | 10 | 12 | 10 |
 | M1-07-R1 | 0 | 8 | 4 | 12 | 4 |
 | M1-05-R1 | 0 | 4 | 8 | 12 | 8 |
 | M2-06-R1 | 0 | 6 | 6 | 12 | 6 |

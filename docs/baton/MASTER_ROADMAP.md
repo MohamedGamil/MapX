@@ -78,7 +78,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — BACKLOG, P2, 6h; depends on M0-17-R1, M0-01-R1.
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
 - **M0-05-R4** MCP parity for Laravel relationships and bindings — BACKLOG, P2, 3h; depends on M0-05-R2.
-- **M0-07-R2** Binary build test writes outside the repo; package check rejects binaries — BACKLOG, P2, 2h; depends on M0-07-R1.
+- **M0-07-R2** Binary build test writes outside the repo; package check rejects binaries — DONE, P2, 2h; depends on M0-07-R1.
 
 ## M1 — Laravel route correctness
 

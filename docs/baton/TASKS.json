@@ -9870,15 +9870,74 @@
         "npx tsx scripts/check-package.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-misc",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T02:26:08.298Z",
+      "completedAt": "2026-10-31T02:35:51.508Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-07-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-distribution.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R2.md"
+        },
+        {
+          "command": "npm run build:npm",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R2.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R2.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T02:26:07.790Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:26:08.298Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:35:50.713Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:35:51.508Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-distribution.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R2.md"
+            },
+            {
+              "command": "npm run build:npm",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R2.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R2.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

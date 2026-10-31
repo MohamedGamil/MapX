@@ -620,7 +620,7 @@ The package is published as **`@mgamil/mapx`**; the unscoped name `mapx` belongs
 2. Add it to the GitHub repository as the Actions secret **`NPM_TOKEN`** (Settings → Secrets and variables → Actions).
 3. Keep `VERSION`, `package.json` and the CHANGELOG in step (`npm run version-sync`) before tagging.
 
-Native binaries built with `npm run build:linux` (or the other `build:*` scripts) and `make build-*` embed the version from `VERSION`.
+Native binaries built with `npm run build:linux` (or the other `build:*` scripts) and `make build-*` embed the version from `VERSION`. They go to `dist/` by default. Pass `-- --outdir <dir>` to write them elsewhere, or `-- --dry-run` to print the `bun build` commands without running them. They must never be published: `npx tsx scripts/check-package.ts`, which CI runs, fails when the pack list contains a native ELF, Mach-O or PE binary.
 
 ---
 
