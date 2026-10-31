@@ -306,6 +306,18 @@ describe('D012 output contract (synthetic TS fixture)', () => {
     }
   });
 
+  // M0-11-R3: deps and mapx_dependencies take the path forms edges takes.
+  it('deps and mapx_dependencies accept backslash, ./ and absolute forms of a path', async () => {
+    for (const form of ['src/store.ts', './src/store.ts', 'src\\store.ts', '.\\src\\store.ts', join(root, 'src/store.ts')]) {
+      const cli = mapxResult(root, 'deps', form, '-d', root);
+      expect(cli.status, form).toBe(0);
+      expect(cli.stdout, form).toContain('src/service.ts');
+      const mcp = await callRaw('mapx_dependencies', { file: form });
+      expect(mcp.isError, form).toBeFalsy();
+      expect(mcp.content[0].text, form).toContain('src/service.ts');
+    }
+  });
+
   it('mapx_edges: type accepts an array; verifiedOnly leaves out inferred edges', async () => {
     const out = async (args: Record<string, unknown>) =>
       (JSON.parse(await call('mapx_edges', { file: 'src/service.ts', direction: 'outgoing', ...args })) as Neighbourhood).outgoing.map((e) => e.type);

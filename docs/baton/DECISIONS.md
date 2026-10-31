@@ -105,3 +105,48 @@ Context: the owner asked for an analysis of Deptrac (PHP architecture-conformanc
 - **Continue (amends F17):** MapX writes Continue's documented layout instead of `.continue/mapx.yaml`, which Continue never loads: `.continue/mcpServers/mapx.yaml` for the MCP server and `.continue/prompts/*.md` for the slash commands. A leftover `.continue/mapx.yaml` written by mapx is migrated or reported. Task M0-09-R4.
 - **`.fish` (F20):** bundle a licence-compatible tree-sitter fish grammar and extract `function` definitions and calls. If no usable WASM build exists, fall back to file-level indexing and record that here. Task M0-12-R5.
 - **M1-05-R3:** promoted from P3 to P2 and made an M3-01 dependency (D010 applies).
+
+## D015 — Review remediation before M4 and M5 (owner, 2026-10-31)
+
+Answers the decision left open by `reviews/REVIEW-2026-10-31-2db08bd25e13.md`. The owner asked to work the seven P1 remediation tasks first, then the P2 remediation tasks, before new milestone work. As with D010, the promotable M4 and M5 tasks (M4-01, M4-03, M4-04, M4-05, M4-08, M5-01, M5-02) take a hard dependency on every open remediation task: M0-02-R6, M0-02-R7, M0-04-R6, M0-10-R4, M1-07-R2, M3-08-R1, M3-09-R1 (P1), and M0-09-R5, M0-11-R3, M0-12-R7, M0-17-R4, M0-17-R5, M0-20-R3, M1-03-R2, M2-04-R3, M2-06-R2, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1 (P2).
+
+## D016 — Svelte extraction claim and M0-11-R3 AC4 (2026-10-31)
+
+M0-11-R3 AC4 asked for a `.svelte` reference that would link without the built-in globals check. Implementing it showed that a `.svelte` file yields no references at all: `queries/svelte/*.scm` have their JS nodes commented out, so only the script element's class symbol is extracted. The criterion's premise was false, and README and `docs/getting-started.md` overclaimed Svelte extraction. The criterion was authored by the 2026-10-31 review, not by the owner, so it is corrected to what can be tested: a test pins down that a `.svelte` script gives the component symbol and no edges. The docs are corrected now, and Svelte script extraction is registered as M0-12-R8 (P2, BACKLOG). The owner may reprioritise it.
+
+## D017 — App boundaries for Vue scopes and JS/TS aliases, as refined by independent review (2026-10-31)
+
+M3-08-R1 and M3-09-R1 first drew app boundaries at every folder holding a `package.json`. Four independent review rounds showed that this breaks common layouts:
+- monorepo packages that use the root tsconfig `paths`;
+- single-build monorepos with one root webpack config;
+- component libraries consumed through `.use()`, including Vite library-mode builds;
+- apps whose `package.json` has `main`;
+- `{"type": "module"}` markers;
+- Laravel modules registered by the root app.
+
+The rule is now one rule for both:
+- **Separately built app.** A folder with a bundler config, or a `package.json` listing a build tool. A Vue component library is a manifest with vue as a peer dependency, a library-mode build, or a published entry (`exports`, `module`).
+- **Package.** Any other manifest with a name or dependencies.
+- **No boundary.** A manifest without a name or dependencies.
+- **Aliases.** Bundler aliases come from the nearest app. Compiler `paths` come from the nearest tsconfig/jsconfig, but not from above an app.
+- **Vue global registries and route tables.** These are per app. Libraries share their registrations with every app, and a component that another app's registering file imports also sees that app's registrations.
+
+M3-09-R1's AC2 is reworded to match. It had said bundler aliases come from "the nearest folder holding a package.json or bundler config". The criterion was authored by the 2026-10-31 review, not by the owner. Remaining limitation: a Laravel module's own `@/` imports do not reach the root app's `@` alias when the module has its own bundler config. The importer scope is not transitive: a child component of a module component registered by the root app does not see the root app's registrations (review 2026-11-01).
+
+## D018 — Python absolute-import roots (M0-12-R9, 2026-11-01)
+
+M0-12-R9 first treated a folder below a source root (`src/`, `lib/`, or a folder with `pyproject.toml`, `setup.py` or `setup.cfg`) as a namespace package, never a root. Independent review (reviewer M, P0) showed that this drops real project imports:
+- Django in `backend/` under a root `pyproject.toml`;
+- Airflow `dags/` under `setup.cfg`;
+- pytest `tests/`;
+- Lambda functions;
+- every absolute import in a repo with a stray root `__init__.py`.
+
+Python itself puts a script's own folder on `sys.path`, so a namespace folder outside any regular package is ambiguous: it is a root when run as a script, and a package when imported. The rule is now:
+- **Not a root:** a regular package folder (`__init__.py`) and every folder inside one.
+- **Always a root:** the workspace root.
+- **Otherwise:** any other ancestor is a root, as before.
+
+`import logging` in `src/nsp/app.py` with no `__init__.py` anywhere therefore links a sibling `logging.py`, as running that file would. M0-12-R9's AC2 (that case) is replaced with the reviewer's layouts. The criterion was authored by the review, not by the owner.
+
+D015 addendum (2026-11-01): the remediation tasks registered during the remediation itself (M0-02-R8, M0-12-R8, M0-12-R9) join D015's list, so they too come before the M4 and M5 tasks. M4-09 (test hygiene, registered the same day) is done.

@@ -20,6 +20,8 @@ import { GoDetector } from '../src/frameworks/detectors/go.js';
 import { RustDetector } from '../src/frameworks/detectors/rust.js';
 import { VaporDetector } from '../src/frameworks/detectors/vapor.js';
 import { WordPressDetector } from '../src/frameworks/detectors/wordpress.js';
+import { FrameworkRegistry } from '../src/frameworks/framework-registry.js';
+import type { FrameworkDetector } from '../src/types.js';
 
 describe('Framework Detectors - Monorepo Support', () => {
   let tmp: string;
@@ -31,6 +33,16 @@ describe('Framework Detectors - Monorepo Support', () => {
 
   const cleanupTmpRepo = async () => {
     await rm(tmp, { recursive: true, force: true });
+  };
+
+  // M3-07-R1: detect() reads only the repo root's manifest, even when `files` lists nested ones. A
+  // nested manifest activates the detector through the registry, for its own folder only.
+  const expectFolderScoped = async (detector: FrameworkDetector, files: string[], folder: string) => {
+    expect(await detector.detect(tmp, files)).toBe(false);
+    const scopes = new Map<string, string[]>();
+    const active = await FrameworkRegistry.getInstance().detectActiveFrameworks(tmp, files, { scopes });
+    expect(active.map((d) => d.name)).toContain(detector.name);
+    expect(scopes.get(detector.name)).toEqual([folder]);
   };
 
   describe('NestJSDetector', () => {
@@ -50,7 +62,7 @@ describe('Framework Detectors - Monorepo Support', () => {
       }
     });
 
-    it('detects NestJS inside nested app (monorepo)', async () => {
+    it('detects NestJS inside nested app (monorepo), scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/backend'), { recursive: true });
@@ -58,8 +70,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/backend/package.json'),
           JSON.stringify({ devDependencies: { '@nestjs/common': '^10.0.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/backend/package.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/backend/package.json'], 'apps/backend');
       } finally {
         await cleanupTmpRepo();
       }
@@ -69,7 +80,7 @@ describe('Framework Detectors - Monorepo Support', () => {
   describe('ExpressDetector', () => {
     const detector = new ExpressDetector();
 
-    it('detects Express inside nested app (monorepo)', async () => {
+    it('does not detect Express from a nested package.json (root manifest only)', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/api'), { recursive: true });
@@ -77,8 +88,10 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/api/package.json'),
           JSON.stringify({ dependencies: { express: '^4.18.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/api/package.json']);
-        expect(result).toBe(true);
+        // Express has no folder-scoped activation (its detect() pre-scans router prefixes repo-wide).
+        expect(await detector.detect(tmp, ['apps/api/package.json'])).toBe(false);
+        const active = await FrameworkRegistry.getInstance().detectActiveFrameworks(tmp, ['apps/api/package.json']);
+        expect(active.map((d) => d.name)).not.toContain('express');
       } finally {
         await cleanupTmpRepo();
       }
@@ -88,7 +101,7 @@ describe('Framework Detectors - Monorepo Support', () => {
   describe('NextJSDetector', () => {
     const detector = new NextJSDetector();
 
-    it('detects Next.js in monorepo', async () => {
+    it('detects Next.js in monorepo, scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/web'), { recursive: true });
@@ -96,8 +109,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/web/package.json'),
           JSON.stringify({ dependencies: { next: '^14.0.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/web/package.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/web/package.json'], 'apps/web');
       } finally {
         await cleanupTmpRepo();
       }
@@ -107,7 +119,7 @@ describe('Framework Detectors - Monorepo Support', () => {
   describe('ReactRouterDetector', () => {
     const detector = new ReactRouterDetector();
 
-    it('detects React Router in monorepo', async () => {
+    it('detects React Router in monorepo, scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/dashboard'), { recursive: true });
@@ -115,8 +127,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/dashboard/package.json'),
           JSON.stringify({ dependencies: { 'react-router-dom': '^6.20.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/dashboard/package.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/dashboard/package.json'], 'apps/dashboard');
       } finally {
         await cleanupTmpRepo();
       }
@@ -138,7 +149,7 @@ describe('Framework Detectors - Monorepo Support', () => {
       }
     });
 
-    it('detects SvelteKit via dependencies in monorepo', async () => {
+    it('detects SvelteKit via dependencies in monorepo, scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/blog'), { recursive: true });
@@ -146,8 +157,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/blog/package.json'),
           JSON.stringify({ dependencies: { svelte: '^4.0.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/blog/package.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/blog/package.json'], 'apps/blog');
       } finally {
         await cleanupTmpRepo();
       }
@@ -157,7 +167,7 @@ describe('Framework Detectors - Monorepo Support', () => {
   describe('TanstackRouterDetector', () => {
     const detector = new TanstackRouterDetector();
 
-    it('detects Tanstack Router in monorepo', async () => {
+    it('detects Tanstack Router in monorepo, scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/admin'), { recursive: true });
@@ -165,8 +175,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/admin/package.json'),
           JSON.stringify({ dependencies: { '@tanstack/react-router': '^1.0.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/admin/package.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/admin/package.json'], 'apps/admin');
       } finally {
         await cleanupTmpRepo();
       }
@@ -176,7 +185,7 @@ describe('Framework Detectors - Monorepo Support', () => {
   describe('VueRouterDetector', () => {
     const detector = new VueRouterDetector();
 
-    it('detects Vue Router in monorepo', async () => {
+    it('detects Vue Router in monorepo, scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/app'), { recursive: true });
@@ -184,8 +193,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/app/package.json'),
           JSON.stringify({ dependencies: { 'vue-router': '^4.0.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/app/package.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/app/package.json'], 'apps/app');
       } finally {
         await cleanupTmpRepo();
       }
@@ -234,7 +242,7 @@ describe('Framework Detectors - Monorepo Support', () => {
       }
     });
 
-    it('detects Symfony via composer.json in monorepo', async () => {
+    it('detects Symfony via composer.json in monorepo, scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/symfony-app'), { recursive: true });
@@ -242,8 +250,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/symfony-app/composer.json'),
           JSON.stringify({ require: { 'symfony/framework-bundle': '^6.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/symfony-app/composer.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/symfony-app/composer.json'], 'apps/symfony-app');
       } finally {
         await cleanupTmpRepo();
       }
@@ -253,7 +260,7 @@ describe('Framework Detectors - Monorepo Support', () => {
   describe('YiiDetector', () => {
     const detector = new YiiDetector();
 
-    it('detects Yii via composer.json in monorepo', async () => {
+    it('detects Yii via composer.json in monorepo, scoped to its folder', async () => {
       await createTmpRepo();
       try {
         await mkdir(join(tmp, 'apps/yii-app'), { recursive: true });
@@ -261,8 +268,7 @@ describe('Framework Detectors - Monorepo Support', () => {
           join(tmp, 'apps/yii-app/composer.json'),
           JSON.stringify({ require: { 'yiisoft/yii2': '^2.0' } })
         );
-        const result = await detector.detect(tmp, ['apps/yii-app/composer.json']);
-        expect(result).toBe(true);
+        await expectFolderScoped(detector, ['apps/yii-app/composer.json'], 'apps/yii-app');
       } finally {
         await cleanupTmpRepo();
       }

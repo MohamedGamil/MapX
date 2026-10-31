@@ -3,6 +3,8 @@ import { hasPackageJsonDependency } from '../utils.js';
 
 /** Words after which a `/` starts a regex literal rather than a division. */
 const REGEX_AFTER_WORD = /^(return|typeof|case|do|else|in|of|void|yield|await|delete|throw|new|instanceof)$/;
+/** Keywords whose parenthesised head is followed by a statement, so a `/` after its `)` starts a regex. */
+const STATEMENT_HEAD = /^(if|while|for|with)$/;
 
 /**
  * `text` with comments and string, template and regex-literal contents blanked to spaces. Same length,
@@ -19,6 +21,8 @@ export function maskCode(text: string): string {
     let depth = 0;
     let prev = '';
     let prevWord = '';
+    // One entry per open `(`: true when it opens an `if`/`while`/`for`/`with` head.
+    const parens: boolean[] = [];
     for (; i < text.length; i++) {
       const c = text[i]!;
       const n = text[i + 1];
@@ -75,6 +79,10 @@ export function maskCode(text: string): string {
       else if (c === '}') {
         if (inTemplate && depth === 0) return i;
         depth--;
+      } else if (c === '(') parens.push(prev === 'w' && STATEMENT_HEAD.test(prevWord));
+      else if (c === ')' && parens.pop()) {
+        prev = ';'; // `if (…)` ends a statement head: what follows starts an expression
+        continue;
       }
       prev = c;
     }
@@ -110,6 +118,21 @@ function classBodyOpen(masked: string, from: number): number {
     else if (c === ';' || c === '}' || c === ')') return -1;
   }
   return -1;
+}
+
+/** Index just past the `>` closing the type parameters opened at `open` (an `=>` inside does not close them). */
+function typeParamsEnd(masked: string, open: number): number {
+  let angle = 0;
+  for (let i = open; i < masked.length; i++) {
+    const c = masked[i]!;
+    if (c === '<') angle++;
+    else if (c === '>' && masked[i - 1] !== '=' && --angle === 0) return i + 1;
+    else if (c === '(' || c === '[' || c === '{') {
+      i = closingBracket(masked, i);
+      if (i < 0) break;
+    } else if (c === ';' || c === '}' || c === ')') break;
+  }
+  return masked.length;
 }
 
 /** Original text and its masked twin, at the same offsets. */
@@ -173,7 +196,9 @@ export function decoratorCalls(src: Source, names: string): DecoratorCall[] {
     if (close < 0) continue;
     const args = slice(src, open + 1, close);
     const lead = args.masked.length - args.masked.trimStart().length;
-    out.push({ name: m[1]!, args: slice(args, lead, args.masked.trimEnd().length), end: close + 1 });
+    // Prettier's trailing comma (`@Get(\n  ':id',\n)`) is not part of the argument.
+    const trail = args.masked.trimEnd().replace(/,\s*$/, '').length;
+    out.push({ name: m[1]!, args: slice(args, lead, trail), end: close + 1 });
     re.lastIndex = close + 1;
   }
   return out;
@@ -391,8 +416,11 @@ export class NestJSDetector implements FrameworkDetector {
         }
         if (modifiers.has(word)) continue;
 
-        // Verify the next non-whitespace char is '(' to confirm it's a method name
+        // Verify the next non-whitespace char is '(' to confirm it's a method name,
+        // past type parameters (`list<T>(`, `save<K extends () => void>(`)
         let j = i;
+        while (j < len && /\s/.test(text[j]!)) j++;
+        if (text[j] === '<') j = typeParamsEnd(text, j);
         while (j < len && /\s/.test(text[j]!)) j++;
         if (text[j] === '(') return word;
         continue;

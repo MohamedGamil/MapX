@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Command } from 'commander';
 
 let mockExists = true;
@@ -186,7 +186,9 @@ vi.mock('../src/languages/installer.js', () => ({
 }));
 
 vi.mock('../src/languages/registry.js', () => ({
-  getBuiltinLanguages: vi.fn().mockReturnValue({})
+  getBuiltinLanguages: vi.fn().mockReturnValue({}),
+  // status filters git changes by the scanner's file rules (M0-11-R3); the status test sets it.
+  getLanguageForFile: vi.fn().mockReturnValue(null),
 }));
 
 vi.mock('../src/core/git-tracker.js', () => ({
@@ -315,6 +317,26 @@ vi.mock('../src/core/graph.js', () => ({
 
 import { buildCLI, getStaleFilesCount, checkAndPrintStaleness, checkTryCatch } from '../src/cli.js';
 import { Store } from '../src/core/store.js';
+
+
+// M4-09: these tests init, uninit and delete `.mapx/` in the working directory, so they run from a
+// temporary folder, never from the checkout (a developer's own index of the repo).
+const checkoutCwd = process.cwd();
+let tmpCwd = '';
+beforeAll(async () => {
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  const os = await vi.importActual<typeof import('node:os')>('node:os');
+  tmpCwd = fs.mkdtempSync(`${os.tmpdir()}/mapx-cli-test-`);
+  process.chdir(tmpCwd);
+  // The indexed file the store mocks list (`src/main.ts`) exists, as it did in the checkout.
+  fs.mkdirSync('src');
+  fs.writeFileSync('src/main.ts', 'export {};\n');
+});
+afterAll(async () => {
+  process.chdir(checkoutCwd);
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  fs.rmSync(tmpCwd, { recursive: true, force: true });
+});
 
 describe('CLI module', () => {
   let logSpy: any;
@@ -1723,12 +1745,15 @@ describe('CLI module', () => {
 
     it('status with stale git changes', async () => {
       const { getChangedFiles } = await import('../src/core/git-tracker.js');
+      const { getLanguageForFile } = await import('../src/languages/registry.js');
+      vi.mocked(getLanguageForFile).mockImplementation(((path: string) => (path.endsWith('.ts') ? { name: 'typescript' } : null)) as any);
       vi.mocked(getChangedFiles).mockReturnValueOnce([
         { path: 'src/changed.ts', status: 'modified' },
         { path: 'src/new.ts', status: 'added' },
         { path: 'src/old.ts', status: 'removed' },
       ] as any);
       await runCLI(['status', '.']);
+      vi.mocked(getLanguageForFile).mockReset().mockReturnValue(null);
       expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('changed files'));
     });
   });

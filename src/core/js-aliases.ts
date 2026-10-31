@@ -1,6 +1,7 @@
 // JS/TS import aliases (docs/baton M3-09): `@/x`, `~/x`, `#utils` and the like, read statically from
-// the configuration nearest to the importing file. Nothing is executed: tsconfig/jsconfig are
-// parsed as JSON with comments, and bundler configs are read for literal alias entries only.
+// the configuration of the app the importing file belongs to (M3-09-R1). Nothing is executed:
+// tsconfig/jsconfig are parsed as JSON with comments, and bundler configs are read for literal alias
+// entries only.
 import { posix } from 'node:path';
 import { maskCode, matchBracket } from '../frameworks/http/client-calls.js';
 
@@ -14,11 +15,22 @@ export interface AliasContext {
 /** A TypeScript `paths` entry, or a bundler alias: `pattern` with at most one `*`, workspace-relative targets. */
 interface AliasRule { pattern: string; targets: string[] }
 
-/** The aliases one directory's config files declare: compiler `paths` first, then bundler aliases. */
-interface DirAliases { compiler: AliasRule[]; bundler: AliasRule[] }
+/**
+ * One directory's config files: `compiler` is null without a tsconfig/jsconfig, `bundler` is null
+ * unless the directory is a package root. `root` is 'app' for a separately built app (a bundler
+ * config, or a bundler or dev server among its package.json dependencies), 'package' for any other
+ * package.json naming a package or dependencies, 'none' otherwise (a `{"type": "module"}` marker).
+ */
+interface DirAliases { compiler: AliasRule[] | null; bundler: AliasRule[] | null; root: 'none' | 'package' | 'app' }
+
+/** Dependencies that make a package.json folder its own build, with its own resolution. */
+export const BUILD_TOOLS = [
+  'vite', 'webpack', '@vue/cli-service', 'nuxt', 'next', 'react-scripts', '@angular/cli', '@angular-devkit/build-angular',
+  'laravel-mix', 'parcel', '@rspack/cli', '@rsbuild/core', '@quasar/app-vite', '@quasar/app-webpack',
+];
 
 const TS_CONFIGS = ['tsconfig.json', 'jsconfig.json'];
-const BUNDLER_CONFIGS = [
+export const BUNDLER_CONFIGS = [
   'vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs', 'vite.config.cts', 'vite.config.cjs',
   'vue.config.js', 'vue.config.cjs', 'webpack.config.js', 'webpack.config.cjs', 'webpack.mix.js',
 ];
@@ -33,32 +45,50 @@ function norm(p: string): string | null {
 const join = (dir: string, p: string) => norm(posix.join(dir || '.', p.replace(/^\//, '')));
 
 // One cache per file set: the scanner hands every resolution of a phase the same Set.
-const caches = new WeakMap<Set<string>, Map<string, DirAliases | null>>();
+const caches = new WeakMap<Set<string>, Map<string, DirAliases>>();
 
 /**
  * Workspace-relative module paths (without extension probing) an aliased import may name, in
- * order: the first directory, from the importing file's upwards, whose config declares an alias
- * matching `target` decides (tsconfig/jsconfig `compilerOptions.paths` before a vite / vue-cli /
- * webpack / Laravel Mix alias). `@/x` with no declared alias falls back to `src/x` under the
- * nearest package.json folder, then under the nearest `src` folder above the importing file, then
- * under the workspace root. Empty for relative or bare imports.
+ * order. Aliases never cross an app's boundary (M3-09-R1):
+ * - `compilerOptions.paths` come from the nearest tsconfig/jsconfig (with its `extends` chain), as
+ *   tsc finds it, but not from above a separately built app (its own bundler config or bundler
+ *   dependency): a package of a monorepo uses the root tsconfig, a nested Vue CLI app does not;
+ * - bundler aliases (vite / vue-cli / webpack / Laravel Mix) come from the nearest app root, a
+ *   folder with a bundler config or a build tool among its package.json dependencies;
+ * - compiler `paths` come before bundler aliases.
+ * `@/x` with no matching alias falls back to `src/x` under the nearest package.json folder, then
+ * under the nearest `src` folder above the importing file, then under the workspace root. Empty for
+ * relative or bare imports.
  */
 export function jsAliasTargets(target: string, sourcePath: string, ctx: AliasContext): string[] {
   if (target.startsWith('.') || target.startsWith('/')) return [];
   let cache = caches.get(ctx.files);
   if (!cache) caches.set(ctx.files, (cache = new Map()));
+  const at = (dir: string) => {
+    let aliases = cache!.get(dir);
+    if (aliases === undefined) cache!.set(dir, (aliases = dirAliases(dir, ctx)));
+    return aliases;
+  };
+  let compiler: AliasRule[] | null = null;
+  let bundler: AliasRule[] | null = null;
+  let compilerDone = false;
+  let bundlerDone = false;
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
-    let aliases = cache.get(dir);
-    if (aliases === undefined) cache.set(dir, (aliases = dirAliases(dir, ctx)));
-    const hit = aliases && (match(aliases.compiler, target) ?? match(aliases.bundler, target));
-    if (hit) return hit;
-    if (!dir) break;
+    const aliases = at(dir);
+    if (!compilerDone && aliases.compiler) [compiler, compilerDone] = [aliases.compiler, true];
+    // The build that bundles the file: a package without its own build (a workspace package of a
+    // single-build monorepo) takes an enclosing app's aliases (review 2026-10-31).
+    if (!bundlerDone && aliases.root === 'app') [bundler, bundlerDone] = [aliases.bundler, true];
+    if (aliases.root === 'app') compilerDone = true;
+    if ((compilerDone && bundlerDone) || !dir) break;
   }
+  const hit = (compiler && match(compiler, target)) ?? (bundler && match(bundler, target));
+  if (hit) return hit;
   if (!target.startsWith('@/')) return [];
   const rest = target.slice(2);
   const out: string[] = [];
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
-    if (ctx.readText(posix.join(dir, 'package.json')) !== null) {
+    if (at(dir).root !== 'none') {
       const p = join(dir, `src/${rest}`);
       if (p) out.push(p);
       break;
@@ -93,18 +123,28 @@ function match(rules: AliasRule[], target: string): string[] | null {
   return best ? best.rule.targets.map((t) => t.replace('*', best!.star)) : null;
 }
 
-function dirAliases(dir: string, ctx: AliasContext): DirAliases | null {
-  const compiler: AliasRule[] = [];
+function dirAliases(dir: string, ctx: AliasContext): DirAliases {
+  let compiler: AliasRule[] | null = null;
   for (const name of TS_CONFIGS) {
-    compiler.push(...tsConfigRules(posix.join(dir, name), ctx));
+    const path = posix.join(dir, name);
+    if (ctx.readText(path) === null) continue;
+    compiler = tsConfigRules(path, ctx);
     if (compiler.length) break;
   }
-  const bundler: AliasRule[] = [];
+  const manifest = parseJsonc(ctx.readText(posix.join(dir, 'package.json')));
+  const deps = manifest && typeof manifest === 'object'
+    ? { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies }
+    : null;
+  let root: DirAliases['root'] = deps && (manifest.name || Object.keys(deps).length) ? 'package' : 'none';
+  if (root === 'package' && BUILD_TOOLS.some(t => t in deps!)) root = 'app';
+  let bundler: AliasRule[] | null = root === 'none' ? null : [];
   for (const name of BUNDLER_CONFIGS) {
     const text = ctx.readText(posix.join(dir, name));
-    if (text !== null) bundler.push(...bundlerRules(text, dir));
+    if (text === null) continue;
+    (bundler ??= []).push(...bundlerRules(text, dir));
+    root = 'app';
   }
-  return compiler.length || bundler.length ? { compiler, bundler } : null;
+  return { compiler, bundler, root };
 }
 
 // ── tsconfig / jsconfig ─────────────────────────────────────────────────────────────────────────
@@ -223,11 +263,16 @@ export function bundlerRules(text: string, dir: string): AliasRule[] {
     }
   }
   for (const m of masked.matchAll(/\.alias\s*\.\s*set\s*\(/g)) {
-    const open = m.index! + m[0].length - 1;
-    const close = matchBracket(masked, open);
-    if (close < 0) continue;
-    const [key, value] = splitTopLevel(masked, open + 1, close);
-    if (key && value) add(literal(text.slice(key.start, key.end)), text.slice(value.start, value.end));
+    // `.set('@', a).set('x', b)`: every call of the chain.
+    for (let open = m.index! + m[0].length - 1; ;) {
+      const close = matchBracket(masked, open);
+      if (close < 0) break;
+      const [key, value] = splitTopLevel(masked, open + 1, close);
+      if (key && value) add(literal(text.slice(key.start, key.end)), text.slice(value.start, value.end));
+      const next = /^\s*\.\s*set\s*\(/.exec(masked.slice(close + 1));
+      if (!next) break;
+      open = close + next[0].length;
+    }
   }
   return rules;
 }
@@ -251,7 +296,8 @@ function aliasPath(value: string, dir: string): string | null {
     path = posix.join(...(parts as string[]).map((p, i) => (i === 0 ? p.replace(/^\//, '') : p)));
   }
   // Vite and Laravel's `'@': '/resources/js'` is relative to the project root, which is `dir`.
-  return join(dir, path);
+  // Backslash separators (`'resources\\js'` in the source) are Windows paths.
+  return join(dir, path.replace(/\\+/g, '/'));
 }
 
 function literal(s: string): string | null {

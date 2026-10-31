@@ -1,6 +1,6 @@
-import { readFile, writeFile, unlink, stat, readdir, open } from 'node:fs/promises';
+import { readFile, writeFile, unlink, stat, lstat, readdir, open } from 'node:fs/promises';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { resolve, relative, extname, join, basename } from 'node:path';
+import { resolve, relative, extname, join, basename, dirname, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
 import { Worker } from 'node:worker_threads';
@@ -16,12 +16,12 @@ import { calculateClusterMetrics } from './metrics.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
 import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
-import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, gitBlobId, isGitRepo } from './git-tracker.js';
+import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, getIgnoredEntries, gitBlobId, isGitRepo, type GitFileStatus } from './git-tracker.js';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { isInScopes } from '../frameworks/utils.js';
 import { canonicalPath } from './workspace-manager.js';
-import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isScannablePath, normalizePattern, shebangLanguage } from './file-rules.js';
+import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isScannableDir, isScannablePath, normalizePattern, shebangLanguage } from './file-rules.js';
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, urlHost } from '../frameworks/http/pairing.js';
@@ -29,16 +29,16 @@ import { closest, importResolverFor, type ImportHit } from './import-resolvers.j
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
-import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
+import { BUILTIN_GLOBALS, JS_GLOBAL_FUNCTIONS } from '../parsers/common-methods.js';
 import { resolveThisMember } from '../parsers/languages/vue-options.js';
 import { collectVuexFiles, resolveStoreTarget, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vueGlobFiles, type GlobalRegistrations, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
-import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
-import { jsAliasTargets, type AliasContext } from './js-aliases.js';
+import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
+import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, type AliasContext } from './js-aliases.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
-const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
+const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
 
 /** Symbol index entry: a declaration by name, with its file, scope and kind. */
 type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string };
@@ -85,6 +85,29 @@ export interface DiscoveredFile extends FileInfo {
 }
 
 export { buildMatcher };
+
+/**
+ * A bundler config building a library: `lib:` inside its `build: { … }` object (Vite library mode),
+ * not an alias or any other key named `lib` (review 2026-10-31).
+ */
+function isLibraryBuild(config: string): boolean {
+  for (const m of config.matchAll(/\bbuild\s*:\s*\{/g)) {
+    let depth = 0;
+    for (let i = m.index! + m[0].length - 1; i < config.length; i++) {
+      if (config[i] === '{') depth++;
+      else if (config[i] === '}' && --depth === 0) {
+        if (/\blib\s*:/.test(config.slice(m.index!, i))) return true;
+        break;
+      }
+    }
+  }
+  return false;
+}
+
+/** Whether `text` holds `name` as a whole word (identifier boundaries). */
+function wordIn(text: string, name: string): boolean {
+  return new RegExp(`(?<![\\w$])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(text);
+}
 
 export class Scanner {
   private store: Store;
@@ -208,6 +231,7 @@ export class Scanner {
       const combinedLangBreakdown: Record<string, number> = {};
       const startTime = Date.now();
 
+      this.parsedInRun = reposToScan.length > 1 ? new Map() : null;
       for (const repoName of reposToScan) {
         const repo = this.config.repos.find(r => r.name === repoName);
         if (!repo) continue;
@@ -218,6 +242,16 @@ export class Scanner {
         for (const [lang, count] of Object.entries(res.languageBreakdown)) {
           combinedLangBreakdown[lang] = (combinedLangBreakdown[lang] || 0) + count;
         }
+        if (this.aborted) break;
+      }
+      // Re-resolves files the counts above already include.
+      if (reposToScan.length > 1 && !this.aborted) this.queueEarlyParsed(reposToScan);
+      // The resolution configs as this run left them, for the next run to compare with (M0-02-R8).
+      if (!this.aborted) for (const name of reposToScan) this.configReferrers(name);
+      this.parsedInRun = null;
+      for (const repoName of reposToScan.length > 1 && !this.aborted ? reposToScan : []) {
+        const repo = this.config.repos.find(r => r.name === repoName);
+        if (repo && this.needsSecondPass(repoName)) await this._scanFullForRepo(repo);
         if (this.aborted) break;
       }
 
@@ -252,6 +286,10 @@ export class Scanner {
 
     const discovered = await this.discoverFiles(repoRoot, repo.name);
     this.onProgress?.({ phase: 'discover', current: discovered.length, total: discovered.length });
+    // The files git lists as changed now, for git sync to re-read once git stops listing them (M0-02-R6).
+    if (isGitRepo(repoRoot)) {
+      this.store.setMeta('dirty_paths:' + repo.name, JSON.stringify(this.dirtyPaths(getChangedFiles(repoRoot), repoRoot, this.nestedRepoTest(repoRoot))));
+    }
 
     // Deleted files leave the index before anything is parsed: a file moved within this scan then
     // records its referrers and their names, and re-parsed references cannot resolve to the old path
@@ -277,7 +315,7 @@ export class Scanner {
     // before the primary repo was scanned): unchanged files keep unresolved references into it,
     // so re-parse everything once, as for changed filters (M0-10-R3).
     const newlyVisible = this.newlyVisibleRepos(repo.name, discovered.some(f => !f.isNew));
-    this.store.setMeta('resolution_repos:' + repo.name, JSON.stringify(this.visibleRepos(repo.name)));
+    this.store.setMeta('resolution_repos:' + repo.name, JSON.stringify(this.indexedRepos(repo.name)));
     const reparseAll = force || newlyVisible || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
     this.store.setMeta(filterKey, filters);
     // Unchanged files that had edges into a removed file now back (M0-02-R2), or into a removed file
@@ -285,10 +323,19 @@ export class Scanner {
     // global registration changed (M3-08): re-parse them.
     const candidates = [...newFiles, ...changedFiles, ...incompleteFiles];
     const candidateTexts = candidates.map(f => ({ path: f.relativePath, content: f.content }));
+    // A file without symbols is re-read by every scan: only new and changed files can name a moved
+    // target, or a mention in an unchanged re-export would re-parse its referrers forever (M0-10-R4).
+    const movedCandidates = [...newFiles, ...changedFiles];
     const referrers = new Set([
-      ...this.takeReferrers(repo.name, newFiles.map(f => f.relativePath)),
-      ...this.movedReferrers(repo.name, candidateTexts),
-      ...this.vueRegistryReferrers(repo.name, candidateTexts, deletedPaths),
+      ...this.takePendingReferrers(repo.name),
+      ...this.ownReferrers(repo.name, [
+        ...this.takeReferrers(repo.name, newFiles.map(f => f.relativePath)),
+        ...this.movedReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
+        ...this.removedSymbolReferrers(repo.name, changedFiles.map(f => ({ path: f.relativePath, content: f.content }))),
+        ...this.vanishedNameReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
+        ...this.configReferrers(repo.name, deletedPaths),
+        ...this.vueRegistryReferrers(repo.name, candidateTexts, deletedPaths),
+      ]),
     ]);
     const stableFiles = discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
     const unchangedFiles = reparseAll ? [] : stableFiles.filter(f => !referrers.has(f.relativePath));
@@ -368,6 +415,7 @@ export class Scanner {
       this.discoverDartPackages(workspaceRoot);
 
       let parsedFilesCount = 0;
+      this.noteParsed(repo.name, toParse.map(f => f.relativePath));
       const parseResults = await this.parseFilesParallel(
         toParse,
         workspaceRoot,
@@ -429,8 +477,9 @@ export class Scanner {
         });
       }
       if (!this.aborted) {
-        const candidatePaths = new Set(candidates.map(f => f.relativePath));
+        const candidatePaths = new Set(movedCandidates.map(f => f.relativePath));
         this.settleMovedNames(repo.name, parseResults.filter((_, i) => candidatePaths.has(toParse[i].relativePath)));
+        this.settleVanishedNames(repo.name, parseResults.filter((_, i) => candidatePaths.has(toParse[i].relativePath)));
       }
     } else if (unchangedFiles.length > 0) {
       this.onProgress?.({ phase: 'parse', current: unchangedFiles.length, total: discovered.length });
@@ -508,6 +557,7 @@ export class Scanner {
       const combinedLangBreakdown: Record<string, number> = {};
       const startTime = Date.now();
 
+      this.parsedInRun = reposToScan.length > 1 ? new Map() : null;
       for (const repoName of reposToScan) {
         const repo = this.config.repos.find(r => r.name === repoName);
         if (!repo) continue;
@@ -518,6 +568,16 @@ export class Scanner {
         for (const [lang, count] of Object.entries(res.languageBreakdown)) {
           combinedLangBreakdown[lang] = (combinedLangBreakdown[lang] || 0) + count;
         }
+        if (this.aborted) break;
+      }
+      // Re-resolves files the counts above already include.
+      if (reposToScan.length > 1 && !this.aborted) this.queueEarlyParsed(reposToScan);
+      // The resolution configs as this run left them, for the next run to compare with (M0-02-R8).
+      if (!this.aborted) for (const name of reposToScan) this.configReferrers(name);
+      this.parsedInRun = null;
+      for (const repoName of reposToScan.length > 1 && !this.aborted ? reposToScan : []) {
+        const repo = this.config.repos.find(r => r.name === repoName);
+        if (repo && this.needsSecondPass(repoName)) await this._scanIncrementalForRepo(repo);
         if (this.aborted) break;
       }
 
@@ -551,11 +611,12 @@ export class Scanner {
     // repo is indexed yet: a git diff from HEAD would list none of its committed files (M0-10-R3).
     const indexed = this.store.getAllFiles(repo.name).length > 0;
     if (!indexed || this.newlyVisibleRepos(repo.name, indexed)) return this._scanFullForRepo(repo);
+    this.store.setMeta('resolution_repos:' + repo.name, JSON.stringify(this.indexedRepos(repo.name)));
 
-    if (!isGitRepo(repoRoot)) {
-      // Content-hash based incremental for non-git projects
-      return this._scanIncrementalByHash(repo);
-    }
+    // Content-hash based incremental for non-git projects, and for a repo inside a gitignored folder
+    // of an enclosing checkout, where git lists none of its files (review 2026-10-31).
+    const ignoredEntries = isGitRepo(repoRoot) ? getIgnoredEntries(repoRoot) : null;
+    if (!ignoredEntries) return this._scanIncrementalByHash(repo);
 
     const excludes = this.effectiveExcludes(repo.name);
     const includes = [
@@ -569,7 +630,22 @@ export class Scanner {
 
     const lastCommit = this.store.getMeta('last_scan_commit:' + repo.name);
     this.onProgress?.({ phase: 'detect', current: 0, total: 0 });
-    const changes = getChangedFiles(repoRoot, lastCommit || undefined);
+    this.listings.clear();
+    // A registered repo nested in this one indexes its own files: git lists them for this repo too,
+    // and the walk leaves them out. Compared by canonical path, as in the walk (M0-02-R7).
+    const inNestedRepo = this.nestedRepoTest(repoRoot);
+    const gitChanges = getChangedFiles(repoRoot, lastCommit || undefined);
+    const changes = [...gitChanges, ...await this.ignoredChanges(repo, repoRoot, ignoredEntries, inNestedRepo)]
+      // A rename into a nested repo still removes its old path here.
+      .map(c => (inNestedRepo(c.path) && c.oldPath && !inNestedRepo(c.oldPath) ? { path: c.oldPath, status: 'removed' as const } : c))
+      .filter(c => !inNestedRepo(c.path));
+    // The files indexed from a state git listed as changed (M0-02-R6). Once git stops listing one (an
+    // edit reverted to HEAD's content), it is read again; the blob comparison below skips it if the
+    // indexed content is still the file's. A checkout whose files differ from HEAD's blobs only by
+    // eol conversion is never listed, so it costs nothing.
+    const dirtyKey = 'dirty_paths:' + repo.name;
+    const wasDirty = new Set(JSON.parse(this.store.getMeta(dirtyKey) ?? '[]') as string[]);
+    this.store.setMeta(dirtyKey, JSON.stringify(this.dirtyPaths(gitChanges, repoRoot, inNestedRepo)));
 
     // A file removed and restored while HEAD stayed at the last scanned commit is not in the diff:
     // look for the removed files on disk (M0-02-R2).
@@ -587,11 +663,21 @@ export class Scanner {
     const committed = getGitBlobHashes(repoRoot, workspaceRoot);
     for (const f of this.store.getAllFiles(repo.name)) {
       const absolutePath = resolve(workspaceRoot, f.path as string);
-      if (committed.has(f.path as string) || listed.has(absolutePath) || existsSync(absolutePath)) continue;
+      if (listed.has(absolutePath)) continue;
+      const exists = committed.has(f.path as string) ? existsSync(absolutePath) : this.existsExactly(absolutePath);
+      if (wasDirty.has(f.path as string) && exists) {
+        changes.push({ path: relative(repoRoot, absolutePath).replace(/\\/g, '/'), status: 'modified' });
+        continue;
+      }
+      if (committed.has(f.path as string) || exists) continue;
       changes.push({ path: relative(repoRoot, absolutePath).replace(/\\/g, '/'), status: 'removed' });
     }
 
-    if (changes.length === 0) {
+    const pending = this.takePendingReferrers(repo.name);
+    // A package.json git does not list (untracked, then deleted) can still move Vue scopes (M3-08-R1).
+    const facts = () => JSON.parse(this.store.getMeta('vue_registry:' + repo.name) ?? '{}');
+    if (changes.length === 0 && pending.length === 0 && this.vueScopeMoves(repo.name, [], [], {}, facts(), true).size === 0
+      && this.configReferrers(repo.name, [], true).size === 0) {
       await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
         filesScanned: 0,
@@ -610,7 +696,9 @@ export class Scanner {
     // into it are re-parsed so references that now resolve to the new path find it (M0-02-R3).
     const renamedReferrers = new Set<string>();
     for (const change of changes) {
-      if (!change.oldPath) continue;
+      // `git mv a b` with a copy left at a: a is still a file the walk indexes (M0-02-R7). Compared in
+      // its exact case: on a case-insensitive disk `git mv User.php user.php` leaves no `User.php`.
+      if (!change.oldPath || inNestedRepo(change.oldPath) || this.existsExactly(resolve(repoRoot, change.oldPath))) continue;
       const oldPath = relative(workspaceRoot, resolve(repoRoot, change.oldPath)).replace(/\\/g, '/');
       toRemove.push(oldPath);
       for (const r of this.store.getReferrers(oldPath)) renamedReferrers.add(r);
@@ -652,9 +740,9 @@ export class Scanner {
     // holds (M0-02-R4), and those using a Vue tag whose global registration changed (M3-08).
     const reindexed = new Set(toReindex.map(r => r.path));
     const listedTexts = [...contents].map(([path, content]) => ({ path, content }));
-    const moved = this.movedReferrers(repo.name, listedTexts);
+    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove)];
     const vueUsers = this.vueRegistryReferrers(repo.name, listedTexts, toRemove);
-    for (const r of new Set([...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers, ...moved, ...vueUsers])) {
+    for (const r of new Set([...pending, ...this.ownReferrers(repo.name, [...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers, ...moved, ...vueUsers])])) {
       if (reindexed.has(r) || toRemove.includes(r) || this.store.getFile(r)?.repo !== repo.name) continue;
       const absolutePath = resolve(workspaceRoot, r);
       const fileInfo = existsSync(absolutePath) ? await this.getFileInfo(absolutePath, r) : null;
@@ -696,6 +784,7 @@ export class Scanner {
     this.discoverDartPackages(workspaceRoot);
 
     let parsedFilesCount = 0;
+    this.noteParsed(repo.name, toReindex.map(r => r.path));
     const parseResults = await this.parseFilesParallel(
       toReindex.map(r => r.fileInfo),
       workspaceRoot,
@@ -746,6 +835,7 @@ export class Scanner {
 
     if (!this.aborted) {
       this.settleMovedNames(repo.name, parseResults.filter((_, i) => contents.has(toReindex[i].path)));
+      this.settleVanishedNames(repo.name, parseResults.filter((_, i) => contents.has(toReindex[i].path)));
       this.settleVueRegistry(repo.name);
       const commitSha = getCurrentCommitSha(repoRoot);
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
@@ -769,7 +859,13 @@ export class Scanner {
     };
   }
 
-  private async discoverFiles(repoRoot: string, repoName: string, silent = false): Promise<DiscoveredFile[]> {
+  /**
+   * The walk of a repo, or of some of its folders (`from`), under the same rules. `skipUnchanged`
+   * leaves out, unread, the indexed files whose size and mtime say they did not change.
+   */
+  private async discoverFiles(
+    repoRoot: string, repoName: string, silent = false, options: { from?: string[]; skipUnchanged?: boolean } = {},
+  ): Promise<DiscoveredFile[]> {
     const files: DiscoveredFile[] = [];
     const workspaceRoot = this.config.getWorkspaceRoot();
     const excludes = this.effectiveExcludes(repoName);
@@ -820,7 +916,7 @@ export class Scanner {
           const gitPath = join(fullPath, '.git');
           if (existsSync(gitPath)) {
             if (!registeredRoots.has(canonical)) {
-              console.warn(`\n⚠️ Warning: Found unregistered nested git repository at ${fullPath}. Skipping walk inside this directory.`);
+              if (!silent) console.warn(`\n⚠️ Warning: Found unregistered nested git repository at ${fullPath}. Skipping walk inside this directory.`);
               continue;
             }
           }
@@ -835,6 +931,7 @@ export class Scanner {
           if (!langDef) continue;
 
           try {
+            if (options.skipUnchanged && trackedHashes.has(relPath) && this.unchangedSinceScan(relPath, await stat(fullPath))) continue;
             const content = await readFile(fullPath, 'utf-8');
             const stats = await stat(fullPath);
             const lines = content.split('\n').length;
@@ -865,8 +962,104 @@ export class Scanner {
       }
     };
 
-    await walk(repoRoot, ownRoot);
+    for (const from of options.from ?? [repoRoot]) await walk(from, join(ownRoot, relative(repoRoot, from)));
     return files;
+  }
+
+  /** Tests a repo-relative path for lying inside another registered repo nested in this one. */
+  private nestedRepoTest(repoRoot: string): (repoRelative: string) => boolean {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const ownRoot = canonicalPath(repoRoot);
+    const nested = this.config.repos
+      .map(r => canonicalPath(resolve(workspaceRoot, r.path)))
+      .filter(p => p !== ownRoot && p.startsWith(ownRoot + sep));
+    if (nested.length === 0) return () => false;
+    return (p: string) => {
+      const canonical = join(ownRoot, p);
+      return nested.some(n => canonical === n || canonical.startsWith(n + sep));
+    };
+  }
+
+  /**
+   * Gitignored files the scan walk reaches whose content is not the indexed content, repo-relative.
+   * The walk does not read .gitignore, so scan indexes them; git never lists them (M0-02-R7). Removed
+   * ones are found with the other indexed files missing from HEAD's tree and from disk.
+   */
+  private async ignoredChanges(
+    repo: RepoConfig, repoRoot: string, entries: string[], inNestedRepo: (p: string) => boolean,
+  ): Promise<GitFileStatus[]> {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const repoPath = relative(workspaceRoot, repoRoot).replace(/\\/g, '/');
+    const excludes = this.effectiveExcludes(repo.name);
+    const includes = [...this.config.settings.includePatterns, ...this.cliIncludes];
+    const changed: GitFileStatus[] = [];
+    const folders: string[] = [];
+    for (const entry of entries) {
+      const path = entry.replace(/\/+$/, '');
+      const absolutePath = resolve(repoRoot, path);
+      const rel = relative(workspaceRoot, absolutePath).replace(/\\/g, '/');
+      if (inNestedRepo(path)) continue;
+      if (entry.endsWith('/')) {
+        // The walk skips an unregistered nested git repository (registered ones are tested above).
+        if (isScannableDir(rel, excludes, repoPath) && !existsSync(join(absolutePath, '.git'))) folders.push(absolutePath);
+        continue;
+      }
+      if (!isScannablePath(rel, excludes, includes, repoPath) || !this.languageFor(absolutePath)) continue;
+      // Regular files only: the walk never follows a symlink.
+      const stats = await lstat(absolutePath).catch(() => null);
+      if (!stats?.isFile() || this.unchangedSinceScan(rel, stats)) continue;
+      const content = await readFile(absolutePath, 'utf-8').catch(() => null);
+      if (content !== null && this.store.getFile(rel)?.content_hash !== createHash('md5').update(content).digest('hex')) {
+        changed.push({ path, status: 'modified' });
+      }
+    }
+    // One walk for every ignored folder, reading only the files whose size or mtime moved.
+    const walked = folders.length ? await this.discoverFiles(repoRoot, repo.name, true, { from: folders, skipUnchanged: true }) : [];
+    for (const f of walked) {
+      if (f.isNew || f.contentChanged) changed.push({ path: relative(repoRoot, f.absolutePath).replace(/\\/g, '/'), status: 'modified' });
+    }
+    return changed;
+  }
+
+  /** The language of a file as the walk decides it: by extension, else an extensionless script's shebang. */
+  private languageFor(absolutePath: string) {
+    return getLanguageForFile(absolutePath, this.config.getResolvedUserLanguages())
+      ?? (basename(absolutePath).includes('.') ? null : shebangLanguage(absolutePath));
+  }
+
+  /** An indexed file whose size is the stored one and that was not modified after it was indexed. */
+  private unchangedSinceScan(rel: string, stats: { size: number; mtimeMs: number }): boolean {
+    const stored = this.store.getFile(rel);
+    // ctime too: `cp -p` or `tar x` restores an older mtime, never an older ctime.
+    const touched = Math.max(stats.mtimeMs, (stats as { ctimeMs?: number }).ctimeMs ?? 0);
+    return !!stored && stored.size_bytes === stats.size && Date.parse(stored.last_scanned as string) > touched;
+  }
+
+  /**
+   * Whether the path exists with this exact case (a case-insensitive disk finds `User.php` as
+   * `user.php`). Each folder is listed once per sync (`listings`, cleared when a sync starts).
+   */
+  private existsExactly(absolutePath: string): boolean {
+    if (!existsSync(absolutePath)) return false;
+    const dir = dirname(absolutePath);
+    let names = this.listings.get(dir);
+    if (!names) {
+      try {
+        names = new Set(readdirSync(dir));
+      } catch {
+        names = new Set();
+      }
+      this.listings.set(dir, names);
+    }
+    return names.has(basename(absolutePath));
+  }
+
+  /** The workspace paths of the files git lists as changed that exist and belong to this repo. */
+  private dirtyPaths(changes: GitFileStatus[], repoRoot: string, inNestedRepo: (p: string) => boolean): string[] {
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    return [...new Set(changes
+      .filter(c => c.status !== 'removed' && !inNestedRepo(c.path) && existsSync(resolve(repoRoot, c.path)))
+      .map(c => relative(workspaceRoot, resolve(repoRoot, c.path)).replace(/\\/g, '/')))].sort();
   }
 
 
@@ -1203,6 +1396,7 @@ export class Scanner {
     const resolver = sourceLanguage ? importResolverFor(sourceLanguage) : undefined;
     // Simple names this file uses (C# picks, among the files declaring a namespace, those whose types it uses).
     let referencedNames: Set<string> | undefined;
+    let jsBindings: { packages: Set<string>; local: Set<string> } | undefined;
     const usedNames = () => (referencedNames ??= new Set(refs
       .filter(r => r.referenceType !== 'import' && r.referenceType !== 'require' && typeof r.targetName === 'string')
       .map(r => r.targetName.replace(/<[\s\S]*$/, '').split(/\.|::/).pop()!)));
@@ -1212,9 +1406,20 @@ export class Scanner {
       const vueHint = ref.metadata?.vue as VueResolveHint | undefined;
       const navigate = ref.referenceType === 'navigate';
       if (isJsOrTs && !vueHint && !navigate && BUILTIN_GLOBALS.has(ref.targetName)) continue;
+      // Library code, not a project symbol of the same name (M0-17-R4): a call on a receiver bound by
+      // an import from an npm package (`axios.create()`, `_.get()`), and a global function the file
+      // neither imports nor declares (`fetch()`).
+      if (isJsOrTs && ref.referenceType === 'call' && !vueHint && !ref.vueThis && !ref.vueStore) {
+        const receiver = ref.metadata?.receiver as string | undefined;
+        jsBindings ??= this.jsImportBindings(sourcePath, fileMap);
+        if (receiver ? jsBindings.packages.has(receiver) : jsBindings.packages.has(ref.targetName)
+          || (JS_GLOBAL_FUNCTIONS.has(ref.targetName) && !jsBindings.local.has(ref.targetName)
+            && !(symbols ?? []).some((s: any) => s.name === ref.targetName && !s.scope))) continue;
+      }
       // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
       // named by the module/namespace rather than the raw statement (M0-12-R4).
       let targets: { file: string; symbol: string; verifiability?: 'verified' | 'inferred'; metadata?: Record<string, unknown> }[];
+      let vueHit: { file: string; symbol: string } | null | undefined;
 
       if (navigate) {
         targets = this.resolveNavigation(ref, sourcePath, fileMap);
@@ -1225,12 +1430,17 @@ export class Scanner {
       } else if (ref.phpFunction) {
         // A PHP function call: the first candidate declared as a function in its namespace (M0-04-R5).
         targets = this.resolvePhpFunction(ref.phpFunction, sourcePath);
-      } else if (ref.vueThis || ref.vueStore) {
+      } else if (sourceLanguage === 'go' && ref.metadata && 'goPackage' in ref.metadata) {
+        // Go `struct { log.Logger }`: the type in the imported project package, never a homonym
+        // elsewhere; a standard-library or third-party package links nothing (M0-17-R5).
+        targets = this.resolveGoQualifiedType(ref, resolver, sourcePath, fileMap, usedNames);
+      } else if ((ref.vueThis || ref.vueStore) && (vueHit = ref.vueStore
+        ? resolveStoreTarget(ref.targetName, ref.vueStore, this.vueResolveContext(sourcePath, fileMap))
+        : resolveThisMember(ref.targetName, ref.vueThis!, this.vueResolveContext(sourcePath, fileMap))) !== undefined) {
         // Options API `this.x()` (M3-03) and Vuex / Pinia members (M3-05): resolved by the Vue
-        // rules in their component, mixin or store file, never by name alone.
-        const ctx = this.vueResolveContext(sourcePath, fileMap);
-        const hit = ref.vueStore ? resolveStoreTarget(ref.targetName, ref.vueStore, ctx) : resolveThisMember(ref.targetName, ref.vueThis!, ctx);
-        targets = hit ? [hit] : [];
+        // rules in their component, mixin or store file, never by name alone. Undefined: the hook
+        // is not a store after all (M3-05-R1), so the reference resolves as any other.
+        targets = vueHit ? [vueHit] : [];
       } else {
         let targetFile: string | null = null;
         if (ref.referenceType === 'require') {
@@ -1272,7 +1482,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -1291,6 +1501,95 @@ export class Scanner {
     }
 
     return edges;
+  }
+
+  /**
+   * The names a JS/TS/Vue file binds by import or require: `local` holds them all, `packages` those
+   * whose specifier is an npm package (M0-17-R4): listed with a registry version in an enclosing
+   * package.json, declared by no workspace package, and resolved to no project file. A name the file
+   * also declares as a variable is left out of `packages` (a local `api` shadows an imported one).
+   */
+  private jsImportBindings(sourcePath: string, fileMap: Map<string, string>): { packages: Set<string>; local: Set<string> } {
+    const text = this.readWorkspaceText(sourcePath) ?? '';
+    const packages = new Set<string>();
+    const local = new Set<string>();
+    // Declared by the file (a `require` binding is the import itself, not a shadowing local).
+    const declared = new Set([
+      ...[...text.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=(?!\s*require\s*\()/g)].map(m => m[1]!),
+      ...[...text.matchAll(/\b(?:function|class)\s+([\w$]+)/g)].map(m => m[1]!),
+    ]);
+    const bind = (names: string[], specifier: string) => {
+      const external = this.isNpmPackage(specifier, sourcePath) && !this.resolveImportPath(specifier, sourcePath, fileMap);
+      for (const name of names) {
+        local.add(name);
+        if (external && !declared.has(name)) packages.add(name);
+      }
+    };
+    const namesOf = (clause: string) => {
+      const names: string[] = [];
+      const braces = /\{([^}]*)\}/.exec(clause);
+      for (const part of braces?.[1]?.split(',') ?? []) {
+        const n = /(?:^|\s)(?:type\s+)?[\w$]+(?:\s+as\s+([\w$]+))?\s*$/.exec(part.trim());
+        const name = n?.[1] ?? part.trim().replace(/^type\s+/, '').split(/\s+/)[0];
+        if (name && /^[\w$]+$/.test(name)) names.push(name);
+      }
+      const rest = clause.replace(/\{[^}]*\}/, '');
+      const star = /\*\s*as\s+([\w$]+)/.exec(rest);
+      if (star) names.push(star[1]!);
+      const def = /^\s*(?:type\s+)?([\w$]+)/.exec(rest.replace(/\*\s*as\s+[\w$]+/, ''));
+      if (def && def[1] !== 'type') names.push(def[1]!);
+      return names;
+    };
+    for (const m of text.matchAll(/\bimport\s+([^'"`;]+?)\s+from\s*['"]([^'"]+)['"]/g)) bind(namesOf(m[1]!), m[2]!);
+    for (const m of text.matchAll(/\b(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+      bind(m[1]!.startsWith('{') ? namesOf(m[1]!) : [m[1]!], m[2]!);
+    }
+    return { packages, local };
+  }
+
+  /**
+   * Whether a bare specifier names an npm package: an enclosing package.json lists it with a
+   * registry version (not `workspace:`, `file:`, `link:` or a path), and no package.json of the
+   * workspace declares that name (a workspace package is project code) (M0-17-R4).
+   */
+  private isNpmPackage(specifier: string, sourcePath: string): boolean {
+    if (/^[./~#@]\//.test(specifier) || /^[./]/.test(specifier)) return false;
+    const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0]!;
+    if (!name || name === '@') return false;
+    // The package names declared in the folders holding indexed files (manifests are not indexed).
+    let workspaceNames = this.npmWorkspaceNames;
+    if (!workspaceNames) {
+      workspaceNames = new Set<string>();
+      const dirs = new Set<string>();
+      for (const path of this.workspaceFileMap.keys()) {
+        for (let dir = path; dir.includes('/');) {
+          dir = dir.slice(0, dir.lastIndexOf('/'));
+          if (dirs.has(dir)) break;
+          dirs.add(dir);
+        }
+      }
+      for (const dir of dirs) {
+        try {
+          const declared = JSON.parse(this.readWorkspaceText(`${dir}/package.json`) ?? 'null')?.name;
+          if (typeof declared === 'string') workspaceNames.add(declared);
+        } catch { /* not a manifest */ }
+      }
+      this.npmWorkspaceNames = workspaceNames;
+    }
+    if (workspaceNames.has(name)) return false;
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    for (let dir = sourcePath.includes('/') ? sourcePath.slice(0, sourcePath.lastIndexOf('/')) : ''; ; dir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '') {
+      let manifest: any = null;
+      try { manifest = JSON.parse(this.readWorkspaceText(dir ? `${dir}/package.json` : 'package.json') ?? 'null'); } catch { /* unreadable */ }
+      if (manifest && typeof manifest === 'object') {
+        if (manifest.name === name) return false;
+        const version = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies, ...manifest.optionalDependencies }[name];
+        if (typeof version === 'string') return !/^(workspace:|file:|link:|portal:|\.|\/)/.test(version);
+      }
+      // Installed although no manifest lists it.
+      if (existsSync(resolve(workspaceRoot, dir, 'node_modules', name))) return true;
+      if (!dir) return false;
+    }
   }
 
   /** What the Vue resolvers need from the scanner (M3-03, M3-05). */
@@ -1356,11 +1655,16 @@ export class Scanner {
     const target = ref.metadata?.navigate as NavTarget | undefined;
     if (!target) return [];
     const repo = fileMap.get(sourcePath) ?? '';
-    let table = this.vueRoutes.get(repo);
+    // The route records of the caller's app folder, in files where vue-router is active (M3-08-R1).
+    const scope = this.vueScope(repo, sourcePath);
+    const key = `${repo}\0${scope}`;
+    let table = this.vueRoutes.get(key);
     if (!table) {
-      const files = [...fileMap].filter(([path, r]) => r === repo && /\.[cm]?[jt]sx?$/.test(path)).map(([path]) => path);
+      const files = [...fileMap]
+        .filter(([path, r]) => r === repo && /\.[cm]?[jt]sx?$/.test(path) && this.vueSees(scope, this.vueScope(repo, path)) && this.vueRouterActive(repo, path))
+        .map(([path]) => path);
       table = buildRouteTable(files, (path) => this.readWorkspaceText(path), (spec, from) => this.resolveImportPath(spec, from, fileMap));
-      this.vueRoutes.set(repo, table);
+      this.vueRoutes.set(key, table);
     }
     const hit = matchRoute(target, table, sourcePath);
     const file = hit?.route.componentFile;
@@ -1384,20 +1688,58 @@ export class Scanner {
    * of the JS/TS files of its repo and Vue scope that call `.component(`: `Vue.component('Name', X)` /
    * `app.component('Name', X)` through X's import, and `require.context` / `import.meta.glob`
    * auto-registration by basename. Built once per resolution phase and scope; the first
-   * registration of a name wins.
+   * registration of a name, by file path, wins, so a fresh index and a sync agree (M3-08-R1).
    */
   private vueGlobalComponents(sourcePath: string, fileMap: Map<string, string>): Map<string, string> {
     const repo = fileMap.get(sourcePath);
-    const scope = this.vueScope(repo, sourcePath);
+    const own = this.vueScopeRegistry(repo, this.vueScope(repo, sourcePath), fileMap);
+    // A component an app's registering file imports runs inside that app too (an nWidart module's
+    // SFC that the root app.js registers): its registrations follow the component's own scope's
+    // (final review 2026-10-31).
+    const importers = this.vueImporterScopes(repo, fileMap).get(sourcePath);
+    if (!importers?.size) return own;
+    const merged = new Map(own);
+    for (const scope of [...importers].sort()) {
+      for (const [name, file] of this.vueScopeRegistry(repo, scope, fileMap)) if (!merged.has(name)) merged.set(name, file);
+    }
+    return merged;
+  }
+
+  /** The scopes, other than its own, whose registering files import each `.vue` file. */
+  private vueImporterScopes(repo: string | undefined, fileMap: Map<string, string>): Map<string, Set<string>> {
+    const key = `${repo ?? ''}\0importers`;
+    const cached = this.vueImporters.get(key);
+    if (cached) return cached;
+    const importers = new Map<string, Set<string>>();
+    for (const path of [...fileMap.keys()].sort()) {
+      if (fileMap.get(path) !== repo || !JS_TS_FILE.test(path)) continue;
+      const text = this.readWorkspaceText(path);
+      if (!text || !/\.component\s*\(/.test(text)) continue;
+      const scope = this.vueScope(repo, path);
+      // The components it registers (`app.component('X', X)`), not every .vue file it imports.
+      for (const { specifier } of globalRegistrations(text).named) {
+        const file = this.resolveImportPath(specifier, path, fileMap);
+        if (!file?.endsWith('.vue') || this.vueScope(repo, file) === scope) continue;
+        (importers.get(file) ?? importers.set(file, new Set()).get(file)!).add(scope);
+      }
+    }
+    this.vueImporters.set(key, importers);
+    return importers;
+  }
+
+  /** The global registrations one Vue scope sees (see `vueGlobalComponents`). */
+  private vueScopeRegistry(repo: string | undefined, scope: string, fileMap: Map<string, string>): Map<string, string> {
     const key = `${repo ?? ''}\0${scope}`;
     let registry = this.vueGlobals.get(key);
     if (registry) return registry;
     registry = new Map();
     this.vueGlobals.set(key, registry);
-    const inScope = (f: string) => fileMap.get(f) === repo && this.vueScope(repo, f) === scope;
+    const inScope = (f: string) => fileMap.get(f) === repo && this.vueSees(scope, this.vueScope(repo, f));
     const vueFiles = [...fileMap.keys()].filter((f) => f.endsWith('.vue') && inScope(f));
-    for (const path of fileMap.keys()) {
-      if (!JS_TS_FILE.test(path) || !inScope(path)) continue;
+    // An app's own registrations first, then the libraries' (a plugin's `install(app)`), each by path.
+    const own = (f: string) => this.vueScope(repo, f) === scope;
+    const registrars = [...fileMap.keys()].filter((f) => JS_TS_FILE.test(f) && inScope(f)).sort();
+    for (const path of [...registrars.filter(own), ...registrars.filter((f) => !own(f))]) {
       const text = this.readWorkspaceText(path);
       if (!text || !/\.component\s*\(/.test(text)) continue;
       const { named, globs } = globalRegistrations(text);
@@ -1416,14 +1758,73 @@ export class Scanner {
   }
 
   /**
-   * The Vue app folder of a file: the folder of the sub-folder `package.json` that activated Vue
-   * for it (M3-07), or '' when Vue covers the whole repo or the file is in no such folder. Each
-   * folder keeps its own global registry (M3-08).
+   * The Vue scope of a file, `<kind>:<folder>`: its nearest folder whose `package.json` is a
+   * boundary, up to the repo folder, whatever the repo root's manifest lists (M3-08, M3-08-R1).
+   * A component library declares vue as a peer dependency, builds in library mode or publishes an
+   * entry (`exports`, `module`); otherwise a folder with a bundler config, or a package.json listing a
+   * bundler or dev server (vite, @vue/cli-service, nuxt, webpack, …), is an app, and any other
+   * package.json naming a package or dependencies is a library; a `{"type": "module"}` marker is no
+   * boundary (see `vueManifestKind`). Each app keeps its own global registry and route
+   * table; a library sees them all, and an app sees the libraries' registrations after its own.
    */
   private vueScope(repoName: string | undefined, path: string): string {
+    const cached = this.vueScopes.get(path);
+    if (cached !== undefined) return cached;
     const repo = this.config.repos.find(r => r.name === repoName);
-    const scopes = repo && this.frameworkScopes(resolve(this.config.getWorkspaceRoot(), repo.path)).get('vue-router');
-    return scopes?.find(scope => isInScopes(path, [scope])) ?? '';
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const repoPath = repo ? relative(workspaceRoot, resolve(workspaceRoot, repo.path)).replace(/\\/g, '/') : '';
+    const parent = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+    let scope = `app:${repoPath}`;
+    for (let dir = parent(path); dir && dir !== repoPath && dir.startsWith(repoPath); dir = parent(dir)) {
+      const kind = this.vueManifestKind(dir);
+      if (kind) {
+        scope = `${kind}:${dir}`;
+        break;
+      }
+    }
+    this.vueScopes.set(path, scope);
+    return scope;
+  }
+
+  private vueManifestKind(dir: string): 'app' | 'library' | null {
+    const configs = BUNDLER_CONFIGS.map(name => this.readWorkspaceText(`${dir}/${name}`)).filter((t): t is string => t !== null);
+    let manifest: any = null;
+    try {
+      manifest = JSON.parse(this.readWorkspaceText(`${dir}/package.json`) ?? 'null');
+    } catch { /* no manifest */ }
+    if (manifest && typeof manifest === 'object') {
+      const deps = { ...manifest.dependencies, ...manifest.devDependencies };
+      const peers = manifest.peerDependencies ?? {};
+      if (!manifest.name && Object.keys(deps).length === 0 && Object.keys(peers).length === 0 && !configs.length) return null;
+      // A component library: vue as a peer dependency, a library build (Vite `build.lib`, Vue CLI
+      // `--target lib`) or a published entry (`exports`, `module`), whatever builds it (final
+      // review 2026-10-31). `main` alone says nothing (`npm init` writes it for apps too).
+      const scripts = Object.values(manifest.scripts ?? {}).join(' ');
+      if ('vue' in peers || manifest.exports || manifest.module || /--target\s+lib\b/.test(scripts)
+        || configs.some(isLibraryBuild)) return 'library';
+      // An app is built (a bundler or dev server among its dependencies, or a bundler config).
+      return BUILD_TOOLS.some(tool => tool in deps) || configs.length ? 'app' : 'library';
+    }
+    if (!configs.length) return null;
+    return configs.some(isLibraryBuild) ? 'library' : 'app';
+  }
+
+  /** Whether code in scope `from` sees the registrations and routes of scope `of`. */
+  private vueSees(from: string, of: string): boolean {
+    return from === of || from.startsWith('library:') || of.startsWith('library:');
+  }
+
+  /** Whether vue-router is active for the file: for its repo, or for the sub-folder holding it (M3-07). */
+  private vueRouterActive(repoName: string, path: string): boolean {
+    const repo = this.config.repos.find(r => r.name === repoName);
+    if (!repo) return false;
+    const repoRoot = resolve(this.config.getWorkspaceRoot(), repo.path);
+    const detectors = this.cachedActiveDetectors.get(repoRoot);
+    // Not detected in this phase (a direct resolution call): no folder is ruled out.
+    if (!detectors) return true;
+    if (!detectors.some(d => d.name === 'vue-router')) return false;
+    const scopes = this.frameworkScopes(repoRoot).get('vue-router');
+    return !scopes || isInScopes(path, scopes);
   }
 
   /**
@@ -1454,6 +1855,7 @@ export class Scanner {
     };
     for (const f of files) if (JS_TS_FILE.test(f.path)) record(f.path, f.content);
     for (const p of deleted) delete next[p];
+    const scopeUsers = this.vueScopeMoves(repoName, files, deleted, previous, next);
     if (stored === null || stored === undefined) {
       // No record yet (a first scan, or an index from before M3-08): read the other JS/TS files
       // once and keep the result; there is nothing to compare with.
@@ -1462,23 +1864,84 @@ export class Scanner {
         if (JS_TS_FILE.test(p) && !listed.has(p)) record(p, this.readWorkspaceText(p));
       }
       this.store.setMeta(key, JSON.stringify(next));
-      return users;
+      return new Set([...users, ...scopeUsers]);
     }
     if (JSON.stringify(next) !== stored) this.pendingVueRegistry.set(repoName, next);
 
     const indexedVue = this.store.getAllFiles(repoName).map(f => f.path as string).filter(p => p.endsWith('.vue'));
     const addedVue = files.map(f => f.path).filter(p => p.endsWith('.vue') && !this.store.getFile(p));
+    // A component registered or unregistered by a changed file gains or loses that app's
+    // registrations when it lives in another scope (`vueImporterScopes`): re-parse it.
+    const registration = (r: { name: string; specifier: string }) => `${r.name}\0${r.specifier}`;
+    for (const path of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+      const was = new Set((previous[path]?.named ?? []).map(registration));
+      const now = new Set((next[path]?.named ?? []).map(registration));
+      for (const r of [...(previous[path]?.named ?? []), ...(next[path]?.named ?? [])]) {
+        if (was.has(registration(r)) === now.has(registration(r))) continue;
+        const file = this.resolveImportPath(r.specifier, path, this.workspaceFileMap);
+        if (file?.endsWith('.vue') && !listed.has(file) && this.store.getFile(file)?.repo === repoName) users.add(file);
+      }
+    }
     const names = changedGlobalNames(previous, next, indexedVue, [...addedVue, ...deleted.filter(p => p.endsWith('.vue'))]);
     const routesOf = (facts: Record<string, VueModuleFacts>) =>
       Object.fromEntries(Object.entries(facts).map(([p, f]) => [p, f.routes ?? []]));
     const routes = changedRoutes(routesOf(previous), routesOf(next));
-    if (names.size === 0 && routes.length === 0) return users;
+    if (names.size === 0 && routes.length === 0) return new Set([...users, ...scopeUsers]);
     // JS/TS modules navigate too (stores, guards, composables: M3-11); they are read only for routes.
     const modules = routes.length > 0 ? this.store.getAllFiles(repoName).map(f => f.path as string).filter(p => JS_TS_FILE.test(p)) : [];
     for (const p of [...indexedVue, ...modules]) {
       if (listed.has(p)) continue;
       const text = this.readWorkspaceText(p) ?? '';
       if ((p.endsWith('.vue') && usesTag(text, names)) || navigatesTo(p, text, routes)) users.add(p);
+    }
+    return new Set([...users, ...scopeUsers]);
+  }
+
+  /**
+   * Files whose Vue scope moved since the last scan (M3-08-R1). Scopes are drawn by package.json
+   * files, which no scan parses: a manifest added, removed or edited moves files between scopes.
+   * The scope of every folder holding indexed JS/TS/Vue files is kept in `meta vue_dir_scopes:<repo>`
+   * (no file is read for it). When one moved, its files are re-parsed, every file that navigates
+   * (its route table may have changed: final review 2026-10-31), and the `.vue` files using a tag
+   * registered by a moved file. Repos without Vue files or registrations record nothing.
+   */
+  private vueScopeMoves(
+    repoName: string, files: Array<{ path: string }>, deleted: string[],
+    previous: Record<string, VueModuleFacts>, next: Record<string, VueModuleFacts>, dryRun = false,
+  ): Set<string> {
+    // Manifests may have changed since the last phase (a long-lived scanner).
+    this.vueScopes.clear();
+    this.vueImporters.clear();
+    this.importTextCache.clear();
+    const key = 'vue_dir_scopes:' + repoName;
+    const gone = new Set(deleted);
+    const indexed = [...new Set([...this.store.getAllFiles(repoName).map(f => f.path as string), ...files.map(f => f.path)])]
+      .filter(p => !gone.has(p) && (p.endsWith('.vue') || JS_TS_FILE.test(p)));
+    if (!indexed.some(p => p.endsWith('.vue')) && Object.keys(next).length === 0) return new Set();
+    const dirOfFile = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+    const scopes: Record<string, string> = {};
+    for (const p of indexed) {
+      const dir = dirOfFile(p);
+      if (!(dir in scopes)) scopes[dir] = this.vueScope(repoName, p);
+    }
+    let before: Record<string, string> = {};
+    try { before = JSON.parse(this.store.getMeta(key) ?? '{}'); } catch { /* recorded below */ }
+    const movedDirs = new Set(Object.keys(scopes).filter(d => before[d] !== undefined && before[d] !== scopes[d]));
+    const moved = indexed.filter(p => movedDirs.has(dirOfFile(p)));
+    if (dryRun) return new Set(moved);
+    this.store.setMeta(key, JSON.stringify(scopes));
+    if (moved.length === 0) return new Set();
+    const listed = new Set(files.map(f => f.path));
+    const users = new Set(moved.filter(p => !listed.has(p)));
+    const facts = moved.flatMap(p => [previous[p], next[p]]).filter((f): f is VueModuleFacts => !!f);
+    // A moved glob registration names every component of its folder: re-parse every user.
+    const anyGlob = facts.some(f => f.globs.length > 0);
+    const names = new Set(facts.flatMap(f => f.named.map(n => n.name)));
+    for (const p of indexed) {
+      if (listed.has(p) || users.has(p)) continue;
+      const text = this.readWorkspaceText(p) ?? '';
+      // The parser's own pre-filter: guard redirects may name no router.push (M3-11-R1).
+      if (mayNavigate(text) || (p.endsWith('.vue') && (anyGlob || usesTag(text, names)))) users.add(p);
     }
     return users;
   }
@@ -1546,6 +2009,16 @@ export class Scanner {
   private vuexFiles = new Map<string, VuexModuleInfo>();
   // Repo → its Vue Router route records (M3-06).
   private vueRoutes = new Map<string, ResolvedRoute[]>();
+  /** Names declared by the workspace's package.json files, per resolution phase (M0-17-R4). */
+  private npmWorkspaceNames: Set<string> | null = null;
+  /** Folder listings for exact-case checks, per sync. */
+  private listings = new Map<string, Set<string>>();
+  /** The files each repo parsed in the current multi-repo run, in run order (M0-10-R4). */
+  private parsedInRun: Map<string, string[]> | null = null;
+  /** The Vue app folder of each file, per resolution phase (M3-08-R1). */
+  private vueScopes = new Map<string, string>();
+  /** Per repo, the other scopes whose registering files import each `.vue` file, per phase. */
+  private vueImporters = new Map<string, Map<string, Set<string>>>();
   /** Per repo: the Vue registrations and route records to store once this scan's parse completes (M3-08). */
   private pendingVueRegistry = new Map<string, Record<string, VueModuleFacts>>();
 
@@ -1558,6 +2031,29 @@ export class Scanner {
       this.languageCache.set(path, lang);
     }
     return lang;
+  }
+
+  /**
+   * Go `pkg.Type` embedded in a struct or interface: the type declared in the directory of the
+   * imported package when the import resolves to a project package, else nothing (M0-17-R5).
+   */
+  private resolveGoQualifiedType(
+    ref: ExtractedReference,
+    resolver: ReturnType<typeof importResolverFor>,
+    sourcePath: string,
+    fileMap: Map<string, string>,
+    referencedNames: () => Set<string>,
+  ): { file: string; symbol: string }[] {
+    const importPath = ref.metadata?.goPackage;
+    if (!resolver || typeof importPath !== 'string') return [];
+    const hit = this.resolveModuleImport(resolver, importPath, sourcePath, fileMap, referencedNames)[0];
+    if (!hit) return [];
+    const entries: { name: string; file: string; kind?: string }[] = this.symbolIndex?.get(ref.targetName.toLowerCase())
+      ?? this.store.searchSymbols(ref.targetName).map((m: any) => ({ name: m.name, file: m.file_path, kind: m.kind }));
+    const files = [...new Set(entries
+      .filter(e => e.name === ref.targetName && TYPE_KINDS.has(e.kind ?? '') && dirname(e.file) === dirname(hit.file))
+      .map(e => e.file))].sort();
+    return files.length ? [{ file: files[0]!, symbol: ref.targetName }] : [];
   }
 
   /** Languages whose imports name modules, packages or namespaces (Java, Rust, Go, Python, Ruby, C#, PHP). */
@@ -1812,10 +2308,12 @@ export class Scanner {
             const sameFile = compatible.find(m => m.file === sourcePath && m.name === key);
             if (sameFile) return sameFile.file;
           }
-          // An exact-case declaration first, else a PHP or Pascal one in another case.
-          const exact = compatible.find(m => m.name === key);
-          if (exact) return exact.file;
-          return compatible[0].file;
+          // An exact-case declaration first, else a PHP or Pascal one in another case. Of several
+          // files, the one nearest the caller, then by path: never the index order, which differs
+          // between a fresh scan and a sync that re-parsed some files (M0-02-R7).
+          const exact = compatible.filter(m => m.name === key);
+          const files = [...new Set((exact.length ? exact : compatible).map(m => m.file as string))].sort();
+          return closest(files, sourcePath ?? '');
         }
       }
       return null; // O(1) short-circuit: if not in symbolIndex, it's a third-party/external symbol not in this workspace.
@@ -1923,6 +2421,79 @@ export class Scanner {
     }
   }
 
+  /**
+   * The other repos whose symbols are in the store now, as `meta resolution_repos:<repo>` records them
+   * when a repo is resolved: a repo whose files were only discovered had nothing to resolve against,
+   * so it must count as newly visible once it is indexed (M0-10-R4).
+   */
+  private indexedRepos(repoName: string): string[] {
+    return this.store.getRepoNames().filter(r => r !== repoName);
+  }
+
+  /**
+   * This repo's files among `referrers`. Another repo's files are queued in `meta
+   * pending_referrers:<repo>`, for that repo's next scan or sync, or the second pass of a
+   * multi-repo run, to re-parse (M0-10-R4).
+   */
+  private ownReferrers(repoName: string, referrers: Iterable<string>): Set<string> {
+    const own = new Set<string>();
+    const queued = new Map<string, Set<string>>();
+    for (const r of referrers) {
+      const owner = this.store.getFile(r)?.repo as string | undefined;
+      if (!owner || owner === repoName) own.add(r);
+      else queued.set(owner, (queued.get(owner) ?? new Set()).add(r));
+    }
+    for (const [owner, paths] of queued) this.queueReferrers(owner, paths);
+    return own;
+  }
+
+  private queueReferrers(repoName: string, paths: Iterable<string>): void {
+    const key = 'pending_referrers:' + repoName;
+    const before = JSON.parse(this.store.getMeta(key) ?? '[]') as string[];
+    this.store.setMeta(key, JSON.stringify([...new Set([...before, ...paths])].sort()));
+  }
+
+  /** Records the files a repo parsed, while a multi-repo run is in progress. */
+  private noteParsed(repoName: string, paths: string[]): void {
+    if (this.parsedInRun && paths.length) this.parsedInRun.set(repoName, [...(this.parsedInRun.get(repoName) ?? []), ...paths]);
+  }
+
+  /**
+   * The files a repo parsed before a later repo of the run parsed some of its own were resolved
+   * against that repo's symbols from before the run: they are queued for the second pass, as one
+   * repo's changed files are resolved together (M0-10-R4).
+   */
+  private queueEarlyParsed(reposInRun: string[]): void {
+    const order = reposInRun.filter(r => this.parsedInRun?.has(r));
+    order.forEach((repoName, i) => {
+      if (i < order.length - 1) this.queueReferrers(repoName, this.parsedInRun!.get(repoName)!);
+    });
+    this.parsedInRun = null;
+  }
+
+  /** The files another repo's scan queued for this repo to re-parse; the queue is emptied. */
+  private takePendingReferrers(repoName: string): string[] {
+    const key = 'pending_referrers:' + repoName;
+    const pending = this.store.getMeta(key);
+    if (pending === null) return [];
+    this.store.setMeta(key, '[]');
+    try {
+      return JSON.parse(pending) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * After every repo of a multi-repo run: a repo resolved before another one of the run was indexed,
+   * or whose files another repo's changes queued, is processed once more, so the result does not
+   * depend on the order of the repos (M0-10-R4).
+   */
+  private needsSecondPass(repoName: string): boolean {
+    const pending = this.store.getMeta('pending_referrers:' + repoName);
+    return this.newlyVisibleRepos(repoName, this.store.getRepoNames().includes(repoName)) || (!!pending && pending !== '[]');
+  }
+
   /** The effective filters of a repo, as recorded in `meta scan_filters:<repo>` (M0-02-R1). */
   private filterSignature(repoName: string): string {
     const includes = [...this.config.settings.includePatterns, ...this.cliIncludes].map(normalizePattern);
@@ -2028,8 +2599,156 @@ export class Scanner {
   }
 
   /**
-   * Drop the recorded names of removed files once one of them is declared by a new or changed file
-   * parsed in this scan, whose text `movedReferrers` saw, so those referrers were re-parsed (M0-02-R4).
+   * JS/TS/Vue/Python files below a folder whose resolution configs changed since the last scan: a
+   * package.json (npm packages, app roots: M0-17-R4, M3-09-R1), tsconfig/jsconfig (with the configs
+   * their relative `extends` / `references` reach) or bundler config added, removed or edited, or an
+   * `__init__.py` added or removed (Python import roots, M0-12-R9). Folders up to the workspace root
+   * count, as alias lookup walks that far. No scan parses those files, so the files they govern are re-parsed,
+   * as `scan --force` would resolve them (M0-02-R8). Signatures live in `meta js_configs:<repo>`.
+   */
+  private configReferrers(repoName: string, deleted: string[] = [], dryRun = false): Set<string> {
+    const key = 'js_configs:' + repoName;
+    const gone = new Set(deleted);
+    const sources = this.store.getAllFiles(repoName).map(f => f.path as string)
+      .filter(p => !gone.has(p) && (JS_TS_FILE.test(p) || /\.(vue|svelte|py)$/.test(p)));
+    if (sources.length === 0) return new Set();
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    // Every folder above a source, up to the workspace root: alias lookup walks that far (review).
+    const dirs = new Set<string>(['']);
+    for (const p of sources) {
+      for (let dir = p; dir.includes('/');) {
+        dir = dir.slice(0, dir.lastIndexOf('/'));
+        if (dirs.has(dir)) break;
+        dirs.add(dir);
+      }
+    }
+    const names = ['package.json', ...BUNDLER_CONFIGS];
+    // A tsconfig/jsconfig and every config its relative `extends` / `references` reach, recursively
+    // (`.svelte-kit/tsconfig.json`, `tsconfig.app.json`, `tsconfig.base.json`): a missing one counts.
+    const tsConfigTree = (file: string, hash: ReturnType<typeof createHash>, seen: Set<string>) => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      const text = existsSync(file) && statSync(file).isFile() ? readFileSync(file, 'utf-8') : null;
+      hash.update(file).update('\0').update(text ?? '<missing>');
+      if (text === null) return;
+      const targets = [...text.matchAll(/"(?:extends|path)"\s*:\s*("[^"]*"|\[[^\]]*\])/g)].flatMap(m => [...m[1]!.matchAll(/"([^"]+)"/g)].map(x => x[1]!));
+      for (const target of targets) {
+        if (!target.startsWith('.')) continue;
+        let next = resolve(dirname(file), target);
+        if (existsSync(next) && statSync(next).isDirectory()) next = join(next, 'tsconfig.json');
+        else if (!next.endsWith('.json')) next += '.json';
+        tsConfigTree(next, hash, seen);
+      }
+    };
+    const signatures: Record<string, string> = {};
+    for (const dir of dirs) {
+      const hash = createHash('md5');
+      let any = false;
+      for (const name of names) {
+        const abs = resolve(workspaceRoot, dir, name);
+        if (!existsSync(abs)) continue;
+        any = true;
+        hash.update(name).update('\0').update(readFileSync(abs));
+      }
+      let entries: string[] = [];
+      try { entries = readdirSync(resolve(workspaceRoot, dir)); } catch { /* gone */ }
+      const seen = new Set<string>();
+      for (const name of entries.filter(n => /^(?:ts|js)config(?:\.[\w-]+)?\.json$/.test(n)).sort()) {
+        any = true;
+        tsConfigTree(resolve(workspaceRoot, dir, name), hash, seen);
+      }
+      // Python: whether the folder is a package decides its import roots, not the file's content (M0-12-R9).
+      if (existsSync(resolve(workspaceRoot, dir, '__init__.py'))) {
+        any = true;
+        hash.update('__init__.py');
+      }
+      if (any) signatures[dir] = hash.digest('hex');
+    }
+    let before: Record<string, string> | null = null;
+    try { before = JSON.parse(this.store.getMeta(key) ?? 'null'); } catch { /* recorded below */ }
+    if (!dryRun) this.store.setMeta(key, JSON.stringify(signatures));
+    // No record yet: nothing to compare with.
+    if (!before) return new Set();
+    const changed = [...new Set([...Object.keys(before), ...Object.keys(signatures)])].filter(d => before![d] !== signatures[d]);
+    if (changed.length === 0) return new Set();
+    const under = (p: string, dir: string) => dir === '' || p.startsWith(`${dir}/`);
+    return new Set(sources.filter(p => changed.some(dir => under(p, dir))));
+  }
+
+  /**
+   * Unchanged files with edges to a symbol that a changed file no longer declares (renamed or
+   * removed): they are re-parsed, so their references resolve as `scan --force` resolves them
+   * (M0-02-R8). A name is gone when the new text no longer holds it as a word; a file's own
+   * component symbol (`.vue`, `.svelte`) is named after the file and never counts. The referrers
+   * are kept under the name in `meta vanished_names:<repo>`, so they are re-parsed again when a
+   * changed file names it once more (a rename undone, a branch switched back).
+   */
+  private removedSymbolReferrers(repoName: string, files: Array<{ path: string; content?: string }>): Set<string> {
+    const referrers = new Set<string>();
+    const vanished = this.metaRecord('vanished_names:' + repoName);
+    let changed = false;
+    for (const f of files) {
+      if (f.content === undefined) continue;
+      const component = /\.(vue|svelte)$/.test(f.path) ? vueComponentName(f.path) : null;
+      const names = [...new Set(this.store.getSymbolsForFile(f.path).map(sym => sym.name as string))].filter(n => n !== component);
+      const gone = new Set(names.filter(n => !wordIn(f.content!, n)));
+      if (gone.size === 0) continue;
+      for (const e of this.store.getReverseEdges(f.path)) {
+        if (e.source_file === f.path || typeof e.target_symbol !== 'string') continue;
+        const tail = /[A-Za-z_$][\w$]*$/.exec(e.target_symbol)?.[0];
+        if (!tail || !gone.has(tail)) continue;
+        referrers.add(e.source_file as string);
+        // Own keys only: `toString` must not read Object.prototype's (review 2026-11-01).
+        vanished[tail] = [...new Set([...(Object.hasOwn(vanished, tail) ? vanished[tail]! : []), e.source_file as string])];
+        changed = true;
+      }
+    }
+    if (changed) this.store.setMeta('vanished_names:' + repoName, JSON.stringify(vanished));
+    return referrers;
+  }
+
+  /** The recorded referrers of vanished names that a new or changed file names again (M0-02-R8). */
+  private vanishedNameReferrers(repoName: string, files: Array<{ path: string; content?: string }>): Set<string> {
+    const referrers = new Set<string>();
+    const vanished = this.metaRecord('vanished_names:' + repoName);
+    // Referrers since deleted leave the record; a name left without referrers goes with them.
+    let pruned = false;
+    for (const name of Object.keys(vanished)) {
+      const alive = vanished[name]!.filter(r => this.store.getFile(r));
+      if (alive.length === vanished[name]!.length) continue;
+      pruned = true;
+      if (alive.length) vanished[name] = alive;
+      else delete vanished[name];
+    }
+    if (pruned) this.store.setMeta('vanished_names:' + repoName, JSON.stringify(vanished));
+    const names = Object.keys(vanished);
+    if (names.length === 0) return referrers;
+    for (const f of files) {
+      if (f.content === undefined) continue;
+      for (const name of names) if (wordIn(f.content, name)) for (const r of vanished[name]!) referrers.add(r);
+    }
+    for (const f of files) referrers.delete(f.path);
+    return referrers;
+  }
+
+  /** Drop the vanished names a new or changed file parsed in this scan declares again (M0-02-R8). */
+  private settleVanishedNames(repoName: string, results: Array<ParseResult | undefined>): void {
+    const vanished = this.metaRecord('vanished_names:' + repoName);
+    if (Object.keys(vanished).length === 0) return;
+    let changed = false;
+    for (const sym of results.flatMap(r => r?.symbols ?? [])) {
+      if (Object.hasOwn(vanished, sym.name)) {
+        delete vanished[sym.name];
+        changed = true;
+      }
+    }
+    if (changed) this.store.setMeta('vanished_names:' + repoName, JSON.stringify(vanished));
+  }
+
+  /**
+   * Drop each recorded name of a removed file once a new or changed file parsed in this scan
+   * declares it, whose text `movedReferrers` saw, so those referrers were re-parsed (M0-02-R4). The
+   * other names stay: an unrelated `find()` must not end the wait for `UserService` (M0-02-R7).
    */
   private settleMovedNames(repoName: string, results: Array<ParseResult | undefined>): void {
     const names = this.removedNames(repoName);
@@ -2037,8 +2756,10 @@ export class Scanner {
     const declared = new Set(results.flatMap(r => (r?.symbols ?? []).map(s => s.name)));
     let changed = false;
     for (const [p, n] of Object.entries(names)) {
-      if (!n.some(name => declared.has(name))) continue;
-      delete names[p];
+      const pending = n.filter(name => !declared.has(name));
+      if (pending.length === n.length) continue;
+      if (pending.length > 0) names[p] = pending;
+      else delete names[p];
       changed = true;
     }
     if (changed) this.store.setMeta('removed_names:' + repoName, JSON.stringify(names));
@@ -2113,7 +2834,10 @@ export class Scanner {
     const edgesToInsert: any[] = [];
     // Middleware names (Kernel aliases such as `auth`, or class names) → the class that handles
     // them, from the middleware hooks; route middlewares are resolved through it (M0-05-R2).
+    // Keyed by the app root a hook declares (`metadata.appRoot`, a Laravel Kernel's app) and name: a
+    // route uses only its own app's entries, so one app's aliases never link another's routes (M0-04-R6).
     const middlewareTargets = new Map<string, { file: string; symbol: string | null }>();
+    const middlewareKey = (appRoot: unknown, name: string) => `${typeof appRoot === 'string' ? appRoot : '\0'}\0${name}`;
 
     for (const detector of activeDetectors) {
       detector.beginScan?.(workspaceRoot);
@@ -2188,7 +2912,7 @@ export class Scanner {
               // A middleware the detector could not resolve (Illuminate\…) falls back to the file
               // registering it; a route using it gets no edge to that file (M0-04-R2).
               if (hook.hookType === 'middleware' && hook.handlerFile && hook.handlerFile !== relPath) {
-                middlewareTargets.set(hook.hookName, { file: hook.handlerFile, symbol: hook.handlerSymbol || null });
+                middlewareTargets.set(middlewareKey(hook.metadata?.appRoot, hook.hookName), { file: hook.handlerFile, symbol: hook.handlerSymbol || null });
               }
 
               const edgeType = (['graphql_resolver', 'message_handler', 'websocket_handler', 'middleware'].includes(hook.hookType)
@@ -2280,16 +3004,23 @@ export class Scanner {
       // Route file → middleware class for every `->middleware('auth')` (F09, M0-05-R2): one edge
       // per route file and middleware, listing the routes it guards.
       const guarded = new Map<string, { source: string; name: string; target: { file: string; symbol: string | null }; uris: string[] }>();
+      // A middleware class belongs to the app that holds it: the longest app root over its path.
+      const appRoots = [...new Set(detectorRoutes.map(r => r.metadata?.appRoot).filter((r): r is string => typeof r === 'string'))];
+      const appOf = (file: string) => appRoots.filter(r => r === '' || file.startsWith(`${r}/`)).sort((a, b) => b.length - a.length)[0];
       for (const route of detectorRoutes) {
         const meta = route.metadata ?? {};
         const source = meta.sourceFile as string | undefined;
         if (!source) continue;
         for (const raw of (route.middlewares ?? meta.middlewares ?? []) as string[]) {
           const name = String(raw).split(':')[0]!.trim();
-          let target = middlewareTargets.get(name);
-          if (!target && /^[A-Z\\]/.test(name)) {
+          let target = middlewareTargets.get(middlewareKey(meta.appRoot, name));
+          // A class name resolves namespace-strictly from the route file. A PHP name without a
+          // namespace separator is no Kernel alias or group of the route's app, so it names a global
+          // class (`\X`, already qualified), never a class found by its short name (M0-04-R6).
+          if (!target && (name.includes('\\') || (this.languageOf(source) !== 'php' && /^[A-Z]/.test(name)))) {
             const file = ctx.resolveSymbolToFile(name, source);
-            if (file) target = { file, symbol: name };
+            // Never another Laravel app's class (two apps in one repo, review 2026-10-31).
+            if (file && (typeof meta.appRoot !== 'string' || appOf(file) === meta.appRoot)) target = { file, symbol: name };
           }
           if (!target) continue;
           const key = `${source}\0${target.file}\0${name}`;
@@ -2365,6 +3096,9 @@ export class Scanner {
     this.phpNamespaces.clear();
     this.vueGlobals.clear();
     this.vueRoutes.clear();
+    this.vueScopes.clear();
+    this.vueImporters.clear();
+    this.npmWorkspaceNames = null;
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 
@@ -2477,14 +3211,16 @@ export class Scanner {
       const value = rawEnv(file)(key);
       return value === undefined ? undefined : expandDotenv(value, rawEnv(file), key);
     };
-    const records: HttpCallRecord[] = calls.map(({ offset, ...call }) => {
+    const records: HttpCallRecord[] = calls.map(({ offset, client: { baseURLAt, ...client }, ...rest }) => {
+      const call = { ...rest, client };
       const path = evaluate(call.rawUrl, constantsFor(call.file, offset), envFor(call.file));
       if (!path.known) return call;
       // A path that starts with something unknown (an undefined env value, a runtime prefix) is
       // relative to that prefix: keep the rest and let pairing match it as a suffix.
       if (path.value.startsWith('{}')) return { ...call, url: path.value.slice(2) || '/', baseURLUnresolved: true };
       const baseFile = call.client.definedIn ?? call.file;
-      const base = call.client.baseURL !== undefined ? evaluate(call.client.baseURL, constantsFor(baseFile), envFor(baseFile)) : null;
+      // The constants in scope where the client is created: a function-local BASE, not the top-level one (M2-04-R3).
+      const base = call.client.baseURL !== undefined ? evaluate(call.client.baseURL, constantsFor(baseFile, baseURLAt), envFor(baseFile)) : null;
       const usable = base?.known && !base.value.includes('{}');
       return {
         ...call,
@@ -2790,9 +3526,15 @@ export class Scanner {
     // global registration changed (M3-08).
     const changedTexts = changed.map(f => ({ path: f.relativePath, content: f.content }));
     const referrers = new Set([
-      ...this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath)),
-      ...this.movedReferrers(repo.name, changedTexts),
-      ...this.vueRegistryReferrers(repo.name, changedTexts, toRemove),
+      ...this.takePendingReferrers(repo.name),
+      ...this.ownReferrers(repo.name, [
+        ...this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath)),
+        ...this.movedReferrers(repo.name, changedTexts),
+        ...this.removedSymbolReferrers(repo.name, changedTexts),
+        ...this.vanishedNameReferrers(repo.name, changedTexts),
+        ...this.configReferrers(repo.name, toRemove),
+        ...this.vueRegistryReferrers(repo.name, changedTexts, toRemove),
+      ]),
     ]);
     for (const f of discovered) {
       if (!f.isNew && !f.contentChanged && referrers.has(f.relativePath)) toReindex.push(f);
@@ -2840,6 +3582,7 @@ export class Scanner {
     this.discoverDartPackages(workspaceRoot);
 
     let parsedFilesCount = 0;
+    this.noteParsed(repo.name, toReindex.map(f => f.relativePath));
     const parseResults = await this.parseFilesParallel(
       toReindex,
       workspaceRoot,
@@ -2893,6 +3636,7 @@ export class Scanner {
 
     if (!this.aborted) {
       this.settleMovedNames(repo.name, parseResults.slice(0, changed.length));
+      this.settleVanishedNames(repo.name, parseResults.slice(0, changed.length));
       this.settleVueRegistry(repo.name);
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
       try {

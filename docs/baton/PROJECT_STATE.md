@@ -1,19 +1,45 @@
 # MapX project state
 
-Updated 2026-10-31, after session 7 (M3 Vue SFC semantics) and the review of `3ac0d6d..2db08bd`. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
 | Milestone | Status | Notes |
 | --- | --- | --- |
-| M0 Delivered baseline and remediation | Review 2026-10-31 (2db08bd): P1 remediation READY | M0-02-R6 (raised to P1), M0-02-R7, M0-10-R4, M0-04-R6 READY; P2 M0-12-R7, M0-17-R5, M0-20-R3, M0-09-R5, M0-11-R3 and M0-17-R4 in BACKLOG |
-| M1 Laravel route correctness | M1-07-R2 READY (P1) | M1-03-R1 and M1-07-R1 disputed (RouteServiceProvider mounts and prefixes); M1-03-R2 (P2) in BACKLOG. M1-99 (release) DEFERRED (D007) |
-| M2 Cross-language precision and HTTP pairing | M2-04-R2, M2-06-R1 DONE | P2 M2-04-R3, M2-06-R2 in BACKLOG |
-| M3 Vue SFC semantics | 12 of 12 DONE; M3-08-R1, M3-09-R1 READY (P1) | App-boundary defects (global registry, route table, aliases); P2 M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1 in BACKLOG. Edge scorer 13.5% → 100% recall, 62.5% → 99.0% precision (119 labels, 23 negatives, 1 FP: `formatter.format()` → enclosing `format`, see M0-17-R4) |
+| M0 Delivered baseline and remediation | Remediation of the 2db08bd review DONE | P1 M0-02-R6, M0-02-R7, M0-04-R6, M0-10-R4 and P2 M0-09-R5, M0-11-R3, M0-12-R7/R8/R9, M0-17-R4/R5, M0-20-R3, M0-02-R8 DONE |
+| M1 Laravel route correctness | M1-07-R2, M1-03-R2 DONE | Routes scorer: 145 labels, URI/handler/attribute recall 1, precision 1, 0 FP. M1-99 (release) DEFERRED (D007) |
+| M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2 DONE | HTTP scorer: 48 labels, every metric 1.0 |
+| M3 Vue SFC semantics | All remediation DONE (M3-08-R1, M3-09-R1, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1) | Edge scorer: 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives: v3-039) |
 | M4 Measurement and DX | 0 of 7 | M4-03 (scan superlinear past ~5,000 files, measured in session 6) and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
 | M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 (fixture + scorer) and M5-02 (config schema) are promotable and parallel-safe with M3 (new `src/arch/` paths). M5-12 is an epic. Interface deps: M5-10 → M3-04, M5-12 → M4-03, M5-18 → M4-01 |
 
 Live list: `npm run plan:scan`.
+
+## Remediation 2026-10-31 / 2026-11-01 of the 2db08bd review (D015–D018)
+
+- **Order (D015):** the 7 P1s, then the P2s, before M4/M5. All 24 remediation tasks are DONE (20 from the review, plus M0-02-R8, M0-12-R8, M0-12-R9 and M4-09 registered on the way).
+- **Method:**
+  - P1s in a `scanner.ts` lane worked here, plus parallel worktree lanes for disjoint files (aliases, Laravel, middleware, and each P2 group).
+  - Every task had at least one independent review: 9 review agents in all, given the diff and criteria but not the conclusions. Several tasks went through two or three rounds.
+  - Every P0/P1 finding was fixed with a regression test and a mutation check before DONE. P2s were fixed or recorded in the task's report.
+- **Notable corrections from review:**
+  - performance of git sync with gitignored files (quadratic `existsExactly`, globs recompiled per call);
+  - eol=crlf checkouts re-listing every file;
+  - the Vue app boundary and alias boundary rules (D017);
+  - a Python import rule that dropped Django, Airflow and pytest imports (D018);
+  - rename round-trips losing callers' edges;
+  - a menu config taken for a route table.
+- **Measured:**
+  - on an 18,000-file repo, a no-op sync takes 2.5–3.5 s against 5.8–6.3 s on base, and a no-op scan 12 s against 18 s;
+  - MapX's own call edges went from 2,634 to 2,589: 51 removed, mostly wrong links of calls on locals, and 6 added (2 wrong `p.start()` guesses, documented).
+- **Corrected decisions:** D016 (Svelte docs claim, then real extraction in M0-12-R8), D017 (app boundaries), D018 (Python roots). Each replaced a criterion authored by the review, not by the owner.
+- **Known gaps recorded in reports, not fixed:**
+  - calls are resolved by name, not through the file's named import;
+  - `go.mod` and `composer.json` changes are not followed by sync;
+  - a renamed name surviving in a comment keeps old edges until a force scan;
+  - heuristic guard detection in Vue Router;
+  - Svelte templates are not read;
+  - a Laravel module's own `@/` does not reach the root `@` alias.
 
 ## Planning 2026-10-31: milestone M5 (D013)
 
@@ -121,11 +147,8 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 ## Next
 
-- **Owner decision pending:** whether the seven READY P1 remediation tasks of the 2db08bd review (M3-08-R1, M3-09-R1, M0-02-R6, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6) go before M5 (as D010 did before M3) or run beside it. None blocks M5 by dependency.
-- M5-01 and M5-02 (architecture rules fixture and config schema) are promotable; specs in `iterations/M5-01.md` and `M5-02.md` (D013).
-- Lane conflicts: M0-02-R6, M0-02-R7, M0-10-R4 and M3-08-R1 all change `src/core/scanner.ts` (as do M4-03/M4-04); M1-07-R2, M0-04-R6 and M1-03-R2 change `src/frameworks/detectors/laravel.ts`.
-- M0-17-R4 (library/DOM receivers; the last edges false positive) in BACKLOG.
-- M4-03: scan time is superlinear past ~5,000 files (80–133 s at 10,000, 323 s at 20,000).
+- M5-01 and M5-02 (architecture rules fixture and config schema) are promotable, and so are M4-01, M4-03, M4-04, M4-05 and M4-08. No owner decision is pending.
+- Nothing from the remediation is committed beyond `00407d6` (the review). The working tree holds all 24 tasks; commit when the owner asks.
 
 ## Done in session 3
 
@@ -142,14 +165,21 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 ## Latest validation
 
-2026-10-31, after the review of `3ac0d6d..2db08bd` (review fixes uncommitted on `develop@2db08bd`): `npm run check` exit 0: plan valid (172 tasks), changelog coverage 105 entries, typecheck, 94 test files with 1603 passed and 1 skipped (`MAPX_SLOW_TESTS`), skill tests 5/5. Edges scorer: 119 labels, recall 1.0, precision 0.990, 1 FP of 23 negatives. Routes scorer: 114 labels, URI 90/90, handler 87/87, precision 1, 0 FP. HTTP scorer: 46 labels, every metric 1.0. `scripts/check-package.ts` (measured at `2db08bd`): 277 files, 4,419,578 B packed, dashboard 690,760 B gzipped (ceiling 737,280).
+2026-11-01, after the remediation (uncommitted on `develop@00407d6`):
+- **`npm run check`:** exit 0 (plan valid with 176 tasks, changelog coverage 130 entries, typecheck, 96 test files with 1773 passed and 1 skipped, skill tests).
+- **`npx vitest run`:** exit 0, 96 files, 1773 passed, 1 skipped.
+- **Typecheck:** clean.
+- **Plan:** valid, 176 tasks (147 DONE).
+- **Edges scorer:** 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives).
+- **Routes scorer:** 145 labels, URI 112/112, handler 109/109, attributes 7/7, precision 1, 0 FP.
+- **HTTP scorer:** 48 labels, every metric 1.0.
 
 ## Owner decisions recorded
 
 - **D006:** the dashboard bundle target is re-baselined to a 720 KiB gzipped ceiling, enforced by `scripts/check-package.ts` and CI. M0-15-R2 is DONE.
 - **D007:** releases are owner-initiated. M1-99 is DEFERRED and the gate is now `G-RELEASE` (`ownerInitiated`). Agents don't request it; work accumulates under CHANGELOG `[Unreleased]`.
 
-Resolved in session 6 (D014): Continue writes its documented layout (M0-09-R4, amends F17); a fish grammar is bundled (M0-12-R5, Unlicense, +19 KB packed); M1-05-R3 promoted to P2 and done. No owner decisions are pending apart from the go-ahead for M3-01.
+Resolved in session 6 (D014): Continue writes its documented layout (M0-09-R4, amends F17); a fish grammar is bundled (M0-12-R5, Unlicense, +19 KB packed); M1-05-R3 promoted to P2 and done. No owner decisions are pending.
 
 ## Known gaps
 

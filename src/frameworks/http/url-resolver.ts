@@ -374,24 +374,55 @@ export function parseDotenv(text: string): Map<string, string> {
  * variable being expanded, so that a self-reference expands like a cycle (to its default).
  */
 export function expandDotenv(value: string, lookup: (key: string) => string | undefined, key?: string): string | undefined {
+  // One reference: `name`, the operator, and the alternative, which may itself hold references.
+  const reference = (name: string, op: string | undefined, alternative: string, seen: Set<string>): string | undefined => {
+    const raw = seen.has(name) ? '' : lookup(name);
+    const set = raw === undefined ? undefined : expand(raw, new Set(seen).add(name));
+    if (op === ':+' || op === '+') return raw === undefined ? undefined : raw ? expand(alternative, seen) : '';
+    if (set) return set;
+    if (raw === undefined ? !op : set === undefined) return undefined;
+    return expand(alternative, seen);
+  };
+  // `${…}` is matched by its braces, so `${A:-${B:-/deep}}` nests as in dotenv-expand (M2-04-R3).
   const expand = (text: string, seen: Set<string>): string | undefined => {
-    let unknown = false;
-    const out = text.replace(/(?<!\\)\$\{([^{}]+)\}|(?<!\\)\$([A-Za-z_][A-Za-z0-9_]*)/g, (_, braced?: string, bare?: string) => {
-      const expression = (braced ?? bare)!;
-      const op = expression.match(/:\+|\+|:-|-/)?.[0];
-      const [name, ...rest] = op ? expression.split(op) : [expression];
-      const alternative = rest.join(op);
-      const raw = seen.has(name!) ? '' : lookup(name!);
-      const set = raw === undefined ? undefined : expand(raw, new Set(seen).add(name!));
+    let out = '';
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i]!;
+      if (c !== '$' || text[i - 1] === '\\') {
+        out += c;
+        continue;
+      }
       let result: string | undefined;
-      if (op === ':+' || op === '+') result = raw === undefined ? undefined : raw ? expand(alternative, seen) : '';
-      else if (set) result = set;
-      else if (raw === undefined ? !op : set === undefined) result = undefined;
-      else result = expand(alternative, seen);
-      if (result === undefined) unknown = true;
-      return result ?? '';
-    });
-    return unknown ? undefined : out;
+      if (text[i + 1] === '{') {
+        let depth = 0;
+        let end = i + 1;
+        for (; end < text.length; end++) {
+          if (text[end] === '{') depth++;
+          else if (text[end] === '}' && --depth === 0) break;
+        }
+        if (end >= text.length) {
+          out += c;
+          continue;
+        }
+        const expression = text.slice(i + 2, end);
+        const m = /^([A-Za-z_][A-Za-z0-9_]*)(:\+|\+|:-|-)?([\s\S]*)$/.exec(expression);
+        // Not a reference dotenv-expand knows (`${H X}`, `${A:=x}`): Vite gives '', so the value is unknown.
+        if (!m || (!m[2] && m[3])) return undefined;
+        result = reference(m[1]!, m[2], m[3] ?? '', seen);
+        i = end;
+      } else {
+        const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i + 1));
+        if (!m) {
+          out += c;
+          continue;
+        }
+        result = reference(m[0], undefined, '', seen);
+        i += m[0].length;
+      }
+      if (result === undefined) return undefined;
+      out += result;
+    }
+    return out;
   };
   return expand(value, new Set(key ? [key] : []))?.replace(/\\\$/g, '$');
 }

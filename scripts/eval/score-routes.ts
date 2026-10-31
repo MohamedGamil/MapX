@@ -2,6 +2,7 @@
 // Copies the fixture to a temp dir, runs the real CLI (init + scan), reads .mapx/routes.json.
 //   npx tsx scripts/eval/score-routes.ts <fixture-dir> [--json] [--min-recall R] [--max-fp N]
 //     [--min-precision P] [--strict-params]
+// --min-recall applies to URI, handler and labelled-attribute (name, domain, dynamic) recall.
 // Exit code 1 when a threshold is missed; 2 on usage or scan errors.
 import { execFileSync } from 'node:child_process';
 import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -16,6 +17,10 @@ export interface Label {
   uri: string;
   handler: string | null;
   expect: 'live' | 'conditional' | 'overridden' | 'unreachable' | 'absent';
+  /** Route attributes a live or conditional route must carry (M1-07-R2). */
+  name?: string;
+  domain?: string;
+  dynamic?: boolean;
 }
 export interface ReportedRoute {
   method: string;
@@ -31,6 +36,9 @@ interface PatternScore {
   exactParams: number;
   flagged: number;
   falsePositives: number;
+  /** Labelled route attributes (name, domain, dynamic), and how many the matched route carries. */
+  attributesLabelled: number;
+  attributesFound: number;
 }
 export interface Score {
   patterns: Record<string, PatternScore>;
@@ -39,6 +47,7 @@ export interface Score {
     unlabelled: number;
     uriRecall: number;
     handlerRecall: number;
+    attributeRecall: number;
     precision: number;
   };
   misses: string[];
@@ -58,6 +67,10 @@ const shortHandler = (h?: string) => {
   return `${cls!.split('\\').pop()}@${method}`;
 };
 const live = (r: ReportedRoute) => r.metadata?.reachable !== false && r.metadata?.overridden !== true;
+const ATTRIBUTES = ['name', 'domain', 'dynamic'] as const;
+/** A route attribute as reported; dynamic is a flag whose absence means false. */
+const attribute = (r: ReportedRoute, key: (typeof ATTRIBUTES)[number]) =>
+  key === 'dynamic' ? r.metadata?.dynamic === true : r.metadata?.[key];
 
 export function score(labels: Label[], routes: ReportedRoute[], strictParams = false): Score {
   const patterns: Record<string, PatternScore> = {};
@@ -68,6 +81,7 @@ export function score(labels: Label[], routes: ReportedRoute[], strictParams = f
   for (const l of labels) {
     const p = (patterns[l.pattern] ??= {
       labelled: 0, uriFound: 0, handlerLabelled: 0, handlerFound: 0, exactParams: 0, flagged: 0, falsePositives: 0,
+      attributesLabelled: 0, attributesFound: 0,
     });
     const candidates = routes.filter((r) => same(l, r));
     if (l.expect === 'absent') {
@@ -114,6 +128,12 @@ export function score(labels: Label[], routes: ReportedRoute[], strictParams = f
       if (shortHandler(best.handlerSymbol) === l.handler) p.handlerFound++;
       else misses.push(`${l.id} ${l.pattern} ${l.method} /${l.uri} handler ${best.handlerSymbol ?? '-'} ≠ ${l.handler}`);
     }
+    for (const key of ATTRIBUTES) {
+      if (l[key] === undefined) continue;
+      p.attributesLabelled++;
+      if (attribute(best, key) === l[key]) p.attributesFound++;
+      else misses.push(`${l.id} ${l.pattern} ${l.method} /${l.uri} ${key} ${JSON.stringify(attribute(best, key) ?? null)} ≠ ${JSON.stringify(l[key])}`);
+    }
     if (l.expect === 'conditional') {
       if (best.metadata?.conditional === true) p.flagged++;
       else misses.push(`${l.id} conditional ${l.method} /${l.uri} not flagged conditional`);
@@ -124,7 +144,7 @@ export function score(labels: Label[], routes: ReportedRoute[], strictParams = f
   const t = {
     labelled: sum('labelled'), uriFound: sum('uriFound'), handlerLabelled: sum('handlerLabelled'),
     handlerFound: sum('handlerFound'), exactParams: sum('exactParams'), flagged: sum('flagged'),
-    falsePositives: sum('falsePositives'),
+    falsePositives: sum('falsePositives'), attributesLabelled: sum('attributesLabelled'), attributesFound: sum('attributesFound'),
   };
   const positives = labels.filter((l) => l.expect === 'live' || l.expect === 'conditional').length;
   const reportedLive = routes.filter(live).length;
@@ -136,6 +156,7 @@ export function score(labels: Label[], routes: ReportedRoute[], strictParams = f
       unlabelled: unlabelled.length,
       uriRecall: positives ? t.uriFound / positives : 1,
       handlerRecall: t.handlerLabelled ? t.handlerFound / t.handlerLabelled : 1,
+      attributeRecall: t.attributesLabelled ? t.attributesFound / t.attributesLabelled : 1,
       precision: reportedLive ? (reportedLive - unlabelled.length - t.falsePositives) / reportedLive : 1,
     },
     misses,
@@ -177,16 +198,16 @@ function main() {
   const t = result.totals;
   if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
   else {
-    console.log('pattern            labelled  uri  handler  exact-params  flagged  FP');
+    console.log('pattern            labelled  uri  handler  exact-params  flagged  FP  attributes');
     for (const [name, p] of Object.entries(result.patterns))
-      console.log(`${name.padEnd(18)} ${String(p.labelled).padStart(8)} ${String(p.uriFound).padStart(4)} ${`${p.handlerFound}/${p.handlerLabelled}`.padStart(8)} ${String(p.exactParams).padStart(13)} ${String(p.flagged).padStart(8)} ${String(p.falsePositives).padStart(3)}`);
-    console.log(`\nURI recall ${pct(t.uriRecall)}, handler recall ${pct(t.handlerRecall)}, precision ${pct(t.precision)}, false positives ${t.falsePositives}, unlabelled live routes ${t.unlabelled}`);
+      console.log(`${name.padEnd(18)} ${String(p.labelled).padStart(8)} ${String(p.uriFound).padStart(4)} ${`${p.handlerFound}/${p.handlerLabelled}`.padStart(8)} ${String(p.exactParams).padStart(13)} ${String(p.flagged).padStart(8)} ${String(p.falsePositives).padStart(3)} ${`${p.attributesFound}/${p.attributesLabelled}`.padStart(11)}`);
+    console.log(`\nURI recall ${pct(t.uriRecall)}, handler recall ${pct(t.handlerRecall)}, attribute recall ${pct(t.attributeRecall)}, precision ${pct(t.precision)}, false positives ${t.falsePositives}, unlabelled live routes ${t.unlabelled}`);
     for (const m of result.misses) console.log(`  miss: ${m}`);
     for (const u of result.unlabelledRoutes) console.log(`  unlabelled: ${u}`);
   }
   const failures: string[] = [];
   const minRecall = opt('min-recall');
-  if (minRecall !== null && (t.uriRecall < minRecall || t.handlerRecall < minRecall))
+  if (minRecall !== null && (t.uriRecall < minRecall || t.handlerRecall < minRecall || t.attributeRecall < minRecall))
     failures.push(`recall below ${minRecall}`);
   const maxFp = opt('max-fp');
   if (maxFp !== null && t.falsePositives > maxFp) failures.push(`false positives ${t.falsePositives} > ${maxFp}`);

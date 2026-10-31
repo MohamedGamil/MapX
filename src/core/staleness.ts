@@ -4,7 +4,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import type { Store } from './store.js';
 import type { MapxConfig, RepoConfig } from '../types.js';
 import { getLanguageForFile } from '../languages/registry.js';
@@ -23,7 +23,7 @@ export interface StaleReport {
  * a known language. Before, only settings.excludePatterns applied, so files outside includePatterns,
  * Laravel's default excludes and dotfiles were reported "(new)" forever.
  */
-function scannableFilter(store: Store, dir: string): (path: string) => boolean {
+export function scannableFilter(store: Store, dir: string): (path: string) => boolean {
   let config: Partial<MapxConfig> = {};
   try {
     config = JSON.parse(readFileSync(join(dir, '.mapx', 'config.json'), 'utf-8'));
@@ -106,4 +106,26 @@ export const staleCount = (r: StaleReport) => r.changed.length + r.deleted.lengt
 /** Up to `max` names: changed first, then `(deleted)` and `(new)` entries. */
 export function staleNames(r: StaleReport, max = 5): string[] {
   return [...r.changed, ...r.deleted.map(p => `${p} (deleted)`), ...r.added.map(p => `${p} (new)`)].slice(0, max);
+}
+
+/**
+ * The git changes a status should report (M0-11-R3): those a scan would index, and those touching a
+ * file the index holds (a removed or renamed indexed file, whatever the rules say of its new name).
+ * `changes` are relative to `repoRoot`.
+ */
+export function indexableChanges<T extends { path: string; oldPath?: string; status: string }>(store: Store, dir: string, repoRoot: string, changes: T[], repoName?: string): T[] {
+  const scannable = scannableFilter(store, dir);
+  const prefix = relative(dir, repoRoot).replace(/\\/g, '/');
+  const at = (p: string) => (prefix ? `${prefix}/${p}` : p);
+  const kept = changes.filter(c => scannable(at(c.path)) || !!store.getFile(at(c.path)) || (!!c.oldPath && !!store.getFile(at(c.oldPath))));
+  // An indexed file of this repo edited or deleted since the scan that git does not list
+  // (gitignored): a change too (M0-02-R8). Another registered repo's files are its own status.
+  const listed = new Set(kept.flatMap(c => (c.oldPath ? [at(c.path), at(c.oldPath)] : [at(c.path)])));
+  const ownPrefix = prefix ? `${prefix}/` : '';
+  const stale = findStaleFiles(store, dir);
+  const own = (path: string) => !listed.has(path) && (!ownPrefix || path.startsWith(ownPrefix))
+    && (!repoName || store.getFile(path)?.repo === repoName);
+  for (const path of stale.changed.filter(own)) kept.push({ path: path.slice(ownPrefix.length), status: 'modified' } as T);
+  for (const path of stale.deleted.filter(own)) kept.push({ path: path.slice(ownPrefix.length), status: 'removed' } as T);
+  return kept;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LARAVEL_DEFAULT_EXCLUDES } from '../src/core/config.js';
 import { cleanup, init, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
@@ -624,6 +624,520 @@ describe('git sync applies the scan walk file rules', () => {
       const synced = snapshot(root);
       mapx(root, 'scan', root, '--force');
       expect(synced).toEqual(snapshot(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+// M0-02-R6: a synced edit that is then reverted to HEAD's content is in no git diff (HEAD is still
+// the last scanned commit), so sync must notice that the indexed blob is no longer the file's.
+describe('git sync: an edit reverted to HEAD', () => {
+  const MAIL = 'app/Services/MailService.php';
+  const edited = `<?php\nnamespace App\\Services;\nclass MailService { public function send(UserService $u) {} }\ninterface Mailer {}\n`;
+  const symbols = (root: string) =>
+    query<{ s: string }>(root, "SELECT file_path || ' ' || name AS s FROM symbols ORDER BY s").map((r) => r.s);
+  const state = (root: string) => ({ ...snapshot(root), symbols: symbols(root) });
+  let root: string;
+  let fresh: ReturnType<typeof state>;
+  beforeAll(() => {
+    root = workspace({ ...files, '.gitignore': '.mapx/\n' }, ['.']);
+    git(root, 'add', '-A');
+    git(root, 'commit', '-qm', 'init');
+    init(root);
+    mapx(root, 'scan', root);
+    fresh = state(root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+
+  it('restores HEAD symbols and edges after a working-tree edit is reverted with git checkout', () => {
+    writeFileSync(join(root, MAIL), edited);
+    mapx(root, 'sync', root);
+    expect(symbols(root)).toContain(`${MAIL} Mailer`);
+    expect(touching(root, MAIL)).toContain(`${MAIL} -> ${USER_SERVICE} param_type`);
+
+    git(root, 'checkout', '--', MAIL);
+    mapx(root, 'sync', root);
+    expect(state(root)).toEqual(fresh);
+    mapx(root, 'scan', root, '--force');
+    expect(state(root)).toEqual(fresh);
+  }, 60000);
+
+  it('restores HEAD symbols and edges after a staged edit is reverted with git reset and checkout', () => {
+    writeFileSync(join(root, MAIL), edited);
+    git(root, 'add', MAIL);
+    mapx(root, 'sync', root);
+    expect(symbols(root)).toContain(`${MAIL} Mailer`);
+
+    git(root, 'reset', '-q', '--', MAIL);
+    git(root, 'checkout', '--', MAIL);
+    mapx(root, 'sync', root);
+    expect(state(root)).toEqual(fresh);
+    mapx(root, 'scan', root, '--force');
+    expect(state(root)).toEqual(fresh);
+  }, 60000);
+});
+
+// M0-02-R7: git sync sequences that ended with an index scan --force does not give (review 2026-10-31).
+describe('git sync gives the index scan --force gives', () => {
+  const rows = (root: string) => ({
+    ...snapshot(root),
+    files: query<{ f: string }>(root, "SELECT path || '|' || repo AS f FROM files ORDER BY f").map((r) => r.f),
+  });
+
+  it('keeps a registered folder repo inside the primary checkout under its own repo after a plain sync', () => {
+    const root = workspace({ 'src/app.ts': 'export const app = 1;\n', 'packages/web/index.ts': 'export function web() { return 1; }\n', '.gitignore': '.mapx/\n' }, ['.']);
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'workspaces', 'add', 'packages/web');
+      mapx(root, 'scan', '--all');
+      writeFileSync(join(root, 'packages/web/added.ts'), 'export function added() {}\n');
+      writeFileSync(join(root, 'packages/web/index.ts'), 'export function web() { return 2; }\n');
+      mapx(root, 'sync', root);
+      const synced = rows(root);
+      expect(synced.files.filter((f) => f.startsWith('packages/web/'))).toEqual(['packages/web/index.ts|web']);
+      mapx(root, 'sync', '--all');
+      expect(rows(root).files.filter((f) => f.startsWith('packages/web/'))).toEqual(['packages/web/added.ts|web', 'packages/web/index.ts|web']);
+      const all = rows(root);
+      mapx(root, 'scan', '--all', '--force');
+      expect(all).toEqual(rows(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('does not index a repo registered through a symlink twice', () => {
+    const root = workspace({ 'src/app.ts': 'export const app = 1;\n', 'packages/web/index.ts': 'export function web() { return 1; }\n', '.gitignore': '.mapx/\nweb-link\n' }, ['.']);
+    try {
+      symlinkSync(join(root, 'packages/web'), join(root, 'web-link'));
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'workspaces', 'add', 'web-link');
+      mapx(root, 'scan', '--all');
+      const fresh = rows(root);
+      expect(fresh.files.map((f) => f.split('|')[0])).toEqual(['src/app.ts', 'web-link/index.ts']);
+      writeFileSync(join(root, 'packages/web/added.ts'), 'export function added() {}\n');
+      mapx(root, 'sync', root);
+      mapx(root, 'sync', '--all');
+      const synced = rows(root);
+      expect(synced.files.filter((f) => f.includes('added.ts'))).toEqual(['web-link/added.ts|web-link']);
+      mapx(root, 'scan', '--all', '--force');
+      expect(synced).toEqual(rows(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('re-links the referrers of a class re-added elsewhere after an unrelated file declared one of its names', () => {
+    const root = workspace({
+      'app/Services/UserService.php': '<?php\nnamespace App\\Services;\nclass UserService { public function find($id) { return $id; } }\n',
+      'app/Http/UserController.php': '<?php\nnamespace App\\Http;\nuse App\\Services\\UserService;\nclass UserController { public function show(UserService $s) { return $s->find(1); } }\n',
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      const service = readFileSync(join(root, 'app/Services/UserService.php'), 'utf8');
+      rmSync(join(root, 'app/Services/UserService.php'));
+      mapx(root, 'sync', root);
+      writeFileSync(join(root, 'app/Repo.php'), '<?php\nnamespace App;\nclass Repo { public function find($id) { return $id; } }\n');
+      mapx(root, 'sync', root);
+      mkdirSync(join(root, 'app/Core'));
+      writeFileSync(join(root, 'app/Core/UserService.php'), service);
+      mapx(root, 'sync', root);
+      const synced = rows(root);
+      expect(touching(root, 'app/Core/UserService.php')).toEqual([
+        'app/Http/UserController.php -> app/Core/UserService.php call',
+        'app/Http/UserController.php -> app/Core/UserService.php import',
+        'app/Http/UserController.php -> app/Core/UserService.php param_type',
+      ]);
+      mapx(root, 'scan', root, '--force');
+      expect(synced).toEqual(rows(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('keeps both files after git mv a b leaves an identical untracked copy at a', () => {
+    const root = workspace({ 'src/a.ts': 'export function a() { return 1; }\n', 'src/main.ts': "import { a } from './a';\nexport const m = () => a();\n", '.gitignore': '.mapx/\n' }, ['.']);
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      git(root, 'mv', 'src/a.ts', 'src/b.ts');
+      writeFileSync(join(root, 'src/a.ts'), readFileSync(join(root, 'src/b.ts')));
+      mapx(root, 'sync', root);
+      const synced = rows(root);
+      expect(synced.files.map((f) => f.split('|')[0])).toEqual(['src/a.ts', 'src/b.ts', 'src/main.ts']);
+      mapx(root, 'scan', root, '--force');
+      expect(synced).toEqual(rows(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('indexes gitignored files as scan does: edits, additions and removals', () => {
+    const root = workspace({
+      ...files,
+      'gen/Generated.php': '<?php\nnamespace Gen;\nclass Generated {}\n',
+      'app/ignored.php': '<?php\nnamespace App;\nclass Ignored {}\n',
+      '.gitignore': '.mapx/\ngen/\napp/ignored.php\n',
+    }, ['.']);
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      const paths = () => rows(root).files.map((f) => f.split('|')[0]);
+      expect(paths()).toEqual(expect.arrayContaining(['app/ignored.php', 'gen/Generated.php']));
+
+      writeFileSync(join(root, 'gen/Generated.php'), `<?php\nnamespace Gen;\nuse App\\Services\\UserService;\nclass Generated { public function run(UserService $u) {} }\n`);
+      writeFileSync(join(root, 'gen/More.php'), '<?php\nnamespace Gen;\nclass More {}\n');
+      rmSync(join(root, 'app/ignored.php'));
+      mapx(root, 'sync', root);
+      const synced = rows(root);
+      expect(touching(root, 'gen/Generated.php')).toEqual([`gen/Generated.php -> ${USER_SERVICE} import`, `gen/Generated.php -> ${USER_SERVICE} param_type`]);
+      expect(paths()).toContain('gen/More.php');
+      expect(paths()).not.toContain('app/ignored.php');
+      mapx(root, 'scan', root, '--force');
+      expect(synced).toEqual(rows(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+// Independent review of M0-02-R6/R7 (2026-10-31): sequences and costs git sync got wrong.
+describe('git sync after the independent review of M0-02-R6/R7', () => {
+  const rows = (root: string) => ({
+    ...snapshot(root),
+    files: query<{ f: string }>(root, "SELECT path || '|' || repo AS f FROM files ORDER BY f").map((r) => r.f),
+  });
+  const stamps = (root: string) => query<{ s: string }>(root, "SELECT path || '|' || last_scanned AS s FROM files ORDER BY s").map((r) => r.s);
+  const committed = (tree: Record<string, string>, gitDirs = ['.']) => {
+    const root = workspace({ '.gitignore': '.mapx/\n', ...tree }, gitDirs);
+    for (const dir of [...gitDirs].reverse()) {
+      git(join(root, dir), 'add', '-A');
+      git(join(root, dir), 'commit', '-qm', 'init');
+    }
+    init(root);
+    return root;
+  };
+
+  it('re-parses nothing on a no-op sync of an eol=crlf checkout, and still re-indexes a real edit', () => {
+    const root = committed({ '.gitattributes': '*.ts text eol=crlf\n', 'src/f.ts': 'export function f() { return 1; }\n', 'src/g.ts': "import { f } from './f';\nexport const g = () => f();\n" });
+    try {
+      rmSync(join(root, 'src/f.ts'));
+      rmSync(join(root, 'src/g.ts'));
+      git(root, 'checkout', '--', '.');
+      expect(readFileSync(join(root, 'src/f.ts'), 'utf8')).toContain('\r\n');
+      mapx(root, 'scan', root);
+      const before = stamps(root);
+      mapx(root, 'sync', root);
+      mapx(root, 'sync', root);
+      expect(stamps(root)).toEqual(before);
+      writeFileSync(join(root, 'src/f.ts'), 'export function f() { return 2; }\r\nexport function h() {}\r\n');
+      mapx(root, 'sync', root);
+      expect(query(root, "SELECT name FROM symbols WHERE file_path = 'src/f.ts' ORDER BY name").map((r: any) => r.name)).toEqual(['f', 'h']);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('re-indexes an edit that a full scan indexed, once it is reverted', () => {
+    const root = committed({ 'src/a.ts': 'export function a() { return 1; }\n' });
+    try {
+      mapx(root, 'scan', root);
+      const fresh = rows(root);
+      writeFileSync(join(root, 'src/a.ts'), 'export function a() { return 1; }\nexport function extra() {}\n');
+      mapx(root, 'scan', root);
+      git(root, 'checkout', '--', 'src/a.ts');
+      mapx(root, 'sync', root);
+      expect(query(root, "SELECT name FROM symbols WHERE name = 'extra'")).toEqual([]);
+      expect(rows(root)).toEqual(fresh);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('re-indexes a gitignored file replaced by same-size content with an older mtime (cp -p)', () => {
+    const root = committed({ '.gitignore': '.mapx/\ngen/\n', 'src/a.ts': 'export const a = 1;\n', 'gen/x.ts': 'export function h() { return 1; }\n' });
+    try {
+      mapx(root, 'scan', root);
+      writeFileSync(join(root, 'gen/x.ts'), 'export function q() { return 1; }\n');
+      const past = new Date(Date.now() - 3600_000);
+      utimesSync(join(root, 'gen/x.ts'), past, past);
+      mapx(root, 'sync', root);
+      expect(query(root, "SELECT name FROM symbols WHERE file_path = 'gen/x.ts'")).toEqual([{ name: 'q' }]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('takes the no-change path with a gitignored non-source file', () => {
+    const root = committed({ 'src/a.ts': 'export const a = 1;\n', '.gitignore': '.mapx/\ndatabase/*.sqlite\nauth.json\n', 'database/database.sqlite': 'SQLite format 3\0'.repeat(1000), 'auth.json': '{}\n' });
+    try {
+      mapx(root, 'scan', root);
+      expect(mapx(root, 'sync', root)).toMatch(/Updated 0 files/);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('syncs a registered repo two levels inside a gitignored folder, as scan --all --force', () => {
+    const root = committed({ '.gitignore': '.mapx/\nvendor-src/\n', 'src/app.ts': 'export const app = 1;\n', 'vendor-src/pkg/web/index.ts': 'export function web() { return 1; }\n' });
+    try {
+      mapx(root, 'workspaces', 'add', 'vendor-src/pkg/web');
+      mapx(root, 'scan', '--all');
+      writeFileSync(join(root, 'vendor-src/pkg/web/index.ts'), 'export function web() { return 2; }\nexport function web2() {}\n');
+      writeFileSync(join(root, 'vendor-src/pkg/web/added.ts'), 'export function added() {}\n');
+      mapx(root, 'sync', '--all');
+      const synced = rows(root);
+      expect(synced.files).toContain('vendor-src/pkg/web/added.ts|web');
+      mapx(root, 'scan', '--all', '--force');
+      expect(rows(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('drops the old path of a staged git mv into a registered nested repo', () => {
+    const root = committed({ 'src/app.ts': 'export function app() { return 1; }\n', 'packages/web/index.ts': 'export const web = 1;\n' });
+    try {
+      mapx(root, 'workspaces', 'add', 'packages/web');
+      mapx(root, 'scan', '--all');
+      git(root, 'mv', 'src/app.ts', 'packages/web/app.ts');
+      mapx(root, 'sync', '--all');
+      const synced = rows(root);
+      expect(synced.files.filter((f) => f.includes('app.ts'))).toEqual(['packages/web/app.ts|web']);
+      mapx(root, 'scan', '--all', '--force');
+      expect(rows(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('re-indexes an edit in a gitignored folder with a non-ASCII name', () => {
+    const root = committed({ '.gitignore': '.mapx/\ngénérés/\n', 'src/a.ts': 'export const a = 1;\n', 'générés/x.ts': 'export function x() { return 1; }\n' });
+    try {
+      mapx(root, 'scan', root);
+      writeFileSync(join(root, 'générés/x.ts'), 'export function x() { return 1; }\nexport function y() {}\n');
+      mapx(root, 'sync', root);
+      const synced = rows(root);
+      expect(query(root, "SELECT name FROM symbols WHERE name = 'y'")).toHaveLength(1);
+      mapx(root, 'scan', root, '--force');
+      expect(rows(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('re-links a class re-added elsewhere under git sync too (committed and uncommitted)', () => {
+    const service = '<?php\nnamespace App\\Services;\nclass UserService { public function find($id) { return $id; } }\n';
+    const root = committed({
+      'app/Services/UserService.php': service,
+      'app/Http/UserController.php': '<?php\nnamespace App\\Http;\nuse App\\Services\\UserService;\nclass UserController { public function show(UserService $s) { return $s->find(1); } }\n',
+    });
+    try {
+      mapx(root, 'scan', root);
+      rmSync(join(root, 'app/Services/UserService.php'));
+      mapx(root, 'sync', root);
+      writeFileSync(join(root, 'app/Repo.php'), '<?php\nnamespace App;\nclass Repo { public function find($id) { return $id; } }\n');
+      mapx(root, 'sync', root);
+      mkdirSync(join(root, 'app/Core'));
+      writeFileSync(join(root, 'app/Core/UserService.php'), service);
+      mapx(root, 'sync', root);
+      const uncommitted = rows(root);
+      expect(touching(root, 'app/Core/UserService.php')).toEqual(expect.arrayContaining([
+        'app/Http/UserController.php -> app/Core/UserService.php import',
+        'app/Http/UserController.php -> app/Core/UserService.php param_type',
+      ]));
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'moved');
+      mapx(root, 'sync', root);
+      expect(rows(root)).toEqual(uncommitted);
+      mapx(root, 'scan', root, '--force');
+      expect(rows(root)).toEqual(uncommitted);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+describe('export directory excludes', () => {
+  it('export --format json --exclude **/Http prunes the folder as scan does', () => {
+    const root = workspace(files);
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      const out = mapx(root, 'export', '-d', root, '--format', 'json', '--exclude', '**/Http');
+      const json = JSON.parse(out.slice(out.indexOf('{')));
+      expect(JSON.stringify(json)).not.toContain('app/Http/');
+      expect(JSON.stringify(json)).toContain('app/Services/UserService.php');
+    } finally {
+      cleanup(root);
+    }
+  }, 60000);
+});
+
+// M0-02-R8: sync after a symbol is renamed, after a resolution config changes, and status after an
+// edit git does not list.
+describe('sync re-links renamed symbols and follows config changes (M0-02-R8)', () => {
+  const calls = (root: string) =>
+    query<{ e: string }>(root, "SELECT source_file || ' -> ' || target_file || '#' || target_symbol AS e FROM edges WHERE edge_type = 'call' ORDER BY e").map((r) => r.e);
+  const all = (root: string) => query<{ e: string }>(root, "SELECT source_file || '|' || target_file || '|' || edge_type || '|' || coalesce(target_symbol, '') AS e FROM edges ORDER BY e").map((r) => r.e);
+  const committed = (tree: Record<string, string>) => {
+    const root = workspace({ '.gitignore': '.mapx/\n', ...tree }, ['.']);
+    git(root, 'add', '-A');
+    git(root, 'commit', '-qm', 'init');
+    init(root);
+    return root;
+  };
+
+  it.each([['tracked', 'src'], ['gitignored', 'gen']])('drops the callers\' edge to a renamed function (%s), as scan --force', (_, dir) => {
+    const root = committed({
+      ...(dir === 'gen' ? { '.gitignore': '.mapx/\ngen/\n' } : {}),
+      [`${dir}/a.js`]: 'export function alpha() { return 1; }\n',
+      'src/usea.js': `import { alpha } from '../${dir}/a.js';\nexport const u = () => alpha();\n`,
+    });
+    try {
+      mapx(root, 'scan', root);
+      expect(calls(root)).toEqual([`src/usea.js -> ${dir}/a.js#alpha`]);
+      writeFileSync(join(root, `${dir}/a.js`), 'export function alphb() { return 1; }\n');
+      mapx(root, 'sync', root);
+      expect(calls(root)).toEqual([]);
+      const synced = all(root);
+      mapx(root, 'scan', root, '--force');
+      expect(all(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('restores the callers\' edge when a rename is undone: a branch round-trip and an edit round-trip', () => {
+    const root = committed({ 'src/a.ts': 'export function foo() { return 1; }\n', 'src/b.ts': "import { foo } from './a';\nexport const b = () => foo();\n" });
+    try {
+      mapx(root, 'scan', root);
+      const fresh = all(root);
+      git(root, 'checkout', '-qb', 'feature');
+      writeFileSync(join(root, 'src/a.ts'), 'export function bar() { return 1; }\n');
+      git(root, 'commit', '-qam', 'rename');
+      mapx(root, 'sync', root);
+      expect(calls(root)).toEqual([]);
+      git(root, 'checkout', '-q', '-');
+      mapx(root, 'sync', root);
+      expect(all(root)).toEqual(fresh);
+      // The same without a commit: edit away and back, a sync after each edit.
+      writeFileSync(join(root, 'src/a.ts'), 'export function fo() { return 1; }\n');
+      mapx(root, 'sync', root);
+      writeFileSync(join(root, 'src/a.ts'), 'export function foo() { return 1; }\n');
+      mapx(root, 'sync', root);
+      expect(all(root)).toEqual(fresh);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('handles a renamed function named like an Object.prototype member (toString)', () => {
+    const root = committed({ 'src/money.ts': 'export function toString(m: number) { return String(m); }\n', 'src/b.ts': "import { toString } from './money';\nexport const b = () => toString(1);\n" });
+    try {
+      mapx(root, 'scan', root);
+      writeFileSync(join(root, 'src/money.ts'), 'export function stringify(m: number) { return String(m); }\n');
+      mapx(root, 'sync', root);
+      mapx(root, 'sync', root);
+      const synced = all(root);
+      mapx(root, 'scan', root, '--force');
+      expect(all(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('re-resolves when package.json gains a dependency, as scan --force', () => {
+    const root = committed({
+      'package.json': JSON.stringify({ name: 'app' }),
+      'src/lib.js': 'export function create() { return 1; }\n',
+      'src/use.js': "import axios from 'axios';\nexport const c = () => axios.create();\n",
+    });
+    try {
+      mapx(root, 'scan', root);
+      // axios is no listed package yet: name resolution applies.
+      expect(calls(root)).toEqual(['src/use.js -> src/lib.js#create']);
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'app', dependencies: { axios: '^1.0.0' } }));
+      mapx(root, 'sync', root);
+      expect(calls(root)).toEqual([]);
+      const synced = all(root);
+      mapx(root, 'scan', root, '--force');
+      expect(all(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('follows a tsconfig reached through extends: created after the scan, then edited', () => {
+    const root = committed({
+      '.gitignore': '.mapx/\n.svelte-kit/\n',
+      // SvelteKit's root tsconfig extends the one `svelte-kit sync` generates.
+      'tsconfig.json': JSON.stringify({ extends: './.svelte-kit/tsconfig.json' }),
+      'src/lib/x.ts': 'export function x() { return 1; }\n',
+      'src/lib2/x.ts': 'export function x() { return 2; }\n',
+      'src/app.ts': "import { x } from '$lib/x';\nexport const a = () => x();\n",
+    });
+    const imports = () => query<{ t: string }>(root, "SELECT target_file AS t FROM edges WHERE source_file = 'src/app.ts' AND edge_type = 'import' ORDER BY t").map((r) => r.t);
+    const kit = (dir: string) => JSON.stringify({ compilerOptions: { paths: { '$lib/*': [`../src/${dir}/*`] } } });
+    try {
+      mapx(root, 'scan', root);
+      expect(imports()).toEqual([]);
+      mkdirSync(join(root, '.svelte-kit'));
+      writeFileSync(join(root, '.svelte-kit/tsconfig.json'), kit('lib'));
+      mapx(root, 'sync', root);
+      expect(imports()).toEqual(['src/lib/x.ts']);
+      writeFileSync(join(root, '.svelte-kit/tsconfig.json'), kit('lib2'));
+      mapx(root, 'sync', root);
+      expect(imports()).toEqual(['src/lib2/x.ts']);
+      const synced = all(root);
+      mapx(root, 'scan', root, '--force');
+      expect(all(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('mapx status of the primary repo leaves a nested registered repo\'s edits to that repo', () => {
+    const root = workspace({ '.gitignore': '.mapx/\nlibs/ui/\n', 'src/a.ts': 'export const a = 1;\n', 'libs/ui/b.ts': 'export const b = 1;\n' }, ['.', 'libs/ui']);
+    try {
+      for (const dir of ['libs/ui', '.']) {
+        git(join(root, dir), 'add', '-A');
+        git(join(root, dir), 'commit', '-qm', 'init');
+      }
+      init(root);
+      mapx(root, 'workspaces', 'add', 'libs/ui');
+      mapx(root, 'scan', '--all');
+      writeFileSync(join(root, 'libs/ui/b.ts'), 'export const b = 2;\n');
+      const future = new Date(Date.now() + 5000);
+      utimesSync(join(root, 'libs/ui/b.ts'), future, future);
+      expect(mapx(root, 'status', '-d', root)).toContain('No changes since last scan');
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('mapx status reports an edit to a gitignored indexed file', () => {
+    const root = committed({ '.gitignore': '.mapx/\ngen/\n', 'src/a.ts': 'export const a = 1;\n', 'gen/x.ts': 'export function l() { return 1; }\n' });
+    try {
+      mapx(root, 'scan', root);
+      expect(mapx(root, 'status', '-d', root)).toContain('No changes since last scan');
+      writeFileSync(join(root, 'gen/x.ts'), 'export function l2() { return 2; }\n');
+      const future = new Date(Date.now() + 5000);
+      utimesSync(join(root, 'gen/x.ts'), future, future);
+      expect(mapx(root, 'status', '-d', root)).toContain('~ gen/x.ts');
+      // Deleted too (review 2026-11-01).
+      mapx(root, 'sync', root);
+      rmSync(join(root, 'gen/x.ts'));
+      expect(mapx(root, 'status', '-d', root)).toContain('- gen/x.ts');
     } finally {
       cleanup(root);
     }

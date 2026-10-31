@@ -6,3 +6,9 @@ export function requireTicketId(to) {
     router.replace('/tickets');
   }
 }
+
+// A guard written for the router file: it redirects through next() (M3-11-R1).
+export function requireAgent(to, from, next) {
+  if (!to.meta.agent) next({ name: 'tickets' });
+  else next();
+}

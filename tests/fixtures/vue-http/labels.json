@@ -453,6 +453,25 @@
       "url": "/api/tags",
       "route": "GET /api/tags",
       "handler": "TagController@index"
+    },
+    {
+      "id": "L47",
+      "pattern": "domain-mismatch",
+      "file": "vue3/src/services/domains.ts",
+      "line": 7,
+      "method": "GET",
+      "url": "https://api.example.com/ops/v3/status",
+      "route": null
+    },
+    {
+      "id": "L48",
+      "pattern": "domain-match",
+      "file": "vue3/src/services/domains.ts",
+      "line": 8,
+      "method": "GET",
+      "url": "https://ops.example.com/ops/v3/status",
+      "route": "GET /ops/v3/status",
+      "handler": "HomeController@opsStatus"
     }
   ]
 }

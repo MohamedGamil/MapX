@@ -6,6 +6,8 @@ import { createGzip } from 'node:zlib';
 import { pipeline, Readable } from 'node:stream';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
+import { applyCollapsedRepos } from './core/workspace-summary.js';
+import { indexableChanges } from './core/staleness.js';
 import { MapxGraph } from './core/graph.js';
 import { buildMetricsReport, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
@@ -53,6 +55,13 @@ function findUiDir(): string {
 
   // Fallback to the default relative lookup
   return join(__dirname, 'ui');
+}
+
+/** `Config.load` plus the duplicate-entry collapse the CLI and MCP loaders apply (M0-10-R4). */
+async function loadConfig(dir: string, store: Store): Promise<Config> {
+  const config = await Config.load(dir);
+  for (const message of applyCollapsedRepos(config, store)) console.error(message);
+  return config;
 }
 
 export function startUiServer(opts: ServerOpts) {
@@ -140,11 +149,11 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
+          const config = await loadConfig(dir, store);
           const fileCount = store.getFileCount();
           const symbolCount = store.getSymbolCount();
           const edgeCount = store.getEdgeCount();
           const lastScan = store.getMeta('last_scan_time') || 'never';
-          const config = await Config.load(dir);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -282,7 +291,7 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await Config.load(dir);
+          const config = await loadConfig(dir, store);
           const repo = config.repo.name;
           const clusters = store.getClusters(repo);
           const memberships = store.getClusterMemberships(repo);
@@ -298,7 +307,7 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await Config.load(dir);
+          const config = await loadConfig(dir, store);
           const repo = config.repo.name;
           const profileStr = store.getMeta('codebase_profile:' + repo);
           const profile = profileStr ? JSON.parse(profileStr) : null;
@@ -314,7 +323,7 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await Config.load(dir);
+          const config = await loadConfig(dir, store);
           const repo = config.repo.name;
           const smells = store.getArchSmells(repo);
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -329,7 +338,7 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await Config.load(dir);
+          const config = await loadConfig(dir, store);
           const repo = config.repo.name;
           const dsm = calculateDSM(store, repo);
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -421,7 +430,7 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await Config.load(dir);
+          const config = await loadConfig(dir, store);
 
           const fileCount = store.getFileCount();
           const symbolCount = store.getSymbolCount();
@@ -455,7 +464,8 @@ export function startUiServer(opts: ServerOpts) {
           const repoRoot = resolve(dir, config.repo.path);
           const isGit = isGitRepo(repoRoot);
           const lastCommit = store.getMeta('last_scan_commit:' + config.repo.name) || store.getMeta('last_scan_commit');
-          const gitChanges = isGit ? getChangedFiles(repoRoot, lastCommit || undefined) : [];
+          // As `mapx status` (M0-11-R3).
+          const gitChanges = isGit ? indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), config.repo.name) : [];
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -506,7 +516,7 @@ export function startUiServer(opts: ServerOpts) {
 
             const dbPath = resolve(dir, '.mapx', 'mapx.db');
             store = new Store(dbPath);
-            const config = await Config.load(dir);
+            const config = await loadConfig(dir, store);
             const graph = new MapxGraph(config.repo.name);
 
             for (const file of store.getAllFiles()) {

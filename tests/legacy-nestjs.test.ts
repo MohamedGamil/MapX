@@ -225,3 +225,120 @@ describe('NestJS segmentation with comments, strings and generics', () => {
     expect(gqlOps).toEqual({ post: 'query', renamePost: 'mutation', allPosts: 'query' });
   });
 });
+
+// M0-20-R3: Prettier trailing commas, generic handlers, a regex literal after a condition's `)`.
+// Synthetic fixtures, one scenario per file; each `*Helper` after a controller catches a swallowed class.
+describe('NestJS trailing commas, generic handlers and regex after a parenthesis', () => {
+  let root: string;
+  let routes: string[];
+  const routesOf = (cls: string) => routes.filter((r) => r.startsWith(`${cls} `)).map((r) => r.slice(cls.length + 1)).sort();
+
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ dependencies: { '@nestjs/core': '^10', '@nestjs/common': '^10' } }),
+      // AC1: Prettier breaks long decorator arguments over lines with a trailing comma.
+      'src/multi.controller.ts': [
+        "import { Controller, Get, Post } from '@nestjs/common';",
+        '@Controller(',
+        "  'x',",
+        ')',
+        'export class MultiController {',
+        '  @Get(',
+        "    ':id',",
+        '  )',
+        '  one() { return 1; }',
+        '  @Post(',
+        "    { path: 'bulk' },",
+        '  )',
+        '  bulk() { return 2; }',
+        '}',
+      ].join('\n'),
+      // AC2: a generic handler is named after itself, not after the first call in its body.
+      'src/generic-method.controller.ts': [
+        "import { Controller, Get, Post } from '@nestjs/common';",
+        "@Controller('gm')",
+        'export class GmController {',
+        '  constructor(private readonly svc: any) {}',
+        '  @Get() async list<T>(): Promise<T[]> { return this.svc.findAll(); }',
+        "  @Post('save') save<K extends keyof Map<string, () => void>, V = {}>(k: K): V { return this.svc.store(k); }",
+        '}',
+      ].join('\n'),
+      // AC3: a regex literal right after the `)` of an if / while / for condition.
+      'src/regex-if.controller.ts': [
+        "import { Controller, Get } from '@nestjs/common';",
+        "@Controller('re-if')",
+        'export class ReIfController {',
+        "  @Get() a(s: string) { if (s) /{'/.test(s); return 1; }",
+        "  @Get('b') b() { return 2; }",
+        '}',
+        "export class ReIfHelper { @Get('phantom') check() {} }",
+      ].join('\n'),
+      'src/regex-while.controller.ts': [
+        "import { Controller, Get } from '@nestjs/common';",
+        "@Controller('re-while')",
+        'export class ReWhileController {',
+        "  @Get() a(s: string) { while (s.length > 9) /'{/.test(s) && (s = s.slice(1)); return s; }",
+        "  @Get('b') b() { return 2; }",
+        '}',
+        "export class ReWhileHelper { @Get('phantom') check() {} }",
+      ].join('\n'),
+      'src/regex-for.controller.ts': [
+        "import { Controller, Get } from '@nestjs/common';",
+        "@Controller('re-for')",
+        'export class ReForController {',
+        "  @Get() a(s: string[]) { for (const c of s) /'/.test(c); return s; }",
+        "  @Get('b') b() { return 2; }",
+        '}',
+        "export class ReForHelper { @Get('phantom') check() {} }",
+      ].join('\n'),
+      // A `/` after the `)` of a call or a grouping is still a division.
+      'src/division.controller.ts': [
+        "import { Controller, Get } from '@nestjs/common';",
+        "@Controller('div')",
+        'export class DivController {',
+        "  @Get() a(n: number) { return Math.abs(n) / 2 + '/' + '{'; }",
+        "  @Get('b') b(n: number) { return (n + 1) / 2 + '/' + '{'; }",
+        "  @Get('c') c() { return 3; }",
+        '}',
+        "export class DivHelper { @Get('phantom') check() {} }",
+      ].join('\n'),
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    const raw = JSON.parse(mapx(root, 'routes', root, '--json')) as { method: string; path: string; handlerSymbol?: string }[];
+    routes = raw.map((r) => `${r.handlerSymbol?.split('@')[0]} ${r.method} ${r.path} ${r.handlerSymbol}`);
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('drops the trailing comma of a multi-line decorator argument (AC1)', () => {
+    expect(routesOf('MultiController')).toEqual(['GET /x/:id MultiController@one', 'POST /x/bulk MultiController@bulk']);
+  });
+
+  it('names a generic handler after itself (AC2)', () => {
+    expect(routesOf('GmController')).toEqual(['GET /gm GmController@list', 'POST /gm/save GmController@save']);
+  });
+
+  it('a regex literal after an if condition does not swallow the next class (AC3)', () => {
+    expect(routesOf('ReIfController')).toEqual(['GET /re-if ReIfController@a', 'GET /re-if/b ReIfController@b']);
+    expect(routesOf('ReIfHelper')).toEqual([]);
+  });
+
+  it('a regex literal after a while condition does not swallow the next class (AC3)', () => {
+    expect(routesOf('ReWhileController')).toEqual(['GET /re-while ReWhileController@a', 'GET /re-while/b ReWhileController@b']);
+    expect(routesOf('ReWhileHelper')).toEqual([]);
+  });
+
+  it('a regex literal after a for header does not swallow the next class (AC3)', () => {
+    expect(routesOf('ReForController')).toEqual(['GET /re-for ReForController@a', 'GET /re-for/b ReForController@b']);
+    expect(routesOf('ReForHelper')).toEqual([]);
+  });
+
+  it('a `/` after the `)` of a call or a grouping stays a division', () => {
+    expect(routesOf('DivController')).toEqual(['GET /div DivController@a', 'GET /div/b DivController@b', 'GET /div/c DivController@c']);
+    expect(routesOf('DivHelper')).toEqual([]);
+  });
+
+  it('no phantom route anywhere in the workspace', () => {
+    expect(routes.filter((r) => /phantom/.test(r))).toEqual([]);
+  });
+});

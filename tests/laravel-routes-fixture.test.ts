@@ -39,14 +39,24 @@ describe('Laravel route fixture labels', () => {
       // M1-05-R2: singletons and route-level prefix keys.
       'singleton', 'singleton-excluded', 'route-prefix', 'route-prefix-wrong',
       // M1-05-R3: implicit binding fields ({post:slug}) reported as {post}.
-      'binding-field'])
+      'binding-field',
+      // M1-07-R2: RouteServiceProvider mounts walked like other providers; evaluated prefixes, names and domains.
+      'rsp-glob', 'rsp-require', 'rsp-load-routes-from', 'rsp-variable-mount', 'rsp-dynamic-prefix', 'rsp-property-prefix', 'rsp-raw-prefix',
+      // M1-03-R2: require_once and cycles, '/' under a prefix, single-action controllers, a resource
+      // name that can't be evaluated, compound and property assignments, a partly dynamic prefix.
+      'require-once', 'require-once-wrong', 'require-cycle', 'trailing-slash', 'trailing-slash-overridden', 'invokable',
+      'dynamic-resource', 'rsp-compound-assignment', 'rsp-compound-assignment-wrong', 'rsp-property-assignment',
+      'rsp-property-assignment-wrong', 'rsp-partly-dynamic'])
       expect(patterns, p).toContain(p);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
     for (const l of labels) {
       expect(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).toContain(l.method);
       expect(l.uri.startsWith('/')).toBe(false);
       if (l.handler !== null) expect(l.handler).toMatch(/^[A-Z]\w+@\w+$/);
+      if (l.name !== undefined || l.domain !== undefined || l.dynamic !== undefined) expect(['live', 'conditional']).toContain(l.expect);
     }
+    // M1-07-R2: name, domain and dynamic attributes are labelled.
+    expect(labels.filter((l) => l.name !== undefined || l.domain !== undefined || l.dynamic !== undefined).length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -95,6 +105,18 @@ describe('route scorer', () => {
     expect(score([l], [R({ path: '/in-comment', metadata: { reachable: false } })]).totals).toMatchObject({ flagged: 0, falsePositives: 1 });
   });
 
+  it('M1-07-R2: checks labelled name, domain and dynamic against the matched route', () => {
+    const l = L({ name: 'ops.status', domain: 'ops.example.com', dynamic: true });
+    expect(score([l], [R({ metadata: { name: 'ops.status', domain: 'ops.example.com', dynamic: true } })]).totals)
+      .toMatchObject({ attributesLabelled: 3, attributesFound: 3, attributeRecall: 1 });
+    const wrong = score([l], [R({ metadata: { name: 'status' } })]);
+    expect(wrong.totals).toMatchObject({ attributesLabelled: 3, attributesFound: 0, attributeRecall: 0 });
+    expect(wrong.misses).toHaveLength(3);
+    // dynamic: false holds for a route with no dynamic flag; no attribute labels means recall 1.
+    expect(score([L({ dynamic: false })], [R({})]).totals.attributesFound).toBe(1);
+    expect(score([L({})], [R({})]).totals.attributeRecall).toBe(1);
+  });
+
   it('requires conditional routes to be flagged', () => {
     const l = L({ expect: 'conditional' });
     expect(score([l], [R({})]).totals.flagged).toBe(0);
@@ -115,6 +137,7 @@ describe('route extraction on the fixture (real scan)', () => {
     expect(t.precision, result.unlabelledRoutes.join('\n')).toBeGreaterThanOrEqual(FLOORS.precision);
     expect(t.falsePositives).toBeLessThanOrEqual(FLOORS.maxFalsePositives);
     expect(t.exactParams).toBe(t.uriFound);
+    expect(t.attributesFound, result.misses.join('\n')).toBe(t.attributesLabelled);
     expect(t.flagged, 'negatives and conditional mounts flagged').toBe(labels.filter((l) => l.expect !== 'live').length);
     for (const [name, floor] of Object.entries(FLOORS.patterns)) {
       expect(result.patterns[name]!.uriFound, `${name} uri`).toBeGreaterThanOrEqual(floor.uriFound);

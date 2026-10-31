@@ -185,6 +185,8 @@ vi.mock('../src/languages/installer.js', () => ({
 }));
 
 vi.mock('../src/languages/registry.js', () => ({
+  // Inert by default (the staleness helpers read the real cwd); the status test enables it.
+  getLanguageForFile: vi.fn().mockReturnValue(null),
   getBuiltinLanguages: vi.fn().mockReturnValue({
     typescript: { extensions: ['.ts', '.tsx'], tier: 'builtin' },
     python: { extensions: ['.py'], tier: 'dynamic' }
@@ -545,9 +547,13 @@ describe('MCP module', () => {
     });
 
     it('shows stale status when git has changes', async () => {
-      mockGetChangedFiles.mockReturnValue(['src/changed.ts', 'src/another.ts']);
+      // getChangedFiles returns { path, status } records; status keeps those a scan would index (M0-11-R3).
+      mockGetChangedFiles.mockReturnValue([{ path: 'src/changed.ts', status: 'modified' }, { path: 'src/another.ts', status: 'added' }]);
+      const { getLanguageForFile } = await import('../src/languages/registry.js');
+      vi.mocked(getLanguageForFile).mockImplementation(((path: string) => (path.endsWith('.ts') ? { name: 'typescript' } : null)) as any);
 
       const res = await callTool('mapx_status');
+      vi.mocked(getLanguageForFile).mockReset().mockReturnValue(null);
       const text = getText(res);
       expect(text).toContain('changed files');
       expect(text).toContain('stale');

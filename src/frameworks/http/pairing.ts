@@ -33,6 +33,23 @@ export function urlHost(url: string): string | null {
   return m ? m[1]!.toLowerCase() : null;
 }
 
+const domainPatterns = new Map<string, RegExp>();
+/**
+ * Matcher for the hosts a `Route::domain()` serves (M2-06-R2): a `{param}` stands for one label,
+ * an unevaluated `{dynamic}` part for any text; the rest is literal, compared case-insensitively.
+ */
+function domainPattern(domain: string): RegExp {
+  let re = domainPatterns.get(domain);
+  if (!re) {
+    const host = (urlHost(domain) ?? domain).toLowerCase().replace(/:\d+$/, '');
+    const body = host.split(/(\{[^}]*\})/).map((part) =>
+      part === '{dynamic}' ? '.+' : /^\{[^}]*\}$/.test(part) ? '[^.]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    re = new RegExp(`^${body.join('')}$`);
+    domainPatterns.set(domain, re);
+  }
+  return re;
+}
+
 /** Frameworks whose routes are client-side pages, never targets of an HTTP request. */
 const CLIENT_ROUTERS = new Set(['vue-router', 'react-router', 'tanstack-router']);
 
@@ -83,7 +100,8 @@ function matchScore(client: string[], route: string[]): { score: number; params:
 /**
  * The live route a call reaches, or null when none serves it. A pair needs literal evidence: at
  * least one literal path segment equal on both sides (only `/` itself, with a known base, matches
- * without one). An absolute URL pairs only on a local or workspace host (`options.hosts`).
+ * without one). An absolute URL pairs only on a local or workspace host (`options.hosts`), and
+ * only with routes that serve its host: no domain, or a matching `Route::domain()`.
  */
 export function pairCall(record: HttpCallRecord, routes: RouteBinding[], options: PairOptions = {}): PairedRoute | null {
   if (record.url === undefined || record.method.toUpperCase() === UNKNOWN_METHOD) return null;
@@ -93,6 +111,9 @@ export function pairCall(record: HttpCallRecord, routes: RouteBinding[], options
   let best: { route: RouteBinding; score: number; params: boolean; suffix: boolean } | null = null;
   for (const route of routes) {
     if (!live(route) || !methodMatches(route.method, record.method)) continue;
+    // A relative URL goes to whichever host serves the page, so only a known host is checked.
+    const domain = route.metadata?.domain;
+    if (host && typeof domain === 'string' && domain && !domainPattern(domain).test(host)) continue;
     const segments = urlSegments(route.path);
     // An unresolved base URL can stand for any leading segments: match the path as a suffix.
     const candidates = record.baseURLUnresolved && segments.length > client.length

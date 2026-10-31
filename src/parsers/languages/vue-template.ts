@@ -91,11 +91,33 @@ export function maskBlocks(source: string): string {
   return source.replace(/<!--[\s\S]*?(?:-->|$)|<(script|style)\b[\s\S]*?<\/\1\s*>/gi, (m) => m.replace(/[^\n]/g, ' '));
 }
 
-/** The root `<template>`'s content range in `masked`, or null (none, self-closing, or not HTML: pug). */
+/**
+ * An SFC's `<script>` blocks: the opening tag's attributes, the code and its offset. A quoted
+ * attribute value may hold `>` (`generic="T extends Record<string, unknown>"`: M3-11-R1).
+ */
+export function scriptBlocks(source: string): { attrs: string; code: string; start: number }[] {
+  return [...source.matchAll(/<script\b((?:[^>"']|"[^"]*"|'[^']*')*)>([\s\S]*?)<\/script>/gi)]
+    .map((m) => ({ attrs: m[1]!, code: m[2]!, start: m.index! + m[0].length - m[2]!.length - '</script>'.length }));
+}
+
+/**
+ * The root `<template>`'s content range in `masked`, or null (none, self-closing, or not HTML: pug).
+ * Only a top-level block counts: a custom block (`<docs>`, `<i18n>`) is raw text up to its closing
+ * tag, as the SFC compiler reads it, even when it shows a `<template>` (M3-02-R1).
+ */
 export function templateRange(masked: string): { start: number; end: number } | null {
-  const open = /<template\b([^>]*)>/i.exec(masked);
-  if (!open || /\/\s*$/.test(open[1]!)) return null;
-  const lang = /\blang\s*=\s*["']?([\w-]+)/.exec(open[1]!)?.[1];
+  const top = /<([A-Za-z][\w-]*)\b([^>]*)>/g;
+  let open: RegExpExecArray | null = null;
+  for (let m; (m = top.exec(masked));) {
+    if (m[1]!.toLowerCase() === 'template') { open = m; break; }
+    if (/\/\s*$/.test(m[2]!)) continue;
+    const close = new RegExp(`</${m[1]}\\s*>`, 'gi');
+    close.lastIndex = top.lastIndex;
+    if (!close.exec(masked)) return null;
+    top.lastIndex = close.lastIndex;
+  }
+  if (!open || /\/\s*$/.test(open[2]!)) return null;
+  const lang = /\blang\s*=\s*["']?([\w-]+)/.exec(open[2]!)?.[1];
   if (lang && lang !== 'html') return null;
   const start = open.index + open[0].length;
   const tags = /<(\/?)template\b[^>]*?(\/?)>/gi;
@@ -108,35 +130,86 @@ export function templateRange(masked: string): { start: number; end: number } | 
 }
 
 export interface TemplateAttr { name: string; value: string | null; offset: number }
-export interface TemplateTag { name: string; offset: number; attrs: TemplateAttr[] }
-export type TemplateNode = { tag: TemplateTag } | { interpolation: string; offset: number };
+export interface TemplateTag {
+  name: string;
+  offset: number;
+  attrs: TemplateAttr[];
+  /** Names the template binds around this tag's attributes: enclosing and own v-for aliases, slot props. */
+  locals: ReadonlySet<string>;
+  /** The same without the tag's own bindings, for its `v-for` source expression. */
+  outerLocals: ReadonlySet<string>;
+}
+export type TemplateNode = { tag: TemplateTag } | { interpolation: string; offset: number; locals: ReadonlySet<string> };
 
-/** Opening tags (with attributes) and `{{ }}` interpolations of the template, in document order. */
+/** Native elements without content: never left open. */
+const VOID_TAGS = new Set('area,base,br,col,embed,hr,img,input,link,meta,param,source,track,wbr'.split(','));
+const NO_LOCALS: ReadonlySet<string> = new Set();
+
+/** The names a binding pattern declares: `item`, `(item, index)`, `{ id, run: go, done = noop, ...rest }`. */
+function patternNames(pattern: string): string[] {
+  const masked = maskCode(pattern)
+    .replace(/=[^,{}[\]()]*/g, ' ') // default values
+    .replace(/[A-Za-z_$][\w$]*\s*:/g, ' '); // property keys
+  return masked.match(/[A-Za-z_$][\w$]*/g) ?? [];
+}
+
+/** Names `tag` binds for its own attributes and children (v-for, slot-scope) and for its children only (v-slot). */
+function tagBindings(tag: { name: string; attrs: TemplateAttr[] }): { own: string[]; children: string[] } {
+  const own: string[] = [];
+  const children: string[] = [];
+  for (const { name, value } of tag.attrs) {
+    if (value === null) continue;
+    if (name === 'v-for') {
+      const alias = /^([\s\S]*?)\s(?:in|of)\s/.exec(value)?.[1];
+      if (alias) own.push(...patternNames(alias));
+    } else if (name === 'slot-scope' || (name === 'scope' && tag.name === 'template')) {
+      own.push(...patternNames(value)); // Vue 2 scoped slots: the element itself is the slot content
+    } else if (/^(?:v-slot(?:$|:)|#)/.test(name)) {
+      children.push(...patternNames(value));
+    }
+  }
+  return { own, children };
+}
+
+/**
+ * Opening tags (with attributes) and `{{ }}` interpolations of the template, in document order,
+ * each with the names the template itself binds around it. A `v-pre` element and its subtree are
+ * not compiled, so they yield no node (M3-02-R1).
+ */
 export function templateNodes(masked: string, start: number, end: number): TemplateNode[] {
   const nodes: TemplateNode[] = [];
+  // Open elements: the names their children see, and whether they are inside a v-pre subtree.
+  const open: { name: string; locals: ReadonlySet<string>; pre: boolean }[] = [];
   let i = start;
   while (i < end) {
+    const parent = open[open.length - 1];
+    const locals = parent?.locals ?? NO_LOCALS;
     if (masked.startsWith('{{', i)) {
       const close = masked.indexOf('}}', i + 2);
       if (close < 0 || close > end) break;
-      nodes.push({ interpolation: masked.slice(i + 2, close), offset: i + 2 });
+      if (!parent?.pre) nodes.push({ interpolation: masked.slice(i + 2, close), offset: i + 2, locals });
       i = close + 2;
       continue;
     }
     if (masked[i] !== '<') { i++; continue; }
     if (masked[i + 1] === '/') {
       const close = masked.indexOf('>', i);
+      // Close up to the matching open element; a stray closing tag closes nothing.
+      const name = /^<\/([A-Za-z][\w.:-]*)/.exec(masked.slice(i, i + 128))?.[1];
+      const at = open.map((o) => o.name).lastIndexOf(name ?? '');
+      if (at >= 0) open.length = at;
       i = close < 0 ? end : close + 1;
       continue;
     }
     const name = /^<([A-Za-z][\w.:-]*)/.exec(masked.slice(i, i + 128))?.[1];
     if (!name) { i++; continue; }
-    const tag: TemplateTag = { name, offset: i, attrs: [] };
+    const tag: TemplateTag = { name, offset: i, attrs: [], locals, outerLocals: locals };
+    let selfClosing = false;
     let j = i + 1 + name.length;
     while (j < end) {
       while (j < end && /\s/.test(masked[j]!)) j++;
       if (masked[j] === '>') { j++; break; }
-      if (masked.startsWith('/>', j)) { j += 2; break; }
+      if (masked.startsWith('/>', j)) { j += 2; selfClosing = true; break; }
       const attr = /^[^\s"'>/=]+/.exec(masked.slice(j, j + 256))?.[0];
       if (!attr) { j++; continue; }
       j += attr.length;
@@ -164,7 +237,15 @@ export function templateNodes(masked: string, start: number, end: number): Templ
       }
       tag.attrs.push({ name: attr, value, offset });
     }
-    nodes.push({ tag });
+    const pre = !!parent?.pre || tag.attrs.some((a) => a.name === 'v-pre');
+    let childLocals = locals;
+    if (!pre) {
+      const { own, children } = tagBindings(tag);
+      if (own.length > 0) tag.locals = new Set([...locals, ...own]);
+      childLocals = children.length > 0 ? new Set([...tag.locals, ...children]) : tag.locals;
+      nodes.push({ tag });
+    }
+    if (!selfClosing && !VOID_TAGS.has(name)) open.push({ name, locals: childLocals, pre });
     i = j;
   }
   return nodes;
@@ -278,9 +359,9 @@ function scriptBindings(source: string): ScriptBindings {
   // The script blocks' code, read with comments and literal bodies masked.
   let code = '';
   let setup = false;
-  for (const m of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    if (/\bsetup\b/.test(m[1]!)) setup = true;
-    code += m[2] + '\n';
+  for (const block of scriptBlocks(source)) {
+    if (/\bsetup\b/.test(block.attrs)) setup = true;
+    code += block.code + '\n';
   }
   const codeMasked = maskCode(code);
   const imports = moduleImports(code, codeMasked);
@@ -353,7 +434,8 @@ export function templateReferences(source: string, componentName: string, option
   };
 
   const refs: ExtractedReference[] = [];
-  const call = (name: string, offset: number) => refs.push({
+  // A name the template binds (v-for alias, slot prop) is not a component member (M3-02-R1).
+  const call = (name: string, offset: number, locals: ReadonlySet<string>) => locals.has(name) || refs.push({
     sourceSymbol: componentName, targetName: name, referenceType: 'call', startLine: lineAt(offset),
     metadata: { template: true, vue: callHint(name, bindings) },
     ...(options ? { vueThis: vueThisScope(options, name) } : {}),
@@ -361,7 +443,7 @@ export function templateReferences(source: string, componentName: string, option
   const rendered = new Set<string>();
   for (const node of templateNodes(masked, range.start, range.end)) {
     if ('interpolation' in node) {
-      for (const c of callsIn(node.interpolation)) call(c.name, node.offset + c.index);
+      for (const c of callsIn(node.interpolation)) call(c.name, node.offset + c.index, node.locals);
       continue;
     }
     const { tag } = node;
@@ -378,8 +460,10 @@ export function templateReferences(source: string, componentName: string, option
     for (const attr of tag.attrs) {
       const expr = attrExpression(attr);
       if (!expr) continue;
-      if (expr.handler) call(expr.handler, expr.at);
-      else for (const c of callsIn(expr.code!)) call(c.name, expr.at + c.index);
+      // The v-for source is read outside the aliases it declares.
+      const locals = attr.name === 'v-for' ? tag.outerLocals : tag.locals;
+      if (expr.handler) call(expr.handler, expr.at, locals);
+      else for (const c of callsIn(expr.code!)) call(c.name, expr.at + c.index, locals);
     }
   }
   return refs;

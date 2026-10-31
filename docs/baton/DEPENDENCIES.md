@@ -13,7 +13,11 @@ flowchart LR
   M1 --> M4
   M2 --> M4
   M3 --> M4
+  M0 --> M4
+  M0 --> M5
   M3 --> M5
+  M1 --> M5
+  M2 --> M5
   M4 --> M5
 ```
 
@@ -89,7 +93,7 @@ flowchart LR
 - M3-10 ← M3-06 (hard)
 - M3-11 ← M3-06 (hard)
 - M3-12 ← M3-09 (hard), M3-06 (hard)
-- M4-01 ← M1-01 (hard), M2-02 (hard), M3-01 (hard)
+- M4-01 ← M1-01 (hard), M2-02 (hard), M3-01 (hard), M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
 - M4-02 ← none
 - M0-31 ← none
 - M0-32 ← none
@@ -101,9 +105,9 @@ flowchart LR
 - M0-37 ← none
 - M0-38 ← none
 - M0-39 ← none
-- M4-03 ← none
-- M4-04 ← none
-- M4-05 ← none
+- M4-03 ← M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
+- M4-04 ← M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
+- M4-05 ← M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
 - M4-06 ← none
 - M4-07 ← none
 - M0-22-R2 ← M0-22-R1 (hard)
@@ -151,8 +155,8 @@ flowchart LR
 - M1-05-R1 ← M1-05 (hard)
 - M2-04-R2 ← M2-04-R1 (hard), M2-05 (hard)
 - M2-06-R1 ← M2-06 (hard), M2-07 (hard)
-- M5-01 ← none
-- M5-02 ← none
+- M5-01 ← M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
+- M5-02 ← M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
 - M5-03 ← M5-01 (fixture), M5-02 (hard)
 - M5-04 ← M5-03 (hard)
 - M5-05 ← M5-04 (hard)
@@ -170,7 +174,7 @@ flowchart LR
 - M5-17 ← M5-04 (hard), M5-06 (hard)
 - M5-18 ← M5-05 (hard), M5-06 (hard), M5-07 (hard), M4-01 (interface)
 - M5-98 ← M5-04 (quality), M5-06 (quality), M5-11 (quality), M5-16 (quality)
-- M4-08 ← M3-01 (hard)
+- M4-08 ← M3-01 (hard), M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
 - M3-08-R1 ← M3-08 (hard), M3-11 (hard)
 - M3-09-R1 ← M3-09 (hard), M3-12 (hard)
 - M0-02-R7 ← M0-02-R4 (hard), M0-02-R5 (hard)
@@ -189,3 +193,7 @@ flowchart LR
 - M0-09-R5 ← M0-09-R4 (hard)
 - M1-03-R2 ← M1-03-R1 (hard), M1-07-R2 (hard)
 - M0-11-R3 ← M0-11-R2 (hard), M0-03-R4 (hard)
+- M0-12-R8 ← M0-11-R3 (hard)
+- M4-09 ← none
+- M0-12-R9 ← M0-12-R7 (hard)
+- M0-02-R8 ← M0-02-R7 (hard), M0-17-R4 (hard)

@@ -5,6 +5,7 @@ import { PhpParser } from './languages/php.js';
 import { JavaScriptParser } from './languages/javascript.js';
 import { TypeScriptParser } from './languages/typescript.js';
 import { VueParser } from './languages/vue.js';
+import { SvelteParser } from './languages/svelte.js';
 import { FallbackParser } from './fallback-parser.js';
 import { StaticFileParser } from './static-file-parser.js';
 import { GenericWasmParser } from './generic-wasm-parser.js';
@@ -49,6 +50,8 @@ function createParser(langDef: LanguageDefinition): LanguageParser {
       return new TypeScriptParser(langDef);
     case 'vue':
       return new VueParser(langDef);
+    case 'svelte':
+      return new SvelteParser(langDef);
     case 'python':
     case 'go':
     case 'rust':

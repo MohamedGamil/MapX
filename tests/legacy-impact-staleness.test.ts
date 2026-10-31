@@ -3,6 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
 import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { buildServer } from '../src/mcp.js';
 import { cleanup, init, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
 
 // M0-11-R1: impact risk without the try/catch downgrade (D010), import-only dependants, callee
@@ -22,9 +25,15 @@ describe('impact, callees, staleness and globals', () => {
       // M0-11-R2: the globals blacklist on the other JS-family extensions
       'src/viaCjs.cjs': 'function viaCjs() { return new Date(); }\nmodule.exports = { viaCjs };\n',
       'src/viaCts.cts': 'export function viaCts() { return new Date(); }\n',
-      'src/View.svelte': '<script>\n  const d = new Date();\n</script>\n<p>{d}</p>\n',
+      // M0-12-R8: a .svelte script with a global instantiation and a project call
+      'src/clock.ts': 'export function now() {\n  return 0;\n}\n',
+      'src/View.svelte': "<script>\n  import { now } from './clock';\n  const d = new Date();\n  const t = now();\n</script>\n<p>{d}{t}</p>\n",
       // M0-11-R2: imports core.ts but not `direct`
       'src/helper-only.ts': "import { helper } from './core';\nexport type H = typeof helper;\n",
+      // M0-11-R3: a default export imported under another name
+      'src/format.ts': 'export default function formatDate(d: number) { return String(d); }\nexport function parseDate(s: string) { return Number(s); }\n',
+      'src/aliased.ts': "import fmt from './format';\nexport const formatters = [fmt];\n",
+      'src/parse-only.ts': "import { parseDate } from './format';\nexport const parsers = [parseDate];\n",
     }, ['.']);
     git(root, 'add', '.');
     git(root, 'commit', '-qm', 'init');
@@ -52,6 +61,23 @@ describe('impact, callees, staleness and globals', () => {
         .filter((a: { symbol: string }) => a.symbol === '<import>').map((a: { file: string }) => a.file).sort();
     expect(importers('direct')).toEqual(['src/types-only.ts']);
     expect(importers('helper')).toEqual(['src/helper-only.ts']);
+  });
+
+  it('lists a file that imports the default export under another name, and not one importing another name (M0-11-R3)', () => {
+    const importers = (symbol: string) =>
+      JSON.parse(mapx(root, 'impact', symbol, '-d', root, '--format', 'json')).affected
+        .filter((a: { symbol: string }) => a.symbol === '<import>').map((a: { file: string }) => a.file).sort();
+    expect(importers('formatDate')).toEqual(['src/aliased.ts']);
+    expect(importers('parseDate')).toEqual(['src/parse-only.ts']);
+  });
+
+  // M0-12-R8 (replaces the M0-11-R3 / D016 test that pinned "no references from .svelte"): a
+  // .svelte script's references go through the scanner, so the globals check is what keeps
+  // `new Date()` from the project's Date class, while the project call links.
+  it('creates no edge from new Date() in a .svelte script to a user Date class, while its project call links', () => {
+    expect(query(root, "SELECT target_file, target_symbol FROM edges WHERE source_file = 'src/View.svelte' AND edge_type = 'call'"))
+      .toEqual([{ target_file: 'src/clock.ts', target_symbol: 'now' }]);
+    expect(query(root, "SELECT target_file FROM edges WHERE source_file = 'src/View.svelte' AND target_file = 'src/Date.ts'")).toEqual([]);
   });
 
   it('creates no edge from new Date() in .cjs, .cts or .svelte to a user Date class', () => {
@@ -133,6 +159,44 @@ describe('staleness follows the scanner file rules', () => {
     const stale = staleLines(root);
     expect(stale).toContain('src/b.ts (new)');
     expect(stale).not.toMatch(/tool\.ts|eslintrc/);
+  }, 60000);
+
+  it('mapx status lists only the git changes a scan would index (M0-11-R3)', async () => {
+    const root = workspace({ 'src/a.ts': 'export const a = 1;\n', 'README.md': '# r\n', '.gitignore': '.mapx/\n' }, ['.']);
+    roots.push(root);
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'init');
+    init(root);
+    mapx(root, 'scan', root);
+    writeFileSync(join(root, '.eslintrc.js'), 'module.exports = {};\n');
+    mkdirSync(join(root, 'coverage'));
+    writeFileSync(join(root, 'coverage/lcov.ts'), 'export const c = 1;\n');
+    writeFileSync(join(root, 'notes.bin'), 'x');
+    const quiet = mapx(root, 'status', '-d', root);
+    expect(quiet).toContain('No changes since last scan');
+    // MCP mapx_status filters the same way (it reports a count).
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    const mcpStatus = async () => ((await client.callTool({ name: 'mapx_status', arguments: { dir: root } })) as { content: Array<{ text: string }> }).content[0].text;
+    expect(await mcpStatus()).toContain('No changes since last scan');
+    writeFileSync(join(root, 'src/b.ts'), 'export const b = 1;\n');
+    const stale = mapx(root, 'status', '-d', root);
+    expect(stale).toContain('+ src/b.ts');
+    expect(stale).not.toMatch(/eslintrc|coverage|notes\.bin/);
+    // A removed indexed file and an indexed file renamed to a non-source name are still changes.
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'more');
+    mapx(root, 'sync', root);
+    git(root, 'mv', 'src/a.ts', 'src/a.ts.bak');
+    const moved = mapx(root, 'status', '-d', root);
+    expect(moved).toMatch(/src\/a\.ts\.bak/);
+    try {
+      expect(await mcpStatus()).toContain('1 changed files');
+    } finally {
+      await client.close();
+    }
   }, 60000);
 
   it('framework laravel without globs: a new migration and Blade view are not stale; a new model is', () => {

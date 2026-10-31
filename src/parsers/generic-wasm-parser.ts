@@ -62,12 +62,111 @@ const JS_FUNCTION_NODES = new Set([
   'generator_function_declaration', 'generator_function', 'class_static_block',
 ]);
 
-/** True when a JS/TS node sits inside a function, arrow or method body. */
-function insideFunctionBody(node: any): boolean {
+/**
+ * True when a JS/TS node sits inside a function, arrow or method body (M0-17-R3), or in a block:
+ * `if (x) { const f = () => 1 }` is block-scoped (M0-17-R5). A TypeScript namespace body is
+ * module level.
+ */
+function insideFunctionOrBlock(node: any): boolean {
   for (let curr = node.parent; curr; curr = curr.parent) {
     if (JS_FUNCTION_NODES.has(curr.type)) return true;
+    if (curr.type === 'statement_block' && curr.parent?.type !== 'internal_module' && curr.parent?.type !== 'module') return true;
+    if (curr.type === 'switch_case' || curr.type === 'switch_default' || curr.type === 'for_statement') return true;
   }
   return false;
+}
+
+/**
+ * Values that make a module-level binding callable (M0-17-R5): a call (`create(…)`,
+ * `createAsyncThunk(…)`, `functools.partial(…)`), a name (`= useSelector`), a member
+ * (`= store.dispatch`) or a Python lambda. Literals, objects, arrays, operators and `new` stay
+ * values.
+ */
+const CALLABLE_VALUES = new Set(['call_expression', 'identifier', 'member_expression', 'call', 'attribute', 'lambda']);
+const TRANSPARENT_VALUES = new Set(['parenthesized_expression', 'as_expression', 'satisfies_expression', 'non_null_expression']);
+
+/** The value of a JS/TS declarator or a module-level Python assignment, unwrapped; null otherwise. */
+function bindingValue(node: any): any {
+  let value = node.type === 'variable_declarator' ? node.childForFieldName('value')
+    : node.type === 'expression_statement' && node.parent?.type === 'module' && node.namedChildren[0]?.type === 'assignment'
+      ? node.namedChildren[0].childForFieldName('right')
+      : null;
+  while (value && TRANSPARENT_VALUES.has(value.type)) value = value.namedChildren[0];
+  return value ?? null;
+}
+
+const LOCAL_SCOPE_LANGUAGES = new Set(['javascript', 'typescript', 'tsx', 'python']);
+const CALL_NODES = new Set(['call_expression', 'call', 'new_expression']);
+
+/**
+ * True when a JS/TS or Python parameter list declares `name` as a plain parameter (with a type,
+ * default or rest). Destructured parameters are not followed: `({ loadLanguage }) => …` over a
+ * dynamic import names the module's function.
+ */
+function bindsName(n: any, name: string): boolean {
+  switch (n?.type) {
+    case 'identifier': return n.text === name;
+    case 'required_parameter': case 'optional_parameter': return bindsName(n.childForFieldName('pattern'), name);
+    case 'assignment_pattern': return bindsName(n.childForFieldName('left'), name);
+    case 'default_parameter': case 'typed_default_parameter': return bindsName(n.childForFieldName('name'), name);
+    case 'formal_parameters': case 'parameters': case 'lambda_parameters':
+    case 'rest_pattern': case 'typed_parameter': case 'list_splat_pattern': case 'dictionary_splat_pattern':
+      return n.namedChildren.some((c: any) => c.type !== 'type' && c.type !== 'type_annotation' && bindsName(c, name));
+    default: return false;
+  }
+}
+
+/**
+ * True when `name()` at `node` calls a parameter or a plain local variable of an enclosing JS/TS
+ * function or block, or Python function (M0-17-R5). Such a call never reaches a module symbol of
+ * that name, which is now often a function (`const useAppSelector = useSelector`): the guard
+ * M0-17-R2 had from skipping constants. Destructured locals (`const { reset } = useStore()`) are
+ * left to the Vue store and composable passes.
+ */
+function boundLocally(node: any, name: string): boolean {
+  for (let curr = node.parent; curr && curr.type !== 'program' && curr.type !== 'module'; curr = curr.parent) {
+    const params = curr.type === 'arrow_function' && !curr.childForFieldName('parameters')
+      ? curr.childForFieldName('parameter') : curr.childForFieldName('parameters');
+    if ((JS_FUNCTION_NODES.has(curr.type) || curr.type === 'function_definition' || curr.type === 'lambda') && bindsName(params, name)) return true;
+    const jsBlock = curr.type === 'statement_block' && curr.parent?.type !== 'internal_module' && curr.parent?.type !== 'module';
+    const pyBody = curr.type === 'block' && curr.parent?.type === 'function_definition';
+    if (!jsBlock && !pyBody) continue;
+    for (const s of curr.namedChildren) {
+      if ((s.type === 'lexical_declaration' || s.type === 'variable_declaration')
+        && s.namedChildren.some((d: any) => d.type === 'variable_declarator' && d.childForFieldName('name')?.type === 'identifier' && d.childForFieldName('name').text === name)) return true;
+      const assignment = s.type === 'expression_statement' ? s.namedChildren[0] : null;
+      if (pyBody && assignment?.type === 'assignment' && assignment.childForFieldName('left')?.type === 'identifier' && assignment.childForFieldName('left').text === name) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Go `struct { log.Logger }`: the import path of the package qualifying an embedded type, by
+ * import alias or package name (the last path element without a `.vN`, `vN` or `go-` decoration).
+ * Null when no import of the file matches (M0-17-R5).
+ */
+function goImportPath(qualifiedType: any): string | null {
+  const qualifier = qualifiedType.childForFieldName('package')?.text;
+  let root = qualifiedType;
+  while (root.parent) root = root.parent;
+  const specs: any[] = [];
+  const collect = (n: any) => {
+    for (const c of n.namedChildren) {
+      if (c.type === 'import_spec') specs.push(c);
+      else if (c.type === 'import_declaration' || c.type === 'import_spec_list') collect(c);
+    }
+  };
+  collect(root);
+  for (const spec of specs) {
+    const path = String(spec.childForFieldName('path')?.text ?? '').replace(/^["`]|["`]$/g, '');
+    const alias = spec.childForFieldName('name')?.text;
+    const parts = path.split('/');
+    const last = /^v\d+$/.test(parts[parts.length - 1] ?? '') && parts.length > 1 ? parts[parts.length - 2] : parts[parts.length - 1];
+    const name = (last ?? '').replace(/\.v\d+$/, '').replace(/^go-/, '').replace(/-go$/, '');
+    if ((alias ?? name) === qualifier) return path;
+  }
+  return null;
 }
 
 export class GenericWasmParser implements LanguageParser {
@@ -116,18 +215,26 @@ export class GenericWasmParser implements LanguageParser {
           const baseKind = captureName.replace('symbol.kind_', '') as SymbolKind;
           for (const capture of captures) {
             if (seenNodeIds.has(capture.node.id)) continue;
+            let kind = baseKind;
             // A `const f = () => …` declarator is a function, claimed by the function pattern on
             // the same node: skip it here without marking it seen (M0-17-R1).
             if ((baseKind === 'constant' || baseKind === 'variable') && capture.node.type === 'variable_declarator') {
               const value = capture.node.childForFieldName('value')?.type;
-              if (value === 'arrow_function' || value === 'function_expression' || value === 'function' || value === 'class' || value === 'generator_function') continue;
+              if (value === 'arrow_function' || value === 'function_expression' || value === 'function' || value === 'generator_function') continue;
+              // `export const Klass = class {}` is a class named by its binding (M0-17-R5).
+              if (value === 'class') kind = 'class';
             }
-            // A `const f = () => …` inside a function or method body is a local binding, like a
-            // local constant, not a module function (M0-17-R3).
-            if (baseKind === 'function' && capture.node.type === 'variable_declarator' && insideFunctionBody(capture.node)) continue;
+            // A module-level binding to a call, a name or a member is callable, so it is a
+            // function symbol and a call target; only a literal value stays a constant or
+            // variable (M0-17-R5). Not in a Vue SFC: there `const total = computed(…)` is a reactive
+            // value, and value declarations own no references (vue-template.ts, rule 2).
+            if ((kind === 'constant' || kind === 'variable') && !filePath.endsWith('.vue')
+              && CALLABLE_VALUES.has(bindingValue(capture.node)?.type)) kind = 'function';
+            // A `const f = () => …` inside a function, method or block is a local binding, like a
+            // local constant, not a module function (M0-17-R3, M0-17-R5).
+            if (baseKind === 'function' && capture.node.type === 'variable_declarator' && insideFunctionOrBlock(capture.node)) continue;
             seenNodeIds.add(capture.node.id);
 
-            let kind = baseKind;
             let name = nameByNodeId.get(capture.node.id);
             if (!name) {
               const isDefaultOrAnonymous =
@@ -169,7 +276,8 @@ export class GenericWasmParser implements LanguageParser {
 
             // C++ out-of-line definition `void Foo::run() {}`: a method of Foo (M0-17-R1). The
             // owner is the innermost qualifier (`ns::K::a` → K), without template arguments
-            // (`Box<T>::f` → Box) (M0-17-R2).
+            // (`Box<T>::f` → Box) (M0-17-R2). The name is the innermost one at any depth
+            // (`a::b::c::D::g` → g), a destructor keeping its tilde (`ns::K::~K` → ~K) (M0-17-R5).
             if (kind === 'function' && capture.node.type === 'function_definition') {
               let qualified = capture.node.childForFieldName('declarator')?.childForFieldName('declarator');
               while (qualified?.type === 'qualified_identifier' && qualified.childForFieldName('name')?.type === 'qualified_identifier') {
@@ -180,6 +288,11 @@ export class GenericWasmParser implements LanguageParser {
               if (owner) {
                 kind = 'method';
                 extractedScope = owner.text;
+              }
+              const leaf = qualified?.type === 'qualified_identifier' ? qualified.childForFieldName('name') : null;
+              if (leaf) {
+                name = leaf.type === 'destructor_name' ? leaf.text.replace(/\s+/g, '')
+                  : leaf.type === 'template_function' ? (leaf.childForFieldName('name')?.text ?? leaf.text) : leaf.text;
               }
             }
 
@@ -287,12 +400,27 @@ export class GenericWasmParser implements LanguageParser {
               continue;
             }
 
+            // `fetchUser()` on a parameter or local variable is not the module's `fetchUser` (M0-17-R5).
+            if ((referenceType === 'call' || referenceType === 'instantiation') && LOCAL_SCOPE_LANGUAGES.has(this.languageName)
+              && !filePath.endsWith('.vue') && capture.node.type === 'identifier'
+              && CALL_NODES.has(capture.node.parent?.type ?? '') && boundLocally(capture.node, targetName)) continue;
+
+            // Go `struct { log.Logger }`: the embedded type lives in the imported package, which the
+            // scanner resolves; a library package (null when no import matches) links nothing (M0-17-R5).
+            const goPackage = this.languageName === 'go' && referenceType === 'extends' && capture.node.parent?.type === 'qualified_type'
+              ? { goPackage: goImportPath(capture.node.parent) } : null;
+
             references.push({
               sourceSymbol: null,
               targetName,
               referenceType,
               startLine,
               verifiability,
+              // The receiver of a member call (`obj`, `this`, `super`, `a.b`), for the scanner to tell a
+              // library object and never take the call for a global function (M0-17-R4).
+              ...(referenceType === 'call' && receiver ? { metadata: { receiver: receiver.type === 'identifier' ? receiver.text : `<${receiver.type}>` } } : {}),
+              // The import path of a package-qualified Go embedded type (an extends, never a call) (M0-17-R5).
+              ...(goPackage ? { metadata: goPackage } : {}),
             });
             }
           }

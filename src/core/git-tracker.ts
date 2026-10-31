@@ -40,7 +40,7 @@ export function getGitBlobHashes(repoRoot: string, relativeTo: string = repoRoot
   try {
     // Single call: `git ls-tree -r HEAD` outputs lines like:
     //   100644 blob <hash>\t<path>
-    const output = execSync('git ls-tree -r HEAD', {
+    const output = execSync(`git ${GIT_RAW_PATHS} ls-tree -r HEAD`, {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
@@ -78,7 +78,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
   // `--relative`: in a repo nested inside a larger checkout, git prints paths from the top level
   // and lists changes outside the repo; the scanner resolves paths against the repo root (M0-02-R3).
   try {
-    const output = execSync(`git diff --name-status --relative ${since || 'HEAD'}`, {
+    const output = execSync(`git ${GIT_RAW_PATHS} diff --name-status --relative ${since || 'HEAD'}`, {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
@@ -89,7 +89,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
   }
 
   try {
-    const stagedOutput = execSync('git diff --name-status --relative --cached', {
+    const stagedOutput = execSync(`git ${GIT_RAW_PATHS} diff --name-status --relative --cached`, {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
     });
@@ -101,7 +101,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
 
   // New files git does not track yet are changes too (git diff never lists them).
   try {
-    const untracked = execSync('git ls-files --others --exclude-standard', {
+    const untracked = execSync(`git ${GIT_RAW_PATHS} ls-files --others --exclude-standard`, {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
@@ -114,6 +114,25 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
   }
 
   return changes;
+}
+
+/**
+ * Gitignored entries under the repo root, repo-relative; a wholly ignored folder is one entry ending
+ * in `/` (`--directory`). The scan walk does not read .gitignore, so git sync needs them (M0-02-R7).
+ * Null when git cannot list them: below an ignored folder it fails ("directory entry not superset of
+ * prefix"), and the whole repo is ignored then.
+ */
+export function getIgnoredEntries(repoRoot: string): string[] | null {
+  try {
+    const output = execSync(`git ${GIT_RAW_PATHS} ls-files --others --ignored --exclude-standard --directory`, {
+      cwd: repoRoot,
+      encoding: 'utf-8', stdio: QUIET,
+      maxBuffer: 50 * 1024 * 1024,
+    });
+    return String(output ?? '').split('\n').filter(Boolean);
+  } catch {
+    return null;
+  }
 }
 
 export function getCurrentCommitSha(repoRoot: string): string | null {
@@ -153,6 +172,9 @@ export function getRepoName(repoRoot: string): string {
 
 import { existsSync, readFileSync } from 'node:fs';
 import { SubmoduleInfo } from '../types.js';
+
+// Non-ASCII paths as they are, not quoted and escaped (`"g\303\251n\303\251r\303\251s/"`).
+const GIT_RAW_PATHS = '-c core.quotePath=false';
 
 // Callers handle failures (e.g. a repo with no commits); keep git's stderr off the terminal.
 const QUIET: ['ignore', 'pipe', 'ignore'] = ['ignore', 'pipe', 'ignore'];

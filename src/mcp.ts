@@ -11,7 +11,8 @@ import { existsSync, statSync, readFileSync } from 'node:fs';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { Scanner, buildMatcher } from './core/scanner.js';
+import { Scanner } from './core/scanner.js';
+import { buildPathFilter } from './core/file-rules.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { AgentGenerator, needsConsent, droppedCommentsWarning } from './agents/generator.js';
@@ -24,7 +25,7 @@ import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
-import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
+import { findStaleFiles, indexableChanges, staleCount, staleNames } from './core/staleness.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { formatLanguageInfo, formatLanguageList, installLanguage, uninstallLanguage } from './languages/installer.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
@@ -835,7 +836,8 @@ EXAMPLE:
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         // Exact path, glob or partial name, as `mapx deps` resolves it; one section per match (M0-03-R4).
-        const paths = resolveFilePaths(file, ctx.store.getAllFiles() as Array<{ path: unknown }>);
+        // Backslash, `./` and absolute forms as mapx_edges takes them (M0-11-R3).
+        const paths = resolveFilePaths(indexedPath(dir, file), ctx.store.getAllFiles() as Array<{ path: unknown }>);
         if (!paths) {
           const { error, tip } = fileNotFoundMessage(file);
           return { content: [{ type: 'text', text: `${error}\n\n${tip}` }], isError: true };
@@ -898,7 +900,7 @@ EXAMPLE:
           ...(ctx.config.settings.includePatterns ?? []),
           ...include,
         ];
-        const matcher = buildMatcher(excludes, includes);
+        const matcher = buildPathFilter(excludes, includes);
         const allFiles = ctx.store.getAllFiles(repo).map(f => f.path as string);
         const filteredFiles = allFiles.filter(f => matcher(f));
 
@@ -953,7 +955,8 @@ EXAMPLE:
         let isStale = false;
         let gitInfo = '';
         if (isGitRepo(repoRoot)) {
-          const changes = getChangedFiles(repoRoot, lastCommit || undefined);
+          // As `mapx status`: only changes a scan would index or that touch an indexed file (M0-11-R3).
+          const changes = indexableChanges(ctx.store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), ctx.config.repo.name);
           if (changes.length === 0) {
             gitInfo = 'No changes since last scan  (✓ index is current)';
           } else {

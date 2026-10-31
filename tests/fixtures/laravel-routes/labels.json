@@ -1,5 +1,5 @@
 {
-  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden (must be reported with this handler and flagged overridden), unreachable (must be reported, with this handler when one is given, and flagged unreachable; never live), absent (must not be reported at all: route code inside comments, strings and heredocs, or a file under a prefix that never mounts it).",
+  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden (must be reported with this handler and flagged overridden), unreachable (must be reported, with this handler when one is given, and flagged unreachable; never live), absent (must not be reported at all: route code inside comments, strings and heredocs, or a file under a prefix that never mounts it). Optional name, domain and dynamic on a live or conditional label must equal the reported route's name, domain and dynamic flag.",
   "labels": [
     {
       "id": "L01",
@@ -913,6 +913,261 @@
       "uri": "api/authors/{author}/books/{book}",
       "handler": "HomeController@book",
       "expect": "live"
+    },
+    {
+      "id": "L115",
+      "pattern": "rsp-glob",
+      "method": "GET",
+      "uri": "mail/inbox",
+      "handler": "HomeController@inbox",
+      "expect": "live"
+    },
+    {
+      "id": "L116",
+      "pattern": "rsp-glob",
+      "method": "GET",
+      "uri": "mail/outbox",
+      "handler": "HomeController@outbox",
+      "expect": "live"
+    },
+    {
+      "id": "L117",
+      "pattern": "rsp-glob",
+      "method": "GET",
+      "uri": "notes",
+      "handler": "HomeController@notes",
+      "expect": "live"
+    },
+    {
+      "id": "L118",
+      "pattern": "rsp-require",
+      "method": "GET",
+      "uri": "required",
+      "handler": "HomeController@required",
+      "expect": "live"
+    },
+    {
+      "id": "L119",
+      "pattern": "rsp-load-routes-from",
+      "method": "GET",
+      "uri": "loaded",
+      "handler": "HomeController@loaded",
+      "expect": "live"
+    },
+    {
+      "id": "L120",
+      "pattern": "rsp-variable-mount",
+      "method": "GET",
+      "uri": "var/page",
+      "handler": "HomeController@variablePage",
+      "expect": "live"
+    },
+    {
+      "id": "L121",
+      "pattern": "rsp-dynamic-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/settings",
+      "handler": "HomeController@settings",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L122",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "config('app.api_prefix')/settings",
+      "handler": "HomeController@settings",
+      "expect": "absent"
+    },
+    {
+      "id": "L123",
+      "pattern": "rsp-property-prefix",
+      "method": "GET",
+      "uri": "ops/v3/status",
+      "handler": "HomeController@opsStatus",
+      "expect": "live",
+      "name": "ops.status",
+      "domain": "ops.example.com"
+    },
+    {
+      "id": "L124",
+      "pattern": "rsp-property-prefix",
+      "method": "GET",
+      "uri": "audit/v3/log",
+      "handler": "HomeController@auditLog",
+      "expect": "live"
+    },
+    {
+      "id": "L125",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "ops/{$this->version}/status",
+      "handler": "HomeController@opsStatus",
+      "expect": "absent"
+    },
+    {
+      "id": "L126",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "ops/{dynamic}/status",
+      "handler": "HomeController@opsStatus",
+      "expect": "absent"
+    },
+    {
+      "id": "L127",
+      "pattern": "rsp-raw-prefix",
+      "method": "GET",
+      "uri": "audit/$this->version/log",
+      "handler": "HomeController@auditLog",
+      "expect": "absent"
+    },
+    {
+      "id": "L128",
+      "pattern": "require-once",
+      "method": "GET",
+      "uri": "api/once-a/shared",
+      "handler": "HomeController@onceShared",
+      "expect": "live"
+    },
+    {
+      "id": "L129",
+      "pattern": "require-once-wrong",
+      "method": "GET",
+      "uri": "api/once-b/shared",
+      "handler": "HomeController@onceShared",
+      "expect": "absent"
+    },
+    {
+      "id": "L130",
+      "pattern": "require-cycle",
+      "method": "GET",
+      "uri": "api/cycle-a",
+      "handler": "HomeController@cycleA",
+      "expect": "live"
+    },
+    {
+      "id": "L131",
+      "pattern": "require-cycle",
+      "method": "GET",
+      "uri": "api/cycle-b",
+      "handler": "HomeController@cycleB",
+      "expect": "live"
+    },
+    {
+      "id": "L132",
+      "pattern": "trailing-slash-overridden",
+      "method": "GET",
+      "uri": "api/home",
+      "handler": "HomeController@homeOld",
+      "expect": "overridden"
+    },
+    {
+      "id": "L133",
+      "pattern": "trailing-slash",
+      "method": "GET",
+      "uri": "api/home",
+      "handler": "HomeController@homeNew",
+      "expect": "live"
+    },
+    {
+      "id": "L134",
+      "pattern": "invokable",
+      "method": "GET",
+      "uri": "api/invokable",
+      "handler": "ShowProfile@__invoke",
+      "expect": "live"
+    },
+    {
+      "id": "L135",
+      "pattern": "match",
+      "method": "GET",
+      "uri": "api/feeds",
+      "handler": "HomeController@feeds",
+      "expect": "live"
+    },
+    {
+      "id": "L136",
+      "pattern": "match",
+      "method": "POST",
+      "uri": "api/feeds",
+      "handler": "HomeController@feeds",
+      "expect": "live"
+    },
+    {
+      "id": "L137",
+      "pattern": "dynamic-resource",
+      "method": "GET",
+      "uri": "api/gallery/{dynamic}",
+      "handler": "GalleryController@index",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L138",
+      "pattern": "dynamic-resource",
+      "method": "GET",
+      "uri": "api/gallery/{dynamic}/{dynamic}",
+      "handler": "GalleryController@show",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L139",
+      "pattern": "rsp-compound-assignment",
+      "method": "GET",
+      "uri": "area/v1/plan",
+      "handler": "HomeController@areaPlan",
+      "expect": "live"
+    },
+    {
+      "id": "L140",
+      "pattern": "rsp-compound-assignment-wrong",
+      "method": "GET",
+      "uri": "area/plan",
+      "handler": "HomeController@areaPlan",
+      "expect": "absent"
+    },
+    {
+      "id": "L141",
+      "pattern": "rsp-compound-assignment",
+      "method": "GET",
+      "uri": "gold/perks",
+      "handler": "HomeController@tierPerks",
+      "expect": "live"
+    },
+    {
+      "id": "L142",
+      "pattern": "rsp-compound-assignment-wrong",
+      "method": "GET",
+      "uri": "{dynamic}/perks",
+      "handler": "HomeController@tierPerks",
+      "expect": "absent"
+    },
+    {
+      "id": "L143",
+      "pattern": "rsp-property-assignment",
+      "method": "GET",
+      "uri": "e2/notes",
+      "handler": "HomeController@editionNotes",
+      "expect": "live"
+    },
+    {
+      "id": "L144",
+      "pattern": "rsp-property-assignment-wrong",
+      "method": "GET",
+      "uri": "e1/notes",
+      "handler": "HomeController@editionNotes",
+      "expect": "absent"
+    },
+    {
+      "id": "L145",
+      "pattern": "rsp-partly-dynamic",
+      "method": "GET",
+      "uri": "zone{dynamic}/map",
+      "handler": "HomeController@zoneMap",
+      "expect": "live",
+      "name": "zone.{dynamic}.map",
+      "dynamic": true
     }
   ]
 }

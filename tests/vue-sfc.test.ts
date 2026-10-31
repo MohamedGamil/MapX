@@ -7,6 +7,8 @@ import {
   type EdgeLabel, type EdgeScore, type StoredEdge, type StoredSymbol,
 } from '../scripts/eval/score-edges.ts';
 import { findNestedManifestScopes } from '../src/frameworks/utils.ts';
+import { SymfonyDetector } from '../src/frameworks/detectors/symfony.ts';
+import { VueRouterDetector } from '../src/frameworks/detectors/vue-router.ts';
 import { ignoredSymbolsForFile } from '../src/parsers/ignored-symbols.ts';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.ts';
 
@@ -293,6 +295,62 @@ describe('framework detection from a package.json below the repo root (M3-07)', 
       cleanup(root);
     }
   }, 120000);
+
+  // M3-07-R1: with the default `package.json` exclude dropped, frontend/package.json is in the scanned
+  // files; detect() must still read only the repo root's manifest, so Vue stays scoped to frontend/.
+  it.each([['worker threads', []], ['main thread', ['--no-parallel']]])('keeps Vue scoped to frontend/ when package.json files are indexed (%s)', (_mode, flags) => {
+    const root = workspace(files);
+    try {
+      init(root);
+      const configPath = join(root, '.mapx', 'config.json');
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      config.settings.excludePatterns = config.settings.excludePatterns.filter((p: string) => p !== 'package.json');
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      mapx(root, 'scan', ...flags);
+      // The manifest really was indexed (otherwise this test would only repeat the one above).
+      expect(query(root, "SELECT path FROM files WHERE path = 'frontend/package.json'")).toHaveLength(1);
+      expect(JSON.parse(readFileSync(join(root, '.mapx', 'frameworks.json'), 'utf8'))).toContain('vue-router');
+      const routes = query<StoredEdge>(root, "SELECT source_file, source_symbol, target_file, target_symbol, edge_type FROM edges WHERE edge_type = 'route'");
+      expect(routes).toEqual([{
+        source_file: 'frontend/src/router/index.js', source_symbol: null,
+        target_file: 'frontend/src/views/AboutView.vue', target_symbol: 'AboutView', edge_type: 'route',
+      }]);
+      const t = query<{ file_path: string }>(root, "SELECT file_path FROM symbols WHERE name = 't' ORDER BY file_path");
+      expect(t.map((s) => s.file_path)).toEqual(['backend/src/helpers.php', 'backend/tools/i18n.js']);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('detect() reads only the repo-root manifest, whatever manifests the file list holds', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mapx-detect-'));
+    const write = (path: string, json: object) => {
+      mkdirSync(join(root, path, '..'), { recursive: true });
+      writeFileSync(join(root, path), JSON.stringify(json));
+    };
+    try {
+      write('frontend/package.json', { dependencies: { vue: '^3', 'vue-router': '^4' } });
+      write('backend/composer.json', { require: { 'symfony/framework-bundle': '^7' } });
+      const files = ['frontend/package.json', 'frontend/src/main.js', 'backend/composer.json', 'backend/src/Kernel.php'];
+      const vue = new VueRouterDetector();
+      const symfony = new SymfonyDetector();
+      // No root manifest: the nested ones in `files` do not activate the detector repo-wide.
+      expect(await vue.detect(root, files)).toBe(false);
+      expect(await symfony.detect(root, files)).toBe(false);
+      // A root manifest without the dependency changes nothing.
+      write('package.json', { dependencies: { express: '^4' } });
+      write('composer.json', { require: { 'monolog/monolog': '^3' } });
+      expect(await vue.detect(root, [...files, 'package.json', 'composer.json'])).toBe(false);
+      expect(await symfony.detect(root, [...files, 'package.json', 'composer.json'])).toBe(false);
+      // The root manifest is read from disk even when excluded from `files` (the default).
+      write('package.json', { devDependencies: { vue: '^3' } });
+      write('composer.json', { require: { 'symfony/symfony': '^5' } });
+      expect(await vue.detect(root, files)).toBe(true);
+      expect(await symfony.detect(root, files)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 
   it('finds manifest folders from the scanned files, below the repo root only', async () => {
     const root = mkdtempSync(join(tmpdir(), 'mapx-scopes-'));

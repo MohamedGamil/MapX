@@ -31,4 +31,23 @@ class HomeController
     public function commentedEntry() {}
     public function article() {}
     public function book() {}
+    public function inbox() {}
+    public function outbox() {}
+    public function notes() {}
+    public function required() {}
+    public function loaded() {}
+    public function variablePage() {}
+    public function settings() {}
+    public function opsStatus() {}
+    public function auditLog() {}
+    public function onceShared() {}
+    public function cycleA() {}
+    public function cycleB() {}
+    public function homeOld() {}
+    public function homeNew() {}
+    public function feeds() {}
+    public function areaPlan() {}
+    public function tierPerks() {}
+    public function editionNotes() {}
+    public function zoneMap() {}
 }

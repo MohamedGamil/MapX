@@ -16,3 +16,17 @@
 - 2026-10-31: M0-41 legacy audit added 15 remediation tasks (≈139 h). D010: tiers all-bundled; implement all promised surface (epic M0-03-R1 decomposed into M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, then cancelled); impact try/catch downgrade removed; all remediation before M3 (M3-01 → BLOCKED on quality dependencies).
 - 2026-10-31: D013 added milestone M5 (architecture rules, Deptrac-inspired): 19 tasks M5-01 … M5-18 and M5-98 (183 h expected; M5-12 is an epic) and REQ-ARCH-001 … 023, from `docs/research/deptrac/`. Interface dependencies M5-10 → M3-04, M5-12 → M4-03 and M5-18 → M4-01 encode the shared-file overlaps found in reconciliation; no existing task changed. The remaining critical path moves from M3 (32 h) to M5-01 → … → M5-98 (62 h); M3 remains the stated next milestone. Risk R07 added, R06 extended.
 - 2026-10-31: review of `3ac0d6d..2db08bd` (`reviews/REVIEW-2026-10-31-2db08bd25e13.md`, six independent reviewers): 45 newly DONE items, 17 CONFIRMED, 23 DEFECTIVE, 5 FALSELY COMPLETE (M3-08, M1-03-R1, M1-07-R1, M0-04-R3, M0-02-R2). Six defects fixed in the review (M0-05-R3, M3-06, M0-02-R2, M0-04-R2/R5, M1-03-R1) plus three test gaps (M3-01, M3-10) and stub drift (M0-12-R6). Added P1 remediation M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2 and M0-04-R6 (READY), raised M0-02-R6 to P1 (reproduced; READY), and added P2 M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2 and M0-11-R3 (BACKLOG). No unstarted task depended on the disputed items, so no dependency was added. affectedFiles completed for M0-03-R3, M0-12-R3/R5/R6, M0-17-R3, M3-02/04/06/09 (docs touched by their commits).
+
+## 2026-10-31 / 2026-11-01 — Remediation of the 2db08bd review (D015–D018)
+
+- D015: the owner asked for the P1 remediation first, then the P2s, before new milestone work. The promotable M4/M5 tasks take a hard dependency on every open remediation task (addendum: M0-02-R8, M0-12-R8 and M0-12-R9 too).
+- Done: the 7 P1 tasks (M0-02-R6, M0-02-R7, M0-04-R6, M0-10-R4, M1-07-R2, M3-08-R1, M3-09-R1) and the 13 P2 tasks of the review (M0-09-R5, M0-11-R3, M0-12-R7, M0-17-R4, M0-17-R5, M0-20-R3, M1-03-R2, M2-04-R3, M2-06-R2, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1). Each passed at least one independent review, with every finding fixed or recorded in its report.
+- Registered and done during the remediation:
+  - M0-02-R8: sync after renames and config changes, from reviewer L;
+  - M0-12-R8: Svelte script extraction, from D016;
+  - M0-12-R9: Python namespace packages, from reviewer J;
+  - M4-09: tests no longer write to the checkout.
+- D016: the Svelte docs overclaimed; M0-11-R3 AC4 was corrected, and Svelte extraction became M0-12-R8.
+- D017: app boundaries for Vue scopes and JS/TS aliases are separately built apps; M3-09-R1 AC2 was reworded.
+- D018: Python absolute-import roots (the source-root rule was withdrawn); M0-12-R9 AC2 was reworded.
+- `verificationCommands` of M4-09 changed while in progress to `node scripts/baton/check-test-cwd.mjs …`. `affectedFiles` were extended where lanes needed files outside them (recorded in each report).

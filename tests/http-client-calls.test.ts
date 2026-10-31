@@ -125,6 +125,33 @@ describe('http-calls.json through configured import aliases (M3-12)', () => {
   });
 });
 
+// M3-09-R1: a nested Vue CLI app (own package.json, no alias config) keeps `@` → its own src/; the
+// Laravel root's vite alias (`@` → resources/js, where a same-path client is a trap) stops at it.
+describe('http-calls.json in a nested app under a Laravel root alias (M3-09-R1)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'laravel-app', private: true, dependencies: { axios: '^1.7.0' } }),
+      'vite.config.js': "import { defineConfig } from 'vite';\nexport default defineConfig({ resolve: { alias: { '@': '/resources/js' } } });\n",
+      'resources/js/api/client.js': "import axios from 'axios';\nexport default axios.create({ baseURL: '/blade' });\n",
+      'frontend/package.json': JSON.stringify({ name: 'spa', private: true, dependencies: { axios: '^1.7.0', vue: '^2.7.0' }, devDependencies: { '@vue/cli-service': '^5.0.0' } }),
+      'frontend/src/api/client.js': "import axios from 'axios';\nexport default axios.create({ baseURL: '/spa' });\n",
+      'frontend/src/views/Users.vue': "<script>\nimport api from '@/api/client';\nexport default { created() { api.get('users'); } };\n</script>\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('follows the app\'s own @/ import to its client', () => {
+    const records = JSON.parse(readFileSync(join(root, '.mapx', 'http-calls.json'), 'utf8')) as
+      { file: string; method: string; url: string | null; client: { kind: string; definedIn?: string } }[];
+    expect(records.map((r) => `${r.file} ${r.method} ${r.url} ${r.client.kind} ${r.client.definedIn}`)).toEqual([
+      'frontend/src/views/Users.vue GET /spa/users instance frontend/src/api/client.js',
+    ]);
+  });
+});
+
 // M2-03-R1: defects found by the independent M2 review.
 describe('extraction defects (M2-03-R1)', () => {
   it('recognises a global window.axios and a required axios', () => {
@@ -213,5 +240,13 @@ describe('deleted files lose their records (M2-03-R1)', () => {
     rmSync(join(root, 'web/src/b.ts'));
     mapx(root, 'scan', '.', '--all');
     expect(read()).toEqual(['web/src/a.ts']);
+  });
+});
+
+// Review 2026-11-01: a generic SFC's script block (`generic="… > …"`) is still read by the HTTP pass.
+describe('HTTP calls in a generic <script setup>', () => {
+  it('extracts the call of a script whose generic attribute holds `>`', () => {
+    const calls = extractHttpCalls('src/List.vue', '<script setup lang="ts" generic="T extends Map<string, number>">\nimport axios from \'axios\';\naxios.get(\'/api/items\');\n</script>\n<template><ul /></template>\n', { providers: collectProviders([]), files: new Set() });
+    expect(calls.map((c) => `${c.method} ${c.rawUrl}`)).toEqual(["GET '/api/items'"]);
   });
 });

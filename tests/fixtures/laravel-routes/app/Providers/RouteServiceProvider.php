@@ -12,6 +12,8 @@ class RouteServiceProvider extends ServiceProvider
         $this->mapAdminRoutes();
         // $this->mapLegacyRoutes();
         // Route::prefix('old')->middleware('web')->group(base_path('routes/old.php'));
+        $this->mapProviderRoutes();
+        $this->mapAssignedRoutes();
     }
 
     protected function mapAdminRoutes(): void
@@ -23,5 +25,39 @@ class RouteServiceProvider extends ServiceProvider
     protected function mapLegacyRoutes(): void
     {
         Route::prefix('legacy')->middleware('web')->group(base_path('routes/legacy.php'));
+    }
+
+    // M1-07-R2: the mount forms other providers use, inside the RouteServiceProvider.
+    protected function mapProviderRoutes(): void
+    {
+        foreach (glob(base_path('routes/rsp/mail/*.php')) as $file) {
+            Route::middleware('web')->prefix('mail')->group($file);
+        }
+        foreach (glob(base_path('routes/rsp/plain/*.php')) as $file) require $file;
+        require base_path('routes/rsp/required.php');
+        $this->loadRoutesFrom(base_path('routes/rsp/loaded.php'));
+        $routes = base_path('routes/rsp/variable.php');
+        Route::prefix('var')->group($routes);
+        Route::prefix(config('app.api_prefix'))->middleware('api')->group(base_path('routes/rsp/config.php'));
+        Route::prefix("ops/{$this->version}")->domain('ops.example.com')->name('ops.')->middleware('web')->group(base_path('routes/rsp/ops.php'));
+        Route::prefix("audit/$this->version")->group(base_path('routes/rsp/audit.php'));
+    }
+
+    // Declared after its use: a class property is visible to every method.
+    protected $version = 'v3';
+
+    protected $edition = 'e1';
+
+    // M1-03-R2: compound and property assignments, a partly dynamic prefix and name prefix.
+    protected function mapAssignedRoutes(): void
+    {
+        $area = 'area';
+        $area .= '/v1';
+        Route::prefix($area)->group(base_path('routes/rsp/area.php'));
+        $tier ??= 'gold';
+        Route::prefix($tier)->group(base_path('routes/rsp/tier.php'));
+        $this->edition = 'e2';
+        Route::prefix($this->edition)->group(base_path('routes/rsp/edition.php'));
+        Route::prefix("zone{$this->zone()}")->name("zone.{$this->zone()}.")->group(base_path('routes/rsp/zone.php'));
     }
 }

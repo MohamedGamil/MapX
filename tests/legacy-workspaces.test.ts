@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer } from '../src/mcp.js';
+import { startUiServer } from '../src/ui-server.js';
 import { cleanup, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
 
 // M0-10-R1 / M0-10-R2: the F18 workspace surface. Layout: <tmp>/main is the primary repo with an
@@ -348,4 +351,187 @@ describe('workspace surface: scan --all after workspaces add (F18)', () => {
       expect(edges(root)).toEqual(plain);
     }, 120000);
   }
+});
+
+// M0-10-R4: cross-repo edges must not depend on the order repos are resolved in, and must come back
+// after the target file or the whole repo leaves the index and returns, without --force.
+describe('workspace surface: cross-repo edges independent of order and history (M0-10-R4)', () => {
+  type Edge = { source_file: string; target_file: string; edge_type: string };
+  const all = (root: string) => query<Edge>(root, 'SELECT source_file, target_file, edge_type FROM edges ORDER BY source_file, target_file, edge_type, source_symbol, target_symbol');
+  const cross = (root: string) => all(root).filter(e => e.source_file === 'src/app.ts');
+  const expected = [
+    { source_file: 'src/app.ts', target_file: 'libs/ui/button.ts', edge_type: 'import' },
+    { source_file: 'src/app.ts', target_file: 'libs/ui/button.ts', edge_type: 'instantiation' },
+  ];
+  const roots: string[] = [];
+  afterAll(() => roots.forEach(cleanup));
+  const setup = (order: 'primary-first' | 'ui-first' = 'primary-first') => {
+    const root = workspace({
+      'src/app.ts': "import { Button } from '../libs/ui/button';\nexport const app = () => new Button();\n",
+      'libs/ui/button.ts': 'export class Button {}\n',
+      'libs/ui/icon.ts': "import { Button } from './button';\nexport const icon = new Button();\n",
+      '.gitignore': '.mapx/\nlibs/ui/\n',
+    }, ['.', 'libs/ui']);
+    roots.push(root);
+    for (const dir of [join(root, 'libs/ui'), root]) {
+      execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+      commit(dir, 'init');
+    }
+    mapx(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover', '--no-workspaces');
+    const path = join(root, '.mapx/config.json');
+    const config = JSON.parse(readFileSync(path, 'utf8'));
+    const primary = config.repos[0];
+    const ui = { name: 'ui', path: 'libs/ui' };
+    config.repos = order === 'primary-first' ? [primary, ui] : [ui, primary];
+    writeFileSync(path, JSON.stringify(config, null, 2));
+    return root;
+  };
+
+  for (const order of ['primary-first', 'ui-first'] as const) {
+    it(`the first scan --all gives the cross-repo instantiation edge (${order}), as scan --all --force does`, () => {
+      const root = setup(order);
+      mapx(root, 'scan', '--all');
+      expect(cross(root)).toEqual(expected);
+      const first = all(root);
+      mapx(root, 'scan', '--all', '--force');
+      expect(all(root)).toEqual(first);
+    }, 120000);
+  }
+
+  for (const command of ['sync', 'scan'] as const) {
+    it(`${command} --all restores cross-repo inbound edges after the target file is deleted and restored`, () => {
+      const root = setup();
+      mapx(root, 'scan', '--all');
+      const fresh = all(root);
+      expect(cross(root)).toEqual(expected);
+      rmSync(join(root, 'libs/ui/button.ts'));
+      mapx(root, command, '--all');
+      expect(cross(root)).toEqual([]);
+      execFileSync('git', ['checkout', '--', 'button.ts'], { cwd: join(root, 'libs/ui') });
+      mapx(root, command, '--all');
+      expect(all(root)).toEqual(fresh);
+    }, 120000);
+
+    it(`workspaces remove then add, then ${command} --all, restores the cross-repo edges`, () => {
+      const root = setup();
+      mapx(root, 'scan', '--all');
+      const fresh = all(root);
+      mapx(root, 'workspaces', 'remove', 'ui');
+      expect(cross(root).filter(e => e.target_file.startsWith('libs/ui/'))).toEqual([]);
+      mapx(root, 'workspaces', 'add', 'libs/ui');
+      mapx(root, command, '--all');
+      expect(all(root)).toEqual(fresh);
+    }, 120000);
+  }
+
+  it('the dashboard server collapses duplicate repo entries and drops the dropped entry\'s rows', async () => {
+    const tmp = workspace({ 'app/src/a.ts': 'export const a = 1;\n', 'app/lib/b.ts': 'export const b = 2;\n' }, ['app', 'app/lib']);
+    roots.push(tmp);
+    const root = join(tmp, 'app');
+    symlinkSync('lib', join(root, 'lib-link'));
+    commit(root, 'app: init');
+    commit(join(root, 'lib'), 'lib: init');
+    mapx(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover', '--no-workspaces');
+    const path = join(root, '.mapx/config.json');
+    const setRepos = (repos: Array<{ name: string; path: string }>) => {
+      const config = JSON.parse(readFileSync(path, 'utf8'));
+      config.repos = repos;
+      writeFileSync(path, JSON.stringify(config, null, 2));
+    };
+    setRepos([{ name: 'app', path: '.' }, { name: 'lib-link', path: 'lib-link' }]);
+    mapx(root, 'scan', '--all');
+    setRepos([{ name: 'app', path: '.' }, { name: 'lib', path: 'lib' }, { name: 'lib-link', path: 'lib-link' }]);
+    const errors: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => { errors.push(args.join(' ')); };
+    const server = startUiServer({ port: 0, host: '127.0.0.1', dir: root, token: 't' }) as unknown as Server;
+    try {
+      await new Promise<void>((r) => (server.listening ? r() : server.once('listening', () => r())));
+      const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/api/status`, { headers: { Authorization: 'Bearer t' } });
+      expect(res.status).toBe(200);
+      expect((await res.json() as { fileCount: number }).fileCount).toBe(1);
+    } finally {
+      console.error = original;
+      await new Promise((r) => server.close(r));
+    }
+    expect(errors.join('\n')).toContain('Removed duplicate repo entry lib-link (lib-link): same folder as lib (lib).');
+    expect(query(root, "SELECT path FROM files WHERE path LIKE 'lib-link/%'")).toEqual([]);
+    expect(JSON.parse(readFileSync(path, 'utf8')).repos.map((r: { name: string }) => r.name)).toEqual(['app', 'lib']);
+  }, 120000);
+});
+
+// Independent review of M0-10-R4 (2026-10-31).
+describe('cross-repo edges after the independent review of M0-10-R4', () => {
+  type Edge = { source_file: string; target_file: string; edge_type: string; target_symbol: string | null };
+  const all = (root: string) => query<Edge>(root, 'SELECT source_file, target_file, edge_type, target_symbol FROM edges ORDER BY source_file, target_file, edge_type, target_symbol');
+  const roots: string[] = [];
+  afterAll(() => roots.forEach(cleanup));
+  const setup = (order: 'primary-first' | 'ui-first') => {
+    const root = workspace({
+      'src/app.ts': "import { Button } from '../libs/ui/button';\nexport const app = () => new Button();\n",
+      'libs/ui/button.ts': 'export class Button {}\n',
+      '.gitignore': '.mapx/\nlibs/ui/\n',
+    }, ['.', 'libs/ui']);
+    roots.push(root);
+    for (const dir of [join(root, 'libs/ui'), root]) {
+      execFileSync('git', ['add', '-A'], { cwd: dir, stdio: 'ignore' });
+      commit(dir, 'init');
+    }
+    mapx(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover', '--no-workspaces');
+    const path = join(root, '.mapx/config.json');
+    const config = JSON.parse(readFileSync(path, 'utf8'));
+    const ui = { name: 'ui', path: 'libs/ui' };
+    config.repos = order === 'primary-first' ? [config.repos[0], ui] : [ui, config.repos[0]];
+    writeFileSync(path, JSON.stringify(config, null, 2));
+    return root;
+  };
+
+  for (const order of ['primary-first', 'ui-first'] as const) {
+    for (const command of ['sync', 'scan'] as const) {
+      it(`${command} --all links a rename made in both repos in one run (${order})`, () => {
+        const root = setup(order);
+        mapx(root, 'scan', '--all');
+        writeFileSync(join(root, 'libs/ui/button.ts'), 'export class Btn {}\n');
+        writeFileSync(join(root, 'src/app.ts'), "import { Btn } from '../libs/ui/button';\nexport const app = () => new Btn();\n");
+        mapx(root, command, '--all');
+        expect(all(root).filter(e => e.source_file === 'src/app.ts')).toEqual([
+          { source_file: 'src/app.ts', target_file: 'libs/ui/button.ts', edge_type: 'import', target_symbol: '../libs/ui/button' },
+          { source_file: 'src/app.ts', target_file: 'libs/ui/button.ts', edge_type: 'instantiation', target_symbol: 'Btn' },
+        ]);
+        const synced = all(root);
+        mapx(root, 'scan', '--all', '--force');
+        expect(all(root)).toEqual(synced);
+      }, 120000);
+    }
+  }
+
+  it('an unchanged scan --all does not re-parse the other repo\'s referrers when a re-export still names a removed class', () => {
+    const root = setup('primary-first');
+    writeFileSync(join(root, 'libs/ui/index.ts'), "export { Button } from './button';\n");
+    mapx(root, 'scan', '--all');
+    rmSync(join(root, 'libs/ui/button.ts'));
+    mapx(root, 'scan', '--all');
+    // The referrer in the other repo (a file without symbols, like index.ts, is re-read by every scan).
+    const stamps = () => query<{ s: string }>(root, "SELECT path || '|' || last_scanned AS s FROM files WHERE path = 'src/app.ts'").map(r => r.s);
+    const before = stamps();
+    mapx(root, 'scan', '--all');
+    mapx(root, 'scan', '--all');
+    expect(stamps()).toEqual(before);
+  }, 120000);
+
+  it('workspaces remove of a nested folder repo, then sync --all, indexes its files into the containing repo', () => {
+    const root = workspace({ 'src/app.ts': 'export const app = 1;\n', 'packages/web/index.ts': 'export const web = 1;\n', '.gitignore': '.mapx/\n' }, ['.']);
+    roots.push(root);
+    execFileSync('git', ['add', '-A'], { cwd: root, stdio: 'ignore' });
+    commit(root, 'init');
+    mapx(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover', '--no-workspaces');
+    mapx(root, 'workspaces', 'add', 'packages/web');
+    mapx(root, 'scan', '--all');
+    mapx(root, 'workspaces', 'remove', 'web');
+    mapx(root, 'sync', '--all');
+    expect(query(root, "SELECT path FROM files WHERE path = 'packages/web/index.ts'")).toHaveLength(1);
+    const synced = all(root);
+    mapx(root, 'scan', '--all', '--force');
+    expect(all(root)).toEqual(synced);
+  }, 120000);
 });

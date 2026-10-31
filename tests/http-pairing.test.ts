@@ -127,6 +127,44 @@ describe('pairing needs literal evidence (M2-06-R1)', () => {
   });
 });
 
+// M2-06-R2: a call with a host pairs only with routes whose Route::domain matches that host.
+describe('pairing honours Route::domain (M2-06-R2)', () => {
+  const onDomain = (path: string, handlerSymbol: string, domain?: string): RouteBinding =>
+    ({ ...route('GET', path, handlerSymbol, domain ? { domain } : {}), handlerFile: `app/Http/Controllers/${handlerSymbol.split('@')[0]}.php` });
+  // AdminUserController sorts first, so the old lexicographic tie-break picked the admin route.
+  const admin = onDomain('/users', 'AdminUserController@index', 'admin.example.com');
+  const api = onDomain('/users', 'ApiUserController@index', 'api.example.com');
+  const hosts = new Set(['admin.example.com', 'api.example.com', 'acme.example.com', 'acme.other.com', 'a.b.example.com']);
+
+  it('pairs a call with the route on its own domain, never with an admin-domain route', () => {
+    expect(pairCall(call('GET', 'https://api.example.com/users'), [admin, api], { hosts })?.handlerSymbol).toBe('ApiUserController@index');
+    expect(pairCall(call('GET', 'https://api.example.com/users'), [api, admin], { hosts })?.handlerSymbol).toBe('ApiUserController@index');
+    expect(pairCall(call('GET', 'https://admin.example.com/users'), [admin, api], { hosts })?.handlerSymbol).toBe('AdminUserController@index');
+    // With only the admin route, the api call has no route at all.
+    expect(pairCall(call('GET', 'https://api.example.com/users'), [admin], { hosts })).toBeNull();
+    // A local host is a host too: an admin-domain route does not serve it.
+    expect(pairCall(call('GET', 'http://localhost:8000/users'), [admin])).toBeNull();
+  });
+
+  it('treats {param} domain segments as one-label wildcards, case-insensitively', () => {
+    const tenant = onDomain('/users', 'TenantController@index', '{account}.Example.com');
+    expect(pairCall(call('GET', 'https://ACME.example.com/users'), [tenant], { hosts })?.handlerSymbol).toBe('TenantController@index');
+    expect(pairCall(call('GET', 'https://acme.other.com/users'), [tenant], { hosts })).toBeNull();
+    expect(pairCall(call('GET', 'https://a.b.example.com/users'), [tenant], { hosts })).toBeNull();
+    // A domain MapX could not evaluate stands for any text, dots included.
+    const unknown = onDomain('/users', 'DynController@index', '{dynamic}.example.com');
+    expect(pairCall(call('GET', 'https://a.b.example.com/users'), [unknown], { hosts })?.handlerSymbol).toBe('DynController@index');
+    expect(pairCall(call('GET', 'https://acme.other.com/users'), [unknown], { hosts })).toBeNull();
+  });
+
+  it('leaves routes without a domain and calls without a host as before', () => {
+    const plain = onDomain('/users', 'UserController@index');
+    expect(pairCall(call('GET', 'https://api.example.com/users'), [admin, plain], { hosts })?.handlerSymbol).toBe('UserController@index');
+    // A relative URL goes to whatever host serves the page: any domain may serve it.
+    expect(pairCall(call('GET', '/users'), [admin])?.handlerSymbol).toBe('AdminUserController@index');
+  });
+});
+
 describe('pairing through the scanner', () => {
   let root: string;
   // Records right after the frontend scan, before the backend (and its routes) exists.
@@ -204,7 +242,10 @@ describe('unmatched calls on the M2-02 fixture', () => {
     expect(labelled).toEqual([
       'GET /api/nope/missing', 'GET /api/reports/daily', 'GET /ghost',
       // M2-06-R1: no literal segment (L40, L39), a third-party host (L41), an unknown fetch method (L44)
-      'GET /{}', 'GET ?page={}', 'GET https://status.example.org/api/health', 'UNKNOWN /api/statuses',
+      'GET /{}', 'GET ?page={}',
+      // M2-06-R2: the ops route is served only on ops.example.com (L47)
+      'GET https://api.example.com/ops/v3/status',
+      'GET https://status.example.org/api/health', 'UNKNOWN /api/statuses',
     ]);
   });
 });

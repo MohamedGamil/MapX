@@ -38,7 +38,7 @@ describe('git-tracker module', () => {
     const hashes = getGitBlobHashes('/mock-repo');
     expect(hashes.get('src/main.ts')).toBe('aaaaaa111111');
     expect(hashes.get('src/utils.ts')).toBe('bbbbbb222222');
-    expect(execSync).toHaveBeenCalledWith('git ls-tree -r HEAD', expect.any(Object));
+    expect(execSync).toHaveBeenCalledWith('git -c core.quotePath=false ls-tree -r HEAD', expect.any(Object));
   });
 
   it('getGitBlobHashes handles error safely', () => {
@@ -75,7 +75,7 @@ describe('git-tracker module', () => {
       { path: 'src/f.ts', status: 'renamed', oldPath: 'src/e.ts' },
     ]);
     const commands = vi.mocked(execSync).mock.calls.map(([c]) => c);
-    expect(commands.slice(0, 2)).toEqual(['git diff --name-status --relative abc123', 'git diff --name-status --relative --cached']);
+    expect(commands.slice(0, 2)).toEqual(['git -c core.quotePath=false diff --name-status --relative abc123', 'git -c core.quotePath=false diff --name-status --relative --cached']);
   });
 
   it('getCurrentCommitSha and getPreviousCommitSha parse shas', () => {

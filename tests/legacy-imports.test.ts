@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { resolveGoImport, resolveJvmImport, resolvePhpImport, resolvePythonImport, resolveRustImport, type ImportContext } from '../src/core/import-resolvers.js';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { jsAliasTargets } from '../src/core/js-aliases.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
@@ -239,6 +240,80 @@ describe('import precision (M0-12-R4)', () => {
   });
 });
 
+// M0-12-R7: follow-ups from review 2026-10-31 (2db08bd). Each source lists exactly its import edges.
+describe('import precision (M0-12-R7)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      // Python 3 has no implicit relative imports: inside a package, `import json` is the stdlib,
+      // not the sibling pkg/json.py. A script directory without __init__.py is on sys.path.
+      'py/pkg/__init__.py': '',
+      'py/pkg/json.py': 'X = 1\n',
+      'py/pkg/a.py': 'A = 1\n',
+      'py/pkg/b.py': 'B = 1\n',
+      'py/pkg/uses_json.py': 'import json\nimport pkg.a\n',
+      'py/pkg/rel.py': 'from . import json\n',
+      'py/scripts/helpers.py': 'H = 1\n',
+      'py/scripts/run.py': 'import helpers\n',
+      // M0-12-R9: a namespace folder inside a package is no root either.
+      'py/pkg/data/json.py': 'X = 1\n',
+      'py/pkg/data/reader.py': 'import json\nimport pkg.a\n',
+      // ...but a project config higher up does not hide a project's own top-level packages (review).
+      'dj/pyproject.toml': '[tool.black]\n',
+      'dj/backend/polls/__init__.py': '',
+      'dj/backend/polls/models.py': 'Q = 1\n',
+      'dj/backend/polls/views.py': 'from polls.models import Q\n',
+      'dj/tests/helpers.py': 'H = 1\n',
+      'dj/tests/test_x.py': 'from helpers import H\n',
+      // A comment inside a parenthesised from-import.
+      'py/main.py': 'from pkg import (a,  # first\n    b)\n',
+      // Rust: src/bin/*.rs is a crate root, so `mod helper;` is src/bin/helper.rs and `crate::` starts at src/bin.
+      'rs/src/main.rs': 'mod helper;\nfn main() {}\n',
+      'rs/src/helper.rs': 'pub fn h() {}\n',
+      'rs/src/bin/tool.rs': 'mod helper;\nuse crate::helper::h;\nfn main() { h() }\n',
+      'rs/src/bin/helper.rs': 'pub fn h() {}\n',
+      // Go: go.mod may quote the module path.
+      'go/go.mod': '// comment\nmodule "example.com/q"\n\ngo 1.22\n',
+      'go/lib/lib.go': 'package lib\nfunc Do() {}\n',
+      'go/cmd/main.go': 'package main\nimport l "example.com/q/lib"\nfunc main() { l.Do() }\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  const edges = (source: string) =>
+    query<{ target_file: string; target_symbol: string }>(
+      root, "SELECT target_file, target_symbol FROM edges WHERE source_file = ? AND edge_type IN ('import','require') ORDER BY target_file, target_symbol", source,
+    ).map((e) => `${e.target_file} [${e.target_symbol}]`);
+
+  it.each([
+    ['py/pkg/uses_json.py', ['py/pkg/a.py [pkg.a]']],
+    ['py/pkg/rel.py', ['py/pkg/json.py [.json]']],
+    ['py/scripts/run.py', ['py/scripts/helpers.py [helpers]']],
+    ['py/pkg/data/reader.py', ['py/pkg/a.py [pkg.a]']],
+    ['dj/backend/polls/views.py', ['dj/backend/polls/models.py [polls.models]']],
+    ['dj/tests/test_x.py', ['dj/tests/helpers.py [helpers]']],
+    ['py/main.py', ['py/pkg/a.py [pkg.a]', 'py/pkg/b.py [pkg.b]']],
+    ['rs/src/bin/tool.rs', ['rs/src/bin/helper.rs [crate::helper::h]', 'rs/src/bin/helper.rs [helper]']],
+    ['rs/src/main.rs', ['rs/src/helper.rs [helper]']],
+    ['go/cmd/main.go', ['go/lib/lib.go [example.com/q/lib]']],
+  ])('%s', (source, expected) => {
+    expect(edges(source)).toEqual(expected);
+  });
+
+  it('keeps the workspace root a search root despite a stray __init__.py (M0-12-R9 review)', () => {
+    const stray = workspace({ '__init__.py': '', 'app/__init__.py': '', 'app/models.py': 'M = 1\n', 'app/views.py': 'import app.models\n' });
+    try {
+      init(stray);
+      mapx(stray, 'scan', stray);
+      expect(query<{ t: string }>(stray, "SELECT target_file AS t FROM edges WHERE source_file = 'app/views.py' AND edge_type = 'import'")).toEqual([{ t: 'app/models.py' }]);
+    } finally {
+      cleanup(stray);
+    }
+  }, 60000);
+});
+
 // M3-09: JS/TS path aliases from the nearest tsconfig/jsconfig `paths`, else the nearest vite /
 // vue-cli / webpack / Laravel Mix alias, else `@/` → src/. Configs are read, never executed.
 describe('JS/TS import aliases (M3-09)', () => {
@@ -313,9 +388,70 @@ describe('JS/TS import aliases (M3-09)', () => {
       'vite.config.js': "export default { resolve: { alias: { '@': '/root', '~': '/root-tilde' } } };\n",
     });
     expect(at('@/x', 'web/ts/a.ts')).toEqual(['web/ts/x']);
-    // web/ declares no `~`: the root config's applies.
-    expect(at('~/x', 'web/ts/a.ts')).toEqual(['root-tilde/x']);
+    // web/ has its own vite.config.js, so web/ is its own app: the root config's `~` is another
+    // project's alias and does not apply (M3-09-R1; M3-09 expected 'root-tilde/x' here).
+    expect(at('~/x', 'web/ts/a.ts')).toEqual([]);
     expect(at('@/x', 'other/a.ts')).toEqual(['root/x']);
+  });
+
+  it('paths come from the nearest tsconfig/jsconfig, bundler aliases from the nearest package.json or bundler config folder (M3-09-R1)', () => {
+    // A Laravel root (jsconfig and vite `@` → resources/js) with a nested Vue CLI app (own
+    // package.json, no alias config): the app keeps `@` → its own src/.
+    const laravel = aliases({
+      'package.json': '{}',
+      'vite.config.js': "export default { resolve: { alias: { '@': '/resources/js' } } };\n",
+      'jsconfig.json': '{ "compilerOptions": { "paths": { "@/*": ["./resources/js/*"], "#shared": ["./shared/index.js"] } } }',
+      'frontend/package.json': '{ "name": "frontend", "devDependencies": { "@vue/cli-service": "^5.0.0" } }',
+    });
+    expect(laravel('@/views/Home.vue', 'frontend/src/App.vue')).toEqual(['frontend/src/views/Home.vue', 'src/views/Home.vue']);
+    expect(laravel('#shared', 'frontend/src/App.vue')).toEqual([]);
+    expect(laravel('@/views/Home.vue', 'resources/js/app.js')).toEqual(['resources/js/views/Home.vue']);
+    // A tsconfig alone (tests/) is not an app root: its `extends` chain gives `paths`, the root's
+    // vite.config.js gives the bundler aliases. The nearest tsconfig decides, even without `paths`.
+    const vitest = aliases({
+      'package.json': '{}',
+      'vite.config.ts': "export default { resolve: { alias: { '@': '/app' } } };\n",
+      'tsconfig.json': '{ "compilerOptions": { "paths": { "#lib/*": ["./lib/*"] } } }',
+      'tests/tsconfig.json': '{ "extends": "../tsconfig.json", "compilerOptions": { "types": ["vitest"] } }',
+      'e2e/tsconfig.json': '{ "compilerOptions": { "types": ["playwright"] } }',
+    });
+    expect(vitest('#lib/x', 'tests/unit/a.spec.ts')).toEqual(['lib/x']);
+    expect(vitest('@/x', 'tests/unit/a.spec.ts')).toEqual(['app/x']);
+    expect(vitest('#lib/x', 'e2e/a.spec.ts')).toEqual([]);
+    expect(vitest('@/x', 'e2e/a.spec.ts')).toEqual(['app/x']);
+    // Review 2026-10-31 (M3-09-R1): a monorepo package (package.json, no tsconfig, no bundler) uses the
+    // root tsconfig's paths, as tsc does; a `{"type": "module"}` marker is not a package root, so the
+    // app's vite alias still applies below it.
+    const mono = aliases({
+      'package.json': '{ "name": "mono", "private": true }',
+      'tsconfig.json': '{ "compilerOptions": { "paths": { "@shared/*": ["./packages/shared/src/*"] } } }',
+      'packages/web/package.json': '{ "name": "web", "dependencies": { "lodash": "^4.0.0" } }',
+      'app/package.json': '{ "name": "app", "devDependencies": { "vite": "^5.0.0" } }',
+      'app/vite.config.js': "export default { resolve: { alias: { '~': '/src' } } };\n",
+      'app/src/workers/package.json': '{ "type": "module" }',
+    });
+    expect(mono('@shared/util', 'packages/web/src/index.ts')).toEqual(['packages/shared/src/util']);
+    expect(mono('~/lib/fmt', 'app/src/workers/w.js')).toEqual(['app/src/lib/fmt']);
+    // A separately built app (vite) does not take the root's paths.
+    expect(mono('@shared/util', 'app/src/main.ts')).toEqual([]);
+    // Final review 2026-10-31: in a single-build monorepo the root webpack config bundles every
+    // package, so its aliases reach packages that have a package.json but no build of their own.
+    const single = aliases({
+      'package.json': '{ "name": "mono", "private": true, "devDependencies": { "webpack": "^5.0.0" } }',
+      'webpack.config.js': "module.exports = { resolve: { alias: { '@components': path.resolve(__dirname, 'packages/components/src') } } };\n",
+      'packages/app/package.json': '{ "name": "@mono/app" }',
+    });
+    expect(single('@components/Button', 'packages/app/src/index.js')).toEqual(['packages/components/src/Button']);
+  });
+
+  it('reads every alias of a chained .set() and backslash path segments (M3-09-R1)', () => {
+    const at = aliases({
+      'vue.config.js': "module.exports = { chainWebpack: (config) => {\n  config.resolve.alias\n    .set('@', resolve('src'))\n    .set('assets', resolve('src/assets'));\n} };\n",
+      'webpack.mix.js': "mix.webpackConfig({ resolve: { alias: { '~': path.resolve(__dirname, 'resources\\\\js') } } });\n",
+    });
+    expect(at('@/router', 'src/main.js')).toEqual(['src/router']);
+    expect(at('assets/logo.png', 'src/main.js')).toEqual(['src/assets/logo.png']);
+    expect(at('~/store', 'src/main.js')).toEqual(['resources/js/store']);
   });
 
   it('without an alias, @/ is src/ under the nearest package.json folder, the enclosing src/, then the workspace root', () => {
@@ -374,4 +510,29 @@ describe('JS/TS alias import edges through the scanner (M3-09)', () => {
   ])('%s imports through its own app\'s alias', (source, expected) => {
     expect(imports(source)).toEqual(expected);
   });
+});
+
+// M0-12-R9 review: an __init__.py added or removed changes Python import roots; sync follows it.
+describe('Python import roots on sync', () => {
+  it('re-resolves when a folder becomes a package, as scan --force', () => {
+    const root = workspace({ '.gitignore': '.mapx/\n', 'pkg/data/json.py': 'X = 1\n', 'pkg/data/reader.py': 'import json\n' }, ['.']);
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: root, stdio: 'pipe' });
+    const imports = () => query<{ t: string }>(root, "SELECT target_file AS t FROM edges WHERE source_file = 'pkg/data/reader.py' AND edge_type = 'import'").map((r) => r.t);
+    try {
+      git('add', '-A');
+      git('commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      // No package yet: pkg/data is a script folder, so json.py shadows the stdlib (as python would).
+      expect(imports()).toEqual(['pkg/data/json.py']);
+      writeFileSync(join(root, 'pkg/__init__.py'), '');
+      mapx(root, 'sync', root);
+      expect(imports()).toEqual([]);
+      rmSync(join(root, 'pkg/__init__.py'));
+      mapx(root, 'sync', root);
+      expect(imports()).toEqual(['pkg/data/json.py']);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
 });

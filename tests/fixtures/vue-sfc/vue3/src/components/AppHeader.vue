@@ -1,6 +1,7 @@
 <template>
   <header class="app-header">
     <router-link :to="{ name: 'cart' }" class="cart-link">Cart</router-link>
+    <router-link :to="{ name: 'admin-orders' }" class="admin-link">Admin</router-link>
     <!-- <PromoBanner :campaign="campaign" /> -->
     <BaseButton variant="ghost" v-on:click="logout">Sign out</BaseButton>
   </header>

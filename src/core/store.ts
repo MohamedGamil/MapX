@@ -763,8 +763,22 @@ export class Store {
       this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
-      this.backend.prepare('DELETE FROM meta WHERE key LIKE ? OR key LIKE ?').run(`last_scan_commit:${repoName}`, `last_scan_time:${repoName}`);
+      // Every `<kind>:<repo>` record of the repo (scan state, resume state, Vue registry, HTTP inputs, profile).
+      this.backend.prepare("DELETE FROM meta WHERE substr(key, -length(?) - 1) = ':' || ?").run(repoName, repoName);
+      // The other repos no longer saw this one: when it comes back it is newly visible to them, so
+      // their references into it are resolved again (M0-10-R4).
+      for (const row of this.backend.prepare("SELECT key, value FROM meta WHERE key LIKE 'resolution_repos:%'").all()) {
+        try {
+          const repos = JSON.parse(row.value as string) as string[];
+          if (repos.includes(repoName)) this.setMeta(row.key as string, JSON.stringify(repos.filter(r => r !== repoName)));
+        } catch { /* a malformed record is replaced by the next scan */ }
+      }
     });
+  }
+
+  /** The repos with indexed files. */
+  getRepoNames(): string[] {
+    return this.backend.prepare('SELECT DISTINCT repo FROM files ORDER BY repo').all().map(r => r.repo as string);
   }
 
   searchSymbolsFiltered(options: {

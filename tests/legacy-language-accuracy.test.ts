@@ -333,3 +333,202 @@ describe('symbol name lookup is case-sensitive except where the language is not'
     ]);
   });
 });
+
+// M0-17-R4: calls on library objects and global functions are not project symbols of the same name.
+describe('calls on library and DOM receivers', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'src/lib.ts': 'export class Repo { save() { return 1; } }\nexport function create() { return 1; }\nexport function remove() { return 2; }\nexport function get() { return 3; }\nexport function fetch() { return 4; }\n',
+      'src/api.ts': 'export function fetch() { return 5; }\n',
+      'src/use.ts': [
+        "import axios from 'axios';",
+        "import _ from 'lodash';",
+        "import * as lo from 'lodash-es';",
+        "const qs = require('qs');",
+        "import { Repo } from './lib';",
+        'export function run(el: HTMLElement, r: Repo) {',
+        '  axios.create();',
+        "  el.classList.remove('x');",
+        "  fetch('/x');",
+        "  _.get({}, 'a');",
+        "  lo.get({}, 'a');",
+        "  qs.remove('a');",
+        '  r.save();',
+        '  const repo = new Repo();',
+        '  repo.save();',
+        '}',
+        '',
+      ].join('\n'),
+      'src/own.ts': "import { fetch } from './api';\nexport const own = () => fetch();\n",
+      'src/declared.ts': 'function fetch() { return 6; }\nexport const local = () => fetch();\n',
+      'src/App.vue': "<script setup>\nimport axios from 'axios';\nfunction go() { return axios.create(); }\n</script>\n<template><div /></template>\n",
+      // Review 2026-10-31: receivers that are not imports, and specifiers that are not npm packages.
+      'package.json': JSON.stringify({ name: 'app', dependencies: { axios: '^1.0.0', lodash: '^4.0.0', 'lodash-es': '^4.0.0', qs: '^6.0.0', 'node-fetch': '^3.0.0', 'api-sdk': '^1.0.0', '@acme/lib': 'workspace:*' } }),
+      'src/base.ts': 'export class Base { alert() { return 1; } confirm() { return 2; } }\n',
+      'src/child.ts': "import { Base } from './base';\nexport class Child extends Base { go() { this.alert(); return this.confirm(); } }\n",
+      'packages/lib/package.json': JSON.stringify({ name: '@acme/lib', main: 'src/index.ts' }),
+      'packages/lib/src/index.ts': 'export function helperOne() { return 1; }\n',
+      'src/workspace.ts': "import * as lib from '@acme/lib';\nexport const w = () => lib.helperOne();\n",
+      'utils/format.ts': 'export function parseThing() { return 1; }\n',
+      'src/nuxt.ts': "import * as t from '~/utils/format';\nexport const n = () => t.parseThing();\n",
+      'src/shadow.ts': "import api from 'api-sdk';\nimport { Repo } from './lib';\nexport function f() { const api = new Repo(); return api.save(); }\n",
+      'src/npmfetch.ts': "import fetch from 'node-fetch';\nexport const g = () => fetch('/x');\n",
+      'src/client.ts': "export class Client { fetch() { return 1; } }\nexport const h = () => fetch('/x');\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+  const calls = (file: string) =>
+    query<{ t: string }>(root, "SELECT target_file || '#' || target_symbol AS t FROM edges WHERE edge_type = 'call' AND source_file = ? ORDER BY t", file).map((r) => r.t);
+
+  it('gives no call edge for npm-package receivers, DOM properties or global functions', () => {
+    expect(calls('src/use.ts')).toEqual(['src/lib.ts#save', 'src/lib.ts#save']);
+    expect(calls('src/App.vue')).toEqual([]);
+  });
+
+  it('still resolves a call on a project receiver, and a global name the file imports or declares itself', () => {
+    expect(calls('src/own.ts')).toEqual(['src/api.ts#fetch']);
+    expect(calls('src/declared.ts')).toEqual(['src/declared.ts#fetch']);
+  });
+
+  it('resolves this.x() named like a global, workspace packages and unresolved ~/ imports as before', () => {
+    expect(calls('src/child.ts')).toEqual(['src/base.ts#alert', 'src/base.ts#confirm']);
+    expect(calls('src/workspace.ts')).toEqual(['packages/lib/src/index.ts#helperOne']);
+    expect(calls('src/nuxt.ts')).toEqual(['utils/format.ts#parseThing']);
+    // A local `api` shadows the imported package of that name.
+    expect(calls('src/shadow.ts')).toEqual(['src/lib.ts#save']);
+  });
+
+  it('gives no edge for a global name imported from an npm package, nor for a global call beside a same-named method', () => {
+    expect(calls('src/npmfetch.ts')).toEqual([]);
+    expect(calls('src/client.ts')).toEqual([]);
+  });
+
+  it('keeps the receiver out of the stored edge metadata', () => {
+    const meta = query<{ metadata: string }>(root, "SELECT metadata FROM edges WHERE edge_type = 'call'").map((r) => JSON.parse(r.metadata));
+    expect(meta.some((m) => 'receiver' in m)).toBe(false);
+  });
+});
+
+// M0-17-R5: factory-made callables, deep C++ qualifiers, block-scoped arrows and class expressions
+// (review 2026-10-31 of M0-17-R2 and M0-17-R3).
+describe('language extraction accuracy: callable bindings, deep qualifiers, block arrows', () => {
+  it('JavaScript, TypeScript and Python: a binding to a call, a name or a member is a function; a literal stays a value', async () => {
+    const src = [
+      "import { useSelector } from 'react-redux';",
+      'export const useAppSelector = useSelector;',
+      "export const fetchUser = createAsyncThunk('user/fetch', async () => 1);",
+      'export const dispatch = store.dispatch;',
+      'const typed = (useSelector as any);',
+      'let later = make();',
+      'export const options = { retry: 1 };',
+      'export const list = [1, 2];',
+      "const name = 'x', size = 2 * 3;",
+      'const inst = new Map();',
+      'let flag = true;',
+      'function f() { const inner = make(); return inner; }',
+    ].join('\n');
+    const expected = ['constant:inst', 'constant:list', 'constant:name', 'constant:options', 'constant:size',
+      'function:dispatch', 'function:f', 'function:fetchUser', 'function:later', 'function:typed', 'function:useAppSelector', 'variable:flag'];
+    expect((await parse('a.ts', src)).symbols.sort()).toEqual(expected);
+    expect((await parse('a.js', src.replace(' as any', ''))).symbols.sort()).toEqual(expected);
+    const py = await parse('a.py', [
+      'import functools',
+      'def _base(x):',
+      '    return x',
+      'handler = functools.partial(_base, 1)',
+      'alias = _base',
+      'method = obj.run',
+      'square = lambda x: x * x',
+      'DEFAULT = functools.partial(_base, 2)',
+      'LIMIT = 10',
+      'handlers = []',
+      'names = {"a": 1}',
+      'class C:',
+      '    m = functools.partial(_base, 3)',
+      'def g():',
+      '    local = functools.partial(_base, 4)',
+      '    return local',
+    ].join('\n'));
+    expect(py.symbols.sort()).toEqual(['class:C', 'constant:LIMIT', 'function:DEFAULT', 'function:_base', 'function:alias',
+      'function:g', 'function:handler', 'function:method', 'function:square', 'variable:handlers', 'variable:names']);
+  });
+
+  it('C++: any depth of qualifiers and qualified destructors give scoped methods', async () => {
+    const r = await parse('a.cpp', [
+      'namespace a { namespace b { namespace c { struct D { void g(); }; } } }',
+      'void a::b::c::D::g() {}',
+      'void a::b::c::d::E::h() {}',
+      'namespace ns { struct K { K(); ~K(); void a(); }; }',
+      'ns::K::K() {}',
+      'ns::K::~K() {}',
+      'K2::~K2() {}',
+      'void ns::K::a() {}',
+      'void free_fn() {}',
+    ].join('\n'));
+    expect(r.symbols.filter((s) => /^(method|function):/.test(s))).toEqual([
+      'method:D::g', 'method:E::h', 'method:K::K', 'method:K::~K', 'method:K2::~K2', 'method:K::a', 'function:free_fn',
+    ]);
+  });
+
+  it('JavaScript and TypeScript: a block-scoped arrow is no symbol; a class expression is a class', async () => {
+    const src = [
+      'if (ready) { const blockArrow = () => 1; }',
+      '{ const inBlock = function () {}; }',
+      'for (;;) { var looped = () => 2; break; }',
+      'try { const tried = () => 3; } catch (e) {}',
+      'export const Klass = class { run() { return 1; } };',
+      'const Named = class Inner {};',
+      'export const top = () => 4;',
+    ].join('\n');
+    for (const file of ['a.js', 'a.ts']) {
+      expect((await parse(file, src)).symbols.sort()).toEqual(['class:Klass', 'class:Named', 'function:top', 'method:Klass::run']);
+    }
+    // A TypeScript namespace body is module level, not a block.
+    expect((await parse('n.ts', 'namespace NS { export const nsf = () => 1; }\n')).symbols).toContain('function:nsf');
+  });
+});
+
+// M0-17-R5: an embedded `pkg.Type` belongs to the imported package; `new Klass()` reaches a class expression.
+describe('qualified Go embedding and class expressions end to end', () => {
+  let root: string;
+  type Edge = { source_file: string; source_symbol: string | null; target_symbol: string; target_file: string };
+  const edges = (type: string, like: string) => query<Edge>(root,
+    'SELECT source_file, source_symbol, target_symbol, target_file FROM edges WHERE edge_type = ? AND source_file LIKE ? ORDER BY source_file, source_symbol', type, like);
+
+  beforeAll(() => {
+    root = workspace({
+      'go/go.mod': 'module example.com/g\n\ngo 1.21\n',
+      'go/internal/mylog/logger.go': 'package mylog\n\ntype Logger struct{}\n',
+      'go/other/logger.go': 'package other\n\ntype Logger struct{}\n',
+      // The standard library and a third-party module are not project packages.
+      'go/svc/std.go': 'package svc\n\nimport "log"\n\ntype Std struct {\n\tlog.Logger\n}\n',
+      'go/svc/ext.go': 'package svc\n\nimport "github.com/sirupsen/logrus"\n\ntype Ext struct {\n\t*logrus.Logger\n}\n',
+      'go/svc/own.go': 'package svc\n\nimport "example.com/g/internal/mylog"\n\ntype Own struct {\n\t*mylog.Logger\n}\n',
+      'go/svc/alias.go': 'package svc\n\nimport (\n\t"fmt"\n\tml "example.com/g/internal/mylog"\n)\n\ntype Aliased struct {\n\tml.Logger\n}\n\nvar _ = fmt.Sprint\n',
+      'go/svc/base.go': 'package svc\n\ntype Base struct{}\n\ntype WithBase struct {\n\tBase\n}\n',
+      'ts/klass.ts': 'export const Klass = class { run() { return 1; } };\n',
+      'ts/make.ts': "import { Klass } from './klass';\nexport function make() { return new Klass(); }\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('Go: `log.Logger` and a third-party Logger give no extends edge; a project package does', () => {
+    expect(edges('extends', 'go/%')).toEqual([
+      { source_file: 'go/svc/alias.go', source_symbol: 'Aliased', target_symbol: 'Logger', target_file: 'go/internal/mylog/logger.go' },
+      { source_file: 'go/svc/base.go', source_symbol: 'WithBase', target_symbol: 'Base', target_file: 'go/svc/base.go' },
+      { source_file: 'go/svc/own.go', source_symbol: 'Own', target_symbol: 'Logger', target_file: 'go/internal/mylog/logger.go' },
+    ]);
+  });
+
+  it('TypeScript: `new Klass()` reaches `export const Klass = class {}`', () => {
+    expect(query<{ kind: string }>(root, "SELECT kind FROM symbols WHERE file_path = 'ts/klass.ts' AND name = 'Klass'")).toEqual([{ kind: 'class' }]);
+    expect(edges('instantiation', 'ts/%')).toEqual([
+      { source_file: 'ts/make.ts', source_symbol: 'make', target_symbol: 'Klass', target_file: 'ts/klass.ts' },
+    ]);
+  });
+});

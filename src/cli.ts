@@ -1,12 +1,13 @@
 import { Command } from 'commander';
-import { resolve, join, dirname, relative, basename } from 'node:path';
+import { resolve, join, dirname, relative, basename, sep } from 'node:path';
 import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import * as readline from 'node:readline';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
-import { Scanner, buildMatcher } from './core/scanner.js';
+import { Scanner } from './core/scanner.js';
+import { buildPathFilter } from './core/file-rules.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { ContextBuilder } from './core/context-builder.js';
@@ -20,7 +21,7 @@ import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
-import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
+import { findStaleFiles, indexableChanges, staleCount, staleNames } from './core/staleness.js';
 import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
@@ -876,7 +877,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         console.log('\n── Git ──────────────────────────────────────────────');
         console.log('  Not a git repository');
       } else {
-        const changes = getChangedFiles(repoRoot, lastCommit || undefined);
+        // Only the changes a scan would index, or that touch an indexed file: git also lists dotfiles,
+        // excluded and non-source files (M0-11-R3).
+        const changes = indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), config.repo.name);
         console.log('\n── Git changes since last scan ──────────────────────');
         if (changes.length === 0) {
           console.log('  No changes since last scan  (✓ index is current)');
@@ -1382,7 +1385,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       checkAndPrintStaleness(store, dir);
 
       const allFiles = store.getAllFiles() as Array<{ path: unknown }>;
-      const resolved = resolveFilePaths(file, allFiles);
+      // Backslash, `./` and absolute forms as `mapx edges` takes them (M0-11-R3).
+      const resolved = resolveFilePaths(indexedPath(dir, file), allFiles);
 
       if (!resolved) {
         const { error, tip } = fileNotFoundMessage(file);
@@ -1870,7 +1874,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         ...(config.settings.includePatterns ?? []),
         ...((opts.include as string[]) ?? []),
       ];
-      const matcher = buildMatcher(excludes, includes);
+      const matcher = buildPathFilter(excludes, includes);
       const allFiles = store.getAllFiles(opts.repo as string | undefined).map(f => f.path as string);
       const filteredFiles = allFiles.filter(f => matcher(f));
 
@@ -3031,6 +3035,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       clack.log.step(`Cleaning up stored data for repository: ${repoName}...`);
       store.deleteRepo(repoName);
+      // A repo whose folder holds the removed one indexes those files again: git lists none of them,
+      // so its next sync re-walks it once, as its next scan does (M0-10-R4).
+      const removedRoot = resolve(dir, repo.path);
+      for (const other of config.repos) {
+        const root = resolve(dir, other.path);
+        if (removedRoot.startsWith(root + sep)) store.setMeta('scan_filters:' + other.name, JSON.stringify({ rewalk: true }));
+      }
       clack.log.success(`Done.`);
     });
 

@@ -68,8 +68,10 @@ Perform a full scan of all source files. Builds the graph from scratch.
 - File reads are parallelized for faster scanning
 - Survives interruptions: progress is saved per-file, re-run to resume
 - Unchanged files are not re-parsed. The exception is a moved target: when a file is removed, the names its referrers resolved into it are remembered, and when a new or changed file names one of them, those referrers are re-parsed, so a class moved to another file is found at its new path without `--force`
-- Vue global components: when a new, changed or deleted JS/TS file adds, removes or retargets a `Vue.component` / `app.component` registration (or a `.vue` file joins or leaves an auto-registered folder), the unchanged `.vue` files using that tag are re-parsed, and no others. Likewise, when a Vue Router route record is added, removed, renamed or given another component or redirect, the unchanged `.vue` files and JS/TS modules navigating to it are re-parsed. Each app folder with its own `package.json` keeps its own global registry (not yet when the root `package.json` also lists `vue` or `vue-router`: then the repo shares one registry; M3-08-R1)
+- Vue global components: when a new, changed or deleted JS/TS file adds, removes or retargets a `Vue.component` / `app.component` registration (or a `.vue` file joins or leaves an auto-registered folder), the unchanged `.vue` files using that tag are re-parsed, and no others. Likewise, when a Vue Router route record is added, removed, renamed or given another component or redirect, the unchanged `.vue` files and JS/TS modules navigating to it are re-parsed. Each Vue app (the nearest folder with a bundler config, or a `package.json` listing a build tool such as vite or `@vue/cli-service`, whatever the root `package.json` lists) keeps its own global registry and route table; a component library (vue as a peer dependency, a library build, or a published entry) shares its registrations with every app, and a component another app's registering file imports also sees that app's registrations. Where two files of an app register one name, the first by path wins. Adding or removing a `package.json` re-parses the files whose app changed and the files that navigate
 - In a git repo, each file stores its blob id at HEAD (also for a repo that is not at the workspace root), unless the working-tree content differs from HEAD
+- With `--all`, the result does not depend on the order of the registered repos: a repo resolved before another repo of the run was indexed, and the files a repo parsed before another repo of the run changed, are resolved once more at the end; files of one repo that referenced a file another repo removed and restored are re-parsed. As within one repo, an unchanged file is not re-parsed because another repo gained a symbol it could now link to
+- A symbol named by several files resolves to the one nearest the referencing file (most shared leading folders), then the first by path, so a scan and a sync pick the same file
 
 ```bash
 mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--force] [--no-parallel]
@@ -94,6 +96,11 @@ Incremental scan. Detects changed files via git, or via content hashes outside g
 - When a Vue global registration changes (`app.component('X', X)` added, removed or retargeted, or a `.vue` file added to or removed from an auto-registered folder), the `.vue` files using `<X/>` are re-parsed, as `mapx scan` does, although none of them changed. The same holds for a Vue Router route renamed or given another component in the router file: the `.vue` files and JS/TS modules navigating to it are re-parsed.
 - A file git lists whose content is still the blob that was indexed (a mode change, or the commit of an edit an earlier sync indexed) is not re-parsed. Sync records the blob id of every file it indexes.
 - A file that was indexed while untracked or only staged leaves the index once it is deleted, although git lists neither side of it.
+- An edit reverted to the committed content (`git checkout -- f`, or `git reset` then `git checkout`) is re-indexed, although git no longer lists the file.
+- A `git mv a b` that leaves a copy at `a` keeps both files.
+- Gitignored files are indexed as `mapx scan` indexes them (see [Gitignored files](configuration.md#gitignored-files)).
+- Files of another registered repo nested in this one stay with that repo; they are synced with it.
+- With `--all`, a file of one repo that referenced a file another repo removed and restored is re-parsed (in the same run, or by its own repo's next sync), and a repo that was removed with `workspaces remove` and added back is resolved again by the others.
 
 In a repo that sits inside a larger git checkout, only changes under the repo's folder count, with paths relative to it.
 
@@ -345,7 +352,7 @@ Options:
 - `--repo` — Filter by repository name
 - `--all` — Every registered repository. The LLM format becomes a combined export: the repo list, the cross-repo dependencies, then one `## <repo>` section per repo sharing the token budget, with that repo's own export nested two heading levels below it
 - `-o, --output <file>` — Write output to file instead of stdout
-- `--exclude` — Exclude glob patterns
+- `--exclude` — Exclude glob patterns; a pattern naming a folder (`**/Http`, `app/Http/**`) leaves out the files under it, as at scan time
 - `--include` — Include glob patterns
 - `--cluster` — Cluster rendering for DOT/SVG: `none` (default, flat) or `auto` (with subgraph blocks)
 - `--depth` — Maximum cluster nesting depth for DOT/SVG. With `--cluster auto`, `--depth 0` is the cluster-level view: one node per cluster (with its file count), one edge per cluster pair labelled with its edge count and types, and `penwidth` = log(count) + 1, capped at 5
@@ -499,7 +506,7 @@ Supported MCP config targets:
 | vscode-mcp | `.vscode/mcp.json` | `.vscode/` directory exists |
 | antigravity | `.agents/mcp.json` | `.agents/` directory exists |
 
-When a config file already exists, mapx **merges** its MCP entry into the file without overwriting other settings.
+When a config file already exists, mapx **merges** its MCP entry into the file without overwriting other settings. A file that already holds the identical mapx entry is reported as up to date and left untouched, comments and formatting included.
 
 Examples:
 ```bash
@@ -688,7 +695,7 @@ Options:
 - `--framework` — Filter by framework name
 - `--method` — Filter by HTTP method (GET, POST, etc.)
 - `--path-pattern` — Filter by route path pattern (with `--clients`: by request URL)
-- `--json` — Output as JSON. Every route carries `line`, `name`, `middlewares`, `reachable`, `reachability`, `overridden` and `conditional`. `reachable` is false only when no mount can load the route; `reachability` is `reachable`, `unreachable` or `unknown` (Laravel: the file is not visibly mounted, but a mount of the app could not be evaluated, so it may be loaded). Overridden routes carry `overriddenBy` (`file:line` of the winner), and routes in a `Route::domain()` group carry `domain`
+- `--json` — Output as JSON. Every route carries `line`, `name`, `middlewares`, `reachable`, `reachability`, `overridden` and `conditional`. `reachable` is false only when no mount can load the route; `reachability` is `reachable`, `unreachable` or `unknown` (Laravel: the file is not visibly mounted, but a mount of the app could not be evaluated, so it may be loaded). Overridden routes carry `overriddenBy` (`file:line` of the winner), and routes in a `Route::domain()` group carry `domain`. Laravel middlewares are named as Laravel resolves them, through the HTTP Kernel of the route's own app: a group becomes its members, an alias its class, a class constant is named through the route file's `use` statements, and parameters follow the class (`EnsureRole::class.':editor'` and `'role:editor'` → `App\Http\Middleware\EnsureRole:editor`)
 - `--clients` — Instead of routes, list frontend HTTP call sites (axios, `fetch`, `axios.create` instances, factories, aliases and configured receivers) with their resolved URL and the backend route each reaches
 - `--unmatched` — With `--clients`: only calls that reach no live route (dead or broken calls)
 
@@ -703,7 +710,7 @@ A call pairs only with a live route that its literal path supports: at least one
 - a host named in a `.env*` file of a registered repo or in a configured client `baseURL`;
 - a host listed in `settings.http.hosts`.
 
-Calls to any other host are third-party calls. A `fetch` whose method cannot be read from the code (`{ method: verb }`, a spread, an options variable) is listed with method `UNKNOWN` and never paired.
+Calls to any other host are third-party calls. A call with a host pairs only with routes that serve that host: a route in a `Route::domain()` group needs its domain to match, with `{param}` segments matching one label each (`{account}.example.com` serves `acme.example.com`). A relative URL can pair with a route on any domain. A `fetch` whose method cannot be read from the code (`{ method: verb }`, a spread, an options variable) is listed with method `UNKNOWN` and never paired.
 
 Paired calls are stored as `http` edges, from the calling file to the route handler.
 
@@ -820,8 +827,8 @@ When run interactively without flags, presents a multi-select prompt to choose p
 Some providers write more than their instruction file:
 - `claude`: `CLAUDE.md` documents both the stdio stanza and the SSE stanza (`mapx serve --sse --port <mcp-port>`, URL `http://localhost:<mcp-port>/sse`).
 - `aider`: also writes `.aider.conf.yml` with `read: [AIDER.md]`, so Aider loads the instructions on startup (`aider --read AIDER.md` does the same by hand). If the file already has its own top-level `read:` key, it is left untouched and the output says which lines to merge by hand.
-- `continue`: writes Continue's documented layout. `.continue/mcpServers/mapx.yaml` is a block with `name`, `version` and `schema: v1` whose `mcpServers` entry runs `mapx serve --dir <project>`. `.continue/prompts/mapx-impact.md`, `mapx-callers.md`, `mapx-context.md` and `mapx-sync.md` are prompts with `invokable: true` front matter, so they appear as `/mapx-impact`, `/mapx-callers`, `/mapx-context` and `/mapx-sync` in Continue. Continue never loaded the `.continue/mapx.yaml` that earlier versions wrote: if it still has a mapx block, that block is removed (and the file deleted when nothing else is left), with a message. A `.continue/mapx.yaml` without a mapx block is left alone. A legacy block edited after mapx wrote it is only removed when you confirm or pass `--force`.
-- `zed`: also registers the mapx server under `context_servers` in `.zed/settings.json`. Existing keys and string values are kept; comments and trailing commas are accepted, but the merged file is written back as plain JSON, and the output warns when comments were dropped. A settings file that cannot be parsed is left untouched, with a warning.
+- `continue`: writes Continue's documented layout. `.continue/mcpServers/mapx.yaml` is a block with `name`, `version` and `schema: v1` whose `mcpServers` entry runs `mapx serve --dir <project>`. `.continue/prompts/mapx-impact.md`, `mapx-callers.md`, `mapx-context.md` and `mapx-sync.md` are prompts with `invokable: true` front matter, so they appear as `/mapx-impact`, `/mapx-callers`, `/mapx-context` and `/mapx-sync` in Continue. Continue never loaded the `.continue/mapx.yaml` that earlier versions wrote: if it still has a mapx block, that block is removed (and the file deleted when nothing else is left), with a message. A `.continue/mapx.yaml` without a mapx block is left alone. A legacy block edited after mapx wrote it is only removed when you confirm or pass `--force`. That includes a block written by 0.3.x or earlier (no content hash) whose body is not one those versions wrote.
+- `zed`: also registers the mapx server under `context_servers` in `.zed/settings.json`. Existing keys and string values are kept; comments and trailing commas are accepted, but the merged file is written back as plain JSON, and the output warns when comments were dropped. A settings file that already holds the identical mapx entry is left untouched, comments included. A settings file that cannot be parsed is left untouched, with a warning.
 
 Generated files end with a newline. A block written into an existing file uses that file's line endings (LF or CRLF).
 

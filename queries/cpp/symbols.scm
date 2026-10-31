@@ -22,18 +22,10 @@
     declarator: [
       (identifier) @symbol.name
       (field_identifier) @symbol.name
-      (qualified_identifier
-        name: (identifier) @symbol.name)
-      (qualified_identifier
-        name: (destructor_name (identifier) @symbol.name))
-      ; Nested qualifiers: `void ns::K::a()`, `void A::B::C::f()` (M0-17-R2)
-      (qualified_identifier
-        name: (qualified_identifier
-          name: (identifier) @symbol.name))
-      (qualified_identifier
-        name: (qualified_identifier
-          name: (qualified_identifier
-            name: (identifier) @symbol.name)))
+      ; Out-of-line definitions qualified at any depth: `void Foo::run()`, `void ns::K::a()`,
+      ; `void a::b::c::D::g()`, `ns::K::~K()`. GenericWasmParser names the method by the innermost
+      ; name (`~K` for a destructor) and scopes it by the innermost qualifier (M0-17-R2, M0-17-R5).
+      (qualified_identifier) @symbol.name
     ])) @symbol.kind_function
 
 ; Template classes and functions need no pattern of their own: the class_specifier and

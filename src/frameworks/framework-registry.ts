@@ -73,7 +73,8 @@ export class FrameworkRegistry {
    * repo; failing that, a manifest below the repo root listing one of its `manifestDependencies`
    * activates it for that folder only, and `options.scopes` receives those folders
    * (workspace-relative, like `files`, which are relative to `options.workspaceRoot`). A detector
-   * missing from `scopes` is active for the whole repo (M3-07).
+   * missing from `scopes` is active for the whole repo (M3-07). The manifest helpers `detect()`
+   * uses read only the repo root's manifest, even when `files` holds nested ones (M3-07-R1).
    */
   async detectActiveFrameworks(
     projectRoot: string,

@@ -169,3 +169,7 @@ The `.mapx/` directory is a local development artifact and should not be committ
 - The project is a git repository
 
 If the entry already exists in `.gitignore`, it is not duplicated.
+
+### Gitignored files
+
+MapX does not read `.gitignore` to decide what to index. `scan` indexes a gitignored file like any other, unless a default ignore (`node_modules`, `vendor`, `dist`, `build`, `coverage`, dot-named entries and the others in `src/core/file-rules.ts`) or an `excludePatterns` entry leaves it out. In a git repository, `sync` does the same: it asks git for the ignored entries, walks them with the same rules, and re-parses those whose content changed, so `sync` and `scan --force` give the same index. To keep generated or local files out of the graph, add them to `excludePatterns`.

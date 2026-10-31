@@ -141,7 +141,7 @@ The content is wrapped in markers:
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties, extensions |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties, enum entries |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals, vars, packages |
-| Svelte | `.svelte` | functions, classes, methods, props, constants |
+| Svelte | `.svelte` | the component, `export let` props, and the functions, classes, methods and constants of its `<script>` blocks (`context="module"` too), with their imports, calls and instantiations as in a `.js` / `.ts` file; the template is not read |
 | Lua | `.lua` | functions, methods, local functions, variables |
 | Elixir | `.ex`, `.exs` | modules, functions (def/defp), macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests, error sets |
@@ -154,7 +154,7 @@ The content is wrapped in markers:
 
 All languages track applicable reference types:
 
-- **Imports**: `import`, `require`, `use`, `include`, `#include`, `using`, `@import`, `alias`. JS/TS/Vue imports also resolve path aliases (`@/x`, `~/x`, `#x`) through the nearest tsconfig/jsconfig `compilerOptions.paths`, else the nearest `vite.config.*`, `vue.config.js`, `webpack.config.js` or `webpack.mix.js` alias (read statically, never executed), else `@/` → the app's `src/`
+- **Imports**: `import`, `require`, `use`, `include`, `#include`, `using`, `@import`, `alias`. JS/TS/Vue imports also resolve path aliases (`@/x`, `~/x`, `#x`) through the importing app's own configuration: the nearest tsconfig/jsconfig `compilerOptions.paths`, else the `vite.config.*`, `vue.config.js`, `webpack.config.js` or `webpack.mix.js` alias of the app root (the nearest folder with a `package.json` or bundler config), else `@/` → the app's `src/`. Configs are read statically, never executed, and a parent project's aliases never apply to a nested app ([details](framework-integration.md#import-aliases-js--ts))
 - **Inheritance**: `extends`, `implements`, protocol conformance, mixins (`with`), `include`/`prepend`
 - **Instantiation**: `new ClassName()`, `ClassName()`, `.new`, composite literals, constructor invocations
 - **Calls**: function calls, method calls, remote calls, pipe operators, macro invocations

@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { ExtractedSymbol, ScanContext } from '../src/types.js';
 import {
-  matchRoute, moduleNavigationReferences, navigationReferences, navTarget, routeRecords, type ResolvedRoute,
+  matchRoute, mayDefineRoutes, moduleNavigationReferences, navigationReferences, navTarget, routeRecords, type ResolvedRoute,
 } from '../src/parsers/languages/vue-navigation.js';
+import { VueParser } from '../src/parsers/languages/vue.js';
+import { getBuiltinLanguages } from '../src/languages/registry.js';
 import { VueRouterDetector } from '../src/frameworks/detectors/vue-router.js';
 import { buildServer } from '../src/mcp.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
@@ -515,4 +518,351 @@ describe('route components through a configured alias (M3-12)', () => {
       'home -> resources/js/Pages/Home.vue',
     ]);
   });
+});
+
+// M3-08-R1: a route table belongs to its app folder; a folder where vue-router is not active is
+// never a navigate target.
+describe('route tables stop at the app boundary (M3-08-R1)', () => {
+  const router = (name: string, view: string) => [
+    "import { createRouter, createWebHistory } from 'vue-router';",
+    `import ${view} from '../views/${view}.vue';`,
+    `export default createRouter({ history: createWebHistory(), routes: [{ path: '/${name}', name: '${name}', component: ${view} }] });`,
+    '',
+  ].join('\n');
+  const nav = (name: string) => `<template>\n  <nav>\n    <router-link to="/${name}">go</router-link>\n    <button @click="$router.push({ name: '${name}' })">go</button>\n  </nav>\n</template>\n`;
+  // An app is built: vite among its dev dependencies.
+  const app = (dir: string, deps: Record<string, string>) => ({ [`${dir}/package.json`]: JSON.stringify({ name: dir.replace(/\//g, '-'), dependencies: deps, devDependencies: { vite: '^5.0.0' } }) });
+
+  it('gives no navigate edge into another app folder, by name or by path, when the root package.json lists vue', () => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'mono', private: true, devDependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0' } }),
+      ...app('admin', { vue: '^3.4.0', 'vue-router': '^4.3.0' }),
+      'admin/src/router/index.js': router('reports', 'Reports'),
+      'admin/src/views/Reports.vue': '<template><p>reports</p></template>\n',
+      'admin/src/Nav.vue': nav('reports'),
+      // `npm init` writes `main`: still an app (review 2026-10-31).
+      'shop/package.json': JSON.stringify({ name: 'shop', main: 'index.js', dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0' }, devDependencies: { vite: '^5.0.0' } }),
+      'shop/src/router/index.js': router('cart', 'Cart'),
+      'shop/src/views/Cart.vue': '<template><p>cart</p></template>\n',
+      'shop/src/Nav.vue': nav('reports'),
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      expect(edgesOf(root, 'navigate').map((e) => `${e.source_file} -> ${e.target_file}`)).toEqual([
+        'admin/src/Nav.vue -> admin/src/views/Reports.vue',
+        'admin/src/Nav.vue -> admin/src/views/Reports.vue',
+      ]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('never targets a folder where vue-router is not active (backend/ beside frontend/)', () => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'mono', private: true }),
+      ...app('frontend', { vue: '^3.4.0', 'vue-router': '^4.3.0' }),
+      'frontend/src/router/index.js': router('home', 'Home'),
+      'frontend/src/views/Home.vue': '<template><p>home</p></template>\n',
+      'frontend/src/Nav.vue': nav('home').replace('</nav>', `  <router-link to="/admin">admin</router-link>\n    <button @click="$router.push({ name: 'admin' })">admin</button>\n  </nav>`),
+      'backend/tools/router/index.js': router('admin', 'AdminPanel'),
+      'backend/tools/views/AdminPanel.vue': '<template><p>admin</p></template>\n',
+      // Navigation inside backend/ itself: vue-router is active for frontend/ only.
+      'backend/tools/Panel.vue': nav('admin'),
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      const targets = edgesOf(root, 'navigate').map((e) => e.target_file);
+      expect(targets).not.toContain('backend/tools/views/AdminPanel.vue');
+      expect(targets).toContain('frontend/src/views/Home.vue');
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+// Final review 2026-10-31 (M3-08-R1): a package.json added or removed moves a router file or a JS
+// navigator to another scope; sync re-parses the navigators, as scan --force has them.
+describe('navigate edges follow a scope move on sync', () => {
+  it('drops and restores navigate edges when an app manifest is added and removed', () => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'mono', private: true, dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0' }, devDependencies: { vite: '^5.0.0' } }),
+      '.gitignore': '.mapx/\n',
+      'apps/a/src/router.js': "import { createRouter, createWebHistory } from 'vue-router';\nimport Home from './views/Home.vue';\nexport default createRouter({ history: createWebHistory(), routes: [{ path: '/home', name: 'home', component: Home }] });\n",
+      'apps/a/src/views/Home.vue': '<template><p>home</p></template>\n',
+      'apps/b/src/store.js': "import { useRouter } from 'vue-router';\nexport function goHome() {\n  const router = useRouter();\n  router.push({ name: 'home' });\n}\n",
+      'apps/c/src/Nav.vue': '<template>\n  <nav>\n    <router-link to="/home">go</router-link>\n    <button @click="$router.push({ name: \'home\' })">go</button>\n  </nav>\n</template>\n',
+    }, ['.']);
+    const sources = () => edgesOf(root, 'navigate').map((e) => e.source_file).sort();
+    const all = () => query<{ e: string }>(root, "SELECT source_file || '>' || target_file || '>' || edge_type AS e FROM edges ORDER BY e").map((r) => r.e);
+    const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: root, stdio: 'pipe' });
+    try {
+      git('add', '-A');
+      git('commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      expect(sources()).toEqual(['apps/b/src/store.js', 'apps/c/src/Nav.vue', 'apps/c/src/Nav.vue']);
+      // apps/b becomes its own app: its store no longer sees apps/a's routes.
+      writeFileSync(join(root, 'apps/b/package.json'), JSON.stringify({ name: 'b', devDependencies: { vite: '^5.0.0' } }));
+      mapx(root, 'sync', root);
+      expect(sources()).toEqual(['apps/c/src/Nav.vue', 'apps/c/src/Nav.vue']);
+      // apps/a becomes its own app: its router moves away from apps/c's navigation.
+      writeFileSync(join(root, 'apps/a/package.json'), JSON.stringify({ name: 'a', devDependencies: { vite: '^5.0.0' } }));
+      mapx(root, 'sync', root);
+      expect(sources()).toEqual([]);
+      const synced = all();
+      mapx(root, 'scan', root, '--force');
+      expect(all()).toEqual(synced);
+      // And back.
+      rmSync(join(root, 'apps/a/package.json'));
+      rmSync(join(root, 'apps/b/package.json'));
+      mapx(root, 'sync', root);
+      expect(sources()).toEqual(['apps/b/src/store.js', 'apps/c/src/Nav.vue', 'apps/c/src/Nav.vue']);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+// ── M3-11-R1: more navigation and route-table forms (review 2026-10-31, P2) ──────────────────────
+
+type Brief = [string | null, string, number];
+const brief = (refs: { sourceSymbol: string | null; targetName: string; startLine: number }[]): Brief[] =>
+  refs.map((r) => [r.sourceSymbol, r.targetName, r.startLine]);
+
+describe('more navigation forms (M3-11-R1)', () => {
+  it('reads a push / replace destructured from the router, in script and in a script-setup template', () => {
+    const sfc = [
+      '<template>', // 1
+      "  <button @click=\"router.push({ name: 'about' })\">a</button>", // 2
+      "  <button @click=\"push('/about')\">b</button>", // 3
+      "  <button @click=\"go('/home')\">c</button>", // 4
+      "  <button @click=\"list.push('/no')\">d</button>", // 5
+      '</template>', // 6
+      '<script setup>', // 7
+      "import { useRouter } from 'vue-router';", // 8
+      'const router = useRouter();', // 9
+      'const { push, replace: go } = useRouter();', // 10
+      'const list = [];', // 11
+      "function a() { push({ name: 'about' }); go('/home'); }", // 12
+      "function b() { list.push('/no'); list. push('/no2'); }", // 13
+      '</script>', // 14
+    ].join('\n');
+    expect(brief(navigationReferences(sfc))).toEqual([
+      [null, 'about', 12], [null, '/home', 12], [null, 'about', 2], [null, '/about', 3], [null, '/home', 4],
+    ]);
+    // A plain <script>'s bindings are not the template's: nothing there is the router.
+    const options = "<template>\n  <button @click=\"router.push('/about')\">a</button>\n</template>\n<script>\nimport { useRouter } from 'vue-router';\nconst router = useRouter();\nexport default {};\n</script>\n";
+    expect(navigationReferences(options)).toEqual([]);
+    // Something else's push, destructured, is not navigation.
+    const other = "<script setup>\nimport { useHistory } from './history';\nconst { push } = useHistory();\nfunction a() { push('/about'); }\n</script>\n";
+    expect(navigationReferences(other)).toEqual([]);
+  });
+
+  it('reads guard redirects: next(target) and a returned target, in the guard only', () => {
+    const code = [
+      "import { createRouter } from 'vue-router';", // 1
+      'const router = createRouter({ routes: [', // 2
+      "  { path: '/admin', component: Admin, beforeEnter: (to, from, next) => next('/login') },", // 3
+      '] });', // 4
+      'router.beforeEach((to, from, next) => {', // 5
+      "  if (!auth) next({ name: 'login' });", // 6
+      '  else next();', // 7
+      '});', // 8
+      'router.beforeEach(async (to) => {', // 9
+      "  const crumbs = to.matched.map((r) => { return { name: 'crumb' }; });", // 10
+      "  if (to.meta.admin) return { name: 'forbidden' };", // 11
+      '  return true;', // 12
+      '});', // 13
+      'router.beforeResolve(checkRole);', // 14
+      'function checkRole(to) {', // 15
+      "  if (!to.meta.role) return '/no-role';", // 16
+      '}', // 17
+      'function breadcrumb() {', // 18
+      "  return { name: 'orders' };", // 19
+      '}', // 20
+      'export function requireAuth(to, from, next) {', // 21
+      "  api.check().then((ok) => (ok ? next() : next({ path: '/login' })));", // 22
+      '}', // 23
+      "export const audit = (req, res, next) => next('/audit');", // 24
+      'export default router;', // 25
+    ].join('\n');
+    const symbols = [
+      { name: 'checkRole', kind: 'function', scope: null, startLine: 15, endLine: 17 },
+      { name: 'breadcrumb', kind: 'function', scope: null, startLine: 18, endLine: 20 },
+      { name: 'requireAuth', kind: 'function', scope: null, startLine: 21, endLine: 23 },
+      { name: 'audit', kind: 'function', scope: null, startLine: 24, endLine: 24 },
+    ] as ExtractedSymbol[];
+    expect(brief(moduleNavigationReferences(code, symbols)).sort((x, y) => x[2] - y[2])).toEqual([
+      [null, '/login', 3],
+      [null, 'login', 6],
+      [null, 'forbidden', 11],
+      ['checkRole', '/no-role', 16],
+      ['requireAuth', '/login', 22],
+    ]);
+    // An in-component guard, and a guard file that never names the router.
+    const sfc = "<script>\nexport default {\n  beforeRouteLeave(to, from, next) { next({ name: 'home' }); },\n  methods: { next() { return { name: 'x' }; } },\n};\n</script>\n";
+    expect(brief(navigationReferences(sfc))).toEqual([[null, 'home', 3]]);
+    expect(brief(moduleNavigationReferences("export function guest(to, from, next) {\n  next('/');\n}\n", []))).toEqual([[null, '/', 2]]);
+    // The router passed in (or imported from './index'): beforeEach is its own method; a typed nested
+    // function's return is not the guard's.
+    const setup = [
+      'export function setupGuards(appRouter) {', // 1
+      '  appRouter.beforeEach((to) => {', // 2
+      "    function fallback(): RouteLocationRaw { return { name: 'nested' }; }", // 3
+      "    if (!to.meta.ok) return '/denied';", // 4
+      '  });', // 5
+      "  test.beforeEach(() => { return { name: 'not-a-guard' }; });", // 6
+      '}', // 7
+    ].join('\n');
+    expect(brief(moduleNavigationReferences(setup, []))).toEqual([[null, '/denied', 4]]);
+  });
+
+  it('reads this.router.push in a Pinia store (the router added by a store plugin), nowhere else', () => {
+    const store = "import { defineStore } from 'pinia';\nexport const useAuth = defineStore('auth', {\n  actions: {\n    logout() { this.router.push({ name: 'login' }); },\n  },\n});\n";
+    const symbols = [{ name: 'logout', kind: 'method', scope: null, startLine: 4, endLine: 4 }] as ExtractedSymbol[];
+    expect(brief(moduleNavigationReferences(store, symbols))).toEqual([['logout', 'login', 4]]);
+    expect(moduleNavigationReferences("export class Shell {\n  open() { this.router.push('/login'); }\n}\n", [])).toEqual([]);
+  });
+});
+
+describe('route modules (M3-11-R1)', () => {
+  it('reads a route module exported as export default [ … ] (also typed), and no other default array', () => {
+    const module = "import Reports from '../views/Reports.vue';\nexport default [\n  { path: '/admin/reports', name: 'admin-reports', component: Reports },\n  { path: '/admin/users', name: 'admin-users', component: () => import('../views/Users.vue') },\n];\n";
+    expect(mayDefineRoutes(module)).toBe(true);
+    expect(routeRecords(module).map((r) => [r.name, r.path, r.component])).toEqual([
+      ['admin-reports', '/admin/reports', '../views/Reports.vue'],
+      ['admin-users', '/admin/users', '../views/Users.vue'],
+    ]);
+    const typed = "import type { RouteRecordRaw } from 'vue-router';\nexport default <RouteRecordRaw[]>[{ path: '/a', name: 'a', component: () => import('./A.vue') }];\n";
+    expect(routeRecords(typed).map((r) => r.name)).toEqual(['a']);
+    const satisfies = "export default [{ path: '/b', name: 'b', component: () => import('./B.vue') }] satisfies RouteRecordRaw[];\n";
+    expect(routeRecords(satisfies).map((r) => r.name)).toEqual(['b']);
+    // A menu, not routes: no record has a component.
+    expect(routeRecords("export default [\n  { path: '/admin', title: 'Admin', icon: 'cog' },\n];\n")).toEqual([]);
+    // Children written for a parent in another file: their full path is unknown, so they are left out.
+    expect(routeRecords("export default [{ path: 'users', name: 'admin-users', component: () => import('./U.vue') }];\n")).toEqual([]);
+  });
+});
+
+describe('<script setup generic> (M3-11-R1)', () => {
+  it('reads a script setup block whose generic attribute holds `>`, as without it', async () => {
+    const sfc = (attrs: string) => [
+      '<template>',
+      '  <Child @click="go" />',
+      '</template>',
+      `<script setup lang="ts"${attrs}>`,
+      "import { useRouter } from 'vue-router';",
+      "import Child from './Child.vue';",
+      'const router = useRouter();',
+      "function go() { router.push({ name: 'about' }); }",
+      '</script>',
+      '',
+    ].join('\n');
+    const generic = sfc(' generic="T extends Record<string, unknown>, U extends Array<T>"');
+    expect(navigationReferences(generic).map((r) => [r.targetName, r.startLine])).toEqual([['about', 8]]);
+    const parser = new VueParser(getBuiltinLanguages().vue);
+    const plain = await parser.parse('src/Generic.vue', sfc(''));
+    expect(plain.symbols.find((s) => s.name === 'go')?.startLine).toBe(8);
+    expect(plain.references.find((r) => r.referenceType === 'navigate')?.sourceSymbol).toBe('go');
+    expect(await parser.parse('src/Generic.vue', generic)).toEqual(plain);
+  });
+});
+
+// The forms above in a real scan: each links to the record it names, from its own function, and a
+// route module spread into the routes array is part of the route table.
+describe('more navigation forms in a real scan (M3-11-R1)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'desk', private: true, dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0', pinia: '^2.1.0' } }),
+      'src/router/index.ts': [
+        "import { createRouter, createWebHistory } from 'vue-router';",
+        "import adminRoutes from './admin';",
+        "import Home from '../views/Home.vue';",
+        "import Login from '../views/Login.vue';",
+        'const router = createRouter({',
+        '  history: createWebHistory(),',
+        '  routes: [',
+        "    { path: '/', name: 'home', component: Home },",
+        "    { path: '/login', name: 'login', component: Login },",
+        '    ...adminRoutes,',
+        '  ],',
+        '});',
+        'function guardAdmin(to) {',
+        "  if (to.path.startsWith('/admin') && !localStorage.admin) return { name: 'login' };",
+        '}',
+        'function crumbs() {',
+        "  return { name: 'reports' };",
+        '}',
+        'router.beforeEach(guardAdmin);',
+        'export default router;',
+        '',
+      ].join('\n'),
+      'src/router/admin.ts': "export default [\n  { path: '/admin/reports', name: 'reports', component: () => import('../views/Reports.vue') },\n];\n",
+      'src/router/guards.ts': "export function requireLogin(to, from, next) {\n  if (!localStorage.token) next({ name: 'login' });\n  else next();\n}\n",
+      'src/stores/session.ts': "import { defineStore } from 'pinia';\nexport const useSession = defineStore('session', {\n  actions: {\n    expire() { this.router.push('/login'); },\n  },\n});\n",
+      'src/components/Toolbar.vue': [
+        '<template>',
+        "  <button @click=\"router.push('/admin/reports')\">reports</button>",
+        '</template>',
+        '<script setup lang="ts" generic="T extends Record<string, unknown>">',
+        "import { useRouter } from 'vue-router';",
+        'const router = useRouter();',
+        'const { push } = useRouter();',
+        'const seen: string[] = [];',
+        'function goHome() {',
+        "  push({ name: 'home' });",
+        "  seen.push('/login');",
+        '}',
+        '</script>',
+        '',
+      ].join('\n'),
+      'src/views/Home.vue': '<template>\n  <p>home</p>\n</template>\n',
+      'src/views/Login.vue': '<template>\n  <p>login</p>\n</template>\n',
+      'src/views/Reports.vue': '<template>\n  <p>reports</p>\n</template>\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('gives the navigate edge of each form to the exact record, and nothing else', () => {
+    expect(edgesOf(root, 'navigate').map((e) => `${e.source_file}#${e.source_symbol} -> ${e.target_file}`)).toEqual([
+      'src/components/Toolbar.vue#Toolbar -> src/views/Reports.vue',
+      'src/components/Toolbar.vue#goHome -> src/views/Home.vue',
+      'src/router/guards.ts#requireLogin -> src/views/Login.vue',
+      'src/router/index.ts#guardAdmin -> src/views/Login.vue',
+      'src/stores/session.ts#expire -> src/views/Login.vue',
+    ]);
+  });
+});
+
+// Review 2026-11-01 (M3-11-R1): an `export default [ { path, component } ]` that no router imports
+// (a sidebar menu config) is no route table.
+describe('route modules are the ones a router imports', () => {
+  it('links a router-link to the routed view, never to a menu config\'s icon component', () => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0' }, devDependencies: { vite: '^5.0.0' } }),
+      'src/router/index.js': "import { createRouter, createWebHistory } from 'vue-router';\nimport SettingsView from '../views/SettingsView.vue';\nimport adminRoutes from './admin.js';\nexport default createRouter({ history: createWebHistory(), routes: [{ path: '/settings', component: SettingsView }, ...adminRoutes] });\n",
+      'src/router/admin.js': "import Reports from '../views/Reports.vue';\nexport default [{ path: '/reports', name: 'reports', component: Reports }];\n",
+      'src/views/SettingsView.vue': '<template><p>settings</p></template>\n',
+      'src/views/Reports.vue': '<template><p>reports</p></template>\n',
+      'src/components/sidebar/menu.js': "import GearIcon from './icons/GearIcon.vue';\nimport ChartIcon from './icons/ChartIcon.vue';\nexport default [{ path: '/settings', label: 'Settings', component: GearIcon }, { path: '/reports', component: ChartIcon }];\n",
+      'src/components/sidebar/icons/GearIcon.vue': '<template><i /></template>\n',
+      'src/components/sidebar/icons/ChartIcon.vue': '<template><i /></template>\n',
+      'src/components/sidebar/SideBar.vue': '<template>\n  <nav>\n    <router-link to="/settings">s</router-link>\n    <router-link to="/reports">r</router-link>\n  </nav>\n</template>\n',
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      expect(edgesOf(root, 'navigate').map((e) => `${e.source_file} -> ${e.target_file}`)).toEqual([
+        'src/components/sidebar/SideBar.vue -> src/views/Reports.vue',
+        'src/components/sidebar/SideBar.vue -> src/views/SettingsView.vue',
+      ]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
 });

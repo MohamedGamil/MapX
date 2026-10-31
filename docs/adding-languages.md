@@ -8,7 +8,7 @@ PHP, JavaScript, TypeScript, and Vue are built-in and always available. They use
 
 ## Tier 2: Bundled Languages (Generic WASM Parsers)
 
-Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, Fish, and Pascal are bundled — their WASM grammars and queries ship with the tool and are available out-of-the-box. They use relative paths and are parsed dynamically via the `GenericWasmParser` base class.
+Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Lua, Elixir, Zig, Bash, Fish, and Pascal are bundled — their WASM grammars and queries ship with the tool and are available out-of-the-box. They use relative paths and are parsed dynamically via the `GenericWasmParser` base class. Svelte is bundled too, but like Vue it has a dedicated parser (`src/parsers/languages/svelte.ts`) that hands each `<script>` block to the JavaScript or TypeScript parser.
 
 Most grammars come from their npm packages. The fish grammar is not on npm: `npm run build:wasm` builds it from the pinned upstream archive, [ram02z/tree-sitter-fish](https://github.com/ram02z/tree-sitter-fish) 3.7.0 (Unlicense), with `tree-sitter build --wasm` (emscripten, or docker when emscripten is not installed).
 
@@ -108,7 +108,21 @@ Example (Ruby):
 
 #### Constants as call targets
 
-`call` and `instantiation` references resolve by name. In JavaScript, TypeScript and Python they skip `constant` and `variable` symbols, because a binding whose value is a function is already a `function` symbol there. In every other language a `constant` stays a call target, because there it can be callable: C function-like macros, Rust tuple variants, Lua `local f = function … end` and Bash aliases. If a new language's constants and variables are never callable, add it to `VALUE_SYMBOL_LANGUAGES` in `src/core/scanner.ts`.
+`call` and `instantiation` references resolve by name. In JavaScript, TypeScript and Python they skip `constant` and `variable` symbols, because `GenericWasmParser` gives every possibly callable module-level binding another kind:
+
+- a function value (`const f = () => …`, `= function () {}`, Python `= lambda …`) is a `function`;
+- a call, a name or a member (`export const useAppSelector = useSelector`, `= createAsyncThunk(…)`, `= create(…)`, `= store.dispatch`, Python `= functools.partial(…)`) is a `function` too: a factory may return a callable, so calls must reach it;
+- a class expression (`export const Klass = class {}`) is a `class`, so `new Klass()` reaches it.
+
+Only a literal value stays a `constant` or `variable`: strings, numbers, booleans, objects, arrays, templates, operator expressions over them and `new X()`. Two exceptions: bindings in a Vue SFC stay values, because `const total = computed(…)` is reactive state and Vue value declarations own no references; and a function value declared inside a function or a block (`if (x) { const f = () => 1 }`) is no symbol at all.
+
+Because call-made bindings are call targets, a call on a parameter or a plain local variable of the same name would reach them by name. So in JavaScript, TypeScript (outside Vue SFCs) and Python, `fetchUser()` makes no reference when `fetchUser` is a parameter (plain, typed, defaulted or rest) of an enclosing function, or a `const`/`let`/`var` (Python: an assignment) in an enclosing function or block. Destructured parameters and locals are not followed: `({ loadLanguage }) => loadLanguage()` over a dynamic import names the module's function, and the Vue store and composable passes resolve `const { reset } = useStore()` themselves.
+
+In every other language a `constant` stays a call target, because there it can be callable: C function-like macros, Rust tuple variants, Lua `local f = function … end` and Bash aliases. If a new language's constants and variables are never callable, add it to `VALUE_SYMBOL_LANGUAGES` in `src/core/scanner.ts`.
+
+#### Qualified names
+
+A C++ out-of-line definition is a method named by its innermost name and scoped by the innermost qualifier, at any depth: `void a::b::c::D::g()` is `D::g`, `ns::K::~K()` is `K::~K` (a destructor keeps its tilde). A Go embedded type qualified by a package (`struct { log.Logger }`) is an `extends` reference that carries the import path of its package (`metadata.goPackage`). The scanner links it only to the type declared in that package's directory when the import resolves to a project package (through `go.mod`). A standard-library or third-party package links nothing, even if the project has a type with the same name.
 
 ### Using Predicates
 

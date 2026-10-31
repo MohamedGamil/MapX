@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync, rmdirSync } from 'node:fs';
 import { join, dirname, basename, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import { TEMPLATES, MCP_CONFIGS, ProviderTemplate, McpConfigEntry } from './templates.js';
 import { VERSION } from '../version.js';
 import { stripJsoncSyntax, hasJsoncComments } from '../parsers/static-file-parser.js';
@@ -82,6 +83,26 @@ const lf = (text: string) => text.replace(/\r\n/g, '\n');
 function bodyHash(body: string): string {
   return createHash('sha1').update(lf(body).trim()).digest('hex').slice(0, 12);
 }
+
+/** The Continue block released versions wrote to `.continue/mapx.yaml`; `tools` was 25, 26 or 32. */
+const continueLegacyBody = (tools: number) => `# Continue configuration for MapxGraph (22 languages, ${tools} MCP tools)
+contextProviders:
+  - name: cmd
+    args:
+      name: mapx-export
+      cmd: mapx export --tokens=4000
+  - name: cmd
+    args:
+      name: mapx-status
+      cmd: mapx status`;
+
+/**
+ * Bodies released versions (0.1.9–0.3.5) wrote, without a hash, into files mapx no longer writes.
+ * A hashless legacy block with any other body was edited (M0-09-R5).
+ */
+const LEGACY_BODIES: Record<string, string[]> = {
+  '.continue/mapx.yaml': [25, 26, 32].map(continueLegacyBody),
+};
 
 /** Top-level keys of a YAML text (`key:` at column 0). */
 const yamlTopKeys = (text: string) => new Set([...lf(text).matchAll(/^([A-Za-z0-9_.-]+)\s*:/gm)].map((m) => m[1]!));
@@ -275,7 +296,8 @@ export class AgentGenerator {
   /**
    * `remove` actions for legacy files that still carry a mapx block (M0-09-R4). A file without
    * one is the user's and is left alone. A hashed block that no longer matches its hash was
-   * edited; a hashless block predates hashes and counts as mapx's own.
+   * edited; a hashless block predates hashes and was edited unless its body is one a released
+   * version wrote (M0-09-R5).
    */
   private planLegacy(providers: string[], dir: string): AgentAction[] {
     const actions: AgentAction[] = [];
@@ -303,7 +325,7 @@ export class AgentGenerator {
           filename,
           filepath,
           status: 'remove',
-          edited: matches.some((m) => !!m[2] && bodyHash(m[3]!) !== m[2]),
+          edited: matches.some((m) => (m[2] ? bodyHash(m[3]!) !== m[2] : !(LEGACY_BODIES[filename] ?? []).includes(lf(m[3]!).trim()))),
           oldContent: content,
           newContent,
           diff: this.diff(content, newContent),
@@ -436,7 +458,9 @@ export class AgentGenerator {
         const merged = this.mergeMapxIntoConfig(existing, newObj, entry.name);
         const mergedStr = JSON.stringify(merged, null, 2);
 
-        if (existingRaw.trim() === mergedStr.trim()) {
+        // Compare parsed values, not text: a JSONC file (comments, trailing commas) that already
+        // holds the identical entry is up to date and keeps its comments (M0-09-R5).
+        if (isDeepStrictEqual(existing, merged)) {
           actions.push({
             tool: entry.name,
             filename: entry.filename,

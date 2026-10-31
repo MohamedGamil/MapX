@@ -5,6 +5,7 @@ use App\Http\Controllers\GhostController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\NoticeController;
 use App\Http\Controllers\PostController;
+use App\Http\Controllers\ShowProfile;
 use App\Http\Controllers\StatusController;
 use App\Http\Controllers\TagController;
 use Illuminate\Support\Facades\Route;
@@ -123,4 +124,19 @@ Route::prefix('lead')->get('chained', [HomeController::class, 'chained']);
 Route::get('articles/{article:slug}', [HomeController::class, 'article']);
 Route::prefix('authors/{author:uuid}')->group(function () {
     Route::get('books/{book:isbn?}', [HomeController::class, 'book']);
+});
+
+// M1-03-R2: require_once loads a file once and a require cycle stops; '/' under a prefix is the
+// prefix itself; single-action controllers; double-quoted Route::match verbs; a resource whose
+// name can't be evaluated (under its own prefix: its {dynamic} segments match any text, and the
+// vue-http fixture pairs its calls with this app).
+Route::prefix('once-a')->group(function () { require_once __DIR__.'/api/once.php'; });
+Route::prefix('once-b')->group(function () { require_once __DIR__.'/api/once.php'; });
+require __DIR__.'/api/cycle-a.php';
+Route::prefix('home')->group(fn () => Route::get('/', [HomeController::class, 'homeOld']));
+Route::get('home', [HomeController::class, 'homeNew']);
+Route::get('invokable', ShowProfile::class);
+Route::match(["get", "post"], 'feeds', [HomeController::class, 'feeds']);
+Route::prefix('gallery')->group(function () {
+    Route::resource(config('app.gallery'), GalleryController::class)->only(['index', 'show']);
 });

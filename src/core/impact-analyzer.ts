@@ -133,11 +133,18 @@ export class ImpactAnalyzer {
     if (target?.file_path) {
       const seenFiles = new Set(items.map(x => x.file));
       const importers = this.store.raw
-        .prepare("SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND edge_type IN ('import', 'require') AND source_file != ?")
-        .all(target.file_path, target.file_path) as { source_file: string }[];
+        .prepare("SELECT source_file, target_symbol FROM edges WHERE target_file = ? AND edge_type IN ('import', 'require') AND source_file != ?")
+        .all(target.file_path, target.file_path) as { source_file: string; target_symbol: string | null }[];
       const short = symbolName.split(/::|\.|\\/).pop() || symbolName;
-      const mentions = new RegExp(`(^|[^\\w$])${short.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\w$])`);
-      for (const { source_file } of importers) {
+      const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const mentions = new RegExp(`(^|[^\\w$])${escape(short)}($|[^\\w$])`);
+      // A default export is imported under any name (`import fmt from './format'`) (M0-11-R3).
+      const defaultExport = this.isDefaultExport(dir, target.file_path as string, short);
+      const specifiers = new Map<string, string[]>();
+      for (const { source_file, target_symbol } of importers) {
+        specifiers.set(source_file, [...(specifiers.get(source_file) ?? []), ...(target_symbol ? [target_symbol] : [])]);
+      }
+      for (const [source_file, specs] of specifiers) {
         if (seenFiles.has(source_file)) continue;
         let source: string | null = null;
         try {
@@ -145,7 +152,9 @@ export class ImpactAnalyzer {
         } catch {
           // unreadable: keep the file-level answer
         }
-        if (source !== null && !mentions.test(source)) continue;
+        const importsDefault = defaultExport && source !== null && specs.some(spec =>
+          new RegExp(`\\bimport\\s+[A-Za-z_$][\\w$]*\\s*(?:,\\s*(?:\\{[^}]*\\}|\\*\\s*as\\s+[\\w$]+)\\s*)?from\\s*['"]${escape(spec)}['"]`).test(source!));
+        if (source !== null && !mentions.test(source) && !importsDefault) continue;
         items.push({ symbol: '<import>', file: source_file, depth: 1, edgeType: 'import', risk: 'LOW' });
       }
     }
@@ -166,5 +175,19 @@ export class ImpactAnalyzer {
       },
       recommendation
     };
+  }
+
+  /** Whether the file exports `name` as its default export (`export default function name`, `export { name as default }`). */
+  private isDefaultExport(dir: string, file: string, name: string): boolean {
+    let text: string;
+    try {
+      text = readFileSync(resolve(dir, file), 'utf-8');
+    } catch {
+      return false;
+    }
+    const n = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\bexport\\s+default\\s+(?:abstract\\s+)?(?:async\\s+)?(?:function\\s*\\*?\\s*|class\\s+)${n}\\b`).test(text)
+      || new RegExp(`\\bexport\\s+default\\s+${n}\\s*;?\\s*$`, 'm').test(text)
+      || new RegExp(`\\bexport\\s*\\{[^}]*\\b${n}\\s+as\\s+default\\b`).test(text);
   }
 }

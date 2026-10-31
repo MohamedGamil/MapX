@@ -9,6 +9,7 @@
     <p>{{ format(cart.total) }}</p>
     <BaseButton variant="secondary" @click="emptyCart">Empty cart</BaseButton>
     <BaseButton @click="checkout">Checkout</BaseButton>
+    <BaseButton variant="link" @click="router.push('/orders')">My orders</BaseButton>
   </section>
 </template>
 

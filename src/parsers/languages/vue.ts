@@ -4,7 +4,7 @@ import type { LanguageDefinition } from '../../languages/registry.js';
 import { TypeScriptParser } from './typescript.js';
 import { getBuiltinLanguages } from '../../languages/registry.js';
 import { analyzeOptionsComponent, annotateThisCalls, type OptionsComponent } from './vue-options.js';
-import { assignOwners, componentSymbol, templateReferences } from './vue-template.js';
+import { assignOwners, componentSymbol, scriptBlocks, templateReferences } from './vue-template.js';
 import { analyzeScriptBlock, annotateComposableCalls, interfaceMetadata, type VueInterface } from './vue-script-setup.js';
 import { navigationReferences } from './vue-navigation.js';
 
@@ -30,20 +30,10 @@ export class VueParser implements LanguageParser {
     // Each block's props / emits, for the component symbol (M3-04).
     const interfaces: VueInterface[] = [];
 
-    // Match all <script> blocks
-    const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
-    let match;
-
-    while ((match = scriptRegex.exec(source)) !== null) {
-      const code = match[2];
-      const matchIndex = match.index;
-
-      // Find the start line of the code block.
-      const openingTagMatch = source.slice(matchIndex).match(/<script\b[^>]*>/i);
-      const openingTagLength = openingTagMatch ? openingTagMatch[0].length : 0;
-      
-      const beforeCode = source.slice(0, matchIndex + openingTagLength);
-      const startLine = beforeCode.split('\n').length;
+    // Each <script> block (also `<script setup generic="T extends …<…>">`: M3-11-R1).
+    for (const { code, start } of scriptBlocks(source)) {
+      // The start line of the code block.
+      const startLine = source.slice(0, start).split('\n').length;
 
       try {
         const res = await this.tsParser.parse(filePath, code, options);

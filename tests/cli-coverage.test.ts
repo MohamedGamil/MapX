@@ -190,6 +190,23 @@ vi.mock('../src/core/scanner.js', () => ({
 import { buildCLI, getStaleFilesCount, checkAndPrintStaleness, checkTryCatch, loadContext } from '../src/cli.js';
 import type { Store } from '../src/core/store.js';
 
+
+// M4-09: these tests init, uninit and delete `.mapx/` in the working directory, so they run from a
+// temporary folder, never from the checkout (a developer's own index of the repo).
+const checkoutCwd = process.cwd();
+let tmpCwd = '';
+beforeAll(async () => {
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  const os = await vi.importActual<typeof import('node:os')>('node:os');
+  tmpCwd = fs.mkdtempSync(`${os.tmpdir()}/mapx-cli-test-`);
+  process.chdir(tmpCwd);
+});
+afterAll(async () => {
+  process.chdir(checkoutCwd);
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  fs.rmSync(tmpCwd, { recursive: true, force: true });
+});
+
 describe('CLI Additional Coverage Boost', () => {
   let logSpy: any;
   let errorSpy: any;

@@ -8,7 +8,7 @@ import { VueParser } from '../src/parsers/languages/vue.js';
 import { getBuiltinLanguages } from '../src/languages/registry.js';
 import { changedRoutes, navigatesTo, type NavTarget, type StoredRoute } from '../src/parsers/languages/vue-navigation.js';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
@@ -469,9 +469,231 @@ export default {
     expect(navigatesTo('src/stores/session.js', store(`'/admin'`), changed)).toBe(false);
   });
 
+  // M3-08-R1: the app boundary holds whatever the root package.json lists.
+  it.each([
+    ['vue in the root devDependencies', { devDependencies: { vue: '^3.4.0' } }],
+    ['only vue-router in the root', { dependencies: { 'vue-router': '^4.3.0' } }],
+  ])('keeps one registry per app folder when the root package.json lists %s, also after sync', (_, rootDeps) => {
+    const app = (name: string, registrations: string) => ({
+      [`apps/${name}/package.json`]: JSON.stringify({ name, dependencies: { vue: '^3.4.0' }, devDependencies: { vite: '^5.0.0' } }),
+      [`apps/${name}/src/main.js`]: `import { createApp } from 'vue';
+import App from './App.vue';
+import Shared from './components/Shared.vue';
+import OnlyA from './components/OnlyA.vue';
+const app = createApp(App);
+${registrations}app.mount('#app');
+`,
+      [`apps/${name}/src/App.vue`]: '<template>\n  <div><shared /><only-a /></div>\n</template>\n',
+      [`apps/${name}/src/components/Shared.vue`]: '<template><i /></template>\n',
+      [`apps/${name}/src/components/OnlyA.vue`]: '<template><b /></template>\n',
+    });
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'mono', private: true, ...rootDeps }),
+      '.gitignore': '.mapx/\n',
+      ...app('a', "app.component('Shared', Shared);\napp.component('OnlyA', OnlyA);\n"),
+      ...app('b', "app.component('Shared', Shared);\n"),
+    }, ['.']);
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      const expected = [
+        'apps/a/src/App.vue#App -render-> apps/a/src/components/OnlyA.vue#OnlyA',
+        'apps/a/src/App.vue#App -render-> apps/a/src/components/Shared.vue#Shared',
+        'apps/b/src/App.vue#App -render-> apps/b/src/components/Shared.vue#Shared',
+      ];
+      expect(renders(root)).toEqual(expected);
+      // A sync after app B's entry changes keeps the boundary, as scan --force does.
+      writeFileSync(join(root, 'apps/b/src/main.js'), app('b', "app.component('Shared', Shared);\n")['apps/b/src/main.js']!.replace('#app', '#root'));
+      mapx(root, 'sync', root);
+      expect(renders(root)).toEqual(expected);
+      const synced = snapshot(root);
+      mapx(root, 'scan', root, '--force');
+      expect(snapshot(root)).toEqual(synced);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('lets the same registration win after a fresh index and after any sync history when two files register one name', () => {
+    const plugin = (n: number) => `import Btn from '../components/BtnB.vue';\nexport function install(app) { app.component('Btn', Btn); }\n// ${n}\n`;
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^3.4.0' } }),
+      '.gitignore': '.mapx/\n',
+      'src/main.js': "import { createApp } from 'vue';\nimport App from './App.vue';\nimport Btn from './components/BtnA.vue';\nimport { install } from './plugins/z.js';\nconst app = createApp(App);\napp.component('Btn', Btn);\ninstall(app);\n",
+      'src/plugins/z.js': plugin(0),
+      'src/App.vue': '<template>\n  <btn />\n</template>\n',
+      'src/components/BtnA.vue': '<template><i /></template>\n',
+      'src/components/BtnB.vue': '<template><b /></template>\n',
+    }, ['.']);
+    const btn = ['src/App.vue#App -render-> src/components/BtnA.vue#BtnA'];
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      expect(renders(root)).toEqual(btn);
+      // Only the plugin changes, then only main.js: each sync re-reads one registering file.
+      writeFileSync(join(root, 'src/plugins/z.js'), plugin(1));
+      mapx(root, 'sync', root);
+      expect(renders(root)).toEqual(btn);
+      writeFileSync(join(root, 'src/main.js'), readFileSync(join(root, 'src/main.js'), 'utf8') + '// edited\n');
+      mapx(root, 'sync', root);
+      expect(renders(root)).toEqual(btn);
+      mapx(root, 'scan', root, '--force');
+      expect(renders(root)).toEqual(btn);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  // Independent review of M3-08-R1 (2026-10-31).
+  it.each([
+    ['a published library (main, vue peer)', { name: '@acme/ui', main: 'src/index.js', peerDependencies: { vue: '^3.4.0' } }],
+    ['an internal package (no main, no peer)', { name: '@acme/ui', dependencies: { vue: '^3.4.0' } }],
+    // Final review 2026-10-31: a library built by Vite in library mode is still a library.
+    ['a Vite library-mode build', { name: '@acme/ui', devDependencies: { vite: '^5.0.0', vue: '^3.4.0' } }],
+  ])('lets apps use the plugin registrations of %s, and the library its apps\' registrations', (label, manifest) => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'mono', private: true, devDependencies: { vue: '^3.4.0' } }),
+      'packages/ui/package.json': JSON.stringify(manifest),
+      ...(label.includes('Vite') ? { 'packages/ui/vite.config.ts': "export default { build: { lib: { entry: 'src/index.js', name: 'Ui' } } };\n" } : {}),
+      'packages/ui/src/index.js': "import UiButton from './UiButton.vue';\nexport default { install(app) { app.component('UiButton', UiButton); } };\n",
+      'packages/ui/src/UiButton.vue': '<template><button /></template>\n',
+      'packages/ui/src/UiCard.vue': '<template>\n  <div><app-badge /></div>\n</template>\n',
+      'apps/a/package.json': JSON.stringify({ name: 'a', dependencies: { vue: '^3.4.0' }, devDependencies: { vite: '^5.0.0' } }),
+      'apps/a/src/main.js': "import { createApp } from 'vue';\nimport App from './App.vue';\nimport Ui from '../../../packages/ui/src/index.js';\nimport AppBadge from './AppBadge.vue';\nconst app = createApp(App);\napp.use(Ui);\napp.component('AppBadge', AppBadge);\napp.mount('#app');\n",
+      'apps/a/src/App.vue': '<template>\n  <div><ui-button /></div>\n</template>\n',
+      'apps/a/src/AppBadge.vue': '<template><i /></template>\n',
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      expect(renders(root)).toEqual([
+        'apps/a/src/App.vue#App -render-> packages/ui/src/UiButton.vue#UiButton',
+        'packages/ui/src/UiCard.vue#UiCard -render-> apps/a/src/AppBadge.vue#AppBadge',
+      ]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  // Final review 2026-10-31: an nWidart module has its own vite.config.js, but the root app imports
+  // and registers its component, which then runs inside the root app and sees its registrations.
+  it('lets a component that another app registers see that app\'s global registrations', () => {
+    const root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'package.json': JSON.stringify({ private: true, devDependencies: { vite: '^5.0.0', vue: '^3.4.0' } }),
+      'resources/js/app.js': "import { createApp } from 'vue';\nimport BaseButton from './components/BaseButton.vue';\nimport BlogPost from '../../Modules/Blog/resources/assets/js/BlogPost.vue';\nconst app = createApp({});\napp.component('BaseButton', BaseButton);\napp.component('BlogPost', BlogPost);\napp.mount('#app');\n",
+      'resources/js/components/BaseButton.vue': '<template><button /></template>\n',
+      'Modules/Blog/package.json': JSON.stringify({ private: true, devDependencies: { vite: '^5.0.0' } }),
+      'Modules/Blog/vite.config.js': "export default { build: { outDir: '../../public/build-blog' } };\n",
+      'Modules/Blog/resources/assets/js/BlogPost.vue': '<template>\n  <article><base-button /></article>\n</template>\n',
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      expect(renders(root)).toContain('Modules/Blog/resources/assets/js/BlogPost.vue#BlogPost -render-> resources/js/components/BaseButton.vue#BaseButton');
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('follows a component that another app starts or stops registering, on sync as scan --force', () => {
+    const appJs = (withBlog: boolean) => "import { createApp } from 'vue';\nimport BaseButton from './components/BaseButton.vue';\n"
+      + (withBlog ? "import BlogPost from '../../Modules/Blog/resources/assets/js/BlogPost.vue';\n" : '')
+      + "const app = createApp({});\napp.component('BaseButton', BaseButton);\n" + (withBlog ? "app.component('BlogPost', BlogPost);\n" : '') + "app.mount('#app');\n";
+    const root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      '.gitignore': '.mapx/\n',
+      'package.json': JSON.stringify({ private: true, devDependencies: { vite: '^5.0.0', vue: '^3.4.0' } }),
+      'resources/js/app.js': appJs(false),
+      'resources/js/components/BaseButton.vue': '<template><button /></template>\n',
+      'Modules/Blog/package.json': JSON.stringify({ private: true, devDependencies: { vite: '^5.0.0' } }),
+      'Modules/Blog/vite.config.js': "export default { build: { outDir: '../../public/build-blog' } };\n",
+      'Modules/Blog/resources/assets/js/BlogPost.vue': '<template>\n  <article><base-button /></article>\n</template>\n',
+    }, ['.']);
+    const edge = 'Modules/Blog/resources/assets/js/BlogPost.vue#BlogPost -render-> resources/js/components/BaseButton.vue#BaseButton';
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      expect(renders(root)).not.toContain(edge);
+      writeFileSync(join(root, 'resources/js/app.js'), appJs(true));
+      mapx(root, 'sync', root);
+      expect(renders(root)).toContain(edge);
+      const synced = snapshot(root);
+      mapx(root, 'scan', root, '--force');
+      expect(snapshot(root)).toEqual(synced);
+      writeFileSync(join(root, 'resources/js/app.js'), appJs(false));
+      mapx(root, 'sync', root);
+      expect(renders(root)).not.toContain(edge);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('re-scopes on sync when a package.json is added or removed, as scan --force, and ignores a {"type": "module"} marker', () => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^3.4.0' } }),
+      '.gitignore': '.mapx/\n',
+      'src/main.js': "import { createApp } from 'vue';\nimport App from './App.vue';\nimport Btn from './components/Btn.vue';\nconst app = createApp(App);\napp.component('Btn', Btn);\napp.mount('#app');\n",
+      'src/App.vue': '<template><div /></template>\n',
+      'src/components/Btn.vue': '<template><b /></template>\n',
+      'src/views/package.json': '{ "type": "module" }\n',
+      'src/views/Home.vue': '<template>\n  <btn />\n</template>\n',
+      'widgets/Panel.vue': '<template>\n  <btn />\n</template>\n',
+    }, ['.']);
+    try {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      const both = [
+        'src/views/Home.vue#Home -render-> src/components/Btn.vue#Btn',
+        'widgets/Panel.vue#Panel -render-> src/components/Btn.vue#Btn',
+      ];
+      expect(renders(root)).toEqual(both);
+      writeFileSync(join(root, 'widgets/package.json'), JSON.stringify({ name: 'widgets', dependencies: { vue: '^3.4.0' }, devDependencies: { vite: '^5.0.0' } }));
+      mapx(root, 'sync', root);
+      expect(renders(root)).toEqual([both[0]]);
+      const added = snapshot(root);
+      mapx(root, 'scan', root, '--force');
+      expect(snapshot(root)).toEqual(added);
+      rmSync(join(root, 'widgets/package.json'));
+      mapx(root, 'sync', root);
+      expect(renders(root)).toEqual(both);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('keeps an app an app when its vite config merely has an alias named lib', () => {
+    const app = (name: string, comp: string, alias = '') => ({
+      [`apps/${name}/package.json`]: JSON.stringify({ name, dependencies: { vue: '^3.4.0' }, devDependencies: { vite: '^5.0.0' } }),
+      [`apps/${name}/vite.config.js`]: `export default { resolve: { alias: { ${alias || "'@': '/src'"} } } };\n`,
+      [`apps/${name}/src/main.js`]: `import { createApp } from 'vue';\nimport App from './App.vue';\nimport ${comp} from './${comp}.vue';\nconst app = createApp(App);\napp.component('${comp}', ${comp});\napp.mount('#app');\n`,
+      [`apps/${name}/src/App.vue`]: '<template>\n  <div><only-a /><only-b /></div>\n</template>\n',
+      [`apps/${name}/src/${comp}.vue`]: '<template><i /></template>\n',
+    });
+    const root = workspace({ ...app('a', 'OnlyA'), ...app('b', 'OnlyB', "lib: '/src/lib'") });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      expect(renders(root)).toEqual([
+        'apps/a/src/App.vue#App -render-> apps/a/src/OnlyA.vue#OnlyA',
+        'apps/b/src/App.vue#App -render-> apps/b/src/OnlyB.vue#OnlyB',
+      ]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
   it('keeps one registry per app folder (two package.json files)', () => {
     const app = (name: string, onlyA: boolean) => ({
-      [`${name}/package.json`]: JSON.stringify({ name, dependencies: { vue: '^3.4.0' } }),
+      [`${name}/package.json`]: JSON.stringify({ name, dependencies: { vue: '^3.4.0' }, devDependencies: { vite: '^5.0.0' } }),
       [`${name}/src/main.js`]: `import { createApp } from 'vue';
 import App from './App.vue';
 import Widget from './components/Widget.vue';
@@ -502,6 +724,141 @@ ${onlyA ? "app.component('OnlyA', OnlyA);\n" : ''}app.mount('#app');
         'appA/src/App.vue#App -render-> appA/src/components/Widget.vue#Widget',
         'appB/src/App.vue#App -render-> appB/src/components/OnlyA.vue#OnlyA',
         'appB/src/App.vue#App -render-> appB/src/components/Widget.vue#Widget',
+      ]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+// M3-02-R1: names the template binds itself (v-for aliases, slot props) shadow component members,
+// a v-pre subtree is not compiled, and only the top-level <template> block is the template.
+describe('template scopes, v-pre and custom blocks (M3-02-R1)', () => {
+  const calls = (refs: ExtractedReference[]) =>
+    refs.filter((r) => r.referenceType === 'call').map((r) => `${r.targetName}:${r.startLine}`);
+  const renders = (refs: ExtractedReference[]) =>
+    refs.filter((r) => r.referenceType === 'render').map((r) => r.targetName);
+
+  it('never gives v-for aliases or slot props a call reference, in the scope they bind', () => {
+    const sfc = `<template>
+  <div>
+    <li v-for="format in formatters" :title="format(1)">{{ format(2) }}</li>
+    <li v-for="({ id, run: go, done = noop }, i) of jobs(count)" :key="id">{{ go(i) }} {{ done() }} {{ id() }}</li>
+    <DataTable v-slot="{ remove, refresh }" @reload="refresh">
+      <button @click="remove(item)">x</button>
+      <button @click="refresh">r</button>
+    </DataTable>
+    <Child #default="{ save }"><b @click="save()" /></Child>
+    <Child v-slot:row="props"><i @click="props.open()">{{ props() }}</i></Child>
+    <Legacy><span slot-scope="{ pick }" @click="pick">{{ pick() }}</span></Legacy>
+    <Legacy><template scope="old">{{ old() }}</template></Legacy>
+    <th scope="col">{{ col() }}</th>
+    <button @click="format(3)">{{ remove() }} {{ save() }} {{ pick() }} {{ go() }}</button>
+  </div>
+</template>
+<script>
+export default {
+  methods: { format() {}, jobs() {}, remove() {}, refresh() {}, save() {}, props() {}, pick() {}, old() {}, col() {}, go() {}, id() {}, done() {} },
+};
+</script>
+`;
+    // Left: a v-for source (outer scope), the component's own @reload (outside its slot), a native
+    // `scope` attribute, and the calls after every scope has closed.
+    expect(calls(templateReferences(sfc, 'List'))).toEqual([
+      'jobs:4', 'refresh:5', 'col:13', 'format:14', 'remove:14', 'save:14', 'pick:14', 'go:14',
+    ]);
+    // The v-for source is outside its own alias: `page(1)` is the method, `page()` inside the alias.
+    expect(calls(templateReferences('<template><li v-for="page in page(1)">{{ page() }}</li></template>', 'P'))).toEqual(['page:1']);
+  });
+
+  it('skips v-pre subtrees: no calls, renders or navigation inside', async () => {
+    const sfc = `<template>
+  <div>
+    <span v-pre>{{ save() }} <UserCard @click="load" /><span>{{ nested() }}</span></span>
+    <UserCard v-pre @click="load" />
+    <section v-pre><router-link to="/admin">{{ admin() }}</router-link></section>
+    <p @click="after">{{ load() }}</p>
+  </div>
+</template>
+<script setup>
+import UserCard from './UserCard.vue';
+function save() {}
+function load() {}
+function after() {}
+</script>
+`;
+    const refs = templateReferences(sfc, 'Pre');
+    expect(calls(refs)).toEqual(['after:6', 'load:6']);
+    expect(renders(refs)).toEqual([]);
+    const parsed = await new VueParser(getBuiltinLanguages().vue).parse('src/Pre.vue', sfc);
+    expect(parsed.references.filter((r) => r.referenceType === 'navigate')).toEqual([]);
+  });
+
+  it('reads the top-level <template> block, not a <template> shown inside a custom block', () => {
+    const sfc = `<docs>
+Usage:
+<template><Fancy @click="danger()" /></template>
+</docs>
+<i18n lang="json">{ "en": { "template": "<template>" } }</i18n>
+<custom-block />
+<template>
+  <div @click="go"><Fancy /></div>
+</template>
+<script setup>
+import Fancy from './Fancy.vue';
+function go() {}
+function danger() {}
+</script>
+`;
+    const refs = templateReferences(sfc, 'Docs');
+    expect(calls(refs)).toEqual(['go:8']);
+    expect(brief(refs.filter((r) => r.referenceType === 'render'))).toEqual([
+      { type: 'render', source: 'Docs', target: 'Fancy', line: 8, vue: { from: [{ specifier: './Fancy.vue', name: 'Fancy' }] } },
+    ]);
+  });
+
+  it('gives no edge to a same-named method on a real scan', () => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^2.7.16' } }),
+      'src/components/DataTable.vue': '<template><table><slot :remove="drop" /></table></template>\n<script>\nexport default { methods: { drop() {} } };\n</script>\n',
+      'src/components/Preview.vue': '<template><i /></template>\n',
+      'src/components/List.vue': `<docs>
+<template><List @click="danger()" /></template>
+</docs>
+
+<template>
+  <div>
+    <DataTable v-slot="{ remove }">
+      <button @click="remove(item)">x</button>
+    </DataTable>
+    <DataTable><template slot-scope="{ refresh }"><b @click="refresh" /></template></DataTable>
+    <ul><li v-for="format in formatters">{{ format(1) }}</li></ul>
+    <span v-pre>{{ legacy() }} <Preview /></span>
+    <button @click="reload">{{ label() }}</button>
+  </div>
+</template>
+
+<script>
+import DataTable from './DataTable.vue';
+import Preview from './Preview.vue';
+
+export default {
+  components: { DataTable, Preview },
+  methods: { remove() {}, refresh() {}, format() {}, legacy() {}, danger() {}, reload() {}, label() {} },
+};
+</script>
+`,
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      const edges = query<{ target_file: string; target_symbol: string; edge_type: string }>(root,
+        `SELECT target_file, target_symbol, edge_type FROM edges WHERE edge_type IN ('call', 'render') AND source_file = 'src/components/List.vue' ORDER BY 1, 2`)
+        .map((e) => `${e.edge_type} ${e.target_file}#${e.target_symbol}`);
+      expect(edges).toEqual([
+        'render src/components/DataTable.vue#DataTable',
+        'call src/components/List.vue#label',
+        'call src/components/List.vue#reload',
       ]);
     } finally {
       cleanup(root);

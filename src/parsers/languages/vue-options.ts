@@ -22,7 +22,12 @@ export interface OptionsComponent {
   mapped: Map<string, VueMappedMember>;
   /** `this.x()` calls inside the options object, by script line (1-based). */
   thisCalls: { name: string; line: number }[];
+  /** `this.x()` calls inside a nested function that rebinds `this`: no edge (M3-02-R1). */
+  reboundCalls: { name: string; line: number }[];
 }
+
+/** A `this` that is not the component: no step resolves it, so the call gets no edge. */
+const NOT_THE_COMPONENT: VueThisScope = { own: false, mixins: [] };
 
 /**
  * Gives every `this.x()` call reference of an Options API script block its `vueThis` scope.
@@ -37,12 +42,15 @@ export async function annotateThisCalls(code: string, refs: ExtractedReference[]
   } catch {
     return;
   }
-  if (!component || component.thisCalls.length === 0) return;
+  if (!component || component.thisCalls.length + component.reboundCalls.length === 0) return;
   const calls = new Set(component.thisCalls.map((c) => `${c.line}:${c.name}`));
+  const rebound = new Set(component.reboundCalls.map((c) => `${c.line}:${c.name}`));
   for (const ref of refs) {
-    if (ref.referenceType === 'call' && calls.has(`${ref.startLine}:${ref.targetName}`)) {
-      ref.vueThis = vueThisScope(component, ref.targetName);
-    }
+    if (ref.referenceType !== 'call') continue;
+    const key = `${ref.startLine}:${ref.targetName}`;
+    if (calls.has(key)) ref.vueThis = vueThisScope(component, ref.targetName);
+    // Never the default resolution: that would link any file defining the name.
+    else if (rebound.has(key)) ref.vueThis = NOT_THE_COMPONENT;
   }
 }
 
@@ -57,7 +65,7 @@ export async function analyzeOptionsComponent(code: string): Promise<OptionsComp
     const options = optionsObject(root);
     if (!options) return null;
     const imports = importSources(root);
-    const component: OptionsComponent = { members: new Set(), mixins: [], mapped: new Map(), thisCalls: [] };
+    const component: OptionsComponent = { members: new Set(), mixins: [], mapped: new Map(), thisCalls: [], reboundCalls: [] };
     let base: string | null | undefined;
 
     for (const prop of options.namedChildren) {
@@ -88,29 +96,73 @@ export async function analyzeOptionsComponent(code: string): Promise<OptionsComp
     }
     // `extends` merges before the mixins, so it has the lowest priority.
     if (base !== undefined) component.mixins.unshift(base);
-    collectThisCalls(options, component.thisCalls);
+    collectThisCalls(options, component);
     return component;
   });
 }
 
+const NON_ARROW_FUNCTIONS = new Set([
+  'function_expression', 'function', 'function_declaration', 'generator_function', 'generator_function_declaration', 'method_definition',
+]);
+/** Literal nodes through which a function is still held by the options object itself. */
+const OPTION_LITERALS = new Set(['object', 'pair', 'array']);
+/** Wrappers that call the function with the `this` they are called with (lodash, underscore). */
+const THIS_PRESERVING_WRAPPERS = new Set(['debounce', 'throttle', 'memoize']);
+/** Vue 2 instance methods that call their callback with the component as `this`. */
+const VM_CALLBACKS = new Set(['$on', '$once', '$nextTick', '$watch']);
+
 /**
- * `this.x()` calls under the options object. A nested `function () {}` that is not itself a
- * member rebinds `this`, so its calls are left to the default resolution.
+ * A non-arrow function that still runs with the component's `this` (review 2026-10-31):
+ * `function () {}.bind(this)`; `debounce(function () {}, 300)` or `_.throttle(function () {})`,
+ * whose wrapper is called as a method and passes its `this` on; and Vue 2's `this.$on`, `$once`,
+ * `$nextTick` and `$watch` callbacks. `socket.once(…, function () {})` rebinds `this`.
  */
-function collectThisCalls(options: Node, out: OptionsComponent['thisCalls']): void {
-  const stack: Node[] = [options];
+function keepsThis(fn: Node): boolean {
+  const parent = fn.parent;
+  if (parent?.type === 'member_expression' && parent.childForFieldName('property')?.text === 'bind') {
+    const call = parent.parent;
+    return call?.type === 'call_expression' && call.childForFieldName('arguments')?.namedChildren[0]?.type === 'this';
+  }
+  if (parent?.type === 'arguments' && parent.parent?.type === 'call_expression') {
+    const callee = parent.parent.childForFieldName('function');
+    if (callee?.type === 'member_expression') {
+      const name = callee.childForFieldName('property')?.text ?? '';
+      const object = callee.childForFieldName('object');
+      // `this.$on('x', function () {})`: Vue binds the component. `_.debounce(fn)`: lodash passes it on.
+      if (object?.type === 'this') return VM_CALLBACKS.has(name);
+      return THIS_PRESERVING_WRAPPERS.has(name) && /^(_|lodash|underscore)$/.test(object?.text ?? '');
+    }
+    return !!callee && THIS_PRESERVING_WRAPPERS.has(callee.text);
+  }
+  return false;
+}
+
+/**
+ * `this.x()` calls under the options object. `this` is the component inside the functions the
+ * options literal holds (members, hooks, `watch` handlers, computed `get` / `set`, inline mixins)
+ * and in arrow functions within them. Any other non-arrow function (a callback `function () {}`,
+ * a nested object's method) and an arrow held by the literal itself rebind it: their calls go to
+ * `reboundCalls` (M3-02-R1). `function () {}.bind(this)` and a function passed to a `this`-preserving
+ * wrapper (`debounce`, `throttle`) keep the component's `this`.
+ */
+function collectThisCalls(options: Node, component: OptionsComponent): void {
+  // held: every node between the options object and this one is an object, pair or array.
+  const stack: { node: Node; held: boolean; rebound: boolean }[] = [{ node: options, held: true, rebound: false }];
   while (stack.length > 0) {
-    const node = stack.pop()!;
-    if ((node.type === 'function_expression' || node.type === 'function' || node.type === 'function_declaration') && node.parent?.type !== 'pair') continue;
+    const { node, held, rebound } = stack.pop()!;
+    const fn = NON_ARROW_FUNCTIONS.has(node.type) || node.type === 'arrow_function';
+    // A held non-arrow function is a member; a held arrow keeps the module's `this`.
+    const rebinds = fn && (NON_ARROW_FUNCTIONS.has(node.type) ? !held && !keepsThis(node) : held);
     if (node.type === 'call_expression') {
       const callee = node.childForFieldName('function');
       const property = callee?.type === 'member_expression' ? callee.childForFieldName('property') : null;
       if (callee?.childForFieldName('object')?.type === 'this' && property?.type === 'property_identifier') {
         // Dated by the name node, as the generic extraction dates the reference.
-        out.push({ name: property.text, line: property.startPosition.row + 1 });
+        (rebound ? component.reboundCalls : component.thisCalls).push({ name: property.text, line: property.startPosition.row + 1 });
       }
     }
-    for (const child of node.namedChildren) stack.push(child);
+    const next = { held: held && OPTION_LITERALS.has(node.type), rebound: rebound || rebinds };
+    for (const child of node.namedChildren) stack.push({ node: child, ...next });
   }
 }
 

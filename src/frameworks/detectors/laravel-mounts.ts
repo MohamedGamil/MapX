@@ -8,7 +8,7 @@ export interface PhpScope {
   dir: string;
   /** Laravel application root, workspace-relative ('' for the root). */
   root: string;
-  /** Local string variables visible at the evaluated position. */
+  /** Local string variables visible at the evaluated position; class properties as `this->name`. */
   vars: Map<string, string>;
 }
 
@@ -82,7 +82,8 @@ export function maskPhp(src: string): { code: string; text: string } {
 }
 
 /**
- * Evaluates a double-quoted string body: escapes plus `$v`, `{$v}` and `${v}` from local variables.
+ * Evaluates a double-quoted string body: escapes plus `$v`, `{$v}` and `${v}` from local variables,
+ * and `$this->p` / `{$this->p}` from class properties.
  * An unresolvable interpolation gives null, or `fallback` in its place when one is given.
  */
 function interpolate(body: string, vars: Map<string, string>, fallback?: string): string | null {
@@ -97,7 +98,13 @@ function interpolate(body: string, vars: Map<string, string>, fallback?: string)
     }
     const rest = body.slice(i);
     let m: RegExpMatchArray | null;
-    if ((m = rest.match(/^\{\$(\w+)\}/)) || (m = rest.match(/^\$\{(\w+)\}/))) {
+    // A property: `{$this->p}`, or `$this->p` (simple syntax reads one property; the rest is literal).
+    if ((m = rest.match(/^\{\$this->([A-Za-z_]\w*)\}/)) || (m = rest.match(/^\$this->([A-Za-z_]\w*)/))) {
+      const value = vars.get(`this->${m[1]}`) ?? fallback;
+      if (value === undefined) return null;
+      out += value;
+      i += m[0].length - 1;
+    } else if ((m = rest.match(/^\{\$(\w+)\}/)) || (m = rest.match(/^\$\{(\w+)\}/))) {
       const value = vars.get(m[1]!) ?? fallback;
       if (value === undefined) return null;
       out += value;
@@ -216,8 +223,8 @@ export function phpString(expr: string, scope: PhpScope, fallback?: string): str
       let dir = scope.dir;
       for (let i = 0; i < Number(m[1] ?? 1); i++) dir = posix.dirname(dir) === '.' ? '' : posix.dirname(dir);
       out += dir;
-    } else if ((m = part.match(/^\$(?:this\s*->\s*)?(\w+)$/))) {
-      const value = scope.vars.get(m[1]!) ?? fallback;
+    } else if ((m = part.match(/^\$(this\s*->\s*)?(\w+)$/))) {
+      const value = scope.vars.get(m[1] ? `this->${m[2]}` : m[2]!) ?? fallback;
       if (value === undefined) return null;
       out += value;
     } else if ((m = part.match(/^module_path\s*\(\s*(.*?)\s*\)$/s))) {
@@ -246,26 +253,162 @@ export function normalizeMountPath(path: string): string {
   return joined.replace(/^\.\/?/, '').replace(/^\/+/, '');
 }
 
+/** Text in front of a property declaration's `$name`: modifiers and an optional type. */
+const PROPERTY_HEAD = /\b(?:public|protected|private|var|readonly)\s+(?:(?:readonly|static)\s+)*(?:\??[\w\\]+(?:\s*[|&]\s*\??[\w\\]+)*\s+)?$/;
+
 /**
  * Collects `$name = 'literal';` assignments with their offsets, for position-aware lookup.
- * With `code` (see maskPhp), matches that start inside a string are ignored.
+ * With `code` (see maskPhp), matches that start inside a string are ignored. A class property
+ * declaration (`protected $version = 'v3';`) is recorded as `this->version` at index -1, so every
+ * method sees it, whatever its position and whatever locals share its name; static ones are not
+ * `$this->` properties and are skipped.
+ * With `code` and `paths`, an assignment of any other expression phpString can evaluate there
+ * (`$routes = base_path('routes/x.php');`) is recorded with its value too (M1-07-R2).
  */
-export function stringAssignments(content: string, code?: string): { name: string; value: string; index: number }[] {
-  const result: { name: string; value: string; index: number }[] = [];
+/**
+ * A variable binding: `value` null for an assignment that cannot be evaluated (it hides an earlier
+ * value). A binding is visible from `index` to `end`, the end of the function body holding it (the
+ * file for top-level code and class properties), so `$path` of one provider method never reaches
+ * another method (review 2026-10-31).
+ */
+export interface Binding {
+  name: string;
+  value: string | null;
+  index: number;
+  end: number;
+  /**
+   * Set on a scope barrier, the body of a function or closure: inside it, local variables of the
+   * enclosing code are hidden except those it captures with `use` (M1-03-R2). Arrow functions see
+   * the enclosing scope and have no barrier; `$this->` properties cross every barrier.
+   */
+  keep?: string[];
+}
+
+/** A function or closure: `function` keyword at `start`, body `[open, close)`, `use` captures. */
+interface FunctionBody { start: number; open: number; close: number; uses: string[] }
+
+/** The functions and closures in masked PHP code. */
+function functionBodies(code: string): FunctionBody[] {
+  const bodies: FunctionBody[] = [];
+  for (const m of code.matchAll(/\bfunction\b\s*&?\s*\w*\s*\(/g)) {
+    let i = closingBracket(code, m.index! + m[0].length - 1);
+    if (i < 0) continue;
+    const use = /^\s*use\s*\(/.exec(code.slice(i));
+    const uses: string[] = [];
+    if (use) {
+      const from = i + use[0].length;
+      i = closingBracket(code, from - 1);
+      if (i < 0) continue;
+      uses.push(...[...code.slice(from, i - 1).matchAll(/\$(\w+)/g)].map(u => u[1]!));
+    }
+    const brace = /^\s*(?::\s*\??[\w\\|]+\s*)?\{/.exec(code.slice(i));
+    if (!brace) continue;
+    const open = i + brace[0].length - 1;
+    const close = closingBracket(code, open);
+    if (close > 0) bodies.push({ start: m.index!, open, close, uses });
+  }
+  return bodies;
+}
+
+export function stringAssignments(content: string, code?: string, paths?: Omit<PhpScope, 'vars'>): Binding[] {
+  const result: Binding[] = [];
+  const bodies = code ? functionBodies(code) : [];
+  // The innermost body holding the assignment ends its visibility.
+  const innermost = (index: number) => bodies.reduce<FunctionBody | undefined>((best, b) => (b.open < index && index < b.close && (!best || b.close < best.close) ? b : best), undefined);
+  const endOf = (index: number) => innermost(index)?.close ?? Infinity;
+  for (const b of bodies) result.push({ name: '', value: null, index: b.open, end: b.close, keep: b.uses });
+  // A property some method writes (`$this->name = ...`) is unknown wherever that write is not
+  // visible, since the methods may run in any order: recorded after every declaration (index -0.5
+  // sorts after the declarations' -1), then the write itself holds until the end of its body.
+  if (code) for (const name of new Set([...code.matchAll(/\$this\s*->\s*(\w+)\s*(?:\.|\?\?)?=(?![=>])/g)].map(w => w[1]!)))
+    result.push({ name: `this->${name}`, value: null, index: -0.5, end: Infinity });
+  const record = (name: string, value: string | null, index: number, property = false) => {
+    if (property) {
+      result.push({ name: `this->${name}`, value, index, end: endOf(index) });
+      return;
+    }
+    const head = PROPERTY_HEAD.exec((code ?? content).slice(Math.max(0, index - 120), index));
+    if (head && /\bstatic\b/.test(head[0])) return;
+    if (head && value === null) return;
+    result.push(head ? { name: `this->${name}`, value, index: -1, end: Infinity } : { name, value, index, end: endOf(index) });
+  };
   const re = /\$(\w+)\s*=\s*((['"])(?:\\.|(?!\3).)*\3)\s*;/gs;
   let m: RegExpExecArray | null;
+  const literals = new Set<number>();
   while ((m = re.exec(content))) {
     if (code && code[m.index] !== '$') continue;
     const quoted = m[2]!.match(QUOTED);
-    if (quoted && !(quoted[1] === '"' && /\$\w/.test(quoted[2]!)))
-      result.push({ name: m[1]!, value: quoted[2]!, index: m.index });
+    if (!quoted || (quoted[1] === '"' && /\$\w/.test(quoted[2]!))) continue;
+    literals.add(m.index);
+    record(m[1]!, quoted[2]!, m.index);
   }
-  return result;
+  if (!code || !paths) return result;
+  for (const a of code.matchAll(/\$(this\s*->\s*)?(\w+)\s*(\.|\?\?)?=(?![=>])/g)) {
+    if (literals.has(a.index!)) continue;
+    // The right-hand side runs to the statement's `;`; an unbalanced closer means a parameter default.
+    const start = a.index! + a[0].length;
+    let depth = 0;
+    let end = start;
+    for (; end < code.length && !(code[end] === ';' && depth === 0); end++) {
+      if ('([{'.includes(code[end]!)) depth++;
+      else if (')]}'.includes(code[end]!) && --depth < 0) break;
+    }
+    if (depth < 0 || end >= code.length) continue;
+    const property = !!a[1];
+    const name = property ? `this->${a[2]}` : a[2]!;
+    const vars = varsAt(result.filter(r => r.index < a.index!), a.index!);
+    const rhs = phpString(content.slice(start, end), { ...paths, vars });
+    const old = vars.get(name);
+    let value: string | null = rhs;
+    // `.=` appends to a known value. `??=` keeps a known (string, so non-null) value; otherwise it
+    // assigns only when the variable is surely undefined: a local of a function or closure that
+    // nothing named before (no parameter, `use`, foreach, global, ...). Anything else is unknown.
+    // Under a condition or loop of its function, whether it ran is unknown: so is the value after it
+    // (`if (local) { $p .= '-dev'; }`, review 2026-10-31).
+    if (a[3] && conditionalAt(code, a.index!, innermost(a.index!)?.start ?? 0)) value = null;
+    else if (a[3] === '.') value = old !== undefined && rhs !== null ? old + rhs : null;
+    else if (a[3] === '??') {
+      const body = property ? undefined : innermost(a.index!);
+      value = old ?? (body && !new RegExp(`\\$${a[2]}\\b`).test(code.slice(body.start, a.index!)) ? rhs : null);
+    }
+    record(a[2]!, value, a.index!, property);
+  }
+  return result.sort((x, y) => x.index - y.index);
 }
 
-export function varsAt(assignments: { name: string; value: string; index: number }[], index: number): Map<string, string> {
+/**
+ * Whether the statement at `index` runs under a condition or loop opened after `bodyStart`: an
+ * enclosing `{` led by if / elseif / else / for / foreach / while / do / switch, or a brace-less
+ * `if (…) stmt;`. Masked code, so strings and comments cannot fool it.
+ */
+function conditionalAt(code: string, index: number, bodyStart: number): boolean {
+  const statement = code.slice(Math.max(code.lastIndexOf(';', index), code.lastIndexOf('{', index), code.lastIndexOf('}', index)) + 1, index);
+  if (/\b(?:if|elseif|else|for|foreach|while)\b/.test(statement)) return true;
+  let depth = 0;
+  for (let i = index - 1; i > bodyStart; i--) {
+    if (code[i] === '}') depth++;
+    else if (code[i] === '{') {
+      if (depth > 0) { depth--; continue; }
+      const lead = code.slice(Math.max(bodyStart, i - 200), i);
+      if (/\b(?:if|elseif|else|for|foreach|while|do|switch|case|default)\b[^;{}]*$/.test(lead)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The bindings visible at `index`: the last assignment before it in a body that holds it, unless
+ * a closure between them (a barrier) does not capture it.
+ */
+export function varsAt(assignments: Binding[], index: number): Map<string, string> {
   const vars = new Map<string, string>();
-  for (const a of assignments) if (a.index < index) vars.set(a.name, a.value);
+  for (const a of [...assignments].sort((x, y) => x.index - y.index)) {
+    if (a.index >= index || index >= a.end) continue;
+    if (a.keep) {
+      for (const name of [...vars.keys()]) if (!name.startsWith('this->') && !a.keep.includes(name)) vars.delete(name);
+    } else if (a.value === null) vars.delete(a.name);
+    else vars.set(a.name, a.value);
+  }
   return vars;
 }
 

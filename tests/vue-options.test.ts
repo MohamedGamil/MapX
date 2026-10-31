@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
+import { analyzeOptionsComponent } from '../src/parsers/languages/vue-options.js';
 
 // M3-03: `this.x()` in an Options API component resolves to the component's own member, then to a
 // member of a mixin in its own `mixins: []` (in the mixin's file), and never to another file merely
@@ -116,4 +117,101 @@ export default {
   it('resolves a map-helper name in the module registered under its namespace (M3-05)', () => {
     expect(targetsOf('submit', 'publish')).toEqual(['src/store/docs.js']);
   });
+});
+
+// M3-02-R1: `this` is the component only in the functions the options literal holds and in arrow
+// functions inside them. A nested non-arrow function rebinds it, so its this.x() gets no edge.
+describe('this.x() inside nested functions (M3-02-R1)', () => {
+  const OPTIONS = `import { mapActions } from 'vuex';
+export default {
+  computed: {
+    full: {
+      get() { return this.format(); },
+    },
+  },
+  watch: {
+    title: { handler: function () { this.save(); } },
+  },
+  mixins: [{ methods: { mixed() { this.save(); } } }],
+  methods: {
+    ...mapActions(['load']),
+    later() {
+      setTimeout(function () { this.fetchAll(); }, 0);
+      setTimeout(() => this.save(), 0);
+    },
+    withHelper() {
+      const helper = { run: function () { this.save(); }, stop() { this.load(); } };
+      function inner() { this.format(); }
+      return [helper, inner];
+    },
+    quick: () => this.save(),
+    save() {},
+    format() {},
+  },
+};
+`;
+
+  it('splits component this.x() calls from rebound ones', async () => {
+    const component = (await analyzeOptionsComponent(OPTIONS))!;
+    const sort = (calls: { name: string; line: number }[]) => calls.map((c) => `${c.name}:${c.line}`).sort();
+    expect(sort(component.thisCalls)).toEqual(['format:5', 'save:11', 'save:16', 'save:9']);
+    expect(sort(component.reboundCalls)).toEqual(['fetchAll:15', 'format:20', 'load:19', 'save:19', 'save:23']);
+  });
+
+  it('never resolves a rebound this.x() by name to another file (real scan)', () => {
+    const root = workspace({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^2.7.16' } }),
+      'src/components/Nest.vue': `<template><i /></template>
+<script>
+export default {
+  methods: {
+    later() {
+      setTimeout(function () { this.fetchAll(); }, 0);
+    },
+    withHelper() {
+      // \`this\` is helper here, not the component: neither the SFC's save() nor remote.js's.
+      const helper = { run: function () { this.save(); }, stop() { this.notify(); } };
+      return helper;
+    },
+    viaArrow() {
+      return [1].map(() => this.save());
+    },
+    // Final review 2026-10-31: lodash wrappers and .bind(this) keep the component's this.
+    onInput: debounce(function () { this.fetchItems(); }, 300),
+    refreshLater() {
+      setTimeout(function () { this.refresh(); }.bind(this), 0);
+    },
+    // socket.once calls back with the socket as this; Vue's $on with the component.
+    listen(socket) {
+      socket.once('connect', function () { this.join(); });
+      this.$on('refresh', function () { this.reload(); });
+    },
+    save() {},
+    fetchItems() {},
+    refresh() {},
+    join() {},
+    reload() {},
+  },
+};
+</script>
+`,
+      'src/api/remote.js': 'export function fetchAll() { return []; }\nexport function notify() { return 0; }\nexport function save() { return 1; }\n',
+    });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      const edges = query<{ source_symbol: string; target_file: string; target_symbol: string }>(root,
+        `SELECT source_symbol, target_file, target_symbol FROM edges WHERE edge_type = 'call' AND source_file = 'src/components/Nest.vue' ORDER BY 1, 2, 3`)
+        .map((e) => `${e.source_symbol} -> ${e.target_file}#${e.target_symbol}`);
+      expect(edges).toEqual([
+        // `onInput: debounce(…)` is a property, not a method: the component owns the call.
+        'Nest -> src/components/Nest.vue#fetchItems',
+        'listen -> src/components/Nest.vue#reload',
+        'refreshLater -> src/components/Nest.vue#refresh',
+        'viaArrow -> src/components/Nest.vue#save',
+      ]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
 });

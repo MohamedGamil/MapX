@@ -119,6 +119,31 @@ describe('agent config merges', () => {
     expect(out).toMatch(/\.zed\/settings\.json[^\n]*comments/i);
   }, 60000);
 
+  // M0-09-R5: the merge compared the raw JSONC text with plain JSON, so an identical entry was a change.
+  it('leaves a JSONC config that already holds the identical mapx entry untouched, comments included (M0-09-R5)', () => {
+    const root = workspace({ '.zed/settings.json': '{ "theme": "One Dark" }\n' });
+    tmp.push(root);
+    run(root, 'agents', 'generate', '--providers=zed');
+    run(root, 'agents', 'mcp', '--tools', 'vscode-mcp');
+    // The same settings as JSONC: comments and a trailing comma around the mapx entry mapx wrote.
+    const jsonc = (f: string) => {
+      const plain = readFileSync(join(root, f), 'utf8');
+      const text = `// my settings\n${plain.replace(/^\{/, '{\n  /* servers */').replace(/\n\}\s*$/, ', // last\n}\n')}`;
+      writeFileSync(join(root, f), text);
+      return text;
+    };
+    const zed = jsonc('.zed/settings.json');
+    const vscode = jsonc('.vscode/mcp.json');
+
+    const out = run(root, 'agents', 'generate', '--providers=zed');
+    expect(readFileSync(join(root, '.zed/settings.json'), 'utf8')).toBe(zed);
+    expect(out).not.toMatch(/settings\.json/);
+    const mcpOut = run(root, 'agents', 'mcp', '--tools', 'vscode-mcp');
+    expect(readFileSync(join(root, '.vscode/mcp.json'), 'utf8')).toBe(vscode);
+    expect(mcpOut).toMatch(/\.vscode\/mcp\.json: Up to date/);
+    expect(mcpOut).not.toMatch(/comments/i);
+  }, 60000);
+
   it('does not add a second top-level `read:` key to .aider.conf.yml', () => {
     const conf = 'model: gpt-4o\nread:\n  - CONVENTIONS.md\n';
     const root = workspace({ '.aider.conf.yml': conf });
@@ -206,8 +231,11 @@ describe('Continue integration files', () => {
     const r = mapxWithStderr(root, ...args);
     return r.stdout + r.stderr;
   };
-  // What mapx 0.3.x wrote: a hashless sentinel block that Continue never loads.
-  const LEGACY = '# mapx v0.3.5\n# Continue configuration for MapxGraph (22 languages, 32 MCP tools)\ncontextProviders:\n  - name: cmd\n    args:\n      name: mapx-export\n      cmd: mapx export --tokens=4000\n# /mapx\n';
+  // What released versions wrote, byte for byte: a hashless sentinel block that Continue never
+  // loads. The tool count was 25 in 0.1.9–0.2.7, 26 in 0.3.0–0.3.1 and 32 in 0.3.2–0.3.5.
+  const shipped = (version: string, tools: number) =>
+    `# mapx v${version}\n# Continue configuration for MapxGraph (22 languages, ${tools} MCP tools)\ncontextProviders:\n  - name: cmd\n    args:\n      name: mapx-export\n      cmd: mapx export --tokens=4000\n  - name: cmd\n    args:\n      name: mapx-status\n      cmd: mapx status\n\n# /mapx\n`;
+  const LEGACY = shipped('0.3.5', 32);
 
   it('writes an MCP server block and invokable prompts in the shape of Continue\'s reference (AC1)', () => {
     // A quote in the project path must survive YAML quoting.
@@ -290,6 +318,39 @@ describe('Continue integration files', () => {
     expect(existsSync(join(edited, '.continue/mapx.yaml'))).toBe(true);
     run(edited, 'agents', 'generate', '--providers=continue', '--force');
     expect(existsSync(join(edited, '.continue/mapx.yaml'))).toBe(false);
+  }, 60000);
+
+  it.each([['0.2.7', 25], ['0.3.1', 26], ['0.3.5', 32]])('removes the hashless block mapx %s wrote without asking (M0-09-R5)', (version, tools) => {
+    const root = ws({ '.continue/mapx.yaml': shipped(version, tools).replace(/\n/g, '\r\n') });
+    run(root, 'agents', 'generate', '--providers=continue');
+    expect(existsSync(join(root, '.continue/mapx.yaml'))).toBe(false);
+  }, 60000);
+
+  // M0-09-R5: a hashless block predates hashes, so only its body tells a hand edit from mapx's own.
+  it('keeps an edited hashless legacy block in generate, update and MCP until --force (M0-09-R5)', async () => {
+    const EDITED = LEGACY.replace('cmd: mapx status', 'cmd: mapx status --verbose');
+    const root = ws({ '.continue/mapx.yaml': EDITED });
+    const out = run(root, 'agents', 'generate', '--providers=continue');
+    expect(readFileSync(join(root, '.continue/mapx.yaml'), 'utf8')).toBe(EDITED);
+    expect(out).toMatch(/Skipped \.continue\/mapx\.yaml/);
+    for (const f of CONTINUE_FILES) expect(existsSync(join(root, f)), f).toBe(true);
+    mapx(root, 'agents', 'update');
+    expect(readFileSync(join(root, '.continue/mapx.yaml'), 'utf8')).toBe(EDITED);
+
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    try {
+      const res = (await client.callTool({ name: 'mapx_agents_generate', arguments: { dir: root, providers: ['continue'] } })) as any;
+      expect(res.content[0].text).toMatch(/\.continue\/mapx\.yaml: Skipped/);
+      expect(readFileSync(join(root, '.continue/mapx.yaml'), 'utf8')).toBe(EDITED);
+    } finally {
+      await client.close();
+    }
+
+    run(root, 'agents', 'generate', '--providers=continue', '--force');
+    expect(existsSync(join(root, '.continue/mapx.yaml'))).toBe(false);
   }, 60000);
 
   it('agents update migrates a legacy-only project; list and uninit cover the new files (AC3, AC4)', () => {

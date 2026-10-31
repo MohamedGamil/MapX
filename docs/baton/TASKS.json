@@ -5393,20 +5393,58 @@
         "npx vitest run tests/legacy-globs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "maintainer",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T18:34:46.729Z",
+      "completedAt": "2026-10-31T21:57:03.715Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R6.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-globs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R6.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T11:56:44.438Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T18:34:46.729Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:27:56.909Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:27:59.942Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:57:03.715Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-globs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R6.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -5781,15 +5819,70 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "DONE",
       "owner": "maintainer",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T20:32:14.252Z",
+      "completedAt": "2026-10-31T22:01:15.661Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-17-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-language-accuracy.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-17-R4.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-17-R4.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T20:32:13.803Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:32:14.252Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:32:26.512Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:32:27.009Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:01:15.661Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-language-accuracy.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-17-R4.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-17-R4.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -7863,6 +7956,98 @@
         {
           "id": "M3-01",
           "type": "hard"
+        },
+        {
+          "id": "M0-02-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M3-02-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M0-20-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R9",
+          "type": "hard"
         }
       ],
       "optionalDependencies": [],
@@ -8788,7 +8973,100 @@
         "scanner",
         "performance"
       ],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "id": "M0-02-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M3-02-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M0-20-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R9",
+          "type": "hard"
+        }
+      ],
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
@@ -8842,7 +9120,100 @@
         "scanner",
         "performance"
       ],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "id": "M0-02-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M3-02-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M0-20-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R9",
+          "type": "hard"
+        }
+      ],
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
@@ -8896,7 +9267,100 @@
       "area": [
         "packaging"
       ],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "id": "M0-02-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M3-02-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M0-20-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R9",
+          "type": "hard"
+        }
+      ],
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
@@ -13793,7 +14257,100 @@
         "fixtures",
         "eval"
       ],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "id": "M0-02-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M3-02-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M0-20-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R9",
+          "type": "hard"
+        }
+      ],
       "sources": [
         "docs/research/deptrac/02-abstract-feature-model.md#AR-08",
         "docs/research/deptrac/02-abstract-feature-model.md#AR-09",
@@ -13854,7 +14411,100 @@
         "arch",
         "config"
       ],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "id": "M0-02-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M3-02-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M0-20-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R9",
+          "type": "hard"
+        }
+      ],
       "sources": [
         "docs/research/deptrac/02-abstract-feature-model.md#AR-11",
         "docs/research/deptrac/02-abstract-feature-model.md#AR-14",
@@ -15054,6 +15704,98 @@
         {
           "id": "M3-01",
           "type": "hard"
+        },
+        {
+          "id": "M0-02-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M3-08-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-04-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M3-02-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-07-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M0-20-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-09-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R9",
+          "type": "hard"
         }
       ],
       "optionalDependencies": [],
@@ -15157,20 +15899,68 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "maintainer",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:28:23.216Z",
+      "completedAt": "2026-10-31T22:34:55.347Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-08-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-template.test.ts tests/vue-navigation.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-08-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-08-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T11:56:43.889Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:23.216Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:26.766Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:29.589Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:34:55.347Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-template.test.ts tests/vue-navigation.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-08-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-08-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -15226,7 +16016,7 @@
       ],
       "acceptanceCriteria": [
         "A nested app with its own package.json and no alias config, under a root whose vite.config maps '@' elsewhere, resolves '@/…' to '<app>/src/…' for import, render, route and navigate edges (e2e).",
-        "`paths` come from the nearest tsconfig/jsconfig (with its extends chain) and bundler aliases from the nearest folder holding a package.json or bundler config; the legacy-imports case that applies the root '~' to web/ (which has its own vite.config.js) is corrected (test).",
+        "`paths` come from the nearest tsconfig/jsconfig above the file (with its extends chain) but not from above a separately built app (bundler config or build tool), and bundler aliases from the nearest such app root; a package without its own build takes the enclosing app's aliases, and a marker-only package.json is no boundary; the legacy-imports case that applies the root `~` to web/ (which has its own vite.config.js) is corrected (test). Reworded by D017.",
         "Chained `.set('@', …).set('x', …)` registers every alias, and `path.resolve(__dirname, 'resources\\\\js')` resolves (test).",
         "docs/framework-integration.md describes alias resolution; the edges scorer and the HTTP gate do not drop."
       ],
@@ -15236,20 +16026,78 @@
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-aliases",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T18:34:46.157Z",
+      "completedAt": "2026-10-31T21:59:45.132Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-09-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-imports.test.ts tests/vue-script-setup.test.ts tests/http-client-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-09-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-09-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-09-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T11:56:44.162Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T18:34:46.157Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:31.998Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:34.419Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:59:45.132Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-imports.test.ts tests/vue-script-setup.test.ts tests/http-client-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-09-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-09-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-09-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -15314,20 +16162,58 @@
         "npx vitest run tests/legacy-globs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "maintainer",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:28:02.886Z",
+      "completedAt": "2026-10-31T21:58:10.964Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R7.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-globs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R7.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T11:56:44.714Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:02.886Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:06.595Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:10.356Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:58:10.964Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-globs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R7.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -15391,20 +16277,58 @@
         "npx vitest run tests/legacy-workspaces.test.ts tests/legacy-globs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "maintainer",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:28:13.647Z",
+      "completedAt": "2026-10-31T21:59:20.746Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-10-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-workspaces.test.ts tests/legacy-globs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-10-R4.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T11:56:44.997Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:13.647Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:15.920Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:18.780Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:59:20.746Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-workspaces.test.ts tests/legacy-globs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-10-R4.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -15473,20 +16397,68 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-laravel",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T18:34:46.443Z",
+      "completedAt": "2026-10-31T20:46:25.981Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M1-07-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07-R2.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T11:56:45.277Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T18:34:46.443Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:36.484Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:38.498Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:46:25.981Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07-R2.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -15546,20 +16518,68 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-middleware",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:06:07.991Z",
+      "completedAt": "2026-10-31T20:45:30.180Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-04-R6.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts tests/legacy-laravel-surface.test.ts tests/legacy-hook-verifiability.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-04-R6.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-04-R6.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T11:56:45.560Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:06:07.991Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:47:32.424Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:47:34.856Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:45:30.180Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts tests/legacy-laravel-surface.test.ts tests/legacy-hook-verifiability.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-04-R6.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-04-R6.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -15623,15 +16643,70 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-vue-p2",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T21:17:42.682Z",
+      "completedAt": "2026-10-31T22:35:50.226Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M3-02-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-template.test.ts tests/vue-options.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-02-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-02-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T20:21:58.446Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:17:42.682Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:17:43.059Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:17:43.396Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:35:50.226Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-template.test.ts tests/vue-options.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-02-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-02-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -15694,15 +16769,70 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-stores",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:19:27.248Z",
+      "completedAt": "2026-10-31T22:00:03.141Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M3-05-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-stores.test.ts tests/vue-script-setup.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-05-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-05-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T19:19:10.403Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:19:27.248Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:53.920Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:54.547Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:00:03.141Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-stores.test.ts tests/vue-script-setup.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-05-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-05-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -15762,15 +16892,70 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-nav",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T22:37:12.752Z",
+      "completedAt": "2026-10-31T23:48:29.523Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M3-11-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-navigation.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-11-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-11-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T22:37:12.255Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:37:12.752Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T23:21:53.358Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T23:21:53.739Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T23:48:29.523Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-navigation.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-11-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-11-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -15821,15 +17006,60 @@
         "npx vitest run tests/vue-sfc.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-vue-p2",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T20:21:58.917Z",
+      "completedAt": "2026-10-31T22:01:54.283Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M3-07-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-sfc.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-07-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T20:21:58.014Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:21:58.917Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:17:41.962Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:17:42.328Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:01:54.283Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-sfc.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-07-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -15882,15 +17112,60 @@
         "npx vitest run tests/legacy-imports.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-imports",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:19:25.812Z",
+      "completedAt": "2026-10-31T20:48:14.632Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R7.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-imports.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R7.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T19:19:09.009Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:19:25.812Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:51.259Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:51.923Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:48:14.632Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-imports.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R7.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -15955,15 +17230,60 @@
         "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-extraction",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T20:32:48.803Z",
+      "completedAt": "2026-10-31T22:02:09.394Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-17-R5.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-17-R5.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T20:32:48.059Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:32:48.803Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:17:43.749Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:17:44.128Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:02:09.394Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-17-R5.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -16015,15 +17335,60 @@
         "npx vitest run tests/legacy-nestjs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-nestjs",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:19:24.716Z",
+      "completedAt": "2026-10-31T20:46:55.763Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-20-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-nestjs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-20-R3.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T19:19:07.687Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:19:24.716Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:48.652Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:49.307Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:46:55.763Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-nestjs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-20-R3.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -16075,15 +17440,70 @@
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-pairing",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:19:25.256Z",
+      "completedAt": "2026-10-31T20:47:46.716Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-06-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R2.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R2.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T19:19:08.367Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:19:25.256Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:49.957Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:50.614Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:47:46.716Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R2.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R2.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -16137,15 +17557,70 @@
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "DONE",
       "owner": "maintainer",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T20:22:44.966Z",
+      "completedAt": "2026-10-31T22:00:43.441Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-04-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-url-resolution.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04-R3.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-04-R3.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T20:22:44.332Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:22:44.966Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:26:17.492Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:26:18.107Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:00:43.441Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-url-resolution.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04-R3.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-04-R3.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -16199,15 +17674,60 @@
         "npx vitest run tests/legacy-agents.test.ts tests/legacy-agent-templates.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-agents",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:19:26.418Z",
+      "completedAt": "2026-10-31T20:48:35.402Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-09-R5.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-agents.test.ts tests/legacy-agent-templates.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-09-R5.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T19:19:09.689Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:19:26.418Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:52.577Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:13:53.257Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:48:35.402Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-agents.test.ts tests/legacy-agent-templates.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-09-R5.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -16218,7 +17738,7 @@
       "milestone": "M1",
       "title": "Laravel route walker: require_once and cycles, trailing slashes, dynamic resource names, match verbs, invokable controllers",
       "objective": "Route files load as PHP loads them, and route keys, resource names, verbs and handlers follow Laravel's.",
-      "description": "Review 2026-10-31 (P2, reproduced; most predate the range). A file loaded by two require_once is mounted twice and a require cycle emits routes up to the depth cap, all kept since M1-07-R1's registry identity; prefix('admin') + get('/') gives /admin/ and is not overridden by a later get('admin'); Route::resource($unknown) gives /{dynamic}/{{dynamic}}; Route::match(['get','post']) gives the method \"GET\"|\"POST\"; Route::get('x', ShowProfile::class) loses its handler.",
+      "description": "Review 2026-10-31 (P2, reproduced; most predate the range). A file loaded by two require_once is mounted twice and a require cycle emits routes up to the depth cap, all kept since M1-07-R1's registry identity; prefix('admin') + get('/') gives /admin/ and is not overridden by a later get('admin'); Route::resource($unknown) gives /{dynamic}/{{dynamic}}; Route::match(['get','post']) gives the method \"GET\"|\"POST\"; Route::get('x', ShowProfile::class) loses its handler. Also from the independent review of M1-07-R2 (2026-10-31, reviewer J, reproduced): RouteServiceProvider assignments `$p .= ...`, `??=` and `$this->x = ...` in a method are ignored (URIs wrong, no dynamic flag); a partly dynamic prefix such as `n{dynamic}` is not flagged dynamic; `->name(\"n.{$this->num}.\")` that cannot be evaluated is dropped silently; a closure without `use` sees the enclosing method variables.",
       "priority": "P2",
       "estimate": {
         "min": 3,
@@ -16255,28 +17775,85 @@
         "src/frameworks/detectors/laravel.ts",
         "tests/fixtures/laravel-routes",
         "tests/laravel-mounts.test.ts",
-        "tests/laravel-routes-fixture.test.ts"
+        "tests/laravel-routes-fixture.test.ts",
+        "src/frameworks/detectors/laravel-mounts.ts"
       ],
       "acceptanceCriteria": [
         "A file loaded by two require_once calls is mounted once, and a require cycle emits each route once (test).",
         "`Route::prefix('admin')->group(fn () => Route::get('/', …))` gives /admin and is overridden by a later Route::get('admin') (test).",
         "`Route::resource($unknown, …)` is flagged dynamic without `{{dynamic}}`; `Route::match(['get','post'], …)` gives GET|POST; `Route::get('x', ShowProfile::class)` keeps its __invoke handler (test).",
-        "Routes scorer: 0 false positives."
+        "Routes scorer: 0 false positives.",
+        "RouteServiceProvider: `.=` / `??=` and `$this->prop =` assignments are evaluated or make the value unknown; a URI with any unevaluated segment is flagged dynamic; a name prefix that cannot be evaluated is recorded as `{dynamic}`, not dropped; a closure sees only its `use` variables (test)."
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-walker",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T21:19:22.772Z",
+      "completedAt": "2026-10-31T22:33:39.239Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M1-03-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-03-R2.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-03-R2.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T21:19:19.378Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:19:22.772Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:55:09.162Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:55:09.486Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:33:39.239Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-03-R2.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-03-R2.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -16332,21 +17909,490 @@
         "`impact formatDate` lists callers that import the default export under another name (test).",
         "deps and mapx_dependencies accept the backslash, ./ and absolute path forms that edges accepts (CLI and MCP test).",
         "`mapx status` lists only changes the scanner's file rules would index (test).",
-        "The M0-11-R2 AC4 test includes a .svelte reference that links to a project symbol when the built-in globals check is removed (mutation-checked)."
+        "A .svelte file gives no references (its tree-sitter queries extract only the component), so the M0-11-R2 globals check cannot apply to it: a test pins down that a .svelte script yields the component symbol and no edges, replacing the vacuous .svelte part of the M0-11-R2 AC4 test; Svelte script extraction is M0-12-R8 (D016)."
       ],
       "verificationCommands": [
         "npx vitest run tests/legacy-impact-staleness.test.ts tests/legacy-metrics-edges.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "DONE",
       "owner": "maintainer",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T19:28:51.467Z",
+      "completedAt": "2026-10-31T22:00:31.702Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-11-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-impact-staleness.test.ts tests/legacy-metrics-edges.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-11-R3.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T19:28:49.806Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T19:28:51.467Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:21:56.719Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T20:21:57.370Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:00:31.702Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-impact-staleness.test.ts tests/legacy-metrics-edges.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-11-R3.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-12-R8",
+      "milestone": "M0",
+      "title": "Svelte script blocks: symbols and references through the JS/TS parsers",
+      "objective": "A .svelte file gives the symbols and references of its <script> blocks, as a .vue file does, and the docs claim only what is extracted.",
+      "description": "Found by M0-11-R3 (2026-10-31): queries/svelte/*.scm have their JS nodes commented out, so a .svelte file yields only a class symbol for its script element and no references (no imports, calls or instantiations). README and docs/getting-started.md listed functions, classes, methods, props and constants; corrected to the component only until this task lands (D016).",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-11-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-11-R3.md",
+        "specs/features/F20-language-expansion.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-12-R8.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/svelte.ts",
+        "queries/svelte/symbols.scm",
+        "queries/svelte/references.scm",
+        "tests/svelte.test.ts",
+        "README.md",
+        "docs/getting-started.md",
+        "docs/framework-integration.md",
+        "src/parsers/parser-registry.ts",
+        "src/core/scanner.ts",
+        "tests/legacy-impact-staleness.test.ts",
+        "docs/adding-languages.md"
+      ],
+      "acceptanceCriteria": [
+        "A .svelte file with <script> and <script context=\"module\"> blocks gives their functions, classes, constants and props (export let) as symbols, with lines in the .svelte file (e2e).",
+        "Its imports (relative and aliased) and calls give edges as in a .ts file, and new Date() / fetch() give no edge to same-named project symbols (the built-in globals check applies) (e2e).",
+        "README.md, docs/getting-started.md and docs/framework-integration.md describe Svelte extraction as delivered."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/svelte.test.ts tests/legacy-impact-staleness.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "lane-svelte",
+      "actualHours": null,
+      "startedAt": "2026-10-31T22:02:35.856Z",
+      "completedAt": "2026-10-31T23:48:09.708Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R8.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/svelte.test.ts tests/legacy-impact-staleness.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R8.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T22:02:35.458Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:02:35.856Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:37:10.955Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:37:11.611Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T23:48:09.708Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/svelte.test.ts tests/legacy-impact-staleness.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R8.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M4-09",
+      "milestone": "M4",
+      "title": "Tests never write to or delete files in the repository checkout",
+      "objective": "Running the test suite leaves the developer checkout untouched: no .mapx/ files are created or deleted outside temporary workspaces.",
+      "description": "Found by P2 lanes on 2026-10-31: tests/cli-coverage.test.ts unlinks .mapx/mapx.db and .mapx/config.json in the process cwd (the repo root) in afterAll, and tests/cli.test.ts runs init/uninit against the cwd, so npx vitest run wipes a developer MapX index of the repo and leaves .mapx/ files behind. Also: the getStaleFilesCount tests in tests/cli.test.ts run real git ls-files in the cwd, so their counts depend on the developer working tree (found 2026-10-31 by M0-11-R3).",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "medium",
+      "area": [
+        "quality"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-06-R2.md",
+        "docs/baton/reports/M0-09-R5.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M4-09.md"
+      ],
+      "affectedFiles": [
+        "tests/cli-coverage.test.ts",
+        "tests/cli.test.ts",
+        "tests/helpers/e2e.ts",
+        "scripts/baton/check-test-cwd.mjs",
+        "tests/mcp.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "After npx vitest run in a checkout holding .mapx/mapx.db and .mapx/config.json, both files are unchanged (same bytes) and no new files appear under the checkout (test or script check).",
+        "Every test that runs CLI commands without an explicit directory uses a temporary workspace as cwd (test)."
+      ],
+      "verificationCommands": [
+        "node scripts/baton/check-test-cwd.mjs tests/cli.test.ts tests/cli-coverage.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-31T21:23:48.676Z",
+      "completedAt": "2026-10-31T21:26:11.921Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M4-09.md"
+      ],
+      "evidence": [
+        {
+          "command": "node scripts/baton/check-test-cwd.mjs tests/cli.test.ts tests/cli-coverage.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T21:23:48.008Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:23:48.676Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:26:11.366Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:26:11.921Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "node scripts/baton/check-test-cwd.mjs tests/cli.test.ts tests/cli-coverage.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-12-R9",
+      "milestone": "M0",
+      "title": "Python namespace packages are not search roots for absolute imports",
+      "objective": "`import json` in a namespace package (PEP 420, no __init__.py) or below a regular package never resolves to a sibling json.py.",
+      "description": "Independent review of M0-12-R7 (2026-10-31, reviewer J, reproduced): only folders with __init__.py stopped being search roots, so pkg/data/reader.py (pkg has __init__.py, data does not) and src/nsp/app.py (no __init__) still link `import json` / `import logging` to a sibling file.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12-R7",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-12-R7.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-12-R9.md"
+      ],
+      "affectedFiles": [
+        "src/core/import-resolvers.ts",
+        "tests/legacy-imports.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`import json` in py/pkg/data/reader.py (pkg has __init__.py, data does not) gives no edge to py/pkg/data/json.py, and sync follows an __init__.py added or removed (test).",
+        "A project config higher up does not hide top-level packages or script folders: backend/polls/views.py under a root pyproject.toml resolves `from polls.models import Q`, tests/test_x.py resolves `from helpers import H`, and a stray root __init__.py keeps the workspace root a search root (test). Reworded by D018.",
+        "A script folder with a sibling module imported by name still resolves (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-imports.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-31T21:19:48.524Z",
+      "completedAt": "2026-10-31T22:34:00.890Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R9.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-imports.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R9.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T21:19:21.209Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:19:48.524Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:22:56.884Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T21:22:57.389Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:34:00.890Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-imports.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R9.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-02-R8",
+      "milestone": "M0",
+      "title": "Sync re-links referrers of renamed or removed symbols, and re-resolves after manifest changes",
+      "objective": "After a sync, the referrers of a symbol renamed or removed in a changed file, and files whose resolution depends on a changed package.json, have the edges scan --force gives.",
+      "description": "Final independent review of the 2026-10-31 remediation (reviewer L, reproduced on base and on the remediated tree): renaming `alpha` to `alphb` in a.js leaves `usea.js -> a.js#alpha call` after sync (scan --force drops it), for tracked and gitignored files. Also: npm-package detection (M0-17-R4) and alias roots (M3-09-R1) depend on package.json files, which are not indexed, so adding a dependency or an app manifest does not re-resolve unchanged files. `mapx status` reports an index current after an edit to a gitignored indexed file (git lists no change).",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-02-R7.md",
+        "docs/baton/reports/M0-17-R4.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R8.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/staleness.ts",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Renaming or removing a symbol in a changed file re-parses the unchanged files that had edges to it, so sync equals scan --force, tracked and gitignored (e2e).",
+        "Adding or removing a dependency or an app package.json re-resolves the files whose npm-package or alias resolution it changes, so sync equals scan --force (e2e).",
+        "`mapx status` reports an edit to a gitignored indexed file as a change (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": "2026-10-31T22:02:36.617Z",
+      "completedAt": "2026-10-31T23:47:52.484Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R8.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-globs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R8.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T22:02:36.252Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:02:36.617Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:14:26.610Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T22:14:27.012Z",
+          "from": "VERIFYING",
+          "to": "REVIEW_REQUIRED",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T23:47:52.484Z",
+          "from": "REVIEW_REQUIRED",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-globs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R8.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

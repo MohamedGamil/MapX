@@ -116,17 +116,18 @@ export function closest(hits: string[], sourcePath: string): string {
 export function resolveRustImport(target: string, sourcePath: string, ctx: ImportContext): string | null {
   const segs = target.replace(/[{}*].*$/, '').split('::').filter(Boolean);
   if (!segs.length) return null;
+  // A crate root's modules live beside it: main.rs, lib.rs, and each src/bin/*.rs (a binary crate of its own).
+  const crateRoot = (file: string) => /(^|\/)(main|lib)\.rs$/.test(file) || /(^|\/)src\/bin\/[^/]+\.rs$/.test(file);
   const moduleDir = (file: string) =>
-    /(^|\/)(main|lib|mod)\.rs$/.test(file) ? dirOf(file) : join(dirOf(file), posix.basename(file, '.rs'));
+    crateRoot(file) || /(^|\/)mod\.rs$/.test(file) ? dirOf(file) : join(dirOf(file), posix.basename(file, '.rs'));
   let base: string;
   if (segs[0] === 'crate') {
     let dir = dirOf(sourcePath);
-    let root: string | null = null;
-    for (;;) {
+    let root: string | null = crateRoot(sourcePath) ? dir : null;
+    while (root === null) {
       if (ctx.files.has(join(dir, 'main.rs')) || ctx.files.has(join(dir, 'lib.rs'))) root = dir;
-      if (!dir) break;
-      dir = dirOf(dir);
-      if (root !== null) break;
+      else if (!dir) break;
+      else dir = dirOf(dir);
     }
     if (root === null) return null;
     base = root;
@@ -158,7 +159,8 @@ export function resolveGoImport(target: string, sourcePath: string, ctx: ImportC
   const path = target.replace(/^"|"$/g, '');
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
     const gomod = ctx.readText(join(dir, 'go.mod'));
-    const module = gomod?.match(/^module\s+(\S+)/m)?.[1];
+    // The module path may be quoted: `module "example.com/m"` (or a raw string in backquotes).
+    const module = gomod?.match(/^module\s+["`]?([^\s"`]+)/m)?.[1];
     // A nested module may import its parent module's packages: keep walking up until a go.mod's
     // module path prefixes the import.
     if (module && (path === module || path.startsWith(`${module}/`))) {
@@ -184,7 +186,7 @@ export function resolvePythonImports(target: string, sourcePath: string, ctx: Im
   const from = target.match(/^from\s+(\.*[\w.]*)\s+import\s+(.+)$/s);
   if (from) {
     module = from[1]!;
-    names = from[2]!.replace(/[()\\\n]/g, ' ').split(',').map((n) => n.trim().split(/\s+as\s+/)[0]!.trim()).filter((n) => n && n !== '*');
+    names = from[2]!.replace(/#.*$/gm, '').replace(/[()\\\n]/g, ' ').split(',').map((n) => n.trim().split(/\s+as\s+/)[0]!.trim()).filter((n) => n && n !== '*');
   } else module = target.replace(/^import\s+/, '').split(/\s+as\s+/)[0]!.trim();
   const dots = module.match(/^\.*/)![0].length;
   const dotted = module.slice(dots).split('.').filter(Boolean);
@@ -198,13 +200,20 @@ export function resolvePythonImports(target: string, sourcePath: string, ctx: Im
     for (let i = 1; i < dots; i++) base = dirOf(base);
     roots = [base];
   } else {
-    // Absolute imports: workspace root, then every ancestor of the file (src/ layouts, sub-projects).
-    roots = [];
+    // Absolute imports: workspace root, then every ancestor of the file (src/ layouts, sub-projects,
+    // a script's own directory). Python 3 has no implicit relative imports, so `import json` inside a
+    // package is the stdlib, not pkg/json.py: a package folder (__init__.py) and every folder inside
+    // one are no roots (M0-12-R7, M0-12-R9). The workspace root always is, even with a stray
+    // __init__.py. A namespace folder outside any package stays a root: run as a script, Python puts
+    // its folder on sys.path (D018).
+    const ancestors: string[] = [];
     for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
-      roots.push(dir);
+      ancestors.push(dir);
       if (!dir) break;
     }
-    roots.reverse();
+    // ancestors run from the file's folder up to the workspace root.
+    const topPackage = ancestors.reduce((top, dir, i) => (dir && ctx.files.has(join(dir, '__init__.py')) ? i : top), -1);
+    roots = ancestors.slice(topPackage + 1).reverse();
   }
   const qualified = (name: string) => (module.endsWith('.') ? `${module}${name}` : `${module}.${name}`);
   const hits: ImportHit[] = [];

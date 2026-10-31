@@ -14,6 +14,17 @@ export const BUILTIN_GLOBALS = new Set([
 ]);
 
 /**
+ * Global functions of browsers and Node. `fetch('/x')` calls the runtime unless the file imports
+ * or declares its own `fetch` (M0-17-R4).
+ */
+export const JS_GLOBAL_FUNCTIONS = new Set([
+  'fetch', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'setImmediate', 'clearImmediate',
+  'queueMicrotask', 'structuredClone', 'requestAnimationFrame', 'cancelAnimationFrame', 'requestIdleCallback',
+  'cancelIdleCallback', 'alert', 'confirm', 'prompt', 'atob', 'btoa', 'postMessage', 'reportError',
+  'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI',
+]);
+
+/**
  * Built-in JS objects and namespaces. `Math.max()`, `Date.now()` or `process.exit()` call the
  * runtime, never a user function of the same name (M0-17-R2).
  */

@@ -77,8 +77,12 @@ export type VuexKind = 'actions' | 'mutations' | 'getters' | 'state';
 export type VueStoreTarget =
   /** A Vuex member by namespace path (null = the root namespace), or in the referring module itself. */
   | { store: 'vuex'; kind: VuexKind; namespace: string | null; local?: boolean }
-  /** A member of the Pinia store `hook` (`useCartStore`), imported from `specifier` (null = this file). */
-  | { store: 'pinia'; hook: string; specifier: string | null };
+  /**
+   * A member of the Pinia store `hook` (`useCartStore`), imported from `specifier` (null = this file).
+   * `fallback`: a hook of any name, maybe a composable; when its module does not define it with
+   * `defineStore`, the reference resolves as any other (M3-05-R1).
+   */
+  | { store: 'pinia'; hook: string; specifier: string | null; fallback?: boolean };
 
 export type ReferenceType =
   | 'import'

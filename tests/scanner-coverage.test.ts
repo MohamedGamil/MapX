@@ -167,6 +167,7 @@ describe('Scanner Coverage Boost', () => {
     getEdgeCount: vi.fn().mockReturnValue(0),
     setMeta: vi.fn(),
     getAllFiles: vi.fn().mockReturnValue([]),
+    getRepoNames: vi.fn().mockReturnValue([]),
     deleteEdgesByType: vi.fn(),
     getAllEdges: vi.fn().mockReturnValue([]),
     getAllSymbols: vi.fn().mockReturnValue([]),

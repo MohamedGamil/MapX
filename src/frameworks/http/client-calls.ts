@@ -26,6 +26,8 @@ export interface HttpClientRef {
   name: string;
   /** Raw `baseURL` expression of the client, evaluated later (M2-05). */
   baseURL?: string;
+  /** Offset of the client's `axios.create` in its file, for scoped constant lookup (M2-04-R3); not persisted. */
+  baseURLAt?: number;
   /** File that defines the client, when it is not the calling file. */
   definedIn?: string;
 }
@@ -46,6 +48,7 @@ export interface HttpClientConfig {
 interface Provider {
   kind: 'instance' | 'factory';
   baseURL?: string;
+  baseURLAt?: number;
   definedIn: string;
 }
 export interface ProviderIndex {
@@ -115,7 +118,8 @@ export function maskCode(text: string): string {
 /** Masks a Vue/Svelte SFC so only its <script> blocks remain as code. */
 function maskComponent(text: string): string {
   const out = text.replace(/[^\n]/g, ' ').split('');
-  for (const m of text.matchAll(/(<script\b[^>]*>)([\s\S]*?)<\/script>/gi)) {
+  // Attributes may hold `>` inside quotes (`<script setup generic="T extends Map<K, V>">`).
+  for (const m of text.matchAll(/(<script\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)<\/script>/gi)) {
     const start = m.index! + m[1]!.length;
     const masked = maskCode(m[2]!);
     for (let k = 0; k < masked.length; k++) out[start + k] = masked[k]!;
@@ -284,7 +288,7 @@ export function collectProviders(files: { path: string; content: string }[], rea
     if (!content.includes('axios')) continue;
     const named = new Map<string, Provider>();
     const add = (name: string | null, kind: Provider['kind'], at: number) => {
-      const provider = { kind, baseURL: createBaseURL(content, at), definedIn: path };
+      const provider = { kind, baseURL: createBaseURL(content, at), baseURLAt: at, definedIn: path };
       if (name) named.set(name, provider);
       else index.defaults.set(path, provider);
     };
@@ -356,7 +360,7 @@ interface Receiver {
 function receiversFor(file: string, content: string, providers: ProviderIndex, files: Set<string>, configured: HttpClientConfig[], readText?: ReadText): Receiver[] {
   const receivers: Receiver[] = [];
   const own = (name: string, provider: Provider): HttpClientRef => ({
-    kind: provider.kind, name, baseURL: provider.baseURL, ...(provider.definedIn !== file ? { definedIn: provider.definedIn } : {}),
+    kind: provider.kind, name, baseURL: provider.baseURL, baseURLAt: provider.baseURLAt, ...(provider.definedIn !== file ? { definedIn: provider.definedIn } : {}),
   });
   const addProvider = (local: string, provider: Provider) => {
     if (provider.kind === 'instance') receivers.push({ pattern: escape(local), client: own(local, provider) });
@@ -391,8 +395,10 @@ function receiversFor(file: string, content: string, providers: ProviderIndex, f
   if (providers.globalAxios && !receivers.some(r => r.client.kind === 'axios'))
     receivers.push({ pattern: '(?:window\\.|globalThis\\.)?axios', client: { kind: 'axios', name: 'axios' } });
   // Clients created or defined in this file.
-  for (const m of content.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*axios\.create\s*\(/g))
-    receivers.push({ pattern: escape(m[1]!), client: { kind: 'instance', name: m[1]!, baseURL: createBaseURL(content, m.index! + m[0].lastIndexOf('axios.create')) } });
+  for (const m of content.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*axios\.create\s*\(/g)) {
+    const at = m.index! + m[0].lastIndexOf('axios.create');
+    receivers.push({ pattern: escape(m[1]!), client: { kind: 'instance', name: m[1]!, baseURL: createBaseURL(content, at), baseURLAt: at } });
+  }
   for (const [name, provider] of providers.named.get(file) ?? []) addProvider(name, provider);
   for (const c of configured)
     if (new RegExp(`(?<![\\w.$])${escape(c.receiver)}\\s*\\.`).test(content))

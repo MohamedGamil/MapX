@@ -135,6 +135,10 @@ describe('dotenv quoting and expansion as Vite reads them (M2-04-R2)', () => {
     'VITE_MULTI="a',
     'b"',
     'VITE_EMPTY=',
+    // M2-04-R3: nested defaults, as dotenv-expand reads them
+    'VITE_DEEP=${VITE_NOPE:-${VITE_NOPE2:-/deep}}',
+    'VITE_DEEP_SET=${VITE_NOPE:-${VITE_API_URL}/x}',
+    'VITE_DEEP_ALT=${VITE_API_URL:+${VITE_SINGLE}/alt}',
     '',
   ].join('\n');
   const lookup = (vars: Map<string, string>) => (key: string) => vars.get(key);
@@ -150,6 +154,8 @@ describe('dotenv quoting and expansion as Vite reads them (M2-04-R2)', () => {
     expect(vars.get('VITE_HASH')).toBe('/x');
     expect(expandDotenv(vars.get('VITE_BILLING')!, lookup(vars))).toBe('/api/billing');
     expect(expandDotenv(vars.get('VITE_CHAIN')!, lookup(vars))).toBe('/api/billing/v1');
+    expect(expandDotenv(vars.get('VITE_DEEP')!, lookup(vars), 'VITE_DEEP')).toBe('/deep');
+    expect(expandDotenv(vars.get('VITE_DEEP_SET')!, lookup(vars), 'VITE_DEEP_SET')).toBe('/api/x');
   });
 
   it('matches Vite loadEnv on the same file', async () => {
@@ -172,6 +178,8 @@ describe('dotenv quoting and expansion as Vite reads them (M2-04-R2)', () => {
     expect(expandDotenv(vars.get('C')!, lookup(vars), 'C')).toBeUndefined();
     expect(expandDotenv(vars.get('D')!, lookup(vars), 'D')).toBe('/self');
     expect(expandDotenv(vars.get('E')!, lookup(vars), 'E')).toBe('/e');
+    expect(expandDotenv('${H X}/x', lookup(vars))).toBeUndefined();
+    expect(expandDotenv('${A:=x}/x', lookup(vars))).toBeUndefined();
   });
 });
 
@@ -192,6 +200,10 @@ describe('scoped constants and env expansion through the scanner (M2-04-R2)', ()
         'export function four() { return api.get(url); }',
         "export function five() { return lost.get('/x'); }",
         "export function six() { const BASE = '/fac'; const fac = axios.create({ baseURL: BASE }); return fac.get('/items'); }",
+        // M2-04-R3: a top-level BASE, then function-local ones
+        "const BASE = '/wrong';",
+        "export function seven() { const BASE = '/api/v7'; const c = axios.create({ baseURL: BASE }); return c.get('/z'); }",
+        "export function eight(BASE: string) { const d = axios.create({ baseURL: BASE }); return d.get('/q'); }",
         '',
       ].join('\n'),
     });
@@ -210,8 +222,12 @@ describe('scoped constants and env expansion through the scanner (M2-04-R2)', ()
       [9, '/x', true],
       // A baseURL constant declared inside a function still resolves when the file agrees on it.
       [10, '/fac/items', false],
+      // The local BASE, never the top-level '/wrong'; a parameter BASE leaves the base unresolved.
+      [12, '/api/v7/z', false],
+      [13, '/q', true],
     ]);
     // The call offset is internal: the D008 record shape is unchanged.
     expect(records.some((r) => 'offset' in r)).toBe(false);
+    expect(records.some((r) => 'baseURLAt' in ((r.client ?? {}) as object))).toBe(false);
   });
 });

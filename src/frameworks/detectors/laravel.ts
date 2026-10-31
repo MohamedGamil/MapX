@@ -29,11 +29,15 @@ const controllerCache = new Map<string, {
   middlewares: { middleware: string, only: string[], except: string[] }[]
 }>();
 
+/** An HTTP Kernel's `$middlewareGroups` and `$routeMiddleware`/`$middlewareAliases`, classes named as PHP does. */
+interface KernelMiddlewares {
+  groups: Record<string, string[]>;
+  aliases: Record<string, string>;
+}
+
 interface LaravelWorkspaceContext {
-  kernelMiddlewares: {
-    groups: Record<string, string[]>;
-    aliases: Record<string, string>;
-  };
+  /** Per Laravel app root (workspace-relative, '' for the workspace itself): its own HTTP Kernel (M0-04-R6). */
+  kernels: Map<string, KernelMiddlewares>;
   routeServiceProvider: {
     routes: Record<string, {
       prefix: string;
@@ -81,6 +85,8 @@ interface MountRequest {
   /** Position among the files one statement mounts (a glob loop), in glob order. */
   sub?: number;
   line: number;
+  /** `require_once` / `include_once`: a no-op when PHP has already loaded the file (M1-03-R2). */
+  once?: boolean;
 }
 
 const workspaceInitializationPromises = new Map<string, Promise<LaravelWorkspaceContext>>();
@@ -90,10 +96,7 @@ function ensureWorkspaceInitialized(workspaceRoot: string, ctx: ScanContext): Pr
   if (!promise) {
     promise = (async () => {
       const wctx: LaravelWorkspaceContext = {
-        kernelMiddlewares: {
-          groups: {},
-          aliases: {}
-        },
+        kernels: new Map(),
         routeServiceProvider: {
           routes: {}
         },
@@ -105,11 +108,12 @@ function ensureWorkspaceInitialized(workspaceRoot: string, ctx: ScanContext): Pr
       
       const roots = findLaravelRoots(workspaceRoot);
       for (const root of roots.length ? roots : ['']) {
-        // 1. Parse Kernel.php if it exists
+        // 1. Parse each app's Kernel.php, kept apart: one app's aliases never name another's middleware
+        wctx.kernels.set(root, { groups: {}, aliases: {} });
         const kernelPath = join(workspaceRoot, root, 'app/Http/Kernel.php');
         if (existsSync(kernelPath)) {
           try {
-            parseKernel(await readFile(kernelPath, 'utf-8'), wctx);
+            wctx.kernels.set(root, parseKernel(await readFile(kernelPath, 'utf-8')));
           } catch (e) {
             // Ignored
           }
@@ -132,54 +136,64 @@ function ensureWorkspaceInitialized(workspaceRoot: string, ctx: ScanContext): Pr
   return promise;
 }
 
-function parseKernel(content: string, wctx: LaravelWorkspaceContext) {
-  // Extract $middlewareGroups block
-  const groupsMatch = content.match(/\$middlewareGroups\s*=\s*/);
-  if (groupsMatch && groupsMatch.index !== undefined) {
-    const afterGroups = content.substring(groupsMatch.index + groupsMatch[0].length);
-    const bracket = getArrayBlockContent(afterGroups);
-    if (bracket) {
-      const groupRegex = /['"]([^'"]+)['"]\s*=>\s*/g;
-      let gMatch;
-      while ((gMatch = groupRegex.exec(bracket.content)) !== null) {
-        const groupName = gMatch[1];
-        const subContent = bracket.content.substring(gMatch.index + gMatch[0].length);
-        const subBracket = getArrayBlockContent(subContent);
-        if (subBracket) {
-          const itemRegex = /['"]([^'"]+)['"]|([a-zA-Z0-9_\\]+)::class/g;
-          const items: string[] = [];
-          let itemMatch;
-          while ((itemMatch = itemRegex.exec(subBracket.content)) !== null) {
-            let item = (itemMatch[1] || itemMatch[2] || '').trim();
-            if (item && item !== 'class' && item !== 'protected' && item !== 'public') {
-              if (item.startsWith('\\')) item = item.substring(1);
-              items.push(item);
-            }
-          }
-          wctx.kernelMiddlewares.groups[groupName] = items;
-        }
-      }
-    }
-  }
+/**
+ * The middleware groups and aliases of an HTTP Kernel. Class constants are named as PHP does in the
+ * Kernel (its `use` table, then its namespace), never left as a short name to guess from (M0-04-R6).
+ */
+function parseKernel(source: string): KernelMiddlewares {
+  const kernel: KernelMiddlewares = { groups: {}, aliases: {} };
+  // Comments blanked: a commented-out entry is not middleware.
+  const content = maskPhp(source).text;
+  const useImports = parseUseImports(content);
+  const namespace = fileNamespace(content);
+  // `'\App\X'` and `\App\X::class` are App\X; a global `\X` keeps its separator.
+  const named = (list: string[]) => middlewareClassNames(list, useImports, namespace).map(n => n.replace(/^\\(?=[^:]*\\)/, ''));
+  const entries = (property: RegExp) => {
+    const match = content.match(property);
+    if (!match || match.index === undefined) return [];
+    const bracket = getArrayBlockContent(content.substring(match.index + match[0].length));
+    return bracket ? phpArrayEntries(`[${bracket.content}]`) ?? [] : [];
+  };
 
-  // Extract $routeMiddleware or $middlewareAliases block
-  const routeMwMatch = content.match(/\$(?:routeMiddleware|middlewareAliases)\s*=\s*/);
-  if (routeMwMatch && routeMwMatch.index !== undefined) {
-    const afterMw = content.substring(routeMwMatch.index + routeMwMatch[0].length);
-    const bracket = getArrayBlockContent(afterMw);
-    if (bracket) {
-      const mappingRegex = /['"]([^'"]+)['"]\s*=>\s*['"]?([a-zA-Z0-9_\\]+)(?:::class)?['"]?/g;
-      let mMatch;
-      while ((mMatch = mappingRegex.exec(bracket.content)) !== null) {
-        const alias = mMatch[1];
-        let fqn = mMatch[2];
-        if (fqn && fqn !== 'class') {
-          if (fqn.startsWith('\\')) fqn = fqn.substring(1);
-          wctx.kernelMiddlewares.aliases[alias] = fqn;
-        }
-      }
-    }
+  // $middlewareGroups: group name → members (aliases, nested groups or classes)
+  for (const { key, value } of entries(/\$middlewareGroups\s*=\s*/)) {
+    if (key !== null) kernel.groups[key] = named(listArg(value, true));
   }
+  // $routeMiddleware or $middlewareAliases: alias → class
+  for (const { key, value } of entries(/\$(?:routeMiddleware|middlewareAliases)\s*=\s*/)) {
+    const cls = key === null ? null : listItem(value);
+    if (key !== null && cls) kernel.aliases[key] = named([cls])[0]!;
+  }
+  return kernel;
+}
+
+/** The deepest Laravel app root holding `filePath`, if any. */
+function appRootOf(filePath: string, wctx: LaravelWorkspaceContext): string | undefined {
+  let best: string | undefined;
+  for (const root of wctx.kernels.keys()) {
+    if ((!root || filePath.startsWith(`${root}/`)) && (best === undefined || root.length > best.length)) best = root;
+  }
+  return best;
+}
+
+/** The HTTP Kernel of the app holding `filePath`; none outside every app. */
+function kernelFor(filePath: string, wctx: LaravelWorkspaceContext): KernelMiddlewares {
+  const root = appRootOf(filePath, wctx);
+  return root === undefined ? { groups: {}, aliases: {} } : wctx.kernels.get(root)!;
+}
+
+/**
+ * Laravel's MiddlewareNameResolver: a group expands to its members (nested groups too), an alias to
+ * its class, and parameters follow the class (`role:editor` → `App\Http\Middleware\EnsureRole:editor`).
+ * Any other name stays as written.
+ */
+function resolveMiddleware(name: string, kernel: KernelMiddlewares, seen: string[] = []): string[] {
+  if (Object.hasOwn(kernel.groups, name)) {
+    return seen.includes(name) ? [] : kernel.groups[name]!.flatMap(m => resolveMiddleware(m, kernel, [...seen, name]));
+  }
+  const colon = name.indexOf(':');
+  const base = colon < 0 ? name : name.slice(0, colon);
+  return [(Object.hasOwn(kernel.aliases, base) ? kernel.aliases[base]! : base) + (colon < 0 ? '' : name.slice(colon))];
 }
 
 function getArrayBlockContent(str: string): { content: string, endIndex: number } | null {
@@ -197,113 +211,6 @@ function getArrayBlockContent(str: string): { content: string, endIndex: number 
     }
   }
   return null;
-}
-
-function resolveRoutePath(arg: string, providerPath: string): string | null {
-  const clean = arg.trim();
-
-  const basePathMatch = clean.match(/base_path\s*\(\s*['"]([^'"]+)['"]\s*\)/);
-  if (basePathMatch) {
-    return basePathMatch[1].replace(/^\/|\/$/g, '').replace(/\\/g, '/');
-  }
-
-  if (clean.includes('__DIR__')) {
-    const relativePartMatch = clean.match(/['"]([^'"]+)['"]/);
-    if (relativePartMatch) {
-      const relPath = relativePartMatch[1];
-      const providerDir = providerPath.includes('/') ? providerPath.substring(0, providerPath.lastIndexOf('/')) : '';
-      const resolved = join(providerDir, relPath).replace(/\\/g, '/');
-      return resolved;
-    }
-  }
-
-  const stringMatch = clean.match(/^['"]([^'"]+)['"]$/);
-  if (stringMatch) {
-    return stringMatch[1].replace(/^\/|\/$/g, '').replace(/\\/g, '/');
-  }
-
-  const phpMatch = clean.match(/['"]?([a-zA-Z0-9_\-/]+\.php)['"]?/);
-  if (phpMatch) {
-    return phpMatch[1].replace(/^\/|\/$/g, '').replace(/\\/g, '/');
-  }
-
-  return null;
-}
-
-function parseRouteServiceProvider(source: string, providerPath: string, wctx: LaravelWorkspaceContext) {
-  // Comments, strings and methods Laravel never calls (e.g. a map*Routes() whose call is
-  // commented out) declare no mounts.
-  const { code: content, text } = liveProviderCode(source);
-  const namespaceVarMatch = text.match(/(?:protected|public|private)\s+\$namespace\s*=\s*['"]([^'"]+)['"]/);
-  const classNamespace = namespaceVarMatch ? namespaceVarMatch[1] : 'App\\Http\\Controllers';
-
-  let index = 0;
-  while (true) {
-    const start = content.indexOf('Route::', index);
-    if (start === -1) break;
-
-    const parsed = /\w/.test(content[start - 1] ?? '') ? null : parseRouteChain(content, start, text);
-    if (!parsed) {
-      index = start + 7;
-      continue;
-    }
-
-    index = parsed.endIndex;
-
-    const groupCall = parsed.calls.find(c => c.name === 'group');
-    if (groupCall && groupCall.args) {
-      const routePathArg = groupCall.args;
-      const relativeRoutePath = resolveRoutePath(routePathArg, providerPath);
-      if (relativeRoutePath) {
-        let prefix = '';
-        let namespace = classNamespace;
-        let middlewares: string[] = [];
-        const excluded: string[] = [];
-
-        // Chained RouteRegistrar attributes: a repeated one replaces the last (M1-05-R3), except
-        // withoutMiddleware, which accumulates.
-        for (const call of parsed.calls) {
-          if (call.name === 'prefix') {
-            const args = parseArgs(call.args);
-            if (args[0]) prefix = args[0];
-          } else if (call.name === 'namespace') {
-            const args = parseArgs(call.args);
-            if (args[0]) {
-              const val = args[0];
-              if (val === '$this->namespace') {
-                namespace = classNamespace;
-              } else {
-                namespace = val;
-              }
-            }
-          } else if (call.name === 'middleware') {
-            middlewares = listArg(call.args);
-          } else if (call.name === 'withoutMiddleware') {
-            excluded.push(...listArg(call.args));
-          } else if (call.name === 'group' && (call.args.trim().startsWith('[') || call.args.trim().startsWith('array('))) {
-            const groupAttrs = parseGroupAttributes(call.args);
-            if (groupAttrs.prefixes[0]) {
-              prefix = (prefix ? `${prefix}/` : '') + groupAttrs.prefixes[0];
-            }
-            if (groupAttrs.namespaces[0]) {
-              namespace = groupAttrs.namespaces[0];
-            }
-            middlewares.push(...groupAttrs.middlewares);
-            excluded.push(...groupAttrs.excluded);
-          }
-        }
-
-        // Class constants are named by the provider's own use table (M0-04-R3).
-        const names = (list: string[]) => middlewareClassNames(list, parseUseImports(text), fileNamespace(text));
-        wctx.routeServiceProvider.routes[relativeRoutePath] = {
-          prefix,
-          namespace,
-          middlewares: names(middlewares),
-          ...(excluded.length ? { excluded: names(excluded) } : {}),
-        };
-      }
-    }
-  }
 }
 
 async function listServiceProviders(workspaceRoot: string, dir: string): Promise<string[]> {
@@ -325,6 +232,9 @@ async function listServiceProviders(workspaceRoot: string, dir: string): Promise
   return found.sort();
 }
 
+/** An entry-point mount of an app: a file and the group context it is loaded with. */
+interface MountEntry { file: string; frame: Omit<RouteMount, 'order' | 'via'>; via: string; once?: boolean }
+
 const emptyFrame = (): Omit<RouteMount, 'order' | 'via'> => ({
   prefixes: [], middlewares: [], namespaces: [], controller: null, conditional: false,
 });
@@ -335,7 +245,7 @@ const emptyFrame = (): Omit<RouteMount, 'order' | 'via'> => ({
  * closure replaces the default files. Read through the masking lexer, so a commented-out call or
  * argument declares nothing. `unresolved` lists the lines of mounts that could not be evaluated.
  */
-function withRoutingEntries(content: string, path: string, root: string, ctx: ScanContext): { entries: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; via: string }[]; unresolved: number[] } {
+function withRoutingEntries(content: string, path: string, root: string, ctx: ScanContext): { entries: MountEntry[]; unresolved: number[] } {
   const { code, text } = maskPhp(content);
   const at = code.search(/->\s*withRouting\s*\(/);
   if (at < 0) return { entries: [], unresolved: [] };
@@ -357,9 +267,11 @@ function withRoutingEntries(content: string, path: string, root: string, ctx: Sc
     return evaluated.filter((f): f is string => !!f).map(normalizeMountPath);
   };
   const apiPrefix = named.has('apiPrefix') ? phpString(named.get('apiPrefix')!, scope) ?? 'api' : 'api';
-  const entries: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; via: string }[] = named.has('using') ? [] : [
-    ...files(named.get('web')).map(file => ({ file, frame: { ...emptyFrame(), middlewares: ['web'] }, via: path })),
+  // Laravel's buildRoutingCallback registers api, then web, then the `then:` closure: a later route
+  // of the same URI overrides an earlier one, and a require_once'd file belongs to its first loader.
+  const entries: MountEntry[] = named.has('using') ? [] : [
     ...files(named.get('api')).map(file => ({ file, frame: { ...emptyFrame(), prefixes: apiPrefix ? [apiPrefix] : [], middlewares: ['api'] }, via: path })),
+    ...files(named.get('web')).map(file => ({ file, frame: { ...emptyFrame(), middlewares: ['web'] }, via: path })),
   ];
   // The closure's mounts: walk the file with everything outside the closure blanked.
   const closure = /\b(then|using)\s*:/g;
@@ -369,7 +281,7 @@ function withRoutingEntries(content: string, path: string, root: string, ctx: Sc
     const end = expressionEnd(code, start);
     const body = content.slice(0, end).replace(/[^\r\n]/g, (c, k: number) => (k >= start ? c : ' '));
     const walked = walkRouteFile(body, path, emptyFrame(), ctx, { collectRoutes: false, root });
-    entries.push(...walked.mounts.map(mount => ({ file: mount.file, frame: mount.frame, via: `${path}:${mount.line}` })));
+    entries.push(...walked.mounts.map(mount => ({ file: mount.file, frame: mount.frame, via: `${path}:${mount.line}`, once: mount.once })));
     unresolved.push(...walked.unresolved);
   }
   return { entries, unresolved };
@@ -378,11 +290,14 @@ function withRoutingEntries(content: string, path: string, root: string, ctx: Sc
 /**
  * Builds the route mount graph of one Laravel app: entry points (withRouting, RouteServiceProvider
  * or the routes/web.php + routes/api.php defaults), service-provider mounts, then every file they
- * require or include, each inheriting the group context at the point it is loaded.
+ * require or include, each inheriting the group context at the point it is loaded. A file loaded
+ * twice by `require_once` and a require cycle are followed as PHP runs them (M1-03-R2).
  */
 async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: number, wctx: LaravelWorkspaceContext, ctx: ScanContext): Promise<void> {
   const read = async (rel: string) => (existsSync(join(workspaceRoot, rel)) ? readFile(join(workspaceRoot, rel), 'utf-8') : null);
-  const queue: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; order: number[]; via: string; depth: number }[] = [];
+  type Pending = { file: string; frame: Omit<RouteMount, 'order' | 'via'>; order: number[]; via: string; depth: number; once?: boolean };
+  /** The app's entry-point mounts, in the order Laravel runs them. */
+  const queue: Pending[] = [];
   const rel = (p: string) => (root ? posix.join(root, p) : p);
   const unresolved: string[] = [];
   const orderOf = (m: MountRequest) => (m.sub !== undefined ? [m.offset, m.sub] : [m.offset]);
@@ -397,10 +312,10 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
     const walked = walkRouteFile(content, provider, emptyFrame(), ctx, { collectRoutes: false, root, provider: true });
     unresolved.push(...walked.unresolved.map(line => `${provider}:${line}`));
     for (const m of walked.mounts)
-      queue.push({ file: m.file, frame: m.frame, order: [rootIndex, 0, pi, ...orderOf(m)], via: `${provider}:${m.line}`, depth: 0 });
+      queue.push({ file: m.file, frame: m.frame, order: [rootIndex, 0, pi, ...orderOf(m)], via: `${provider}:${m.line}`, depth: 0, once: m.once });
   }
 
-  const entries: { file: string; frame: Omit<RouteMount, 'order' | 'via'>; via: string }[] = [];
+  const entries: MountEntry[] = [];
   const bootstrap = await read(rel('bootstrap/app.php'));
   if (bootstrap) {
     const routing = withRoutingEntries(bootstrap, rel('bootstrap/app.php'), root, ctx);
@@ -409,16 +324,18 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
   }
   const rsp = await read(rspPath);
   if (rsp) {
-    const legacy = { routeServiceProvider: { routes: {} } } as LaravelWorkspaceContext;
-    parseRouteServiceProvider(rsp, 'app/Providers/RouteServiceProvider.php', legacy);
-    for (const [file, config] of Object.entries(legacy.routeServiceProvider.routes))
-      entries.push({
-        file: normalizeMountPath(rel(file)),
-        frame: { ...emptyFrame(), prefixes: config.prefix ? [config.prefix] : [], middlewares: config.middlewares, excluded: config.excluded, namespaces: config.namespace ? [config.namespace] : [] },
-        via: rspPath,
-      });
+    // Walked like any other provider (glob loops, require, loadRoutesFrom, ->group($var), evaluated
+    // prefixes, names and domains), but its mounts are the app's entry points. A mount that sets no
+    // namespace gets the provider's `$namespace`, App\Http\Controllers by default (M1-07-R2).
+    const walked = walkRouteFile(rsp, rspPath, emptyFrame(), ctx, { collectRoutes: false, root, provider: true });
+    const namespace = liveProviderCode(rsp).text.match(/(?:protected|public|private)\s+(?:\??string\s+)?\$namespace\s*=\s*['"]([^'"]+)['"]/)?.[1] ?? 'App\\Http\\Controllers';
+    unresolved.push(...walked.unresolved.map(line => `${rspPath}:${line}`));
+    for (const m of walked.mounts)
+      entries.push({ file: m.file, frame: { ...m.frame, namespaces: m.frame.namespaces.length ? m.frame.namespaces : [namespace] }, via: `${rspPath}:${m.line}`, once: m.once });
   }
-  if (!entries.length) {
+  // The routes/web.php + routes/api.php defaults stand in only when no entry point declares
+  // anything, not when its mounts could not be evaluated.
+  if (!entries.length && !unresolved.length) {
     for (const name of ['web', 'api'] as const) {
       const file = rel(`routes/${name}.php`);
       if (!existsSync(join(workspaceRoot, file))) continue;
@@ -431,30 +348,46 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
     }
   }
   entries.forEach((e, i) => queue.push({ ...e, order: [rootIndex, 1, i], depth: 0 }));
-  if (!queue.length) return;
+  if (!queue.length && !unresolved.length) return;
   wctx.knownRoots.push(root);
   wctx.unresolved.set(root, unresolved);
 
-  while (queue.length) {
-    const next = queue.shift()!;
+  // Files are loaded depth first, in PHP's execution order, so `loaded` is PHP's included-files
+  // table at each point: file → loaded unconditionally (true) or only under a condition so far.
+  const loaded = new Map<string, boolean>();
+  const load = async (next: Pending, chain: string[]): Promise<void> => {
+    // A file that requires one still loading (a require cycle) adds nothing: `require_once` is a
+    // no-op and a plain `require` would recurse until PHP fails, so each route is reported once
+    // (M1-03-R2). The depth cap is a backstop.
+    if (chain.includes(next.file) || next.depth > 8) return;
+    let frame = next.frame;
+    if (next.once && loaded.has(next.file)) {
+      // `require_once` of a loaded file does nothing; after a conditional load only, it loads the
+      // file exactly when that load did not happen.
+      if (loaded.get(next.file)) return;
+      frame = { ...frame, conditional: true };
+    }
     const mounts = wctx.mounts.get(next.file) ?? [];
-    // Each (file, order) pair is a distinct mount; the depth cap stops require cycles.
-    if (mounts.some(m => m.order.join('.') === next.order.join('.')) || next.depth > 8) continue;
-    mounts.push({ ...next.frame, order: next.order, via: next.via });
+    // Each (file, order) pair is a distinct mount.
+    if (mounts.some(m => m.order.join('.') === next.order.join('.'))) return;
+    mounts.push({ ...frame, order: next.order, via: next.via });
     wctx.mounts.set(next.file, mounts);
+    loaded.set(next.file, loaded.get(next.file) || !frame.conditional);
     const content = await read(next.file);
-    if (!content) continue;
-    const walked = walkRouteFile(content, next.file, next.frame, ctx, { collectRoutes: false, root });
+    if (!content) return;
+    const walked = walkRouteFile(content, next.file, frame, ctx, { collectRoutes: false, root });
     unresolved.push(...walked.unresolved.map(line => `${next.file}:${line}`));
     for (const m of walked.mounts)
-      queue.push({
+      await load({
         file: m.file,
-        frame: { ...m.frame, conditional: next.frame.conditional || m.frame.conditional },
+        frame: { ...m.frame, conditional: frame.conditional || m.frame.conditional },
         order: [...next.order, ...orderOf(m)],
         via: `${next.file}:${m.line}`,
         depth: next.depth + 1,
-      });
-  }
+        once: m.once,
+      }, [...chain, next.file]);
+  };
+  for (const next of queue) await load(next, []);
 }
 
 function getInitialGroupConfig(normalizedPath: string, wctx: LaravelWorkspaceContext): { prefix: string, namespace: string, middlewares: string[] } {
@@ -490,23 +423,17 @@ function getInitialGroupConfig(normalizedPath: string, wctx: LaravelWorkspaceCon
   };
 }
 
-async function resolveRouteMiddlewares(routes: RouteBinding[], wctx: LaravelWorkspaceContext) {
-  const resolve = (list: string[]) => {
-    const expanded: string[] = [];
-    for (const mw of list) {
-      if (wctx.kernelMiddlewares.groups[mw]) {
-        for (const subMw of wctx.kernelMiddlewares.groups[mw]) {
-          const resolved = wctx.kernelMiddlewares.aliases[subMw] || subMw;
-          expanded.push(resolved);
-        }
-      } else {
-        const resolved = wctx.kernelMiddlewares.aliases[mw] || mw;
-        expanded.push(resolved);
-      }
-    }
-    return expanded;
-  };
+/**
+ * Route middleware names resolved through the HTTP Kernel of the route file's own app, never
+ * another app's. Each route records that app root, so the scanner links only that app's Kernel
+ * entries (M0-04-R6).
+ */
+async function resolveRouteMiddlewares(routes: RouteBinding[], filePath: string, wctx: LaravelWorkspaceContext) {
+  const appRoot = appRootOf(filePath, wctx);
+  const kernel = kernelFor(filePath, wctx);
+  const resolve = (list: string[]) => list.flatMap(mw => resolveMiddleware(mw, kernel));
   for (const r of routes) {
+    if (appRoot !== undefined) (r.metadata ??= {}).appRoot = appRoot;
     const mws = r.middlewares || r.metadata?.middlewares;
     if (!mws) continue;
 
@@ -637,7 +564,7 @@ export class LaravelDetector implements FrameworkDetector {
 
       // Enrich routes with parameter details and constructor-defined middlewares
       await Promise.all(routes.map(r => enrichRouteFromController(r)));
-      await resolveRouteMiddlewares(routes, wctx);
+      await resolveRouteMiddlewares(routes, normalizedPath, wctx);
       return routes;
     }
 
@@ -778,75 +705,51 @@ export class LaravelDetector implements FrameworkDetector {
     }
 
     await Promise.all(routes.map(r => enrichRouteFromController(r)));
-    await resolveRouteMiddlewares(routes, wctx);
+    await resolveRouteMiddlewares(routes, normalizedPath, wctx);
     return routes;
   }
 
   async extractHooks(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]> {
     const normalizedPath = filePath.replace(/\\/g, '/');
-    const lowerPath = normalizedPath.toLowerCase();
     const hooks: HookBinding[] = [];
 
     // 1. app/Http/Kernel.php (Middlewares): the only file the aliases and groups are parsed from,
-    // so not the Console Kernel or any other Kernel.php.
-    if (lowerPath.endsWith('app/http/kernel.php')) {
-      const wctx = await ensureWorkspaceInitialized(ctx.workspaceRoot, ctx);
-      
-      // Add all aliases
-      for (const [alias, fqn] of Object.entries(wctx.kernelMiddlewares.aliases)) {
-        const resolvedPath = ctx.resolveSymbolToFile(fqn);
+    // so not the Console Kernel or any other Kernel.php. Read from this Kernel alone, never merged
+    // with another app's; each hook names its app root, so only that app's routes use it (M0-04-R6).
+    const kernelMatch = normalizedPath.match(/^(?:(.*)\/)?app\/http\/kernel\.php$/i);
+    if (kernelMatch) {
+      const appRoot = kernelMatch[1] ?? '';
+      const kernel = parseKernel(content);
+      // One hook per name and class: an alias's class listed in a group too is declared once.
+      const declared = new Set<string>();
+      const declare = (hookName: string, cls: string, middlewareType: string) => {
+        if (declared.has(`${hookName}\0${cls}`)) return;
+        declared.add(`${hookName}\0${cls}`);
+        // Only a namespaced name resolves: a bare one is no class to guess by short name (M0-04-R6).
+        const resolvedPath = cls.includes('\\') ? ctx.resolveSymbolToFile(cls) : null;
         hooks.push({
           framework: this.name,
-          hookName: alias,
+          hookName,
           hookType: 'middleware',
           handlerFile: resolvedPath || filePath,
-          handlerSymbol: fqn,
-          metadata: {
-            confidence: 'declared',
-            middlewareType: 'alias'
-          }
+          handlerSymbol: cls,
+          metadata: { confidence: 'declared', middlewareType, appRoot },
         });
-        // Register concrete FQN as a hook (qualified entry)
-        hooks.push({
-          framework: this.name,
-          hookName: fqn,
-          hookType: 'middleware',
-          handlerFile: resolvedPath || filePath,
-          handlerSymbol: fqn,
-          metadata: {
-            confidence: 'declared',
-            middlewareType: 'concrete_qualified'
-          }
-        });
+      };
+
+      // Each alias, and its class as a qualified entry
+      for (const [alias, fqn] of Object.entries(kernel.aliases)) {
+        declare(alias, fqn, 'alias');
+        declare(fqn, fqn, 'concrete_qualified');
       }
 
-      // Add all groups
-      for (const [groupName, mws] of Object.entries(wctx.kernelMiddlewares.groups)) {
-        for (const mw of mws) {
-          const resolvedPath = ctx.resolveSymbolToFile(mw);
-          hooks.push({
-            framework: this.name,
-            hookName: groupName,
-            hookType: 'middleware',
-            handlerFile: resolvedPath || filePath,
-            handlerSymbol: mw,
-            metadata: {
-              confidence: 'declared',
-              middlewareType: 'group_member'
-            }
-          });
-          // Register concrete member FQN as a hook (qualified entry)
-          hooks.push({
-            framework: this.name,
-            hookName: mw,
-            hookType: 'middleware',
-            handlerFile: resolvedPath || filePath,
-            handlerSymbol: mw,
-            metadata: {
-              confidence: 'declared',
-              middlewareType: 'group_member_qualified'
-            }
-          });
+      // Each group's classes, its alias and nested-group members resolved as Laravel does; the
+      // parameters of a member (`throttle:api`) belong to the route, not to the class.
+      for (const groupName of Object.keys(kernel.groups)) {
+        for (const mw of resolveMiddleware(groupName, kernel)) {
+          const cls = mw.split(':')[0]!;
+          declare(groupName, cls, 'group_member');
+          declare(cls, cls, 'group_member_qualified');
         }
       }
     }
@@ -903,6 +806,13 @@ function parseUseImports(fileContent: string): Map<string, string> {
     const alias = match[2];
     const shortName = alias || fqn.split('\\').pop() || '';
     imports.set(shortName, fqn);
+  }
+  // Group use: use App\Http\Middleware\{EnsureX, Audit as A}; (no function or const imports, M0-04-R6)
+  for (const match of fileContent.matchAll(/\buse\s+(?!function\s|const\s)(\\?[A-Za-z_][\w\\]*\\)\s*\{([^{}]*)\}\s*;/g)) {
+    for (const item of match[2]!.split(',')) {
+      const m = item.trim().match(/^([A-Za-z_][\w\\]*)(?:\s+as\s+(\w+))?$/);
+      if (m) imports.set(m[2] || m[1]!.split('\\').pop()!, match[1] + m[1]);
+    }
   }
   return imports;
 }
@@ -1215,6 +1125,12 @@ function pathArg(raw: string, scope: PhpScope): string {
   return phpString(raw, scope, DYNAMIC) ?? DYNAMIC;
 }
 
+/**
+ * A route name or name prefix evaluated as PHP: an unresolvable part is recorded as {dynamic}
+ * (`"zone.{$this->zone()}."` → `zone.{dynamic}.`), never dropped (M1-03-R2).
+ */
+const nameArg = pathArg;
+
 function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], excluded: string[], namespaces: string[], domain: string | null, names: string[] } {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
@@ -1242,7 +1158,7 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
       const m = entry.match(/^(['"])(prefix|domain|as)\1\s*=>\s*([\s\S]+)$/);
       if (!m) continue;
       if (m[2] === 'as') {
-        const name = phpString(m[3]!.trim(), scope);
+        const name = nameArg(m[3]!.trim(), scope);
         if (name) names.push(name);
         continue;
       }
@@ -1257,27 +1173,13 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
       namespaces.push(namespaceMatch[1]);
     }
 
-    // 3. Extract middleware
-    const mwIndex = arrayContent.search(/['"]middleware['"]\s*=>/);
-    if (mwIndex !== -1) {
-      const afterMw = arrayContent.substring(mwIndex).replace(/^['"]middleware['"]\s*=>\s*/, '').trim();
-      // Quoted names and class constants (M0-04-R3), named later through the file's use table.
-      if (afterMw.startsWith('[')) {
-        const bracket = getBracketedContent(afterMw, 0);
-        if (bracket) middlewares.push(...listItems(bracket.content));
-      } else if (afterMw.startsWith('array(')) {
-        const paren = getParenthesizedContent(afterMw, 5);
-        if (paren) middlewares.push(...listItems(paren.content));
-      } else {
-        const match = afterMw.match(/^['"]([^'"]+)['"]|^\\?[A-Za-z_][\w\\]*::class\b/);
-        if (match) {
-          middlewares.push(match[1] ?? match[0]);
-        }
-      }
+    // 3. Middleware, and excluded middleware merged into nested groups like it (M1-05-R3): names,
+    // class constants (M0-04-R3) and class constants with parameters (M0-04-R6), the class
+    // constants named later through the file's use table.
+    for (const e of phpArrayEntries(`[${arrayContent}]`) ?? []) {
+      if (e.key === 'middleware') middlewares.push(...listArg(e.value, true));
+      else if (e.key === 'excluded_middleware') excluded.push(...listArg(e.value, true));
     }
-
-    // 4. Excluded middleware, merged into nested groups like `middleware` (M1-05-R3).
-    for (const e of phpArrayEntries(`[${arrayContent}]`) ?? []) if (e.key === 'excluded_middleware') excluded.push(...listArg(e.value));
   }
 
   return { prefixes, middlewares, excluded, namespaces, domain, names };
@@ -1438,7 +1340,9 @@ function expandResourceRoute(
   const clean = resourceName.replace(/^\/+|\/+$/g, '');
   const name = clean.slice(clean.lastIndexOf('/') + 1);
   const uriPrefix = clean.slice(0, Math.max(0, clean.lastIndexOf('/')));
-  const wildcard = (segment: string) => (options.parameters?.[segment] ?? getResourceParam(segment)).replace(/-/g, '_');
+  // A segment that can't be evaluated has an unknown singular: its wildcard is {dynamic} (M1-03-R2).
+  const wildcard = (segment: string) => (segment.includes(DYNAMIC) ? DYNAMIC.slice(1, -1)
+    : (options.parameters?.[segment] ?? getResourceParam(segment)).replace(/-/g, '_'));
   // getResourceUri: each segment followed by its wildcard, minus the last segment's wildcard.
   const resourceUri = (n: string) => {
     const segments = n.split('.');
@@ -1690,7 +1594,14 @@ async function enrichRouteFromController(route: RouteBinding) {
   if (!cached) {
     try {
       const content = await readFile(route.handlerFile, 'utf-8');
-      const middlewares = parseControllerMiddlewares(content);
+      // `EnsureRole::class` names its class through the controller's own imports (review 2026-10-31).
+      const code = maskPhp(content).text;
+      const useImports = parseUseImports(code);
+      const namespace = fileNamespace(code);
+      const middlewares = parseControllerMiddlewares(content).map(mw => ({
+        ...mw,
+        middleware: middlewareClassNames([mw.middleware], useImports, namespace)[0]!.replace(/^\\(?=[^:]*\\)/, ''),
+      }));
       cached = { content, middlewares };
       controllerCache.set(route.handlerFile, cached);
     } catch {
@@ -1774,18 +1685,19 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
     } else if (call.name === 'name' || call.name === 'as') {
       // A RouteRegistrar attribute: the last one wins.
       const a = parseArgs(call.args, true)[0];
-      const name = a ? phpString(a, scope) : null;
-      if (name !== null) names.splice(0, names.length, name);
+      if (a) names.splice(0, names.length, nameArg(a, scope));
     } else if (call.name === 'domain') {
       const a = parseArgs(call.args, true)[0];
       if (a) domain = pathArg(a, scope);
     } else if (call.name === 'middleware') {
       middlewares.splice(0, middlewares.length, ...listArg(call.args));
     } else if (call.name === 'withoutMiddleware') {
-      excluded.push(...listArg(call.args));
+      excluded.push(...listArg(call.args, true));
     } else if (call.name === 'namespace') {
-      const a = parseArgs(call.args)[0];
-      if (a) namespaces.splice(0, namespaces.length, a);
+      // Evaluated, so `->namespace($this->namespace)` reads the property; null or unknown sets none.
+      const a = parseArgs(call.args, true)[0];
+      const ns = a ? phpString(a, scope) : null;
+      if (ns) namespaces.splice(0, namespaces.length, ns);
     } else if (call.name === 'controller') {
       controller = parseArgs(call.args)[0]?.match(/([a-zA-Z0-9_\\]+)/)?.[1] ?? null;
     } else if (call.name === 'group' && /^\s*(\[|array\()/.test(call.args)) {
@@ -1801,20 +1713,30 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
   return { prefixes, middlewares, excluded, namespaces, controller, domain, names };
 }
 
-/** Quoted names and class constants of a PHP list: 'auth', "verified", EnsureX::class, \A\B::class. */
-const LIST_ITEM = /['"]([^'"]+)['"]|\\?[A-Za-z_][\w\\]*::class\b/g;
-const listItems = (text: string) => (text.match(LIST_ITEM) || []).map(m => /::class$/.test(m) ? m : m.replace(/['"]/g, ''));
+/**
+ * One entry of a PHP list as Laravel reads it: a quoted name ('auth', 'throttle:60,1'), a class
+ * constant (`EnsureX::class`), or a class constant with parameters (`EnsureRole::class.':editor'`
+ * → `EnsureRole::class:editor`). Class constants stay unnamed until the file's use table names them
+ * (`middlewareClassNames`). A name that can't be read statically (`$mw`) is no entry (M0-04-R6).
+ */
+function listItem(expr: string): string | null {
+  const e = expr.trim();
+  const cls = e.match(/^(\\?[A-Za-z_][\w\\]*::class)\b\s*(?:\.\s*([\s\S]+))?$/);
+  if (cls) return cls[1]! + (cls[2] ? phpString(cls[2], literalScope(), DYNAMIC) ?? DYNAMIC : '');
+  const value = phpString(e, literalScope(), DYNAMIC);
+  return value && !value.startsWith(DYNAMIC) ? value : null;
+}
 
 /**
- * A string or array-of-strings argument, e.g. 'auth' or ['auth', 'verified']. Class constants
- * stay `X::class` (a single argument already does) until the route file's use table names them
- * (`middlewareClassNames`, M0-04-R3).
+ * A string, array or variadic argument list, e.g. 'auth', ['auth', 'verified'] or 'auth', 'verified'
+ * (Route::middleware(...$middleware) and RouteRegistrar::middleware read every argument unless the
+ * first is an array, M0-04-R6). `single` reads the first argument only (withoutMiddleware).
  */
-function listArg(args: string): string[] {
-  const trimmed = args.trim();
-  if (/^(\[|array\s*\()/i.test(trimmed)) return listItems(trimmed);
-  const a = parseArgs(trimmed)[0];
-  return a ? [a] : [];
+function listArg(args: string, single = false): string[] {
+  const all = parseArgs(args.trim(), true);
+  const first = phpArrayEntries(all[0]);
+  const values = first ? first.map(e => e.value) : single ? all.slice(0, 1) : all;
+  return values.map(listItem).filter((v): v is string => v !== null);
 }
 
 /** The namespace a PHP file declares, '' for none. */
@@ -1826,17 +1748,21 @@ function fileNamespace(text: string): string {
  * Middleware given as class constants, named as PHP does in `useImports`' file: `EnsureX::class`
  * with `use App\Http\Middleware\EnsureX` (or a first segment imported, `Mw\EnsureX` with
  * `use App\Http\Middleware as Mw`) → App\Http\Middleware\EnsureX; `\A\B::class` → A\B; any other
- * name is relative to the file's namespace, the global `\X` without one (M0-04-R3).
+ * name is relative to the file's namespace, the global `\X` without one (M0-04-R3). Parameters
+ * follow the class: `EnsureRole::class:editor` → App\Http\Middleware\EnsureRole:editor (M0-04-R6),
+ * as does whatever else was concatenated to it.
  */
 function middlewareClassNames(names: string[], useImports: Map<string, string>, namespace: string): string[] {
   return names.map(name => {
-    const cls = name.match(/^(\\?[\w\\]+)::class$/)?.[1];
-    if (!cls) return name;
-    if (cls.startsWith('\\')) return cls.slice(1);
+    const m = name.match(/^(\\?[\w\\]+)::class([\s\S]*)$/);
+    if (!m) return name;
+    const cls = m[1]!;
+    const params = m[2] ?? '';
+    if (cls.startsWith('\\')) return cls.slice(1) + params;
     const [head, ...rest] = cls.split('\\');
     const imported = useImports.get(head!);
-    if (imported) return [imported.replace(/^\\/, ''), ...rest].join('\\');
-    return namespace ? `${namespace}\\${cls}` : `\\${cls}`;
+    if (imported) return [imported.replace(/^\\/, ''), ...rest].join('\\') + params;
+    return (namespace ? `${namespace}\\${cls}` : `\\${cls}`) + params;
   });
 }
 
@@ -1906,7 +1832,7 @@ function walkRouteFile(
   const unresolved: number[] = [];
   const { code, text } = options.provider ? liveProviderCode(content) : maskPhp(content);
   const dir = posix.dirname(filePath) === '.' ? '' : posix.dirname(filePath);
-  const assignments = stringAssignments(text, code);
+  const assignments = stringAssignments(text, code, { dir, root: options.root });
   const useImports = parseUseImports(text);
   // Middleware class constants (`EnsureX::class`) named through this file's use table (M0-04-R3).
   const namespace = fileNamespace(text);
@@ -1947,7 +1873,7 @@ function walkRouteFile(
     const end = closed > 0 ? closed : code.length;
     globLoops.push({ variable: loop[2]!, pattern: parseArgs(loop[1]!, true)[0] ?? '', at: m.index!, start: head.endIndex, end });
   }
-  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; excluded?: string[]; namespaces: string[]; controller: string | null; domain?: string | null; names?: string[] } = { prefixes: [], middlewares: [], namespaces: [], controller: null }) => {
+  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; excluded?: string[]; namespaces: string[]; controller: string | null; domain?: string | null; names?: string[] } = { prefixes: [], middlewares: [], namespaces: [], controller: null }, once = false) => {
     const base = current();
     const push = (file: string, sub?: number) => mounts.push({
       file: normalizeMountPath(file),
@@ -1964,6 +1890,7 @@ function walkRouteFile(
       offset: index,
       ...(sub !== undefined ? { sub } : {}),
       line: lineAt(content, index),
+      ...(once ? { once } : {}),
     });
     const loopVar = expr.trim().match(/^\$(\w+)$/)?.[1];
     const loop = loopVar ? globLoops.find(l => l.variable === loopVar && l.start <= index && index < l.end) : undefined;
@@ -1999,7 +1926,7 @@ function walkRouteFile(
     if (include && !/[\w$>:\\]/.test(code[i - 1] ?? '')) {
       const start = i + include[0].length;
       const end = expressionEnd(code, start);
-      mountAt(unwrapParens(text.slice(start, end)), i);
+      mountAt(unwrapParens(text.slice(start, end)), i, undefined, include[0].endsWith('_once'));
       i = end - 1;
       continue;
     }
@@ -2073,6 +2000,8 @@ function processRouteChain(
   let verbArgs: string[] = [];
   let uri: string | null = null;
   let handlerStr: string | null = null;
+  /** The handler argument as written (quotes kept), for a route verb, match() or fallback(). */
+  let handlerRaw: string | undefined;
   let chainController: string | null = null;
   const chainPrefixes: string[] = [];
   /** Middleware and excluded middleware of a group opened by this chain. */
@@ -2099,6 +2028,8 @@ function processRouteChain(
   let excludedAttribute: string[] | undefined;
   const postExcluded: string[] = [];
   let isGroup = false;
+  /** Route::match() with a verb that can't be evaluated. */
+  let unknownVerb = false;
   const isResourceVerb = () => /^(API)?(RESOURCE|SINGLETON)S?$/.test(verb ?? '');
 
   for (const call of calls) {
@@ -2123,7 +2054,7 @@ function processRouteChain(
         const name = phpString(raw[1]!, scope);
         if (name !== null) resourceOptions.names = { ...(typeof resourceOptions.names === 'object' ? resourceOptions.names : {}), [cleanQuotes(raw[0]!)]: name };
       } else {
-        const name = raw[0] ? phpString(raw[0], scope) : null;
+        const name = raw[0] ? nameArg(raw[0], scope) : null;
         if (name !== null && verb) nameSuffixes.push(name);
         else if (name !== null) nameAttribute = name;
       }
@@ -2148,7 +2079,7 @@ function processRouteChain(
       const [methods, list] = parseArgs(call.args, true);
       if (methods && list) for (const m of listArg(methods)) resourceOptions.excludedFor = { ...resourceOptions.excludedFor, [m]: listArg(list) };
     } else if (call.name === 'withoutMiddleware') {
-      const list = listArg(call.args);
+      const list = listArg(call.args, true);
       if (isResourceVerb()) resourceOptions.excluded = [...(resourceOptions.excluded ?? []), ...list];
       else if (verb) postExcluded.push(...list);
       else excludedAttribute = [...(excludedAttribute ?? []), ...list];
@@ -2172,6 +2103,7 @@ function processRouteChain(
       uriExpr = verbArgs[0] || null;
       uri = args[0] || null;
       handlerStr = args[1] || null;
+      handlerRaw = verbArgs[1];
       if (isResourceVerb()) {
         const plural = verb.endsWith('S');
         Object.assign(resourceOptions, parseResourceOptions(verbArgs[plural ? 1 : 2], scope));
@@ -2184,17 +2116,22 @@ function processRouteChain(
       }
     } else if (call.name === 'match') {
       const args = parseArgs(call.args);
-      const verbsRaw = args[0] || '';
-      const matchedVerbs = verbsRaw.replace(/[\[\]']/g, '').split(',').map(v => v.trim().toUpperCase()).filter(Boolean);
-      verb = matchedVerbs.join('|');
+      // Router::match: `array_map('strtoupper', (array) $methods)`, each a PHP string. A verb that
+      // can't be evaluated may be any verb: ANY, flagged dynamic (M1-03-R2).
+      const methodsArg = parseArgs(call.args, true)[0] ?? '';
+      const matchedVerbs = (phpArrayEntries(methodsArg)?.map(e => e.value) ?? [methodsArg]).map(v => phpString(v, scope)?.toUpperCase() ?? null);
+      unknownVerb = matchedVerbs.some(v => !v);
+      verb = unknownVerb ? 'ANY' : [...new Set(matchedVerbs)].join('|');
       uriExpr = parseArgs(call.args, true)[1] || null;
       uri = args[1] || null;
       handlerStr = args[2] || null;
+      handlerRaw = parseArgs(call.args, true)[2];
     } else if (call.name === 'fallback') {
       verb = 'ANY';
       uri = '{any}';
       const args = parseArgs(call.args);
       handlerStr = args[0] || null;
+      handlerRaw = parseArgs(call.args, true)[0];
     } else if (call.name === 'redirect') {
       verb = 'GET';
       const args = parseArgs(call.args);
@@ -2216,7 +2153,8 @@ function processRouteChain(
         prefixAttribute = pathArg(raw, scope);
       }
     } else if (call.name === 'middleware') {
-      const list = listArg(call.args);
+      // PendingResourceRegistration::middleware() takes one argument; a route's takes several.
+      const list = listArg(call.args, isResourceVerb());
       // PendingResourceRegistration::middleware() replaces the resource's middleware option and
       // is appended to every middlewareFor entry.
       if (isResourceVerb()) {
@@ -2259,7 +2197,7 @@ function processRouteChain(
       if (key === 'uses') {
         const concat = value.match(/^\\?([\w\\]+)::class\s*\.\s*['"]@(\w+)['"]$/);
         uses = concat ? `${concat[1]}@${concat[2]}` : value.match(/^(['"])([^'"]+)\1$/)?.[2] ?? null;
-      } else if (key === 'as') actionName = phpString(value, scope) ?? undefined;
+      } else if (key === 'as') actionName = nameArg(value, scope);
       else if (key === 'prefix') actionPrefix = pathArg(value, scope);
       else if (key === 'domain') actionDomain = pathArg(value, scope);
       else if (key === 'middleware') actionMiddlewares = listArg(value);
@@ -2302,7 +2240,8 @@ function processRouteChain(
       domain: chainDomain,
       end: groupEnd
     });
-  } else if (verb && uri) {
+  } else if (verb && uri !== null) {
+    // (`Route::get('', ...)` is a route too: the group prefix, or `/`.)
     const activeController = chainController || (groupStack.length > 0 ? groupStack[groupStack.length - 1].controller : null);
     let controllerClass: string | null = null;
     let controllerMethod: string | null = null;
@@ -2315,7 +2254,15 @@ function processRouteChain(
         }
       }
     } else if (handlerStr) {
-      if (handlerStr.includes('::class')) {
+      // A single-action controller: `X::class` (RouteAction::parse makes it `X@__invoke`), or a
+      // class name string outside a Route::controller() group, where it would name a method
+      // (Router::prependGroupController). M1-03-R2.
+      const invokable = handlerStr.trim().match(/^(\\?[\w\\]+)::class$/)?.[1]
+        ?? (activeController || handlerRaw === undefined ? undefined : handlerRaw.match(/^(['"])(\\?[A-Za-z_][\w\\]*)\1$/)?.[2]);
+      if (invokable) {
+        controllerClass = invokable;
+        controllerMethod = '__invoke';
+      } else if (handlerStr.includes('::class')) {
         const classAndMethod = handlerStr.match(/\[\s*([a-zA-Z0-9_\\]+)::class\s*,\s*['"]([^'"]+)['"]\s*\]/);
         if (classAndMethod) {
           controllerClass = classAndMethod[1];
@@ -2346,7 +2293,7 @@ function processRouteChain(
         routes.push(...expanded);
       };
       if (!verb.endsWith('S')) {
-        if (controllerClass) register(uri, controllerClass, false);
+        if (controllerClass && uri) register(uri, controllerClass, false);
       } else {
         // Route::resources([...]) / apiResources([...]) / singletons([...]) / apiSingletons([...]):
         // one resource per `name => controller`, all sharing the options array.
@@ -2369,8 +2316,9 @@ function processRouteChain(
       const cleanUri = uri.replace(/^\/|\/$/g, '');
       // RouteUri::parse: `{post:slug}` is reported as `{post}` with a binding field. Each
       // `->prefix()` after the verb re-parses the already stripped URI, so only the last one's
-      // own fields survive, as in Laravel.
-      const parsed = parseRouteUri('/' + [...cleanPrefixes, cleanUri].join('/'));
+      // own fields survive, as in Laravel. Router::prefix trims the joined URI, so `/` under the
+      // prefix `admin` is `admin`, not `admin/` (M1-03-R2).
+      const parsed = parseRouteUri('/' + [...cleanPrefixes, cleanUri].filter(Boolean).join('/'));
       const fullPath = parsed.uri;
       const bindingFields = postPrefixes.length ? parseRouteUri(postPrefixes[postPrefixes.length - 1]!).bindingFields : parsed.bindingFields;
 
@@ -2401,8 +2349,9 @@ function processRouteChain(
   // route, `->domain()` after the verb wins over the action's `domain`, which wins over the
   // attribute chained before the verb; any of them replaces the group domain.
   const domain = (isResourceVerb() ? null : postDomain ?? actionDomain ?? chainDomain) ?? [...groupStack].reverse().find(g => g.domain)?.domain ?? null;
+  // Any unevaluated part counts, a partly dynamic segment such as `zone{dynamic}` too (M1-03-R2).
   for (const r of routes.slice(routesBefore)) {
-    if (r.path.split('/').includes(DYNAMIC)) (r.metadata ??= {}).dynamic = true;
+    if (r.path.includes(DYNAMIC) || unknownVerb) (r.metadata ??= {}).dynamic = true;
     if (domain && !isGroup) (r.metadata ??= {}).domain = domain;
   }
 }

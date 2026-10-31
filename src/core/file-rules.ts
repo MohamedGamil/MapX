@@ -2,6 +2,15 @@
 // stale" warning only reports files a scan would pick up (M0-11-R2).
 import { closeSync, openSync, readSync } from 'node:fs';
 import picomatch from 'picomatch';
+
+// Each glob compiled once: `picomatch.isMatch` recompiles its pattern on every call, and the scan
+// walk and git sync test every path (review 2026-10-31).
+const compiled = new Map<string, (path: string) => boolean>();
+const globMatch = (path: string, pattern: string) => {
+  let match = compiled.get(pattern);
+  if (!match) compiled.set(pattern, (match = picomatch(pattern, { dot: true })));
+  return match(path);
+};
 import { LARAVEL_DEFAULT_EXCLUDES } from './config.js';
 import { languageFromShebang } from '../languages/registry.js';
 import type { MapxConfig, RepoConfig } from '../types.js';
@@ -42,7 +51,7 @@ export function buildMatcher(excludes: string[], includes: string[]): (rel: stri
   includes = includes.map(normalizePattern);
   return (rel: string) => {
     if (excludes.some(p => {
-      if (picomatch.isMatch(rel, p, { dot: true })) return true;
+      if (globMatch(rel, p)) return true;
       const segments = rel.split('/');
       if (segments.some(seg => seg === p)) return true;
       return false;
@@ -51,7 +60,7 @@ export function buildMatcher(excludes: string[], includes: string[]): (rel: stri
     }
     if (includes.length > 0) {
       const matched = includes.some(p => {
-        if (picomatch.isMatch(rel, p, { dot: true })) return true;
+        if (globMatch(rel, p)) return true;
         const segments = rel.split('/');
         if (segments.some(seg => seg === p)) return true;
         return false;
@@ -72,10 +81,25 @@ export function buildMatcher(excludes: string[], includes: string[]): (rel: stri
 export function isExcludedDir(relDir: string, excludes: string[]): boolean {
   return excludes.some(p => {
     const pattern = normalizePattern(p).replace(/\/+$/, '');
-    if (!pattern.endsWith('/*') && picomatch.isMatch(relDir, pattern, { dot: true })) return true;
-    if (pattern.endsWith('/**') && picomatch.isMatch(relDir, pattern.slice(0, -3), { dot: true })) return true;
+    if (!pattern.endsWith('/*') && globMatch(relDir, pattern)) return true;
+    if (pattern.endsWith('/**') && globMatch(relDir, pattern.slice(0, -3))) return true;
     return relDir.split('/').some(seg => seg === pattern);
   });
+}
+
+/**
+ * The matcher plus the walk's directory pruning, for filtering indexed paths: `--exclude '**\/Http'`
+ * leaves out app/Http/… in exports as it does at scan time (M0-02-R7).
+ */
+export function buildPathFilter(excludes: string[], includes: string[]): (rel: string) => boolean {
+  const matcher = buildMatcher(excludes, includes);
+  return (rel: string) => {
+    const segments = rel.split('/');
+    for (let i = 1; i < segments.length; i++) {
+      if (isExcludedDir(segments.slice(0, i).join('/'), excludes)) return false;
+    }
+    return matcher(rel);
+  };
 }
 
 /**
@@ -97,6 +121,17 @@ export function effectiveExcludesFor(
     }
   }
   return excludes;
+}
+
+/** Would the scan walk enter this workspace-relative folder? The segment and pruning rules of `isScannablePath`. */
+export function isScannableDir(relDir: string, excludes: string[], repoPath = ''): boolean {
+  const segments = relDir.split('/');
+  const start = repoPath ? repoPath.split('/').filter(Boolean).length : 0;
+  if (segments.slice(start).some(s => DEFAULT_IGNORE.has(s) || s.startsWith('.'))) return false;
+  for (let i = start + 1; i <= segments.length; i++) {
+    if (isExcludedDir(segments.slice(0, i).join('/'), excludes)) return false;
+  }
+  return true;
 }
 
 /**

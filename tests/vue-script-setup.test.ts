@@ -239,3 +239,63 @@ export default {
     expect(edge('Badge', 'call', 'track')).toEqual(['laravel/resources/js/mixins/tracking.js']);
   });
 });
+
+// M3-09-R1: a nested app with its own package.json and no alias config keeps Vue CLI's `@` → src/,
+// although the Laravel root's vite.config.js aliases `@` to resources/js. Every resources/js file
+// below is a trap with the same path as the app's own file.
+describe('JS/TS aliases stop at a nested app\'s boundary (M3-09-R1)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'laravel', private: true, devDependencies: { vite: '^5.0.0', 'laravel-vite-plugin': '^1.0.0' } }),
+      'vite.config.js': "import { defineConfig } from 'vite';\nimport laravel from 'laravel-vite-plugin';\nexport default defineConfig({ plugins: [laravel(['resources/js/app.js'])], resolve: { alias: { '@': '/resources/js' } } });\n",
+      'resources/js/app.js': "import Home from '@/views/Home.vue';\nexport default Home;\n",
+      'resources/js/App.vue': '<template>\n  <p>blade island</p>\n</template>\n',
+      'resources/js/views/Home.vue': '<template>\n  <p>blade home</p>\n</template>\n',
+      'resources/js/components/NavBar.vue': '<template>\n  <nav>blade nav</nav>\n</template>\n',
+      'frontend/package.json': JSON.stringify({ name: 'spa', private: true, dependencies: { vue: '^2.7.0', 'vue-router': '^3.6.0' }, devDependencies: { '@vue/cli-service': '^5.0.0' } }),
+      'frontend/src/main.js': "import Vue from 'vue';\nimport router from './router';\nimport App from '@/App.vue';\nnew Vue({ router, render: (h) => h(App) }).$mount('#app');\n",
+      'frontend/src/App.vue': `<template>
+  <div>
+    <NavBar />
+    <router-link :to="{ name: 'home' }">Home</router-link>
+    <router-view />
+  </div>
+</template>
+<script>
+import NavBar from '@/components/NavBar.vue';
+export default { name: 'App', components: { NavBar } };
+</script>
+`,
+      'frontend/src/components/NavBar.vue': '<template>\n  <nav>spa nav</nav>\n</template>\n',
+      'frontend/src/router/index.js': "import Vue from 'vue';\nimport VueRouter from 'vue-router';\nimport Home from '@/views/Home.vue';\nVue.use(VueRouter);\nconst routes = [{ path: '/', name: 'home', component: Home }];\nexport default new VueRouter({ routes });\n",
+      'frontend/src/views/Home.vue': '<template>\n  <p>spa home</p>\n</template>\n',
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  const targets = (type: string, source: string) => query<{ target_file: string }>(
+    root, 'SELECT DISTINCT target_file FROM edges WHERE edge_type = ? AND source_file = ? ORDER BY target_file', type, source,
+  ).map((e) => e.target_file);
+
+  it('import: the app\'s @/ is its own src/, the root\'s stays resources/js', () => {
+    expect(targets('import', 'frontend/src/main.js')).toEqual(['frontend/src/App.vue', 'frontend/src/router/index.js']);
+    expect(targets('import', 'frontend/src/router/index.js')).toEqual(['frontend/src/views/Home.vue']);
+    expect(targets('import', 'frontend/src/App.vue')).toEqual(['frontend/src/components/NavBar.vue']);
+    expect(targets('import', 'resources/js/app.js')).toEqual(['resources/js/views/Home.vue']);
+  });
+
+  it('render: <NavBar /> renders the app\'s component', () => {
+    expect(targets('render', 'frontend/src/App.vue')).toEqual(['frontend/src/components/NavBar.vue']);
+  });
+
+  it('route: the route record\'s component is the app\'s view', () => {
+    expect(targets('route', 'frontend/src/router/index.js')).toEqual(['frontend/src/views/Home.vue']);
+  });
+
+  it('navigate: <router-link> reaches the app\'s view', () => {
+    expect(targets('navigate', 'frontend/src/App.vue')).toEqual(['frontend/src/views/Home.vue']);
+  });
+});

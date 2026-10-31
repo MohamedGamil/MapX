@@ -38,11 +38,11 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-02-R3** Git renames, nested-repo diffs and symlinked nested repos in incremental sync — DONE, P2, 4h; depends on M0-02-R2.
 - **M0-02-R4** Incremental scans re-resolve references to moved files; blob-hash keys for non-root repos — DONE, P2, 4h; depends on M0-02-R3, M0-10-R3.
 - **M0-02-R5** git sync drops deleted untracked/staged files; blob hashes for re-indexed files — DONE, P2, 3h; depends on M0-02-R4.
-- **M0-02-R6** git sync re-parses a file whose working-tree edit was reverted to HEAD — READY, P1, 2h; depends on M0-02-R5.
+- **M0-02-R6** git sync re-parses a file whose working-tree edit was reverted to HEAD — DONE, P1, 2h; depends on M0-02-R5.
 - **M0-10-R3** Workspaces: F18 fields, duplicate config cleanup, cross-repo references after workspaces add — DONE, P2, 5h; depends on M0-10-R2.
 - **M0-03-R4** edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching — DONE, P2, 4h; depends on M0-03-R3, M0-05-R4.
 - **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — DONE, P2, 5h; depends on M0-17-R2.
-- **M0-17-R4** Calls on library and DOM receivers do not link to same-named project symbols — BACKLOG, P2, 4h; depends on M3-10, M0-17-R3.
+- **M0-17-R4** Calls on library and DOM receivers do not link to same-named project symbols — DONE, P2, 4h; depends on M3-10, M0-17-R3.
 - **M0-32-R2** Cycle smells keep their path order; small follow-ups from integration — DONE, P2, 3h; depends on M0-32-R1, M2-06-R1, M0-07-R2, M0-09-R3.
 - **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.
@@ -94,14 +94,17 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
 - **M0-05-R4** MCP parity for Laravel relationships and bindings — DONE, P2, 3h; depends on M0-05-R2.
 - **M0-07-R2** Binary build test writes outside the repo; package check rejects binaries — DONE, P2, 2h; depends on M0-07-R1.
-- **M0-02-R7** git sync: registered folder repos, per-name settling of moved targets, rename plus copy, export pruning — READY, P1, 6h; depends on M0-02-R4, M0-02-R5.
-- **M0-10-R4** Multi-repo resolution independent of repo order; cross-repo edges after delete/restore and re-add — READY, P1, 6h; depends on M0-10-R3, M0-02-R2.
-- **M0-04-R6** Laravel middleware: X::class.':param', no short-name guessing, one Kernel per app — READY, P1, 5h; depends on M0-04-R3.
-- **M0-12-R7** Import precision follow-ups: Python package-dir absolute imports, from-import comments, Rust bin crates, quoted go.mod — BACKLOG, P2, 3h; depends on M0-12-R4.
-- **M0-17-R5** Extraction follow-ups: factory-made callables, qualified Go embedding, deep C++ qualifiers, block arrows, class expressions — BACKLOG, P2, 5h; depends on M0-17-R2, M0-17-R3.
-- **M0-20-R3** NestJS: trailing commas, generic handlers, regex after a parenthesis — BACKLOG, P2, 2h; depends on M0-20-R2.
-- **M0-09-R5** Agent files: consent for edited hashless legacy blocks; JSONC configs already up to date — BACKLOG, P2, 2h; depends on M0-09-R4.
-- **M0-11-R3** Impact through default-import aliases; deps path forms; status lists only indexable changes; .svelte globals test — BACKLOG, P2, 3h; depends on M0-11-R2, M0-03-R4.
+- **M0-02-R7** git sync: registered folder repos, per-name settling of moved targets, rename plus copy, export pruning — DONE, P1, 6h; depends on M0-02-R4, M0-02-R5.
+- **M0-10-R4** Multi-repo resolution independent of repo order; cross-repo edges after delete/restore and re-add — DONE, P1, 6h; depends on M0-10-R3, M0-02-R2.
+- **M0-04-R6** Laravel middleware: X::class.':param', no short-name guessing, one Kernel per app — DONE, P1, 5h; depends on M0-04-R3.
+- **M0-12-R7** Import precision follow-ups: Python package-dir absolute imports, from-import comments, Rust bin crates, quoted go.mod — DONE, P2, 3h; depends on M0-12-R4.
+- **M0-17-R5** Extraction follow-ups: factory-made callables, qualified Go embedding, deep C++ qualifiers, block arrows, class expressions — DONE, P2, 5h; depends on M0-17-R2, M0-17-R3.
+- **M0-20-R3** NestJS: trailing commas, generic handlers, regex after a parenthesis — DONE, P2, 2h; depends on M0-20-R2.
+- **M0-09-R5** Agent files: consent for edited hashless legacy blocks; JSONC configs already up to date — DONE, P2, 2h; depends on M0-09-R4.
+- **M0-11-R3** Impact through default-import aliases; deps path forms; status lists only indexable changes; .svelte globals test — DONE, P2, 3h; depends on M0-11-R2, M0-03-R4.
+- **M0-12-R8** Svelte script blocks: symbols and references through the JS/TS parsers — DONE, P2, 6h; depends on M0-11-R3.
+- **M0-12-R9** Python namespace packages are not search roots for absolute imports — DONE, P2, 2h; depends on M0-12-R7.
+- **M0-02-R8** Sync re-links referrers of renamed or removed symbols, and re-resolves after manifest changes — DONE, P2, 5h; depends on M0-02-R7, M0-17-R4.
 
 ## M1 — Laravel route correctness
 
@@ -123,8 +126,8 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-03-R1** Laravel route-file walker: string/comment-aware lexing and brace-less groups — DONE, P1, 10h; depends on M1-03, M1-06.
 - **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — DONE, P1, 8h; depends on M1-07, M1-04.
 - **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — DONE, P2, 4h; depends on M1-05.
-- **M1-07-R2** RouteServiceProvider mounts walked like other providers; prefixes, names and domains evaluated — READY, P1, 6h; depends on M1-07-R1, M1-03-R1, M1-05-R1.
-- **M1-03-R2** Laravel route walker: require_once and cycles, trailing slashes, dynamic resource names, match verbs, invokable controllers — BACKLOG, P2, 4h; depends on M1-03-R1, M1-07-R2.
+- **M1-07-R2** RouteServiceProvider mounts walked like other providers; prefixes, names and domains evaluated — DONE, P1, 6h; depends on M1-07-R1, M1-03-R1, M1-05-R1.
+- **M1-03-R2** Laravel route walker: require_once and cycles, trailing slashes, dynamic resource names, match verbs, invokable controllers — DONE, P2, 4h; depends on M1-03-R1, M1-07-R2.
 
 ## M2 — Cross-language precision and HTTP pairing
 
@@ -141,8 +144,8 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-07** HTTP pairing follow-ups from the M2 review — DONE, P2, 10h; depends on M2-06.
 - **M2-04-R2** Scoped URL constants; dotenv quoting and expansion — DONE, P1, 4h; depends on M2-04-R1, M2-05.
 - **M2-06-R1** HTTP pairing needs literal evidence; host affinity; honest pairing tests — DONE, P1, 6h; depends on M2-06, M2-07.
-- **M2-06-R2** HTTP pairing honours Route::domain — BACKLOG, P2, 2h; depends on M2-06-R1.
-- **M2-04-R3** HTTP URL follow-ups: shadowed baseURL constants, nested dotenv defaults — BACKLOG, P2, 2h; depends on M2-04-R2.
+- **M2-06-R2** HTTP pairing honours Route::domain — DONE, P2, 2h; depends on M2-06-R1.
+- **M2-04-R3** HTTP URL follow-ups: shadowed baseURL constants, nested dotenv defaults — DONE, P2, 2h; depends on M2-04-R2.
 
 ## M3 — Vue SFC semantics
 
@@ -160,32 +163,33 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-10** Case-sensitive symbol name lookup in resolution — DONE, P2, 3h; depends on M3-06.
 - **M3-11** Vue Router navigation from plain JS/TS modules (stores, guards, composables) — DONE, P2, 4h; depends on M3-06.
 - **M3-12** HTTP pass and vue-router detector use the shared alias resolver — DONE, P2, 3h; depends on M3-09, M3-06.
-- **M3-08-R1** Vue app boundary: one global registry and route table per app folder, whatever the root manifest lists — READY, P1, 6h; depends on M3-08, M3-11.
-- **M3-09-R1** JS/TS aliases stop at the app's own boundary — READY, P1, 5h; depends on M3-09, M3-12.
-- **M3-02-R1** Vue template and Options API precision: scoped names, v-pre, custom blocks, nested functions — BACKLOG, P2, 4h; depends on M3-02, M3-03.
-- **M3-05-R1** Vuex map-helper path forms and Pinia outside SFCs — BACKLOG, P2, 5h; depends on M3-05, M3-04.
-- **M3-11-R1** More Vue Router navigation and route-table forms — BACKLOG, P2, 4h; depends on M3-11, M3-08-R1.
-- **M3-07-R1** Framework detection keeps its folder scope when package.json files are indexed — BACKLOG, P2, 2h; depends on M3-07.
+- **M3-08-R1** Vue app boundary: one global registry and route table per app folder, whatever the root manifest lists — DONE, P1, 6h; depends on M3-08, M3-11.
+- **M3-09-R1** JS/TS aliases stop at the app's own boundary — DONE, P1, 5h; depends on M3-09, M3-12.
+- **M3-02-R1** Vue template and Options API precision: scoped names, v-pre, custom blocks, nested functions — DONE, P2, 4h; depends on M3-02, M3-03.
+- **M3-05-R1** Vuex map-helper path forms and Pinia outside SFCs — DONE, P2, 5h; depends on M3-05, M3-04.
+- **M3-11-R1** More Vue Router navigation and route-table forms — DONE, P2, 4h; depends on M3-11, M3-08-R1.
+- **M3-07-R1** Framework detection keeps its folder scope when package.json files are indexed — DONE, P2, 2h; depends on M3-07.
 
 ## M4 — Measurement and developer experience
 
 Fixture scoring in CI; optional message edges.
 
-- **M4-01** Recall/precision scoring in CI — BACKLOG, P1, 5h; depends on M1-01, M2-02, M3-01.
+- **M4-01** Recall/precision scoring in CI — BACKLOG, P1, 5h; depends on M1-01, M2-02, M3-01, M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M4-02** postMessage / iframe message edges — DEFERRED, P3, 10h; depends on nothing.
-- **M4-03** Scanner: remove O(N²) resume serialisation and full-DB fileMap rebuilds — BACKLOG, P2, 8h; depends on nothing.
-- **M4-04** Scanner: bounded parallel directory walk and post-scan steps — BACKLOG, P3, 12h; depends on nothing.
-- **M4-05** Build the dashboard only for release and serve, not on every install — BACKLOG, P2, 4h; depends on nothing.
+- **M4-03** Scanner: remove O(N²) resume serialisation and full-DB fileMap rebuilds — BACKLOG, P2, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
+- **M4-04** Scanner: bounded parallel directory walk and post-scan steps — BACKLOG, P3, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
+- **M4-05** Build the dashboard only for release and serve, not on every install — BACKLOG, P2, 4h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M4-06** 3D graph mode in the dashboard — DEFERRED, P3, 16h; depends on nothing.
 - **M4-07** Compiled scanner sidecar for very large codebases — DEFERRED, P3, 40h; depends on nothing.
-- **M4-08** Strict flag handling in score-routes and score-http — BACKLOG, P3, 2h; depends on M3-01.
+- **M4-08** Strict flag handling in score-routes and score-http — BACKLOG, P3, 2h; depends on M3-01, M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
+- **M4-09** Tests never write to or delete files in the repository checkout — DONE, P2, 2h; depends on nothing.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 
 Declared layers, selectors and allow-rules over the MapX graph in every supported language, enforced in CI, explorable in CLI/MCP/dashboard.
 
-- **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — BACKLOG, P1, 12h; depends on nothing.
-- **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — BACKLOG, P1, 8h; depends on nothing.
+- **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — BACKLOG, P1, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
+- **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — BACKLOG, P1, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M5-03** Element view, core selectors and layer membership with selector trace — BACKLOG, P1, 10h; depends on M5-01, M5-02.
 - **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — BACKLOG, P1, 12h; depends on M5-03.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — BACKLOG, P1, 8h; depends on M5-04.
