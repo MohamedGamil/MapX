@@ -37,6 +37,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
 - **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.
+- **M0-32-R1** Architecture analysis: iterative SCC, no stack overflow on large cyclic graphs — READY, P1, 4h; depends on M0-32.
 - **M0-33** Search, tracing and graph-quality improvements (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-34** Dart/Flutter and ASP.NET support (0.3.3) — DONE, P1, 0h; depends on nothing.
 - **M0-35** PageRank persistence and graphExcludePatterns (0.3.4) — DONE, P1, 0h; depends on nothing.
@@ -74,7 +75,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — IN_PROGRESS, P2, 4h; depends on M0-10-R1.
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — DONE, P1, 6h; depends on M0-12-R1, M0-12-R2.
-- **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — BACKLOG, P2, 6h; depends on M0-12-R3.
+- **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — IN_PROGRESS, P2, 6h; depends on M0-12-R3.
 - **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — BACKLOG, P2, 6h; depends on M0-17-R1, M0-01-R1.
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
 - **M0-05-R4** MCP parity for Laravel relationships and bindings — DONE, P2, 3h; depends on M0-05-R2.
@@ -113,13 +114,13 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06** Pair client calls with backend routes across repositories — DONE, P1, 14h; depends on M2-04, M2-05, M1-98, M2-01, M2-03-R1, M2-04-R1.
 - **M2-07** HTTP pairing follow-ups from the M2 review — DONE, P2, 10h; depends on M2-06.
 - **M2-04-R2** Scoped URL constants; dotenv quoting and expansion — DONE, P1, 4h; depends on M2-04-R1, M2-05.
-- **M2-06-R1** HTTP pairing needs literal evidence; host affinity; honest pairing tests — IN_PROGRESS, P1, 6h; depends on M2-06, M2-07.
+- **M2-06-R1** HTTP pairing needs literal evidence; host affinity; honest pairing tests — DONE, P1, 6h; depends on M2-06, M2-07.
 
 ## M3 — Vue SFC semantics
 
 Templates, Options/Composition API, state stores and router navigation in Vue 2.7 and 3.
 
-- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BLOCKED, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1.
+- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BLOCKED, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1.
 - **M3-02** Vue template pass — BACKLOG, P1, 14h; depends on M3-01.
 - **M3-03** Options API member resolution — BACKLOG, P1, 12h; depends on M3-01.
 - **M3-04** <script setup> macros and composables — BACKLOG, P1, 10h; depends on M3-01.

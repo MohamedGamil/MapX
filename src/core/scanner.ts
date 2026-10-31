@@ -20,9 +20,9 @@ import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } fro
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, shebangLanguage } from './file-rules.js';
-import { collectProviders, extractHttpCalls, HTTP_SKIP, HTTP_SOURCE, type HttpClientConfig } from '../frameworks/http/client-calls.js';
+import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
-import { pairCall } from '../frameworks/http/pairing.js';
+import { pairCall, urlHost } from '../frameworks/http/pairing.js';
 import { importResolverFor } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
@@ -1792,7 +1792,7 @@ export class Scanner {
   private async scanHttpCalls(repo: RepoConfig): Promise<void> {
     const workspaceRoot = this.config.getWorkspaceRoot();
     const paths = this.store.getAllFiles(repo.name).map(f => f.path as string);
-    const sources = paths.filter(p => HTTP_SOURCE.test(p) && !HTTP_SKIP.test(p));
+    const sources = paths.filter(p => HTTP_SOURCE.test(p) && !isHttpSkipped(p));
     this.store.setMeta('http_inputs:' + repo.name, this.httpInputsFingerprint(resolve(workspaceRoot, repo.path)));
     const registry = new HttpCallRegistry();
     await registry.load(workspaceRoot);
@@ -1867,6 +1867,17 @@ export class Scanner {
    */
   private httpInputsFingerprint(repoRoot: string): string {
     const envFiles: string[] = [];
+    for (const full of this.envFiles(repoRoot)) {
+      try {
+        envFiles.push(`${full}@${statSync(full).mtimeMs}`);
+      } catch {}
+    }
+    return createHash('md5').update(JSON.stringify([this.config.settings.http ?? null, envFiles.sort()])).digest('hex');
+  }
+
+  /** Every .env* file of a repo (up to four directories deep, outside dependencies and builds). */
+  private envFiles(repoRoot: string): string[] {
+    const envFiles: string[] = [];
     const walk = (dir: string, depth: number) => {
       if (depth > 4) return;
       let entries: import('node:fs').Dirent[];
@@ -1879,15 +1890,36 @@ export class Scanner {
         const full = join(dir, e.name);
         if (e.isDirectory()) {
           if (!['node_modules', 'vendor', '.git', '.mapx', 'dist', 'storage'].includes(e.name)) walk(full, depth + 1);
-        } else if (/^\.env(\.|$)/.test(e.name)) {
-          try {
-            envFiles.push(`${full}@${statSync(full).mtimeMs}`);
-          } catch {}
-        }
+        } else if (/^\.env(\.|$)/.test(e.name)) envFiles.push(full);
       }
     };
     walk(repoRoot, 0);
-    return createHash('md5').update(JSON.stringify([this.config.settings.http ?? null, envFiles.sort()])).digest('hex');
+    return envFiles;
+  }
+
+  /**
+   * The workspace's own hosts (M2-06-R1): those named by settings.http (`hosts`, configured client
+   * base URLs) or by a URL in any .env* value of a registered repo. Absolute request URLs on any
+   * other non-local host are calls to third-party services and never pair with a workspace route.
+   */
+  private workspaceHosts(): Set<string> {
+    const http = this.config.settings.http ?? {};
+    const hosts = new Set<string>((http.hosts ?? []).map(h => h.toLowerCase()));
+    const add = (value: string | undefined) => {
+      for (const m of (value ?? '').matchAll(/[a-z][a-z\d+.-]*:\/\/[^\s'"`]+/gi)) {
+        const host = urlHost(m[0]);
+        if (host) hosts.add(host);
+      }
+    };
+    for (const client of http.clients ?? []) add(client.baseURL);
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    for (const repo of this.config.repos)
+      for (const file of this.envFiles(resolve(workspaceRoot, repo.path))) {
+        try {
+          for (const value of parseDotenv(readFileSync(file, 'utf-8')).values()) add(value);
+        } catch {}
+      }
+    return hosts;
   }
 
   private async refreshHttpIfInputsChanged(repo: RepoConfig, repoRoot: string): Promise<void> {
@@ -1914,7 +1946,8 @@ export class Scanner {
     const routes = routeRegistry.getRoutes();
     const repoOf = new Map(this.store.getAllFiles().map(f => [f.path as string, f.repo as string]));
 
-    const records = registry.getRecords().map(r => ({ ...r, route: pairCall(r, routes) }));
+    const hosts = this.workspaceHosts();
+    const records = registry.getRecords().map(r => ({ ...r, route: pairCall(r, routes, { hosts }) }));
     registry.setRecords(records);
     await registry.save(workspaceRoot);
 

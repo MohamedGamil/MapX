@@ -1,5 +1,5 @@
 {
-  "description": "Expected HTTP call sites in tests/fixtures/vue-http, paired against tests/fixtures/laravel-routes. file is relative to the fixture root (vue2/ is mounted as frontend-vue2/, vue3/ as frontend-vue3/). url is the resolved request path with parameters as {}. route is 'METHOD /path' of the backend route the call reaches, or null when no live route serves it.",
+  "description": "Expected HTTP call sites in tests/fixtures/vue-http, paired against tests/fixtures/laravel-routes. file is relative to the fixture root (vue2/ is mounted as frontend-vue2/, vue3/ as frontend-vue3/). url is the resolved request path with parameters as {}. route is 'METHOD /path' of the backend route the call reaches, or null when no live route serves it. handler is the expected route handler as ShortClass@method (null for a closure), compared by the scorer.",
   "labels": [
     {
       "id": "L01",
@@ -8,7 +8,8 @@
       "line": 7,
       "method": "GET",
       "url": "/api/posts",
-      "route": "GET /api/posts"
+      "route": "GET /api/posts",
+      "handler": "PostController@index"
     },
     {
       "id": "L02",
@@ -17,7 +18,8 @@
       "line": 8,
       "method": "POST",
       "url": "/api/posts/search",
-      "route": "POST /api/posts/search"
+      "route": "POST /api/posts/search",
+      "handler": "PostController@search"
     },
     {
       "id": "L03",
@@ -26,7 +28,8 @@
       "line": 9,
       "method": "GET",
       "url": "/api/legacy/items",
-      "route": "GET /api/legacy/items"
+      "route": "GET /api/legacy/items",
+      "handler": "ItemController@index"
     },
     {
       "id": "L04",
@@ -35,7 +38,8 @@
       "line": 10,
       "method": "GET",
       "url": "/api/legacy/items/{}",
-      "route": "GET /api/legacy/items/{id}"
+      "route": "GET /api/legacy/items/{id}",
+      "handler": "ItemController@show"
     },
     {
       "id": "L05",
@@ -44,7 +48,8 @@
       "line": 12,
       "method": "GET",
       "url": "/api/v1/users",
-      "route": "GET /api/v1/users"
+      "route": "GET /api/v1/users",
+      "handler": "UserController@index"
     },
     {
       "id": "L06",
@@ -53,7 +58,8 @@
       "line": 16,
       "method": "GET",
       "url": "/api/v1/users",
-      "route": "GET /api/v1/users"
+      "route": "GET /api/v1/users",
+      "handler": "UserController@index"
     },
     {
       "id": "L07",
@@ -62,7 +68,8 @@
       "line": 16,
       "method": "GET",
       "url": "/api/v1/people",
-      "route": "GET /api/v1/people"
+      "route": "GET /api/v1/people",
+      "handler": "PersonController@index"
     },
     {
       "id": "L08",
@@ -71,7 +78,8 @@
       "line": 17,
       "method": "GET",
       "url": "/api/dup",
-      "route": "GET /api/dup"
+      "route": "GET /api/dup",
+      "handler": "PostController@newDup"
     },
     {
       "id": "L09",
@@ -89,7 +97,8 @@
       "line": 13,
       "method": "GET",
       "url": "/api/tags",
-      "route": "GET /api/tags"
+      "route": "GET /api/tags",
+      "handler": "TagController@index"
     },
     {
       "id": "L11",
@@ -98,7 +107,8 @@
       "line": 14,
       "method": "GET",
       "url": "/api/blog-categories/{}",
-      "route": "GET /api/blog-categories/{blog_category}"
+      "route": "GET /api/blog-categories/{blog_category}",
+      "handler": "CategoryController@show"
     },
     {
       "id": "L12",
@@ -116,7 +126,8 @@
       "line": 6,
       "method": "GET",
       "url": "/api/v1/people",
-      "route": "GET /api/v1/people"
+      "route": "GET /api/v1/people",
+      "handler": "PersonController@index"
     },
     {
       "id": "L14",
@@ -125,7 +136,8 @@
       "line": 7,
       "method": "GET",
       "url": "/api/v1/people/{}",
-      "route": "GET /api/v1/people/{person}"
+      "route": "GET /api/v1/people/{person}",
+      "handler": "PersonController@show"
     },
     {
       "id": "L15",
@@ -134,7 +146,8 @@
       "line": 8,
       "method": "PUT",
       "url": "/api/v1/people/{}",
-      "route": "PUT /api/v1/people/{person}"
+      "route": "PUT /api/v1/people/{person}",
+      "handler": "PersonController@update"
     },
     {
       "id": "L16",
@@ -143,7 +156,8 @@
       "line": 9,
       "method": "DELETE",
       "url": "/api/v1/people/{}",
-      "route": "DELETE /api/v1/people/{person}"
+      "route": "DELETE /api/v1/people/{person}",
+      "handler": "PersonController@destroy"
     },
     {
       "id": "L17",
@@ -152,7 +166,8 @@
       "line": 3,
       "method": "GET",
       "url": "/api/statuses",
-      "route": "GET /api/statuses"
+      "route": "GET /api/statuses",
+      "handler": "StatusController@index"
     },
     {
       "id": "L18",
@@ -161,7 +176,8 @@
       "line": 4,
       "method": "POST",
       "url": "/api/statuses",
-      "route": "POST /api/statuses"
+      "route": "POST /api/statuses",
+      "handler": "StatusController@store"
     },
     {
       "id": "L19",
@@ -170,7 +186,8 @@
       "line": 5,
       "method": "PUT",
       "url": "/api/statuses/{}",
-      "route": "PUT /api/statuses/{status}"
+      "route": "PUT /api/statuses/{status}",
+      "handler": "StatusController@update"
     },
     {
       "id": "L20",
@@ -179,7 +196,8 @@
       "line": 6,
       "method": "PATCH",
       "url": "/api/statuses/{}",
-      "route": "PATCH /api/statuses/{status}"
+      "route": "PATCH /api/statuses/{status}",
+      "handler": "StatusController@update"
     },
     {
       "id": "L21",
@@ -188,7 +206,8 @@
       "line": 7,
       "method": "DELETE",
       "url": "/api/statuses/{}",
-      "route": "DELETE /api/statuses/{status}"
+      "route": "DELETE /api/statuses/{status}",
+      "handler": "StatusController@destroy"
     },
     {
       "id": "L22",
@@ -206,7 +225,8 @@
       "line": 3,
       "method": "GET",
       "url": "/api/blog-categories/create",
-      "route": "GET /api/blog-categories/create"
+      "route": "GET /api/blog-categories/create",
+      "handler": "CategoryController@create"
     },
     {
       "id": "L24",
@@ -215,7 +235,8 @@
       "line": 4,
       "method": "GET",
       "url": "/api/blog-categories/{}/edit",
-      "route": "GET /api/blog-categories/{blog_category}/edit"
+      "route": "GET /api/blog-categories/{blog_category}/edit",
+      "handler": "CategoryController@edit"
     },
     {
       "id": "L25",
@@ -224,7 +245,8 @@
       "line": 5,
       "method": "GET",
       "url": "/shop/products",
-      "route": "GET /shop/products"
+      "route": "GET /shop/products",
+      "handler": "ProductController@index"
     },
     {
       "id": "L26",
@@ -233,7 +255,8 @@
       "line": 6,
       "method": "GET",
       "url": "/about",
-      "route": "GET /about"
+      "route": "GET /about",
+      "handler": null
     },
     {
       "id": "L27",
@@ -242,7 +265,8 @@
       "line": 7,
       "method": "GET",
       "url": "/api/tags/{}",
-      "route": "GET /api/tags/{tag}"
+      "route": "GET /api/tags/{tag}",
+      "handler": "TagController@show"
     },
     {
       "id": "L28",
@@ -251,7 +275,8 @@
       "line": 4,
       "method": "GET",
       "url": "/api/billing/v1/invoices",
-      "route": "GET /api/billing/v1/invoices"
+      "route": "GET /api/billing/v1/invoices",
+      "handler": "InvoiceController@index"
     },
     {
       "id": "L29",
@@ -260,7 +285,8 @@
       "line": 5,
       "method": "GET",
       "url": "/api/billing/v1/invoices/{}",
-      "route": "GET /api/billing/v1/invoices/{invoice}"
+      "route": "GET /api/billing/v1/invoices/{invoice}",
+      "handler": "InvoiceController@show"
     },
     {
       "id": "L30",
@@ -269,7 +295,8 @@
       "line": 6,
       "method": "GET",
       "url": "/api/health",
-      "route": "GET /api/health"
+      "route": "GET /api/health",
+      "handler": null
     },
     {
       "id": "L31",
@@ -278,7 +305,8 @@
       "line": 7,
       "method": "GET",
       "url": "/api/notices/latest",
-      "route": "GET /api/notices/latest"
+      "route": "GET /api/notices/latest",
+      "handler": "NoticeController@latest"
     },
     {
       "id": "L32",
@@ -287,7 +315,8 @@
       "line": 8,
       "method": "POST",
       "url": "/api/posts/search",
-      "route": "POST /api/posts/search"
+      "route": "POST /api/posts/search",
+      "handler": "PostController@search"
     },
     {
       "id": "L33",
@@ -296,7 +325,8 @@
       "line": 8,
       "method": "GET",
       "url": "/api/tags",
-      "route": "GET /api/tags"
+      "route": "GET /api/tags",
+      "handler": "TagController@index"
     },
     {
       "id": "L34",
@@ -305,7 +335,8 @@
       "line": 13,
       "method": "GET",
       "url": "/api/statuses",
-      "route": "GET /api/statuses"
+      "route": "GET /api/statuses",
+      "handler": "StatusController@index"
     },
     {
       "id": "L35",
@@ -314,7 +345,8 @@
       "line": 17,
       "method": "GET",
       "url": "/api/posts",
-      "route": "GET /api/posts"
+      "route": "GET /api/posts",
+      "handler": "PostController@index"
     },
     {
       "id": "L36",
@@ -323,7 +355,8 @@
       "line": 7,
       "method": "GET",
       "url": "/shop/products",
-      "route": "GET /shop/products"
+      "route": "GET /shop/products",
+      "handler": "ProductController@index"
     },
     {
       "id": "L37",
@@ -332,7 +365,8 @@
       "line": 8,
       "method": "GET",
       "url": "/api/billing/v1/invoices",
-      "route": "GET /api/billing/v1/invoices"
+      "route": "GET /api/billing/v1/invoices",
+      "handler": "InvoiceController@index"
     },
     {
       "id": "L38",
@@ -341,7 +375,84 @@
       "line": 22,
       "method": "GET",
       "url": "/api/health",
-      "route": "GET /api/health"
+      "route": "GET /api/health",
+      "handler": null
+    },
+    {
+      "id": "L39",
+      "pattern": "no-literal",
+      "file": "vue2/src/services/searchService.js",
+      "line": 5,
+      "method": "GET",
+      "url": "?page={}",
+      "route": null
+    },
+    {
+      "id": "L40",
+      "pattern": "no-literal",
+      "file": "vue2/src/services/searchService.js",
+      "line": 9,
+      "method": "GET",
+      "url": "/{}",
+      "route": null
+    },
+    {
+      "id": "L41",
+      "pattern": "foreign-host",
+      "file": "vue3/src/services/external.ts",
+      "line": 6,
+      "method": "GET",
+      "url": "https://status.example.org/api/health",
+      "route": null
+    },
+    {
+      "id": "L42",
+      "pattern": "env-host",
+      "file": "vue3/src/services/external.ts",
+      "line": 7,
+      "method": "GET",
+      "url": "https://api.example.com/api/notices/latest",
+      "route": "GET /api/notices/latest",
+      "handler": "NoticeController@latest"
+    },
+    {
+      "id": "L43",
+      "pattern": "fetch-method",
+      "file": "vue3/src/services/external.ts",
+      "line": 8,
+      "method": "GET",
+      "url": "/api/posts/search",
+      "route": "GET /api/posts/search",
+      "handler": "PostController@search"
+    },
+    {
+      "id": "L44",
+      "pattern": "fetch-method",
+      "file": "vue3/src/services/external.ts",
+      "line": 9,
+      "method": "UNKNOWN",
+      "url": "/api/statuses",
+      "route": null
+    },
+    {
+      "id": "L45",
+      "pattern": "source-dir",
+      "file": "vue3/src/views/public/Landing.vue",
+      "line": 3,
+      "method": "GET",
+      "url": "/api/notices/latest",
+      "route": "GET /api/notices/latest",
+      "handler": "NoticeController@latest"
+    },
+    {
+      "id": "L46",
+      "pattern": "jsx",
+      "file": "vue3/src/components/TagLinks.tsx",
+      "line": 2,
+      "method": "GET",
+      "url": "/api/tags",
+      "route": "GET /api/tags",
+      "handler": "TagController@index"
     }
   ]
 }

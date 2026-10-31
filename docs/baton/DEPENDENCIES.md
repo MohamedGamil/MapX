@@ -62,7 +62,7 @@ flowchart LR
 - M2-04-R1 ← M2-04 (hard), M2-05 (hard)
 - M2-06 ← M2-04 (hard), M2-05 (hard), M1-98 (quality), M2-01 (hard), M2-03-R1 (hard), M2-04-R1 (hard)
 - M2-07 ← M2-06 (hard)
-- M3-01 ← M0-06-R1 (quality), M0-05-R1 (quality), M0-04-R1 (quality), M0-12-R1 (quality), M0-12-R2 (quality), M0-17-R1 (quality), M0-07-R1 (quality), M0-09-R1 (quality), M0-08-R1 (quality), M0-11-R1 (quality), M0-20-R1 (quality), M0-02-R1 (quality), M0-01-R1 (quality), M0-18-R1 (quality), M0-03-R2 (quality), M0-05-R2 (quality), M0-09-R2 (quality), M0-10-R1 (quality), M0-05-R3 (quality), M0-20-R2 (quality), M0-11-R2 (quality), M0-02-R2 (quality), M0-04-R2 (quality), M0-09-R3 (quality), M0-10-R2 (quality), M0-12-R3 (quality), M0-12-R4 (quality), M0-17-R2 (quality), M0-03-R3 (quality), M0-05-R4 (quality), M0-07-R2 (quality), M1-03-R1 (quality), M1-07-R1 (quality), M1-05-R1 (quality), M2-04-R2 (quality), M2-06-R1 (quality)
+- M3-01 ← M0-06-R1 (quality), M0-05-R1 (quality), M0-04-R1 (quality), M0-12-R1 (quality), M0-12-R2 (quality), M0-17-R1 (quality), M0-07-R1 (quality), M0-09-R1 (quality), M0-08-R1 (quality), M0-11-R1 (quality), M0-20-R1 (quality), M0-02-R1 (quality), M0-01-R1 (quality), M0-18-R1 (quality), M0-03-R2 (quality), M0-05-R2 (quality), M0-09-R2 (quality), M0-10-R1 (quality), M0-05-R3 (quality), M0-20-R2 (quality), M0-11-R2 (quality), M0-02-R2 (quality), M0-04-R2 (quality), M0-09-R3 (quality), M0-10-R2 (quality), M0-12-R3 (quality), M0-12-R4 (quality), M0-17-R2 (quality), M0-03-R3 (quality), M0-05-R4 (quality), M0-07-R2 (quality), M1-03-R1 (quality), M1-07-R1 (quality), M1-05-R1 (quality), M2-04-R2 (quality), M2-06-R1 (quality), M0-32-R1 (quality)
 - M3-02 ← M3-01 (fixture)
 - M3-03 ← M3-01 (fixture)
 - M3-04 ← M3-01 (fixture)
@@ -72,6 +72,7 @@ flowchart LR
 - M4-02 ← none
 - M0-31 ← none
 - M0-32 ← none
+- M0-32-R1 ← M0-32 (hard)
 - M0-33 ← none
 - M0-34 ← none
 - M0-35 ← none

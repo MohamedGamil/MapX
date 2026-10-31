@@ -170,6 +170,8 @@ export interface MapxConfig {
     /** Frontend HTTP clients MapX cannot recognise on its own (D008). */
     http?: {
       clients?: { receiver: string; baseURL?: string }[];
+      /** Hosts of the workspace's own backends: absolute URLs on other hosts never pair (M2-06-R1). */
+      hosts?: string[];
     };
     [key: string]: any;
   };

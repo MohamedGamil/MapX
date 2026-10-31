@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { collectProviders, extractHttpCalls, HTTP_SKIP, urlBranches } from '../src/frameworks/http/client-calls.js';
+import { collectProviders, extractHttpCalls, fetchMethod, isHttpSkipped, objectProperty, urlBranches } from '../src/frameworks/http/client-calls.js';
 import { evaluate, fileConstants } from '../src/frameworks/http/url-resolver.js';
 import { pairCall } from '../src/frameworks/http/pairing.js';
 import { MapxGraph } from '../src/core/graph.js';
@@ -93,8 +93,13 @@ describe('large bundles', () => {
     };
     time(600); // warm-up (JIT, regex compilation)
     const small = time(600);
+    const cpu = process.cpuUsage();
     const big = time(6000);
+    const spent = process.cpuUsage(cpu);
     expect(big.size).toBeGreaterThan(3_000_000);
+    // M2-07 AC4, "under 1 s", measured as CPU time: waiting on other test files does not inflate
+    // it (wall-clock flaked at 1.12 s in the parallel suite; 186 ms alone).
+    expect((spent.user + spent.system) / 1000).toBeLessThan(1000);
     // 10x the input must cost far less than the ~100x a quadratic line lookup did; absolute
     // ceiling is generous because the full suite runs files in parallel.
     expect(big.ms / Math.max(small.ms, 1)).toBeLessThan(30);
@@ -102,9 +107,12 @@ describe('large bundles', () => {
   });
 
   it('skips built and vendored bundles', () => {
-    for (const p of ['public/js/app.js', 'backend/public/js/app.js', 'web/dist/assets/index.js', 'src/lib.min.js', 'node_modules/x/index.js'])
-      expect(HTTP_SKIP.test(p), p).toBe(true);
-    expect(HTTP_SKIP.test('resources/js/app.js')).toBe(false);
+    for (const p of ['public/js/app.js', 'backend/public/js/app.js', 'web/dist/assets/index.js', 'src/lib.min.js', 'node_modules/x/index.js',
+      'packages/ui/dist/index.js', 'web/src/node_modules/x/a.js', 'backend/public/vendor/x/app.js'])
+      expect(isHttpSkipped(p), p).toBe(true);
+    // M2-06-R1: under src/ or resources/, these directory names are ordinary source.
+    for (const p of ['resources/js/app.js', 'web/src/views/public/Landing.vue', 'web/src/build/config.ts', 'resources/js/vendor/api.js', 'src/dist.ts'])
+      expect(isHttpSkipped(p), p).toBe(false);
   });
 });
 
@@ -158,5 +166,94 @@ describe('http edges follow the records', () => {
     writeFileSync(configPath, JSON.stringify(config, null, 2));
     mapx(root, 'scan', root, '--all');
     expect(httpEdges()).toEqual([]);
+  });
+});
+
+// M2-06-R1: extraction defects from the 2026-10-31 review, and criteria proven only by hand.
+describe('fetch methods and options objects (M2-06-R1)', () => {
+  it('reads the fetch method from the top level of the init object only', () => {
+    expect(fetchMethod(undefined)).toBe('GET');
+    expect(fetchMethod("{ method: 'post' }")).toBe('POST');
+    expect(fetchMethod("{ 'method': \"DELETE\", body }")).toBe('DELETE');
+    expect(fetchMethod("{ body: JSON.stringify({ method: 'card' }) }")).toBe('GET');
+    expect(fetchMethod("{ headers: { method: 'PUT' } }")).toBe('GET');
+    expect(fetchMethod('{ method: verb }')).toBe('UNKNOWN');
+    expect(fetchMethod('{ method, body }')).toBe('UNKNOWN');
+    expect(fetchMethod('{ ...options }')).toBe('UNKNOWN');
+    expect(fetchMethod("{ ...options, method: 'PATCH' }")).toBe('PATCH');
+    expect(fetchMethod('options')).toBe('UNKNOWN');
+  });
+
+  it('reads baseURL from the top level of axios.create options', () => {
+    expect(objectProperty("headers: { baseURL: '/no' }, baseURL: '/yes'", 'baseURL')).toBe("'/yes'");
+    expect(objectProperty("headers: { baseURL: '/no' }", 'baseURL')).toBeUndefined();
+  });
+
+  it('extracts calls on a line with a JSX closing or self-closing tag', () => {
+    const files = {
+      'src/a.tsx': "export const A = () => <li><a href=\"/tags\">Tags</a> <b onClick={() => fetch('/api/tags')}>x</b></li>;\n"
+        + "export const B = () => <Spinner size={2} /> && fetch('/api/posts'); // see /docs\n",
+    };
+    expect(extract(files, 'src/a.tsx').map((c) => `${c.line} ${c.method} ${c.rawUrl}`)).toEqual(["1 GET '/api/tags'", "2 GET '/api/posts'"]);
+  });
+});
+
+describe('workspace hosts through the scanner (M2-06-R1)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'frontend/.env': 'VITE_API=https://api.env-host.example/api\n',
+      'frontend/src/svc.js': [
+        "export const a = () => fetch('https://api.own.example/api/users');",
+        "export const b = () => fetch('https://api.github.com/api/users');",
+        "export const c = () => fetch('http://localhost:8000/api/users');",
+        "export const d = () => fetch('https://api.env-host.example/api/users');",
+        '',
+      ].join('\n'),
+      'backend/artisan': '#!/usr/bin/env php\n<?php\n',
+      'backend/app/Http/Controllers/UserController.php': '<?php\nnamespace App\\Http\\Controllers;\nclass UserController { public function index() {} }\n',
+      'backend/routes/api.php': "<?php\nuse App\\Http\\Controllers\\UserController;\nRoute::get('users', [UserController::class, 'index']);\n",
+    }, ['frontend', 'backend']);
+    init(root);
+    const configPath = join(root, '.mapx', 'config.json');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.settings.http = { hosts: ['api.own.example'] };
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    mapx(root, 'workspaces', 'add', 'frontend');
+    mapx(root, 'workspaces', 'add', 'backend');
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('pairs absolute URLs only on configured, env-named or local hosts', () => {
+    const records = JSON.parse(readFileSync(join(root, '.mapx', 'http-calls.json'), 'utf8')) as { url: string; route: { handlerSymbol?: string } | null }[];
+    const handler = 'App\\Http\\Controllers\\UserController@index';
+    expect(records.map((r) => [r.url, r.route?.handlerSymbol ?? null])).toEqual([
+      ['https://api.own.example/api/users', handler],
+      ['https://api.github.com/api/users', null],
+      ['http://localhost:8000/api/users', handler],
+      ['https://api.env-host.example/api/users', handler],
+    ]);
+  });
+});
+
+// M2-05 AC2, proven before only by a manual run: a factory's import.meta.env.VITE_API_URL is read
+// from .env.development, which takes precedence over .env.
+describe('.env.development wins for a factory base URL (M2-05 AC2)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'web/.env': 'VITE_API_URL=/from-env\n',
+      'web/.env.development': 'VITE_API_URL=/from-development\n',
+      'web/src/api/Api.ts': "import axios from 'axios';\nexport default () => axios.create({ baseURL: import.meta.env.VITE_API_URL });\n",
+      'web/src/users.ts': "import Api from './api/Api';\nexport const list = () => Api().get('users');\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+
+  it('resolves the call against the .env.development value', () => {
+    const records = JSON.parse(readFileSync(join(root, '.mapx', 'http-calls.json'), 'utf8')) as { file: string; url: string }[];
+    expect(records.map((r) => [r.file, r.url])).toEqual([['web/src/users.ts', '/from-development/users']]);
   });
 });

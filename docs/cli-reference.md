@@ -678,8 +678,15 @@ Options:
 Client receivers MapX cannot recognise on its own (project wrappers) are configured in `.mapx/config.json`:
 
 ```json
-{ "settings": { "http": { "clients": [{ "receiver": "apiService", "baseURL": "/api" }] } } }
+{ "settings": { "http": { "clients": [{ "receiver": "apiService", "baseURL": "/api" }], "hosts": ["api.example.com"] } } }
 ```
+
+A call pairs only with a live route that its literal path supports: at least one literal path segment must match. A URL with no literal segment, such as `` `${endpoint}?page=${n}` ``, stays unmatched. An absolute URL pairs only when its host belongs to the workspace:
+- a local development host (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.localhost`);
+- a host named in a `.env*` file of a registered repo or in a configured client `baseURL`;
+- a host listed in `settings.http.hosts`.
+
+Calls to any other host are third-party calls. A `fetch` whose method cannot be read from the code (`{ method: verb }`, a spread, an options variable) is listed with method `UNKNOWN` and never paired.
 
 Paired calls are stored as `http` edges, from the calling file to the route handler.
 

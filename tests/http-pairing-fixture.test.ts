@@ -20,10 +20,17 @@ describe('vue-http fixture labels', () => {
     for (const p of ['axios-direct', 'fetch', 'axios-instance', 'factory', 'alias', 'constant-local', 'constant-imported',
       'template', 'split-line', 'conditional', 'env-base', 'configured-receiver', 'unserved', 'overridden-route', 'unmounted-route',
       // M2-04-R2: shadowed constants, a quoted .env value with a comment, ${VAR} expansion
-      'constant-scoped', 'env-quoted', 'env-expanded'])
+      'constant-scoped', 'env-quoted', 'env-expanded',
+      // M2-06-R1: no literal segment, hosts, fetch methods, source dirs named public/, JSX
+      'no-literal', 'foreign-host', 'env-host', 'fetch-method', 'source-dir', 'jsx'])
       expect(patterns, p).toContain(p);
     expect(labels.filter((l) => l.route === null).length).toBeGreaterThanOrEqual(2);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
+  });
+
+  it('names the expected handler of every routed label (M2-06-R1)', () => {
+    for (const l of labels.filter((x) => x.route)) expect(l.handler, l.id).not.toBeUndefined();
+    expect(labels.find((l) => l.id === 'L08')?.handler).toBe('PostController@newDup');
   });
 
   it('points every label at a marked line of an existing file', () => {
@@ -83,6 +90,28 @@ describe('http scorer', () => {
     const s = scoreHttp([L({}), L({ id: 'Y', route: null })], []);
     expect(s.totals).toMatchObject({ callSiteRecall: 0, pairingRecall: 0, pairingPrecision: 1 });
   });
+
+  it('counts the right route with the wrong handler as a wrong pair (M2-06-R1)', () => {
+    const route = (handlerSymbol?: string) => ({ method: 'GET', path: '/api/a/{slug}', handlerFile: 'c.php', ...(handlerSymbol ? { handlerSymbol } : {}) });
+    const label = L({ handler: 'PostController@show' });
+    expect(scoreHttp([label], [R({ route: route('App\\Http\\Controllers\\PostController@show') })]).totals).toMatchObject({ pairedCorrect: 1, wrongPairs: 0 });
+    const wrong = scoreHttp([label], [R({ route: route('App\\Http\\Controllers\\OldController@show') })]);
+    expect(wrong.totals).toMatchObject({ pairedCorrect: 0, wrongPairs: 1, pairingPrecision: 0 });
+    expect(wrong.misses[0]).toContain('OldController@show');
+    // A closure route has no handler symbol: the label says null.
+    expect(scoreHttp([L({ handler: null })], [R({ route: route() })]).totals.pairedCorrect).toBe(1);
+    expect(scoreHttp([L({ handler: null })], [R({ route: route('X@y') })]).totals.wrongPairs).toBe(1);
+  });
+});
+
+// M2-03 AC2, proven before only by a unit test and a manual run: without the fixture's
+// settings.http, exactly the two configured-receiver calls disappear from a real scan.
+describe('configured receivers on the fixture (M2-03 AC2, real scan)', () => {
+  it('drops exactly L28 and L29 when apiService is not configured', () => {
+    const s = scoreHttp(labels, scanHttpFixture(FIXTURE, { config: false }));
+    expect(s.misses.filter((m) => m.endsWith('not extracted')).map((m) => m.split(' ')[0])).toEqual(['L28', 'L29']);
+    expect(s.totals.found).toBe(labels.length - 2);
+  }, 120000);
 });
 
 describe('http pairing on the fixture (real scan)', () => {

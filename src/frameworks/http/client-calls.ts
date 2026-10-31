@@ -5,8 +5,19 @@ import { posix } from 'node:path';
 
 export const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
 export const HTTP_SOURCE = /\.(m?[jt]sx?|cjs|vue|svelte)$/;
-/** Built or vendored bundles: compiled copies of the sources, not call sites of their own. */
-export const HTTP_SKIP = /(^|\/)(public|dist|build|vendor|node_modules)\/|\.min\.[cm]?js$|\.bundle\.js$/;
+/**
+ * Built or vendored bundles: compiled copies of the sources, not call sites of their own.
+ * `node_modules` and minified bundles always; `public/`, `dist/`, `build/` and `vendor/` only
+ * outside `src/` and `resources/`, where such a directory name is ordinary source (M2-06-R1).
+ */
+export function isHttpSkipped(path: string): boolean {
+  if (/(^|\/)node_modules\/|\.min\.[cm]?js$|\.bundle\.js$/.test(path)) return true;
+  for (const segment of path.split('/').slice(0, -1)) {
+    if (segment === 'src' || segment === 'resources') return false;
+    if (['public', 'dist', 'build', 'vendor'].includes(segment)) return true;
+  }
+  return false;
+}
 
 export interface HttpClientRef {
   kind: 'axios' | 'fetch' | 'instance' | 'factory' | 'configured';
@@ -77,7 +88,8 @@ export function maskCode(text: string): string {
       lastSignificant = c;
       continue;
     }
-    if (c === '/' && REGEX_PRECEDER.test(text.slice(Math.max(0, i - 8), i).trimEnd() || '(')) {
+    // `</a>` and `/>` close JSX elements; they never start a regex literal (M2-06-R1).
+    if (c === '/' && text[i - 1] !== '<' && text[i + 1] !== '>' && REGEX_PRECEDER.test(text.slice(Math.max(0, i - 8), i).trimEnd() || '(')) {
       let j = i + 1;
       let inClass = false;
       for (; j < text.length && text[j] !== '\n'; j++) {
@@ -205,12 +217,39 @@ export function callEnd(masked: string, open: number): number {
   return maskedClose(masked, open) + 1;
 }
 
-/** Raw `baseURL` value inside an options object such as `{ baseURL: X, timeout: 1 }`. */
+/** Top-level entries of an object literal's body: `a: 1, b, ...c` → ['a: 1', 'b', '...c']. */
+function objectEntries(objectText: string): string[] {
+  return callArguments(`(${objectText})`, 0);
+}
+
+/**
+ * Raw value of a top-level property inside an options object such as `{ baseURL: X, timeout: 1 }`;
+ * the last one wins. Keys of nested objects (`body: JSON.stringify({ method: 'x' })`) do not count.
+ */
 export function objectProperty(objectText: string, key: string): string | undefined {
-  const m = new RegExp(`\\b${key}\\s*:`).exec(objectText);
-  if (!m) return undefined;
-  const wrapped = `(${objectText.slice(m.index + m[0].length)})`;
-  return callArguments(wrapped, 0)[0];
+  let value: string | undefined;
+  for (const entry of objectEntries(objectText)) {
+    const m = entry.match(new RegExp(`^(['"]?)${key}\\1\\s*:`));
+    if (m) value = entry.slice(m[0].length).trim();
+  }
+  return value;
+}
+
+/**
+ * Method of `fetch(url, init)` (M2-06-R1): GET without `init` or without a `method`; a literal
+ * top-level `method`; UNKNOWN when it comes from a variable, a shorthand, a spread or an init that
+ * is not an object literal.
+ */
+export function fetchMethod(init: string | undefined): string {
+  if (init === undefined) return 'GET';
+  if (!init.startsWith('{')) return 'UNKNOWN';
+  let method = 'GET';
+  for (const entry of objectEntries(init.slice(1, -1))) {
+    const m = entry.match(/^(['"]?)method\1\s*:\s*([\s\S]*)$/);
+    if (m) method = m[2]!.match(/^['"`](\w+)['"`]$/)?.[1]?.toUpperCase() ?? 'UNKNOWN';
+    else if (entry === 'method' || entry.startsWith('...')) method = 'UNKNOWN';
+  }
+  return method;
 }
 
 function createBaseURL(text: string, createAt: number): string | undefined {
@@ -410,10 +449,9 @@ export function extractHttpCalls(
     if (/^\s*(?:\{|=>|:\s*[\w<]+[^;{]*\{)/.test(masked.slice(callEnd(masked, open), callEnd(masked, open) + 80))) continue;
     const args = callArguments(content, open, masked);
     if (!args[0]) continue;
-    const method = args[1]?.startsWith('{') ? objectProperty(args[1].slice(1, -1), 'method') : undefined;
-    const literal = method?.match(/^['"`](\w+)['"`]$/)?.[1];
+    const method = fetchMethod(args[1]);
     for (const rawUrl of urlBranches(args[0]))
-      calls.push({ file, line: lineAt(m.index!), method: (literal ?? 'GET').toUpperCase(), rawUrl, client: { kind: 'fetch', name: 'fetch' }, offset: m.index! });
+      calls.push({ file, line: lineAt(m.index!), method, rawUrl, client: { kind: 'fetch', name: 'fetch' }, offset: m.index! });
   }
   return calls.sort((a, b) => a.line - b.line);
 }

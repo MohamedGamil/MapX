@@ -28,6 +28,8 @@ export interface HttpLabel {
   method: string;
   url: string;
   route: string | null;
+  /** Expected handler of `route` as ShortClass@method, null for a closure (M2-06-R1). */
+  handler?: string | null;
 }
 interface PatternScore {
   labelled: number;
@@ -61,6 +63,8 @@ export const normUrl = (url: string) =>
     .replace(/\{[^}]*\}/g, '{}')
     .replace(/\$\{[^}]*\}/g, '{}');
 const normRoute = (method: string, path: string) => `${method.toUpperCase()} ${normUrl(path)}`;
+/** Handler without its namespace: App\\Http\\Controllers\\PostController@index → PostController@index. */
+export const shortHandler = (symbol: string | undefined) => (symbol ? symbol.split('\\').pop()! : null);
 /** Fixture app dir → workspace dir: vue2/src/x.js ↔ frontend-vue2/src/x.js. */
 export const workspacePath = (labelFile: string) => labelFile.replace(/^([^/]+)\//, 'frontend-$1/');
 
@@ -96,10 +100,13 @@ export function scoreHttp(labels: HttpLabel[], records: HttpCallRecord[]): HttpS
       } else p.unmatchedCorrect++;
     } else {
       const [method, path] = l.route.split(' ');
-      if (got === normRoute(method!, path!)) p.pairedCorrect++;
+      // The right route is not enough: it must be the handler that serves it (M2-06-R1).
+      const handler = shortHandler(record.route?.handlerSymbol);
+      const handlerOk = l.handler === undefined || handler === l.handler;
+      if (got === normRoute(method!, path!) && handlerOk) p.pairedCorrect++;
       else {
         if (got) p.wrongPairs++;
-        misses.push(`${l.id} ${l.pattern} paired with ${got ?? 'nothing'}, expected ${l.route}`);
+        misses.push(`${l.id} ${l.pattern} paired with ${got ?? 'nothing'}${got ? ` (${handler})` : ''}, expected ${l.route} (${l.handler})`);
       }
     }
   }
@@ -128,8 +135,11 @@ export function scoreHttp(labels: HttpLabel[], records: HttpCallRecord[]): HttpS
   };
 }
 
-/** Scans the composed workspace and returns the D008 records (empty when the file is absent). */
-export function scanHttpFixture(fixture: string): HttpCallRecord[] {
+/**
+ * Scans the composed workspace and returns the D008 records (empty when the file is absent).
+ * `config: false` leaves out the fixture's http-config.json (settings.http).
+ */
+export function scanHttpFixture(fixture: string, { config = true }: { config?: boolean } = {}): HttpCallRecord[] {
   const work = mkdtempSync(join(tmpdir(), 'mapx-score-http-'));
   try {
     cpSync(BACKEND, join(work, 'backend'), { recursive: true });
@@ -142,7 +152,7 @@ export function scanHttpFixture(fixture: string): HttpCallRecord[] {
       });
     run('init', work, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover');
     const extra = join(fixture, 'http-config.json');
-    if (existsSync(extra)) {
+    if (config && existsSync(extra)) {
       const configPath = join(work, '.mapx', 'config.json');
       const config = JSON.parse(readFileSync(configPath, 'utf8'));
       config.settings = { ...config.settings, ...JSON.parse(readFileSync(extra, 'utf8')).settings };

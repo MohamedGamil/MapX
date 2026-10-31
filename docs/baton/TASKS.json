@@ -5205,6 +5205,10 @@
         {
           "id": "M2-06-R1",
           "type": "quality"
+        },
+        {
+          "id": "M0-32-R1",
+          "type": "quality"
         }
       ],
       "optionalDependencies": [],
@@ -5829,6 +5833,72 @@
       "objective": "CodebaseProfiler, RoleClassifier, Leiden clustering, smell detection and dedup, DSM, layer clusters, and the profile/explain/smells/dsm/layers tools. Imported from CHANGELOG 0.2.7–0.3.5; it had no iteration.",
       "description": "CodebaseProfiler, RoleClassifier, Leiden clustering, smell detection and dedup, DSM, layer clusters, and the profile/explain/smells/dsm/layers tools. Delivered before BATON with no iteration. Imported by M0-30 with evidence from re-running the tests that exercise it.",
       "milestone": "M0"
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-32",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-12-R3.md",
+        "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-32-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/architecture-analyzer.ts",
+        "tests/architecture-scc.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A generated cyclic graph deep enough to overflow the recursive strongConnect (e.g. a 20,000-file import chain closing into a cycle) is scanned without a RangeError, and its SCCs are reported (test).",
+        "SCC membership and the cycle smells on the existing fixtures are unchanged (existing tests pass; new identity assertions on a small known graph)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/architecture-scc.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T02:53:56.145Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-32-R1",
+      "title": "Architecture analysis: iterative SCC, no stack overflow on large cyclic graphs",
+      "objective": "mapx scan completes on large cyclic dependency graphs; strongly connected components are computed without recursion.",
+      "milestone": "M0",
+      "description": "Found during M0-12-R3 (2026-10-31): mapx scan crashes with a stack overflow in the recursive Tarjan strongConnect (src/core/architecture-analyzer.ts:76) on a large cyclic graph; pre-existing on the base commit. Make it iterative."
     },
     {
       "priority": "P1",
@@ -9685,15 +9755,28 @@
         "npx vitest run tests/legacy-imports.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-imports",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T02:53:56.953Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T02:53:56.554Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:53:56.953Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -10572,14 +10655,27 @@
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-http",
       "actualHours": null,
       "startedAt": "2026-10-31T02:19:13.741Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T02:55:30.836Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-06-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing.test.ts tests/http-followups.test.ts tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T00:30:47.781Z",
@@ -10592,6 +10688,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:55:30.173Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:55:30.836Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing.test.ts tests/http-followups.test.ts tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
