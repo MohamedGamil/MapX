@@ -37,7 +37,7 @@ const FLOORS: {
     'v-model-component': 0, // M3-02
     'component-symbol': 0, // M3-02
     'options-this-call': labelledCount('options-this-call'), // already works (same-file this.x())
-    'mixin-method': 1, // M3-03 (formatPrice → currency: found only because `currency` is a unique name)
+    'mixin-method': labelledCount('mixin-method'), // M3-03: through the component's own mixins array
     'script-setup-macro': 0, // M3-04
     'script-setup-call': labelledCount('script-setup-call'), // already works (local emit constant)
     composable: 2, // M3-04 (persist, addReply: found by unique name; setup-level calls lack the component owner)
@@ -47,12 +47,11 @@ const FLOORS: {
     router: 0, // M3-06
   },
   falsePositives: {
-    'mixin-method': 2, // M3-03: this.track()/this.relativeTime() resolve to a mixin the component does not use
     composable: 1, // generic: formatter.format() inside format() resolves to itself
     pinia: 2, // M3-05: session.touch() → presence store; cart.checkout() → CartView's own checkout()
   },
-  /** Baseline 0.625 (15/24): one more unlabelled edge would drop it to 0.6. */
-  minPrecision: 0.6,
+  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03. */
+  minPrecision: 0.7,
 };
 
 const ALLOWED_EDGE_TYPES = new Set(expected.scoredTypes ?? []);

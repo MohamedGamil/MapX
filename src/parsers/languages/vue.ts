@@ -3,6 +3,7 @@ import type { ParseResult, ExtractedSymbol, ExtractedReference } from '../../typ
 import type { LanguageDefinition } from '../../languages/registry.js';
 import { TypeScriptParser } from './typescript.js';
 import { getBuiltinLanguages } from '../../languages/registry.js';
+import { annotateThisCalls } from './vue-options.js';
 
 export class VueParser implements LanguageParser {
   readonly languageName = 'vue';
@@ -37,6 +38,8 @@ export class VueParser implements LanguageParser {
 
       try {
         const res = await this.tsParser.parse(filePath, code, options);
+        // Options API `this.x()`: own member, then mixins (M3-03).
+        if (res.references) await annotateThisCalls(code, res.references);
 
         if (res.symbols) {
           for (const sym of res.symbols) {

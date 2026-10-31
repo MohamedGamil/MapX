@@ -29,6 +29,7 @@ import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evalua
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
+import { resolveThisMember } from '../parsers/languages/vue-options.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
@@ -1191,6 +1192,16 @@ export class Scanner {
           targetFile = this.resolveRequirePath(ref.targetName, sourcePath, fileMap);
         } else if (ref.referenceType === 'import') {
           targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
+        } else if (ref.vueThis) {
+          // `this.x()` in a Vue Options API component: own member, then mixins, never by name alone (M3-03).
+          targetFile = resolveThisMember(ref.targetName, ref.vueThis, {
+            sourceFile: sourcePath,
+            resolveImport: (specifier) => this.resolveImportPath(specifier, sourcePath, fileMap),
+            defines: (file, name) => this.symbolIndex
+              ? (this.symbolIndex.get(name) ?? []).some(e => e.file === file && e.name === name)
+              : this.store.getSymbolsForFile(file).some((s: any) => s.name === name),
+            byName: (name) => this.resolveSymbolToFile(name, fileMap, sourcePath, true),
+          });
         } else {
           // Calls and instantiations skip value symbols (constants, variables) (M0-17-R2).
           const callable = ref.referenceType === 'call' || ref.referenceType === 'instantiation';

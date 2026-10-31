@@ -41,6 +41,27 @@ export interface ExtractedReference {
   startLine: number;
   verifiability?: 'verified' | 'inferred';
   metadata?: Record<string, any>;
+  /** `this.x()` in a Vue Options API component: where `x` may be declared (M3-03). Not stored. */
+  vueThis?: VueThisScope;
+}
+
+/** Edge contract rule 6 (docs/baton/iterations/M3-01.md): the candidates for `this.x()`. */
+export interface VueThisScope {
+  /** `x` is a member of the component itself (`methods`, `computed`, hooks). */
+  own: boolean;
+  /** Mixin module specifiers in merge order (`extends` first); null = the component's file. */
+  mixins: (string | null)[];
+  /** The map helper that introduces `x`, resolved by M3-05. */
+  mapped?: VueMappedMember;
+}
+
+/** A name spread from `mapActions` / `mapGetters` / `mapState` / `mapMutations` / `mapWritableState`. */
+export interface VueMappedMember {
+  helper: string;
+  /** The namespace string (`'tickets'`) or the store expression (`useCartStore`); null without one. */
+  namespace: string | null;
+  /** The mapped name in the store; null when the helper maps it to a function. */
+  name: string | null;
 }
 
 export type ReferenceType =
