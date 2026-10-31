@@ -9323,10 +9323,10 @@
         "npx vitest run tests/legacy-agents.test.ts tests/legacy-agent-templates.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-misc",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T02:03:09.773Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -9336,6 +9336,12 @@
           "at": "2026-10-31T00:30:46.375Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:03:09.773Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -9876,14 +9882,27 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-laravel",
       "actualHours": null,
       "startedAt": "2026-10-31T01:53:54.685Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T02:16:25.241Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M1-03-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-03-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-03-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T00:30:46.954Z",
@@ -9896,6 +9915,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:16:23.682Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:16:25.241Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts tests/laravel-routes-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-03-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-03-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

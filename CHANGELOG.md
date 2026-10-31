@@ -34,6 +34,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- Laravel route extraction no longer reads routes, braces or `require` from strings and comments, scopes arrow-function and legacy path groups correctly, evaluates interpolated URIs and variable prefixes (or flags them dynamic), and ignores commented-out or uncalled RouteServiceProvider mounts (M1-03-R1).
 - NestJS route and hook detection no longer loses or misattributes routes when comments or strings contain `class`, quotes or braces, or when classes use generics; GraphQL operation names ignore `name:` inside description strings (M0-20-R2)
 - `mapx init`, `mapx agents update` and the `mapx_agents_generate` MCP tool no longer replace a user-written `AGENTS.md`/`CLAUDE.md` that has no mapx block, or an edited block: without a TTY they skip the file (MCP: pass `force: true` to overwrite). `mapx_agents_generate` accepts `providers: ["all"]`. (M0-09-R1)
 - `--exclude '**/_*'` no longer drops every file in a subdirectory, and directory patterns such as `**/generated` and `packages/*/generated` exclude again; `app/Http/*` still keeps `app/Http/Controllers`. (M0-02-R1)

@@ -1,5 +1,5 @@
 {
-  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden or unreachable (must not be reported as live).",
+  "description": "Expected Laravel routes for tests/fixtures/laravel-routes. uri has no leading slash; {param} names are compared exactly when --strict-params is set, otherwise any {x} matches any {y}. handler is ShortClass@method or null for closures. expect: live (must be reported), conditional (must be reported and flagged conditional), overridden or unreachable (must not be reported as live; the not-a-route pattern labels route code inside comments, strings and heredocs, which must never be reported).",
   "labels": [
     {
       "id": "L01",
@@ -329,6 +329,198 @@
       "uri": "shop/products/{product}",
       "handler": "ProductController@show",
       "expect": "live"
+    },
+    {
+      "id": "L42",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/{locale}/dashboard",
+      "handler": "HomeController@dashboard",
+      "expect": "live"
+    },
+    {
+      "id": "L43",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/after-locale",
+      "handler": "HomeController@afterLocale",
+      "expect": "live"
+    },
+    {
+      "id": "L44",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/secure",
+      "handler": "HomeController@secure",
+      "expect": "live"
+    },
+    {
+      "id": "L45",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/after-glob",
+      "handler": "HomeController@afterGlob",
+      "expect": "live"
+    },
+    {
+      "id": "L46",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/after-url",
+      "handler": "HomeController@afterUrl",
+      "expect": "live"
+    },
+    {
+      "id": "L47",
+      "pattern": "string-lexing",
+      "method": "GET",
+      "uri": "api/csv",
+      "handler": "HomeController@csv",
+      "expect": "live"
+    },
+    {
+      "id": "L48",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/hash-commented",
+      "handler": "GhostController@show",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L49",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/slash-commented",
+      "handler": "GhostController@show",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L50",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/block-commented",
+      "handler": "GhostController@show",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L51",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/in-string",
+      "handler": "GhostController@show",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L52",
+      "pattern": "not-a-route",
+      "method": "GET",
+      "uri": "api/in-heredoc",
+      "handler": "GhostController@show",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L53",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/v2/reports",
+      "handler": "ReportController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L54",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/after-arrow",
+      "handler": "HomeController@afterArrow",
+      "expect": "live"
+    },
+    {
+      "id": "L55",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/inline/ping",
+      "handler": "HomeController@ping",
+      "expect": "live"
+    },
+    {
+      "id": "L56",
+      "pattern": "braceless-group",
+      "method": "GET",
+      "uri": "api/after-inline",
+      "handler": "HomeController@afterInline",
+      "expect": "live"
+    },
+    {
+      "id": "L57",
+      "pattern": "legacy-group-mount",
+      "method": "GET",
+      "uri": "api/archive/entries",
+      "handler": "ReportController@archive",
+      "expect": "live"
+    },
+    {
+      "id": "L58",
+      "pattern": "legacy-group-mount",
+      "method": "GET",
+      "uri": "api/after-legacy",
+      "handler": "HomeController@afterLegacy",
+      "expect": "live"
+    },
+    {
+      "id": "L59",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/daily",
+      "handler": "HomeController@daily",
+      "expect": "live"
+    },
+    {
+      "id": "L60",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/weekly",
+      "handler": "HomeController@weekly",
+      "expect": "live"
+    },
+    {
+      "id": "L61",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/monthly",
+      "handler": "HomeController@monthly",
+      "expect": "live"
+    },
+    {
+      "id": "L62",
+      "pattern": "interpolated-path",
+      "method": "GET",
+      "uri": "api/stats/yearly",
+      "handler": "HomeController@yearly",
+      "expect": "live"
+    },
+    {
+      "id": "L63",
+      "pattern": "rsp-mount",
+      "method": "GET",
+      "uri": "admin/panel",
+      "handler": "HomeController@adminPanel",
+      "expect": "live"
+    },
+    {
+      "id": "L64",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
+      "uri": "legacy/page",
+      "handler": "HomeController@legacyPage",
+      "expect": "unreachable"
+    },
+    {
+      "id": "L65",
+      "pattern": "rsp-unmounted",
+      "method": "GET",
+      "uri": "old/page",
+      "handler": "HomeController@oldPage",
+      "expect": "unreachable"
     }
   ]
 }

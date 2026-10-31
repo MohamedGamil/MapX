@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { opensConditionalBlock, phpString, resourceParam } from '../src/frameworks/detectors/laravel-mounts.js';
+import { maskPhp, opensConditionalBlock, phpString, resourceParam } from '../src/frameworks/detectors/laravel-mounts.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M1-02 … M1-09: Laravel route mounts, handlers, parameters, reachability and route metadata.
@@ -35,6 +35,46 @@ describe('laravel-mounts helpers', () => {
     // Review 2026-10-31 (post-acceptance defect): `-ses`/`-zes` words lost their final `e`.
     expect(['courses', 'responses', 'sizes', 'cases', 'houses', 'licenses', 'databases', 'phases', 'prizes', 'branches', 'dishes', 'glasses'].map(resourceParam))
       .toEqual(['course', 'response', 'size', 'case', 'house', 'license', 'database', 'phase', 'prize', 'branch', 'dish', 'glass']);
+  });
+
+  it('M1-03-R1: masks comments, strings and heredocs without moving offsets', () => {
+    const src = [
+      "<?php $a = 'x{y};/*'; # Route::get('h')",
+      "// Route::get('s') ?>html<?php $b = \"q\\\"{\";",
+      "/* Route::get('b') */ $c = <<<TXT",
+      "  Route::get('d'); {",
+      "  TXT;",
+      "$e = <<<'NOW'",
+      "}\nNOW;",
+      "Route::get('live');",
+    ].join('\n');
+    const { code, text } = maskPhp(src);
+    expect(code).toHaveLength(src.length);
+    expect(text).toHaveLength(src.length);
+    expect(code.split('\n').length).toBe(src.split('\n').length);
+    // Only the last line keeps route code; braces and semicolons inside strings are gone.
+    expect(code.match(/Route::/g)).toHaveLength(1);
+    expect(code.indexOf('Route::')).toBe(src.lastIndexOf('Route::'));
+    expect(code.replace(/[^{}]/g, '')).toBe('');
+    // Comment-free text keeps string contents for argument evaluation.
+    expect(text).toContain("'x{y};/*'");
+    expect(text).not.toContain("Route::get('h')");
+    expect(text).not.toContain("Route::get('b')");
+  });
+
+  it('M1-03-R1: evaluates interpolated strings from local variables, else null', () => {
+    const scope = { dir: '', root: '', vars: new Map([['base', 'notices']]) };
+    expect(phpString('"$base/x"', scope)).toBe('notices/x');
+    expect(phpString('"{$base}/x"', scope)).toBe('notices/x');
+    expect(phpString('"${base}/x"', scope)).toBe('notices/x');
+    expect(phpString('"\\$base/x"', scope)).toBe('$base/x');
+    expect(phpString('"$missing/x"', scope)).toBeNull();
+    expect(phpString('"{$base->x}/y"', scope)).toBeNull();
+    expect(phpString('"$base[0]/y"', scope)).toBeNull();
+    // With a fallback only the unresolvable part is replaced.
+    expect(phpString('"{$missing}/x/$base"', scope, '{dynamic}')).toBe('{dynamic}/x/notices');
+    expect(phpString("SOME_CONST.'/x'.$base", scope, '{dynamic}')).toBe('{dynamic}/xnotices');
+    expect(phpString('"{$a->b}/$c[1]/y"', scope, '{dynamic}')).toBe('{dynamic}/{dynamic}/y');
   });
 
   it('recognises conditional blocks', () => {
@@ -127,6 +167,66 @@ describe('Laravel routes through the real scanner', () => {
     const auth = metas.find((m) => m.uri === '/api/users');
     expect(auth).toMatchObject({ line: 4, name: 'users.index' });
     expect(auth.middlewares).toEqual(expect.arrayContaining(['api', 'auth']));
+  });
+});
+
+describe('M1-03-R1: brace-less groups, comments and dynamic paths through the real scanner', () => {
+  let root: string;
+  let routes: RouteView[];
+  const find = (method: string, path: string) => routes.filter((r) => r.method.split('|').includes(method) && r.path === path);
+
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'routes/api.php': [
+        '<?php',
+        'use Illuminate\\Support\\Facades\\Route;',
+        // The M1-03 AC1 arrow form: the group ends with the call, not at a later brace.
+        "Route::group(['middleware' => 'auth'], fn () => require __DIR__.'/api/users.php');",
+        "Route::get('open', 'OpenController@index');",
+        "# Route::get('hashed', 'GhostController@show');",
+        "Route::get(\"{$unknown}/x\", 'DynController@x');",
+        "Route::get(\"$alsoUnknown/y\", 'DynController@y');",
+        "Route::prefix($nope)->group(function () { Route::get('z', 'DynController@z'); });",
+        "Route::group(['prefix' => $nope], function () { Route::get('w', 'DynController@w'); });",
+        "Route::prefix($nope)->group(__DIR__.'/api/mounted.php');",
+        "Route::get('last', 'LastController@index');",
+      ].join('\n'),
+      'routes/api/users.php': "<?php\nRoute::get('users', 'UserController@index');\n",
+      'routes/api/mounted.php': "<?php\nRoute::get('m', 'DynController@m');\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    routes = JSON.parse(mapx(root, 'routes', root, '--json'));
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('scopes the arrow-function group to its call: the required file gets auth, later routes do not', () => {
+    const users = find('GET', '/api/users');
+    expect(users).toHaveLength(1);
+    expect(users[0]!.middlewares).toEqual(expect.arrayContaining(['api', 'auth']));
+    for (const path of ['/api/open', '/api/last']) {
+      const later = find('GET', path);
+      expect(later, path).toHaveLength(1);
+      expect(later[0]!.middlewares, path).not.toContain('auth');
+    }
+  });
+
+  it('never reports a route from a # comment', () => {
+    expect(routes.filter((r) => r.path.includes('hashed'))).toEqual([]);
+  });
+
+  it('flags unresolvable interpolated URIs and variable prefixes as dynamic instead of emitting PHP text', () => {
+    const dyn = routes.filter((r) => r.handlerSymbol?.includes('DynController@'));
+    expect(dyn.map((r) => `${r.handlerSymbol!.split('\\').pop()} ${r.path} ${r.dynamic}`).sort()).toEqual([
+      'DynController@m /api/{dynamic}/m true',
+      'DynController@w /api/{dynamic}/w true',
+      'DynController@x /api/{dynamic}/x true',
+      'DynController@y /api/{dynamic}/y true',
+      'DynController@z /api/{dynamic}/z true',
+    ]);
+    for (const r of routes) expect(r.path, r.path).not.toMatch(/[$'"]/);
+    expect(find('GET', '/api/last')[0]!.dynamic).toBeFalsy();
   });
 });
 

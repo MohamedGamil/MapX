@@ -5,12 +5,15 @@ import type { FrameworkDetector, RouteBinding, HookBinding, ScanContext } from '
 import { hasComposerDependency } from '../utils.js';
 import {
   findLaravelRoots,
+  liveProviderCode,
+  maskPhp,
   normalizeMountPath,
   opensConditionalBlock,
   phpString,
   resourceParam,
   stringAssignments,
   varsAt,
+  type PhpScope,
 } from './laravel-mounts.js';
 
 interface ChainedCall {
@@ -209,8 +212,11 @@ function resolveRoutePath(arg: string, providerPath: string): string | null {
   return null;
 }
 
-function parseRouteServiceProvider(content: string, providerPath: string, wctx: LaravelWorkspaceContext) {
-  const namespaceVarMatch = content.match(/(?:protected|public|private)\s+\$namespace\s*=\s*['"]([^'"]+)['"]/);
+function parseRouteServiceProvider(source: string, providerPath: string, wctx: LaravelWorkspaceContext) {
+  // Comments, strings and methods Laravel never calls (e.g. a map*Routes() whose call is
+  // commented out) declare no mounts.
+  const { code: content, text } = liveProviderCode(source);
+  const namespaceVarMatch = text.match(/(?:protected|public|private)\s+\$namespace\s*=\s*['"]([^'"]+)['"]/);
   const classNamespace = namespaceVarMatch ? namespaceVarMatch[1] : 'App\\Http\\Controllers';
 
   let index = 0;
@@ -218,7 +224,7 @@ function parseRouteServiceProvider(content: string, providerPath: string, wctx: 
     const start = content.indexOf('Route::', index);
     if (start === -1) break;
 
-    const parsed = parseRouteChain(content, start);
+    const parsed = /\w/.test(content[start - 1] ?? '') ? null : parseRouteChain(content, start, text);
     if (!parsed) {
       index = start + 7;
       continue;
@@ -343,7 +349,7 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
     if (provider === rspPath) continue;
     const content = await read(provider);
     if (!content) continue;
-    for (const m of walkRouteFile(content, provider, emptyFrame(), ctx, { collectRoutes: false, root }).mounts)
+    for (const m of walkRouteFile(content, provider, emptyFrame(), ctx, { collectRoutes: false, root, provider: true }).mounts)
       queue.push({ file: m.file, frame: m.frame, order: [rootIndex, 0, pi, m.offset], via: `${provider}:${m.line}`, depth: 0 });
   }
 
@@ -945,7 +951,22 @@ function getParenthesizedContent(str: string, startIndex: number): { content: st
   return null;
 }
 
-function parseRouteChain(content: string, startIndex: number): { calls: ChainedCall[], endIndex: number } | null {
+/**
+ * Parenthesised content found by scanning `code` (a masked view, see maskPhp) and sliced from
+ * `text`, a same-length view that still has the string contents.
+ */
+function parenAt(code: string, text: string, index: number): { content: string, endIndex: number } | null {
+  const paren = getParenthesizedContent(code, index);
+  if (!paren || code === text) return paren;
+  return { content: text.slice(paren.endIndex - 1 - paren.content.length, paren.endIndex - 1), endIndex: paren.endIndex };
+}
+
+/**
+ * Parses `Route::x(...)->y(...)` at startIndex. Structure is read from `code` and arguments are
+ * sliced from `text` (both same-length masked views; they default to the same string).
+ */
+function parseRouteChain(code: string, startIndex: number, text = code): { calls: ChainedCall[], endIndex: number } | null {
+  const content = code;
   let index = startIndex;
   const calls: ChainedCall[] = [];
 
@@ -956,13 +977,13 @@ function parseRouteChain(content: string, startIndex: number): { calls: ChainedC
   index += initMatch[0].length - 1;
 
   if (name === 'group') {
-    const paren = getParenthesizedContent(content, index);
+    const paren = parenAt(code, text, index);
     const args = paren ? paren.content : '';
     calls.push({ name: 'group', args });
     return { calls, endIndex: index + 1 };
   }
 
-  const paren = getParenthesizedContent(content, index);
+  const paren = parenAt(code, text, index);
   if (!paren) return null;
 
   calls.push({ name, args: paren.content });
@@ -987,13 +1008,13 @@ function parseRouteChain(content: string, startIndex: number): { calls: ChainedC
     index += 2 + methodMatch[0].length - 1;
 
     if (methodName === 'group') {
-      const methodParen = getParenthesizedContent(content, index);
+      const methodParen = parenAt(code, text, index);
       const args = methodParen ? methodParen.content : '';
       calls.push({ name: 'group', args });
       return { calls, endIndex: index + 1 };
     }
 
-    const methodParen = getParenthesizedContent(content, index);
+    const methodParen = parenAt(code, text, index);
     if (!methodParen) {
       break;
     }
@@ -1112,7 +1133,16 @@ function getBracketedContent(str: string, startIndex: number): { content: string
   return null;
 }
 
-function parseGroupAttributes(argsStr: string): { prefixes: string[], middlewares: string[], namespaces: string[] } {
+/** Path segment standing for a URI part or prefix that can't be evaluated statically (M1-06). */
+const DYNAMIC = '{dynamic}';
+const literalScope = (): PhpScope => ({ dir: '', root: '', vars: new Map() });
+
+/** A URI or prefix argument evaluated as PHP; anything unresolvable becomes {dynamic}. */
+function pathArg(raw: string, scope: PhpScope): string {
+  return phpString(raw, scope, DYNAMIC) ?? DYNAMIC;
+}
+
+function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], namespaces: string[] } {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
   const namespaces: string[] = [];
@@ -1130,10 +1160,13 @@ function parseGroupAttributes(argsStr: string): { prefixes: string[], middleware
   }
 
   if (arrayContent) {
-    // 1. Extract prefix
-    const prefixMatch = arrayContent.match(/['"]prefix['"]\s*=>\s*['"]([^'"]+)['"]/);
-    if (prefixMatch) {
-      prefixes.push(prefixMatch[1]);
+    // 1. Extract prefix, evaluated like a URI (literals, concatenation, variables, interpolation)
+    for (const entry of parseArgs(arrayContent, true)) {
+      const m = entry.match(/^(['"])prefix\1\s*=>\s*([\s\S]+)$/);
+      if (m) {
+        const prefix = pathArg(m[2]!.trim(), scope);
+        if (prefix) prefixes.push(prefix);
+      }
     }
 
     // 2. Extract namespace
@@ -1499,18 +1532,20 @@ interface WalkOptions {
   collectRoutes: boolean;
   /** Laravel app root, for base_path() and friends. */
   root: string;
+  /** A service provider: methods Laravel never runs are ignored (see liveProviderCode). */
+  provider?: boolean;
 }
 
 /** Group attributes declared by a chain itself (prefix, middleware, namespace, controller, group array). */
-function chainAttributes(calls: ChainedCall[]) {
+function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
   const namespaces: string[] = [];
   let controller: string | null = null;
   for (const call of calls) {
     if (call.name === 'prefix') {
-      const a = parseArgs(call.args)[0];
-      if (a) prefixes.push(a);
+      const a = parseArgs(call.args, true)[0];
+      if (a) prefixes.push(pathArg(a, scope));
     } else if (call.name === 'middleware' || call.name === 'withoutMiddleware') {
       if (call.name === 'withoutMiddleware') continue;
       middlewares.push(...listArg(call.args));
@@ -1520,7 +1555,7 @@ function chainAttributes(calls: ChainedCall[]) {
     } else if (call.name === 'controller') {
       controller = parseArgs(call.args)[0]?.match(/([a-zA-Z0-9_\\]+)/)?.[1] ?? null;
     } else if (call.name === 'group' && /^\s*(\[|array\()/.test(call.args)) {
-      const attrs = parseGroupAttributes(call.args);
+      const attrs = parseGroupAttributes(call.args, scope);
       prefixes.push(...attrs.prefixes);
       middlewares.push(...attrs.middlewares);
       namespaces.push(...attrs.namespaces);
@@ -1539,10 +1574,42 @@ function listArg(args: string): string[] {
 
 const lineAt = (content: string, index: number) => content.slice(0, index).split('\n').length;
 
+/** End of the expression starting at `start` in masked code: `;`, `,` or an unbalanced closer. */
+function expressionEnd(code: string, start: number): number {
+  let depth = 0;
+  for (let i = start; i < code.length; i++) {
+    const c = code[i];
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') {
+      if (depth === 0) return i;
+      depth--;
+    } else if ((c === ';' || c === ',') && depth === 0) return i;
+    else if (c === '?' && code[i + 1] === '>') return i;
+  }
+  return code.length;
+}
+
+/** Strips parentheses that wrap a whole expression: `(__DIR__.'/x.php')` → `__DIR__.'/x.php'`. */
+function unwrapParens(expr: string): string {
+  let e = expr.trim();
+  while (e.startsWith('(')) {
+    const paren = getParenthesizedContent(e, 0);
+    if (!paren || paren.endIndex !== e.length) break;
+    e = paren.content.trim();
+  }
+  return e;
+}
+
 /**
  * Walks a PHP file that declares routes. Tracks the group stack and conditional blocks, and
- * reports routes (when collectRoutes) and mounts: require/include of a file, `->group(<path>)`
- * and `$this->loadRoutesFrom(<path>)`, each with the group context in force at that point.
+ * reports routes (when collectRoutes) and mounts: require/include of a file, `->group(<path>)`,
+ * the legacy `Route::group($attributes, <path>)` and `$this->loadRoutesFrom(<path>)`, each with
+ * the group context in force at that point.
+ *
+ * Structure is read from a masked copy (maskPhp), so comments, strings and heredocs never yield
+ * routes, mounts, braces or statement ends; arguments are sliced from the comment-free copy.
+ * A group lasts until its call's closing parenthesis, whatever its body: a closure, an arrow
+ * function or nothing at all.
  */
 function walkRouteFile(
   content: string,
@@ -1553,17 +1620,18 @@ function walkRouteFile(
 ): { routes: RouteBinding[]; mounts: MountRequest[] } {
   const routes: RouteBinding[] = [];
   const mounts: MountRequest[] = [];
+  const { code, text } = options.provider ? liveProviderCode(content) : maskPhp(content);
   const dir = posix.dirname(filePath) === '.' ? '' : posix.dirname(filePath);
-  const assignments = stringAssignments(content);
-  const useImports = parseUseImports(content);
-  let braceDepth = 0;
+  const assignments = stringAssignments(text, code);
+  const useImports = parseUseImports(text);
+  const scopeAt = (index: number): PhpScope => ({ dir, root: options.root, vars: varsAt(assignments, index) });
   const conditionalBraces: boolean[] = [];
-  const groupStack: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; startDepth: number }[] = [{
+  const groupStack: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; end: number }[] = [{
     prefixes: frame.prefixes,
     middlewares: frame.middlewares,
     namespaces: frame.namespaces,
     controller: frame.controller,
-    startDepth: 0,
+    end: Infinity,
   }];
   const inConditional = () => conditionalBraces.some(Boolean);
   const current = () => ({
@@ -1573,7 +1641,7 @@ function walkRouteFile(
     controller: [...groupStack].reverse().find(g => g.controller)?.controller ?? null,
   });
   const mountAt = (expr: string, index: number, extra = { prefixes: [] as string[], middlewares: [] as string[], namespaces: [] as string[], controller: null as string | null }) => {
-    const path = phpString(expr, { dir, root: options.root, vars: varsAt(assignments, index) });
+    const path = phpString(expr, scopeAt(index));
     if (!path || !path.endsWith('.php')) return false;
     const base = current();
     mounts.push({
@@ -1591,44 +1659,28 @@ function walkRouteFile(
     return true;
   };
 
-  for (let i = 0; i < content.length; i++) {
-    const char = content[i];
+  for (let i = 0; i < code.length; i++) {
+    while (groupStack.length > 1 && groupStack[groupStack.length - 1].end <= i) groupStack.pop();
+    const char = code[i];
     if (char === '{') {
-      conditionalBraces.push(opensConditionalBlock(content.slice(Math.max(0, i - 300), i)));
-      braceDepth++;
+      conditionalBraces.push(opensConditionalBlock(code.slice(Math.max(0, i - 300), i)));
       continue;
     }
     if (char === '}') {
       conditionalBraces.pop();
-      braceDepth--;
-      while (groupStack.length > 1 && groupStack[groupStack.length - 1].startDepth > braceDepth) {
-        groupStack.pop();
-      }
-      continue;
-    }
-    if (char === '/' && content[i + 1] === '/') {
-      const eol = content.indexOf('\n', i);
-      i = eol < 0 ? content.length : eol;
-      continue;
-    }
-    if (char === '/' && content[i + 1] === '*') {
-      const end = content.indexOf('*/', i + 2);
-      i = end < 0 ? content.length : end + 1;
       continue;
     }
 
-    const include = /^(?:require|include)(?:_once)?\b\s*\(?/.exec(content.slice(i, i + 20));
-    if (include && !/[\w$>]/.test(content[i - 1] ?? '')) {
-      const end = content.indexOf(';', i);
-      if (end > i) {
-        const expr = content.slice(i + include[0].length, end).replace(/\)\s*$/, '');
-        mountAt(expr, i);
-        i = end;
-      }
+    const include = /^(?:require|include)(?:_once)?\b/.exec(code.slice(i, i + 20));
+    if (include && !/[\w$>:\\]/.test(code[i - 1] ?? '')) {
+      const start = i + include[0].length;
+      const end = expressionEnd(code, start);
+      mountAt(unwrapParens(text.slice(start, end)), i);
+      i = end - 1;
       continue;
     }
-    if (content.startsWith('loadRoutesFrom', i) && /->\s*$/.test(content.slice(Math.max(0, i - 4), i))) {
-      const paren = getParenthesizedContent(content, content.indexOf('(', i));
+    if (code.startsWith('loadRoutesFrom', i) && /->\s*$/.test(code.slice(Math.max(0, i - 4), i))) {
+      const paren = parenAt(code, text, code.indexOf('(', i));
       if (paren) {
         mountAt(paren.content, i);
         i = paren.endIndex - 1;
@@ -1636,25 +1688,27 @@ function walkRouteFile(
       continue;
     }
 
-    if (content.substring(i, i + 7) === 'Route::' && !/\w/.test(content[i - 1] ?? '')) {
-      const parsed = parseRouteChain(content, i);
+    if (code.startsWith('Route::', i) && !/\w/.test(code[i - 1] ?? '')) {
+      const parsed = parseRouteChain(code, i, text);
       if (!parsed) continue;
+      const scope = scopeAt(i);
       const group = parsed.calls.find(c => c.name === 'group');
-      // `->group(<path>)` mounts a file; it does not open a group in this one.
-      if (group && group.args.trim() && !/^\s*(\[|array\(|function\b|fn\b|static\b)/.test(group.args)) {
-        const groupEnd = getParenthesizedContent(content, parsed.endIndex - 1);
-        mountAt(group.args, i, chainAttributes(parsed.calls));
-        i = (groupEnd?.endIndex ?? parsed.endIndex) - 1;
-        continue;
-      }
-      const skippedText = content.substring(i, parsed.endIndex);
-      for (const c of skippedText) {
-        if (c === '{') braceDepth++;
-        else if (c === '}') braceDepth--;
+      // A group's frame ends with its call, so brace-less bodies (`fn () => ...`) can't leak.
+      const groupEnd = group ? (getParenthesizedContent(code, parsed.endIndex - 1)?.endIndex ?? code.length) : code.length;
+      if (group) {
+        // `->group(<path>)` and legacy `Route::group($attributes, <path>)` mount a file; they
+        // don't open a group in this one.
+        const args = parseArgs(group.args, true);
+        const body = args.length > 1 ? args[args.length - 1] : args[0] && !/^(\[|array\s*\()/.test(args[0]) ? args[0] : undefined;
+        if (body && !/^(function\b|fn\b|static\b)/.test(body)) {
+          mountAt(body, i, chainAttributes(parsed.calls, scope));
+          i = groupEnd - 1;
+          continue;
+        }
       }
       const before = routes.length;
-      processRouteChain(parsed.calls, groupStack, braceDepth, filePath, ctx, routes, 'laravel', useImports, {
-        vars: varsAt(assignments, i),
+      processRouteChain(parsed.calls, groupStack, groupEnd, filePath, ctx, routes, 'laravel', useImports, {
+        vars: scope.vars,
         scope: { dir, root: options.root },
       });
       const name = parsed.calls.find(c => c.name === 'name');
@@ -1676,7 +1730,8 @@ function walkRouteFile(
 function processRouteChain(
   calls: ChainedCall[],
   groupStack: any[],
-  currentBraceDepth: number,
+  /** Offset where a group opened by this chain ends (its call's closing parenthesis). */
+  groupEnd: number,
   filePath: string,
   ctx: ScanContext,
   routes: RouteBinding[],
@@ -1685,6 +1740,7 @@ function processRouteChain(
   extra: { vars: Map<string, string>; scope: { dir: string; root: string } } = { vars: new Map(), scope: { dir: '', root: '' } }
 ) {
   const routesBefore = routes.length;
+  const scope: PhpScope = { ...extra.scope, vars: extra.vars };
   let verb: string | null = null;
   let uriExpr: string | null = null;
   let routeName: string | undefined;
@@ -1701,7 +1757,7 @@ function processRouteChain(
     if (call.name === 'group') {
       isGroup = true;
       if (call.args) {
-        const groupAttrs = parseGroupAttributes(call.args);
+        const groupAttrs = parseGroupAttributes(call.args, scope);
         chainPrefixes.push(...groupAttrs.prefixes);
         chainMiddlewares.push(...groupAttrs.middlewares);
         chainNamespaces.push(...groupAttrs.namespaces);
@@ -1736,16 +1792,18 @@ function processRouteChain(
     } else if (call.name === 'redirect') {
       verb = 'GET';
       const args = parseArgs(call.args);
+      uriExpr = parseArgs(call.args, true)[0] || null;
       uri = args[0] || null;
       handlerStr = 'Redirect';
     } else if (call.name === 'view') {
       verb = 'GET';
       const args = parseArgs(call.args);
+      uriExpr = parseArgs(call.args, true)[0] || null;
       uri = args[0] || null;
       handlerStr = `View(${args[1] || ''})`;
     } else if (call.name === 'prefix') {
-      const args = parseArgs(call.args);
-      if (args[0]) chainPrefixes.push(args[0]);
+      const raw = parseArgs(call.args, true)[0];
+      if (raw) chainPrefixes.push(pathArg(raw, scope));
     } else if (call.name === 'middleware') {
       if (call.args.trim().startsWith('[')) {
         const matches = call.args.match(/['"]([^'"]+)['"]/g) || [];
@@ -1769,16 +1827,9 @@ function processRouteChain(
     }
   }
 
-  // Evaluate the URI as PHP: literals, concatenation and local string variables.
-  let dynamicUri = false;
-  if (uriExpr && verb !== 'ANY') {
-    const evaluated = phpString(uriExpr, { ...extra.scope, vars: extra.vars });
-    if (evaluated !== null) uri = evaluated;
-    else if (!/^(['"])[^'"]*\1$/.test(uriExpr)) {
-      dynamicUri = true;
-      uri = '{dynamic}';
-    }
-  }
+  // Evaluate the URI as PHP: literals, concatenation, interpolation and local string variables.
+  // Anything else becomes {dynamic}, never raw PHP text.
+  if (uriExpr && verb !== 'ANY') uri = pathArg(uriExpr, scope);
 
   // Array handlers: ['uses' => 'C@m', 'as' => 'name', 'middleware' => ...]
   if (handlerStr && /^\s*(\[|array\()/.test(handlerStr) && /['"]uses['"]\s*=>/.test(handlerStr)) {
@@ -1807,7 +1858,7 @@ function processRouteChain(
       middlewares: chainMiddlewares,
       namespaces: chainNamespaces,
       controller: activeController,
-      startDepth: currentBraceDepth + 1
+      end: groupEnd
     });
   } else if (verb && uri) {
     const activeController = chainController || (groupStack.length > 0 ? groupStack[groupStack.length - 1].controller : null);
@@ -1913,7 +1964,6 @@ function processRouteChain(
           confidence: 'inferred',
           middlewares: fullMiddlewares,
           ...(routeName ? { name: routeName } : {}),
-          ...(dynamicUri ? { dynamic: true } : {}),
         },
       });
     }
@@ -1921,4 +1971,7 @@ function processRouteChain(
   // Handlers given as Class::class (array form or resource controller) are declared, not inferred.
   if (handlerStr && /::class\b/.test(handlerStr))
     for (const r of routes.slice(routesBefore)) (r.metadata ??= {}).confidence = 'declared';
+  // A {dynamic} URI part or prefix (from this chain, a group or the mount) flags the route.
+  for (const r of routes.slice(routesBefore))
+    if (r.path.split('/').includes(DYNAMIC)) (r.metadata ??= {}).dynamic = true;
 }

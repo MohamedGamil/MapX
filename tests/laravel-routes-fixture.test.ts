@@ -29,7 +29,9 @@ describe('Laravel route fixture labels', () => {
     expect(labels.length).toBeGreaterThanOrEqual(40);
     const patterns = new Set(labels.map((l) => l.pattern));
     for (const p of ['uses-array', 'class-array', 'string-handler', 'controller-group', 'match', 'resource', 'api-resource',
-      'dynamic-path', 'closure', 'require-mount', 'provider-mount', 'conditional', 'overridden', 'unmounted'])
+      'dynamic-path', 'closure', 'require-mount', 'provider-mount', 'conditional', 'overridden', 'unmounted',
+      // M1-03-R1: lexing (strings, comments, heredocs), brace-less groups, interpolation, provider reachability.
+      'string-lexing', 'not-a-route', 'braceless-group', 'legacy-group-mount', 'interpolated-path', 'rsp-mount', 'rsp-unmounted'])
       expect(patterns, p).toContain(p);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
     for (const l of labels) {
