@@ -1,13 +1,13 @@
 # MapX project state
 
-Updated 2026-10-31, after session 6 (review remediation). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `1ae3368`).
+Updated 2026-10-31, after session 6 (review remediation). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
 | Milestone | Status | Notes |
 | --- | --- | --- |
 | M0 Delivered baseline and remediation | All review 2026-10-31 remediation DONE (session 6) | Follow-ups found during session 6 also DONE (M0-02-R3/R4/R5, M0-03-R4, M0-10-R3, M0-17-R3, M0-32-R1/R2) and M0-04-R3 |
-| M1 Laravel route correctness | M1-03-R1, M1-07-R1, M1-05-R1, M1-05-R2 DONE | M1-05-R3 (P3 feature gaps) BACKLOG, not an M3-01 dependency. M1-99 (release) DEFERRED (D007) |
+| M1 Laravel route correctness | M1-03-R1, M1-07-R1, M1-05-R1, M1-05-R2 DONE | M1-05-R3 DONE (D014). M1-99 (release) DEFERRED (D007) |
 | M2 Cross-language precision and HTTP pairing | M2-04-R2, M2-06-R1 DONE | |
 | M3 Vue SFC semantics | 0 of 6 | M3-01 is unblocked by the plan (every remediation dependency DONE); start it only with the owner's go-ahead |
 | M4 Measurement and DX | 0 of 7 | M4-03 (scan superlinear past ~5,000 files, measured in session 6) and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
@@ -39,7 +39,7 @@ Deptrac analysed and abstracted for MapX (`docs/research/deptrac/`, six document
 Owner Q&A first: D012 (metrics/edges output contract: spec structures, camelCase). Then five parallel lanes in git worktrees, each task cherry-picked onto `develop` and closed with registered evidence.
 
 - **Review remediation (19 tasks):** M0-20-R2, M1-03-R1, M2-04-R2, M0-03-R3, M0-09-R3, M0-07-R2, M0-05-R3, M1-07-R1, M0-11-R2, M0-05-R4, M0-12-R3, M2-06-R1, M0-02-R2, M0-10-R2, M0-32-R1 (stack overflow found in M0-12-R3), M0-17-R2, M1-05-R1, M0-12-R4, M0-04-R2.
-- **Follow-ups found by the lanes:** M0-32-R2, M0-17-R3, M0-03-R4, M1-05-R2, M0-02-R3, M0-10-R3, M0-02-R4, M0-02-R5, M0-04-R3 (10 DONE). M1-05-R3 registered as P3.
+- **Follow-ups found by the lanes:** M0-32-R2, M0-17-R3, M0-03-R4, M1-05-R2, M0-02-R3, M0-10-R3, M0-02-R4, M0-02-R5, M0-04-R3 (10 DONE). Final gaps (D014): M0-09-R4, M0-12-R5, M0-12-R6, M1-05-R3. M1-05-R3 registered as P3.
 - **Scorers:** routes 41 → 112 labels (URI 88/88, handler 85/85, 0 FP; the scorer now requires negative labels to be reported and flagged, and has `absent`); HTTP 32 → 46 labels (all metrics 1.0; every routed label carries a handler).
 - **Measured:** import resolution 6.60 s → 0.12 s at 2,000 Java files (M0-12-R3); 20,000-file cyclic repo scans instead of crashing (M0-32-R1).
 - **Integration fixes:** a test-typecheck error from M0-03-R3 (`9b8f9f6`); M0-03-R3 density counted raw edges (`b99f3a9`); the 214 s real-scan SCC test is opt-in via `MAPX_SLOW_TESTS=1` (`8965717`).
@@ -121,17 +121,14 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 ## Latest validation
 
-2026-10-31, end of session 6 (`develop@1ae3368`): `npm run check` exit 0: plan valid (122 tasks), changelog coverage 82 entries, typecheck, 88 test files with 1434 passed and 1 skipped (`MAPX_SLOW_TESTS`), skill tests. Routes scorer: 112 labels, URI 88/88, handler 85/85, precision 1, 0 FP. HTTP scorer: 46 labels, every metric 1.0, 0 wrong pairs. `scripts/check-package.ts`: 256 files, 4.34 MB packed, dashboard 690,760 B gzipped (ceiling 737,280).
+2026-10-31, end of session 6 (`develop@3c24c1d`): `npm run check` exit 0: plan valid (144 tasks), changelog coverage 86 entries, typecheck, 88 test files with 1491 passed and 1 skipped (`MAPX_SLOW_TESTS`), skill tests. Routes scorer: 114 labels, URI 90/90, handler 87/87, precision 1, 0 FP. HTTP scorer: 46 labels, every metric 1.0, 0 wrong pairs. `scripts/check-package.ts`: 259 files, 4.36 MB packed, dashboard 690,760 B gzipped (ceiling 737,280).
 
 ## Owner decisions recorded
 
 - **D006:** the dashboard bundle target is re-baselined to a 720 KiB gzipped ceiling, enforced by `scripts/check-package.ts` and CI. M0-15-R2 is DONE.
 - **D007:** releases are owner-initiated. M1-99 is DEFERRED and the gate is now `G-RELEASE` (`ownerInitiated`). Agents don't request it; work accumulates under CHANGELOG `[Unreleased]`.
 
-Pending (session 6):
-- **Continue output vs F17:** F17 prescribes `.continue/mapx.yaml` with a context provider and slash commands, which Continue does not load (M0-09-R3 report). Keep F17, or amend it to Continue's documented `config.yaml` / `prompts` / `mcpServers` layout.
-- **`.fish` files (F20):** indexed as files with no symbols because no fish grammar ships (M0-12-R3). Record as an F20 amendment, or require a grammar.
-- **M1-05-R3:** Laravel feature gaps registered as P3 and not an M3-01 dependency; D010 could be read to include it.
+Resolved in session 6 (D014): Continue writes its documented layout (M0-09-R4, amends F17); a fish grammar is bundled (M0-12-R5, Unlicense, +19 KB packed); M1-05-R3 promoted to P2 and done. No owner decisions are pending apart from the go-ahead for M3-01.
 
 ## Known gaps
 
