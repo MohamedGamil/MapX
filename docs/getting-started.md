@@ -154,7 +154,7 @@ The content is wrapped in markers:
 
 All languages track applicable reference types:
 
-- **Imports**: `import`, `require`, `use`, `include`, `#include`, `using`, `@import`, `alias`
+- **Imports**: `import`, `require`, `use`, `include`, `#include`, `using`, `@import`, `alias`. JS/TS/Vue imports also resolve path aliases (`@/x`, `~/x`, `#x`) through the nearest tsconfig/jsconfig `compilerOptions.paths`, else the nearest `vite.config.*`, `vue.config.js`, `webpack.config.js` or `webpack.mix.js` alias (read statically, never executed), else `@/` → the app's `src/`
 - **Inheritance**: `extends`, `implements`, protocol conformance, mixins (`with`), `include`/`prepend`
 - **Instantiation**: `new ClassName()`, `ClassName()`, `.new`, composite literals, constructor invocations
 - **Calls**: function calls, method calls, remote calls, pipe operators, macro invocations

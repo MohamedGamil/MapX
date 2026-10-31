@@ -95,12 +95,14 @@ function elsewhere() { refresh(); useCartStore(); useLocal(); format(1); }
 });
 
 const CARD = 'src/components/UserCard.vue';
-const PROFILE = 'resources/js/Pages/Profile.vue';
+const PROFILE = 'laravel/resources/js/Pages/Profile.vue';
+const BADGE = 'laravel/resources/js/Components/Badge.vue';
 
 describe('Vue composables end to end', () => {
   let root: string;
   let calls: { source_symbol: string | null; target_file: string; target_symbol: string }[];
   let profileCalls: typeof calls;
+  let laravelEdges: (typeof calls[number] & { source_file: string; edge_type: string })[];
   const targetsOf = (source: string, target: string, edges = calls) =>
     edges.filter((e) => e.source_symbol === source && e.target_symbol === target).map((e) => e.target_file).sort();
 
@@ -146,9 +148,24 @@ function signOut() {
       // useUser, and top-level functions named like the destructured ones.
       'src/api/useUser.ts': 'export function useUser() {\n  return {};\n}\nexport function refresh() {\n  return 0;\n}\n',
       'src/api/session.ts': 'export function logout() {\n  return false;\n}\nexport function rename(name: string) {\n  return name;\n}\n',
-      // Laravel layout: `@` is aliased to resources/js (vite.config), not src/. The trap in src/api
-      // shares the names but not the path.
-      [PROFILE]: `<script setup>
+      // Laravel app (M3-09): its vite.config.js aliases `@` to resources/js. The src/ files are traps
+      // for a fixed `@/` → src/ mapping; src/api/useProfile.js shares the names but not the path.
+      'laravel/package.json': JSON.stringify({ name: 'laravel-app', dependencies: { vue: '^3.4.0' } }),
+      'laravel/vite.config.js': `import { defineConfig } from 'vite';
+import laravel from 'laravel-vite-plugin';
+import vue from '@vitejs/plugin-vue';
+
+export default defineConfig({
+  plugins: [laravel({ input: 'resources/js/app.js', refresh: true }), vue()],
+  resolve: { alias: { '@': '/resources/js' } },
+});
+`,
+      [PROFILE]: `<template>
+  <Avatar :size="2" />
+</template>
+
+<script setup>
+import Avatar from '@/Components/Avatar.vue';
 import { useProfile } from '@/composables/useProfile';
 
 const { save } = useProfile();
@@ -158,13 +175,36 @@ function submit() {
 }
 </script>
 `,
-      'resources/js/composables/useProfile.js': 'export function useProfile() {\n  function save() { return 1; }\n  return { save };\n}\n',
+      [BADGE]: `<template>
+  <span @click="track('badge')"><slot /></span>
+</template>
+
+<script>
+import tracking from '@/mixins/tracking';
+
+export default {
+  mixins: [tracking],
+  methods: {
+    go() {
+      this.track('go');
+    },
+  },
+};
+</script>
+`,
+      'laravel/resources/js/Components/Avatar.vue': '<template><img alt="" /></template>\n',
+      'laravel/resources/js/mixins/tracking.js': 'export default {\n  methods: {\n    track(event) { return event; },\n  },\n};\n',
+      'laravel/resources/js/composables/useProfile.js': 'export function useProfile() {\n  function save() { return 1; }\n  return { save };\n}\n',
+      'src/Components/Avatar.vue': '<template><b /></template>\n',
+      'src/mixins/tracking.js': 'export default {\n  methods: {\n    track() { return 0; },\n  },\n};\n',
+      'src/composables/useProfile.js': 'export function useProfile() {\n  function save() { return 0; }\n  return { save };\n}\n',
       'src/api/useProfile.js': 'export function useProfile() {\n  return {};\n}\nexport function save() {\n  return 0;\n}\n',
     });
     init(root);
     mapx(root, 'scan', '.');
     calls = query(root, `SELECT source_symbol, target_file, target_symbol FROM edges WHERE edge_type = 'call' AND source_file = ?`, CARD);
     profileCalls = query(root, `SELECT source_symbol, target_file, target_symbol FROM edges WHERE edge_type = 'call' AND source_file = ?`, PROFILE);
+    laravelEdges = query(root, `SELECT source_file, source_symbol, target_file, target_symbol, edge_type FROM edges WHERE source_file IN (?, ?) AND edge_type IN ('call', 'render')`, PROFILE, BADGE);
   }, 90000);
   afterAll(() => cleanup(root));
 
@@ -189,8 +229,13 @@ function submit() {
     expect(targetsOf('UserCard', 'useTheme')).toEqual(['src/composables/useTheme.ts']);
   });
 
-  it('resolves an @/ import that is not src/ by its path suffix (Laravel resources/js), not by name', () => {
-    expect(targetsOf('Profile', 'useProfile', profileCalls)).toEqual(['resources/js/composables/useProfile.js']);
-    expect(targetsOf('submit', 'save', profileCalls)).toEqual(['resources/js/composables/useProfile.js']);
+  it('resolves a Laravel @ → resources/js alias (vite.config.js) for composables, renders and mixins', () => {
+    expect(targetsOf('Profile', 'useProfile', profileCalls)).toEqual(['laravel/resources/js/composables/useProfile.js']);
+    expect(targetsOf('submit', 'save', profileCalls)).toEqual(['laravel/resources/js/composables/useProfile.js']);
+    const edge = (source: string, type: string, target: string) => laravelEdges
+      .filter((e) => e.source_symbol === source && e.edge_type === type && e.target_symbol === target).map((e) => e.target_file).sort();
+    expect(edge('Profile', 'render', 'Avatar')).toEqual(['laravel/resources/js/Components/Avatar.vue']);
+    expect(edge('go', 'call', 'track')).toEqual(['laravel/resources/js/mixins/tracking.js']);
+    expect(edge('Badge', 'call', 'track')).toEqual(['laravel/resources/js/mixins/tracking.js']);
   });
 });

@@ -81,8 +81,10 @@ flowchart LR
 - M3-05 ← M3-03 (hard)
 - M3-06 ← M3-02 (hard)
 - M3-07 ← M3-01 (fixture)
-- M3-08 ← M3-02 (hard), M3-07 (hard)
+- M3-08 ← M3-02 (hard), M3-07 (hard), M3-06 (hard)
 - M3-09 ← M3-04 (hard)
+- M3-10 ← M3-06 (hard)
+- M3-11 ← M3-06 (hard)
 - M4-01 ← M1-01 (hard), M2-02 (hard), M3-01 (hard)
 - M4-02 ← none
 - M0-31 ← none

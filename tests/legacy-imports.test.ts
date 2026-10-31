@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { resolveGoImport, resolveJvmImport, resolvePhpImport, resolvePythonImport, resolveRustImport, type ImportContext } from '../src/core/import-resolvers.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { jsAliasTargets } from '../src/core/js-aliases.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M0-12-R1: import edges for languages whose imports name modules, packages or namespaces.
@@ -235,5 +236,139 @@ describe('import precision (M0-12-R4)', () => {
     writeFileSync(join(root, 'cs/App.cs'), readFileSync(join(root, 'cs/App.cs'), 'utf8') + '\n// touched\n');
     mapx(root, 'sync', root);
     expect(edges('cs/App.cs')).toEqual(before);
+  });
+});
+
+// M3-09: JS/TS path aliases from the nearest tsconfig/jsconfig `paths`, else the nearest vite /
+// vue-cli / webpack / Laravel Mix alias, else `@/` → src/. Configs are read, never executed.
+describe('JS/TS import aliases (M3-09)', () => {
+  const aliases = (texts: Record<string, string>) => {
+    const c = ctx(Object.keys(texts), texts);
+    return (target: string, source: string) => jsAliasTargets(target, source, c);
+  };
+
+  it('tsconfig paths: baseUrl and paths through a relative extends, comments and trailing commas', () => {
+    const at = aliases({
+      // baseUrl comes from the extended config: the paths below are relative to src/.
+      'apps/web/tsconfig.base.json': '{ "compilerOptions": { "baseUrl": "./src" } }',
+      'apps/web/tsconfig.json': `{
+  // the app's aliases
+  "extends": "./tsconfig.base",
+  "compilerOptions": {
+    "paths": { "@/*": ["*"], "@components/*": ["ui/*", "legacy/*"], "#config": ["../config/index.ts"], },
+  },
+}`,
+    });
+    expect(at('@/utils/format', 'apps/web/src/pages/a.ts')).toEqual(['apps/web/src/utils/format']);
+    expect(at('@components/Button', 'apps/web/src/pages/a.ts')).toEqual(['apps/web/src/ui/Button', 'apps/web/src/legacy/Button']);
+    expect(at('#config', 'apps/web/src/a.ts')).toEqual(['apps/web/config/index.ts']);
+    // Scoped packages and relative imports are never aliased.
+    expect(at('@vue/runtime-core', 'apps/web/src/a.ts')).toEqual([]);
+    expect(at('./b', 'apps/web/src/a.ts')).toEqual([]);
+  });
+
+  it('tsconfig without baseUrl resolves paths from its own folder; the longest prefix wins; references are read', () => {
+    const at = aliases({
+      'tsconfig.json': '{ "files": [], "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.app.json" }] }',
+      'tsconfig.node.json': '{ "compilerOptions": { "types": ["node"] } }',
+      'tsconfig.app.json': '{ "compilerOptions": { "paths": { "@/*": ["./src/*"], "@/components/*": ["./src/shared/components/*"] } } }',
+    });
+    expect(at('@/stores/cart', 'src/views/Cart.vue')).toEqual(['src/stores/cart']);
+    expect(at('@/components/Card.vue', 'src/views/Cart.vue')).toEqual(['src/shared/components/Card.vue']);
+  });
+
+  it('vite.config: object and array forms, fileURLToPath, path.resolve and Laravel\'s root-relative string', () => {
+    expect(aliases({
+      'shop/vite.config.ts': "import { fileURLToPath, URL } from 'node:url';\nexport default defineConfig({ resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } } });\n",
+    })('@/App.vue', 'shop/src/main.ts')).toEqual(['shop/src/App.vue']);
+    expect(aliases({
+      'vite.config.js': "export default { resolve: { alias: [{ find: '~', replacement: path.resolve(__dirname, 'client') }, { find: /^#/, replacement: 'x' }] } };\n",
+    })('~/api/http', 'client/main.js')).toEqual(['client/api/http']);
+    expect(aliases({
+      'vite.config.js': "export default defineConfig({\n  plugins: [laravel({ input: 'resources/js/app.js' })],\n  resolve: { alias: { '@': '/resources/js', ziggy: path.resolve('vendor/tightenco/ziggy') } },\n});\n",
+    })('@/Pages/Home.vue', 'resources/js/app.js')).toEqual(['resources/js/Pages/Home.vue']);
+  });
+
+  it('vue.config.js (chainWebpack, configureWebpack), webpack.config.js ($ exact) and webpack.mix.js', () => {
+    expect(aliases({
+      'vue.config.js': "module.exports = { chainWebpack: (config) => { config.resolve.alias.set('@', path.resolve(__dirname, 'app')); } };\n",
+    })('@/router', 'app/main.js')).toEqual(['app/router']);
+    expect(aliases({
+      'vue.config.js': "module.exports = { configureWebpack: { resolve: { alias: { '@': path.join(__dirname, 'frontend', 'src') } } } };\n",
+    })('@/router', 'frontend/src/main.js')).toEqual(['frontend/src/router']);
+    const webpack = aliases({ 'webpack.config.js': "module.exports = { resolve: { alias: { vue$: 'vue/dist/vue.esm.js', Utils: path.resolve(__dirname, 'src/utilities/') } } };\n" });
+    expect(webpack('Utils/date', 'src/a.js')).toEqual(['src/utilities/date']);
+    expect(webpack('vue', 'src/a.js')).toEqual(['vue/dist/vue.esm.js']);
+    expect(webpack('vue/other', 'src/a.js')).toEqual([]);
+    expect(aliases({
+      'webpack.mix.js': "mix.js('resources/js/app.js', 'public/js').vue().alias({ '@': path.join(__dirname, 'resources/js') });\n",
+    })('@/store', 'resources/js/app.js')).toEqual(['resources/js/store']);
+  });
+
+  it('skips non-literal aliases; tsconfig paths come before a bundler alias; the nearest config decides', () => {
+    expect(aliases({ 'vite.config.js': "const dir = compute();\nexport default { resolve: { alias: { '~': dir } } };\n" })('~/x', 'a.js')).toEqual([]);
+    const at = aliases({
+      'web/tsconfig.json': '{ "compilerOptions": { "paths": { "@/*": ["./ts/*"] } } }',
+      'web/vite.config.js': "export default { resolve: { alias: { '@': '/vite' } } };\n",
+      'vite.config.js': "export default { resolve: { alias: { '@': '/root', '~': '/root-tilde' } } };\n",
+    });
+    expect(at('@/x', 'web/ts/a.ts')).toEqual(['web/ts/x']);
+    // web/ declares no `~`: the root config's applies.
+    expect(at('~/x', 'web/ts/a.ts')).toEqual(['root-tilde/x']);
+    expect(at('@/x', 'other/a.ts')).toEqual(['root/x']);
+  });
+
+  it('without an alias, @/ is src/ under the nearest package.json folder, then under the workspace root', () => {
+    const at = aliases({ 'apps/legacy/package.json': '{}', 'apps/legacy/src/main.js': '' });
+    expect(at('@/utils/format', 'apps/legacy/src/main.js')).toEqual(['apps/legacy/src/utils/format', 'src/utils/format']);
+    expect(at('~/utils/format', 'apps/legacy/src/main.js')).toEqual([]);
+  });
+});
+
+describe('JS/TS alias import edges through the scanner (M3-09)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      // Laravel-style app: `@` is resources/js (vite.config.js).
+      'apps/admin/package.json': '{ "name": "admin" }',
+      'apps/admin/vite.config.js': "import path from 'path';\nexport default { resolve: { alias: { '@': path.resolve(__dirname, 'resources/js') } } };\n",
+      'apps/admin/resources/js/app.js': "import { format } from '@/utils/format';\nformat(1);\n",
+      'apps/admin/resources/js/utils/format.js': 'export function format(v) { return String(v); }\n',
+      // tsconfig paths relative to the baseUrl of the extended config: `@` is app/.
+      'apps/shop/package.json': '{ "name": "shop" }',
+      'apps/shop/tsconfig.base.json': '{ "compilerOptions": { "baseUrl": "./app" } }',
+      'apps/shop/tsconfig.json': '{ "extends": "./tsconfig.base.json", "compilerOptions": { "paths": { "@/*": ["*"] } } }',
+      'apps/shop/app/main.ts': "import { format } from '@/utils/format';\nformat(2);\n",
+      'apps/shop/app/utils/format.ts': 'export function format(v: number) { return `${v}`; }\n',
+      // vue.config.js: `@` is client/.
+      'apps/old/package.json': '{ "name": "old" }',
+      'apps/old/vue.config.js': "module.exports = { chainWebpack: (config) => config.resolve.alias.set('@', path.resolve(__dirname, 'client')) };\n",
+      'apps/old/client/main.js': "import { format } from '@/utils/format';\nformat(3);\n",
+      'apps/old/client/utils/format.js': 'export function format(v) { return v; }\n',
+      // No alias config: `@` is src/ of the app.
+      'apps/legacy/package.json': '{ "name": "legacy" }',
+      'apps/legacy/src/main.js': "import { format } from '@/utils/format';\nformat(4);\n",
+      'apps/legacy/src/utils/format.js': 'export function format(v) { return v; }\n',
+      // src/utils/format files the aliases do not point at (traps for a fixed `@/` → src/).
+      'apps/admin/src/utils/format.js': 'export function format() { return 0; }\n',
+      'apps/shop/src/utils/format.ts': 'export function format() { return 0; }\n',
+      'src/utils/format.js': 'export function format() { return 0; }\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  const imports = (source: string) =>
+    query<{ target_file: string }>(root, "SELECT DISTINCT target_file FROM edges WHERE source_file = ? AND edge_type IN ('import','require') ORDER BY target_file", source)
+      .map((e) => e.target_file);
+
+  it.each([
+    ['apps/admin/resources/js/app.js', ['apps/admin/resources/js/utils/format.js']],
+    ['apps/shop/app/main.ts', ['apps/shop/app/utils/format.ts']],
+    ['apps/old/client/main.js', ['apps/old/client/utils/format.js']],
+    ['apps/legacy/src/main.js', ['apps/legacy/src/utils/format.js']],
+  ])('%s imports through its own app\'s alias', (source, expected) => {
+    expect(imports(source)).toEqual(expected);
   });
 });

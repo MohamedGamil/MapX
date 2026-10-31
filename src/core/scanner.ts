@@ -35,6 +35,7 @@ import { collectVuexFiles, resolveStoreTarget, type VueResolveContext, type Vuex
 import { globalRegistrations, vueComponentName, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, matchRoute, withSrcAlias, type NavTarget, type ResolvedRoute } from '../parsers/languages/vue-navigation.js';
+import { jsAliasTargets, type AliasContext } from './js-aliases.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
@@ -43,8 +44,8 @@ const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
 type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string };
 const NAMESPACE_KINDS = new Set(['namespace']);
 const TYPE_KINDS = new Set(['class', 'struct', 'interface', 'enum', 'record', 'trait']);
-/** A JS/TS/Vue module's extension. */
-const MODULE_EXT = /\.(?:[cm]?[jt]sx?|vue)$/;
+/** Sources whose imports may use JS/TS path aliases (M3-09). */
+const JS_MODULE_SOURCE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/;
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -1312,7 +1313,7 @@ export class Scanner {
   private moduleMember(
     specifier: string, name: string, fromFile: string, fileMap: Map<string, string>, depth = 0,
   ): { file: string; symbol: string } | null {
-    const file = this.resolveImportPath(specifier, fromFile, fileMap) ?? this.resolveAliasBySuffix(specifier, fromFile, fileMap);
+    const file = this.resolveImportPath(specifier, fromFile, fileMap);
     if (!file) return null;
     if (this.fileDefines(file, name)) return { file, symbol: name };
     const text = depth < 3 ? this.readWorkspaceText(file) : null;
@@ -1321,33 +1322,6 @@ export class Scanner {
       if (found) return found;
     }
     return null;
-  }
-
-  /**
-   * A path alias whose target is unknown (`@/x` where `@` is `resources/js`, `~/x`, `#/x`): the
-   * JS/TS/Vue module of `fromFile`'s repo whose path ends with `/x` (or `/x/index`). Among several,
-   * the one sharing the longest directory prefix with `fromFile`. Bare packages never match (M3-04).
-   */
-  private resolveAliasBySuffix(specifier: string, fromFile: string, fileMap: Map<string, string>): string | null {
-    const rest = /^(?:@|@@|~|~~|#)\/(.+)$/.exec(specifier)?.[1]?.replace(MODULE_EXT, '');
-    if (!rest) return null;
-    const repo = fileMap.get(fromFile);
-    const key = `${repo}\0${rest}`;
-    let matches = this.aliasSuffixMatches.get(key);
-    if (!matches) {
-      matches = [...fileMap.keys()].filter((f) => {
-        if (fileMap.get(f) !== repo || !MODULE_EXT.test(f)) return false;
-        const base = f.replace(MODULE_EXT, '').replace(/\/index$/, '');
-        return base === rest || base.endsWith(`/${rest}`);
-      });
-      this.aliasSuffixMatches.set(key, matches);
-    }
-    const shared = (f: string) => {
-      let i = 0;
-      while (i < f.length && f[i] === fromFile[i]) i++;
-      return f.slice(0, i).lastIndexOf('/');
-    };
-    return matches.reduce<string | null>((best, f) => (best === null || shared(f) > shared(best) ? f : best), null);
   }
 
   /**
@@ -1473,8 +1447,6 @@ export class Scanner {
   private vueGlobals = new Map<string, Map<string, string>>();
   /** Vuex store models by file, per resolution phase (M3-05). */
   private vuexFiles = new Map<string, VuexModuleInfo>();
-  // Repo and alias path → the modules whose path ends with it (M3-04, `resolveAliasBySuffix`).
-  private aliasSuffixMatches = new Map<string, string[]>();
   // Repo → its Vue Router route records (M3-06).
   private vueRoutes = new Map<string, ResolvedRoute[]>();
 
@@ -1560,12 +1532,22 @@ export class Scanner {
       return null;
     }
 
-    if (sourcePath.endsWith('.vue') && target.startsWith('@/')) {
-      resolvedTarget = 'src/' + target.substring(2);
-    } else {
-      const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
-      resolvedTarget = target.startsWith('.') ? join(dir, target) : target;
+    // JS/TS/Vue/Svelte: aliases from the nearest tsconfig/jsconfig `paths` or bundler config, then
+    // `@/` → src/ (M3-09); then the specifier itself, relative to the importing file when it is `./…`.
+    const dir = sourcePath.includes('/') ? sourcePath.substring(0, sourcePath.lastIndexOf('/')) : '';
+    const bases = !target.startsWith('.') && JS_MODULE_SOURCE.test(sourcePath)
+      ? jsAliasTargets(target, sourcePath, this.aliasContext(fileMap))
+      : [];
+    bases.push(target.startsWith('.') ? join(dir, target) : target);
+    for (const base of bases) {
+      const hit = this.probeModule(base, fileMap);
+      if (hit) return hit;
     }
+    return null;
+  }
+
+  /** The indexed file a JS-style module path names: itself, its .ts twin, an index file or an extension. */
+  private probeModule(resolvedTarget: string, fileMap: Map<string, string>): string | null {
     const normalizedTarget = resolvedTarget.replace(/\\/g, '/').replace(/^\.\//,  '').replace(/^\//, '');
 
     // When a .ts file imports with an explicit .js extension (TypeScript "use .js for .ts"
@@ -1600,6 +1582,12 @@ export class Scanner {
       }
     }
     return null;
+  }
+
+  /** What `jsAliasTargets` reads: this phase's file set and the workspace's config files (M3-09). */
+  private aliasContext(fileMap: Map<string, string>): AliasContext {
+    if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
+    return { files: this.importFiles.files, readText: (path) => this.readWorkspaceText(path) };
   }
 
   /**
@@ -2266,7 +2254,6 @@ export class Scanner {
     this.languageCache.clear();
     this.phpNamespaces.clear();
     this.vueGlobals.clear();
-    this.aliasSuffixMatches.clear();
     this.vueRoutes.clear();
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
