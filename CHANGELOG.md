@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- Framework hook edges declared by their detector (such as Laravel Kernel middleware aliases) are now stored as verified, so `metrics --verified-only` keeps them (M0-05-R3).
 - Agent integration files now stay single-block and "current" on CRLF checkouts, end with a newline, are never created by `agents update`, keep edited legacy or duplicate blocks behind consent, no longer duplicate Aider's `read:` key, and JSONC settings merges keep string values and warn when comments are dropped (M0-09-R3)
 - Frontend HTTP URLs now resolve function-local constants in their own scope, and `.env` values are read like Vite: quotes before a trailing `# comment`, and `${VAR}` expansion (M2-04-R2).
 - Laravel route extraction no longer reads routes, braces or `require` from strings and comments, scopes arrow-function and legacy path groups correctly, evaluates interpolated URIs and variable prefixes (or flags them dynamic), and ignores commented-out or uncalled RouteServiceProvider mounts (M1-03-R1).

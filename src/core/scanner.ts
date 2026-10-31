@@ -1637,6 +1637,9 @@ export class Scanner {
                 hookType: hook.hookType,
                 confidence: hook.metadata?.confidence || 'inferred',
               };
+              // As for routes: a hook the detector declares (a Kernel alias → class constant) is
+              // resolved by the language, not guessed (F01, M0-05-R3).
+              const hookVerifiability = hookMeta.confidence === 'declared' ? 'verified' : 'inferred';
 
               edgesToInsert.push({
                 sourceFile: relPath,
@@ -1646,7 +1649,7 @@ export class Scanner {
                 edgeType,
                 repo: repo.name,
                 weight: 1.0,
-                verifiability: 'inferred',
+                verifiability: hookVerifiability,
                 metadata: hookMeta
               });
               this.graph.addDependencyEdge({
@@ -1657,7 +1660,7 @@ export class Scanner {
                 edgeType,
                 repo: repo.name,
                 weight: 1.0,
-                verifiability: 'inferred',
+                verifiability: hookVerifiability,
                 metadata: hookMeta
               });
             }

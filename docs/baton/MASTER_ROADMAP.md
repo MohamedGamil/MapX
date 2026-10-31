@@ -66,7 +66,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-05-R2** Laravel structure surface: relationships, middleware edges, LLM sections (F07–F09) — DONE, P1, 10h; depends on M0-05-R1.
 - **M0-09-R2** Agent template deliverables: SSE, Continue, Aider, Zed (F17) — DONE, P1, 6h; depends on M0-09-R1, M0-07-R1.
 - **M0-10-R1** Workspace surface: flags, table, cross-repo counts, JSONC (F18) — DONE, P1, 10h; depends on M0-10.
-- **M0-05-R3** Hook edges honour declared confidence (verifiability) — BACKLOG, P2, 3h; depends on M0-05-R2.
+- **M0-05-R3** Hook edges honour declared confidence (verifiability) — DONE, P2, 3h; depends on M0-05-R2.
 - **M0-20-R2** NestJS class segmentation ignores comments, strings and generics — DONE, P1, 4h; depends on M0-20-R1.
 - **M0-11-R2** Staleness uses the scanner file rules; precise import-only dependants and callee lines — IN_PROGRESS, P1, 5h; depends on M0-11-R1.
 - **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — READY, P1, 6h; depends on M0-02-R1.

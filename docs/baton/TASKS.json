@@ -8940,15 +8940,54 @@
         "npx vitest run tests/legacy-hook-verifiability.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-misc",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T02:36:04.755Z",
+      "completedAt": "2026-10-31T02:43:12.356Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-05-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-hook-verifiability.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-05-R3.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-31T02:36:03.572Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:36:04.755Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:43:10.594Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:43:12.356Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-hook-verifiability.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-05-R3.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
