@@ -8,9 +8,10 @@ export class YiiDetector implements FrameworkDetector {
   readonly name = 'yii';
   readonly language = 'php';
   readonly filePattern = /\.php$/;
+  readonly manifestDependencies = { manifest: 'composer.json' as const, names: ['yiisoft/yii2', 'yiisoft/yii3', 'yiisoft/router'] };
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    return hasComposerDependency(projectRoot, files, ['yiisoft/yii2', 'yiisoft/yii3', 'yiisoft/router']);
+    return hasComposerDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

@@ -8,9 +8,10 @@ export class NextJSDetector implements FrameworkDetector {
   readonly name = 'nextjs';
   readonly language = 'typescript';
   readonly filePattern = /\.(js|jsx|ts|tsx)$/;
+  readonly manifestDependencies = { manifest: 'package.json' as const, names: ['next'] };
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    return hasPackageJsonDependency(projectRoot, files, ['next']);
+    return hasPackageJsonDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

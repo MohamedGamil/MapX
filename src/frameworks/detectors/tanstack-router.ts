@@ -8,12 +8,13 @@ export class TanstackRouterDetector implements FrameworkDetector {
   readonly name = 'tanstack-router';
   readonly language = 'typescript';
   readonly filePattern = /\.(js|jsx|ts|tsx)$/;
+  readonly manifestDependencies = { manifest: 'package.json' as const, names: ['@tanstack/react-router'] };
 
   private projectFiles: string[] = [];
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
     this.projectFiles = files;
-    return hasPackageJsonDependency(projectRoot, files, ['@tanstack/react-router']);
+    return hasPackageJsonDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

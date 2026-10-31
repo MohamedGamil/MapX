@@ -8,6 +8,7 @@ export class SymfonyDetector implements FrameworkDetector {
   readonly name = 'symfony';
   readonly language = 'php';
   readonly filePattern = /\.php$/;
+  readonly manifestDependencies = { manifest: 'composer.json' as const, names: ['symfony/framework-bundle', 'symfony/symfony'] };
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
     if (files.some(f => f === 'symfony.lock' || f.endsWith('/symfony.lock'))) {
@@ -17,7 +18,7 @@ export class SymfonyDetector implements FrameworkDetector {
     if (existsSync(lockPath)) {
       return true;
     }
-    return hasComposerDependency(projectRoot, files, ['symfony/framework-bundle', 'symfony/symfony']);
+    return hasComposerDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

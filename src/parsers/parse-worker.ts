@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getParserForFile } from './parser-registry.js';
+import { ignoredSymbolsForFile, type ScopedIgnoredSymbols } from './ignored-symbols.js';
 // The main thread's JSONC normaliser (already loaded through parser-registry), so worker and
 // main-thread JSON references match (M0-32-R2).
 import { stripJsoncSyntax } from './static-file-parser.js';
@@ -149,7 +150,7 @@ let loadedLanguages: Map<string, { language: any; symbolsQuery: string; referenc
 let langDefs: Map<string, any>;
 let assetRoot: string;
 let nameByNodeId: Map<number, string>;
-let ignoredSymbols: Set<string> | undefined;
+let scopedIgnoredSymbols: ScopedIgnoredSymbols | undefined;
 
 async function initParser(): Promise<void> {
   if (parserReady) return;
@@ -225,6 +226,8 @@ function cleanTarget(name: string, refType: string): string {
 
 async function parseFile(job: ParseJob): Promise<ParseResult> {
   const empty: ParseResult = { id: job.id, symbols: [], references: [], errors: [] };
+  // A framework's ignore list applies only inside the folders it was detected for (M3-07).
+  const ignoredSymbols = ignoredSymbolsForFile(scopedIgnoredSymbols, job.filePath);
 
   let source: string;
   try {
@@ -501,7 +504,7 @@ async function initLanguages(): Promise<void> {
 async function main() {
   langDefs = new Map(Object.entries(workerData.languages));
   if (workerData.ignoredSymbols) {
-    ignoredSymbols = workerData.ignoredSymbols;
+    scopedIgnoredSymbols = workerData.ignoredSymbols;
   }
 
   await initParser();

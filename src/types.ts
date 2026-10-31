@@ -359,6 +359,12 @@ export interface FrameworkDetector {
   readonly language: string;
   readonly filePattern: RegExp;
   detect(projectRoot: string, files: string[]): Promise<boolean>;
+  /**
+   * Manifest dependencies that activate this detector. `detect()` reads the repo root's manifest
+   * and activates the detector for the whole repo; a manifest in a sub-folder (frontend/package.json)
+   * activates it only for the files under that folder (M3-07).
+   */
+  readonly manifestDependencies?: { manifest: 'package.json' | 'composer.json'; names: string[] };
   extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]>;
   extractHooks?(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]>;
   /** Called once before a repo's files are extracted; drop any per-workspace cache here. */

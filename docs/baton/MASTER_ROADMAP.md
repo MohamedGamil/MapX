@@ -137,9 +137,9 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-02** Vue template pass — IN_PROGRESS, P1, 14h; depends on M3-01.
 - **M3-03** Options API member resolution — DONE, P1, 12h; depends on M3-01.
 - **M3-04** <script setup> macros and composables — BACKLOG, P1, 10h; depends on M3-01.
-- **M3-05** Vuex and Pinia resolution — BACKLOG, P1, 14h; depends on M3-03.
+- **M3-05** Vuex and Pinia resolution — IN_PROGRESS, P1, 14h; depends on M3-03.
 - **M3-06** Vue Router navigation edges — BACKLOG, P1, 8h; depends on M3-02.
-- **M3-07** Framework detection from package.json files below the repo root — IN_PROGRESS, P2, 4h; depends on M3-01.
+- **M3-07** Framework detection from package.json files below the repo root — DONE, P2, 4h; depends on M3-01.
 
 ## M4 — Measurement and developer experience
 

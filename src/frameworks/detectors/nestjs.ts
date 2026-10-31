@@ -213,9 +213,10 @@ export class NestJSDetector implements FrameworkDetector {
   readonly name = 'nestjs';
   readonly language = 'typescript';
   readonly filePattern = /\.(ts|js)$/;
+  readonly manifestDependencies = { manifest: 'package.json' as const, names: ['@nestjs/core', '@nestjs/common'] };
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    return hasPackageJsonDependency(projectRoot, files, ['@nestjs/core', '@nestjs/common']);
+    return hasPackageJsonDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

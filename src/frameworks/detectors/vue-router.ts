@@ -8,9 +8,10 @@ export class VueRouterDetector implements FrameworkDetector {
   readonly name = 'vue-router';
   readonly language = 'typescript';
   readonly filePattern = /\.(js|ts|vue)$/;
+  readonly manifestDependencies = { manifest: 'package.json' as const, names: ['vue-router', 'vue'] };
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
-    return hasPackageJsonDependency(projectRoot, files, ['vue-router', 'vue']);
+    return hasPackageJsonDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

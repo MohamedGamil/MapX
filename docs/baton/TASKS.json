@@ -6760,24 +6760,40 @@
       "affectedFiles": [
         "src/frameworks/framework-registry.ts",
         "src/frameworks/utils.ts",
-        "tests/vue-sfc.test.ts"
+        "tests/vue-sfc.test.ts",
+        "src/core/scanner.ts",
+        "docs/framework-integration.md"
       ],
       "acceptanceCriteria": [
         "A repo whose only package.json listing vue is in a sub-folder (e.g. frontend/package.json) activates the Vue detector for files under that folder (e2e test).",
         "The vue-sfc scorer can scan the whole fixture root as one project with the same results as scanning vue2/ and vue3/ separately (test)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/vue-sfc.test.ts"
+        "npx vitest run tests/vue-sfc.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-vue-detect",
       "actualHours": null,
       "startedAt": "2026-10-31T07:27:05.676Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T07:51:43.124Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-07.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-sfc.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-07.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-07.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T07:27:05.323Z",
@@ -6790,6 +6806,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:51:41.783Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:51:43.124Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-sfc.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-07.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-07.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

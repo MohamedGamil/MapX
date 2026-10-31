@@ -8,6 +8,7 @@ export class SvelteKitDetector implements FrameworkDetector {
   readonly name = 'sveltekit';
   readonly language = 'typescript';
   readonly filePattern = /\.(svelte|ts|js)$/;
+  readonly manifestDependencies = { manifest: 'package.json' as const, names: ['@sveltejs/kit', 'svelte'] };
 
   async detect(projectRoot: string, files: string[]): Promise<boolean> {
     if (files.some(f => f === 'svelte.config.js' || f.endsWith('/svelte.config.js'))) {
@@ -17,7 +18,7 @@ export class SvelteKitDetector implements FrameworkDetector {
     if (existsSync(svelteConfigPath)) {
       return true;
     }
-    return hasPackageJsonDependency(projectRoot, files, ['@sveltejs/kit', 'svelte']);
+    return hasPackageJsonDependency(projectRoot, files, this.manifestDependencies.names);
   }
 
   async extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]> {

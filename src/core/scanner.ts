@@ -19,6 +19,7 @@ import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, gitBlobId, isGitRepo } from './git-tracker.js';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
+import { isInScopes } from '../frameworks/utils.js';
 import { canonicalPath } from './workspace-manager.js';
 import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, normalizePattern, shebangLanguage } from './file-rules.js';
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
@@ -27,7 +28,7 @@ import { pairCall, urlHost } from '../frameworks/http/pairing.js';
 import { importResolverFor, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
-import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
+import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 import { resolveThisMember } from '../parsers/languages/vue-options.js';
 
@@ -77,6 +78,7 @@ export class Scanner {
   private workspaceFileMap = new Map<string, string>();
   private dartPackageMap = new Map<string, string>();
   private cachedActiveDetectors = new Map<string, any[]>();
+  private cachedFrameworkScopes = new Map<string, Map<string, string[]>>();
   private symbolIndex: Map<string, SymbolIndexEntry[]> | null = null;
   private parallel: boolean;
 
@@ -336,7 +338,7 @@ export class Scanner {
       const filePaths = discovered.map(f => f.relativePath);
       const activeDetectors = await this.getActiveDetectors(repoRoot, filePaths);
       const activeFrameworks = activeDetectors.map(d => d.name);
-      const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+      const ignoredSymbols = buildScopedIgnoredSymbols(activeFrameworks, this.frameworkScopes(repoRoot));
 
       // Build pre-scan symbol index for O(1) lookups during reference resolution
       this.symbolIndex = this.buildSymbolIndex(repo.name);
@@ -658,7 +660,7 @@ export class Scanner {
     const allFilePaths = this.store.getAllFiles(repo.name).map(f => f.path as string);
     const activeDetectors = await this.getActiveDetectors(repoRoot, allFilePaths);
     const activeFrameworks = activeDetectors.map(d => d.name);
-    const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+    const ignoredSymbols = buildScopedIgnoredSymbols(activeFrameworks, this.frameworkScopes(repoRoot));
 
     // Build pre-scan symbol index for O(1) lookups during reference resolution
     this.symbolIndex = this.buildSymbolIndex(repo.name);
@@ -854,7 +856,7 @@ export class Scanner {
   private async parseFilesParallel(
     files: FileInfo[],
     workspaceRoot: string,
-    ignoredSymbols?: Set<string>,
+    ignoredSymbols?: ScopedIgnoredSymbols,
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
     if (files.length === 0) return [];
@@ -874,7 +876,7 @@ export class Scanner {
   private async parseWithWorkers(
     files: FileInfo[],
     workspaceRoot: string,
-    ignoredSymbols?: Set<string>,
+    ignoredSymbols?: ScopedIgnoredSymbols,
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
     const workerCount = Math.min(this.concurrency, files.length, 8);
@@ -1034,7 +1036,7 @@ export class Scanner {
   private async parseOnMainThread(
     files: FileInfo[],
     workspaceRoot: string,
-    ignoredSymbols?: Set<string>,
+    ignoredSymbols?: ScopedIgnoredSymbols,
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
     const results: ParseResult[] = new Array(files.length);
@@ -1075,7 +1077,7 @@ export class Scanner {
           const parser = getParserForFile(relPath, this.config.getResolvedUserLanguages(), fileInfo.language);
           results[i] = await parser.parse(relPath, sources[i]!, {
             facadeMap: this.config.settings.php?.facadeMap,
-            ignoredSymbols,
+            ignoredSymbols: ignoredSymbolsForFile(ignoredSymbols, relPath),
           });
         } catch {
           results[i] = { symbols: [], references: [], errors: [{ message: `Failed to parse ${relPath}` }] };
@@ -1830,7 +1832,9 @@ export class Scanner {
       // last-registration-wins) before any edge is built.
       const detectorRoutes: RouteBinding[] = [];
       // Find files that match the detector's pattern (e.g. routes/api.php)
-      const matchingPaths = filePaths.filter(p => detector.filePattern.test(p));
+      // A detector activated by a sub-folder manifest extracts only under that folder (M3-07).
+      const scopes = this.frameworkScopes(repoRoot).get(detector.name);
+      const matchingPaths = filePaths.filter(p => detector.filePattern.test(p) && (!scopes || isInScopes(p, scopes)));
       for (const relPath of matchingPaths) {
         try {
           const absPath = resolve(workspaceRoot, relPath);
@@ -2040,9 +2044,16 @@ export class Scanner {
       return this.cachedActiveDetectors.get(repoRoot)!;
     }
     const registry = FrameworkRegistry.getInstance();
-    const detectors = await registry.detectActiveFrameworks(repoRoot, filePaths);
+    const scopes = new Map<string, string[]>();
+    const detectors = await registry.detectActiveFrameworks(repoRoot, filePaths, { workspaceRoot: this.config.getWorkspaceRoot(), scopes });
     this.cachedActiveDetectors.set(repoRoot, detectors);
+    this.cachedFrameworkScopes.set(repoRoot, scopes);
     return detectors;
+  }
+
+  /** Folders of the detectors a sub-folder manifest activated (M3-07); others cover the repo. */
+  private frameworkScopes(repoRoot: string): Map<string, string[]> {
+    return this.cachedFrameworkScopes.get(repoRoot) ?? new Map();
   }
 
   /**
@@ -2437,6 +2448,7 @@ export class Scanner {
 
     // Clear framework detection cache after post-scan analysis
     this.cachedActiveDetectors.clear();
+    this.cachedFrameworkScopes.clear();
   }
 
   /**
@@ -2519,7 +2531,7 @@ export class Scanner {
     const filePaths = discovered.map(f => f.relativePath);
     const activeDetectors = await this.getActiveDetectors(repoRoot, filePaths);
     const activeFrameworks = activeDetectors.map(d => d.name);
-    const ignoredSymbols = buildIgnoredSymbols(activeFrameworks);
+    const ignoredSymbols = buildScopedIgnoredSymbols(activeFrameworks, this.frameworkScopes(repoRoot));
 
     // Build pre-scan symbol index
     this.symbolIndex = this.buildSymbolIndex(repo.name);

@@ -1,10 +1,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join, resolve } from 'node:path';
 import {
   loadExpected, parseArgs, parseThresholds, scanEdgeFixture, scoreEdges, thresholdFailures,
   type EdgeLabel, type EdgeScore, type StoredEdge, type StoredSymbol,
 } from '../scripts/eval/score-edges.ts';
+import { findNestedManifestScopes } from '../src/frameworks/utils.ts';
+import { ignoredSymbolsForFile } from '../src/parsers/ignored-symbols.ts';
+import { cleanup, init, mapx, query, workspace } from './helpers/e2e.ts';
 
 // M3-01: Vue SFC edge fixture + scorer (contract: docs/baton/iterations/M3-01.md, "Edge contract").
 // FLOORS only ever rise: each of M3-02 … M3-06 raises the patterns it implements (ideally to their
@@ -220,5 +224,91 @@ describe('Vue SFC edges on the fixture (real scan)', () => {
         .toBeLessThanOrEqual(FLOORS.falsePositives[p] ?? 0);
     }
     expect(result.totals.precision, result.unlabelledEdges.join('\n')).toBeGreaterThanOrEqual(FLOORS.minPrecision);
+  });
+
+  // M3-07: vue2/package.json and vue3/package.json activate Vue detection for their own folders,
+  // so one scan of the fixture root equals the per-app scans that `roots` asks for.
+  it('scans the whole fixture as one project with the same edges, symbols and score as per root', () => {
+    const perRoot = scanEdgeFixture(FIXTURE, expected.roots);
+    const whole = scanEdgeFixture(FIXTURE);
+    const sorted = (rows: object[]) => rows.map((r) => JSON.stringify(r)).sort();
+    expect(sorted(whole.edges)).toEqual(sorted(perRoot.edges));
+    expect(sorted(whole.symbols)).toEqual(sorted(perRoot.symbols));
+    expect(scoreEdges(labels, whole.edges, whole.symbols, expected.scoredTypes)).toEqual(result);
+    // Vue detection really ran: the router files yield route edges in both apps.
+    for (const app of ['vue2', 'vue3'])
+      expect(whole.edges.some((e) => e.edge_type === 'route' && e.source_file === `${app}/src/router/index.js`), app).toBe(true);
+  }, 240000);
+});
+
+describe('framework detection from a package.json below the repo root (M3-07)', () => {
+  // A Vue app in frontend/ next to a PHP backend; the only package.json is frontend's.
+  const files: Record<string, string> = {
+    'frontend/package.json': JSON.stringify({ name: 'shop-frontend', private: true, dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0' } }),
+    'frontend/src/i18n.js': 'export function t(key) {\n  return key;\n}\n',
+    'frontend/src/title.js': "import { t } from './i18n';\n\nexport function pageTitle() {\n  return t('shop.title');\n}\n",
+    'frontend/src/router/index.js': "import { createRouter, createWebHistory } from 'vue-router';\n\nconst routes = [\n  { path: '/about', name: 'About', component: () => import('../views/AboutView.vue') },\n];\n\nexport default createRouter({ history: createWebHistory(), routes });\n",
+    'frontend/src/views/AboutView.vue': "<template>\n  <h1>About</h1>\n</template>\n\n<script>\nexport default { name: 'AboutView' };\n</script>\n",
+    // `t` is on the vue-router ignore list; the backend's own t() functions must survive (the PHP
+    // parser never applies ignore lists; the JS build script shows the scoping).
+    'backend/src/helpers.php': "<?php\n\nfunction t($text)\n{\n    return $text;\n}\n",
+    'backend/tools/i18n.js': "function t(key) {\n  return key;\n}\n\nmodule.exports = { t };\n",
+    // Looks like a Vue route table, but no Vue manifest covers backend/.
+    'backend/tools/routes.js': "const routes = [\n  { path: '/admin', component: () => import('./AdminPanel.vue') },\n];\n\nmodule.exports = routes;\n",
+    'backend/tools/AdminPanel.vue': "<template>\n  <h1>Admin</h1>\n</template>\n",
+  };
+  // More than 10 files, so the default scan parses in worker threads; --no-parallel covers the main thread.
+  for (let i = 1; i <= 4; i++) files[`backend/src/Util${i}.php`] = `<?php\n\nfunction util${i}()\n{\n    return ${i};\n}\n`;
+
+  it.each([['worker threads', []], ['main thread', ['--no-parallel']]])('activates Vue for frontend/ only (%s)', (_mode, flags) => {
+    const root = workspace(files);
+    try {
+      init(root);
+      mapx(root, 'scan', ...flags);
+      expect(JSON.parse(readFileSync(join(root, '.mapx', 'frameworks.json'), 'utf8'))).toContain('vue-router');
+      const routes = query<StoredEdge>(root, "SELECT source_file, source_symbol, target_file, target_symbol, edge_type FROM edges WHERE edge_type = 'route'");
+      expect(routes).toEqual([{
+        source_file: 'frontend/src/router/index.js', source_symbol: null,
+        target_file: 'frontend/src/views/AboutView.vue', target_symbol: 'AboutView', edge_type: 'route',
+      }]);
+      const t = query<{ file_path: string }>(root, "SELECT file_path FROM symbols WHERE name = 't' ORDER BY file_path");
+      expect(t.map((s) => s.file_path)).toEqual(['backend/src/helpers.php', 'backend/tools/i18n.js']);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('finds manifest folders from the scanned files, below the repo root only', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'mapx-scopes-'));
+    const pkg = (dir: string, deps: Record<string, string>) => {
+      mkdirSync(join(root, dir), { recursive: true });
+      writeFileSync(join(root, dir, 'package.json'), JSON.stringify({ dependencies: deps }));
+    };
+    try {
+      pkg('', { vue: '^3' }); // the repo root itself is detect()'s job
+      pkg('apps/web', { vue: '^3' });
+      pkg('apps/web/legacy', { vue: '^2' }); // covered by apps/web
+      pkg('apps/api', { express: '^4' });
+      pkg('apps/admin/node_modules/x', { vue: '^3' }); // no scanned file there
+      pkg('tools', { 'vue-router': '^4' });
+      const files = ['index.js', 'apps/web/src/main.js', 'apps/web/legacy/old.js', 'apps/api/server.js', 'apps/admin/app.js', 'tools/a/b/c.js'];
+      expect(await findNestedManifestScopes(root, '', files, 'package.json', ['vue', 'vue-router'])).toEqual(['apps/web', 'tools']);
+      // A repo registered at apps/ sees only manifests below apps/.
+      expect(await findNestedManifestScopes(root, 'apps', files.filter((f) => f.startsWith('apps/')), 'package.json', ['vue'])).toEqual(['apps/web']);
+      expect(await findNestedManifestScopes(root, 'apps/web', ['apps/web/src/main.js'], 'package.json', ['vue'])).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('applies a scoped ignore list only to files under its folders', () => {
+    const vue = new Set(['t']);
+    const other = new Set(['x']);
+    const scoped = [{ scopes: ['frontend'], symbols: vue }, { scopes: [''], symbols: other }];
+    expect(ignoredSymbolsForFile(scoped, 'frontend/src/a.js')).toEqual(new Set(['t', 'x']));
+    expect(ignoredSymbolsForFile(scoped, 'backend/a.php')).toBe(other);
+    expect(ignoredSymbolsForFile(scoped, 'frontend-old/a.js')).toBe(other);
+    expect(ignoredSymbolsForFile([{ scopes: ['frontend'], symbols: vue }], 'backend/a.php')).toBeUndefined();
+    expect(ignoredSymbolsForFile(undefined, 'a.js')).toBeUndefined();
   });
 });
