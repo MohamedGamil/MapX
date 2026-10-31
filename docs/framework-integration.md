@@ -57,7 +57,7 @@ graph TD
 | **TanStack Router** | JS / TS | Package dependency (`@tanstack/react-router`), parses route files and directory-based routes. |
 | **Next.js** | JS / TS | Page routing layouts (`pages/` directory or `app/` directory routes matching `/route.ts`, `page.tsx`). |
 | **SvelteKit** | Svelte / JS / TS | Directory structure (`src/routes/`), parses page endpoint routing scripts (`+page.svelte`, `+server.ts`). |
-| **Vue Router** | JS / TS | Package dependency (`vue-router`), routes arrays, lazy-loaded route bundle declarations. |
+| **Vue Router** | JS / TS | Package dependency (`vue-router`), routes arrays, lazy-loaded route bundle declarations. A route's component resolves through the router file's import of it (including `@/` for `src/`). Navigation (`router.push`, `this.$router.push`, `<router-link :to>`) gives `navigate` edges to the route's component; they are not routes and do not appear in `mapx routes`. |
 | **Drupal** | PHP | Checks for `.info.yml` files, custom routes yml, hooks, and theme hook registrations. |
 | **Rails** | Ruby | Checks for `Gemfile` containing `rails`, parses `config/routes.rb` files. |
 | **Spring** | Java | Checks for `@RestController`, `@RequestMapping`, `@GetMapping`, and `@PostMapping` annotations. |

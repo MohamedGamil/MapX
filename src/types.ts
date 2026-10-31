@@ -101,7 +101,12 @@ export type ReferenceType =
   | 'websocket_handler'
   | 'render'
   /** Frontend HTTP call → backend route handler (M2-06). */
-  | 'http';
+  | 'http'
+  /**
+   * Client-side navigation (Vue Router `push` / `<router-link>`) → the component of the route record
+   * it reaches (M3-06). Not `route`: that is a backend endpoint, rebuilt by the detect phase.
+   */
+  | 'navigate';
 
 export interface ParseResult {
   symbols: ExtractedSymbol[];
@@ -347,6 +352,8 @@ export interface ScanContext {
   workspaceRoot: string;
   repoName: string;
   resolveSymbolToFile: (symbolName: string, sourcePath?: string) => string | null;
+  /** The indexed file a JS/TS module specifier imported from `fromFile` resolves to (M3-06). */
+  resolveImport?: (specifier: string, fromFile: string) => string | null;
 }
 
 export interface RouteBinding {

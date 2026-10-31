@@ -87,12 +87,12 @@ export function toPascal(name: string): string {
 }
 
 /** Same-length copy with HTML comments and `<script>` / `<style>` blocks blanked (newlines kept). */
-function maskBlocks(source: string): string {
+export function maskBlocks(source: string): string {
   return source.replace(/<!--[\s\S]*?(?:-->|$)|<(script|style)\b[\s\S]*?<\/\1\s*>/gi, (m) => m.replace(/[^\n]/g, ' '));
 }
 
 /** The root `<template>`'s content range in `masked`, or null (none, self-closing, or not HTML: pug). */
-function templateRange(masked: string): { start: number; end: number } | null {
+export function templateRange(masked: string): { start: number; end: number } | null {
   const open = /<template\b([^>]*)>/i.exec(masked);
   if (!open || /\/\s*$/.test(open[1]!)) return null;
   const lang = /\blang\s*=\s*["']?([\w-]+)/.exec(open[1]!)?.[1];
@@ -107,12 +107,12 @@ function templateRange(masked: string): { start: number; end: number } | null {
   return null;
 }
 
-interface TemplateAttr { name: string; value: string | null; offset: number }
-interface TemplateTag { name: string; offset: number; attrs: TemplateAttr[] }
-type TemplateNode = { tag: TemplateTag } | { interpolation: string; offset: number };
+export interface TemplateAttr { name: string; value: string | null; offset: number }
+export interface TemplateTag { name: string; offset: number; attrs: TemplateAttr[] }
+export type TemplateNode = { tag: TemplateTag } | { interpolation: string; offset: number };
 
 /** Opening tags (with attributes) and `{{ }}` interpolations of the template, in document order. */
-function templateNodes(masked: string, start: number, end: number): TemplateNode[] {
+export function templateNodes(masked: string, start: number, end: number): TemplateNode[] {
   const nodes: TemplateNode[] = [];
   let i = start;
   while (i < end) {

@@ -6,5 +6,6 @@ Synthetic Vue 2.7 (`vue2/`, a helpdesk: Vuex 3, Vue Router 3, Pinia) and Vue 3.x
 - The edge contract (symbol naming, which symbol owns template and `<script setup>` code, render and route edges) is in `docs/baton/iterations/M3-01.md`, section "Edge contract".
 - Score: `npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc [--json] [--min-recall R|pattern=R] [--max-fp N|pattern=N] [--min-precision P]`.
 - Floors: `tests/vue-sfc.test.ts` (`FLOORS`); raise them as M3-02 … M3-06 land.
+- Pattern `router-record` (M3-06) labels the vue-router detector's `route` edges (router file, no source symbol → the route's component). `route` is not a scored type, so these count for recall only; its negatives name the old defect, a statically imported component resolved to the router file itself.
 
 Deliberate traps (negatives): same-named methods in unrelated components (`save`, `checkout`), a component tag inside an HTML comment, a mixin with the same member that the component does not mix in, modules that share a name with a composable or with the functions destructured from one (`api/client.js`, `api/money.ts`), Vuex actions with the same name in two namespaces (`FETCH_ALL`), Pinia actions with the same name in two stores (`clear`, `touch`), a route named like a different component (`Dashboard`), and `<router-link>` targets that are navigation, not rendering.

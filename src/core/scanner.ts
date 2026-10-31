@@ -34,6 +34,7 @@ import { resolveThisMember } from '../parsers/languages/vue-options.js';
 import { collectVuexFiles, resolveStoreTarget, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { globalRegistrations, vueComponentName, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
+import { buildRouteTable, matchRoute, withSrcAlias, type NavTarget, type ResolvedRoute } from '../parsers/languages/vue-navigation.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
@@ -1187,12 +1188,15 @@ export class Scanner {
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
       const vueHint = ref.metadata?.vue as VueResolveHint | undefined;
-      if (isJsOrTs && !vueHint && BUILTIN_GLOBALS.has(ref.targetName)) continue;
+      const navigate = ref.referenceType === 'navigate';
+      if (isJsOrTs && !vueHint && !navigate && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
       // named by the module/namespace rather than the raw statement (M0-12-R4).
-      let targets: { file: string; symbol: string }[];
+      let targets: { file: string; symbol: string; verifiability?: 'verified' | 'inferred'; metadata?: Record<string, unknown> }[];
 
-      if (vueHint) {
+      if (navigate) {
+        targets = this.resolveNavigation(ref, sourcePath, fileMap);
+      } else if (vueHint) {
         targets = this.resolveVueReference(ref, vueHint, sourcePath, fileMap);
       } else if (resolver && (ref.referenceType === 'import' || ref.referenceType === 'require')) {
         targets = this.resolveModuleImport(resolver, ref.targetName, sourcePath, fileMap, usedNames);
@@ -1219,7 +1223,7 @@ export class Scanner {
         targets = targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
       }
 
-      for (const { file: targetFile, symbol: targetSymbol } of targets) {
+      for (const { file: targetFile, symbol: targetSymbol, verifiability, metadata: targetMetadata } of targets) {
         const targetRepoName = fileMap.get(targetFile);
 
         let sourceSymbol: string | null = ref.sourceSymbol;
@@ -1256,10 +1260,10 @@ export class Scanner {
           edgeType,
           repo: repoName,
           weight: 1.0,
-          verifiability: ref.verifiability ?? 'verified',
+          verifiability: verifiability ?? ref.verifiability ?? 'verified',
           targetRepo: (targetRepoName && targetRepoName !== repoName) ? targetRepoName : undefined,
           // Keep what the parser recorded (relationship, binding, facade, dispatch details).
-          metadata: { ...metadata, startLine: ref.startLine },
+          metadata: { ...metadata, ...targetMetadata, startLine: ref.startLine },
         });
       }
     }
@@ -1344,6 +1348,33 @@ export class Scanner {
       return f.slice(0, i).lastIndexOf('/');
     };
     return matches.reduce<string | null>((best, f) => (best === null || shared(f) > shared(best) ? f : best), null);
+  }
+
+  /**
+   * Vue Router navigation (M3-06, edge contract rule 9): the component of the route record the
+   * target names, from the repo's route table; exact name or path, never by similarity. The edge
+   * carries the record in `metadata.route`; a `:param` pattern match is inferred.
+   */
+  private resolveNavigation(
+    ref: ExtractedReference, sourcePath: string, fileMap: Map<string, string>,
+  ): { file: string; symbol: string; verifiability: 'verified' | 'inferred'; metadata: Record<string, unknown> }[] {
+    const target = ref.metadata?.navigate as NavTarget | undefined;
+    if (!target) return [];
+    const repo = fileMap.get(sourcePath) ?? '';
+    let table = this.vueRoutes.get(repo);
+    if (!table) {
+      const files = [...fileMap].filter(([path, r]) => r === repo && /\.[cm]?[jt]sx?$/.test(path)).map(([path]) => path);
+      table = buildRouteTable(files, (path) => this.readWorkspaceText(path), withSrcAlias((spec, from) => this.resolveImportPath(spec, from, fileMap)));
+      this.vueRoutes.set(repo, table);
+    }
+    const hit = matchRoute(target, table, sourcePath);
+    const file = hit?.route.componentFile;
+    if (!hit || !file?.endsWith('.vue')) return [];
+    const { name, path } = hit.route;
+    return [{
+      file, symbol: vueComponentName(file), verifiability: hit.exact ? 'verified' : 'inferred',
+      metadata: { route: { file: hit.route.file, name, path } },
+    }];
   }
 
   /** Whether `file` declares a symbol named exactly `name` (this phase's index, else the store). */
@@ -1444,6 +1475,8 @@ export class Scanner {
   private vuexFiles = new Map<string, VuexModuleInfo>();
   // Repo and alias path → the modules whose path ends with it (M3-04, `resolveAliasBySuffix`).
   private aliasSuffixMatches = new Map<string, string[]>();
+  // Repo → its Vue Router route records (M3-06).
+  private vueRoutes = new Map<string, ResolvedRoute[]>();
 
   /** Language of an indexed path: its extension or file name, else what discovery stored (shebang scripts). */
   private languageOf(path: string): string | null {
@@ -2006,6 +2039,7 @@ export class Scanner {
             // its language family (a PHP route must not resolve to a JS class, M2-01).
             resolveSymbolToFile: (symName: string, sourcePath: string = relPath) =>
               this.resolveSymbolToFile(symName, this.workspaceFileMap, sourcePath),
+            resolveImport: withSrcAlias((specifier, fromFile) => this.resolveImportPath(specifier, fromFile, this.workspaceFileMap)),
           };
 
           const routes = await detector.extractRoutes(relPath, content, localCtx);
@@ -2233,6 +2267,7 @@ export class Scanner {
     this.phpNamespaces.clear();
     this.vueGlobals.clear();
     this.aliasSuffixMatches.clear();
+    this.vueRoutes.clear();
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 

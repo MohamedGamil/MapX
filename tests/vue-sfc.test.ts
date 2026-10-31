@@ -20,7 +20,7 @@ const labels = expected.labels;
 const PATTERNS = [
   'template-handler', 'template-binding-call', 'component-local', 'component-global', 'v-model-component',
   'options-this-call', 'mixin-method', 'script-setup-macro', 'script-setup-call', 'component-symbol', 'composable',
-  'vuex-map-helpers', 'vuex-dispatch', 'pinia', 'router',
+  'vuex-map-helpers', 'vuex-dispatch', 'pinia', 'router', 'router-record',
 ] as const;
 type Pattern = (typeof PATTERNS)[number];
 
@@ -50,12 +50,13 @@ const FLOORS: {
     'vuex-map-helpers': labelledCount('vuex-map-helpers'), // M3-05: by namespace through the store root
     'vuex-dispatch': labelledCount('vuex-dispatch'), // M3-05
     pinia: labelledCount('pinia'), // M3-05: through the store's import
-    router: 0, // M3-06
+    router: labelledCount('router'), // M3-06: rule 9 navigate edges
+    'router-record': labelledCount('router-record'), // M3-06: the vue-router detector's route edges reach the component
   },
   falsePositives: {
     composable: 1, // generic: formatter.format() inside format() resolves to itself
   },
-  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02; 0.989 (90/91) after M3-05. */
+  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02; 0.989 (90/91) after M3-05; 0.990 (100/101) after M3-06. */
   minPrecision: 0.95,
 };
 
@@ -103,14 +104,19 @@ describe('Vue SFC fixture labels', () => {
         continue;
       }
       const e = l.edge!;
-      expect(ALLOWED_EDGE_TYPES.has(e.edge_type), `${l.id} ${e.edge_type}`).toBe(true);
+      // `router-record` labels the vue-router detector's `route` edges (M3-06): unscored for
+      // precision, owned by no symbol of the router file.
+      const routeRecord = l.pattern === 'router-record';
+      expect(ALLOWED_EDGE_TYPES.has(e.edge_type) || (routeRecord && e.edge_type === 'route'), `${l.id} ${e.edge_type}`).toBe(true);
       for (const [file, symbol] of [[e.source_file, e.source_symbol], [e.target_file, e.target_symbol]] as const) {
         expect(file.startsWith(`${l.version}/src/`), `${l.id} ${file}`).toBe(true);
         expect(existsSync(resolve(FIXTURE, file)), `${l.id} ${file}`).toBe(true);
-        expect(symbolIsReal(file, symbol), `${l.id} ${file}#${symbol}`).toBe(true);
+        if (routeRecord && file === e.source_file && symbol === e.source_symbol) expect(symbol, l.id).toBeNull();
+        else expect(symbolIsReal(file, symbol), `${l.id} ${file}#${symbol}`).toBe(true);
       }
-      // Contract: render and route edges end at a component symbol.
-      if (e.edge_type !== 'call') expect(e.target_symbol, l.id).toBe(componentName(e.target_file));
+      // Contract: render, navigate and route edges end at a component symbol (a route-record negative
+      // names the defect: the router file itself).
+      if (e.edge_type !== 'call' && !(routeRecord && l.expect === 'absent')) expect(e.target_symbol, l.id).toBe(componentName(e.target_file));
     }
   });
 

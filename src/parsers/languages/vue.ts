@@ -6,6 +6,7 @@ import { getBuiltinLanguages } from '../../languages/registry.js';
 import { analyzeOptionsComponent, annotateThisCalls, type OptionsComponent } from './vue-options.js';
 import { assignOwners, componentSymbol, templateReferences } from './vue-template.js';
 import { analyzeScriptBlock, annotateComposableCalls, interfaceMetadata, type VueInterface } from './vue-script-setup.js';
+import { navigationReferences } from './vue-navigation.js';
 
 export class VueParser implements LanguageParser {
   readonly languageName = 'vue';
@@ -98,6 +99,8 @@ export class VueParser implements LanguageParser {
     symbols.unshift(component);
     try {
       references.push(...templateReferences(source, component.name, optionsComponent));
+      // Rule 9: router.push / <router-link :to> → `navigate` (M3-06).
+      references.push(...navigationReferences(source));
     } catch (err: any) {
       errors.push({ message: `Failed to read the Vue template: ${err.message}`, line: 1 });
     }
