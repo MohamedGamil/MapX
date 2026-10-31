@@ -78,16 +78,16 @@
   arguments: (arguments) @ref.binding_arguments
 ) @ref.type_binding_call
 
-; F12: Event, Job, and Notification dispatch
+; F12: Event, Job, and Notification dispatch; qualified names too: event(new \App\X), \Event::dispatch (M0-04-R2)
 (function_call_expression
   function: (name) @_fn (#match? @_fn "^(event|dispatch|dispatch_sync)$")
   arguments: (arguments
     (argument
       (object_creation_expression
-        (name) @ref.target_dispatch)))) @ref.type_dispatch
+        [(name) (qualified_name)] @ref.target_dispatch)))) @ref.type_dispatch
 
 (scoped_call_expression
-  scope: (name) @ref.target_dispatch_static
+  scope: [(name) (qualified_name)] @ref.target_dispatch_static
   name: (name) @_dispatch_method (#match? @_dispatch_method "^(dispatch|dispatchSync|dispatchIf|dispatchUnless|dispatchAfterResponse)$")
 ) @ref.type_dispatch_static_call
 
@@ -96,7 +96,7 @@
   arguments: (arguments
     (argument
       (object_creation_expression
-        (name) @ref.target_notify)))) @ref.type_notify
+        [(name) (qualified_name)] @ref.target_notify)))) @ref.type_notify
 
 (scoped_call_expression
   scope: (name) @_notif_facade (#eq? @_notif_facade "Notification")
@@ -105,5 +105,5 @@
     (argument)
     (argument
       (object_creation_expression
-        (name) @ref.target_notify)))) @ref.type_notify_facade
+        [(name) (qualified_name)] @ref.target_notify)))) @ref.type_notify_facade
 

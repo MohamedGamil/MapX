@@ -2259,8 +2259,10 @@ function processRouteChain(
     }
   }
   // Handlers given as Class::class (array form or resource controller) are declared, not inferred.
-  // (Route::resources() decides per controller above.)
-  if (handlerStr && /::class\b/.test(handlerStr) && !(isResourceVerb() && verb!.endsWith('S')))
+  // (Route::resources() decides per controller above.) A closure mentioning `X::class` in its body
+  // names no handler class (M0-04-R2).
+  const closure = !!handlerStr && /^\s*(static\s+)?(function|fn)\b/.test(handlerStr);
+  if (handlerStr && !closure && /::class\b/.test(handlerStr) && !(isResourceVerb() && verb!.endsWith('S')))
     for (const r of routes.slice(routesBefore)) (r.metadata ??= {}).confidence = 'declared';
   // A {dynamic} URI part or prefix (from this chain, a group or the mount) flags the route.
   // A domain chained before a resource is not a resource option, so Laravel ignores it. On a

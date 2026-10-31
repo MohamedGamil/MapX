@@ -56,7 +56,11 @@ describe('import resolution indexes (M0-12-R3)', () => {
     'vendor/acme/src/Services/UserService.php',
   ];
   for (let i = 0; i < 2000; i++) files.push(`gen/src/main/java/com/gen/p${i % 40}/C${i}.java`);
-  const texts = { 'go/go.mod': 'module example.com/proj\n' };
+  const texts = {
+    'go/go.mod': 'module example.com/proj\n',
+    // PSR-4 maps the vendor prefix Acme\ to src/ (M0-04-R2: a dropped-segment suffix no longer does).
+    'vendor/acme/composer.json': JSON.stringify({ autoload: { 'psr-4': { 'Acme\\': 'src/' } } }),
+  };
 
   it('index each file set once, not once per import', () => {
     const set = new CountingSet(files);
@@ -83,6 +87,10 @@ describe('import resolution indexes (M0-12-R3)', () => {
     expect(resolveGoImport('"example.com/proj/internal/none"', 'go/cmd/main.go', c)).toBeNull();
     expect(resolvePhpImport('app\\services\\userservice', 'app/X.php', c)).toBe('app/Services/UserService.php');
     expect(resolvePhpImport('Acme\\Services\\UserService', 'vendor/acme/src/X.php', c)).toBe('vendor/acme/src/Services/UserService.php');
+    // No mapping and no file at the whole name's path: nothing, not the …/Services/UserService.php homonyms.
+    expect(resolvePhpImport('Acme\\Services\\UserService', 'app/X.php', c)).toBeNull();
+    expect(resolvePhpImport('Illuminate\\Services\\UserService', 'app/X.php', c)).toBeNull();
+    expect(resolvePhpImport('App\\Services\\UserService', 'app/Services/UserService.php', c)).toBeNull();
   });
 });
 

@@ -1283,6 +1283,8 @@ export class Scanner {
   private importFiles: { map: Map<string, string>; files: Set<string> } | null = null;
   private importTextCache = new Map<string, string | null>();
   private languageCache = new Map<string, string | null>();
+  // PHP file → the namespace it declares ('' for none), built with the symbol index (M0-04-R2).
+  private phpNamespaces = new Map<string, string>();
 
   /** Language of an indexed path: its extension or file name, else what discovery stored (shebang scripts). */
   private languageOf(path: string): string | null {
@@ -1323,6 +1325,7 @@ export class Scanner {
       },
       namespaceFiles: (namespace) => declaring(namespace, NAMESPACE_KINDS),
       typeFiles: (name) => declaring(name, TYPE_KINDS),
+      fileNamespace: (file) => this.phpNamespaces.get(file) ?? null,
       get referencedNames() { return referencedNames(); },
     });
   }
@@ -1493,16 +1496,18 @@ export class Scanner {
           const shortName = symbolName.includes('\\') 
             ? symbolName.split('\\').pop()! 
             : (symbolName.includes('.') ? symbolName.split('.').pop()! : symbolName);
+          // A namespaced name (App\Models\Role) is the class declared in that namespace or nothing:
+          // never another namespace's Role, nor an app file for an Illuminate\… name (M0-04-R1, M0-04-R2).
+          if (sourceLang === 'php' && symbolName.includes('\\')) {
+            const namespace = symbolName.replace(/^\\/, '').split('\\').slice(0, -1).join('\\').toLowerCase();
+            const declared = compatible.filter(m => m.name.toLowerCase() === shortName.toLowerCase()
+              && (TYPE_KINDS.has(m.kind ?? '') || m.kind === 'function')
+              && this.phpNamespaces.get(m.file)?.toLowerCase() === namespace);
+            return (declared.find(m => m.file === sourcePath) ?? declared[0])?.file ?? null;
+          }
           if (sourcePath) {
             const sameFile = compatible.find(m => m.file === sourcePath && m.name === shortName);
             if (sameFile) return sameFile.file;
-          }
-          // A namespaced name (App\Models\Role) prefers the homonym whose path follows its namespace
-          // (…/Models/Role.php) over another namespace's Role (M0-04-R1).
-          if (symbolName.includes('\\')) {
-            const nsPath = symbolName.split('\\').filter(Boolean).slice(-2).join('/').toLowerCase();
-            const byPath = compatible.find(m => m.name === shortName && m.file.toLowerCase().replace(/\.[^./]+$/, '').endsWith(nsPath));
-            if (byPath) return byPath.file;
           }
           const exact = compatible.find(m => m.name === shortName);
           if (exact) return exact.file;
@@ -1872,7 +1877,9 @@ export class Scanner {
               hook.metadata.sourceFile = relPath;
 
               routeRegistry.addHook(hook);
-              if (hook.hookType === 'middleware' && hook.handlerFile) {
+              // A middleware the detector could not resolve (Illuminate\…) falls back to the file
+              // registering it; a route using it gets no edge to that file (M0-04-R2).
+              if (hook.hookType === 'middleware' && hook.handlerFile && hook.handlerFile !== relPath) {
                 middlewareTargets.set(hook.hookName, { file: hook.handlerFile, symbol: hook.handlerSymbol || null });
               }
 
@@ -2039,6 +2046,7 @@ export class Scanner {
     this.importFiles = null;
     this.importTextCache.clear();
     this.languageCache.clear();
+    this.phpNamespaces.clear();
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 
@@ -2071,6 +2079,11 @@ export class Scanner {
       addEntry(sym.name as string, filePath, (sym.scope as string) || null, sym.kind as string);
     }
 
+    // PHP namespaces: stored ones, replaced by this phase's parse results.
+    for (const f of this.store.getAllFiles()) {
+      if (f.language === 'php') this.phpNamespaces.set(f.path as string, (f.namespace as string | null) ?? '');
+    }
+
     if (parsedPaths && results) {
       for (let i = 0; i < parsedPaths.length; i++) {
         const filePath = parsedPaths[i];
@@ -2079,6 +2092,7 @@ export class Scanner {
         for (const sym of res.symbols) {
           addEntry(sym.name, filePath, sym.scope, sym.kind);
         }
+        if (this.languageOf(filePath) === 'php') this.phpNamespaces.set(filePath, res.fileMetadata?.namespace ?? '');
       }
     }
 

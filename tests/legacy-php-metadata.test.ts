@@ -39,7 +39,11 @@ describe('PHP reference metadata and route verifiability', () => {
         "Route::get('/users', [UserController::class, 'index']);",
         "Route::post('/users', 'UserController@store');",
         "Route::resource('teams', UserController::class);",
+        "Route::get('/ping', function () { return UserController::class; });",
       ].join('\n'),
+      // A route file whose only verified edge is its route: no `use`, a fully-qualified class constant.
+      'app/Http/Controllers/HomeController.php': '<?php\nnamespace App\\Http\\Controllers;\nclass HomeController { public function index() {} }\n',
+      'routes/web.php': "<?php\nRoute::get('/home', [\\App\\Http\\Controllers\\HomeController::class, 'index']);\n",
     });
     init(root);
     mapx(root, 'scan', root);
@@ -66,14 +70,21 @@ describe('PHP reference metadata and route verifiability', () => {
     const store = routes.find((r) => r.meta.uri === '/api/users' && r.meta.httpVerb === 'POST');
     expect(index?.verifiability).toBe('verified');
     expect(store?.verifiability).toBe('inferred');
+    // A closure that mentions `X::class` names no handler class (M0-04-R2).
+    expect(routes.find((r) => r.meta.uri === '/api/ping')?.verifiability).toBe('inferred');
     const resource = routes.filter((r) => r.meta.uri?.startsWith('/api/teams'));
     expect(resource.length).toBe(7 + 1);
     expect(resource.every((r) => r.meta.resourceType === 'resource' && r.verifiability === 'verified')).toBe(true);
   });
 
   it('keeps verified routes in metrics --verified-only', () => {
-    const out = mapx(root, 'metrics', root, '--verified-only');
-    expect(out).toContain('routes/api.php');
+    // routes/web.php → HomeController.php is a route edge and nothing else, so these degrees only
+    // hold while class-constant routes are verified (M0-04-R2: the old `toContain('routes/api.php')`
+    // passed with every route forced inferred, through the import edge).
+    const report = JSON.parse(mapx(root, 'metrics', root, '--verified-only', '--format', 'json', '--top', '0'));
+    const row = (path: string) => report.files.find((f: { path: string }) => f.path === path);
+    expect(row('routes/web.php')?.outDegree).toBe(1);
+    expect(row('app/Http/Controllers/HomeController.php')?.inDegree).toBe(1);
   });
 });
 
@@ -88,8 +99,23 @@ describe('PHP class names in strings are fully qualified', () => {
       'app/Contracts/Gateway.php': '<?php\nnamespace App\\Contracts;\ninterface Gateway {}\n',
       'app/Services/Stripe.php': '<?php\nnamespace App\\Services;\nclass Stripe {}\n',
       'app/Models/User.php': "<?php\nnamespace App\\Models;\nclass User {\n  public function team() { return $this->belongsTo('App\\Models\\Team'); }\n}\n",
-      'app/Providers/AppServiceProvider.php':
-        '<?php\nnamespace App\\Providers;\nuse Illuminate\\Support\\ServiceProvider;\nclass AppServiceProvider extends ServiceProvider {\n  public function register() {\n    $this->app->bind(\'App\\Contracts\\Gateway\', \'\\App\\Services\\Stripe\');\n  }\n}\n',
+      'app/Contracts/Mailer.php': '<?php\nnamespace App\\Contracts;\ninterface Mailer {}\n',
+      'app/Services/Smtp.php': '<?php\nnamespace App\\Services;\nclass Smtp {}\n',
+      'app/Contracts/Queue.php': '<?php\nnamespace App\\Contracts;\ninterface Queue {}\n',
+      'app/Services/Redis.php': '<?php\nnamespace App\\Services;\nclass Redis {}\n',
+      'app/Providers/AppServiceProvider.php': [
+        '<?php',
+        'namespace App\\Providers;',
+        'use Illuminate\\Support\\ServiceProvider;',
+        'class AppServiceProvider extends ServiceProvider {',
+        '  public function register() {',
+        "    $this->app->bind('App\\Contracts\\Gateway', '\\App\\Services\\Stripe');",
+        // M0-04-R2: double-quoted names (escaped or not), and a comment before the first argument.
+        '    $this->app->singleton("App\\\\Contracts\\\\Mailer", "App\\Services\\Smtp");',
+        '    $this->app->scoped(/* the queue */ \\App\\Contracts\\Queue::class, \\App\\Services\\Redis::class);',
+        '  }',
+        '}',
+      ].join('\n'),
     });
     init(root);
     mapx(root, 'scan', root);
@@ -102,8 +128,12 @@ describe('PHP class names in strings are fully qualified', () => {
     const relation = rows.find((r) => r.edge_type === 'relation')!;
     expect(relation.target_symbol).toBe('App\\Models\\Team');
     expect(relation.target_file).toBe('app/Models/Team.php');
-    const binding = rows.find((r) => r.edge_type === 'binding')!;
-    expect(binding.target_symbol).toBe('App\\Contracts\\Gateway');
-    expect(JSON.parse(binding.metadata).concreteClass).toBe('App\\Services\\Stripe');
+    const bindings = rows.filter((r) => r.edge_type === 'binding')
+      .map((r) => `${JSON.parse(r.metadata).bindingType} ${r.target_symbol} → ${r.target_file} (${JSON.parse(r.metadata).concreteClass})`).sort();
+    expect(bindings).toEqual([
+      'bind App\\Contracts\\Gateway → app/Contracts/Gateway.php (App\\Services\\Stripe)',
+      'scoped App\\Contracts\\Queue → app/Contracts/Queue.php (App\\Services\\Redis)',
+      'singleton App\\Contracts\\Mailer → app/Contracts/Mailer.php (App\\Services\\Smtp)',
+    ]);
   });
 });

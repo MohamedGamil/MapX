@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- PHP `use` imports and namespaced class references now resolve only to the class declared in that namespace, so stock Laravel apps no longer get self-imports or `Illuminate\…` names linked to app files, and `$listen` is read from the syntax tree (M0-04-R2).
 - `sync` now drops deleted files that were indexed while untracked or only staged, and records blob ids for the files it re-indexes, so committing an already synced edit no longer re-parses it (M0-02-R5).
 - `scan` and `sync` now re-link the referrers of a class moved to another file without `--force`, store git blob hashes for repos that are not at the workspace root, and skip files git lists whose content is unchanged (M0-02-R4).
 - `mapx_workspaces` now returns F18's absolute `path`, `relativePath`, `isRegistered` and `isInitialised` (and lists uninitialised submodules), duplicate repo entries already in a config are collapsed with a message, and `scan --all` / `update --all` after `workspaces add` resolve the new repo's references into the primary repo without `--force` (M0-10-R3).

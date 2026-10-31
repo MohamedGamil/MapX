@@ -15,6 +15,8 @@ export interface ImportContext {
   typeFiles?(name: string): string[];
   /** Simple names the importing file references (calls, instantiations, base types), for C#'s target choice. */
   referencedNames?: Set<string>;
+  /** The namespace a file declares ('' for none), or null when unknown (PHP). */
+  fileNamespace?(file: string): string | null;
 }
 
 /** One import edge: the target file and the module, package or namespace it names. */
@@ -36,7 +38,12 @@ interface ImportIndex {
   byLowerBase: Map<string, string[]>;
   /** directory → its non-test .go files, sorted. */
   goByDir: Map<string, string[]>;
+  /** directory → the composer.json PSR-4 roots of it and its ancestors, nearest first. */
+  psr4: Map<string, Psr4Root[]>;
 }
+
+/** A composer.json `autoload.psr-4` entry: namespace prefix (`App\`) → workspace-relative directory. */
+type Psr4Root = { prefix: string; dir: string };
 
 // Built once per file set: the scanner hands every resolver of a scan the same Set.
 const indexes = new WeakMap<Set<string>, ImportIndex>();
@@ -44,7 +51,7 @@ const indexes = new WeakMap<Set<string>, ImportIndex>();
 function indexOf(ctx: ImportContext): ImportIndex {
   let index = indexes.get(ctx.files);
   if (index) return index;
-  index = { byBase: new Map(), byLowerBase: new Map(), goByDir: new Map() };
+  index = { byBase: new Map(), byLowerBase: new Map(), goByDir: new Map(), psr4: new Map() };
   const push = (m: Map<string, string[]>, k: string, f: string) => {
     const list = m.get(k);
     if (list) list.push(f);
@@ -267,18 +274,60 @@ export function resolveCSharpImports(target: string, _sourcePath: string, ctx: I
   return chosen.length ? chosen : [files[0]!];
 }
 
-/** PHP: `use App\\Services\\UserService` → the PSR-4 file …/Services/UserService.php (case-insensitive first segment). */
-export function resolvePhpImport(target: string, sourcePath: string, ctx: ImportContext): string | null {
-  const parts = target.replace(/^\\/, '').split('\\').filter(Boolean);
-  if (parts.length < 2) return null;
-  const { byLowerBase } = indexOf(ctx);
-  // Longest suffix first: App/Services/UserService.php, then Services/UserService.php.
-  for (let start = 0; start <= parts.length - 2; start++) {
-    const suffix = `${parts.slice(start).join('/')}.php`.toLowerCase();
-    const hits = matchSuffix(byLowerBase.get(baseOf(suffix)), suffix, (f) => f.toLowerCase());
-    if (hits.length) return hits.find((h) => h.split('/')[0] === sourcePath.split('/')[0]) ?? hits[0]!;
+/** composer.json PSR-4 roots declared in `dir` and its ancestors, nearest first (autoload, then autoload-dev). */
+function psr4Roots(dir: string, ctx: ImportContext): Psr4Root[] {
+  const cache = indexOf(ctx).psr4;
+  let roots = cache.get(dir);
+  if (roots) return roots;
+  roots = [];
+  let composer: any = null;
+  try {
+    composer = JSON.parse(ctx.readText(join(dir, 'composer.json')) ?? 'null');
+  } catch { /* unreadable composer.json: no roots here */ }
+  for (const section of [composer?.autoload, composer?.['autoload-dev']]) {
+    const map = section?.['psr-4'];
+    if (!map || typeof map !== 'object') continue;
+    for (const [prefix, dirs] of Object.entries(map)) {
+      for (const d of [dirs].flat()) if (typeof d === 'string') roots.push({ prefix, dir: join(dir, d) });
+    }
   }
-  return null;
+  if (dir) roots.push(...psr4Roots(dirOf(dir), ctx));
+  cache.set(dir, roots);
+  return roots;
+}
+
+/**
+ * PHP: `use App\\Services\\UserService` → the file declaring class UserService in namespace
+ * App\\Services (symbol index), else the file composer.json's PSR-4 autoloading maps it to, else
+ * …/App/Services/UserService.php (the whole name as a case-insensitive path suffix). Never a
+ * shorter suffix: `Illuminate\\Support\\Collection` is not app/Support/Collection.php, and
+ * `use Illuminate\\Foundation\\Http\\Kernel as HttpKernel` is not app/Http/Kernel.php (M0-04-R2).
+ */
+export function resolvePhpImport(target: string, sourcePath: string, ctx: ImportContext): string | null {
+  const fqn = target.replace(/^\\/, '');
+  const parts = fqn.split('\\').filter(Boolean);
+  if (parts.length < 2) return null;
+  const other = (f: string) => f !== sourcePath;
+  if (ctx.typeFiles && ctx.fileNamespace) {
+    const namespace = parts.slice(0, -1).join('\\').toLowerCase();
+    const declared = ctx.typeFiles(parts[parts.length - 1]!)
+      .filter((f) => other(f) && ctx.fileNamespace!(f)?.toLowerCase() === namespace)
+      .sort();
+    if (declared.length) return closest(declared, sourcePath);
+  }
+  const { byLowerBase } = indexOf(ctx);
+  const at = (path: string) => {
+    const lower = path.toLowerCase();
+    return byLowerBase.get(baseOf(lower))?.find((f) => f.toLowerCase() === lower && other(f)) ?? null;
+  };
+  for (const { prefix, dir } of psr4Roots(dirOf(sourcePath), ctx)) {
+    if (!prefix || !fqn.startsWith(prefix)) continue;
+    const hit = at(`${join(dir, ...fqn.slice(prefix.length).split('\\'))}.php`);
+    if (hit) return hit;
+  }
+  const suffix = `${parts.join('/')}.php`.toLowerCase();
+  const hits = matchSuffix(byLowerBase.get(baseOf(suffix)), suffix, (f) => f.toLowerCase()).filter(other);
+  return hits.length ? closest(hits, sourcePath) : null;
 }
 
 type Resolver = (target: string, sourcePath: string, ctx: ImportContext) => ImportHit[];

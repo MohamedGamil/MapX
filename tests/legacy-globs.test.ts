@@ -124,6 +124,13 @@ const inbound = (root: string) =>
     "SELECT source_file || ' -> ' || target_file || ' ' || edge_type AS e FROM edges WHERE target_file = ? AND source_file != target_file ORDER BY e",
     USER_SERVICE,
   ).map((r) => r.e);
+// Every referrer of the UserService class once it lives at `path`: imports resolve to the file
+// declaring the class (M0-04-R2), the parameter type too.
+const referrers = (path: string) => [
+  `app/Http/Controllers/UserController.php -> ${path} import`,
+  `app/Http/Controllers/UserController.php -> ${path} param_type`,
+  `app/Models/User.php -> ${path} import`,
+];
 const git = (root: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: root, stdio: 'pipe' });
 
@@ -324,8 +331,8 @@ describe('incremental sync: git renames, nested and symlinked repos', () => {
       const original = snapshot(root);
       expect(inbound(root)).toEqual(expect.arrayContaining([`app/Models/User.php -> ${USER_SERVICE} import`]));
 
-      // Committed rename. The class keeps its name: the `use` imports no longer resolve (PSR-4
-      // path), but UserController's parameter type still resolves to the class at its new path.
+      // Committed rename. The class keeps its name: the `use` imports and UserController's parameter
+      // type follow the class declared at its new path (M0-04-R2: imports resolve by declaration).
       git(root, 'mv', USER_SERVICE, ACCOUNT_SERVICE);
       git(root, 'commit', '-qm', 'rename');
       mapx(root, 'sync', root);
@@ -333,7 +340,7 @@ describe('incremental sync: git renames, nested and symlinked repos', () => {
       expect(synced.files).toContain(ACCOUNT_SERVICE);
       expect(synced.files).not.toContain(USER_SERVICE);
       expect(touching(root, USER_SERVICE)).toEqual([]);
-      expect(touching(root, ACCOUNT_SERVICE)).toEqual([`app/Http/Controllers/UserController.php -> ${ACCOUNT_SERVICE} param_type`]);
+      expect(touching(root, ACCOUNT_SERVICE)).toEqual(referrers(ACCOUNT_SERVICE));
       mapx(root, 'scan', root, '--force');
       expect(synced).toEqual(snapshot(root));
 
@@ -387,9 +394,7 @@ describe('incremental sync: git renames, nested and symlinked repos', () => {
       mkdirSync(join(root, 'app/Core'));
       writeFileSync(join(root, 'app/Core/UserService.php'), content);
       mapx(root, 'sync', root);
-      expect(touching(root, 'app/Core/UserService.php')).toEqual([
-        'app/Http/Controllers/UserController.php -> app/Core/UserService.php param_type',
-      ]);
+      expect(touching(root, 'app/Core/UserService.php')).toEqual(referrers('app/Core/UserService.php'));
     } finally {
       cleanup(outer);
     }
@@ -432,22 +437,21 @@ describe('incremental scans: moved targets and non-root blob hashes', () => {
   it('plain scan and sync without git re-link the referrers of a moved class, as scan --force', () => {
     const DOMAIN = 'app/Domain/UserService.php';
     const CORE = 'app/Core/UserService.php';
-    const param = (path: string) => [`app/Http/Controllers/UserController.php -> ${path} param_type`];
     const root = workspace(files);
     try {
       init(root);
       mapx(root, 'scan', root);
       const content = readFileSync(join(root, USER_SERVICE), 'utf8');
 
-      // Moved within one plain scan. The `use` imports name the old PSR-4 path and stay
-      // unresolved, but the parameter type resolves to the class at its new path.
+      // Moved within one plain scan. The `use` imports and the parameter type resolve to the class
+      // at its new path (M0-04-R2: imports resolve by declaration, not by PSR-4 path alone).
       mkdirSync(join(root, 'app/Domain'));
       renameSync(join(root, USER_SERVICE), join(root, DOMAIN));
       mapx(root, 'scan', root);
       const scanned = snapshot(root);
       expect(scanned.files).not.toContain(USER_SERVICE);
       expect(touching(root, USER_SERVICE)).toEqual([]);
-      expect(touching(root, DOMAIN)).toEqual(param(DOMAIN));
+      expect(touching(root, DOMAIN)).toEqual(referrers(DOMAIN));
 
       // Moved across two syncs without git: removed by one, added under a new path by the next.
       rmSync(join(root, DOMAIN));
@@ -456,7 +460,7 @@ describe('incremental scans: moved targets and non-root blob hashes', () => {
       mkdirSync(join(root, 'app/Core'));
       writeFileSync(join(root, CORE), content);
       mapx(root, 'sync', root);
-      expect(touching(root, CORE)).toEqual(param(CORE));
+      expect(touching(root, CORE)).toEqual(referrers(CORE));
       // The class is declared again, so its name no longer re-parses those referrers whenever a
       // later file mentions it.
       expect(query<{ value: string }>(root, "SELECT value FROM meta WHERE key LIKE 'removed_names:%'").map((m) => JSON.parse(m.value))).toEqual([{}]);

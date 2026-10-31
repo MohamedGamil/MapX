@@ -120,6 +120,12 @@ export class PhpParser extends GenericWasmParser {
           }
         }
 
+        // `use function` / `use const` import a function or constant: still an import, but never
+        // in the class table (M0-04-R2).
+        const declaration = parent?.type === 'namespace_use_group' ? parent.parent : parent;
+        const isKeyword = (c: any) => c.type === 'function' || c.type === 'const';
+        const importsClass = !node.children.some(isKeyword) && !declaration?.children.some(isKeyword);
+
         const targetNode = (node.namedChildCount > 0 ? node.namedChild(0) : null) || node;
         const targetText = targetNode.text;
         const fullTarget = prefix ? `${prefix}\\${targetText}` : targetText;
@@ -139,7 +145,7 @@ export class PhpParser extends GenericWasmParser {
           : targetText;
 
         const importName = aliasText || shortName;
-        useTable.set(importName, fullTarget);
+        if (importsClass) useTable.set(importName, fullTarget);
 
         // Emit import reference
         references.push({
@@ -323,21 +329,32 @@ export class PhpParser extends GenericWasmParser {
         return str.replace(/^['"]|['"]$/g, '').trim();
       };
 
-      const getArgText = (argsNode: any, idx: number): string | null => {
+      const notComment = (c: any) => c.type !== 'comment';
+      // The value node of argument `idx`; comments are not arguments (`bind(/* x */ Repo::class)`, M0-04-R2).
+      const argValue = (argsNode: any, idx: number): any => {
         if (!argsNode || argsNode.type !== 'arguments') return null;
-        const argNode = argsNode.namedChild(idx);
+        const argNode = argsNode.namedChildren.filter(notComment)[idx];
         if (!argNode) return null;
-        const valNode = argNode.type === 'argument' ? (argNode.namedChild(0) || argNode) : argNode;
+        return argNode.type === 'argument' ? (argNode.namedChildren.find(notComment) || argNode) : argNode;
+      };
+
+      // The class a value names: `X::class` as written, or a string (single- or double-quoted).
+      const classNameOf = (valNode: any): string | null => {
         if (valNode.type === 'class_constant_access_expression') {
-          const classNode = valNode.namedChild(0);
-          if (classNode) return classNode.text;
+          return valNode.namedChild(0)?.text ?? null;
         }
         if (valNode.type === 'string' || valNode.type === 'encapsed_string') {
           // A class name in a string is always fully qualified: mark it so resolveToFqn keeps it.
           const name = cleanQuotes(valNode.text).replace(/\\\\/g, '\\').replace(/^\\/, '');
           return name ? `\\${name}` : null;
         }
-        return cleanQuotes(valNode.text);
+        return null;
+      };
+
+      const getArgText = (argsNode: any, idx: number): string | null => {
+        const valNode = argValue(argsNode, idx);
+        if (!valNode) return null;
+        return classNameOf(valNode) ?? cleanQuotes(valNode.text);
       };
 
       const modelClasses = new Set<string>();
@@ -366,24 +383,19 @@ export class PhpParser extends GenericWasmParser {
         if (targetArgText) {
           const targetFqn = resolveToFqn(targetArgText);
           const startLine = cap.node.startPosition.row + 1;
-          
-          const arg0 = argsNode.namedChild(0);
-          if (arg0) {
-            const valNode = arg0.type === 'argument' ? (arg0.namedChild(0) || arg0) : arg0;
-            const isClassConst = valNode ? valNode.type === 'class_constant_access_expression' : false;
+          const isClassConst = argValue(argsNode, 0)?.type === 'class_constant_access_expression';
 
-            references.push({
-              sourceSymbol: className,
-              targetName: targetFqn,
-              referenceType: 'relation',
-              startLine,
-              verifiability: isClassConst ? 'verified' : 'inferred',
-              metadata: {
-                relationshipMethod: methodName,
-                relationshipType: RELATIONSHIP_TYPES[methodName] || 'one-to-many',
-              },
-            });
-          }
+          references.push({
+            sourceSymbol: className,
+            targetName: targetFqn,
+            referenceType: 'relation',
+            startLine,
+            verifiability: isClassConst ? 'verified' : 'inferred',
+            metadata: {
+              relationshipMethod: methodName,
+              relationshipType: RELATIONSHIP_TYPES[methodName] || 'one-to-many',
+            },
+          });
         }
       }
 
@@ -418,30 +430,24 @@ export class PhpParser extends GenericWasmParser {
           const abstractFqn = resolveToFqn(abstractVal);
           // Only a class constant (Concrete::class) or a class-name string names a concrete class;
           // a closure or factory is not one.
-          const arg1 = argsNode.namedChild(1);
-          const valNode1 = arg1 ? (arg1.type === 'argument' ? (arg1.namedChild(0) || arg1) : arg1) : null;
-          const namesClass = !!valNode1 && (valNode1.type === 'class_constant_access_expression' || valNode1.type === 'string' || valNode1.type === 'encapsed_string');
+          const valNode1 = argValue(argsNode, 1);
+          const namesClass = !!valNode1 && classNameOf(valNode1) !== null;
           const concreteFqn = concreteVal && namesClass ? resolveToFqn(concreteVal) : null;
           const startLine = cap.node.startPosition.row + 1;
+          const isAbstractClassConst = argValue(argsNode, 0)?.type === 'class_constant_access_expression';
 
-          const arg0 = argsNode.namedChild(0);
-          if (arg0) {
-            const valNode0 = arg0.type === 'argument' ? (arg0.namedChild(0) || arg0) : arg0;
-            const isAbstractClassConst = valNode0 ? valNode0.type === 'class_constant_access_expression' : false;
-
-            references.push({
-              sourceSymbol: encMethod || 'register',
-              targetName: abstractFqn,
-              referenceType: 'binding',
-              startLine,
-              verifiability: isAbstractClassConst ? 'verified' : 'inferred',
-              metadata: {
-                bindingType: methodName,
-                concreteClass: concreteFqn,
-                serviceProviderPhase: encMethod === 'boot' ? 'boot' : 'register',
-              },
-            });
-          }
+          references.push({
+            sourceSymbol: encMethod || 'register',
+            targetName: abstractFqn,
+            referenceType: 'binding',
+            startLine,
+            verifiability: isAbstractClassConst ? 'verified' : 'inferred',
+            metadata: {
+              bindingType: methodName,
+              concreteClass: concreteFqn,
+              serviceProviderPhase: encMethod === 'boot' ? 'boot' : 'register',
+            },
+          });
         }
       }
 
@@ -532,29 +538,34 @@ export class PhpParser extends GenericWasmParser {
 
       // EventServiceProvider: protected $listen = [Event::class => [Listener::class, …]]
       // File-level edges originate here, so each listener gets a `binding` edge from the provider
-      // carrying the event it handles (F12 stretch goal).
-      const listenAt = source.search(/\$listen\s*=\s*\[/);
-      if (listenAt >= 0) {
-        const open = source.indexOf('[', listenAt);
-        let depth = 0;
-        let close = -1;
-        for (let i = open; i < source.length; i++) {
-          if (source[i] === '[') depth++;
-          else if (source[i] === ']' && --depth === 0) { close = i; break; }
-        }
-        const body = close > open ? source.slice(open + 1, close) : '';
-        for (const entry of body.matchAll(/([\\\w]+)::class\s*=>\s*\[([^\]]*)\]/g)) {
-          const eventFqn = resolveToFqn(entry[1]!);
-          const line = source.slice(0, open + 1 + entry.index!).split('\n').length;
-          for (const listener of entry[2]!.matchAll(/([\\\w]+)::class/g))
+      // carrying the event it handles (F12 stretch goal). Read from the property's syntax tree, so a
+      // docblock example or a commented-out listener is ignored, and an event or listener may be
+      // `X::class` or a class-name string (M0-04-R2).
+      for (const cap of refCaptures.get('ref.target_property') || []) {
+        const element = cap.node.namedChildren.find((c: any) => c.type === 'property_element');
+        const variable = element?.namedChildren.find((c: any) => c.type === 'variable_name');
+        if (!element || variable?.text !== '$listen') continue;
+        const array = element.namedChildren.find((c: any) => c.type === 'array_creation_expression');
+        for (const entry of array?.namedChildren.filter((c: any) => c.type === 'array_element_initializer') ?? []) {
+          const [key, value] = entry.namedChildren.filter(notComment);
+          const event = key && value ? classNameOf(key) : null;
+          if (!event) continue;
+          const listeners = value.type === 'array_creation_expression'
+            ? value.namedChildren.filter((c: any) => c.type === 'array_element_initializer').map((c: any) => c.namedChildren.find(notComment))
+            : [value];
+          for (const listenerNode of listeners) {
+            // 'App\Listeners\X@handle' names the class X.
+            const listener = listenerNode ? classNameOf(listenerNode)?.replace(/@\w*$/, '') : null;
+            if (!listener) continue;
             references.push({
               sourceSymbol: null,
-              targetName: resolveToFqn(listener[1]!),
+              targetName: resolveToFqn(listener),
               referenceType: 'binding',
-              startLine: line,
-              verifiability: 'verified',
-              metadata: { bindingType: 'listen', event: eventFqn },
+              startLine: key.startPosition.row + 1,
+              verifiability: listenerNode.type === 'class_constant_access_expression' ? 'verified' : 'inferred',
+              metadata: { bindingType: 'listen', event: resolveToFqn(event) },
             });
+          }
         }
       }
 
@@ -692,7 +703,8 @@ export class PhpParser extends GenericWasmParser {
       // Check if file is a route file
       const isRouteFile = filePath.replace(/\\/g, '/').includes('routes/');
       if (isRouteFile) {
-        fileMetadata = { laravelRole: 'route_file' };
+        // Keep the namespace: class resolution reads it (M0-04-R2).
+        fileMetadata = { ...fileMetadata, laravelRole: 'route_file' };
       }
 
       // F10: Classification of migration, seeder, and factory roles
