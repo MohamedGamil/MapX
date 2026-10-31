@@ -7454,6 +7454,86 @@
       "description": "Found by M3-06 (2026-10-31): navigation written in plain JS/TS modules is not read."
     },
     {
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-09",
+          "type": "hard"
+        },
+        {
+          "id": "M3-06",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-09.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-12.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/client-calls.ts",
+        "src/frameworks/detectors/vue-router.ts",
+        "tests/http-client-calls.test.ts",
+        "tests/vue-navigation.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "An axios client imported through a Laravel `@` → resources/js alias (vite.config.js) is followed by the HTTP pass, so its base URL applies (e2e test).",
+        "vue-router route components imported through a configured alias resolve via the shared resolver; withSrcAlias is removed (test).",
+        "The edges, routes and HTTP scorers do not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-client-calls.test.ts tests/vue-navigation.test.ts",
+        "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-setup",
+      "actualHours": null,
+      "startedAt": "2026-10-31T08:48:43.817Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T08:48:42.066Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T08:48:43.817Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-12",
+      "title": "HTTP pass and vue-router detector use the shared alias resolver",
+      "objective": "Every JS/TS import consumer resolves aliases through M3-09's resolver instead of its own guess.",
+      "milestone": "M3",
+      "description": "Found by M3-09 (2026-10-31): client-calls.ts resolveImport still guesses @/ from the nearest src folder; vue-router withSrcAlias is redundant."
+    },
+    {
       "id": "M4-01",
       "milestone": "M4",
       "title": "Recall/precision scoring in CI",
