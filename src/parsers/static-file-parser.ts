@@ -85,14 +85,42 @@ function extractCssRefs(source: string): ExtractedReference[] {
  *   3. Trailing commas before `}` or `]`
  *   4. Single-quoted strings → double-quoted
  *   5. Unquoted object keys
+ *
+ * Trailing commas and unquoted keys are only rewritten outside strings, so values
+ * such as `"**\/[,]"` or `"{ key: v }"` are kept verbatim (M0-09-R3).
  */
 export function stripJsoncSyntax(raw: string): string {
+  return normaliseJsonc(raw).json;
+}
+
+/** True when JSONC text has comments, which a parse-and-rewrite round trip loses. */
+export function hasJsoncComments(raw: string): boolean {
+  return normaliseJsonc(raw).comments;
+}
+
+function normaliseJsonc(raw: string): { json: string; comments: boolean } {
   let result = '';
+  let comments = false;
+  let last = ''; // last non-whitespace character written
   let i = 0;
   const len = raw.length;
+  // Index of the next character that is neither whitespace nor inside a comment.
+  const significant = (j: number): number => {
+    for (;;) {
+      while (j < len && /\s/.test(raw[j]!)) j++;
+      if (raw[j] === '/' && raw[j + 1] === '/') {
+        while (j < len && raw[j] !== '\n') j++;
+      } else if (raw[j] === '/' && raw[j + 1] === '*') {
+        const end = raw.indexOf('*/', j + 2);
+        j = end < 0 ? len : end + 2;
+      } else {
+        return j;
+      }
+    }
+  };
 
   while (i < len) {
-    const ch = raw[i];
+    const ch = raw[i]!;
 
     // --- Double-quoted string: copy verbatim (preserving escapes) ---
     if (ch === '"') {
@@ -102,6 +130,7 @@ export function stripJsoncSyntax(raw: string): string {
         j++;
       }
       result += raw.slice(i, j + 1);
+      last = '"';
       i = j + 1;
       continue;
     }
@@ -121,37 +150,45 @@ export function stripJsoncSyntax(raw: string): string {
         }
       }
       result += '"' + inner + '"';
+      last = '"';
       i = j + 1;
       continue;
     }
 
-    // --- Line comment: skip to EOL --------------------------------
-    if (ch === '/' && i + 1 < len && raw[i + 1] === '/') {
-      i += 2;
-      while (i < len && raw[i] !== '\n') i++;
+    // --- Line and block comments: skip ------------------------------
+    if (ch === '/' && (raw[i + 1] === '/' || raw[i + 1] === '*')) {
+      comments = true;
+      i = significant(i);
       continue;
     }
 
-    // --- Block comment: skip to closing *​/ -------------------------
-    if (ch === '/' && i + 1 < len && raw[i + 1] === '*') {
-      i += 2;
-      while (i + 1 < len && !(raw[i] === '*' && raw[i + 1] === '/')) i++;
-      i += 2; // skip closing */
-      continue;
+    // --- Trailing comma before } or ]: drop -------------------------
+    if (ch === ',') {
+      const next = raw[significant(i + 1)];
+      if (next === '}' || next === ']') {
+        i++;
+        continue;
+      }
+    }
+
+    // --- Unquoted object key ({ foo: … } → { "foo": … }) ------------
+    if (/[a-zA-Z_$]/.test(ch) && (last === '{' || last === ',')) {
+      let j = i;
+      while (j < len && /[a-zA-Z0-9_$]/.test(raw[j]!)) j++;
+      if (raw[significant(j)] === ':') {
+        result += `"${raw.slice(i, j)}"`;
+        last = '"';
+        i = j;
+        continue;
+      }
     }
 
     result += ch;
+    if (!/\s/.test(ch)) last = ch;
     i++;
   }
 
-  // Remove trailing commas before } or ]
-  result = result.replace(/,\s*([}\]])/g, '$1');
-
-  // Wrap unquoted object keys:  { foo: … }  →  { "foo": … }
-  // Matches a word at a position where a JSON key is expected (after { or ,).
-  result = result.replace(/([\{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
-
-  return result;
+  return { json: result, comments };
 }
 
 function extractJsonRefs(source: string): ExtractedReference[] {

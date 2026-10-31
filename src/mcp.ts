@@ -14,7 +14,7 @@ import { MapxGraph } from './core/graph.js';
 import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
-import { AgentGenerator, needsConsent } from './agents/generator.js';
+import { AgentGenerator, needsConsent, droppedCommentsWarning } from './agents/generator.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
 import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
@@ -1910,6 +1910,8 @@ Callees: ${callees.length}`;
         for (const action of actions) {
           if (action.status === 'up_to_date') {
             results.push(`${action.filename}: Up to date.`);
+          } else if (action.status === 'key_conflict') {
+            results.push(`${action.filename}: Skipped, ${action.note}`);
           } else if (needsConsent(action) && !requestArgs.force) {
             results.push(`${action.filename}: Skipped, it has content mapx did not write (${action.status}); pass force: true to overwrite.`);
           } else {
@@ -1924,6 +1926,8 @@ Callees: ${callees.length}`;
           } else {
             generator.executeMcpConfig(action);
             results.push(`${action.filename}: mapx MCP server ${action.status === 'merge' ? 'merged in' : 'written'}.`);
+            const lost = droppedCommentsWarning(action);
+            if (lost) results.push(lost);
           }
         }
 

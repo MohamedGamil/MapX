@@ -4,16 +4,21 @@ import { join, dirname, basename, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TEMPLATES, MCP_CONFIGS, ProviderTemplate, McpConfigEntry } from './templates.js';
 import { VERSION } from '../version.js';
-import { stripJsoncSyntax } from '../parsers/static-file-parser.js';
+import { stripJsoncSyntax, hasJsoncComments } from '../parsers/static-file-parser.js';
 
 export interface AgentAction {
   provider: string;
   filename: string;
   filepath: string;
-  status: 'create' | 'append' | 'update_clean' | 'update_conflict' | 'up_to_date' | 'no_sentinel';
+  /**
+   * `key_conflict`: the file already defines, outside the mapx block, a top-level YAML key the
+   * block would add (Aider's `read:`). Never written; `note` says what to merge by hand.
+   */
+  status: 'create' | 'append' | 'update_clean' | 'update_conflict' | 'up_to_date' | 'no_sentinel' | 'key_conflict';
   oldContent?: string;
   newContent: string;
   diff?: string;
+  note?: string;
 }
 
 /** Writing this action would replace user-written content: a file without a mapx block, or an edited block. */
@@ -27,6 +32,13 @@ export interface McpConfigAction {
   filepath: string;
   status: 'create' | 'update' | 'merge' | 'up_to_date' | 'unparseable';
   content: string;
+  /** The merge rewrites a JSONC file whose comments plain JSON cannot keep. */
+  droppedComments?: boolean;
+}
+
+/** Warning to print when writing `action` loses the file's comments. */
+export function droppedCommentsWarning(action: McpConfigAction): string | undefined {
+  return action.droppedComments ? `${action.filename}: its comments were not preserved (the merged file is plain JSON).` : undefined;
 }
 
 /**
@@ -43,7 +55,8 @@ function getSentinelMarkers(filename: string): { open: (v: string, hash?: string
     return {
       open: (v: string, hash?: string) => `# mapx v${v}${hash ? ` #${hash}` : ''}`,
       close: '# /mapx',
-      regex: /#\s*mapx\s+v([\d.]+)(?:[ \t]+#([0-9a-f]+))?[ \t]*\n([\s\S]*?)#\s*\/mapx/i,
+      // `\r?\n`: files checked out with CRLF must still match (M0-09-R3).
+      regex: /#\s*mapx\s+v([\d.]+)(?:[ \t]+#([0-9a-f]+))?[ \t]*\r?\n([\s\S]*?)#\s*\/mapx/gi,
     };
   }
 
@@ -51,14 +64,20 @@ function getSentinelMarkers(filename: string): { open: (v: string, hash?: string
   return {
     open: (v: string, hash?: string) => `<!-- mapx v${v}${hash ? ` #${hash}` : ''} -->`,
     close: '<!-- /mapx -->',
-    regex: /<!--\s*mapx\s+v([\d.]+)(?:\s+#([0-9a-f]+))?\s*-->([\s\S]*?)<!--\s*\/mapx\s*-->/i,
+    regex: /<!--\s*mapx\s+v([\d.]+)(?:\s+#([0-9a-f]+))?\s*-->([\s\S]*?)<!--\s*\/mapx\s*-->/gi,
   };
 }
 
-/** Short hash of a generated block body, ignoring surrounding whitespace. */
+/** `text` with LF line endings. */
+const lf = (text: string) => text.replace(/\r\n/g, '\n');
+
+/** Short hash of a generated block body, ignoring surrounding whitespace and line endings. */
 function bodyHash(body: string): string {
-  return createHash('sha1').update(body.trim()).digest('hex').slice(0, 12);
+  return createHash('sha1').update(lf(body).trim()).digest('hex').slice(0, 12);
 }
+
+/** Top-level keys of a YAML text (`key:` at column 0). */
+const yamlTopKeys = (text: string) => new Set([...lf(text).matchAll(/^([A-Za-z0-9_.-]+)\s*:/gm)].map((m) => m[1]!));
 
 export class AgentGenerator {
   private version: string;
@@ -89,7 +108,8 @@ export class AgentGenerator {
       .replaceAll('{{MCP_PORT}}', mcpPort.toString());
   }
 
-  public plan(providers: string[], options: { dir: string; mcpPort?: number }): AgentAction[] {
+  /** `onlyExisting`: plan only files that already exist (`agents update` never creates files). */
+  public plan(providers: string[], options: { dir: string; mcpPort?: number; onlyExisting?: boolean }): AgentAction[] {
     const actions: AgentAction[] = [];
     const dir = options.dir;
     const mcpPort = options.mcpPort || 3456;
@@ -116,25 +136,49 @@ export class AgentGenerator {
       const frontmatter = rawContent.match(/^---\n[\s\S]*?\n---\n/)?.[0] ?? '';
       const body = rawContent.slice(frontmatter.length);
       // The hash of the generated body lets `update` tell a hand edit from an old version (M0-09-R1).
-      const block = `${markers.open(this.version, bodyHash(body))}\n${body}\n${markers.close}`;
-      const wrappedNewContent = `${frontmatter}${block}`;
+      const lfBlock = `${markers.open(this.version, bodyHash(body))}\n${body}\n${markers.close}`;
 
       if (!existsSync(filepath)) {
+        if (options.onlyExisting) continue;
         actions.push({
           provider,
           filename: template.filename,
           filepath,
           status: template.isAppend ? 'append' : 'create',
-          newContent: wrappedNewContent,
+          // Files end with a newline, so text appended later starts on its own line (M0-09-R3).
+          newContent: `${frontmatter}${lfBlock}\n`,
         });
         continue;
       }
 
-      // File exists
+      // File exists. A block written into it uses its line endings (M0-09-R3).
       const existingFileContent = readFileSync(filepath, 'utf-8');
-      const match = existingFileContent.match(markers.regex);
+      const eol = existingFileContent.includes('\r\n') ? '\r\n' : '\n';
+      const withEol = (s: string) => (eol === '\n' ? s : s.replace(/\r?\n/g, eol));
+      const block = withEol(lfBlock);
+      const wrappedNewContent = withEol(`${frontmatter}${lfBlock}\n`);
+      const matches = [...existingFileContent.matchAll(markers.regex)];
 
-      if (!match) {
+      // A YAML block must not add a top-level key the user already set outside it: a second
+      // `read:` in .aider.conf.yml would be a duplicate key (M0-09-R3).
+      if (/\.ya?ml$/i.test(template.filename)) {
+        const userKeys = yamlTopKeys(existingFileContent.replace(markers.regex, ''));
+        const clash = [...yamlTopKeys(body)].filter((k) => userKeys.has(k));
+        if (clash.length) {
+          actions.push({
+            provider,
+            filename: template.filename,
+            filepath,
+            status: 'key_conflict',
+            oldContent: existingFileContent,
+            newContent: existingFileContent,
+            note: `it already sets top-level ${clash.map((k) => `\`${k}:\``).join(', ')}; merge these lines into it by hand:\n${body.trimEnd()}`,
+          });
+          continue;
+        }
+      }
+
+      if (!matches.length) {
         // No sentinel block
         if (template.isAppend) {
           // For append files, lack of sentinel means we append
@@ -145,8 +189,8 @@ export class AgentGenerator {
             status: 'append',
             oldContent: existingFileContent,
             newContent: existingFileContent.endsWith('\n')
-              ? `${existingFileContent}\n${wrappedNewContent}`
-              : `${existingFileContent}\n\n${wrappedNewContent}`,
+              ? `${existingFileContent}${eol}${wrappedNewContent}`
+              : `${existingFileContent}${eol}${eol}${wrappedNewContent}`,
           });
         } else {
           // For non-append files, lack of sentinel is a potential overwrite conflict
@@ -163,19 +207,19 @@ export class AgentGenerator {
         continue;
       }
 
-      // Sentinel block exists
+      // Sentinel block(s) exist. Only the first is kept; later ones are duplicates (M0-09-R3).
+      const match = matches[0]!;
       const fileVersion = match[1];
-      const recordedHash = match[2];
       const fileContentInside = match[3]!;
-      // Edited: the block no longer matches the hash it was written with (any version). Blocks
-      // written before hashes existed fall back to the version rule.
-      const edited = recordedHash ? bodyHash(fileContentInside) !== recordedHash : fileVersion === this.version;
+      // Edited: a block no longer matches the hash it was written with (any version). A block
+      // written before hashes existed counts as edited unless it is the current body, since an
+      // old version cannot be told from a hand edit (M0-09-R3).
+      const isEdited = (m: RegExpMatchArray) => (m[2] ? bodyHash(m[3]!) !== m[2] : lf(m[3]!).trim() !== lf(body).trim());
+      const edited = matches.some(isEdited);
 
-      const expectedContentOld = fileContentInside; // what's actually there
-      const expectedContentNew = body;              // new template content (frontmatter excluded)
       const frontmatterInPlace = !!frontmatter && existingFileContent.slice(0, match.index).trimStart().startsWith('---');
 
-      if (expectedContentOld.trim() === expectedContentNew.trim() && fileVersion === this.version && (!frontmatter || frontmatterInPlace)) {
+      if (matches.length === 1 && lf(fileContentInside).trim() === lf(body).trim() && fileVersion === this.version && (!frontmatter || frontmatterInPlace)) {
         actions.push({
           provider,
           filename: template.filename,
@@ -187,9 +231,18 @@ export class AgentGenerator {
         continue;
       }
 
-      // Content or version changed — replace sentinel block
+      // Content or version changed — replace the first sentinel block and drop duplicates.
       // A file already carrying the frontmatter above the block only gets its block replaced.
-      const newFileContent = existingFileContent.replace(markers.regex, () => (frontmatterInPlace ? block : wrappedNewContent));
+      const replacement = frontmatterInPlace || !frontmatter ? block : withEol(`${frontmatter}${lfBlock}`);
+      let newFileContent = '';
+      let from = 0;
+      for (const [k, m] of matches.entries()) {
+        newFileContent += existingFileContent.slice(from, m.index) + (k === 0 ? replacement : '');
+        from = m.index! + m[0].length;
+        // A removed duplicate takes its line break with it.
+        if (k > 0 && existingFileContent.startsWith(eol, from)) from += eol.length;
+      }
+      newFileContent += existingFileContent.slice(from);
 
       actions.push({
         provider,
@@ -206,7 +259,7 @@ export class AgentGenerator {
   }
 
   public execute(action: AgentAction): void {
-    if (action.status === 'up_to_date') return;
+    if (action.status === 'up_to_date' || action.status === 'key_conflict') return;
     const parentDir = dirname(action.filepath);
     if (!existsSync(parentDir)) {
       mkdirSync(parentDir, { recursive: true });
@@ -269,10 +322,12 @@ export class AgentGenerator {
 
   /**
    * MCP configs that belong to instruction providers: generating Zed's instructions also
-   * registers the server in .zed/settings.json (M0-09-R2).
+   * registers the server in .zed/settings.json (M0-09-R2). Declared per template, not inferred
+   * from matching names (M0-09-R3).
    */
   public companionMcpConfigs(providers: string[]): McpConfigEntry[] {
-    return MCP_CONFIGS.filter(entry => providers.includes(entry.name));
+    const names = new Set(providers.flatMap(p => TEMPLATES[p]?.mcpConfigs ?? []));
+    return MCP_CONFIGS.filter(entry => names.has(entry.name));
   }
 
   /**
@@ -333,6 +388,7 @@ export class AgentGenerator {
             filepath,
             status: 'merge',
             content: mergedStr,
+            droppedComments: hasJsoncComments(existingRaw),
           });
         }
       } catch {

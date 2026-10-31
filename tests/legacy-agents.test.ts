@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -38,7 +38,8 @@ describe('agent integration files', () => {
   it('keeps text after the block on its own line when updating', () => {
     writeFileSync(join(root, 'CLAUDE.md'), read('CLAUDE.md').replace(/mapx v[\d.]+/, 'mapx v0.0.1') + '\nkeep-after\n');
     mapx(root, 'agents', 'update');
-    expect(read('CLAUDE.md')).toMatch(/<!-- \/mapx -->\nkeep-after\n$/);
+    // The generated file ends with a newline (M0-09-R3), so the leading '\n' above is a blank line, kept as is.
+    expect(read('CLAUDE.md')).toMatch(/<!-- \/mapx -->\n\nkeep-after\n$/);
   });
 
   it('does not overwrite an edited block without a TTY unless --force', () => {
@@ -107,5 +108,110 @@ describe('user-written agent files are never replaced without consent', () => {
     } finally {
       await client.close();
     }
+  }, 60000);
+});
+
+// M0-09-R3: line endings, final newlines, legacy and duplicate blocks, update scope.
+describe('agent files: line endings, legacy blocks and update scope', () => {
+  const SENTINEL_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'AIDER.md', '.aider.conf.yml', '.clinerules', '.cursor/rules/mapx.mdc', '.windsurf/rules/mapx.md', '.github/copilot-instructions.md', '.continue/mapx.yaml', '.zed/mapx-instructions.md', '.agents/rules/mapx.md', '.agents/rules/instructions.md'];
+  const OPEN = /^(?:<!--|#) mapx v[\d.]+(?: #[0-9a-f]+)?(?: -->)?\r?$/gm;
+  const blocks = (s: string) => (s.match(OPEN) ?? []).length;
+  const tmp: string[] = [];
+  const ws = (files: Record<string, string> = {}) => {
+    const r = workspace({ 'src/a.ts': 'export const a = 1;\n', ...files });
+    tmp.push(r);
+    return r;
+  };
+  afterAll(() => tmp.forEach(cleanup));
+
+  it('generating twice on CRLF files yields one block per file, keeps CRLF and lists every provider as current (AC1)', () => {
+    const root = ws({ '.clinerules': 'user rule one\r\nuser rule two\r\n', '.github/copilot-instructions.md': '# Team\r\nBe nice.\r\n' });
+    const read = (f: string) => readFileSync(join(root, f), 'utf8');
+    mapx(root, 'agents', 'generate', '--providers=all');
+    // A user CRLF file gets a CRLF block: no bare LF.
+    for (const f of ['.clinerules', '.github/copilot-instructions.md']) expect(read(f), f).not.toMatch(/[^\r]\n/);
+    // Simulate a checkout with core.autocrlf: every agent file becomes CRLF.
+    for (const f of SENTINEL_FILES) writeFileSync(join(root, f), read(f).replace(/\r?\n/g, '\r\n'));
+    const before = Object.fromEntries(SENTINEL_FILES.map((f) => [f, read(f)]));
+    mapx(root, 'agents', 'generate', '--providers=all');
+    for (const f of SENTINEL_FILES) {
+      expect(blocks(read(f)), f).toBe(1);
+      expect(read(f), f).toBe(before[f]);
+    }
+    const list = mapx(root, 'agents', 'list').split('\n').filter((l) => l.includes(' -> '));
+    expect(list.length).toBeGreaterThan(5);
+    expect(list.filter((l) => !l.includes('[current]'))).toEqual([]);
+  }, 60000);
+
+  it('refreshes an outdated block in a CRLF file in place, keeping CRLF', () => {
+    const root = ws();
+    const read = (f: string) => readFileSync(join(root, f), 'utf8');
+    mapx(root, 'agents', 'generate', '--providers=cline');
+    writeFileSync(join(root, '.clinerules'), read('.clinerules').replace(/mapx v[\d.]+/, 'mapx v0.0.1').replace(/\r?\n/g, '\r\n'));
+    mapx(root, 'agents', 'update');
+    expect(blocks(read('.clinerules'))).toBe(1);
+    expect(read('.clinerules')).not.toContain('v0.0.1');
+    expect(read('.clinerules')).not.toMatch(/[^\r]\n/);
+  }, 60000);
+
+  it('ends every generated file with a newline; appended text stays on its own line after update (AC2)', () => {
+    const root = ws();
+    const read = (f: string) => readFileSync(join(root, f), 'utf8');
+    mapx(root, 'agents', 'generate', '--providers=all');
+    for (const f of SENTINEL_FILES) expect(read(f).endsWith('\n'), f).toBe(true);
+    appendFileSync(join(root, 'CLAUDE.md'), 'appended-line\n');
+    appendFileSync(join(root, '.clinerules'), 'appended-rule\n');
+    for (const f of ['CLAUDE.md', '.clinerules']) writeFileSync(join(root, f), read(f).replace(/mapx v[\d.]+/, 'mapx v0.0.1'));
+    mapx(root, 'agents', 'update');
+    expect(read('CLAUDE.md')).toMatch(/\n<!-- \/mapx -->\nappended-line\n$/);
+    expect(read('.clinerules')).toMatch(/\n# \/mapx\nappended-rule\n$/);
+    expect(read('CLAUDE.md')).not.toContain('v0.0.1');
+  }, 60000);
+
+  it('agents update only touches files that exist (AC4)', () => {
+    const root = ws();
+    const read = (f: string) => readFileSync(join(root, f), 'utf8');
+    mapx(root, 'agents', 'generate', '--providers=claude,aider');
+    rmSync(join(root, '.agents/rules/instructions.md'));
+    rmSync(join(root, '.aider.conf.yml'));
+    writeFileSync(join(root, 'CLAUDE.md'), read('CLAUDE.md').replace(/mapx v[\d.]+/, 'mapx v0.0.1'));
+    mapx(root, 'agents', 'update');
+    expect(read('CLAUDE.md')).not.toContain('v0.0.1');
+    expect(existsSync(join(root, '.agents/rules/instructions.md'))).toBe(false);
+    expect(existsSync(join(root, '.aider.conf.yml'))).toBe(false);
+    expect(existsSync(join(root, 'GEMINI.md'))).toBe(false);
+  }, 60000);
+
+  it('treats an edited hashless legacy block as edited whatever its version; a clean one is refreshed', () => {
+    const root = ws();
+    const read = (f: string) => readFileSync(join(root, f), 'utf8');
+    mapx(root, 'agents', 'generate', '--providers=claude,gemini');
+    writeFileSync(join(root, 'CLAUDE.md'), '<!-- mapx v0.0.1 -->\nMY LEGACY EDIT\n<!-- /mapx -->\n');
+    // An unedited hashless legacy block: the current body, no hash, an old version.
+    writeFileSync(join(root, 'GEMINI.md'), read('GEMINI.md').replace(/<!-- mapx v[\d.]+ #[0-9a-f]+ -->/, '<!-- mapx v0.0.1 -->'));
+    expect(mapx(root, 'agents', 'list')).toMatch(/claude\s+-> CLAUDE\.md\s+\[edited\]/);
+    mapx(root, 'agents', 'update');
+    expect(read('CLAUDE.md')).toContain('MY LEGACY EDIT');
+    expect(read('GEMINI.md')).toMatch(/<!-- mapx v[\d.]+ #[0-9a-f]{12} -->/);
+    expect(read('GEMINI.md')).not.toContain('v0.0.1');
+    mapx(root, 'agents', 'update', '--force');
+    expect(read('CLAUDE.md')).not.toContain('MY LEGACY EDIT');
+  }, 60000);
+
+  it('removes a second stale block when updating, and keeps text between them', () => {
+    const root = ws();
+    const read = (f: string) => readFileSync(join(root, f), 'utf8');
+    mapx(root, 'agents', 'generate', '--providers=gemini');
+    const old = read('GEMINI.md').replace(/mapx v[\d.]+/, 'mapx v0.0.1');
+    writeFileSync(join(root, 'GEMINI.md'), `${old}\nmiddle-text\n${old}`);
+    mapx(root, 'agents', 'update');
+    expect(blocks(read('GEMINI.md'))).toBe(1);
+    expect(read('GEMINI.md')).toContain('middle-text');
+    expect(read('GEMINI.md')).not.toContain('v0.0.1');
+    // An edited duplicate block is a customisation: it needs consent.
+    const cur = read('GEMINI.md').replace('middle-text\n', '');
+    writeFileSync(join(root, 'GEMINI.md'), `${cur}\n${cur.replace('<!-- /mapx -->', 'DUP EDIT\n<!-- /mapx -->')}`);
+    mapx(root, 'agents', 'update');
+    expect(read('GEMINI.md')).toContain('DUP EDIT');
   }, 60000);
 });

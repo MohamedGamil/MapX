@@ -789,9 +789,11 @@ When run interactively without flags, presents a multi-select prompt to choose p
 
 Some providers write more than their instruction file:
 - `claude`: `CLAUDE.md` documents both the stdio stanza and the SSE stanza (`mapx serve --sse --port <mcp-port>`, URL `http://localhost:<mcp-port>/sse`).
-- `aider`: also writes `.aider.conf.yml` with `read: [AIDER.md]`, so Aider loads the instructions on startup (`aider --read AIDER.md` does the same by hand).
+- `aider`: also writes `.aider.conf.yml` with `read: [AIDER.md]`, so Aider loads the instructions on startup (`aider --read AIDER.md` does the same by hand). If the file already has its own top-level `read:` key, it is left untouched and the output says which lines to merge by hand.
 - `continue`: `.continue/mapx.yaml` adds `slashCommands` (`/mapx-impact`, `/mapx-callers`, `/mapx-context`, `/mapx-sync`).
-- `zed`: also registers the mapx server under `context_servers` in `.zed/settings.json`. Existing keys are kept; comments and trailing commas are accepted, but the merged file is written back as plain JSON. A settings file that cannot be parsed is left untouched, with a warning.
+- `zed`: also registers the mapx server under `context_servers` in `.zed/settings.json`. Existing keys and string values are kept; comments and trailing commas are accepted, but the merged file is written back as plain JSON, and the output warns when comments were dropped. A settings file that cannot be parsed is left untouched, with a warning.
+
+Generated files end with a newline. A block written into an existing file uses that file's line endings (LF or CRLF).
 
 ## `mapx agents update`
 
@@ -806,7 +808,7 @@ Options:
 - `--force` — Force overwrite of customized blocks without prompt
 - `--mcp-port` — Port for the MCP SSE transport server (default: 3456)
 
-Only updates files that already exist; does not create new ones.
+Only updates files that already exist; does not create new ones. That includes the shared `.agents/rules/instructions.md` and companion files such as `.aider.conf.yml`. A mapx block that was edited, or a block written before content hashes existed whose body differs from the current template, is kept unless you confirm or pass `--force`. Duplicate mapx blocks in one file are merged into one.
 
 ## Static File Indexing
 

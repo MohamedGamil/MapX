@@ -501,3 +501,5 @@ Generate or update project-level agent integration instructions and rule files.
 - `all` (boolean, optional): Generate configs for all providers
 - `force` (boolean, optional): Overwrite files without prompting
 - `dir` (string, optional): Target project directory
+
+The result lists each file. It also reports when a merged JSONC settings file lost its comments, and when `.aider.conf.yml` was skipped because it already sets `read:`.

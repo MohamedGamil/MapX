@@ -1,7 +1,49 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, mapx, workspace } from './helpers/e2e.js';
+import { cleanup, mapx, mapxWithStderr, workspace } from './helpers/e2e.js';
+
+// M0-09-R3: JSONC merges keep string values; Aider's `read:` is never duplicated.
+describe('agent config merges', () => {
+  const tmp: string[] = [];
+  afterAll(() => tmp.forEach(cleanup));
+  const run = (root: string, ...args: string[]) => {
+    const r = mapxWithStderr(root, ...args);
+    return r.stdout + r.stderr;
+  };
+
+  it('keeps JSONC string values containing `,]`, `,}` and `key:` and reports dropped comments (AC3)', () => {
+    const settings = [
+      '// my zed settings',
+      '{',
+      '  "file_scan_exclusions": ["**/[,]", "a,}", "b, ]"],',
+      '  "note": "{ key: v, }",',
+      '  /* theme */',
+      '  "theme": "One Dark",',
+      '}',
+      '',
+    ].join('\n');
+    const root = workspace({ '.zed/settings.json': settings });
+    tmp.push(root);
+    const out = run(root, 'agents', 'generate', '--providers=zed');
+    const merged = JSON.parse(readFileSync(join(root, '.zed/settings.json'), 'utf8'));
+    expect(merged.file_scan_exclusions).toEqual(['**/[,]', 'a,}', 'b, ]']);
+    expect(merged.note).toBe('{ key: v, }');
+    expect(merged.theme).toBe('One Dark');
+    expect(merged.context_servers.mapx).toBeDefined();
+    expect(out).toMatch(/\.zed\/settings\.json[^\n]*comments/i);
+  }, 60000);
+
+  it('does not add a second top-level `read:` key to .aider.conf.yml', () => {
+    const conf = 'model: gpt-4o\nread:\n  - CONVENTIONS.md\n';
+    const root = workspace({ '.aider.conf.yml': conf });
+    tmp.push(root);
+    const out = run(root, 'agents', 'generate', '--providers=aider');
+    expect(readFileSync(join(root, '.aider.conf.yml'), 'utf8')).toBe(conf);
+    expect(out).toMatch(/\.aider\.conf\.yml[^\n]*read/);
+    expect(existsSync(join(root, 'AIDER.md'))).toBe(true);
+  }, 60000);
+});
 
 // M0-09-R2: the F17 template deliverables (SSE stanza, Continue slash commands, Aider config,
 // Zed MCP registration).

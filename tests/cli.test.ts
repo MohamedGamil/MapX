@@ -291,6 +291,7 @@ const agentGeneratorMocks = {
 vi.mock('../src/agents/generator.js', () => ({
   AgentGenerator: class { constructor() { Object.assign(this, agentGeneratorMocks); } },
   needsConsent: (a: { status: string }) => a.status === 'no_sentinel' || a.status === 'update_conflict',
+  droppedCommentsWarning: () => undefined,
 }));
 
 const graphMocks = {

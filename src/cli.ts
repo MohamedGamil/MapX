@@ -10,7 +10,7 @@ import { Scanner, buildMatcher } from './core/scanner.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { ContextBuilder } from './core/context-builder.js';
-import { AgentGenerator, needsConsent } from './agents/generator.js';
+import { AgentGenerator, needsConsent, droppedCommentsWarning } from './agents/generator.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
 import { codeWorkspaceFiles, crossRepoPairs, summarizeRepos, table, timeAgo } from './core/workspace-summary.js';
 import { LLMExporter } from './exporters/llm-exporter.js';
@@ -387,6 +387,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const generator = new AgentGenerator();
           const actions = generator.plan(selected, { dir });
           for (const action of actions) {
+            if (action.status === 'key_conflict') {
+              clack.log.warn(`Skipped ${action.filename}: ${action.note}`);
+              continue;
+            }
             if (needsConsent(action)) {
               const confirm = await clack.confirm({ message: `${action.filename} has content mapx did not write. Overwrite it?`, initialValue: false });
               if (clack.isCancel(confirm) || !confirm) {
@@ -401,6 +405,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const generator = new AgentGenerator();
           const actions = generator.plan(['generic'], { dir });
           for (const action of actions) {
+            if (action.status === 'key_conflict') {
+              clack.log.warn(`Skipped ${action.filename}: ${action.note}`);
+              continue;
+            }
             if (needsConsent(action)) {
               clack.log.warn(`Skipped ${action.filename}: it has content mapx did not write; run \`mapx agents generate --force\` to overwrite it.`);
               continue;
@@ -426,6 +434,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             generator.executeMcpConfig(action);
             const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
             clack.log.success(`MCP config ${verb} ${action.filename} (${action.tool})`);
+            const lost = droppedCommentsWarning(action);
+            if (lost) clack.log.warn(lost);
           }
         }
       }
@@ -2673,7 +2683,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // Status of each provider's file in this project, from the same plan `update` would run.
       const STATUS: Record<string, string> = {
         create: 'missing', append: 'missing', up_to_date: 'current', update_clean: 'outdated',
-        update_conflict: 'edited', no_sentinel: 'unmanaged (no mapx block)',
+        update_conflict: 'edited', no_sentinel: 'unmanaged (no mapx block)', key_conflict: 'conflicting keys',
       };
       const statusOf = new Map(generator.plan(providers, { dir }).map(a => [a.provider, STATUS[a.status] ?? a.status]));
       console.log('\nSupported LLM integration providers:');
@@ -2724,6 +2734,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           clack.log.info(`${action.filename}: Up to date. Skipping.`);
           continue;
         }
+        if (action.status === 'key_conflict') {
+          clack.log.warn(`Skipped ${action.filename}: ${action.note}`);
+          continue;
+        }
 
         if (action.status === 'update_conflict' || action.status === 'no_sentinel') {
           clack.log.warn(`Conflict/Modification detected in ${action.filename}:`);
@@ -2764,6 +2778,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         } else {
           generator.executeMcpConfig(action);
           clack.log.success(`MCP config ${action.status === 'merge' ? 'merged into' : 'written to'} ${action.filename} (${action.tool})`);
+          const lost = droppedCommentsWarning(action);
+          if (lost) clack.log.warn(lost);
         }
       }
     });
@@ -2789,11 +2805,16 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         return;
       }
 
-      const actions = generator.plan(existingProviders, { dir, mcpPort: parseInt(opts.mcpPort, 10) });
+      // Update never creates files: missing instructions or companion files stay missing (M0-09-R3).
+      const actions = generator.plan(existingProviders, { dir, mcpPort: parseInt(opts.mcpPort, 10), onlyExisting: true });
       let updatedCount = 0;
 
       for (const action of actions) {
         if (action.status === 'up_to_date') {
+          continue;
+        }
+        if (action.status === 'key_conflict') {
+          clack.log.warn(`Skipped ${action.filename}: ${action.note}`);
           continue;
         }
 
@@ -2896,6 +2917,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           generator.executeMcpConfig(action);
           const verb = action.status === 'merge' ? 'merged into' : action.status === 'create' ? 'created' : 'updated';
           clack.log.success(`MCP config ${verb} ${action.filename} (${action.tool})`);
+          const lost = droppedCommentsWarning(action);
+          if (lost) clack.log.warn(lost);
         }
       }
     });

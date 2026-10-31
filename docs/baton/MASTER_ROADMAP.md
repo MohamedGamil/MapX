@@ -68,10 +68,10 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-10-R1** Workspace surface: flags, table, cross-repo counts, JSONC (F18) — DONE, P1, 10h; depends on M0-10.
 - **M0-05-R3** Hook edges honour declared confidence (verifiability) — BACKLOG, P2, 3h; depends on M0-05-R2.
 - **M0-20-R2** NestJS class segmentation ignores comments, strings and generics — DONE, P1, 4h; depends on M0-20-R1.
-- **M0-11-R2** Staleness uses the scanner file rules; precise import-only dependants and callee lines — READY, P1, 5h; depends on M0-11-R1.
+- **M0-11-R2** Staleness uses the scanner file rules; precise import-only dependants and callee lines — IN_PROGRESS, P1, 5h; depends on M0-11-R1.
 - **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — READY, P1, 6h; depends on M0-02-R1.
 - **M0-04-R2** PHP resolution never maps vendor names to app files; tree-sitter $listen — READY, P1, 8h; depends on M0-04-R1.
-- **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — IN_PROGRESS, P1, 6h; depends on M0-09-R2.
+- **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — BACKLOG, P2, 4h; depends on M0-10-R1.
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — IN_PROGRESS, P1, 6h; depends on M0-12-R1, M0-12-R2.
 - **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — BACKLOG, P2, 6h; depends on M0-12-R3.

@@ -8,6 +8,8 @@ export interface ProviderTemplate {
   companions?: string[];
   /** Companion-only templates are not offered as providers of their own. */
   hidden?: boolean;
+  /** MCP_CONFIGS entries written whenever this provider is generated (Zed's .zed/settings.json). */
+  mcpConfigs?: string[];
 }
 
 /**
@@ -546,6 +548,7 @@ slashCommands:
   zed: {
     filename: '.zed/mapx-instructions.md',
     isAppend: false,
+    mcpConfigs: ['zed'],
     content: `# Zed Assistant MapxGraph Instructions
 
 This project uses MapxGraph (22 languages, 32 MCP tools).
@@ -566,6 +569,7 @@ This project uses MapxGraph (22 languages, 32 MCP tools).
   antigravity: {
     filename: '.agents/rules/mapx.md',
     isAppend: false,
+    mcpConfigs: ['antigravity'],
     content: `# MapxGraph Initialization Rule
 
 ## Context
