@@ -118,4 +118,27 @@ describe('Laravel structure surface (F07–F09)', () => {
     const out = await call('mapx_dependencies', { file: 'app/Providers/AppServiceProvider.php' });
     expect(out).toContain('Bindings (abstract → concrete):\n  App\\Contracts\\PaymentGateway → App\\Services\\StripeGateway (bind)');
   });
+
+  // M0-03-R4: mapx_dependencies resolves a file argument as `mapx deps` does: exact path, glob or partial name.
+  it('mapx_dependencies accepts a partial name or a glob, like mapx deps (MCP client)', async () => {
+    const raw = async (file: string) =>
+      (await client.callTool({ name: 'mapx_dependencies', arguments: { dir: root, file } })) as { isError?: boolean; content: Array<{ text: string }> };
+    const exact = await call('mapx_dependencies', { file: 'app/Providers/AppServiceProvider.php' });
+    expect(exact).toContain('→ app/Contracts/PaymentGateway.php');
+    // A partial name and a glob matching one file give the exact path's answer.
+    expect(await call('mapx_dependencies', { file: 'AppServiceProvider' })).toBe(exact);
+    expect(await call('mapx_dependencies', { file: 'app/Providers/*.php' })).toBe(exact);
+    // The CLI resolves the same partial name to the same file and dependencies.
+    const cli = mapx(root, 'deps', 'AppServiceProvider');
+    for (const line of exact.split('\n')) expect(cli).toContain(line);
+    // Several matches: one headed section per file, as `mapx deps app/Models/*.php`.
+    const models = await call('mapx_dependencies', { file: 'app/Models/*.php' });
+    const headers = models.split('\n').filter((l) => l.startsWith('── '));
+    expect([...headers].sort()).toEqual(['── app/Models/Order.php ──', '── app/Models/Team.php ──', '── app/Models/User.php ──']);
+    expect(mapx(root, 'deps', 'app/Models/*.php').split('\n').filter((l) => l.startsWith('── '))).toEqual(headers);
+    // No match: the CLI's message, as an error.
+    const missing = await raw('NoSuchProvider');
+    expect(missing.isError).toBe(true);
+    expect(missing.content[0].text).toContain('File "NoSuchProvider" not found in index.');
+  });
 });

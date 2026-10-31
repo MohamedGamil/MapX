@@ -1113,9 +1113,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 4,
-        "latestFinish": 4,
-        "slack": 4
+        "latestStart": 8,
+        "latestFinish": 8,
+        "slack": 8
       },
       {
         "id": "M0-04",
@@ -1131,9 +1131,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 4,
-        "latestFinish": 4,
-        "slack": 4
+        "latestStart": 8,
+        "latestFinish": 8,
+        "slack": 8
       },
       {
         "id": "M0-06",
@@ -1590,54 +1590,54 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 4,
-        "latestFinish": 4,
-        "slack": 4
+        "latestStart": 8,
+        "latestFinish": 8,
+        "slack": 8
       },
       {
         "id": "M0-03-R2",
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 4,
-        "latestFinish": 4,
-        "slack": 4
+        "latestStart": 8,
+        "latestFinish": 8,
+        "slack": 8
       },
       {
         "id": "M0-03-R3",
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 4,
-        "latestFinish": 4,
-        "slack": 4
+        "latestStart": 8,
+        "latestFinish": 8,
+        "slack": 8
       },
       {
         "id": "M0-05-R2",
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 4,
-        "latestFinish": 4,
-        "slack": 4
+        "latestStart": 8,
+        "latestFinish": 8,
+        "slack": 8
       },
       {
         "id": "M0-05-R4",
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 4,
-        "latestFinish": 4,
-        "slack": 4
+        "latestStart": 8,
+        "latestFinish": 8,
+        "slack": 8
       },
       {
         "id": "M0-03-R4",
-        "duration": 4,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 4,
-        "latestStart": 4,
+        "earliestFinish": 0,
+        "latestStart": 8,
         "latestFinish": 8,
-        "slack": 4
+        "slack": 8
       },
       {
         "id": "M0-17-R1",
@@ -2153,13 +2153,13 @@
         "slack": 40
       }
     ],
-    "totalEffort": 116
+    "totalEffort": 112
   },
   "resourceSchedule": {
-    "hours": 116,
-    "weeks": 5.8,
+    "hours": 112,
+    "weeks": 5.6,
     "forecastAsOf": "2026-11-02",
-    "conditionalDate": "2026-12-12",
+    "conditionalDate": "2026-12-11",
     "assignments": [
       {
         "id": "M0-01",
@@ -2525,349 +2525,349 @@
         "id": "M0-03-R4",
         "worker": 0,
         "start": 7,
-        "finish": 11
+        "finish": 7
       },
       {
         "id": "M0-17-R1",
         "worker": 0,
-        "start": 11,
-        "finish": 11
+        "start": 7,
+        "finish": 7
       },
       {
         "id": "M0-01-R1",
         "worker": 0,
-        "start": 11,
-        "finish": 11
+        "start": 7,
+        "finish": 7
       },
       {
         "id": "M0-17-R2",
         "worker": 0,
-        "start": 11,
-        "finish": 11
+        "start": 7,
+        "finish": 7
       },
       {
         "id": "M0-17-R3",
         "worker": 0,
-        "start": 11,
-        "finish": 11
+        "start": 7,
+        "finish": 7
       },
       {
         "id": "M1-05-R1",
         "worker": 0,
-        "start": 11,
-        "finish": 11
+        "start": 7,
+        "finish": 7
       },
       {
         "id": "M1-05-R2",
         "worker": 0,
-        "start": 11,
-        "finish": 15
+        "start": 7,
+        "finish": 11
       },
       {
         "id": "M0-32",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-32-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M2-06-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-07-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-07-R2",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-09-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-09-R2",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-09-R3",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-32-R2",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-06-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-04-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-12-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-12-R2",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-08-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-11-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-20-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-18-R1",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-05-R3",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-20-R2",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-11-R2",
         "worker": 0,
-        "start": 15,
-        "finish": 15
+        "start": 11,
+        "finish": 11
       },
       {
         "id": "M0-04-R2",
         "worker": 0,
-        "start": 15,
-        "finish": 23
+        "start": 11,
+        "finish": 19
       },
       {
         "id": "M0-12-R3",
         "worker": 0,
-        "start": 23,
-        "finish": 23
+        "start": 19,
+        "finish": 19
       },
       {
         "id": "M0-12-R4",
         "worker": 0,
-        "start": 23,
-        "finish": 23
+        "start": 19,
+        "finish": 19
       },
       {
         "id": "M1-03-R1",
         "worker": 0,
-        "start": 23,
-        "finish": 23
+        "start": 19,
+        "finish": 19
       },
       {
         "id": "M1-07-R1",
         "worker": 0,
-        "start": 23,
-        "finish": 23
+        "start": 19,
+        "finish": 19
       },
       {
         "id": "M2-04-R2",
         "worker": 0,
-        "start": 23,
-        "finish": 23
+        "start": 19,
+        "finish": 19
       },
       {
         "id": "M3-01",
         "worker": 0,
-        "start": 23,
-        "finish": 29
+        "start": 19,
+        "finish": 25
       },
       {
         "id": "M3-02",
         "worker": 0,
-        "start": 29,
-        "finish": 43
+        "start": 25,
+        "finish": 39
       },
       {
         "id": "M3-03",
         "worker": 0,
-        "start": 43,
-        "finish": 55
+        "start": 39,
+        "finish": 51
       },
       {
         "id": "M3-04",
         "worker": 0,
-        "start": 55,
-        "finish": 65
+        "start": 51,
+        "finish": 61
       },
       {
         "id": "M3-05",
         "worker": 0,
-        "start": 65,
-        "finish": 79
+        "start": 61,
+        "finish": 75
       },
       {
         "id": "M3-06",
         "worker": 0,
-        "start": 79,
-        "finish": 87
+        "start": 75,
+        "finish": 83
       },
       {
         "id": "M4-01",
         "worker": 0,
-        "start": 87,
-        "finish": 92
+        "start": 83,
+        "finish": 88
       },
       {
         "id": "M4-02",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-31",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-33",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-34",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-35",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-36",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-37",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-38",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M0-39",
         "worker": 0,
-        "start": 92,
-        "finish": 92
+        "start": 88,
+        "finish": 88
       },
       {
         "id": "M4-03",
         "worker": 0,
-        "start": 92,
-        "finish": 100
+        "start": 88,
+        "finish": 96
       },
       {
         "id": "M4-04",
         "worker": 0,
-        "start": 100,
-        "finish": 112
+        "start": 96,
+        "finish": 108
       },
       {
         "id": "M4-05",
         "worker": 0,
-        "start": 112,
-        "finish": 116
+        "start": 108,
+        "finish": 112
       },
       {
         "id": "M4-06",
         "worker": 0,
-        "start": 116,
-        "finish": 116
+        "start": 112,
+        "finish": 112
       },
       {
         "id": "M4-07",
         "worker": 0,
-        "start": 116,
-        "finish": 116
+        "start": 112,
+        "finish": 112
       },
       {
         "id": "M0-22-R2",
         "worker": 0,
-        "start": 116,
-        "finish": 116
+        "start": 112,
+        "finish": 112
       },
       {
         "id": "M0-40",
         "worker": 0,
-        "start": 116,
-        "finish": 116
+        "start": 112,
+        "finish": 112
       },
       {
         "id": "M0-41",
         "worker": 0,
-        "start": 116,
-        "finish": 116
+        "start": 112,
+        "finish": 112
       },
       {
         "id": "M0-03-R1",
         "worker": 0,
-        "start": 116,
-        "finish": 116
+        "start": 112,
+        "finish": 112
       }
     ]
   }

@@ -20,7 +20,8 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { calculateClusterMetrics, calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop } from './core/metrics.js';
-import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
+import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
+import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
@@ -166,7 +167,7 @@ Prefer mapx_search for filtered queries (by kind, file path, exact match). Use m
         inputSchema: {
           type: 'object',
           properties: {
-            file: { type: 'string', description: 'File path to analyze (relative to project root)' },
+            file: { type: 'string', description: 'File to analyze: an indexed path (relative to project root), a glob (app/Providers/*.php) or a partial name (AppServiceProvider), as `mapx deps` takes it' },
             crossRepo: { type: 'boolean', description: 'Only dependencies that cross into or come from another registered repository, like `mapx deps --cross-repo`', default: false },
             ...dirProperty,
           },
@@ -831,34 +832,44 @@ EXAMPLE:
         const ctx = await loadCtx(dir);
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
-        if ((args as any)?.crossRepo) {
-          // As `deps --cross-repo` (F18, M0-10-R2).
-          const warning = getMcpStalenessWarning(ctx.store, dir);
-          return { content: [{ type: 'text', text: warning + crossRepoDependencies(ctx.store, file).join('\n') }] };
+        // Exact path, glob or partial name, as `mapx deps` resolves it; one section per match (M0-03-R4).
+        const paths = resolveFilePaths(file, ctx.store.getAllFiles() as Array<{ path: unknown }>);
+        if (!paths) {
+          const { error, tip } = fileNotFoundMessage(file);
+          return { content: [{ type: 'text', text: `${error}\n\n${tip}` }], isError: true };
         }
 
-        const deps = ctx.graph.getDependencies(file);
-        const rdeps = ctx.graph.getReverseDependencies(file);
+        const sections = paths.map(filePath => {
+          const parts: string[] = paths.length > 1 ? [`── ${filePath} ──`] : [];
+          if ((args as any)?.crossRepo) {
+            // As `deps --cross-repo` (F18, M0-10-R2).
+            parts.push(...crossRepoDependencies(ctx.store, filePath));
+            return parts.join('\n');
+          }
 
-        const parts: string[] = [];
-        if (deps.length > 0) {
-          parts.push('Dependencies:');
-          for (const d of deps) parts.push(`  → ${d.target} (${d.type})`);
-        }
-        if (rdeps.length > 0) {
-          parts.push('Depended on by:');
-          for (const r of rdeps) parts.push(`  ← ${r.source} (${r.type})`);
-        }
-        if (parts.length === 0) parts.push('No dependencies found');
-        // Service container bindings declared here, as `mapx deps` shows them (F08, M0-05-R4).
-        const bindings = fileBindings(ctx.store, file);
-        if (bindings.length > 0) {
-          parts.push('Bindings (abstract → concrete):');
-          for (const b of bindings) parts.push(`  ${describeBinding(b)}`);
-        }
+          const deps = ctx.graph.getDependencies(filePath);
+          const rdeps = ctx.graph.getReverseDependencies(filePath);
+          const start = parts.length;
+          if (deps.length > 0) {
+            parts.push('Dependencies:');
+            for (const d of deps) parts.push(`  → ${d.target} (${d.type})`);
+          }
+          if (rdeps.length > 0) {
+            parts.push('Depended on by:');
+            for (const r of rdeps) parts.push(`  ← ${r.source} (${r.type})`);
+          }
+          if (parts.length === start) parts.push('No dependencies found');
+          // Service container bindings declared here, as `mapx deps` shows them (F08, M0-05-R4).
+          const bindings = fileBindings(ctx.store, filePath);
+          if (bindings.length > 0) {
+            parts.push('Bindings (abstract → concrete):');
+            for (const b of bindings) parts.push(`  ${describeBinding(b)}`);
+          }
+          return parts.join('\n');
+        });
 
         const warning = getMcpStalenessWarning(ctx.store, dir);
-        return { content: [{ type: 'text', text: warning + parts.join('\n') }] };
+        return { content: [{ type: 'text', text: warning + sections.join('\n\n') }] };
       }
 
       case 'mapx_export': {
@@ -1522,7 +1533,8 @@ Callees: ${callees.length}`;
         const file = fileArg ? indexedPath(dir, fileArg) : undefined;
         const direction = ((args as any)?.direction ?? 'both') as EdgeDirection;
         const edges = ctx.store.queryEdges({
-          repo: ctx.config.repo.name,
+          // Every registered repo's edges for a file, as `mapx edges <file>` (M0-03-R4).
+          repo: file ? undefined : ctx.config.repo.name,
           type: (args as any)?.type,
           from: (args as any)?.from,
           to: (args as any)?.to,
@@ -1533,6 +1545,7 @@ Callees: ${callees.length}`;
 
         // With a file: F04's incoming / outgoing neighbourhood, JSON by default (D012).
         if (file) {
+          if (edges.length === 0 && !ctx.store.getFile(file)) return { content: [{ type: 'text', text: notIndexedMessage(file) }], isError: true };
           const neighbourhood = fileEdges(file, direction, edges);
           if (format === 'json') return { content: [{ type: 'text', text: JSON.stringify(neighbourhood, null, 2) }] };
           return { content: [{ type: 'text', text: getMcpStalenessWarning(ctx.store, dir) + formatFileEdgesText(neighbourhood) }] };

@@ -637,7 +637,7 @@ Options:
 mapx edges app/Models/User.php --direction outgoing --type relation,extends --verified-only --format=json
 ```
 
-With a file, text output (F04) lists both sides; inferred edges end in `(inferred)`, and a file without edges prints `No edges for <file>.` (exit 0):
+With a file, the edges of every registered repo of the workspace count, so another repo's edge into the file is listed. Text output (F04) lists both sides; inferred edges end in `(inferred)` and a file of another repo shows as `repo:path`. An indexed file without edges prints `No edges for <file>.` (exit 0); a path that is not indexed prints `File "<file>" is not indexed. …` on stderr and exits 1:
 
 ```
 Edges for: src/service.ts
@@ -651,11 +651,11 @@ Edges for: src/service.ts
     → src/store.ts  [instantiation]  Store
 ```
 
-With a file, JSON output (decision D012) is `{ file, direction, incoming[], outgoing[] }`; with `--direction incoming` the `outgoing` list is empty, and vice versa:
+With a file, JSON output (decision D012) is `{ file, direction, incoming[], outgoing[] }`; with `--direction incoming` the `outgoing` list is empty, and vice versa. `sourceRepo` / `targetRepo` name the other repo of a cross-repo edge and are `null` otherwise:
 
 ```json
 { "file": "src/service.ts", "direction": "both",
-  "incoming": [ { "sourceFile": "src/api.ts", "type": "instantiation", "sourceSymbol": "handler", "targetSymbol": "Service", "verifiability": "verified", "weight": 1, "line": 3 } ],
+  "incoming": [ { "sourceFile": "src/api.ts", "sourceRepo": null, "type": "instantiation", "sourceSymbol": "handler", "targetSymbol": "Service", "verifiability": "verified", "weight": 1, "line": 3 } ],
   "outgoing": [ { "targetFile": "src/store.ts", "targetRepo": null, "type": "instantiation", "sourceSymbol": "Service", "targetSymbol": "Store", "verifiability": "verified", "weight": 1, "line": 2 } ] }
 ```
 

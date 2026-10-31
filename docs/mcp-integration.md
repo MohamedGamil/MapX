@@ -342,7 +342,7 @@ List and filter project files.
 
 #### `mapx_dependencies`
 Get file-level dependencies and reverse dependencies. A file that declares service-container bindings also gets a `Bindings (abstract → concrete)` block, as `mapx deps` does: closures show as `(closure)`, and `$listen` entries read `Event → Listener (listen)`.
-- `file` (string, required): File path to analyze
+- `file` (string, required): File to analyze, resolved as `mapx deps` resolves it: an exact indexed path, a glob (`app/Providers/*.php`) or a partial name (`AppServiceProvider`). Several matches each get a `── path ──` section; no match returns `File "…" not found in index.` as an error
 - `crossRepo` (boolean, optional): List only the edges that cross into or come from another registered repository, as `mapx deps --cross-repo` does (`→ [repo] file (type)` / `← [repo] file (type)`)
 - `dir` (string, optional): Target project directory
 
@@ -390,7 +390,7 @@ Show hooks from detected frameworks.
 - `dir` (string, optional): Target project directory
 
 #### `mapx_edges`
-Structured edge neighbourhood of a file, JSON by default. With `file` it returns the same `{ file, direction, incoming[], outgoing[] }` object as `mapx edges <file> --format json` (decision D012): incoming rows carry `sourceFile`, outgoing rows `targetFile` and `targetRepo`, and both carry `type`, `sourceSymbol`, `targetSymbol`, `verifiability`, `weight` and `line`. Without `file` it returns the flat JSON array of edges (`sourceFile`, `targetFile`, …, `metadata`). `format: "text"` gives the CLI's text output.
+Structured edge neighbourhood of a file, JSON by default. With `file` it returns the same `{ file, direction, incoming[], outgoing[] }` object as `mapx edges <file> --format json` (decision D012): incoming rows carry `sourceFile` and `sourceRepo`, outgoing rows `targetFile` and `targetRepo` (the other repo of a cross-repo edge, else `null`), and both carry `type`, `sourceSymbol`, `targetSymbol`, `verifiability`, `weight` and `line`. A file's neighbourhood includes the edges of every registered repo of the workspace. A file that is not indexed and has no edges returns `File "…" is not indexed.` as an error. Without `file` it returns the flat JSON array of the primary repo's edges (`sourceFile`, `targetFile`, …, `metadata`). `format: "text"` gives the CLI's text output.
 - `file` (string, optional): File whose edges to list (workspace-relative or absolute)
 - `direction` (string, optional): Needs `file`: `outgoing`, `incoming` or `both` (default)
 - `type` (string array, optional): Edge types to include, e.g. `["relation", "extends"]`; a comma-separated string also works

@@ -4,15 +4,15 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer } from '../src/mcp.js';
-import { cleanup, init, mapx, mapxResult, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, mapxResult, query, workspace } from './helpers/e2e.js';
 
 // M0-03-R2 / M0-03-R3: the metrics / edges surface (F02, F04) in the output contract of D012:
 // spec structures with camelCase keys. Real CLI and a real MCP client on scanned workspaces.
 
 type Row = { path: string; language: string; inDegree: number; outDegree: number; totalDegree: number; instability: number; pagerank: number };
 type Report = { dir: string; generatedAt: string; summary: { files: number; edges: number; density: number }; files: Row[] };
-type In = { sourceFile: string; type: string; sourceSymbol: string | null; targetSymbol: string | null; verifiability: string; weight: number; line: number | null };
-type Out = Omit<In, 'sourceFile'> & { targetFile: string; targetRepo: string | null };
+type In = { sourceFile: string; sourceRepo: string | null; type: string; sourceSymbol: string | null; targetSymbol: string | null; verifiability: string; weight: number; line: number | null };
+type Out = Omit<In, 'sourceFile' | 'sourceRepo'> & { targetFile: string; targetRepo: string | null };
 type Neighbourhood = { file: string; direction: string; incoming: In[]; outgoing: Out[] };
 
 async function mcpClient(): Promise<Client> {
@@ -208,8 +208,8 @@ describe('D012 output contract (synthetic TS fixture)', () => {
   });
 
   const serviceIncoming: In[] = [
-    { sourceFile: 'src/api.ts', type: 'import', sourceSymbol: null, targetSymbol: './service', verifiability: 'verified', weight: 1, line: 1 },
-    { sourceFile: 'src/api.ts', type: 'instantiation', sourceSymbol: 'handler', targetSymbol: 'Service', verifiability: 'verified', weight: 1, line: 3 },
+    { sourceFile: 'src/api.ts', sourceRepo: null, type: 'import', sourceSymbol: null, targetSymbol: './service', verifiability: 'verified', weight: 1, line: 1 },
+    { sourceFile: 'src/api.ts', sourceRepo: null, type: 'instantiation', sourceSymbol: 'handler', targetSymbol: 'Service', verifiability: 'verified', weight: 1, line: 3 },
   ];
   const serviceOutgoing: Out[] = [
     { targetFile: 'src/store.ts', targetRepo: null, type: 'call', sourceSymbol: 'Service::run', targetSymbol: 'save', verifiability: 'inferred', weight: 1, line: 4 },
@@ -221,6 +221,7 @@ describe('D012 output contract (synthetic TS fixture)', () => {
     const both: Neighbourhood = JSON.parse(mapx(root, 'edges', 'src/service.ts', '--format', 'json'));
     expect(both).toEqual({ file: 'src/service.ts', direction: 'both', incoming: serviceIncoming, outgoing: serviceOutgoing });
     expect(Object.keys(both.outgoing[0])).toEqual(['targetFile', 'targetRepo', 'type', 'sourceSymbol', 'targetSymbol', 'verifiability', 'weight', 'line']);
+    expect(Object.keys(both.incoming[0])).toEqual(['sourceFile', 'sourceRepo', 'type', 'sourceSymbol', 'targetSymbol', 'verifiability', 'weight', 'line']);
 
     expect(JSON.parse(mapx(root, 'edges', 'src/service.ts', '--format', 'json', '--direction', 'incoming')))
       .toEqual({ file: 'src/service.ts', direction: 'incoming', incoming: serviceIncoming, outgoing: [] });
@@ -261,6 +262,23 @@ describe('D012 output contract (synthetic TS fixture)', () => {
     expect(await call('mapx_edges', { file: 'src/lonely.ts', format: 'text' })).toContain('No edges for src/lonely.ts.');
   });
 
+  it('edges <file> on a path that is not indexed says so, unlike an indexed file with no edges (M0-03-R4)', async () => {
+    for (const format of ['text', 'json']) {
+      const missing = mapxResult(root, 'edges', 'src/missing.ts', '--format', format);
+      expect(missing.status, format).toBe(1);
+      expect(missing.stderr, format).toContain('File "src/missing.ts" is not indexed.');
+      expect(missing.stdout, format).not.toContain('No edges');
+    }
+    const lonely = mapxResult(root, 'edges', 'src/lonely.ts');
+    expect(lonely.stderr).not.toContain('not indexed');
+    for (const format of ['text', 'json']) {
+      const r = await callRaw('mapx_edges', { file: 'src/missing.ts', format });
+      expect(r.isError, format).toBe(true);
+      expect(r.content[0].text).toContain('File "src/missing.ts" is not indexed.');
+    }
+    expect((await callRaw('mapx_edges', { file: 'src/lonely.ts', format: 'text' })).isError).toBeFalsy();
+  });
+
   it('invalid --top / --format values and --direction without a file exit non-zero with a message', async () => {
     const rejects: Array<[string[], RegExp]> = [
       [['metrics', '--top', 'abc'], /Invalid top value "abc"/],
@@ -295,5 +313,67 @@ describe('D012 output contract (synthetic TS fixture)', () => {
     expect(await out({ type: 'call,import' })).toEqual(['call', 'import']);
     expect(await out({})).toEqual(['call', 'import', 'instantiation']);
     expect(await out({ verifiedOnly: true })).toEqual(['import', 'instantiation']);
+  });
+});
+
+// M0-03-R4, synthetic two-repo workspace: <root> is the primary repo (src/), libs/ui a second
+// registered repo `ui`. Edges are stored under their source repo, so ui's edges into the primary
+// repo and within ui are not rows of the primary repo's.
+describe('edges <file> across the repos of a workspace', () => {
+  let root: string;
+  let client: Client;
+  beforeAll(async () => {
+    root = workspace({
+      'src/theme.ts': "export const theme = { color: 'red' };\n",
+      'src/app.ts': "import { Button } from '../libs/ui/button';\nexport const app = () => new Button();\n",
+      'libs/ui/button.ts': "import { theme } from '../../src/theme';\nexport class Button { color = theme.color; }\n",
+      'libs/ui/icon.ts': "import { Button } from './button';\nexport const icon = new Button();\n",
+    }, ['.', 'libs/ui']);
+    init(root);
+    mapx(root, 'workspaces', 'add', 'libs/ui');
+    // --force: `workspaces add` scanned ui before the primary repo was indexed.
+    mapx(root, 'scan', '--all', '--force');
+    client = await mcpClient();
+  }, 120000);
+  afterAll(async () => {
+    await client?.close();
+    cleanup(root);
+  });
+  const call = async (name: string, args: Record<string, unknown>) =>
+    ((await client.callTool({ name, arguments: { dir: root, ...args } })) as any).content[0].text as string;
+  const main = () => JSON.parse(readFileSync(join(root, '.mapx/config.json'), 'utf8')).repos[0].name as string;
+
+  it('the store holds the fixture\'s edges under their source repo', () => {
+    expect(query(root, 'SELECT source_file, target_file, edge_type, repo, target_repo FROM edges ORDER BY source_file, edge_type')).toEqual([
+      { source_file: 'libs/ui/button.ts', target_file: 'src/theme.ts', edge_type: 'import', repo: 'ui', target_repo: main() },
+      { source_file: 'libs/ui/icon.ts', target_file: 'libs/ui/button.ts', edge_type: 'import', repo: 'ui', target_repo: null },
+      { source_file: 'libs/ui/icon.ts', target_file: 'libs/ui/button.ts', edge_type: 'instantiation', repo: 'ui', target_repo: null },
+      { source_file: 'src/app.ts', target_file: 'libs/ui/button.ts', edge_type: 'import', repo: main(), target_repo: 'ui' },
+      { source_file: 'src/app.ts', target_file: 'libs/ui/button.ts', edge_type: 'instantiation', repo: main(), target_repo: 'ui' },
+    ]);
+  });
+
+  it('edges <file> --format json lists the other repo\'s edge into the file under incoming, with its source repo', async () => {
+    const theme: Neighbourhood = JSON.parse(mapx(root, 'edges', 'src/theme.ts', '--format', 'json'));
+    expect(theme).toEqual({
+      file: 'src/theme.ts',
+      direction: 'both',
+      incoming: [{ sourceFile: 'libs/ui/button.ts', sourceRepo: 'ui', type: 'import', sourceSymbol: null, targetSymbol: '../../src/theme', verifiability: 'verified', weight: 1, line: 1 }],
+      outgoing: [],
+    });
+    expect(JSON.parse(await call('mapx_edges', { file: 'src/theme.ts' }))).toEqual(theme);
+    expect(mapx(root, 'edges', 'src/theme.ts')).toContain('  Incoming (1):\n    ← ui:libs/ui/button.ts  [import]  ../../src/theme');
+
+    // A file of the second repo: its own repo's edges (sourceRepo null), the primary repo's, and
+    // its outgoing edge into the primary repo.
+    const button: Neighbourhood = JSON.parse(mapx(root, 'edges', 'libs/ui/button.ts', '--format', 'json'));
+    expect(button.incoming.map((e) => `${e.sourceRepo ?? '-'} ${e.sourceFile} ${e.type}`)).toEqual([
+      '- libs/ui/icon.ts import',
+      '- libs/ui/icon.ts instantiation',
+      `${main()} src/app.ts import`,
+      `${main()} src/app.ts instantiation`,
+    ]);
+    expect(button.outgoing.map((e) => `${e.targetRepo} ${e.targetFile} ${e.type}`)).toEqual([`${main()} src/theme.ts import`]);
+    expect(JSON.parse(await call('mapx_edges', { file: 'libs/ui/button.ts' }))).toEqual(button);
   });
 });

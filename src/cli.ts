@@ -21,7 +21,8 @@ import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
-import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
+import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
+import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { formatLanguageInfo, formatLanguageList, installLanguage, uninstallLanguage } from './languages/installer.js';
@@ -29,8 +30,7 @@ import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
-import { findSimilarSymbols, isGlobPattern, globToLike } from './core/fuzzy-matcher.js';
-import picomatch from 'picomatch';
+import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
 
 const dynamicRequire = createRequire(import.meta.url);
@@ -42,38 +42,6 @@ function collectPatterns(val: string, memo: string[]): string[] {
 function resolveDir(cmdOpts: Record<string, unknown>, programOpts: Record<string, unknown>): string {
   const raw = (cmdOpts.dir as string) || (programOpts.dir as string) || process.cwd();
   return resolve(raw);
-}
-
-/**
- * Resolve a file argument to one or more tracked file paths.
- *
- * Resolution order:
- *  1. Exact match in the tracked file set.
- *  2. Glob / wildcard match (*, ?) against all tracked paths — returns all matches.
- *  3. Substring / prefix match — returns all paths containing the input as a substring.
- *
- * Returns `null` when no match is found so callers can print a helpful error.
- */
-function resolveFilePaths(input: string, allFiles: Array<{ path: unknown }>): string[] | null {
-  const paths = allFiles.map(f => f.path as string);
-
-  // 1. Exact match
-  if (paths.includes(input)) return [input];
-
-  // 2. Glob wildcard: *, ?, **
-  if (isGlobPattern(input) || input.includes('/')) {
-    const matchBase = !input.includes('/');
-    const isMatch = picomatch(input, { dot: true, nocase: true, matchBase });
-    const matches = paths.filter(p => isMatch(p) || p.endsWith(input) || p.includes(input));
-    if (matches.length > 0) return matches;
-  }
-
-  // 3. Substring fallback
-  const lower = input.toLowerCase();
-  const substr = paths.filter(p => p.toLowerCase().includes(lower));
-  if (substr.length > 0) return substr;
-
-  return null;
 }
 
 const PHASE_LABELS: Record<ScanProgress['phase'], { active: string; done: string }> = {
@@ -1417,8 +1385,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const resolved = resolveFilePaths(file, allFiles);
 
       if (!resolved) {
-        console.error(`File "${file}" not found in index.`);
-        console.log(`\nTip: Use globs (src/core/*.ts), partial names (scanner), or run mapx files to list all tracked files.`);
+        const { error, tip } = fileNotFoundMessage(file);
+        console.error(error);
+        console.log(`\n${tip}`);
         process.exit(1);
       }
 
@@ -2289,7 +2258,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       if (format !== 'json') checkAndPrintStaleness(store, dir);
       const file = hasFile ? indexedPath(dir, fileArg!) : undefined;
       const edges = store.queryEdges({
-        repo: config.repo.name,
+        // A file's neighbourhood spans every registered repo: edges are stored under their source
+        // repo, so another repo's edge into this file is not under ours (M0-03-R4).
+        repo: file ? undefined : config.repo.name,
         type: opts.type as string | undefined,
         file,
         direction: direction as EdgeDirection,
@@ -2300,6 +2271,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       // With a file: F04's incoming / outgoing neighbourhood (D012). Without: the flat list.
       if (file) {
+        if (edges.length === 0 && !store.getFile(file)) {
+          console.error(notIndexedMessage(file));
+          process.exit(1);
+        }
         const neighbourhood = fileEdges(file, direction as EdgeDirection, edges);
         console.log(format === 'json' ? JSON.stringify(neighbourhood, null, 2) : formatFileEdgesText(neighbourhood));
         return;

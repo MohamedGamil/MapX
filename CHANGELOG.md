@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `mapx edges <file>` / `mapx_edges` now list edges from every repo of a workspace (incoming rows carry `sourceRepo`) and report a path that is not indexed instead of "No edges", and `mapx_dependencies` accepts globs and partial names like `mapx deps` (M0-03-R4).
 - Java and TypeScript generic bases (`extends Base<T>`, `implements Run<T>`) are extracted, `export let`/`export var` and TypeScript top-level bindings are symbols, arrows declared inside functions are no longer top-level functions, and C# base lists use the indexed target's kind to choose extends or implements (M0-17-R3).
 - Cyclic-dependency smells now list their files in cycle order, each once, and JSON/JSONC files with `key:`-like text inside strings keep their `$ref`/`extends` links when parsed in worker threads (M0-32-R2).
 - Import edges are more precise: Ruby `require_relative` vs `require`, the right Java module in multi-module builds, Python aliased and multi-name imports, C# `using static`/aliases/nested namespaces, Rust `mod foo;` and uniform paths, and Go nested modules; import edges now name the imported module in `target_symbol` (M0-12-R4).

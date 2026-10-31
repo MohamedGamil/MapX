@@ -45,7 +45,8 @@ interface FileEdgeBase {
   weight: number;
   line: number | null;
 }
-export interface IncomingEdge extends FileEdgeBase { sourceFile: string }
+/** `sourceRepo` mirrors `targetRepo`: the repo the edge comes from when it is not the file's own, else null (M0-03-R4). */
+export interface IncomingEdge extends FileEdgeBase { sourceFile: string; sourceRepo: string | null }
 export interface OutgoingEdge extends FileEdgeBase { targetFile: string; targetRepo: string | null }
 
 /** `mapx edges <file> --format json` / mapx_edges with a file: F04's shape with camelCase keys (D012). */
@@ -80,7 +81,11 @@ export function fileEdges(file: string, direction: EdgeDirection, rows: Record<s
       weight: v.weight,
       line: typeof line === 'number' ? line : null,
     };
-    if (direction !== 'outgoing' && v.targetFile === file) result.incoming.push({ sourceFile: v.sourceFile, ...base });
+    if (direction !== 'outgoing' && v.targetFile === file) {
+      // A cross-repo edge is stored under its source repo with target_repo set to the other one.
+      const sourceRepo = v.targetRepo && v.targetRepo !== row.repo ? (row.repo as string) : null;
+      result.incoming.push({ sourceFile: v.sourceFile, sourceRepo, ...base });
+    }
     if (direction !== 'incoming' && v.sourceFile === file) result.outgoing.push({ targetFile: v.targetFile, targetRepo: v.targetRepo, ...base });
   }
   return result;
@@ -97,12 +102,20 @@ export function formatFileEdgesText(edges: FileEdges): string {
     (e.verifiability === 'inferred' ? '  (inferred)' : '');
   const lines = [`Edges for: ${edges.file}`];
   if (edges.direction !== 'outgoing') {
-    lines.push('', `  Incoming (${edges.incoming.length}):`, ...edges.incoming.map(e => row('←', e.sourceFile, e)));
+    lines.push('', `  Incoming (${edges.incoming.length}):`, ...edges.incoming.map(e => row('←', e.sourceFile, e, e.sourceRepo)));
   }
   if (edges.direction !== 'incoming') {
     lines.push('', `  Outgoing (${edges.outgoing.length}):`, ...edges.outgoing.map(e => row('→', e.targetFile, e, e.targetRepo)));
   }
   return lines.join('\n');
+}
+
+/**
+ * `edges <file>` / mapx_edges on a path the index does not know, so that it reads differently from
+ * an indexed file with no edges (M0-03-R4: both used to print "No edges").
+ */
+export function notIndexedMessage(file: string): string {
+  return `File "${file}" is not indexed. Run mapx files to list tracked files, or mapx scan to index it.`;
 }
 
 /**
