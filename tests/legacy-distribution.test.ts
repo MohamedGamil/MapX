@@ -78,15 +78,16 @@ describe('distribution correctness', () => {
 describe('package check rejects native binaries', () => {
   // A throwaway package laid out like ours: `files: ["dist/"]`, a dashboard bundle, and
   // optionally a fake native binary (only its magic bytes matter).
-  const pack = (extra: Record<string, Buffer>) => {
+  const fixture = (extra: Record<string, Buffer>, files: string[] = ['dist/']) => {
     const dir = tempDir();
-    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'pkg-check-fixture', version: '0.0.0', files: ['dist/'] }));
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'pkg-check-fixture', version: '0.0.0', files }));
     mkdirSync(join(dir, 'dist/ui'), { recursive: true });
     writeFileSync(join(dir, 'dist/main.js'), 'console.log(1);\n');
     writeFileSync(join(dir, 'dist/ui/main.js'), 'console.log(2);\n');
     for (const [f, data] of Object.entries(extra)) writeFileSync(join(dir, f), data);
-    return tsx(dir, 'scripts/check-package.ts');
+    return dir;
   };
+  const pack = (extra: Record<string, Buffer>, files?: string[]) => tsx(fixture(extra, files), 'scripts/check-package.ts');
   const fake = (magic: number[]) => Buffer.concat([Buffer.from(magic), Buffer.alloc(64)]);
 
   it('passes a package without binaries', () => {
@@ -104,5 +105,22 @@ describe('package check rejects native binaries', () => {
     expect(r.stderr).toContain('FAIL native ELF binary packed: dist/mapx-linux-x64');
     expect(r.stderr).toContain('FAIL native Mach-O binary packed: dist/mapx-darwin-arm64');
     expect(r.stderr).toContain('FAIL native PE binary packed: dist/mapx-windows-x64.exe');
+  }, 60000);
+
+  // M0-32-R2: a second guard. The real `files` list leaves out dist/mapx-*, so binaries that a
+  // bun build left in dist/ are not packed at all.
+  it('the real package.json `files` leaves out dist/mapx-* binaries', () => {
+    const binaries = {
+      'dist/mapx-linux-x64': fake([0x7f, 0x45, 0x4c, 0x46]),
+      'dist/mapx-linux-arm64': fake([0x7f, 0x45, 0x4c, 0x46]),
+      'dist/mapx-darwin-arm64': fake([0xcf, 0xfa, 0xed, 0xfe]),
+      'dist/mapx-darwin-x64': fake([0xcf, 0xfa, 0xed, 0xfe]),
+      'dist/mapx-windows-x64.exe': fake([0x4d, 0x5a]),
+    };
+    const dir = fixture(binaries, pkg.files);
+    const [packed] = JSON.parse(execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: dir, encoding: 'utf8' })) as { files: { path: string }[] }[];
+    expect(packed.files.map((f) => f.path).sort()).toEqual(['dist/main.js', 'dist/ui/main.js', 'package.json']);
+    const r = tsx(dir, 'scripts/check-package.ts');
+    expect(r.status, r.stderr).toBe(0);
   }, 60000);
 });

@@ -4,6 +4,9 @@ import { existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getParserForFile } from './parser-registry.js';
+// The main thread's JSONC normaliser (already loaded through parser-registry), so worker and
+// main-thread JSON references match (M0-32-R2).
+import { stripJsoncSyntax } from './static-file-parser.js';
 
 // --- Self-contained static parsing helpers to avoid ESM loader issues in Workers ---
 const isRelativeLike = (s: string) =>
@@ -59,57 +62,6 @@ function extractCssRefs(source: string): any[] {
     }
   }
   return refs;
-}
-
-function stripJsoncSyntax(raw: string): string {
-  let result = '';
-  let i = 0;
-  const len = raw.length;
-  while (i < len) {
-    const ch = raw[i];
-    if (ch === '"') {
-      let j = i + 1;
-      while (j < len && raw[j] !== '"') {
-        if (raw[j] === '\\') j++;
-        j++;
-      }
-      result += raw.slice(i, j + 1);
-      i = j + 1;
-      continue;
-    }
-    if (ch === "'") {
-      let j = i + 1;
-      let inner = '';
-      while (j < len && raw[j] !== "'") {
-        if (raw[j] === '\\') {
-          inner += raw[j] + raw[j + 1];
-          j += 2;
-        } else {
-          inner += raw[j] === '"' ? '\\"' : raw[j];
-          j++;
-        }
-      }
-      result += '"' + inner + '"';
-      i = j + 1;
-      continue;
-    }
-    if (ch === '/' && i + 1 < len && raw[i + 1] === '/') {
-      i += 2;
-      while (i < len && raw[i] !== '\n') i++;
-      continue;
-    }
-    if (ch === '/' && i + 1 < len && raw[i + 1] === '*') {
-      i += 2;
-      while (i + 1 < len && !(raw[i] === '*' && raw[i + 1] === '/')) i++;
-      i += 2;
-      continue;
-    }
-    result += ch;
-    i++;
-  }
-  result = result.replace(/,\s*([}\]])/g, '$1');
-  result = result.replace(/([\{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '$1"$2":');
-  return result;
 }
 
 function extractJsonRefs(source: string): any[] {

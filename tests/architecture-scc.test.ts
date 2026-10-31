@@ -111,19 +111,26 @@ describe('ArchitectureAnalyzer cycle smells (M0-32-R1)', () => {
     const cycles = new ArchitectureAnalyzer(storeOf(known, knownEdges))
       .analyze('r', profile)
       .filter(s => s.type === 'cyclic-dependency');
-    // Each path is the shortest cycle from the component's first popped member; `analyze`
-    // sorts involvedFiles in place when it deduplicates, so they come back sorted.
+    // Each path is the shortest cycle from the component's first popped member.
     expect(cycles.map(c => c.description)).toEqual([
       'Cyclic dependency detected: e.ts -> d.ts -> e.ts',
       'Cyclic dependency detected: i.ts -> g.ts -> h.ts -> i.ts',
       'Cyclic dependency detected: c.ts -> a.ts -> b.ts -> c.ts',
     ]);
-    expect(cycles.map(c => c.involvedFiles)).toEqual([
-      ['d', 'e', 'e'],
-      ['g', 'h', 'i', 'i'],
-      ['a', 'b', 'c', 'c'],
-    ].map(c => c.map(N)));
     expect(cycles.every(c => c.severity === 'critical')).toBe(true);
+  });
+
+  // M0-32-R2: the dedup in `analyze` sorted involvedFiles in place, so stored cycles came back
+  // sorted (`[d, e, e]`) instead of in path order.
+  it('lists involved files in cycle path order, without the closing repeat and unsorted', () => {
+    const cycles = new ArchitectureAnalyzer(storeOf(known, knownEdges))
+      .analyze('r', profile)
+      .filter(s => s.type === 'cyclic-dependency');
+    expect(cycles.map(c => c.involvedFiles)).toEqual([
+      ['e', 'd'],
+      ['i', 'g', 'h'],
+      ['c', 'a', 'b'],
+    ].map(c => c.map(N)));
   });
 
   it('reports one cycle over all files of a 20,000-file chain closing into a cycle', () => {
@@ -134,8 +141,8 @@ describe('ArchitectureAnalyzer cycle smells (M0-32-R1)', () => {
       .analyze('r', profile)
       .filter(s => s.type === 'cyclic-dependency');
     expect(cycles).toHaveLength(1);
-    expect(cycles[0].involvedFiles).toHaveLength(n + 1);
-    expect(new Set(cycles[0].involvedFiles)).toEqual(new Set(files));
+    // Path order, each file once (M0-32-R2): m19999, m0, m1, …, m19998.
+    expect(cycles[0].involvedFiles).toEqual([files[n - 1], ...files.slice(0, n - 1)]);
     // The component's first popped member is the deepest node, m19999.
     const { description } = cycles[0];
     expect(description.startsWith('Cyclic dependency detected: m19999.ts -> m0.ts -> m1.ts -> ')).toBe(true);

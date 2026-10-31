@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- Cyclic-dependency smells now list their files in cycle order, each once, and JSON/JSONC files with `key:`-like text inside strings keep their `$ref`/`extends` links when parsed in worker threads (M0-32-R2).
 - Import edges are more precise: Ruby `require_relative` vs `require`, the right Java module in multi-module builds, Python aliased and multi-name imports, C# `using static`/aliases/nested namespaces, Rust `mod foo;` and uniform paths, and Go nested modules; import edges now name the imported module in `target_symbol` (M0-12-R4).
 - Laravel resource routes now honour options arrays (`only`, `except`, `parameters`, `names`, `as`, `middleware`, `shallow`), nested `photos.comments` and shallow resources, `Route::resources([...])`/`apiResources([...])`, carry Laravel's route names, and group name prefixes and action arrays without `uses` keep route names and middleware (M1-05-R1).
 - Calls no longer link to JS/Python constants or variables, or from built-in objects (`Math.max()`) to user functions. C++ out-of-line methods with template or nested qualifiers, C# exception and generic base classes, and Go qualified embedded structs are extracted correctly, and DOT dashes a file pair only when none of its edges is verified (M0-17-R2).

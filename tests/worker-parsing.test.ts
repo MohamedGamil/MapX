@@ -89,4 +89,37 @@ describe('Worker Thread Parsing Integration', () => {
     expect(mainResults[1].symbols).toEqual(workerResults[1].symbols);
     expect(mainResults[2].references).toEqual(workerResults[2].references);
   });
+
+  // M0-32-R2: the worker kept its own copy of the old JSONC normaliser, whose regex pass quoted
+  // `key:` inside strings, so a JSON file with `"{ key: v }"` in a value failed to parse in a
+  // worker and lost its `$ref`/`extends` references (the main thread had the M0-09-R3 fix).
+  it('reads $ref and extends from JSONC with key-like text in strings, like the main thread', async () => {
+    writeFileSync(
+      join(tempDir, 'schema.jsonc'),
+      [
+        '{',
+        '  // a comment',
+        '  "$ref": "./defs/item.json",',
+        '  "extends": ["./base/tsconfig.json"],',
+        '  "description": "{ key: v, }",',
+        '  "glob": "**/[,]",',
+        '}',
+      ].join('\n'),
+    );
+    const store = new Store(':memory:');
+    const config = {
+      getWorkspaceRoot: () => resolve(__dirname, '..'),
+      getResolvedUserLanguages: () => ({}),
+      repos: [{ name: 'test-repo', path: '.' }],
+      settings: { excludePatterns: [], includePatterns: [] },
+    } as unknown as Config;
+    const scanner = new Scanner(store, config, new MapxGraph('test-repo'));
+    const files = [{ absolutePath: join(tempDir, 'schema.jsonc'), language: 'json', sizeBytes: 200, lines: 7 }];
+
+    const [worker] = await (scanner as any).parseWithWorkers(files, resolve(__dirname, '..'));
+    expect(worker.errors).toHaveLength(0);
+    expect(worker.references.map((r: { targetName: string }) => r.targetName)).toEqual(['./defs/item.json', './base/tsconfig.json']);
+    const [main] = await (scanner as any).parseOnMainThread(files, resolve(__dirname, '..'));
+    expect(main.references).toEqual(worker.references);
+  });
 });

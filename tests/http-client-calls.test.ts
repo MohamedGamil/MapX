@@ -124,6 +124,37 @@ describe('extraction defects (M2-03-R1)', () => {
   });
 });
 
+// M0-32-R2: the single-line large-bundle test (http-followups) let a quadratic line lookup
+// (`content.slice(0, i).split('\n')` per call, mutant M14 of M2-06-R1) pass, since one line is
+// cheap to split. With tens of thousands of lines, a per-call split costs O(calls x size).
+describe('large multi-line bundles (M0-32-R2)', () => {
+  it('extracts 4,000 calls from a 52,000-line file in linear time, on the right lines', () => {
+    // Each unit is 13 lines: a function, its call on the next line, ten padding lines and `}`.
+    const pad = (i: number) => Array.from({ length: 10 }, (_, k) => `  var p${i}_${k} = '${'x'.repeat(30)}';\n`).join('');
+    const make = (n: number) => `import axios from 'axios';\n` + Array.from({ length: n }, (_, i) => `function f${i}(id) {\n  axios.get('/api/items/${i}/' + id);\n${pad(i)}}\n`).join('');
+    const time = (n: number) => {
+      const body = make(n);
+      const start = performance.now();
+      const calls = extract({ 'src/big.js': body }, 'src/big.js');
+      const ms = performance.now() - start;
+      // Call i sits on line 3 + 13i.
+      expect(calls.map((c) => `${c.line} ${c.rawUrl}`)).toEqual(Array.from({ length: n }, (_, i) => `${3 + 13 * i} '/api/items/${i}/' + id`));
+      return { ms, lines: body.split('\n').length };
+    };
+    time(400); // warm-up (JIT, regex compilation)
+    const small = time(400);
+    const cpu = process.cpuUsage();
+    const big = time(4000);
+    const spent = process.cpuUsage(cpu);
+    expect(big.lines).toBeGreaterThan(52_000);
+    // CPU time, so waiting on parallel test files does not count: about 0.3 s alone when linear
+    // (building and checking the input included), about 4 s with the quadratic line lookup.
+    expect((spent.user + spent.system) / 1000).toBeLessThan(1500);
+    // 10x the input: 11-15x the extraction time when linear, about 70x when quadratic.
+    expect(big.ms / Math.max(small.ms, 1)).toBeLessThan(30);
+  });
+});
+
 describe('deleted files lose their records (M2-03-R1)', () => {
   let root: string;
   beforeAll(() => {

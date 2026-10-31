@@ -33,6 +33,7 @@
   "files": [
     "dist/",
     "!dist/**/*.map",
+    "!dist/mapx-*",
     "wasm/",
     "queries/",
     "VERSION",

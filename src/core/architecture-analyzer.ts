@@ -45,10 +45,11 @@ export class ArchitectureAnalyzer {
     const clusterSmells = this.detectClusterSmells(clusterMetrics, edges, files);
     smells.push(...clusterSmells);
 
-    // Deduplicate smells on (type, sorted involved files)
+    // Deduplicate smells on (type, sorted involved files). Sort a copy: involvedFiles keep their
+    // order (a cycle's path order, M0-32-R2).
     const seenSmells = new Set<string>();
     return smells.filter(s => {
-      const key = `${s.type}:${(s.involvedFiles || []).sort().join(',')}`;
+      const key = `${s.type}:${[...(s.involvedFiles || [])].sort().join(',')}`;
       if (seenSmells.has(key)) return false;
       seenSmells.add(key);
       return true;
@@ -75,7 +76,8 @@ export class ArchitectureAnalyzer {
         type: 'cyclic-dependency',
         severity: 'critical',
         description: `Cyclic dependency detected: ${cyclePath.map(f => path.basename(f)).join(' -> ')}`,
-        involvedFiles: cyclePath,
+        // The path without its closing repeat of the first file.
+        involvedFiles: [...new Set(cyclePath)],
         suggestion: `Break the cycle by extracting shared logic into interfaces or utilities.`,
       };
     });
