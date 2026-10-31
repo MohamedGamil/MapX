@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { buildServer } from '../src/mcp.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M0-05-R2: the Laravel structure surface of F07–F09: model relationships in `query` and the LLM
@@ -59,13 +62,24 @@ const files: Record<string, string> = {
 
 describe('Laravel structure surface (F07–F09)', () => {
   let root: string;
-  beforeAll(() => {
+  let client: Client;
+  beforeAll(async () => {
     expect(Object.keys(files).length).toBeGreaterThan(10); // parallel scan path
     root = workspace(files);
     init(root);
     mapx(root, 'scan', root);
+    // A real MCP client over an in-memory transport (M0-05-R4).
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
   }, 90000);
-  afterAll(() => cleanup(root));
+  afterAll(async () => {
+    await client?.close();
+    cleanup(root);
+  });
+  const call = async (name: string, args: Record<string, unknown>) =>
+    ((await client.callTool({ name, arguments: { dir: root, ...args } })) as any).content[0].text as string;
 
   it('mapx query User lists its relationships (method, type, target)', () => {
     const out = mapx(root, 'query', 'User');
@@ -92,5 +106,16 @@ describe('Laravel structure surface (F07–F09)', () => {
 
   it('mapx deps AppServiceProvider shows abstract → concrete bindings', () => {
     expect(mapx(root, 'deps', 'AppServiceProvider')).toContain('Bindings (abstract → concrete):\n  App\\Contracts\\PaymentGateway → App\\Services\\StripeGateway (bind)');
+  });
+
+  // M0-05-R4: the MCP tools carry the same relationships and bindings as the CLI.
+  it('mapx_query on a model lists its relationships (MCP client)', async () => {
+    const out = await call('mapx_query', { term: 'User' });
+    expect(out).toMatch(/class User\n  @ app\/Models\/User\.php:\d+\n(?:  signature: .*\n)?  relationships:\n    team → belongsTo App\\Models\\Team \(many-to-one\)\n    orders → hasMany App\\Models\\Order \(one-to-many\)/);
+  });
+
+  it('mapx_dependencies on a provider lists its bindings (MCP client)', async () => {
+    const out = await call('mapx_dependencies', { file: 'app/Providers/AppServiceProvider.php' });
+    expect(out).toContain('Bindings (abstract → concrete):\n  App\\Contracts\\PaymentGateway → App\\Services\\StripeGateway (bind)');
   });
 });

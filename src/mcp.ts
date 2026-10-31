@@ -33,6 +33,7 @@ import { UiEventBus } from './ui-events.js';
 import { WorkspaceManager } from './core/workspace-manager.js';
 import { codeWorkspaceFiles, crossRepoPairs, summarizeRepos } from './core/workspace-summary.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
+import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -143,7 +144,7 @@ export function buildServer(options?: ServeOptions): Server {
       },
       {
         name: 'mapx_query',
-        description: `Search symbols by name pattern. Returns definitions with file locations and signatures.
+        description: `Search symbols by name pattern. Returns definitions with file locations and signatures; a model class also lists its Eloquent relationships.
 
 SEARCH MODES:
   • Substring (default): term="User" matches UserService, UserController, getUser
@@ -162,7 +163,7 @@ Prefer mapx_search for filtered queries (by kind, file path, exact match). Use m
       },
       {
         name: 'mapx_dependencies',
-        description: 'Get dependencies and reverse dependencies for a file. Shows what a file depends on and what depends on it.',
+        description: 'Get dependencies and reverse dependencies for a file. Shows what a file depends on and what depends on it, plus any service container bindings it declares (abstract → concrete).',
         inputSchema: {
           type: 'object',
           properties: {
@@ -795,7 +796,13 @@ EXAMPLE:
         const header = `Found ${results.length} symbol${results.length !== 1 ? 's' : ''} matching "${term}":\n\n`;
         const lines = results.map(sym => {
           const scope = sym.scope ? `${sym.scope}::` : '';
-          return `${sym.kind} ${scope}${sym.name}\n  @ ${sym.file_path}:${sym.start_line}${sym.signature && sym.signature !== sym.name ? `\n  signature: ${sym.signature}` : ''}`;
+          let text = `${sym.kind} ${scope}${sym.name}\n  @ ${sym.file_path}:${sym.start_line}${sym.signature && sym.signature !== sym.name ? `\n  signature: ${sym.signature}` : ''}`;
+          // An Eloquent model lists its relationships, as `mapx query` does (F07, M0-05-R4).
+          if (sym.kind === 'class') {
+            const relations = modelRelations(ctx.store, { file: sym.file_path as string }).filter(r => r.model === sym.name);
+            if (relations.length) text += `\n  relationships:${relations.map(r => `\n    ${describeRelation(r)}`).join('')}`;
+          }
+          return text;
         });
 
         const warning = getMcpStalenessWarning(ctx.store, dir);
@@ -825,6 +832,12 @@ EXAMPLE:
           for (const r of rdeps) parts.push(`  ← ${r.source} (${r.type})`);
         }
         if (parts.length === 0) parts.push('No dependencies found');
+        // Service container bindings declared here, as `mapx deps` shows them (F08, M0-05-R4).
+        const bindings = fileBindings(ctx.store, file);
+        if (bindings.length > 0) {
+          parts.push('Bindings (abstract → concrete):');
+          for (const b of bindings) parts.push(`  ${describeBinding(b)}`);
+        }
 
         const warning = getMcpStalenessWarning(ctx.store, dir);
         return { content: [{ type: 'text', text: warning + parts.join('\n') }] };

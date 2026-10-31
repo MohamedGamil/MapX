@@ -77,7 +77,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — BACKLOG, P2, 6h; depends on M0-12-R3.
 - **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — BACKLOG, P2, 6h; depends on M0-17-R1, M0-01-R1.
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
-- **M0-05-R4** MCP parity for Laravel relationships and bindings — BACKLOG, P2, 3h; depends on M0-05-R2.
+- **M0-05-R4** MCP parity for Laravel relationships and bindings — DONE, P2, 3h; depends on M0-05-R2.
 - **M0-07-R2** Binary build test writes outside the repo; package check rejects binaries — DONE, P2, 2h; depends on M0-07-R1.
 
 ## M1 — Laravel route correctness
@@ -97,7 +97,7 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-99** Release (owner-initiated) — DEFERRED, P1, 2h; depends on nothing.
 - **M1-03-R1** Laravel route-file walker: string/comment-aware lexing and brace-less groups — DONE, P1, 10h; depends on M1-03, M1-06.
 - **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — DONE, P1, 8h; depends on M1-07, M1-04.
-- **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — BACKLOG, P2, 4h; depends on M1-05.
+- **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — IN_PROGRESS, P2, 4h; depends on M1-05.
 
 ## M2 — Cross-language precision and HTTP pairing
 

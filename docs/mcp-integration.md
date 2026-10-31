@@ -311,7 +311,7 @@ Incremental update: sync changed files only.
 ### Symbol & File Discovery
 
 #### `mapx_query`
-Search symbols by name pattern.
+Search symbols by name pattern. A class that declares Eloquent relationships lists them under `relationships:`, one per line, as `mapx query` does (`team → belongsTo App\Models\Team (many-to-one)`).
 - `term` (string, required): Symbol name or pattern
 - `dir` (string, optional): Target project directory
 
@@ -341,7 +341,7 @@ List and filter project files.
 ### Dependencies & Flow
 
 #### `mapx_dependencies`
-Get file-level dependencies and reverse dependencies.
+Get file-level dependencies and reverse dependencies. A file that declares service-container bindings also gets a `Bindings (abstract → concrete)` block, as `mapx deps` does: closures show as `(closure)`, and `$listen` entries read `Event → Listener (listen)`.
 - `file` (string, required): File path to analyze
 - `dir` (string, optional): Target project directory
 

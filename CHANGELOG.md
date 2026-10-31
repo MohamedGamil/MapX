@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `mapx_query` now lists an Eloquent model's relationships and `mapx_dependencies` lists a provider's abstract → concrete bindings, matching the CLI (M0-05-R4).
 - The "graph may be stale" warning now applies the scanner's own file rules, so files a scan never indexes (outside `includePatterns`, Laravel default excludes, dotfiles, `node_modules`/`coverage`) no longer keep it on; `impact` lists import-only dependants only when they import the symbol, and `callees` shows the called method's own line (or none) instead of a same-named method's or the call site's (M0-11-R2).
 - `mapx metrics` graph density now counts distinct file pairs, so it stays between 0 and 1 instead of exceeding 1 when files share several edges (M0-03-R3).
 - Laravel routes behind mounts MapX cannot evaluate are now reported with unknown reachability instead of unreachable (and still pair with HTTP calls), `module_path()`, `withRouting(then:)`, glob-loop and `DIRECTORY_SEPARATOR` mounts are followed, overridden routes and their winners both appear in `routes.json`, and attribute routes carry their line (M1-07-R1).

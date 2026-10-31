@@ -1,5 +1,6 @@
-// Eloquent model relationships from stored `relation` edges, for `mapx query` and the LLM
-// export's Models section (F07, M0-05-R2).
+// Eloquent model relationships from stored `relation` edges, for `mapx query`, `mapx_query` and the
+// LLM export's Models section (F07, M0-05-R2), and service container bindings for `mapx deps` and
+// `mapx_dependencies` (F08, M0-05-R4).
 import type { Store } from './store.js';
 
 export interface ModelRelation {
@@ -64,4 +65,35 @@ export function modelRelations(store: Store, opts: { file?: string; repo?: strin
 /** `team → belongsTo App\Models\Team (many-to-one)` */
 export function describeRelation(r: ModelRelation): string {
   return `${r.method ?? '?'} → ${r.relation} ${r.target}${r.type ? ` (${r.type})` : ''}`;
+}
+
+export interface FileBinding {
+  abstract: string;
+  /** Concrete class, `(closure)` for a closure binding, or the listener of a `$listen` entry. */
+  concrete: string;
+  /** bind, singleton, listen, … */
+  bindingType: string | null;
+}
+
+/** Service container bindings declared in a file, for `mapx deps` and `mapx_dependencies` (F08, M0-05-R2/R4). */
+export function fileBindings(store: Store, file: string): FileBinding[] {
+  return store.getEdgesForFile(file).filter(e => e.edge_type === 'binding').map(b => {
+    let meta: Record<string, unknown> = {};
+    try {
+      meta = JSON.parse((b.metadata as string) || '{}');
+    } catch {
+      // keep {}
+    }
+    const target = (b.target_symbol as string) || (b.target_file as string);
+    // `$listen` bindings point at the listener; the event is the "abstract" side.
+    const [abstract, concrete] = meta.bindingType === 'listen'
+      ? [String(meta.event ?? '?'), target]
+      : [target, (meta.concreteClass as string | null) ?? '(closure)'];
+    return { abstract, concrete, bindingType: (meta.bindingType as string | undefined) ?? null };
+  });
+}
+
+/** `App\Contracts\PaymentGateway → App\Services\StripeGateway (bind)` */
+export function describeBinding(b: FileBinding): string {
+  return `${b.abstract} → ${b.concrete}${b.bindingType ? ` (${b.bindingType})` : ''}`;
 }
