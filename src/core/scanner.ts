@@ -33,6 +33,7 @@ import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 import { resolveThisMember } from '../parsers/languages/vue-options.js';
 import { collectVuexFiles, resolveStoreTarget, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { globalRegistrations, vueComponentName, type VueResolveHint } from '../parsers/languages/vue-template.js';
+import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
@@ -41,6 +42,8 @@ const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
 type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string };
 const NAMESPACE_KINDS = new Set(['namespace']);
 const TYPE_KINDS = new Set(['class', 'struct', 'interface', 'enum', 'record', 'trait']);
+/** A JS/TS/Vue module's extension. */
+const MODULE_EXT = /\.(?:[cm]?[jt]sx?|vue)$/;
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -1291,11 +1294,56 @@ export class Scanner {
     }
     if (hint.sameFile && this.fileDefines(sourcePath, ref.targetName)) return [{ file: sourcePath, symbol: ref.targetName }];
     for (const { specifier, name } of hint.from ?? []) {
-      const file = this.resolveImportPath(specifier, sourcePath, fileMap);
-      if (file && this.fileDefines(file, name)) return [{ file, symbol: name }];
+      const found = this.moduleMember(specifier, name, sourcePath, fileMap);
+      if (found) return [found];
     }
     const hit = ref.vueThis ? resolveThisMember(ref.targetName, ref.vueThis, this.vueResolveContext(sourcePath, fileMap)) : null;
     return hit ? [hit] : [];
+  }
+
+  /**
+   * The symbol `name` of the module `specifier` imported from `fromFile`, following up to three
+   * re-exports (`export { name } from …`, `export * from …`) of a barrel file (M3-04).
+   */
+  private moduleMember(
+    specifier: string, name: string, fromFile: string, fileMap: Map<string, string>, depth = 0,
+  ): { file: string; symbol: string } | null {
+    const file = this.resolveImportPath(specifier, fromFile, fileMap) ?? this.resolveAliasBySuffix(specifier, fromFile, fileMap);
+    if (!file) return null;
+    if (this.fileDefines(file, name)) return { file, symbol: name };
+    const text = depth < 3 ? this.readWorkspaceText(file) : null;
+    for (const next of text ? reExportsOf(text, name) : []) {
+      const found = this.moduleMember(next.specifier, next.name, file, fileMap, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  /**
+   * A path alias whose target is unknown (`@/x` where `@` is `resources/js`, `~/x`, `#/x`): the
+   * JS/TS/Vue module of `fromFile`'s repo whose path ends with `/x` (or `/x/index`). Among several,
+   * the one sharing the longest directory prefix with `fromFile`. Bare packages never match (M3-04).
+   */
+  private resolveAliasBySuffix(specifier: string, fromFile: string, fileMap: Map<string, string>): string | null {
+    const rest = /^(?:@|@@|~|~~|#)\/(.+)$/.exec(specifier)?.[1]?.replace(MODULE_EXT, '');
+    if (!rest) return null;
+    const repo = fileMap.get(fromFile);
+    const key = `${repo}\0${rest}`;
+    let matches = this.aliasSuffixMatches.get(key);
+    if (!matches) {
+      matches = [...fileMap.keys()].filter((f) => {
+        if (fileMap.get(f) !== repo || !MODULE_EXT.test(f)) return false;
+        const base = f.replace(MODULE_EXT, '').replace(/\/index$/, '');
+        return base === rest || base.endsWith(`/${rest}`);
+      });
+      this.aliasSuffixMatches.set(key, matches);
+    }
+    const shared = (f: string) => {
+      let i = 0;
+      while (i < f.length && f[i] === fromFile[i]) i++;
+      return f.slice(0, i).lastIndexOf('/');
+    };
+    return matches.reduce<string | null>((best, f) => (best === null || shared(f) > shared(best) ? f : best), null);
   }
 
   /** Whether `file` declares a symbol named exactly `name` (this phase's index, else the store). */
@@ -1394,6 +1442,8 @@ export class Scanner {
   private vueGlobals = new Map<string, Map<string, string>>();
   /** Vuex store models by file, per resolution phase (M3-05). */
   private vuexFiles = new Map<string, VuexModuleInfo>();
+  // Repo and alias path → the modules whose path ends with it (M3-04, `resolveAliasBySuffix`).
+  private aliasSuffixMatches = new Map<string, string[]>();
 
   /** Language of an indexed path: its extension or file name, else what discovery stored (shebang scripts). */
   private languageOf(path: string): string | null {
@@ -2182,6 +2232,7 @@ export class Scanner {
     this.languageCache.clear();
     this.phpNamespaces.clear();
     this.vueGlobals.clear();
+    this.aliasSuffixMatches.clear();
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 

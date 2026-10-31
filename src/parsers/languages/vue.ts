@@ -5,6 +5,7 @@ import { TypeScriptParser } from './typescript.js';
 import { getBuiltinLanguages } from '../../languages/registry.js';
 import { analyzeOptionsComponent, annotateThisCalls, type OptionsComponent } from './vue-options.js';
 import { assignOwners, componentSymbol, templateReferences } from './vue-template.js';
+import { analyzeScriptBlock, annotateComposableCalls, interfaceMetadata, type VueInterface } from './vue-script-setup.js';
 
 export class VueParser implements LanguageParser {
   readonly languageName = 'vue';
@@ -25,6 +26,8 @@ export class VueParser implements LanguageParser {
     // The Options API object, whose members and mixins template calls see like `this.x()` (M3-02).
     const hasTemplate = /<template\b/i.test(source);
     let optionsComponent: OptionsComponent | null = null;
+    // Each block's props / emits, for the component symbol (M3-04).
+    const interfaces: VueInterface[] = [];
 
     // Match all <script> blocks
     const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
@@ -46,6 +49,12 @@ export class VueParser implements LanguageParser {
         // Options API `this.x()`: own member, then mixins (M3-03).
         if (res.references) await annotateThisCalls(code, res.references);
         if (hasTemplate && !optionsComponent) optionsComponent = await analyzeOptionsComponent(code).catch(() => null);
+        // Macros and composables: the interface, and useX() / destructured calls through the import (M3-04).
+        const setup = await analyzeScriptBlock(code).catch(() => null);
+        if (setup) {
+          interfaces.push(setup.interface);
+          if (res.references) annotateComposableCalls(setup, res.references);
+        }
 
         if (res.symbols) {
           for (const sym of res.symbols) {
@@ -85,6 +94,7 @@ export class VueParser implements LanguageParser {
     // Edge contract rules 1, 2, 4 and 5 (docs/baton/iterations/M3-01.md): the component symbol,
     // template calls and component tags, and the component as owner of code outside any member.
     const component = componentSymbol(filePath, source);
+    Object.assign(component.metadata!, interfaceMetadata(interfaces));
     symbols.unshift(component);
     try {
       references.push(...templateReferences(source, component.name, optionsComponent));

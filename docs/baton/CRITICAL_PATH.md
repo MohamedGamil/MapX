@@ -6,10 +6,9 @@ Remaining longest dependency path: **62h** (full-plan path: 126h).
 
 M5-01 → M5-03 → M5-04 → M5-05 → M5-08 → M5-16 → M5-98
 
-Remaining effort min/expected/max: **173 / 236 / 324h**. Capacity: 1 engineer(s) × 20 h/week → **11.8 weeks**, conditional finish **2027-01-23** (as of 2026-11-02).
+Remaining effort min/expected/max: **167 / 226 / 310h**. Capacity: 1 engineer(s) × 20 h/week → **11.3 weeks**, conditional finish **2027-01-20** (as of 2026-11-02).
 
 ## Open items and blockers
-- M3-04 (IN_PROGRESS): prerequisites satisfied
 - M3-06 (IN_PROGRESS): prerequisites satisfied
 - M3-08 (IN_PROGRESS): prerequisites satisfied
 - M4-01 (BACKLOG): prerequisites satisfied
@@ -25,7 +24,7 @@ Remaining effort min/expected/max: **173 / 236 / 324h**. Capacity: 1 engineer(s)
 - M5-07 (BACKLOG): M5-05
 - M5-08 (BACKLOG): M5-04; M5-05
 - M5-09 (BACKLOG): M5-03
-- M5-10 (BACKLOG): M5-01; M3-04
+- M5-10 (BACKLOG): M5-01
 - M5-11 (BACKLOG): M5-04; M5-10
 - M5-12 (BACKLOG): M5-01; M5-03; M4-03; Decompose epic into 4–16h iterations before execution
 - M5-13 (BACKLOG): M5-04
@@ -40,7 +39,6 @@ Remaining effort min/expected/max: **173 / 236 / 324h**. Capacity: 1 engineer(s)
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
 |---|---:|---:|---:|---:|---:|
-| M3-04 | 0 | 10 | 26 | 36 | 26 |
 | M3-06 | 0 | 8 | 54 | 62 | 54 |
 | M3-08 | 0 | 4 | 58 | 62 | 58 |
 | M4-01 | 0 | 5 | 51 | 56 | 51 |

@@ -42,10 +42,10 @@ const FLOORS: {
     'component-symbol': labelledCount('component-symbol'), // M3-02
     'options-this-call': labelledCount('options-this-call'), // already works (same-file this.x())
     'mixin-method': labelledCount('mixin-method'), // M3-03: through the component's own mixins array
-    'script-setup-macro': 0, // M3-04
+    'script-setup-macro': labelledCount('script-setup-macro'), // M3-04: defineProps / withDefaults / defineEmits metadata
     'script-setup-call': labelledCount('script-setup-call'), // already works (local emit constant)
-    // M3-02: setup-level useX() calls owned by the component (rule 2) and {{ format() }} (rule 4). Still by unique
-    // name: persist, addReply (script calls to destructured composable functions, M3-04).
+    // M3-02: setup-level useX() calls owned by the component (rule 2) and {{ format() }} (rule 4). M3-04: useX()
+    // and the destructured persist / addReply resolve through the import, not by name (traps v2-101, v2-102, v3-101).
     composable: labelledCount('composable'),
     'vuex-map-helpers': labelledCount('vuex-map-helpers'), // M3-05: by namespace through the store root
     'vuex-dispatch': labelledCount('vuex-dispatch'), // M3-05
