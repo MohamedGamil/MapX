@@ -6641,15 +6641,28 @@
         "npx vitest run tests/parsers-integration.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. this.$store.dispatch('users/FETCH') links to the FETCH action in store/modules/users.js.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-options",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T07:43:45.401Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T07:43:44.980Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:43:45.401Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
