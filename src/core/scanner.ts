@@ -16,7 +16,7 @@ import { calculateClusterMetrics } from './metrics.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
 import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
-import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
+import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, gitBlobId, isGitRepo } from './git-tracker.js';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
 import { canonicalPath } from './workspace-manager.js';
@@ -230,6 +230,14 @@ export class Scanner {
     const discovered = await this.discoverFiles(repoRoot, repo.name);
     this.onProgress?.({ phase: 'discover', current: discovered.length, total: discovered.length });
 
+    // Deleted files leave the index before anything is parsed: a file moved within this scan then
+    // records its referrers and their names, and re-parsed references cannot resolve to the old path
+    // through the file map or the symbol index (M0-02-R4).
+    if (!this.aborted) {
+      const deletedPaths = this.detectDeletedFiles(discovered, repo.name);
+      if (deletedPaths.length > 0) this.store.inTransaction(() => this.removeFiles(repo.name, deletedPaths));
+    }
+
     const filesWithSymbols = new Set<string>();
     for (const sym of this.store.getAllSymbols(repo.name)) {
       filesWithSymbols.add(sym.file_path as string);
@@ -251,8 +259,13 @@ export class Scanner {
     this.store.setMeta('resolution_repos:' + repo.name, JSON.stringify(this.visibleRepos(repo.name)));
     const reparseAll = force || newlyVisible || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
     this.store.setMeta(filterKey, filters);
-    // Unchanged files that had edges into a removed file now back: re-parse them (M0-02-R2).
-    const referrers = this.takeReferrers(repo.name, newFiles.map(f => f.relativePath));
+    // Unchanged files that had edges into a removed file now back (M0-02-R2), or into a removed file
+    // whose referenced names a new or changed file now holds (M0-02-R4): re-parse them.
+    const candidates = [...newFiles, ...changedFiles, ...incompleteFiles];
+    const referrers = new Set([
+      ...this.takeReferrers(repo.name, newFiles.map(f => f.relativePath)),
+      ...this.movedReferrers(repo.name, candidates.map(f => ({ path: f.relativePath, content: f.content }))),
+    ]);
     const stableFiles = discovered.filter(f => !f.isNew && !f.contentChanged && filesWithSymbols.has(f.relativePath));
     const unchangedFiles = reparseAll ? [] : stableFiles.filter(f => !referrers.has(f.relativePath));
     const filesToParse = reparseAll
@@ -276,12 +289,16 @@ export class Scanner {
     if (toParse.length > 0) {
       this.onProgress?.({ phase: 'index', current: 0, total: toParse.length });
 
-      const gitHashes = isGitRepo(repoRoot) ? getGitBlobHashes(repoRoot) : new Map<string, string>();
+      // Keyed by workspace path, as files are stored, also for a repo that is not at the root.
+      const gitHashes = isGitRepo(repoRoot) ? getGitBlobHashes(repoRoot, workspaceRoot) : new Map<string, string>();
 
       this.store.inTransaction(() => {
         for (let i = 0; i < toParse.length; i++) {
           const f = toParse[i];
-          const blobHash = gitHashes.get(f.relativePath) || null;
+          // HEAD's blob id, kept only when it is the indexed content: a file modified in the working
+          // tree stores null, so sync never takes it for unchanged (M0-02-R4).
+          const headBlob = gitHashes.get(f.relativePath);
+          const blobHash = headBlob && f.content !== undefined && gitBlobId(f.content) === headBlob ? headBlob : null;
 
           this.store.upsertFile({
             path: f.relativePath,
@@ -387,13 +404,12 @@ export class Scanner {
           totalEdges,
         });
       }
+      if (!this.aborted) {
+        const candidatePaths = new Set(candidates.map(f => f.relativePath));
+        this.settleMovedNames(repo.name, parseResults.filter((_, i) => candidatePaths.has(toParse[i].relativePath)));
+      }
     } else if (unchangedFiles.length > 0) {
       this.onProgress?.({ phase: 'parse', current: unchangedFiles.length, total: discovered.length });
-    }
-
-    const deletedPaths = this.detectDeletedFiles(discovered, repo.name);
-    if (deletedPaths.length > 0) {
-      this.store.inTransaction(() => this.removeFiles(repo.name, deletedPaths));
     }
 
     const langBreakdown: Record<string, number> = {};
@@ -550,6 +566,7 @@ export class Scanner {
 
     const toRemove: string[] = [];
     const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string }> = [];
+    const contents = new Map<string, string>();
 
     // A rename is listed by its new path; its old path leaves the index, and the files with edges
     // into it are re-parsed so references that now resolve to the new path find it (M0-02-R3).
@@ -574,16 +591,27 @@ export class Scanner {
       }
       const fileInfo = await this.getFileInfo(absolutePath, relativePath);
       if (fileInfo) {
-        const content = await readFile(absolutePath, 'utf-8');
+        const bytes = await readFile(absolutePath);
+        // Listed, but the indexed blob is still the content (a mode change): nothing to re-parse.
+        // Blob hashes are stored under workspace paths, so this holds for a repo that is not at the
+        // root too (M0-02-R4).
+        const stored = this.store.getFile(relativePath);
+        if (stored?.repo === repo.name && stored.git_blob_hash && stored.git_blob_hash === gitBlobId(bytes)) continue;
+        const content = bytes.toString('utf-8');
         const contentHash = createHash('md5').update(content).digest('hex');
         toReindex.push({ path: relativePath, fileInfo, contentHash });
+        contents.set(relativePath, content);
       }
     }
 
-    // Unchanged files of this repo that had edges into a removed file now back (M0-02-R2), or into
-    // a renamed file's old path.
+    this.store.inTransaction(() => this.removeFiles(repo.name, toRemove));
+
+    // Unchanged files of this repo that had edges into a removed file now back (M0-02-R2), into
+    // a renamed file's old path, or into a removed file whose referenced names a listed file now
+    // holds (M0-02-R4).
     const reindexed = new Set(toReindex.map(r => r.path));
-    for (const r of new Set([...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers])) {
+    const moved = this.movedReferrers(repo.name, [...contents].map(([path, content]) => ({ path, content })));
+    for (const r of new Set([...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers, ...moved])) {
       if (reindexed.has(r) || toRemove.includes(r) || this.store.getFile(r)?.repo !== repo.name) continue;
       const absolutePath = resolve(workspaceRoot, r);
       const fileInfo = existsSync(absolutePath) ? await this.getFileInfo(absolutePath, r) : null;
@@ -593,7 +621,6 @@ export class Scanner {
     }
 
     this.store.inTransaction(() => {
-      this.removeFiles(repo.name, toRemove);
       for (const { path: p, fileInfo, contentHash } of toReindex) {
         this.store.deleteSymbolsForFile(p);
         this.store.deleteEdgesForFile(p);
@@ -672,6 +699,7 @@ export class Scanner {
     });
 
     if (!this.aborted) {
+      this.settleMovedNames(repo.name, parseResults.filter((_, i) => contents.has(toReindex[i].path)));
       const commitSha = getCurrentCommitSha(repoRoot);
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
@@ -1579,8 +1607,17 @@ export class Scanner {
   }
 
   private removedFiles(repoName: string): Record<string, string[]> {
+    return this.metaRecord('removed_files:' + repoName);
+  }
+
+  /** The names the referrers of each removed file resolved into it (M0-02-R4). */
+  private removedNames(repoName: string): Record<string, string[]> {
+    return this.metaRecord('removed_names:' + repoName);
+  }
+
+  private metaRecord(key: string): Record<string, string[]> {
     try {
-      return JSON.parse(this.store.getMeta('removed_files:' + repoName) ?? '{}');
+      return JSON.parse(this.store.getMeta(key) ?? '{}');
     } catch {
       return {};
     }
@@ -1589,36 +1626,99 @@ export class Scanner {
   /**
    * Drop files from the index and remember which files had edges into them, so those edges come
    * back when a file does (a restored file, a branch switch) although its referrers did not change
-   * (M0-02-R2). Call inside a transaction.
+   * (M0-02-R2). The names they referenced are kept too, for when the target moves to another file
+   * (M0-02-R4). Call inside a transaction.
    */
   private removeFiles(repoName: string, paths: string[]): void {
     const removed = this.removedFiles(repoName);
+    const names = this.removedNames(repoName);
     let changed = false;
     for (const p of paths) {
       // References parsed later in this scan must not resolve to a removed file (M0-02-R3).
       this.workspaceFileMap.delete(p);
       if (!this.store.getFile(p)) continue;
       removed[p] = [...new Set([...(removed[p] ?? []), ...this.store.getReferrers(p)])];
+      // The trailing identifier of each target symbol: `App\Services\UserService` is declared as
+      // `UserService` wherever the class moves.
+      const referenced = this.store.getReverseEdges(p)
+        .filter(e => e.source_file !== p && typeof e.target_symbol === 'string')
+        .map(e => /[A-Za-z_$][\w$]*$/.exec(e.target_symbol as string)?.[0])
+        .filter((n): n is string => !!n);
+      if (referenced.length > 0) names[p] = [...new Set([...(names[p] ?? []), ...referenced])];
       changed = true;
       this.store.deleteFile(p);
     }
-    if (changed) this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
+    if (changed) {
+      this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
+      this.store.setMeta('removed_names:' + repoName, JSON.stringify(names));
+    }
   }
 
   /** The recorded referrers of removed files that are indexed again; their entries are consumed. */
   private takeReferrers(repoName: string, paths: string[]): Set<string> {
     const removed = this.removedFiles(repoName);
+    const names = this.removedNames(repoName);
     const referrers = new Set<string>();
     let changed = false;
     for (const p of paths) {
-      if (!removed[p]) continue;
-      for (const r of removed[p]) referrers.add(r);
+      if (!removed[p] && !names[p]) continue;
+      for (const r of removed[p] ?? []) referrers.add(r);
       delete removed[p];
+      delete names[p];
       changed = true;
     }
-    if (changed) this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
+    if (changed) {
+      this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
+      this.store.setMeta('removed_names:' + repoName, JSON.stringify(names));
+    }
     for (const p of paths) referrers.delete(p);
     return referrers;
+  }
+
+  /**
+   * The recorded referrers of removed files whose referenced names appear in a new or changed file:
+   * the target may have moved there, and unchanged referrers would otherwise keep the reference
+   * unresolved until a forced scan (M0-02-R4). Only the text is checked here, so a file that merely
+   * mentions a name costs a re-parse of those referrers; `settleMovedNames` drops a name once a
+   * parsed file declares it.
+   */
+  private movedReferrers(repoName: string, files: Array<{ path: string; content?: string }>): Set<string> {
+    const referrers = new Set<string>();
+    const paths = new Set(files.map(f => f.path));
+    const pending = Object.entries(this.removedNames(repoName)).filter(([p]) => !paths.has(p));
+    if (pending.length === 0 || files.length === 0) return referrers;
+    const escape = (n: string) => n.replace(/[$]/g, '\\$');
+    const all = [...new Set(pending.flatMap(([, n]) => n))];
+    const pattern = new RegExp(`(?<![\\w$])(?:${all.map(escape).join('|')})(?![\\w$])`, 'g');
+    const mentioned = new Set<string>();
+    for (const f of files) {
+      for (const m of (f.content ?? '').matchAll(pattern)) mentioned.add(m[0]);
+      if (mentioned.size === all.length) break;
+    }
+    if (mentioned.size === 0) return referrers;
+    const removed = this.removedFiles(repoName);
+    for (const [p, n] of pending) {
+      if (n.some(name => mentioned.has(name))) for (const r of removed[p] ?? []) referrers.add(r);
+    }
+    for (const p of paths) referrers.delete(p);
+    return referrers;
+  }
+
+  /**
+   * Drop the recorded names of removed files once one of them is declared by a new or changed file
+   * parsed in this scan, whose text `movedReferrers` saw, so those referrers were re-parsed (M0-02-R4).
+   */
+  private settleMovedNames(repoName: string, results: Array<ParseResult | undefined>): void {
+    const names = this.removedNames(repoName);
+    if (Object.keys(names).length === 0) return;
+    const declared = new Set(results.flatMap(r => (r?.symbols ?? []).map(s => s.name)));
+    let changed = false;
+    for (const [p, n] of Object.entries(names)) {
+      if (!n.some(name => declared.has(name))) continue;
+      delete names[p];
+      changed = true;
+    }
+    if (changed) this.store.setMeta('removed_names:' + repoName, JSON.stringify(names));
   }
 
   private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {
@@ -2323,16 +2423,23 @@ export class Scanner {
         toReindex.push(f);
       }
     }
-    // Unchanged files that had edges into a removed file now back (M0-02-R2).
-    const referrers = this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath));
-    for (const f of discovered) {
-      if (!f.isNew && !f.contentChanged && referrers.has(f.relativePath)) toReindex.push(f);
-    }
+    const changed = [...toReindex];
 
-    // Detect deleted files
+    // Detect deleted files; they leave the index first, so their referrers are recorded (M0-02-R4).
     const currentPaths = new Set(discovered.map(f => f.relativePath));
     for (const [path] of trackedHashes) {
       if (!currentPaths.has(path)) toRemove.push(path);
+    }
+    if (toRemove.length > 0) this.store.inTransaction(() => this.removeFiles(repo.name, toRemove));
+
+    // Unchanged files that had edges into a removed file now back (M0-02-R2), or into a removed file
+    // whose referenced names a new or changed file now holds (M0-02-R4).
+    const referrers = new Set([
+      ...this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath)),
+      ...this.movedReferrers(repo.name, changed.map(f => ({ path: f.relativePath, content: f.content }))),
+    ]);
+    for (const f of discovered) {
+      if (!f.isNew && !f.contentChanged && referrers.has(f.relativePath)) toReindex.push(f);
     }
 
     if (toRemove.length === 0 && toReindex.length === 0) {
@@ -2347,7 +2454,6 @@ export class Scanner {
     }
 
     this.store.inTransaction(() => {
-      this.removeFiles(repo.name, toRemove);
       for (const f of toReindex) {
         this.store.deleteSymbolsForFile(f.relativePath);
         this.store.deleteEdgesForFile(f.relativePath);
@@ -2430,6 +2536,7 @@ export class Scanner {
     for (const f of discovered) { (f as any).content = undefined; }
 
     if (!this.aborted) {
+      this.settleMovedNames(repo.name, parseResults.slice(0, changed.length));
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
       try {
         await this.runPostScanAnalysis(repo, repoRoot);

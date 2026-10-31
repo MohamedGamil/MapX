@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `scan` and `sync` now re-link the referrers of a class moved to another file without `--force`, store git blob hashes for repos that are not at the workspace root, and skip files git lists whose content is unchanged (M0-02-R4).
 - `mapx_workspaces` now returns F18's absolute `path`, `relativePath`, `isRegistered` and `isInitialised` (and lists uninitialised submodules), duplicate repo entries already in a config are collapsed with a message, and `scan --all` / `update --all` after `workspaces add` resolve the new repo's references into the primary repo without `--force` (M0-10-R3).
 - `sync` now drops the old path of a git rename and re-links its referrers, picks up changes in a repo nested inside a larger git checkout, treats a symlink to a registered repo as that repo, and small scans and syncs no longer recompile tree-sitter queries for every file (M0-02-R3).
 - Laravel `Route::singleton`/`apiSingleton` (with `creatable`/`destroyable` and the plural forms), `->scoped()` binding fields, `->middlewareFor()` and route-level `prefix`/`domain` keys now match Laravel's router, including its placement of a route's own prefix before the group prefix (M1-05-R2).

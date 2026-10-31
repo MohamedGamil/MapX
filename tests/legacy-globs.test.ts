@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LARAVEL_DEFAULT_EXCLUDES } from '../src/core/config.js';
 import { cleanup, init, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
@@ -101,8 +101,14 @@ describe('glob filters', () => {
     const expected = all.filter((p) => !p.startsWith('app/Services/'));
     mapx(root, 'scan', root, '--exclude', './app/Services/**');
     expect(paths()).toEqual(expected);
+    // Both spellings record the same filters, so the second scan re-parses nothing: a changed
+    // filter signature would re-parse every file and give every symbol a new id (M0-02-R4).
+    const symbolIds = () => query<{ id: number; file_path: string }>(root, 'SELECT id, file_path FROM symbols ORDER BY id');
+    const ids = symbolIds();
+    expect(ids.length).toBeGreaterThan(0);
     mapx(root, 'scan', root, '--exclude', 'app\\Services\\**');
     expect(paths()).toEqual(expected);
+    expect(symbolIds()).toEqual(ids);
     mapx(root, 'scan', root, '--exclude', '.\\app\\Services');
     expect(paths()).toEqual(expected);
     mapx(root, 'scan', root);
@@ -178,6 +184,15 @@ describe('inbound edges of a deleted and restored file', () => {
     }
   }, 120000);
 });
+
+// Edges from or into a file, other than its own.
+const touching = (root: string, path: string) =>
+  query<{ e: string }>(
+    root,
+    "SELECT source_file || ' -> ' || target_file || ' ' || edge_type AS e FROM edges WHERE (source_file = ? OR target_file = ?) AND source_file != target_file ORDER BY e",
+    path,
+    path,
+  ).map((r) => r.e);
 
 // Files and edge tuples, to compare an incremental result with `scan --force`.
 const snapshot = (root: string) => ({
@@ -297,13 +312,6 @@ describe('Laravel default excludes at scan time', () => {
 // M0-02-R3: git renames, repos nested in a larger checkout, and repos registered through a symlink.
 describe('incremental sync: git renames, nested and symlinked repos', () => {
   const ACCOUNT_SERVICE = 'app/Services/AccountService.php';
-  const touching = (root: string, path: string) =>
-    query<{ e: string }>(
-      root,
-      "SELECT source_file || ' -> ' || target_file || ' ' || edge_type AS e FROM edges WHERE (source_file = ? OR target_file = ?) AND source_file != target_file ORDER BY e",
-      path,
-      path,
-    ).map((r) => r.e);
 
   it('sync after git mv removes the old path and matches scan --force', () => {
     const root = workspace(files, ['.']);
@@ -369,6 +377,19 @@ describe('incremental sync: git renames, nested and symlinked repos', () => {
       expect(synced.files.filter((p) => p.startsWith('api/') || p.startsWith('web/') || p.startsWith('..'))).toEqual([]);
       mapx(root, 'scan', root, '--force');
       expect(synced).toEqual(snapshot(root));
+
+      // M0-02-R4: moved across two git syncs, which git does not report as a rename: deleted, then
+      // added under another path as an untracked file. The parameter type follows the class.
+      const content = readFileSync(join(root, USER_SERVICE), 'utf8');
+      rmSync(join(root, USER_SERVICE));
+      mapx(root, 'sync', root);
+      expect(touching(root, USER_SERVICE)).toEqual([]);
+      mkdirSync(join(root, 'app/Core'));
+      writeFileSync(join(root, 'app/Core/UserService.php'), content);
+      mapx(root, 'sync', root);
+      expect(touching(root, 'app/Core/UserService.php')).toEqual([
+        'app/Http/Controllers/UserController.php -> app/Core/UserService.php param_type',
+      ]);
     } finally {
       cleanup(outer);
     }
@@ -403,4 +424,101 @@ describe('incremental sync: git renames, nested and symlinked repos', () => {
       cleanup(root);
     }
   }, 60000);
+});
+
+// M0-02-R4: plain scan and content-hash sync saw a move as a delete plus an add, and left the moved
+// class's referrers unresolved until --force; a repo not at the workspace root stored no blob hashes.
+describe('incremental scans: moved targets and non-root blob hashes', () => {
+  it('plain scan and sync without git re-link the referrers of a moved class, as scan --force', () => {
+    const DOMAIN = 'app/Domain/UserService.php';
+    const CORE = 'app/Core/UserService.php';
+    const param = (path: string) => [`app/Http/Controllers/UserController.php -> ${path} param_type`];
+    const root = workspace(files);
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      const content = readFileSync(join(root, USER_SERVICE), 'utf8');
+
+      // Moved within one plain scan. The `use` imports name the old PSR-4 path and stay
+      // unresolved, but the parameter type resolves to the class at its new path.
+      mkdirSync(join(root, 'app/Domain'));
+      renameSync(join(root, USER_SERVICE), join(root, DOMAIN));
+      mapx(root, 'scan', root);
+      const scanned = snapshot(root);
+      expect(scanned.files).not.toContain(USER_SERVICE);
+      expect(touching(root, USER_SERVICE)).toEqual([]);
+      expect(touching(root, DOMAIN)).toEqual(param(DOMAIN));
+
+      // Moved across two syncs without git: removed by one, added under a new path by the next.
+      rmSync(join(root, DOMAIN));
+      mapx(root, 'sync', root);
+      expect(touching(root, DOMAIN)).toEqual([]);
+      mkdirSync(join(root, 'app/Core'));
+      writeFileSync(join(root, CORE), content);
+      mapx(root, 'sync', root);
+      expect(touching(root, CORE)).toEqual(param(CORE));
+      // The class is declared again, so its name no longer re-parses those referrers whenever a
+      // later file mentions it.
+      expect(query<{ value: string }>(root, "SELECT value FROM meta WHERE key LIKE 'removed_names:%'").map((m) => JSON.parse(m.value))).toEqual([{}]);
+
+      const synced = snapshot(root);
+      mapx(root, 'scan', root, '--force');
+      const forced = snapshot(root);
+      expect(synced).toEqual(forced);
+      // The plain scan's result is the forced one with the class at its first new path.
+      const atDomain = (s: { files: string[]; edges: string[] }) => ({
+        files: s.files.map((p) => p.replace(CORE, DOMAIN)).sort(),
+        edges: s.edges.map((e) => e.replaceAll(CORE, DOMAIN)).sort(),
+      });
+      expect(atDomain(scanned)).toEqual(atDomain(forced));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('stores blob hashes under workspace paths for a repo not at the root, and sync skips a listed file whose blob is unchanged', () => {
+    const root = workspace(
+      {
+        'src/app.ts': 'export function app() { return 1; }\n',
+        'libs/ui/button.ts': 'export function button() { return 1; }\n',
+        'libs/ui/card.ts': 'export function card() { return 1; }\n',
+      },
+      ['libs/ui'],
+    );
+    const ui = join(root, 'libs/ui');
+    try {
+      git(ui, 'add', '-A');
+      git(ui, 'commit', '-qm', 'init');
+      init(root);
+      const path = join(root, '.mapx', 'config.json');
+      const config = JSON.parse(readFileSync(path, 'utf8'));
+      config.repos = [config.repos[0], { name: 'ui', path: 'libs/ui' }];
+      writeFileSync(path, JSON.stringify(config));
+      // card.ts is modified in the working tree: what is indexed is not HEAD's blob.
+      writeFileSync(join(ui, 'card.ts'), 'export function card() { return 4; }\n');
+      mapx(root, 'scan', root, '--all');
+
+      const blob = (p: string) => git(ui, 'rev-parse', `HEAD:${p}`).toString().trim();
+      expect(query(root, "SELECT path, git_blob_hash FROM files WHERE repo = 'ui' ORDER BY path")).toEqual([
+        { path: 'libs/ui/button.ts', git_blob_hash: blob('button.ts') },
+        { path: 'libs/ui/card.ts', git_blob_hash: null },
+      ]);
+
+      // git lists button.ts (a mode change) with the same blob: it is not re-parsed, so its
+      // symbols keep their ids. card.ts changed and is re-parsed.
+      const symbols = (p: string) =>
+        query<{ id: number; name: string }>(root, 'SELECT id, name FROM symbols WHERE file_path = ? ORDER BY id', p);
+      const button = symbols('libs/ui/button.ts');
+      expect(button.map((s) => s.name)).toEqual(['button']);
+      chmodSync(join(ui, 'button.ts'), 0o755);
+      writeFileSync(join(ui, 'card.ts'), 'export function card() { return 2; }\nexport function badge() { return 3; }\n');
+      git(ui, 'commit', '-qam', 'change');
+      expect(git(ui, 'diff', '--name-status', 'HEAD~1').toString()).toContain('button.ts');
+      mapx(root, 'sync', root, '--all');
+      expect(symbols('libs/ui/button.ts')).toEqual(button);
+      expect(symbols('libs/ui/card.ts').map((s) => s.name).sort()).toEqual(['badge', 'card']);
+    } finally {
+      cleanup(root);
+    }
+  }, 90000);
 });

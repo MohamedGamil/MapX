@@ -36,7 +36,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-23** Scan summary edge count disagrees with stored edges — DONE, P2, 4h; depends on nothing.
 - **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
 - **M0-02-R3** Git renames, nested-repo diffs and symlinked nested repos in incremental sync — DONE, P2, 4h; depends on M0-02-R2.
-- **M0-02-R4** Incremental scans re-resolve references to moved files; blob-hash keys for non-root repos — BACKLOG, P2, 4h; depends on M0-02-R3, M0-10-R3.
+- **M0-02-R4** Incremental scans re-resolve references to moved files; blob-hash keys for non-root repos — DONE, P2, 4h; depends on M0-02-R3, M0-10-R3.
 - **M0-10-R3** Workspaces: F18 fields, duplicate config cleanup, cross-repo references after workspaces add — DONE, P2, 5h; depends on M0-10-R2.
 - **M0-03-R4** edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching — DONE, P2, 4h; depends on M0-03-R3, M0-05-R4.
 - **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — DONE, P2, 5h; depends on M0-17-R2.

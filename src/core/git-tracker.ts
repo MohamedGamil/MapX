@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
-import { resolve, join, dirname } from 'node:path';
+import { createHash } from 'node:crypto';
+import { resolve, join, dirname, relative } from 'node:path';
 
 export interface GitFileStatus {
   path: string;
@@ -28,7 +29,13 @@ export interface GitBlobHash {
   hash: string;
 }
 
-export function getGitBlobHashes(repoRoot: string): Map<string, string> {
+/**
+ * Blob ids at HEAD, keyed by path relative to `relativeTo` (default: the repo root). `ls-tree` prints
+ * repo-relative paths; a repo that is not at the workspace root passes the workspace root, so the
+ * keys are the stored file paths (M0-02-R4).
+ */
+export function getGitBlobHashes(repoRoot: string, relativeTo: string = repoRoot): Map<string, string> {
+  const prefix = relative(relativeTo, repoRoot).replace(/\\/g, '/');
   const hashes = new Map<string, string>();
   try {
     // Single call: `git ls-tree -r HEAD` outputs lines like:
@@ -48,12 +55,21 @@ export function getGitBlobHashes(repoRoot: string): Map<string, string> {
       if (parts.length < 3) continue;
       const hash = parts[2];
       const filePath = line.slice(tab + 1);
-      if (hash && filePath) hashes.set(filePath, hash);
+      if (hash && filePath) hashes.set(prefix ? `${prefix}/${filePath}` : filePath, hash);
     }
   } catch {
     // not a git repo or no commits
   }
   return hashes;
+}
+
+/**
+ * The blob id git gives this content, as `git hash-object` without filters (autocrlf and the like).
+ * A string is taken as UTF-8.
+ */
+export function gitBlobId(content: Buffer | string): string {
+  const bytes = typeof content === 'string' ? Buffer.from(content, 'utf-8') : content;
+  return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 }
 
 export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus[] {

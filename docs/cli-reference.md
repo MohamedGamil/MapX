@@ -67,6 +67,8 @@ Perform a full scan of all source files. Builds the graph from scratch.
 - Shows real-time progress: discover, index, and parse phases
 - File reads are parallelized for faster scanning
 - Survives interruptions: progress is saved per-file, re-run to resume
+- Unchanged files are not re-parsed. The exception is a moved target: when a file is removed, the names its referrers resolved into it are remembered, and when a new or changed file names one of them, those referrers are re-parsed, so a class moved to another file is found at its new path without `--force`
+- In a git repo, each file stores its blob id at HEAD (also for a repo that is not at the workspace root), unless the working-tree content differs from HEAD
 
 ```bash
 mapx scan [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--force] [--no-parallel]
@@ -87,6 +89,8 @@ Incremental scan. Detects changed files via git, or via content hashes outside g
 - When a file that was removed comes back (a restored file, or a branch switch), the files that referenced it are re-parsed, so its inbound edges return.
 - When the effective include/exclude filters differ from the last scan (config or flags), every file is re-parsed once, as `mapx scan` does.
 - When git reports a rename, the old path leaves the index and the files that referenced it are re-parsed.
+- When a removed file's referenced names appear in a new or changed file (a class moved to another file, in one sync or across two, with or without git), the files that referenced it are re-parsed, as `mapx scan` does.
+- A file git lists whose content is still the blob that was indexed (a mode change, for example) is not re-parsed.
 
 In a repo that sits inside a larger git checkout, only changes under the repo's folder count, with paths relative to it.
 

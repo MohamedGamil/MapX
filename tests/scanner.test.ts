@@ -28,6 +28,7 @@ vi.mock('../src/core/git-tracker.js', () => ({
   getGitBlobHashes: () => new Map([['a.ts', 'blobhash1']]),
   getChangedFiles: () => [{ path: 'a.ts', status: 'modified' }],
   getCurrentCommitSha: () => 'commitsha123',
+  gitBlobId: () => 'blobhash1',
   isGitRepo: () => true
 }));
 
