@@ -37,7 +37,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
 - **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.
-- **M0-32-R1** Architecture analysis: iterative SCC, no stack overflow on large cyclic graphs — IN_PROGRESS, P1, 4h; depends on M0-32.
+- **M0-32-R1** Architecture analysis: iterative SCC, no stack overflow on large cyclic graphs — DONE, P1, 4h; depends on M0-32.
 - **M0-33** Search, tracing and graph-quality improvements (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-34** Dart/Flutter and ASP.NET support (0.3.3) — DONE, P1, 0h; depends on nothing.
 - **M0-35** PageRank persistence and graphExcludePatterns (0.3.4) — DONE, P1, 0h; depends on nothing.

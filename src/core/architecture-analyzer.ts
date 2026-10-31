@@ -66,74 +66,10 @@ export class ArchitectureAnalyzer {
       }
     }
 
-    const indexMap = new Map<string, number>();
-    const lowlinkMap = new Map<string, number>();
-    const onStack = new Set<string>();
-    const stack: string[] = [];
-    let index = 0;
-    const sccs: string[][] = [];
-
-    const strongConnect = (v: string) => {
-      indexMap.set(v, index);
-      lowlinkMap.set(v, index);
-      index++;
-      stack.push(v);
-      onStack.add(v);
-
-      const neighbors = adj.get(v) || [];
-      for (const w of neighbors) {
-        if (!indexMap.has(w)) {
-          strongConnect(w);
-          lowlinkMap.set(v, Math.min(lowlinkMap.get(v)!, lowlinkMap.get(w)!));
-        } else if (onStack.has(w)) {
-          lowlinkMap.set(v, Math.min(lowlinkMap.get(v)!, indexMap.get(w)!));
-        }
-      }
-
-      if (lowlinkMap.get(v) === indexMap.get(v)) {
-        const scc: string[] = [];
-        let w: string;
-        do {
-          w = stack.pop()!;
-          onStack.delete(w);
-          scc.push(w);
-        } while (w !== v);
-        if (scc.length > 1) {
-          sccs.push(scc);
-        }
-      }
-    };
-
-    for (const node of files) {
-      if (!indexMap.has(node)) {
-        strongConnect(node);
-      }
-    }
+    const sccs = stronglyConnectedComponents(adj, files).filter(scc => scc.length > 1);
 
     return sccs.map(scc => {
-      const cyclePath: string[] = [];
-      if (scc.length > 0) {
-        const start = scc[0];
-        const queue: string[][] = [[start]];
-        const visited = new Set<string>();
-        let foundPath: string[] | null = null;
-        while (queue.length > 0 && !foundPath) {
-          const path = queue.shift()!;
-          const last = path[path.length - 1];
-          const nbrs = adj.get(last) || [];
-          for (const nbr of nbrs) {
-            if (nbr === start) {
-              foundPath = [...path, start];
-              break;
-            }
-            if (scc.includes(nbr) && !visited.has(nbr)) {
-              visited.add(nbr);
-              queue.push([...path, nbr]);
-            }
-          }
-        }
-        cyclePath.push(...(foundPath || scc));
-      }
+      const cyclePath = shortestCycleThrough(scc[0], adj, new Set(scc)) ?? scc;
 
       return {
         type: 'cyclic-dependency',
@@ -296,4 +232,91 @@ export class ArchitectureAnalyzer {
 
     return smells;
   }
+}
+
+/**
+ * Tarjan's strongly connected components, iterative so that a long dependency chain cannot overflow
+ * the call stack. Roots are taken in `order`; components come out in the order the recursive
+ * algorithm pops them, each listing its members in pop order. Singletons are included.
+ */
+export function stronglyConnectedComponents(adj: Map<string, string[]>, order: Iterable<string>): string[][] {
+  const indexMap = new Map<string, number>();
+  const lowlinkMap = new Map<string, number>();
+  const onStack = new Set<string>();
+  const stack: string[] = [];
+  const sccs: string[][] = [];
+  let index = 0;
+  // The DFS path: each frame is a node and the position of the next neighbour it will visit.
+  const frames: { v: string; next: number }[] = [];
+
+  const visit = (v: string) => {
+    indexMap.set(v, index);
+    lowlinkMap.set(v, index);
+    index++;
+    stack.push(v);
+    onStack.add(v);
+    frames.push({ v, next: 0 });
+  };
+
+  for (const root of order) {
+    if (indexMap.has(root)) continue;
+    visit(root);
+    while (frames.length > 0) {
+      const frame = frames[frames.length - 1];
+      const v = frame.v;
+      const neighbors = adj.get(v) || [];
+      if (frame.next < neighbors.length) {
+        const w = neighbors[frame.next++];
+        if (!indexMap.has(w)) {
+          visit(w);
+        } else if (onStack.has(w)) {
+          lowlinkMap.set(v, Math.min(lowlinkMap.get(v)!, indexMap.get(w)!));
+        }
+        continue;
+      }
+
+      // Every neighbour is done: emit v's component if v is its root, then return to the parent.
+      frames.pop();
+      if (lowlinkMap.get(v) === indexMap.get(v)) {
+        const scc: string[] = [];
+        let w: string;
+        do {
+          w = stack.pop()!;
+          onStack.delete(w);
+          scc.push(w);
+        } while (w !== v);
+        sccs.push(scc);
+      }
+      if (frames.length > 0) {
+        const parent = frames[frames.length - 1].v;
+        lowlinkMap.set(parent, Math.min(lowlinkMap.get(parent)!, lowlinkMap.get(v)!));
+      }
+    }
+  }
+
+  return sccs;
+}
+
+/**
+ * The shortest cycle from `start` back to itself through `members`, breadth-first in adjacency
+ * order (`[start, ..., start]`), or null if there is none.
+ */
+function shortestCycleThrough(start: string, adj: Map<string, string[]>, members: Set<string>): string[] | null {
+  const parent = new Map<string, string>();
+  const queue: string[] = [start];
+  for (let head = 0; head < queue.length; head++) {
+    const last = queue[head];
+    for (const nbr of adj.get(last) || []) {
+      if (nbr === start) {
+        const back: string[] = [];
+        for (let n = last; n !== start; n = parent.get(n)!) back.push(n);
+        return [start, ...back.reverse(), start];
+      }
+      if (members.has(nbr) && !parent.has(nbr)) {
+        parent.set(nbr, last);
+        queue.push(nbr);
+      }
+    }
+  }
+  return null;
 }
