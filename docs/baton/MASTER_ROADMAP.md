@@ -149,3 +149,27 @@ Fixture scoring in CI; optional message edges.
 - **M4-06** 3D graph mode in the dashboard — DEFERRED, P3, 16h; depends on nothing.
 - **M4-07** Compiled scanner sidecar for very large codebases — DEFERRED, P3, 40h; depends on nothing.
 
+## M5 — Architecture rules (Deptrac-inspired)
+
+Declared layers, selectors and allow-rules over the MapX graph in every supported language, enforced in CI, explorable in CLI/MCP/dashboard.
+
+- **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — BACKLOG, P1, 12h; depends on nothing.
+- **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — BACKLOG, P1, 8h; depends on nothing.
+- **M5-03** Element view, core selectors and layer membership with selector trace — BACKLOG, P1, 10h; depends on M5-01, M5-02.
+- **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — BACKLOG, P1, 12h; depends on M5-03.
+- **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — BACKLOG, P1, 8h; depends on M5-04.
+- **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — BACKLOG, P1, 7h; depends on M5-05.
+- **M5-07** CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit — BACKLOG, P2, 6h; depends on M5-05.
+- **M5-08** Introspection: arch layers --why, which, unassigned, deps, unused, changed, allowed — BACKLOG, P2, 10h; depends on M5-04, M5-05.
+- **M5-09** Hierarchy and member selectors (transitive ancestry, depth, members) — BACKLOG, P2, 8h; depends on M5-03.
+- **M5-10** Capture decorators/attributes and doc tags in symbol metadata (tier 1) — BACKLOG, P1, 16h; depends on M5-01, M3-04.
+- **M5-11** Visibility rules: private selectors and internal markers — BACKLOG, P2, 8h; depends on M5-04, M5-10.
+- **M5-12** External, builtin and ambient elements with package attribution — BACKLOG, P1, 24h; depends on M5-01, M5-03, M4-03.
+- **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — BACKLOG, P2, 6h; depends on M5-04.
+- **M5-14** MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates — BACKLOG, P1, 8h; depends on M5-05, M5-08.
+- **M5-15** Dashboard Architecture view and /api/arch endpoints — BACKLOG, P3, 12h; depends on M5-05, M5-13.
+- **M5-16** Rule-derived smells and single-source layer violations — BACKLOG, P2, 8h; depends on M5-04, M5-08.
+- **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — BACKLOG, P2, 12h; depends on M5-04, M5-06.
+- **M5-18** Dogfood: MapX architecture config, CI step and user docs — BACKLOG, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
+- **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
+

@@ -12,6 +12,8 @@ flowchart LR
   M1 --> M4
   M2 --> M4
   M3 --> M4
+  M3 --> M5
+  M4 --> M5
 ```
 
 - M0-01 ← none
@@ -136,3 +138,22 @@ flowchart LR
 - M1-05-R1 ← M1-05 (hard)
 - M2-04-R2 ← M2-04-R1 (hard), M2-05 (hard)
 - M2-06-R1 ← M2-06 (hard), M2-07 (hard)
+- M5-01 ← none
+- M5-02 ← none
+- M5-03 ← M5-01 (fixture), M5-02 (hard)
+- M5-04 ← M5-03 (hard)
+- M5-05 ← M5-04 (hard)
+- M5-06 ← M5-05 (hard)
+- M5-07 ← M5-05 (hard)
+- M5-08 ← M5-04 (hard), M5-05 (interface)
+- M5-09 ← M5-03 (hard)
+- M5-10 ← M5-01 (fixture), M3-04 (interface)
+- M5-11 ← M5-04 (hard), M5-10 (hard)
+- M5-12 ← M5-01 (fixture), M5-03 (hard), M4-03 (interface)
+- M5-13 ← M5-04 (hard)
+- M5-14 ← M5-05 (hard), M5-08 (hard)
+- M5-15 ← M5-05 (hard), M5-13 (hard)
+- M5-16 ← M5-04 (hard), M5-08 (hard)
+- M5-17 ← M5-04 (hard), M5-06 (hard)
+- M5-18 ← M5-05 (hard), M5-06 (hard), M5-07 (hard), M4-01 (interface)
+- M5-98 ← M5-04 (quality), M5-06 (quality), M5-11 (quality), M5-16 (quality)

@@ -32,6 +32,11 @@
       "id": "M4",
       "title": "Measurement and developer experience",
       "goal": "Fixture scoring in CI; optional message edges."
+    },
+    {
+      "id": "M5",
+      "title": "Architecture rules (Deptrac-inspired)",
+      "goal": "Declared layers, selectors and allow-rules over the MapX graph in every supported language, enforced in CI, explorable in CLI/MCP/dashboard."
     }
   ],
   "gates": [
@@ -6202,7 +6207,7 @@
           "note": "D010: the remediation backlog comes before M3; quality dependencies added in the same structured edit (READY → BLOCKED could not go through the tool while the plan was mid-edit)."
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -6323,7 +6328,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -6443,7 +6448,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch; keep fixtures and evidence."
@@ -11984,6 +11989,1284 @@
       "objective": "A call pairs only with a route its literal path supports, on the right host.",
       "milestone": "M2",
       "description": "Review 2026-10-31 P1: a URL with no literal segment (`${endpoint}?page=…`, `${base}/${id}`, `DELETE '/'`) scores 0 and matches any route of that method. P2: the host is ignored (an api.github.com URL pairs with a local route); `{dynamic}` routes act as wildcards; fetch method from a variable or nested `method:` is wrong; HTTP_SKIP skips any public/build/vendor directory; JSX closing tags mask calls. Tests: the scan-order test re-scans the frontend, so a pair-once mutant survives; the scorer never compares the handler; M2-07 AC4 no longer asserts <1 s; M2-03 AC2 and M2-05 AC2 are proven only manually."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-01",
+      "title": "Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo)",
+      "priority": "P1",
+      "risk": "low",
+      "estimate": {
+        "min": 10,
+        "expected": 12,
+        "max": 16
+      },
+      "area": [
+        "arch",
+        "fixtures",
+        "eval"
+      ],
+      "dependencies": [],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-08",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-09",
+        "docs/research/deptrac/01-deptrac-capabilities.md"
+      ],
+      "objective": "Small synthetic apps per tier-1 language plus a two-repo workspace, each with a .mapx/architecture.jsonc and labelled expected findings (violation, skipped, uncovered, warning, error) keyed by fingerprint inputs, and a scorer reporting per-kind recall/precision. Baseline score is 0 (no engine yet).",
+      "outputs": [
+        "tests/fixtures/arch-rules/",
+        "tests/fixtures/arch-rules/expected-findings.json",
+        "scripts/eval/score-arch.ts",
+        "tests/arch-fixture.test.ts"
+      ],
+      "affectedFiles": [
+        "tests/fixtures/arch-rules/**",
+        "scripts/eval/score-arch.ts",
+        "tests/arch-fixture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Fixture covers every rule in the AR-08 chain at least twice per tier-1 language (PHP, TS, Python, Go): disallowed-layer, internal-element, private-layer, uncovered, same-layer (no finding), allowed.",
+        "Includes a `+` transitive rule, a `+` cycle (config error), a multi-layer element (warning), an empty layer (warning), a baseline with one matched and one stale entry (skipped + error).",
+        "Two-repo workspace case: frontend → backend `http` edge allowed only to a PublicApi layer.",
+        "score-arch.ts prints per-kind recall/precision as JSON and records the 0.0 baseline in the report."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-fixture.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "description": "Small synthetic apps per tier-1 language plus a two-repo workspace, each with a .mapx/architecture.jsonc and labelled expected findings (violation, skipped, uncovered, warning, error) keyed by fingerprint inputs, and a scorer reporting per-kind recall/precision. Baseline score is 0 (no engine yet)."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-02",
+      "title": "Architecture config: JSONC schema, loader, extends/parameters, validate-config",
+      "priority": "P1",
+      "risk": "low",
+      "estimate": {
+        "min": 6,
+        "expected": 8,
+        "max": 12
+      },
+      "area": [
+        "arch",
+        "config"
+      ],
+      "dependencies": [],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-11",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-14",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-05"
+      ],
+      "objective": "Load .mapx/architecture.jsonc and .mapx/architecture/<view>.jsonc with `extends` (files and mapx:preset/ ids), %parameters%, and semantic validation (unknown layer in rules/selectors, `+` cycles, unknown selector keys); publish schemas/architecture.schema.json.",
+      "outputs": [
+        "src/arch/config.ts",
+        "src/arch/schema.ts",
+        "schemas/architecture.schema.json",
+        "tests/arch-config.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/config.ts",
+        "src/arch/schema.ts",
+        "schemas/architecture.schema.json",
+        "tests/arch-config.test.ts",
+        "package.json"
+      ],
+      "acceptanceCriteria": [
+        "Invalid documents yield all errors at once with JSON pointer paths; `+` cycles are reported as errors naming the cycle.",
+        "extends chains resolve depth-first with later files overriding layers by name and merging rules; circular extends is an error.",
+        "schemas/architecture.schema.json ships in the npm package (check-package lists it)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-config.test.ts",
+        "npx tsx scripts/check-package.ts"
+      ],
+      "description": "Load .mapx/architecture.jsonc and .mapx/architecture/<view>.jsonc with `extends` (files and mapx:preset/ ids), %parameters%, and semantic validation (unknown layer in rules/selectors, `+` cycles, unknown selector keys); publish schemas/architecture.schema.json."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-03",
+      "title": "Element view, core selectors and layer membership with selector trace",
+      "priority": "P1",
+      "risk": "medium",
+      "estimate": {
+        "min": 8,
+        "expected": 10,
+        "max": 14
+      },
+      "area": [
+        "arch",
+        "selectors"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        },
+        {
+          "id": "M5-02",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-01",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-03",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-12"
+      ],
+      "objective": "Element abstraction over stored files and symbols with per-language qualifiedName normalisation; selectors path, name(+kind), layer, all/any/not, role, cluster, repo, workspacePackage, language, framework; membership memoised per (scan, config hash) and recording which selector matched.",
+      "outputs": [
+        "src/arch/elements.ts",
+        "src/arch/selectors/",
+        "src/arch/membership.ts",
+        "tests/arch-selectors.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/elements.ts",
+        "src/arch/selectors/**",
+        "src/arch/membership.ts",
+        "tests/arch-selectors.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Every listed selector has unit tests in at least PHP, TS and Python fixture files, including negative cases.",
+        "qualifiedName normalisation documented and tested for the 22 languages (path-based fallback where no namespace exists).",
+        "Membership for the fixture is computed once per scan/config pair (cache hit verified by test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-selectors.test.ts"
+      ],
+      "description": "Element abstraction over stored files and symbols with per-language qualifiedName normalisation; selectors path, name(+kind), layer, all/any/not, role, cluster, repo, workspacePackage, language, framework; membership memoised per (scan, config hash) and recording which selector matched."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-04",
+      "title": "Policy expansion and rule evaluator (handler chain, findings, fingerprints)",
+      "priority": "P1",
+      "risk": "medium",
+      "estimate": {
+        "min": 10,
+        "expected": 12,
+        "max": 16
+      },
+      "area": [
+        "arch",
+        "analysis"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-03",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-05",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-06",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-08",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-09",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-12",
+        "docs/research/deptrac/01-deptrac-capabilities.md#4-ruleset-semantics"
+      ],
+      "objective": "Allow-set expansion (`+`, `*`, `!`), per-rule severity and edge-type scope, verifiability policy, the AR-08 chain (scope → uncovered → same-layer → disallowed-layer → internal-element → private-layer → allowed), multi-layer and empty-layer warnings, ArchReport aggregation with layerEdges, stable fingerprints.",
+      "outputs": [
+        "src/arch/policy.ts",
+        "src/arch/evaluate.ts",
+        "src/arch/report.ts",
+        "tests/arch-evaluate.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/policy.ts",
+        "src/arch/evaluate.ts",
+        "src/arch/report.ts",
+        "tests/arch-evaluate.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "On the M5-01 fixture (excluding baseline, visibility, external and decorator rows owned by later tasks): violation and allowed recall/precision = 1.0.",
+        "Fingerprints are unchanged when lines shift (test inserts blank lines and re-scans).",
+        "Inferred edges become severity warn under the default policy; `policy.inferred: \"error\"` restores error."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-evaluate.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "description": "Allow-set expansion (`+`, `*`, `!`), per-rule severity and edge-type scope, verifiability policy, the AR-08 chain (scope → uncovered → same-layer → disallowed-layer → internal-element → private-layer → allowed), multi-layer and empty-layer warnings, ArchReport aggregation with layerEdges, stable fingerprints."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-05",
+      "title": "`mapx check` CLI: table/json reporters, exit contract, staleness",
+      "priority": "P1",
+      "risk": "medium",
+      "estimate": {
+        "min": 6,
+        "expected": 8,
+        "max": 10
+      },
+      "area": [
+        "arch",
+        "cli"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-16",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-17",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#34-cli-surface-proposed"
+      ],
+      "objective": "Register `mapx check` with --view, --format table|json, --output, --report-uncovered, --fail-on-uncovered, --report-skipped, --fail-on warn, --layer, --rule, --sync; exit codes 0–4 as AR-17.",
+      "outputs": [
+        "src/arch/reporters/table.ts",
+        "src/arch/reporters/json.ts",
+        "src/cli.ts (check command)",
+        "tests/arch-cli.test.ts"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        "src/arch/reporters/**",
+        "tests/arch-cli.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each exit code 0–4 is produced by a fixture case in tests/arch-cli.test.ts using the built binary.",
+        "JSON output validates against the ArchReport schema and is identical across two runs (deterministic ordering).",
+        "Without an architecture config, `mapx check` exits 3 with a hint to run `mapx arch init`."
+      ],
+      "verificationCommands": [
+        "npm run build",
+        "npx vitest run tests/arch-cli.test.ts"
+      ],
+      "description": "Register `mapx check` with --view, --format table|json, --output, --report-uncovered, --fail-on-uncovered, --report-skipped, --fail-on warn, --layer, --rule, --sync; exit codes 0–4 as AR-17."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-06",
+      "title": "Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet",
+      "priority": "P1",
+      "risk": "low",
+      "estimate": {
+        "min": 5,
+        "expected": 7,
+        "max": 10
+      },
+      "area": [
+        "arch",
+        "ci"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-10",
+        "docs/research/deptrac/01-deptrac-capabilities.md#4-ruleset-semantics"
+      ],
+      "objective": "Baseline file of fingerprints plus readable keys; matched violations become skipped; unmatched entries become errors; Deptrac-style element-pair entries accepted; `--compare base.json` fails only on fingerprints absent from a base-revision JSON report (the `--since <ref>` form is deferred, REQ-ARCH-021).",
+      "outputs": [
+        "src/arch/baseline.ts",
+        "tests/arch-baseline.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/baseline.ts",
+        "src/cli.ts",
+        "tests/arch-baseline.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Generate → re-run yields 0 violations and N skipped; deleting the offending import yields 1 stale-entry error (exit 3).",
+        "Baseline output is sorted and byte-stable across runs.",
+        "`--compare` against a base report fails only on the one new violation in the fixture variant; an unchanged head exits 0."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-baseline.test.ts"
+      ],
+      "description": "Baseline file of fingerprints plus readable keys; matched violations become skipped; unmatched entries become errors; Deptrac-style element-pair entries accepted; `--compare base.json` fails only on fingerprints absent from a base-revision JSON report (the `--since <ref>` form is deferred, REQ-ARCH-021)."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-07",
+      "title": "CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit",
+      "priority": "P2",
+      "risk": "low",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 8
+      },
+      "area": [
+        "arch",
+        "ci",
+        "reporters"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-16",
+        "docs/research/deptrac/01-deptrac-capabilities.md#6-formatters-13-classes"
+      ],
+      "objective": "Reporters sarif, github (auto when GITHUB_ACTIONS is set and no --format), codeclimate (severity map), junit (suite per layer).",
+      "outputs": [
+        "src/arch/reporters/{sarif,github,codeclimate,junit}.ts",
+        "tests/arch-reporters.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/reporters/**",
+        "tests/arch-reporters.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "SARIF validates against the SARIF 2.1.0 JSON schema (vendored in tests).",
+        "CodeClimate fingerprints equal finding fingerprints; severities follow config.",
+        "Golden-file tests for each reporter on the fixture."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-reporters.test.ts"
+      ],
+      "description": "Reporters sarif, github (auto when GITHUB_ACTIONS is set and no --format), codeclimate (severity map), junit (suite per layer)."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-08",
+      "title": "Introspection: arch layers --why, which, unassigned, deps, unused, changed, allowed",
+      "priority": "P2",
+      "risk": "low",
+      "estimate": {
+        "min": 8,
+        "expected": 10,
+        "max": 12
+      },
+      "area": [
+        "arch",
+        "cli"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "hard"
+        },
+        {
+          "id": "M5-05",
+          "type": "interface"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-13",
+        "docs/research/deptrac/01-deptrac-capabilities.md#7-debug-and-exploration-commands"
+      ],
+      "objective": "Subcommands under `mapx arch` answering AR-13a–g, all with --json; `unassigned` exits 2 when non-empty; `changed` accepts files or --since and --with-dependents; `allowed <from> <to>` returns decision, rule and reason.",
+      "outputs": [
+        "src/arch/introspect.ts",
+        "src/cli.ts (arch subcommands)",
+        "tests/arch-introspect.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/introspect.ts",
+        "src/cli.ts",
+        "tests/arch-introspect.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each subcommand has a fixture test asserting exact JSON output.",
+        "`mapx arch` with only legacy flags (--smells, --dsm, --violations) behaves exactly as before (regression test).",
+        "`unused --limit 1` lists allowances used at most once with counts."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-introspect.test.ts"
+      ],
+      "description": "Subcommands under `mapx arch` answering AR-13a–g, all with --json; `unassigned` exits 2 when non-empty; `changed` accepts files or --since and --with-dependents; `allowed <from> <to>` returns decision, rule and reason."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-09",
+      "title": "Hierarchy and member selectors (transitive ancestry, depth, members)",
+      "priority": "P2",
+      "risk": "medium",
+      "estimate": {
+        "min": 6,
+        "expected": 8,
+        "max": 10
+      },
+      "area": [
+        "arch",
+        "selectors",
+        "graph"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-03",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-02"
+      ],
+      "objective": "Ancestry closure over extends/implements (and mixin/trait/with edges where parsers emit them) with cycle safety; selectors extends, implements, inherits, mixes, inheritanceDepth, member; optional inherited-dependency derivation (policy.inheritDependencies).",
+      "outputs": [
+        "src/arch/selectors/hierarchy.ts",
+        "src/arch/selectors/member.ts",
+        "tests/arch-hierarchy.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/selectors/hierarchy.ts",
+        "src/arch/selectors/member.ts",
+        "src/arch/evaluate.ts",
+        "tests/arch-hierarchy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Transitive `extends Eloquent\\Model` through an intermediate base class is matched in the PHP fixture; same pattern in TS, Python, Java.",
+        "With inheritDependencies on, a subclass violation reports `via` with the inheritance path."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-hierarchy.test.ts"
+      ],
+      "description": "Ancestry closure over extends/implements (and mixin/trait/with edges where parsers emit them) with cycle safety; selectors extends, implements, inherits, mixes, inheritanceDepth, member; optional inherited-dependency derivation (policy.inheritDependencies)."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-10",
+      "title": "Capture decorators/attributes and doc tags in symbol metadata (tier 1)",
+      "priority": "P1",
+      "risk": "high",
+      "estimate": {
+        "min": 12,
+        "expected": 16,
+        "max": 22
+      },
+      "area": [
+        "parsers",
+        "languages",
+        "arch"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        },
+        {
+          "id": "M3-04",
+          "type": "interface"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#37-language-and-framework-coverage-what-each-selector-needs-from-parsers",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04"
+      ],
+      "objective": "Parsers persist `metadata.decorators` (normalised name, raw args) and `metadata.docTags` ({tag, value}) on symbols for PHP (attributes, PHPDoc), TS/JS (decorators, JSDoc/TSDoc), Python (decorators, docstring deprecations), Java/Kotlin (annotations, Javadoc/KDoc), C# (attributes, XML doc); add decorator and docTag selectors.",
+      "outputs": [
+        "parser changes",
+        "src/arch/selectors/{decorator,doc-tag}.ts",
+        "tests/symbol-annotations.test.ts"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "src/parsers/languages/typescript.ts",
+        "src/parsers/languages/javascript.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "src/arch/selectors/**",
+        "tests/symbol-annotations.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "For each listed language a fixture asserts decorators and doc tags on class and method symbols, including multi-line and argument-bearing forms.",
+        "MapX self-scan symbol count and edge count unchanged (metadata only).",
+        "NestJS detector behaviour unchanged (existing tests pass)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/symbol-annotations.test.ts",
+        "npm test"
+      ],
+      "description": "Parsers persist `metadata.decorators` (normalised name, raw args) and `metadata.docTags` ({tag, value}) on symbols for PHP (attributes, PHPDoc), TS/JS (decorators, JSDoc/TSDoc), Python (decorators, docstring deprecations), Java/Kotlin (annotations, Javadoc/KDoc), C# (attributes, XML doc); add decorator and docTag selectors. Interface dependency M3-04: Vue SFC <script setup> extraction (M3-02/M3-04) and decorator/doc-tag capture both change the TS/JS symbol path; land after M3-04 so the SFC pass is stable."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-11",
+      "title": "Visibility rules: private selectors and internal markers",
+      "priority": "P2",
+      "risk": "medium",
+      "estimate": {
+        "min": 6,
+        "expected": 8,
+        "max": 10
+      },
+      "area": [
+        "arch",
+        "analysis"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "hard"
+        },
+        {
+          "id": "M5-10",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-07",
+        "docs/research/deptrac/01-deptrac-capabilities.md#3-layers-and-collectors-21-built-in"
+      ],
+      "objective": "Layer `private` selectors (rule private-layer) and internal markers (rule internal-element) from configurable doc tags; opt-in native markers (Go internal/, Kotlin/C# internal, Rust pub(crate), Python/Dart underscore, Java package-private).",
+      "outputs": [
+        "src/arch/evaluate.ts (visibility)",
+        "tests/arch-visibility.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/evaluate.ts",
+        "src/arch/config.ts",
+        "tests/arch-visibility.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "private-layer and internal-element fixture rows reach recall/precision 1.0.",
+        "Native markers off by default; enabling them adds only the expected Go and Python findings in the fixture."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-visibility.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "description": "Layer `private` selectors (rule private-layer) and internal markers (rule internal-element) from configurable doc tags; opt-in native markers (Go internal/, Kotlin/C# internal, Rust pub(crate), Python/Dart underscore, Java package-private)."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "epic",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-12",
+      "title": "External, builtin and ambient elements with package attribution",
+      "priority": "P1",
+      "risk": "high",
+      "estimate": {
+        "min": 18,
+        "expected": 24,
+        "max": 34
+      },
+      "area": [
+        "scanner",
+        "graph",
+        "arch",
+        "ecosystems"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        },
+        {
+          "id": "M5-03",
+          "type": "hard"
+        },
+        {
+          "id": "M4-03",
+          "type": "interface"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#4-risks-and-conflicts",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04"
+      ],
+      "objective": "Persist unresolved out-of-workspace references in a separate external_refs table (not edges) with ecosystem, package, direct/transitive and dev/prod attribution from manifests and lockfiles (npm, Composer, pip/Poetry/uv, Go modules first); classify builtins and ambient access; add package, builtin and ambient selectors and uncovered reporting.",
+      "outputs": [
+        "store migration (external_refs)",
+        "src/core/manifests/*",
+        "src/arch/selectors/{package,builtin,ambient}.ts",
+        "tests/external-refs.test.ts"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/store.ts",
+        "src/core/manifests/**",
+        "src/arch/selectors/**",
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Decompose into 4–16h iterations (per ecosystem) before execution.",
+        "MapX self-scan edge counts, metrics and PageRank unchanged (externals live outside edges).",
+        "Uncovered, vendor-confinement and dev-dependency fixture rows reach recall/precision 1.0 for npm, Composer, pip and Go."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "description": "Persist unresolved out-of-workspace references in a separate external_refs table (not edges) with ecosystem, package, direct/transitive and dev/prod attribution from manifests and lockfiles (npm, Composer, pip/Poetry/uv, Go modules first); classify builtins and ambient access; add package, builtin and ambient selectors and uncovered reporting. Interface dependency M4-03: M4-03 restructures resume/fileMap in src/core/scanner.ts; the external-reference table must be built on the reworked scanner, not merged across it. Keep M4-04 in the same owner queue (R07)."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-13",
+      "title": "Layer graph reporters: DOT, SVG, Mermaid and layer DSM",
+      "priority": "P2",
+      "risk": "low",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 8
+      },
+      "area": [
+        "arch",
+        "exporters"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-16",
+        "docs/research/deptrac/01-deptrac-capabilities.md#6-formatters-13-classes"
+      ],
+      "objective": "`mapx arch graph --format dot|svg|mermaid|dsm` with counts on edges, red violations, dashed skipped, groups as subgraphs, hidden layers and point-to-group; reuse existing dot/svg exporters and calculateDSM.",
+      "outputs": [
+        "src/arch/reporters/{dot,mermaid,dsm}.ts",
+        "tests/arch-graph.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/reporters/**",
+        "src/exporters/dot-exporter.ts",
+        "tests/arch-graph.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Golden DOT and Mermaid outputs for the fixture; hidden layers absent from output but present in counts.",
+        "SVG renders without Graphviz installed (existing fallback path)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-graph.test.ts"
+      ],
+      "description": "`mapx arch graph --format dot|svg|mermaid|dsm` with counts on edges, red violations, dashed skipped, groups as subgraphs, hidden layers and point-to-group; reuse existing dot/svg exporters and calculateDSM."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-14",
+      "title": "MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates",
+      "priority": "P1",
+      "risk": "low",
+      "estimate": {
+        "min": 6,
+        "expected": 8,
+        "max": 10
+      },
+      "area": [
+        "mcp",
+        "agents",
+        "arch"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        },
+        {
+          "id": "M5-08",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-19",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#35-mcp-surface"
+      ],
+      "objective": "Five MCP tools with JSON defaults, capped results with truncation totals, and agent template guidance to call mapx_arch_allowed before cross-module imports; tool count references updated.",
+      "outputs": [
+        "src/mcp.ts (tools)",
+        "src/agents/templates.ts",
+        "src/agents.stub.md",
+        "tests/mcp-arch.test.ts"
+      ],
+      "affectedFiles": [
+        "src/mcp.ts",
+        "src/agents/templates.ts",
+        "src/agents.stub.md",
+        "CLAUDE.md",
+        "docs/mcp-integration.md",
+        "tests/mcp-arch.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each tool has an MCP round-trip test on the fixture.",
+        "mapx_arch_allowed returns allowed:false with rule and allowed alternatives for a disallowed pair.",
+        "mapx_arch_init never writes files unless write:true (test asserts no fs change)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/mcp-arch.test.ts"
+      ],
+      "description": "Five MCP tools with JSON defaults, capped results with truncation totals, and agent template guidance to call mapx_arch_allowed before cross-module imports; tool count references updated."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-15",
+      "title": "Dashboard Architecture view and /api/arch endpoints",
+      "priority": "P3",
+      "risk": "medium",
+      "estimate": {
+        "min": 10,
+        "expected": 12,
+        "max": 16
+      },
+      "area": [
+        "ui",
+        "dashboard",
+        "arch"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        },
+        {
+          "id": "M5-13",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#36-dashboard-an-architecture-view"
+      ],
+      "objective": "Layer diagram with violation drill-down to concrete edges, layer DSM, findings table with filters, health tiles, declared-layer overlay on the graph; /api/arch/report, /api/arch/layers, /api/arch/edges.",
+      "outputs": [
+        "src/ui/main.ts (view)",
+        "src/ui-server.ts (endpoints)",
+        "tests/ui-arch-api.test.ts"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "src/ui/index.html",
+        "src/ui/styles.css",
+        "src/ui-server.ts",
+        "tests/ui-arch-api.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "API tests cover every /api/arch endpoint on the fixture.",
+        "Bundle stays under the D006 ceiling (check-package passes).",
+        "Manual walkthrough recorded in the report with screenshots (R06 still applies to UI behaviour)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-arch-api.test.ts",
+        "npx tsx scripts/check-package.ts"
+      ],
+      "description": "Layer diagram with violation drill-down to concrete edges, layer DSM, findings table with filters, health tiles, declared-layer overlay on the graph; /api/arch/report, /api/arch/layers, /api/arch/edges."
+    },
+    {
+      "optionalDependencies": [
+        "M5-12",
+        "M5-10"
+      ],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-16",
+      "title": "Rule-derived smells and single-source layer violations",
+      "priority": "P2",
+      "risk": "medium",
+      "estimate": {
+        "min": 6,
+        "expected": 8,
+        "max": 12
+      },
+      "area": [
+        "analysis",
+        "smells",
+        "arch"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "hard"
+        },
+        {
+          "id": "M5-08",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-18",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#33-relationship-to-existing-smells-and-roles-one-source-of-truth"
+      ],
+      "objective": "When an architecture config exists, layer-violation smells come from the evaluator (FlowValidator suppressed unless policy.alsoInferred); add layer-cycle, dead-allowance, weak-allowance, layer-skip, unstable-layer-dependency, abstractness-distance; vendor-leak, undeclared-dependency, dev-dependency-in-prod and deprecated-usage once M5-12/M5-10 land.",
+      "outputs": [
+        "src/core/architecture-analyzer.ts (integration)",
+        "src/arch/smells.ts",
+        "tests/arch-smells.test.ts"
+      ],
+      "affectedFiles": [
+        "src/core/architecture-analyzer.ts",
+        "src/arch/smells.ts",
+        "tests/arch-smells.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "No duplicate layer-violation smells when a config exists (test).",
+        "Without a config, mapx_smells output is byte-identical to before (regression test on MapX self-scan).",
+        "Each new smell has a positive and negative fixture case."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-smells.test.ts"
+      ],
+      "description": "When an architecture config exists, layer-violation smells come from the evaluator (FlowValidator suppressed unless policy.alsoInferred); add layer-cycle, dead-allowance, weak-allowance, layer-skip, unstable-layer-dependency, abstractness-distance; vendor-leak, undeclared-dependency, dev-dependency-in-prod and deprecated-usage once M5-12/M5-10 land."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-17",
+      "title": "`mapx arch init`: inference from roles/clusters/frameworks and first presets",
+      "priority": "P2",
+      "risk": "medium",
+      "estimate": {
+        "min": 10,
+        "expected": 12,
+        "max": 16
+      },
+      "area": [
+        "arch",
+        "dx",
+        "frameworks"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "hard"
+        },
+        {
+          "id": "M5-06",
+          "type": "hard"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-15",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#38-framework-presets-the-first-wave"
+      ],
+      "objective": "Generate a reviewed-by-human starting config from roles + LAYER_ORDER + observed layer graph or from a preset; optional baseline so day one is green; presets layered, clean, hexagonal, ddd-contexts, feature-sliced, laravel, nestjs, django.",
+      "outputs": [
+        "src/arch/infer.ts",
+        "src/arch/presets/*.jsonc",
+        "tests/arch-init.test.ts"
+      ],
+      "affectedFiles": [
+        "src/arch/infer.ts",
+        "src/arch/presets/**",
+        "src/cli.ts",
+        "tests/arch-init.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "On the Laravel route fixture (M1-01) and a NestJS fixture, `arch init --preset` yields a config whose check runs with 0 config errors.",
+        "`arch init --baseline` followed by `mapx check` exits 0.",
+        "Dry-run by default; --write required to create files."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-init.test.ts"
+      ],
+      "description": "Generate a reviewed-by-human starting config from roles + LAYER_ORDER + observed layer graph or from a preset; optional baseline so day one is green; presets layered, clean, hexagonal, ddd-contexts, feature-sliced, laravel, nestjs, django."
+    },
+    {
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-18",
+      "title": "Dogfood: MapX architecture config, CI step and user docs",
+      "priority": "P2",
+      "risk": "low",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 8
+      },
+      "area": [
+        "docs",
+        "ci",
+        "arch"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        },
+        {
+          "id": "M5-06",
+          "type": "hard"
+        },
+        {
+          "id": "M5-07",
+          "type": "hard"
+        },
+        {
+          "id": "M4-01",
+          "type": "interface"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#39-dogfood-mapxs-own-architecture-example-mapxarchitecturejsonc"
+      ],
+      "objective": "Commit .mapx/architecture.jsonc for MapX itself (with baseline for the Languages→Parsers and Agents→Parsers findings or fixes), add `mapx check --format sarif` to CI, write docs/architecture-rules.md and update cli-reference and mcp-integration.",
+      "outputs": [
+        ".mapx/architecture.jsonc",
+        ".mapx/architecture.baseline.json",
+        "docs/architecture-rules.md",
+        "CI workflow step"
+      ],
+      "affectedFiles": [
+        ".mapx/architecture.jsonc",
+        ".github/workflows/ci.yml",
+        "docs/architecture-rules.md",
+        "docs/cli-reference.md",
+        "docs/mcp-integration.md"
+      ],
+      "acceptanceCriteria": [
+        "CI runs `mapx check` on MapX and passes; a deliberate forbidden import in a throwaway branch fails it (recorded in report).",
+        "docs/architecture-rules.md documents every selector, rule, reporter and exit code with an example."
+      ],
+      "verificationCommands": [
+        "npm run build",
+        "node dist/main.js check --format json"
+      ],
+      "description": "Commit .mapx/architecture.jsonc for MapX itself (with baseline for the Languages→Parsers and Agents→Parsers findings or fixes), add `mapx check --format sarif` to CI, write docs/architecture-rules.md and update cli-reference and mcp-integration. Interface dependency M4-01: M4-01 owns the CI scoring step in .github/workflows/ci.yml; the arch-check step is added to that layout."
+    },
+    {
+      "optionalDependencies": [
+        "M5-12"
+      ],
+      "blockingConditions": [],
+      "verificationPlan": "Run every registered command; each must exit 0.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the iteration branch.",
+      "milestone": "M5",
+      "id": "M5-98",
+      "title": "M5 acceptance: re-score architecture-rules fixture",
+      "priority": "P1",
+      "risk": "low",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "area": [
+        "eval",
+        "arch"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "quality"
+        },
+        {
+          "id": "M5-06",
+          "type": "quality"
+        },
+        {
+          "id": "M5-11",
+          "type": "quality"
+        },
+        {
+          "id": "M5-16",
+          "type": "quality"
+        }
+      ],
+      "sources": [
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-09",
+        "docs/research/deptrac/05-requirements.md"
+      ],
+      "objective": "Re-score the M5-01 fixture and record per-kind recall/precision against the 0.0 baseline; mark each REQ-ARCH requirement VERIFIED or open a follow-up.",
+      "outputs": [
+        "docs/baton/reports/M5-98.md"
+      ],
+      "affectedFiles": [
+        "docs/baton/reports/M5-98.md"
+      ],
+      "acceptanceCriteria": [
+        "Every finding kind has recall and precision ≥ 0.95 on the fixture; any shortfall has a follow-up task."
+      ],
+      "verificationCommands": [
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "description": "Re-score the M5-01 fixture and record per-kind recall/precision against the 0.0 baseline; mark each REQ-ARCH requirement VERIFIED or open a follow-up."
     }
   ]
 }

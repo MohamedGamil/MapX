@@ -188,5 +188,321 @@
       "M4-01"
     ],
     "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-001",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "Layers are declared in .mapx/architecture.jsonc with path, name, role, cluster, repo, language, layer and boolean selectors; membership is explainable (which selector matched)",
+    "source": "docs/research/deptrac/05-requirements.md MUST, AR-03/AR-04/AR-11",
+    "taskIds": [
+      "M5-02",
+      "M5-03"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-002",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "Allow-rules with default deny, `+` transitive, `*`, `!`, per-rule severity and edge-type scope; `+` cycles are configuration errors",
+    "source": "docs/research/deptrac/05-requirements.md MUST, AR-05/AR-06",
+    "taskIds": [
+      "M5-04"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-003",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "Every in-scope dependency is classified allowed, violation, skipped, uncovered, warning or error by a named rule, located at file:line, with a line-independent fingerprint",
+    "source": "docs/research/deptrac/05-requirements.md MUST, AR-08/AR-09",
+    "taskIds": [
+      "M5-04"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-004",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "`mapx check` reports as table or JSON and exits 0–4 per AR-17; a stale graph is reported, never silently analysed",
+    "source": "docs/research/deptrac/05-requirements.md MUST, AR-16/AR-17",
+    "taskIds": [
+      "M5-05"
+    ],
+    "verificationTaskIds": [
+      "M5-18"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-005",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "A baseline turns known violations into skipped findings; stale baseline entries are errors; `--compare <report>` fails only on new fingerprints",
+    "source": "docs/research/deptrac/05-requirements.md MUST, AR-10",
+    "taskIds": [
+      "M5-06"
+    ],
+    "verificationTaskIds": [
+      "M5-18"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-006",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "A labelled polyglot fixture and scorer measure recall and precision per finding kind, with a recorded 0.0 baseline before the engine exists",
+    "source": "docs/research/deptrac/05-requirements.md MUST, D004",
+    "taskIds": [
+      "M5-01"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-007",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "Inferred (heuristic) edges never fail CI by default; `policy.inferred` can promote them",
+    "source": "docs/research/deptrac/05-requirements.md MUST, AR-05",
+    "taskIds": [
+      "M5-04"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-008",
+    "category": "ARCH",
+    "priority": "P1",
+    "requirement": "Without an architecture config, MapX behaviour (smells, edge counts, metrics, exports) is unchanged",
+    "source": "docs/research/deptrac/05-requirements.md MUST, G6/§3.3",
+    "taskIds": [
+      "M5-16",
+      "M5-12"
+    ],
+    "verificationTaskIds": [
+      "M5-16"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-009",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "CI reporters: SARIF 2.1.0, GitHub annotations (auto-selected), CodeClimate with severity map, JUnit",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-16",
+    "taskIds": [
+      "M5-07"
+    ],
+    "verificationTaskIds": [
+      "M5-18"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-010",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "Introspection: layers --why, which, unassigned (exit 2), deps, unused, changed, allowed, all with --json",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-13",
+    "taskIds": [
+      "M5-08"
+    ],
+    "verificationTaskIds": [
+      "M5-08"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-011",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "Hierarchy selectors extends/implements/inherits/mixes/inheritanceDepth and member selector over transitive ancestry",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-04",
+    "taskIds": [
+      "M5-09"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-012",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "Decorators/attributes and doc tags are captured on symbols for PHP, TS/JS, Python, Java/Kotlin, C# and usable as selectors",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-04/G4",
+    "taskIds": [
+      "M5-10"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-013",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "Visibility: private selectors (private-layer) and internal markers (internal-element), native markers opt-in",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-07",
+    "taskIds": [
+      "M5-11"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-014",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "External, builtin and ambient references are persisted outside `edges` with package, direct/transitive and dev/prod attribution for npm, Composer, pip and Go; package/builtin/ambient selectors and uncovered reporting",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-04/G3/G9",
+    "taskIds": [
+      "M5-12"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-015",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "MCP tools mapx_arch_check/_layers/_allowed/_explain/_init with capped JSON output; agent templates instruct a pre-flight `mapx_arch_allowed`",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-19",
+    "taskIds": [
+      "M5-14"
+    ],
+    "verificationTaskIds": [
+      "M5-14"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-016",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "Layer graph as DOT, SVG, Mermaid and a policy-coloured layer DSM, with groups, hidden layers and point-to-group",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-16",
+    "taskIds": [
+      "M5-13"
+    ],
+    "verificationTaskIds": [
+      "M5-13"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-017",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "Rule-derived smells (layer-cycle, dead/weak allowance, layer-skip, unstable-layer-dependency, abstractness-distance, and the external/deprecated family) with a single source for layer violations",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-18",
+    "taskIds": [
+      "M5-16"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-018",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "`mapx arch init` proposes a config (and optional baseline) from roles, clusters, framework edges or a preset; dry-run by default",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-15",
+    "taskIds": [
+      "M5-17"
+    ],
+    "verificationTaskIds": [
+      "M5-17"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-019",
+    "category": "ARCH",
+    "priority": "P2",
+    "requirement": "MapX enforces its own architecture in CI and documents every selector, rule, reporter and exit code",
+    "source": "docs/research/deptrac/05-requirements.md SHOULD, §3.9",
+    "taskIds": [
+      "M5-18"
+    ],
+    "verificationTaskIds": [
+      "M5-18"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-020",
+    "category": "ARCH",
+    "priority": "P3",
+    "requirement": "Dashboard Architecture view: layer diagram with drill-down, layer DSM, findings table, health tiles",
+    "source": "docs/research/deptrac/05-requirements.md COULD, §3.6",
+    "taskIds": [
+      "M5-15"
+    ],
+    "verificationTaskIds": [
+      "M5-15"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-021",
+    "category": "ARCH",
+    "priority": "P3",
+    "requirement": "`--since <git-ref>` ratchet without a base report (second scan at the ref)",
+    "source": "docs/research/deptrac/05-requirements.md COULD, AR-10; no task yet",
+    "taskIds": [],
+    "verificationTaskIds": [],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-022",
+    "category": "ARCH",
+    "priority": "P3",
+    "requirement": "Inherited-dependency derivation (subclass inherits its ancestors' dependencies, reported with `via`)",
+    "source": "docs/research/deptrac/05-requirements.md COULD, AR-02",
+    "taskIds": [
+      "M5-09"
+    ],
+    "verificationTaskIds": [
+      "M5-98"
+    ],
+    "status": "PLANNED"
+  },
+  {
+    "id": "REQ-ARCH-023",
+    "category": "ARCH",
+    "priority": "P3",
+    "requirement": "Custom selectors and rules as user plugins",
+    "source": "docs/research/deptrac/05-requirements.md COULD, AR-04; no task yet",
+    "taskIds": [],
+    "verificationTaskIds": [],
+    "status": "PLANNED"
   }
 ]

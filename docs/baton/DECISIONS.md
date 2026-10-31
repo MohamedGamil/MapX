@@ -85,3 +85,17 @@ Context: review 2026-10-31 found `metrics` and `edges` output diverging from F02
 - **`edges <file>` text:** F04's `Incoming (n)` / `Outgoing (n)` sections with ←/→ arrows, and a clear message when there are no edges.
 
 camelCase supersedes F02/F04's snake_case keys; everything else follows the specs.
+
+## D013 — Milestone M5, architecture rules (Deptrac-inspired), 2026-10-31
+
+Context: the owner asked for an analysis of Deptrac (PHP architecture-conformance tool) and its abstraction for MapX's 22 languages, frameworks, CLI/MCP and dashboard, then instructed integration of the result into the plan. The research pack is `docs/research/deptrac/` (01 capabilities, 02 abstract feature model AR-01…AR-19, 03 gap analysis G1–G11, 04 phased plan, 05 requirement register REQ-ARCH-001…023). The seven open items were proposed with defaults and the owner instructed integration without overriding them, so the defaults stand; each can be revised by editing the affected tasks before they start.
+
+- **Adopted:** milestone M5 with 19 tasks (M5-01 … M5-18, M5-98; M5-12 is an epic to decompose per ecosystem) and requirements REQ-ARCH-001…023 (P1 MUST = the CI gate, P2 SHOULD, P3 COULD; no P0 is claimed). Expected effort 183 h, MUST set about 65 h.
+- **Ordering:** M3 stays the owner's stated next milestone (PROJECT_STATE "Next"); M5 Phase A (M5-01 … M5-06) lives in new `src/arch/`, `tests/` and `schemas/` paths and may run as a parallel lane. The only ordering constraints are the real ones, recorded as `interface` dependencies: M5-10 → M3-04 (TS/Vue extraction path), M5-12 → M4-03 (`src/core/scanner.ts`), M5-18 → M4-01 (`.github/workflows/ci.yml`). The computed critical path is now M5's chain (62 h); that reflects effort, not precedence over M3.
+- **Config:** `.mapx/architecture.jsonc`, views under `.mapx/architecture/*.jsonc`, next to `config.json`, `routes.json` and `http-calls.json`.
+- **Verb:** `mapx check` is the CI gate; introspection lives under `mapx arch <sub>` and the existing `mapx arch` flags stay unchanged.
+- **Exit codes:** 0 clean, 1 violations, 2 uncovered/unassigned when asked, 3 config or baseline error, 4 stale graph or internal error (AR-17), instead of Deptrac's single 1.
+- **Inferred edges:** warn by default; `policy.inferred: "error"` promotes them (REQ-ARCH-007).
+- **External references (G3):** stored outside `edges`, in a separate table with ecosystem, package, direct/transitive and dev/prod attribution, so existing metrics, PageRank and exports are unchanged (REQ-ARCH-008, REQ-ARCH-014).
+- **Ratchet:** `--compare <base-report.json>` is the MUST; `--since <git-ref>` is COULD (REQ-ARCH-021, no task yet).
+- **Research home:** `docs/research/deptrac/`; task `sources` cite it. `specs/` stays frozen (D001).

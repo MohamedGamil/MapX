@@ -11,8 +11,13 @@ Updated 2026-10-31, after session 6 (review remediation). Plan baseline: `develo
 | M2 Cross-language precision and HTTP pairing | M2-04-R2, M2-06-R1 DONE | |
 | M3 Vue SFC semantics | 0 of 6 | M3-01 is unblocked by the plan (every remediation dependency DONE); start it only with the owner's go-ahead |
 | M4 Measurement and DX | 0 of 7 | M4-03 (scan superlinear past ~5,000 files, measured in session 6) and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
+| M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 (fixture + scorer) and M5-02 (config schema) are promotable and parallel-safe with M3 (new `src/arch/` paths). M5-12 is an epic. Interface deps: M5-10 → M3-04, M5-12 → M4-03, M5-18 → M4-01 |
 
 Live list: `npm run plan:scan`.
+
+## Planning 2026-10-31: milestone M5 (D013)
+
+Deptrac analysed and abstracted for MapX (`docs/research/deptrac/`, six documents). Plan additions: milestone M5 with 19 tasks (183 h expected; MUST set about 65 h) and REQ-ARCH-001 … 023. Reconciled against `develop@8b933e1`: no file overlap with M3; overlaps with M4-01 (`ci.yml`), M4-03/M4-04 (`scanner.ts`) and M4-05 (`package.json`) are carried as interface dependencies or R07. No existing task, `src/`, `tests/` or `specs/` file changed.
 
 ## Done this session (reports in `reports/`)
 
@@ -97,6 +102,7 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 ## Next
 
 - M3-01 (Vue SFC fixture set) once the owner gives the go-ahead; per D010 every remediation task is now DONE.
+- M5-01 and M5-02 (architecture rules fixture and config schema) are promotable; specs in `iterations/M5-01.md` and `M5-02.md`. The computed critical path is now M5's 62 h chain because it is the longest remaining dependency chain, not because it precedes M3 (D013).
 - Owner decisions pending (see below).
 - M4-03: scan time is superlinear past ~5,000 files (80–133 s at 10,000, 323 s at 20,000).
 
