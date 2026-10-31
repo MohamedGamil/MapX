@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { Store } from './store.js';
 
 export interface ImpactItem {
@@ -124,15 +126,26 @@ export class ImpactAnalyzer {
       }
     }
 
-    // Files that only import the symbol's file (no call edge) are affected too, at LOW risk.
+    // Files that only import the symbol's file (no call edge) are affected too, at LOW risk, but only
+    // when they import the symbol itself (M0-11-R2). Import edges name the module, not the imported
+    // names, so the importer's source must mention the symbol's short name as a whole word.
     const target = this.store.getSymbolByName(symbolName);
     if (target?.file_path) {
       const seenFiles = new Set(items.map(x => x.file));
       const importers = this.store.raw
         .prepare("SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND edge_type IN ('import', 'require') AND source_file != ?")
         .all(target.file_path, target.file_path) as { source_file: string }[];
+      const short = symbolName.split(/::|\.|\\/).pop() || symbolName;
+      const mentions = new RegExp(`(^|[^\\w$])${short.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\w$])`);
       for (const { source_file } of importers) {
         if (seenFiles.has(source_file)) continue;
+        let source: string | null = null;
+        try {
+          source = readFileSync(resolve(dir, source_file), 'utf-8');
+        } catch {
+          // unreadable: keep the file-level answer
+        }
+        if (source !== null && !mentions.test(source)) continue;
         items.push({ symbol: '<import>', file: source_file, depth: 1, edgeType: 'import', risk: 'LOW' });
       }
     }

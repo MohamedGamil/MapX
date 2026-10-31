@@ -1085,14 +1085,28 @@ export class Store {
     return results;
   }
 
-  /** Start line of `name` (or `Scope::name`) declared in `file`, or null. */
-  getSymbolLineInFile(file: string, name: string): number | null {
+  /**
+   * Start line of `name` (or `Scope::name`) declared in `file`, or null when it is not declared there
+   * or cannot be told apart from a homonym (M0-11-R2: the first same-named declaration used to win).
+   * With several declarations of the name, the one whose scope matches `Scope::` wins; otherwise the
+   * single one whose scope is in `scopeHints` (names the caller also references in that file, such as
+   * the class it instantiates).
+   */
+  getSymbolLineInFile(file: string, name: string, scopeHints: string[] = []): number | null {
     // `A::m`, `a.b` and PHP `App\Models\User` all end in the declared name.
-    const short = name.split(/::|\.|\\/).pop() ?? name;
-    const row = this.backend
-      .prepare('SELECT start_line FROM symbols WHERE file_path = ? AND name = ? ORDER BY start_line LIMIT 1')
-      .get(file, short) as { start_line: number } | undefined;
-    return row?.start_line ?? null;
+    const parts = name.split(/::|\.|\\/);
+    const short = parts.pop() ?? name;
+    const rows = this.backend
+      .prepare('SELECT start_line, scope FROM symbols WHERE file_path = ? AND name = ? ORDER BY start_line')
+      .all(file, short) as Array<{ start_line: number; scope: string | null }>;
+    if (rows.length <= 1) return rows[0]?.start_line ?? null;
+    const lastSegment = (s: string | null) => (s ?? '').split(/::|\.|\\/).pop() ?? '';
+    const pick = (scopes: string[]) => {
+      const wanted = new Set(scopes.map(lastSegment).filter(Boolean));
+      const matches = rows.filter(r => wanted.has(lastSegment(r.scope)));
+      return matches.length === 1 ? matches[0].start_line : null;
+    };
+    return (parts.length ? pick([parts[parts.length - 1]]) : null) ?? pick(scopeHints);
   }
 
   getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {

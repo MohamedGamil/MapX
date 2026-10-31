@@ -234,6 +234,8 @@ Show direct and nested callees of a symbol. If the symbol is not found, suggests
 mapx callees <symbol> [--dir /path] [--depth <n>]
 ```
 
+Each callee's `@ file:line` is its own declaration. When the file declares the name several times (two classes with a `save` method), the line belongs to the class the caller also references there, for example the class it instantiates. When the declaration is unknown or ambiguous, only `@ file` is printed; the call-site line is never shown in its place.
+
 ## `mapx impact <symbol>`
 
 Perform change impact analysis — show blast radius and risk for modifying a symbol. Validates symbol existence before running analysis; suggests alternatives via fuzzy matching if not found.
@@ -241,6 +243,12 @@ Perform change impact analysis — show blast radius and risk for modifying a sy
 ```bash
 mapx impact <symbol> [--dir /path] [--depth <n>] [--format <format>]
 ```
+
+Files that import the symbol's file without calling it are listed as `LOW` (`symbol: <import>`), but only when their source mentions the symbol's name. A file that imports other names from the same module is not affected.
+
+## Staleness warning
+
+Commands that read the index warn `Graph index may be stale` when indexed files changed content, were deleted, or new untracked files appeared. A new untracked file counts only if a scan would index it: the same rules apply as for the scan walk. These are the repo's include and exclude patterns from its last scan (including Laravel's default excludes), skipped directories such as `node_modules`, `vendor`, `build` and `coverage`, dot-prefixed files and directories, and a known language.
 
 ## `mapx node <symbol>`
 

@@ -21,7 +21,7 @@ import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
-import { directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
+import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
 import { describeRelation, modelRelations } from './core/relations.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { getBuiltinLanguages } from './languages/registry.js';
@@ -1166,7 +1166,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
 
       const queue: Array<{ symName: string; depth: number }> = [{ symName: symbol, depth: 0 }];
       const visited = new Set<string>([symbol]);
-      const results: Array<{ caller: string; callee: string; file: string; line: number; depth: number }> = [];
+      const results: Array<{ caller: string; callee: string; file: string; line: number | null; depth: number }> = [];
 
       while (queue.length > 0) {
         const { symName, depth } = queue.shift()!;
@@ -1176,14 +1176,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         for (const edge of callees) {
           const calleeName = edge.target_symbol || '<unknown>';
           const callerName = edge.source_symbol || symName;
-          const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
 
           results.push({
             caller: callerName,
             callee: calleeName,
             file: edge.target_file,
-            // The callee's own declaration, not the call site in the caller.
-            line: store.getSymbolLineInFile(edge.target_file, calleeName) ?? meta.startLine ?? 1,
+            // The callee's own declaration, or none: never the call site in the caller (M0-11-R2).
+            line: store.getSymbolLineInFile(edge.target_file, calleeName, calleeScopeHints(callees, edge)),
             depth: depth + 1
           });
 
@@ -1217,7 +1216,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const res of results) {
         const indent = '  '.repeat(res.depth);
         console.log(`${indent}→ ${res.callee} (called by ${res.caller})`);
-        console.log(`${indent}  @ ${res.file}:${res.line}`);
+        console.log(`${indent}  @ ${res.file}${res.line ? `:${res.line}` : ''}`);
       }
     });
 

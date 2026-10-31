@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, stat, readdir, open } from 'node:fs/promises';
-import { existsSync, readFileSync, closeSync, openSync, readSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, extname, join, basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
@@ -14,13 +14,12 @@ import { RoleClassifier } from './role-classifier.js';
 import { ArchitectureAnalyzer } from './architecture-analyzer.js';
 import { calculateClusterMetrics } from './metrics.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
-import { getLanguageForFile, languageFromShebang, areLanguagesCompatible } from '../languages/registry.js';
+import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
-import picomatch from 'picomatch';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
-import { LARAVEL_DEFAULT_EXCLUDES } from './config.js';
+import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, shebangLanguage } from './file-rules.js';
 import { collectProviders, extractHttpCalls, HTTP_SKIP, HTTP_SOURCE, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall } from '../frameworks/http/pairing.js';
@@ -31,12 +30,6 @@ import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
-
-const DEFAULT_IGNORE = new Set([
-  'node_modules', 'vendor', '.git', 'dist', '.mapx', '__pycache__',
-  '.next', '.nuxt', 'coverage', '.cache', '.turbo', 'target', 'build',
-  '.gradle', '.idea', '.vscode', '.vs',
-]);
 
 interface ScanResumeState {
   totalFiles: number;
@@ -52,22 +45,6 @@ interface FileInfo {
   lines: number;
 }
 
-/** Language of an extensionless script from its `#!` line (reads at most 256 bytes). */
-function shebangLanguage(path: string) {
-  try {
-    const fd = openSync(path, 'r');
-    try {
-      const buf = Buffer.alloc(256);
-      const n = readSync(fd, buf, 0, 256, 0);
-      return languageFromShebang(buf.subarray(0, n).toString('utf-8').split('\n')[0] ?? '');
-    } finally {
-      closeSync(fd);
-    }
-  } catch {
-    return null;
-  }
-}
-
 export interface DiscoveredFile extends FileInfo {
   relativePath: string;
   contentHash: string;
@@ -76,28 +53,7 @@ export interface DiscoveredFile extends FileInfo {
   contentChanged: boolean;
 }
 
-export function buildMatcher(excludes: string[], includes: string[]): (rel: string) => boolean {
-  return (rel: string) => {
-    if (excludes.some(p => {
-      if (picomatch.isMatch(rel, p, { dot: true })) return true;
-      const segments = rel.split('/');
-      if (segments.some(seg => seg === p)) return true;
-      return false;
-    })) {
-      return false;
-    }
-    if (includes.length > 0) {
-      const matched = includes.some(p => {
-        if (picomatch.isMatch(rel, p, { dot: true })) return true;
-        const segments = rel.split('/');
-        if (segments.some(seg => seg === p)) return true;
-        return false;
-      });
-      if (!matched) return false;
-    }
-    return true;
-  };
-}
+export { buildMatcher };
 
 export class Scanner {
   private store: Store;
@@ -1463,26 +1419,12 @@ export class Scanner {
    * must not prune every directory (review 2026-10-31).
    */
   private shouldExcludeDir(relDir: string, excludes: string[]): boolean {
-    return excludes.some(p => {
-      const pattern = p.replace(/\/+$/, '');
-      if (!pattern.endsWith('/*') && picomatch.isMatch(relDir, pattern, { dot: true })) return true;
-      if (pattern.endsWith('/**') && picomatch.isMatch(relDir, pattern.slice(0, -3), { dot: true })) return true;
-      return relDir.split('/').some(seg => seg === pattern);
-    });
+    return isExcludedDir(relDir, excludes);
   }
 
   /** Config + CLI excludes, plus Laravel's defaults for `framework: laravel` repos unless declined (F10). */
   private effectiveExcludes(repoName: string): string[] {
-    const excludes = [...this.config.settings.excludePatterns, ...this.cliExcludes];
-    const repo = this.config.repos.find(r => r.name === repoName);
-    if (repo?.framework === 'laravel' && this.config.settings.laravelDefaultExcludes !== false) {
-      const prefix = !repo.path || repo.path === '.' ? '' : `${repo.path.replace(/^\.\//, '').replace(/\/+$/, '')}/`;
-      for (const p of LARAVEL_DEFAULT_EXCLUDES) {
-        const scoped = p.startsWith('**/') ? p : `${prefix}${p}`;
-        if (!excludes.includes(scoped)) excludes.push(scoped);
-      }
-    }
-    return excludes;
+    return effectiveExcludesFor(this.config.settings, this.config.repos.find(r => r.name === repoName), this.cliExcludes);
   }
 
   private async getFileInfo(absolutePath: string, relativePath: string): Promise<FileInfo | null> {

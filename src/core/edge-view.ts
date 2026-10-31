@@ -105,6 +105,16 @@ export function formatFileEdgesText(edges: FileEdges): string {
   return lines.join('\n');
 }
 
+/**
+ * Scope hints for a callee's declaration line: the other names the same caller references in the
+ * callee's file (`new B(); b.save()` → `B`), so `save` resolves to `B::save` (M0-11-R2).
+ */
+export function calleeScopeHints(callees: Record<string, any>[], edge: Record<string, any>): string[] {
+  return callees
+    .filter(e => e !== edge && e.target_file === edge.target_file && e.source_symbol === edge.source_symbol && e.target_symbol)
+    .map(e => e.target_symbol as string);
+}
+
 /** A file argument as the index stores it: workspace-relative with `/` separators. */
 export function indexedPath(dir: string, file: string): string {
   const rel = isAbsolute(file) ? relative(resolve(dir), file) : file;

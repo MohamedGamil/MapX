@@ -20,7 +20,7 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { calculateClusterMetrics, calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop } from './core/metrics.js';
-import { directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
+import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
@@ -1198,7 +1198,7 @@ Recommendation:
         const maxDepth = (args as any)?.depth ?? 1;
         const queue: Array<{ symName: string; depth: number }> = [{ symName: symbolName, depth: 0 }];
         const visited = new Set<string>([symbolName]);
-        const results: Array<{ caller: string; callee: string; file: string; line: number; depth: number }> = [];
+        const results: Array<{ caller: string; callee: string; file: string; line: number | null; depth: number }> = [];
 
         while (queue.length > 0) {
           const { symName, depth } = queue.shift()!;
@@ -1208,14 +1208,13 @@ Recommendation:
           for (const edge of callees) {
             const calleeName = edge.target_symbol || '<unknown>';
             const callerName = edge.source_symbol || symName;
-            const meta = edge.metadata ? JSON.parse(edge.metadata) : {};
 
             results.push({
               caller: callerName,
               callee: calleeName,
               file: edge.target_file,
-              // The callee's own declaration, not the call site in the caller.
-              line: ctx.store.getSymbolLineInFile(edge.target_file, calleeName) ?? meta.startLine ?? 1,
+              // The callee's own declaration, or none: never the call site in the caller (M0-11-R2).
+              line: ctx.store.getSymbolLineInFile(edge.target_file, calleeName, calleeScopeHints(callees, edge)),
               depth: depth + 1
             });
 
@@ -1243,7 +1242,7 @@ Recommendation:
 
         const lines = results.map(res => {
           const indent = '  '.repeat(res.depth);
-          return `${indent}→ ${res.callee} (called by ${res.caller})\n${indent}  @ ${res.file}:${res.line}`;
+          return `${indent}→ ${res.callee} (called by ${res.caller})\n${indent}  @ ${res.file}${res.line ? `:${res.line}` : ''}`;
         });
 
         const header = `${results.length} callee${results.length !== 1 ? 's' : ''} of "${symbolName}"${maxDepth > 1 ? ` (depth ${maxDepth})` : ''}:\n`;
