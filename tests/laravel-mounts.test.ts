@@ -334,6 +334,111 @@ describe('M1-07-R1: unknown reachability, duplicate winners and override keys th
   });
 });
 
+// Review 2026-10-31 (P2, M1-05): resource options arrays, nested and plural registration, array
+// handlers without `uses`, and group name prefixes. EXPECTED is the route list Laravel 12.70's own
+// router builds from these files (vendor Illuminate\Routing, driven by a scratch oracle script),
+// with two documented differences: MapX reports resource `update` as separate PUT and PATCH routes,
+// and an action array whose callable is `[C::class, 'm']` (no `uses`) is reported as C@m, which is
+// what Laravel runs, where route:list prints "Closure".
+describe('M1-05-R1: resource forms, array handlers and group name prefixes match Laravel', () => {
+  let root: string;
+  let routes: RouteView[];
+  const EXPECTED = [
+    'GET /api/photos gallery PhotoController@index [api,auth]',
+    'GET /api/photos/{picture} photos.show PhotoController@show [api,auth]',
+    'GET /api/videos media.videos.index VideoController@index [api]',
+    'POST /api/videos media.videos.store VideoController@store [api]',
+    'GET /api/videos/{video} media.videos.show VideoController@show [api]',
+    'GET /api/albums/{album} records.show AlbumController@show [api]',
+    'GET /api/photos/{pic}/comments photos.comments.index CommentController@index [api]',
+    'POST /api/photos/{pic}/comments photos.comments.store CommentController@store [api]',
+    'GET /api/photos/{pic}/comments/{comment} photos.comments.show CommentController@show [api]',
+    'PUT /api/photos/{pic}/comments/{comment} photos.comments.update CommentController@update [api]',
+    'PATCH /api/photos/{pic}/comments/{comment} photos.comments.update CommentController@update [api]',
+    'DELETE /api/photos/{pic}/comments/{comment} photos.comments.destroy CommentController@destroy [api]',
+    'GET /api/admin/posts/{post}/notes posts.notes.index NoteController@index [api]',
+    'POST /api/admin/posts/{post}/notes posts.notes.store NoteController@store [api]',
+    'GET /api/admin/notes/{note} notes.show NoteController@show [api]',
+    'GET /api/cats/{cat} cats.show CatController@show [api]',
+    'GET /api/dogs/{dog} dogs.show UserController@show [api]',
+    'GET /api/badges badges.index BadgeController@index [api]',
+    'POST /api/badges badges.store BadgeController@store [api]',
+    'GET /api/badges/{badge} badges.show BadgeController@show [api]',
+    'PUT /api/badges/{badge} badges.update BadgeController@update [api]',
+    'PATCH /api/badges/{badge} badges.update BadgeController@update [api]',
+    'DELETE /api/badges/{badge} badges.destroy BadgeController@destroy [api]',
+    'GET /api/items items.index ItemController@index [api]',
+    'GET /api/items/create items.create ItemController@create [api]',
+    'GET /api/tags tags.all TagController@index [api,auth]',
+    'GET /api/closure closure.show Closure [api,auth,verified]',
+    'GET /api/callable - UserController@show [api,throttle]',
+    'GET /api/admin/home admin.home AdminController@home [api]',
+    'GET /api/admin/bare admin. AdminController@bare [api]',
+    'GET /api/admin/reports/daily admin.reports.daily ReportController@daily [api]',
+    'GET /api/admin/reports/exports admin.reports.exports.index ExportController@index [api]',
+    'GET /api/admin/users admin.users AdminController@users [api]',
+    'GET /api/after after AfterController@index [api]',
+  ];
+  const line = (r: RouteView) =>
+    `${r.method} ${r.path} ${r.name ?? '-'} ${r.handlerSymbol?.split('\\').pop() ?? 'Closure'} [${r.middlewares.join(',')}]`;
+
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'routes/api.php': [
+        '<?php',
+        'use App\\Http\\Controllers\\PhotoController;',
+        'use App\\Http\\Controllers\\UserController;',
+        'use Illuminate\\Support\\Facades\\Route;',
+        '',
+        // Third-argument options (array and array()) and chained options.
+        "Route::resource('photos', PhotoController::class, ['only' => ['index', 'show'], 'parameters' => ['photos' => 'picture'], 'names' => ['index' => 'gallery'], 'middleware' => 'auth']);",
+        "Route::apiResource('videos', 'VideoController', array('except' => ['destroy', 'update'], 'as' => 'media'));",
+        "Route::resource('albums', 'AlbumController')->only('show')->names('records');",
+        // Nested (parameters apply to the parent segment too) and prefixed shallow nesting.
+        "Route::resource('photos.comments', 'CommentController')->parameters(['photos' => 'pic'])->except(['create', 'edit']);",
+        "Route::resource('admin/posts.notes', 'NoteController')->shallow()->only(['index', 'store', 'show']);",
+        // Plural registration with shared options.
+        "Route::resources(['cats' => 'CatController', 'dogs' => UserController::class], ['only' => ['show']]);",
+        "Route::apiResources(['badges' => 'BadgeController']);",
+        // apiResource()->only() replaces the API default, and a chained prefix never reaches a resource.
+        "Route::apiResource('items', 'ItemController')->only(['index', 'create']);",
+        "Route::prefix('ignored')->middleware('auth')->resource('tags', 'TagController')->only(['index'])->name('index', 'tags.all');",
+        // Array handlers without `uses`.
+        "Route::get('closure', ['as' => 'closure.', 'middleware' => ['auth', 'verified'], function () { return 1; }])->name('show');",
+        "Route::get('callable', ['middleware' => 'throttle', [UserController::class, 'show']]);",
+        // Group name prefixes: chained, array `as`, nested, on resources and across a require mount.
+        "Route::name('admin.')->prefix('admin')->group(function () {",
+        "    Route::get('home', 'AdminController@home')->name('home');",
+        "    Route::get('bare', 'AdminController@bare');",
+        "    Route::group(['as' => 'reports.', 'prefix' => 'reports'], function () {",
+        "        Route::get('daily', ['as' => 'daily', 'uses' => 'ReportController@daily']);",
+        "        Route::resource('exports', 'ExportController')->only(['index']);",
+        '    });',
+        "    require __DIR__.'/api/admin.php';",
+        '});',
+        "Route::get('after', 'AfterController@index')->name('after');",
+      ].join('\n'),
+      'routes/api/admin.php': "<?php\nRoute::get('users', 'AdminController@users')->name('users');\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    routes = JSON.parse(mapx(root, 'routes', root, '--json'));
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it("reports exactly Laravel's route list: URIs, parameters, handlers, names and middleware", () => {
+    expect(routes.map(line).sort()).toEqual([...EXPECTED].sort());
+  });
+
+  it('resolves resources and array handlers to fully-qualified controllers', () => {
+    const fqn = (path: string) => routes.filter((r) => r.path === path).map((r) => r.handlerSymbol);
+    expect(fqn('/api/dogs/{dog}')).toEqual(['App\\Http\\Controllers\\UserController@show']);
+    expect(fqn('/api/callable')).toEqual(['App\\Http\\Controllers\\UserController@show']);
+    expect(fqn('/api/cats/{cat}')).toEqual(['App\\Http\\Controllers\\CatController@show']);
+  });
+});
+
 // Review 2026-10-31: the M1-08 test seeded frameworks.json and used artisan, so detection from
 // composer.json alone was never exercised.
 describe('M1-08: a nested Laravel app found from composer.json alone', () => {

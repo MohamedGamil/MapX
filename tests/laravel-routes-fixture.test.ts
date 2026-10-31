@@ -33,7 +33,9 @@ describe('Laravel route fixture labels', () => {
       // M1-03-R1: lexing (strings, comments, heredocs), brace-less groups, interpolation, provider reachability.
       'string-lexing', 'not-a-route', 'braceless-group', 'legacy-group-mount', 'interpolated-path', 'rsp-mount', 'rsp-unmounted',
       // M1-07-R1: evaluated mount forms, brace-less conditionals, commented-out withRouting.
-      'then-mount', 'glob-mount', 'separator-mount', 'module-path', 'braceless-if', 'unmounted-entry'])
+      'then-mount', 'glob-mount', 'separator-mount', 'module-path', 'braceless-if', 'unmounted-entry',
+      // M1-05-R1: resource options arrays, nesting and shallow, Route::resources, action arrays without `uses`.
+      'resource-options', 'resource-excluded', 'nested-resource', 'nested-wrong', 'resources-array', 'action-array'])
       expect(patterns, p).toContain(p);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
     for (const l of labels) {

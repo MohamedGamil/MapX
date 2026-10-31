@@ -609,6 +609,174 @@
       "uri": "commented-entry",
       "handler": "HomeController@commentedEntry",
       "expect": "unreachable"
+    },
+    {
+      "id": "L77",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/photos",
+      "handler": "PhotoController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L78",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/photos/{picture}",
+      "handler": "PhotoController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L79",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/videos",
+      "handler": "VideoController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L80",
+      "pattern": "resource-options",
+      "method": "POST",
+      "uri": "api/videos",
+      "handler": "VideoController@store",
+      "expect": "live"
+    },
+    {
+      "id": "L81",
+      "pattern": "resource-options",
+      "method": "GET",
+      "uri": "api/videos/{video}",
+      "handler": "VideoController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L82",
+      "pattern": "resource-excluded",
+      "method": "GET",
+      "uri": "api/photos/create",
+      "handler": "PhotoController@create",
+      "expect": "absent"
+    },
+    {
+      "id": "L83",
+      "pattern": "resource-excluded",
+      "method": "POST",
+      "uri": "api/photos",
+      "handler": "PhotoController@store",
+      "expect": "absent"
+    },
+    {
+      "id": "L84",
+      "pattern": "resource-excluded",
+      "method": "PUT",
+      "uri": "api/videos/{video}",
+      "handler": "VideoController@update",
+      "expect": "absent"
+    },
+    {
+      "id": "L85",
+      "pattern": "resource-excluded",
+      "method": "DELETE",
+      "uri": "api/videos/{video}",
+      "handler": "VideoController@destroy",
+      "expect": "absent"
+    },
+    {
+      "id": "L86",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/albums/{album}/tracks",
+      "handler": "TrackController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L87",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/albums/{album}/tracks/{track}",
+      "handler": "TrackController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L88",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/albums/{album}/reviews",
+      "handler": "ReviewController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L89",
+      "pattern": "nested-resource",
+      "method": "GET",
+      "uri": "api/reviews/{review}",
+      "handler": "ReviewController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L90",
+      "pattern": "nested-wrong",
+      "method": "GET",
+      "uri": "api/albums.tracks",
+      "handler": "TrackController@index",
+      "expect": "absent"
+    },
+    {
+      "id": "L91",
+      "pattern": "nested-wrong",
+      "method": "GET",
+      "uri": "api/albums.reviews",
+      "handler": "ReviewController@index",
+      "expect": "absent"
+    },
+    {
+      "id": "L92",
+      "pattern": "nested-wrong",
+      "method": "GET",
+      "uri": "api/albums/{album}/reviews/{review}",
+      "handler": "ReviewController@show",
+      "expect": "absent"
+    },
+    {
+      "id": "L93",
+      "pattern": "resources-array",
+      "method": "GET",
+      "uri": "api/tickets",
+      "handler": "TicketController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L94",
+      "pattern": "resources-array",
+      "method": "GET",
+      "uri": "api/badges",
+      "handler": "BadgeController@index",
+      "expect": "live"
+    },
+    {
+      "id": "L95",
+      "pattern": "resources-array",
+      "method": "GET",
+      "uri": "api/coupons/{coupon}",
+      "handler": "CouponController@show",
+      "expect": "live"
+    },
+    {
+      "id": "L96",
+      "pattern": "action-array",
+      "method": "GET",
+      "uri": "api/guarded",
+      "handler": "HomeController@guarded",
+      "expect": "live"
+    },
+    {
+      "id": "L97",
+      "pattern": "action-array",
+      "method": "GET",
+      "uri": "api/named-closure",
+      "handler": null,
+      "expect": "live"
     }
   ]
 }

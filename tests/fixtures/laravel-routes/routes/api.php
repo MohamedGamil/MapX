@@ -100,3 +100,15 @@ Route::prefix('extra')->group(function () {
 require __DIR__ . DIRECTORY_SEPARATOR . 'api' . DIRECTORY_SEPARATOR . 'separator.php';
 if (env('LEGACY_EXPORTS')) require __DIR__.'/api/exports.php';
 Route::get('after-exports', [HomeController::class, 'afterExports']);
+
+// M1-05-R1: resource options arrays, nested and plural registration, action arrays without `uses`.
+Route::resource('photos', PhotoController::class, ['only' => ['index', 'show'], 'parameters' => ['photos' => 'picture']]);
+Route::apiResource('videos', VideoController::class, ['except' => ['update', 'destroy']]);
+Route::apiResource('albums.tracks', TrackController::class)->only(['index', 'show']);
+Route::resource('albums.reviews', ReviewController::class)->shallow()->only(['index', 'show']);
+Route::resources(['tickets' => TicketController::class, 'badges' => 'BadgeController'], ['only' => ['index']]);
+Route::apiResources(['coupons' => CouponController::class], ['only' => ['show']]);
+Route::get('guarded', ['middleware' => 'auth', [HomeController::class, 'guarded']]);
+Route::get('named-closure', ['as' => 'named', function () {
+    return ['ok' => true];
+}]);

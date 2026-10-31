@@ -61,6 +61,8 @@ interface RouteMount {
   controller: string | null;
   /** Route::domain() / 'domain' => of the enclosing groups, when any. */
   domain?: string | null;
+  /** Route name prefixes of the enclosing groups (`->name('admin.')`, `'as' => 'admin.'`). */
+  names?: string[];
   /** Registration order: compare lexicographically; later wins for duplicate method + URI. */
   order: number[];
   conditional: boolean;
@@ -1200,10 +1202,11 @@ function pathArg(raw: string, scope: PhpScope): string {
   return phpString(raw, scope, DYNAMIC) ?? DYNAMIC;
 }
 
-function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], namespaces: string[], domain: string | null } {
+function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], namespaces: string[], domain: string | null, names: string[] } {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
   const namespaces: string[] = [];
+  const names: string[] = [];
   let domain: string | null = null;
 
   const trimmed = argsStr.trim();
@@ -1215,14 +1218,20 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
     const paren = getParenthesizedContent(trimmed, 5);
     if (paren) arrayContent = paren.content;
   } else {
-    return { prefixes, middlewares, namespaces, domain };
+    return { prefixes, middlewares, namespaces, domain, names };
   }
 
   if (arrayContent) {
-    // 1. Extract prefix and domain, evaluated like a URI (literals, concatenation, variables, interpolation)
+    // 1. Extract prefix and domain, evaluated like a URI (literals, concatenation, variables,
+    // interpolation), and the route name prefix ('as').
     for (const entry of parseArgs(arrayContent, true)) {
-      const m = entry.match(/^(['"])(prefix|domain)\1\s*=>\s*([\s\S]+)$/);
+      const m = entry.match(/^(['"])(prefix|domain|as)\1\s*=>\s*([\s\S]+)$/);
       if (!m) continue;
+      if (m[2] === 'as') {
+        const name = phpString(m[3]!.trim(), scope);
+        if (name) names.push(name);
+        continue;
+      }
       const value = pathArg(m[3]!.trim(), scope);
       if (m[2] === 'domain') domain = value || null;
       else if (value) prefixes.push(value);
@@ -1259,22 +1268,65 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
     }
   }
 
-  return { prefixes, middlewares, namespaces, domain };
+  return { prefixes, middlewares, namespaces, domain, names };
 }
 
-function parseResourceDict(argsStr: string): Record<string, string> {
-  const dict: Record<string, string> = {};
-  const matches = argsStr.matchAll(/['"]([^'"]+)['"]\s*=>\s*([a-zA-Z0-9_\\]+)/g);
-  for (const match of matches) {
-    dict[match[1]] = match[2];
+/**
+ * Entries of a PHP array literal (`[...]` or `array(...)`): `key => value` pairs with a string
+ * key, and positional values with key null. Null when the argument is not an array literal.
+ */
+function phpArrayEntries(arg: string | undefined): { key: string | null; value: string }[] | null {
+  const t = arg?.trim() ?? '';
+  const inner = t.startsWith('[') && t.endsWith(']') ? t.slice(1, -1)
+    : /^array\s*\(/i.test(t) && t.endsWith(')') ? t.slice(t.indexOf('(') + 1, -1)
+    : null;
+  if (inner === null) return null;
+  return parseArgs(inner, true).map(entry => {
+    const m = entry.match(/^(['"])((?:\\.|(?!\1).)*)\1\s*=>\s*([\s\S]*)$/);
+    return m ? { key: m[2]!, value: m[3]!.trim() } : { key: null, value: entry };
+  });
+}
+
+/** A `['key' => 'value', ...]` array of strings. */
+function stringMap(arg: string, scope: PhpScope): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const { key, value } of phpArrayEntries(arg) ?? []) {
+    const v = key === null ? null : phpString(value, scope);
+    if (key !== null && v !== null) map[key] = v;
   }
-  return dict;
+  return map;
 }
 
+/** A controller argument: `Foo::class` or a string class name. */
+function classArg(arg: string, scope: PhpScope): string | null {
+  return arg.trim().match(/^\\?([\w\\]+)::class$/)?.[1] ?? phpString(arg, scope);
+}
+
+/** Options of a resource registration: the options array and PendingResourceRegistration calls. */
 interface ResourceOptions {
   only?: string[];
   except?: string[];
   parameters?: Record<string, string>;
+  /** `names` option: one base name for every action, or a name per action. */
+  names?: string | Record<string, string>;
+  /** `as` option: a name prefix joined with `.`. */
+  as?: string;
+  middleware?: string[];
+  shallow?: boolean;
+}
+
+/** The options array of `Route::resource($name, $controller, $options)` and `Route::resources($map, $options)`. */
+function parseResourceOptions(arg: string | undefined, scope: PhpScope): ResourceOptions {
+  const options: ResourceOptions = {};
+  for (const { key, value } of phpArrayEntries(arg) ?? []) {
+    if (key === 'only' || key === 'except') options[key] = listArg(value);
+    else if (key === 'parameters') options.parameters = stringMap(value, scope);
+    else if (key === 'names') options.names = phpArrayEntries(value) ? stringMap(value, scope) : phpString(value, scope) ?? undefined;
+    else if (key === 'as') options.as = phpString(value, scope) ?? undefined;
+    else if (key === 'middleware') options.middleware = listArg(value);
+    else if (key === 'shallow') options.shallow = /^true$/i.test(value);
+  }
+  return options;
 }
 
 /**
@@ -1304,44 +1356,64 @@ function getResourceParam(resourceName: string): string {
   return resourceParam(resourceName);
 }
 
+const API_RESOURCE_ACTIONS = ['index', 'store', 'show', 'update', 'destroy'];
+
+/**
+ * The routes of one resource registration, following Laravel's ResourceRegistrar: everything
+ * before the last `/` is a URI prefix; `a.b` nests `b` under `a/{a}`; every segment's wildcard is
+ * its `parameters` entry or its singular; `shallow` drops the parents from member routes; route
+ * names are `[as.]<name>.<action>` unless `names` overrides them, behind the group name prefix.
+ * MapX keeps `update` as two routes (PUT and PATCH) where Laravel registers one PUT|PATCH route.
+ */
 function expandResourceRoute(
   frameworkName: string,
   resourceName: string,
   controllerName: string,
   resolvedFile: string,
   fullPrefixes: string[],
-  fullMiddlewares: string[],
+  groupMiddlewares: string[],
   isApi: boolean,
-  options: ResourceOptions = {}
+  options: ResourceOptions = {},
+  namePrefix = '',
 ): RouteBinding[] {
-  const lastSegment = resourceName.split(/[./]/).filter(Boolean).pop() ?? '';
-  const param = options.parameters?.[lastSegment] ?? options.parameters?.[resourceName] ?? getResourceParam(resourceName);
-  const cleanPrefixes = fullPrefixes.map(p => p.replace(/^\/|\/$/g, '')).filter(Boolean);
-  const cleanUri = resourceName.replace(/^\/|\/$/g, '');
-  const basePath = '/' + [...cleanPrefixes, cleanUri].join('/');
+  const clean = resourceName.replace(/^\/+|\/+$/g, '');
+  const name = clean.slice(clean.lastIndexOf('/') + 1);
+  const uriPrefix = clean.slice(0, Math.max(0, clean.lastIndexOf('/')));
+  const wildcard = (segment: string) => (options.parameters?.[segment] ?? getResourceParam(segment)).replace(/-/g, '_');
+  // getResourceUri: each segment followed by its wildcard, minus the last segment's wildcard.
+  const resourceUri = (n: string) => {
+    const segments = n.split('.');
+    if (segments.length === 1) return n;
+    return segments.map(s => `${s}/{${wildcard(s)}}`).join('/').split(`/{${wildcard(segments[segments.length - 1]!)}}`).join('');
+  };
+  const param = wildcard(name.split('.').pop()!);
+  const memberName = options.shallow ? name.split('.').pop()! : name;
+  const cleanPrefixes = [...fullPrefixes, uriPrefix].map(p => p.replace(/^\/|\/$/g, '')).filter(Boolean);
+  const routeName = (n: string, action: string) => {
+    if (typeof options.names === 'object' && options.names[action]) return namePrefix + options.names[action];
+    const base = typeof options.names === 'string' ? options.names : n;
+    return namePrefix + `${options.as ? `${options.as}.` : ''}${base}.${action}`.replace(/^\.+|\.+$/g, '');
+  };
+  // apiResource() is resource() with `only` defaulting to the API actions minus `except`.
+  const only = options.only ?? (isApi ? API_RESOURCE_ACTIONS.filter(a => !options.except?.includes(a)) : undefined);
+  const middlewares = [...groupMiddlewares, ...(options.middleware ?? [])];
 
-  const routesDefs = isApi ? [
-    { method: 'GET', pathSuffix: '', action: 'index' },
-    { method: 'POST', pathSuffix: '', action: 'store' },
-    { method: 'GET', pathSuffix: `/{${param}}`, action: 'show' },
-    { method: 'PUT', pathSuffix: `/{${param}}`, action: 'update' },
-    { method: 'PATCH', pathSuffix: `/{${param}}`, action: 'update' },
-    { method: 'DELETE', pathSuffix: `/{${param}}`, action: 'destroy' }
-  ] : [
-    { method: 'GET', pathSuffix: '', action: 'index' },
-    { method: 'GET', pathSuffix: '/create', action: 'create' },
-    { method: 'POST', pathSuffix: '', action: 'store' },
-    { method: 'GET', pathSuffix: `/{${param}}`, action: 'show' },
-    { method: 'GET', pathSuffix: `/{${param}}/edit`, action: 'edit' },
-    { method: 'PUT', pathSuffix: `/{${param}}`, action: 'update' },
-    { method: 'PATCH', pathSuffix: `/{${param}}`, action: 'update' },
-    { method: 'DELETE', pathSuffix: `/{${param}}`, action: 'destroy' }
+  const routesDefs = [
+    { method: 'GET', pathSuffix: '', action: 'index', member: false },
+    { method: 'GET', pathSuffix: '/create', action: 'create', member: false },
+    { method: 'POST', pathSuffix: '', action: 'store', member: false },
+    { method: 'GET', pathSuffix: `/{${param}}`, action: 'show', member: true },
+    { method: 'GET', pathSuffix: `/{${param}}/edit`, action: 'edit', member: true },
+    { method: 'PUT', pathSuffix: `/{${param}}`, action: 'update', member: true },
+    { method: 'PATCH', pathSuffix: `/{${param}}`, action: 'update', member: true },
+    { method: 'DELETE', pathSuffix: `/{${param}}`, action: 'destroy', member: true },
   ];
 
   return routesDefs
-    .filter(def => (!options.only || options.only.includes(def.action)) && !options.except?.includes(def.action))
+    .filter(def => (!only || only.includes(def.action)) && !options.except?.includes(def.action))
     .map(def => {
-    const fullPath = (basePath + def.pathSuffix).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+    const n = def.member ? memberName : name;
+    const fullPath = ('/' + [...cleanPrefixes, resourceUri(n)].join('/') + def.pathSuffix).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
     return {
       framework: frameworkName,
       method: def.method,
@@ -1351,7 +1423,8 @@ function expandResourceRoute(
       metadata: {
         confidence: 'inferred',
         resourceType: isApi ? 'apiResource' : 'resource',
-        middlewares: fullMiddlewares,
+        middlewares,
+        name: routeName(n, def.action),
       }
     };
   });
@@ -1600,12 +1673,18 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
   const namespaces: string[] = [];
+  const names: string[] = [];
   let controller: string | null = null;
   let domain: string | null = null;
   for (const call of calls) {
     if (call.name === 'prefix') {
       const a = parseArgs(call.args, true)[0];
       if (a) prefixes.push(pathArg(a, scope));
+    } else if (call.name === 'name' || call.name === 'as') {
+      // A RouteRegistrar attribute: the last one wins.
+      const a = parseArgs(call.args, true)[0];
+      const name = a ? phpString(a, scope) : null;
+      if (name !== null) names.splice(0, names.length, name);
     } else if (call.name === 'domain') {
       const a = parseArgs(call.args, true)[0];
       if (a) domain = pathArg(a, scope);
@@ -1622,16 +1701,17 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
       prefixes.push(...attrs.prefixes);
       middlewares.push(...attrs.middlewares);
       namespaces.push(...attrs.namespaces);
+      names.push(...attrs.names);
       domain = attrs.domain ?? domain;
     }
   }
-  return { prefixes, middlewares, namespaces, controller, domain };
+  return { prefixes, middlewares, namespaces, controller, domain, names };
 }
 
 /** A string or array-of-strings argument, e.g. 'auth' or ['auth', 'verified']. */
 function listArg(args: string): string[] {
   const trimmed = args.trim();
-  if (trimmed.startsWith('[')) return (trimmed.match(/['"]([^'"]+)['"]/g) || []).map(m => m.replace(/['"]/g, ''));
+  if (/^(\[|array\s*\()/i.test(trimmed)) return (trimmed.match(/['"]([^'"]+)['"]/g) || []).map(m => m.replace(/['"]/g, ''));
   const a = parseArgs(trimmed)[0];
   return a ? [a] : [];
 }
@@ -1664,6 +1744,18 @@ function unwrapParens(expr: string): string {
   return e;
 }
 
+/** One open route group while walking a file; `end` is where its group(...) call closes. */
+interface GroupFrame {
+  prefixes: string[];
+  middlewares: string[];
+  namespaces: string[];
+  /** Route name prefixes, concatenated outermost first. */
+  names: string[];
+  controller: string | null;
+  domain?: string | null;
+  end: number;
+}
+
 /**
  * Walks a PHP file that declares routes. Tracks the group stack and conditional blocks, and
  * reports routes (when collectRoutes) and mounts: require/include of a file, `->group(<path>)`,
@@ -1692,10 +1784,11 @@ function walkRouteFile(
   const useImports = parseUseImports(text);
   const scopeAt = (index: number): PhpScope => ({ dir, root: options.root, vars: varsAt(assignments, index) });
   const conditionalBraces: boolean[] = [];
-  const groupStack: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; domain?: string | null; end: number }[] = [{
+  const groupStack: GroupFrame[] = [{
     prefixes: frame.prefixes,
     middlewares: frame.middlewares,
     namespaces: frame.namespaces,
+    names: frame.names ?? [],
     controller: frame.controller,
     domain: frame.domain ?? null,
     end: Infinity,
@@ -1707,6 +1800,7 @@ function walkRouteFile(
     prefixes: groupStack.flatMap(g => g.prefixes),
     middlewares: groupStack.flatMap(g => g.middlewares),
     namespaces: groupStack.flatMap(g => g.namespaces),
+    names: groupStack.flatMap(g => g.names),
     controller: [...groupStack].reverse().find(g => g.controller)?.controller ?? null,
     domain: [...groupStack].reverse().find(g => g.domain)?.domain ?? null,
   });
@@ -1722,7 +1816,7 @@ function walkRouteFile(
     const end = closed > 0 ? closed : code.length;
     globLoops.push({ variable: loop[2]!, pattern: parseArgs(loop[1]!, true)[0] ?? '', at: m.index!, start: head.endIndex, end });
   }
-  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; domain?: string | null } = { prefixes: [], middlewares: [], namespaces: [], controller: null }) => {
+  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; domain?: string | null; names?: string[] } = { prefixes: [], middlewares: [], namespaces: [], controller: null }) => {
     const base = current();
     const push = (file: string, sub?: number) => mounts.push({
       file: normalizeMountPath(file),
@@ -1730,6 +1824,7 @@ function walkRouteFile(
         prefixes: [...base.prefixes, ...extra.prefixes],
         middlewares: [...base.middlewares, ...extra.middlewares],
         namespaces: [...base.namespaces, ...extra.namespaces],
+        names: [...base.names, ...(extra.names ?? [])],
         controller: extra.controller ?? base.controller,
         domain: extra.domain ?? base.domain,
         conditional: inConditional() || bracelessIf(index),
@@ -1808,7 +1903,6 @@ function walkRouteFile(
         vars: scope.vars,
         scope: { dir, root: options.root },
       });
-      const name = parsed.calls.find(c => c.name === 'name');
       const line = lineAt(content, i);
       for (const r of routes.slice(before)) {
         r.line = line;
@@ -1816,7 +1910,6 @@ function walkRouteFile(
         meta.line = line;
         meta.order = [i];
         if (inConditional() || bracelessIf(i)) meta.conditional = true;
-        if (name && !meta.resourceType) meta.name = parseArgs(name.args)[0];
       }
       i = parsed.endIndex - 1;
     }
@@ -1840,27 +1933,52 @@ function processRouteChain(
   const scope: PhpScope = { ...extra.scope, vars: extra.vars };
   let verb: string | null = null;
   let uriExpr: string | null = null;
-  let routeName: string | undefined;
   const resourceOptions: ResourceOptions = {};
+  /** Raw arguments of the verb call (resource options and Route::resources dictionaries). */
+  let verbArgs: string[] = [];
   let uri: string | null = null;
   let handlerStr: string | null = null;
   let chainController: string | null = null;
   const chainPrefixes: string[] = [];
   const chainMiddlewares: string[] = [];
   const chainNamespaces: string[] = [];
+  /** Name prefixes of a group opened by this chain. */
+  const chainNames: string[] = [];
+  /** `->name()` / `->as()` before the verb (a RouteRegistrar attribute; the last one wins) and after it (appended). */
+  let nameAttribute: string | undefined;
+  const nameSuffixes: string[] = [];
   let chainDomain: string | null = null;
   let isGroup = false;
+  const isResourceVerb = () => ['RESOURCE', 'APIRESOURCE', 'RESOURCES', 'APIRESOURCES'].includes(verb ?? '');
 
   for (const call of calls) {
     if (call.name === 'group') {
       isGroup = true;
+      if (nameAttribute !== undefined) chainNames.push(nameAttribute);
       if (call.args) {
         const groupAttrs = parseGroupAttributes(call.args, scope);
         chainPrefixes.push(...groupAttrs.prefixes);
         chainMiddlewares.push(...groupAttrs.middlewares);
         chainNamespaces.push(...groupAttrs.namespaces);
+        chainNames.push(...groupAttrs.names);
         chainDomain = groupAttrs.domain ?? chainDomain;
       }
+    } else if (call.name === 'name' || call.name === 'as') {
+      const raw = parseArgs(call.args, true);
+      if (isResourceVerb() && raw.length > 1) {
+        // PendingResourceRegistration::name($method, $name)
+        const name = phpString(raw[1]!, scope);
+        if (name !== null) resourceOptions.names = { ...(typeof resourceOptions.names === 'object' ? resourceOptions.names : {}), [cleanQuotes(raw[0]!)]: name };
+      } else {
+        const name = raw[0] ? phpString(raw[0], scope) : null;
+        if (name !== null && verb) nameSuffixes.push(name);
+        else if (name !== null) nameAttribute = name;
+      }
+    } else if (call.name === 'names') {
+      const raw = parseArgs(call.args, true)[0] ?? '';
+      resourceOptions.names = phpArrayEntries(raw) ? stringMap(raw, scope) : phpString(raw, scope) ?? undefined;
+    } else if (call.name === 'shallow') {
+      resourceOptions.shallow = !/^\s*false\s*$/i.test(call.args);
     } else if (call.name === 'domain') {
       const raw = parseArgs(call.args, true)[0];
       if (raw) chainDomain = pathArg(raw, scope);
@@ -1875,9 +1993,19 @@ function processRouteChain(
     } else if (['get', 'post', 'put', 'patch', 'delete', 'options', 'any', 'resource', 'apiResource', 'resources', 'apiResources'].includes(call.name)) {
       verb = call.name.toUpperCase();
       const args = parseArgs(call.args);
-      uriExpr = parseArgs(call.args, true)[0] || null;
+      verbArgs = parseArgs(call.args, true);
+      uriExpr = verbArgs[0] || null;
       uri = args[0] || null;
       handlerStr = args[1] || null;
+      if (isResourceVerb()) {
+        const plural = verb.endsWith('S');
+        Object.assign(resourceOptions, parseResourceOptions(verbArgs[plural ? 1 : 2], scope));
+        // Attributes set before the verb (`Route::name('x')->resource(...)`) win over the options
+        // array: RouteRegistrar passes `$this->attributes + $options`. Prefix, namespace and
+        // domain attributes are not resource options, so Laravel ignores them.
+        if (nameAttribute !== undefined) resourceOptions.as = nameAttribute;
+        if (chainMiddlewares.length) resourceOptions.middleware = [...chainMiddlewares];
+      }
     } else if (call.name === 'match') {
       const args = parseArgs(call.args);
       const verbsRaw = args[0] || '';
@@ -1907,22 +2035,17 @@ function processRouteChain(
       const raw = parseArgs(call.args, true)[0];
       if (raw) chainPrefixes.push(pathArg(raw, scope));
     } else if (call.name === 'middleware') {
-      if (call.args.trim().startsWith('[')) {
-        const matches = call.args.match(/['"]([^'"]+)['"]/g) || [];
-        chainMiddlewares.push(...matches.map(m => m.replace(/['"]/g, '')));
-      } else {
-        const args = parseArgs(call.args);
-        if (args[0]) chainMiddlewares.push(args[0]);
-      }
+      const list = listArg(call.args);
+      chainMiddlewares.push(...list);
+      // PendingResourceRegistration::middleware() replaces the resource's middleware option.
+      if (isResourceVerb()) resourceOptions.middleware = list;
     } else if (call.name === 'namespace') {
       const args = parseArgs(call.args);
       if (args[0]) chainNamespaces.push(args[0]);
     } else if (call.name === 'only' || call.name === 'except') {
       resourceOptions[call.name] = listArg(call.args);
     } else if (call.name === 'parameters') {
-      resourceOptions.parameters = Object.fromEntries(
-        [...call.args.matchAll(/['"]([^'"]+)['"]\s*=>\s*['"]([^'"]+)['"]/g)].map(m => [m[1]!, m[2]!]),
-      );
+      resourceOptions.parameters = stringMap(parseArgs(call.args, true)[0] ?? '', scope);
     } else if (call.name === 'parameter') {
       const [res, param] = parseArgs(call.args);
       if (res && param) resourceOptions.parameters = { ...resourceOptions.parameters, [res]: param };
@@ -1933,23 +2056,36 @@ function processRouteChain(
   // Anything else becomes {dynamic}, never raw PHP text.
   if (uriExpr && verb !== 'ANY') uri = pathArg(uriExpr, scope);
 
-  // Array handlers: ['uses' => 'C@m', 'as' => 'name', 'middleware' => ...]
-  if (handlerStr && /^\s*(\[|array\()/.test(handlerStr) && /['"]uses['"]\s*=>/.test(handlerStr)) {
-    const uses = handlerStr.match(/['"]uses['"]\s*=>\s*(?:(['"])([^'"]+)\1|([\w\\]+)::class\s*\.\s*['"]@(\w+)['"])/);
-    if (uses) handlerStr = uses[2] ?? `${uses[3]}@${uses[4]}`;
-    const as = handlerStr.length && /['"]as['"]\s*=>/.test(calls.map(c => c.args).join(',')) ? calls.map(c => c.args).join(',').match(/['"]as['"]\s*=>\s*['"]([^'"]+)['"]/) : null;
-    if (as) routeName = as[1];
-    const mw = calls.map(c => c.args).join(',').match(/['"]middleware['"]\s*=>\s*(\[[^\]]*\]|['"][^'"]+['"])/);
-    if (mw) chainMiddlewares.push(...listArg(mw[1]!));
+  // Action arrays: ['as' => 'name', 'middleware' => ..., 'uses' => 'C@m'], or without `uses`, the
+  // first positional callable (Laravel's RouteAction::findCallable): a closure or [C::class, 'm'].
+  let actionName: string | undefined;
+  const actionMiddlewares: string[] = [];
+  const action = verb && !isResourceVerb() ? phpArrayEntries(handlerStr ?? undefined) : null;
+  if (action?.some(e => e.key !== null)) {
+    let uses: string | null = null;
+    let callable: string | null = null;
+    for (const { key, value } of action) {
+      if (key === 'uses') {
+        const concat = value.match(/^\\?([\w\\]+)::class\s*\.\s*['"]@(\w+)['"]$/);
+        uses = concat ? `${concat[1]}@${concat[2]}` : value.match(/^(['"])([^'"]+)\1$/)?.[2] ?? null;
+      } else if (key === 'as') actionName = phpString(value, scope) ?? undefined;
+      else if (key === 'middleware') actionMiddlewares.push(...listArg(value));
+      else if (key === null && callable === null && /^(function\b|fn\b|static\b|\[)/.test(value)) callable = value;
+    }
+    handlerStr = uses ?? callable;
   }
 
   const groupPrefixes = groupStack.flatMap(g => g.prefixes);
   const groupMiddlewares = groupStack.flatMap(g => g.middlewares);
   const groupNamespaces = groupStack.flatMap(g => g.namespaces);
+  const groupNames: string = groupStack.flatMap(g => g.names ?? []).join('');
 
   const fullPrefixes = [...groupPrefixes, ...chainPrefixes];
-  const fullMiddlewares = [...groupMiddlewares, ...chainMiddlewares];
+  const fullMiddlewares = [...groupMiddlewares, ...actionMiddlewares, ...chainMiddlewares];
   const fullNamespaces = [...groupNamespaces, ...chainNamespaces];
+  // Laravel's route name: group prefixes, then the action's `as` (or a `->name()` attribute set
+  // before the verb), then every `->name()` after it. A named group names even unnamed routes.
+  const routeName = groupNames + (actionName ?? nameAttribute ?? '') + nameSuffixes.join('') || undefined;
 
   if (isGroup) {
     const parentController = groupStack.length > 0 ? groupStack[groupStack.length - 1].controller : null;
@@ -1959,6 +2095,7 @@ function processRouteChain(
       prefixes: chainPrefixes,
       middlewares: chainMiddlewares,
       namespaces: chainNamespaces,
+      names: chainNames,
       controller: activeController,
       domain: chainDomain,
       end: groupEnd
@@ -1968,7 +2105,7 @@ function processRouteChain(
     let controllerClass: string | null = null;
     let controllerMethod: string | null = null;
 
-    if (['RESOURCE', 'APIRESOURCE', 'RESOURCES', 'APIRESOURCES'].includes(verb)) {
+    if (isResourceVerb()) {
       if (handlerStr) {
         const classMatch = handlerStr.match(/([a-zA-Z0-9_\\]+)(?:::class)?/);
         if (classMatch) {
@@ -1989,58 +2126,31 @@ function processRouteChain(
           controllerClass = strMatch[1];
           controllerMethod = strMatch[2];
         }
-      } else if (activeController && !handlerStr.startsWith('function') && !handlerStr.startsWith('fn')) {
+      } else if (activeController && !/^(function|fn|static)\b/.test(handlerStr)) {
         // Route::controller -> short method handler mapping
         controllerClass = activeController;
         controllerMethod = handlerStr.replace(/['"]/g, '').trim();
       }
     }
 
-    if (['RESOURCE', 'APIRESOURCE', 'RESOURCES', 'APIRESOURCES'].includes(verb)) {
-      if (controllerClass) {
- let resolvedFile = filePath;
-        const fqn = controllerFqn(controllerClass, useImports, fullNamespaces);
-        
-        const resolvedPath = ctx.resolveSymbolToFile(fqn);
-        if (resolvedPath) {
-          resolvedFile = resolvedPath;
-        }
-
-        if (verb === 'RESOURCE' || verb === 'APIRESOURCE') {
-          const expanded = expandResourceRoute(
-            frameworkName,
-            uri,
-            controllerFqn(controllerClass, useImports, fullNamespaces),
-            resolvedFile,
-            fullPrefixes,
-            fullMiddlewares,
-            verb === 'APIRESOURCE',
-            resourceOptions
-          );
-          routes.push(...expanded);
-        } else {
-          // RESOURCES / APIRESOURCES array dictionary
-          const resourcesCall = calls.find(c => ['resources', 'apiresources'].includes(c.name.toLowerCase()));
-          const dict = resourcesCall ? parseResourceDict(resourcesCall.args) : {};
-          for (const [resName, ctrlName] of Object.entries(dict)) {
-            let resolvedResFile = filePath;
-            const resFqn = controllerFqn(ctrlName, useImports, fullNamespaces);
-            const resolvedPath = ctx.resolveSymbolToFile(resFqn);
-            if (resolvedPath) {
-              resolvedResFile = resolvedPath;
-            }
-
-            const expanded = expandResourceRoute(
-              frameworkName,
-              resName,
-              controllerFqn(ctrlName, useImports, fullNamespaces),
-              resolvedResFile,
-              fullPrefixes,
-              fullMiddlewares,
-              verb === 'APIRESOURCES'
-            );
-            routes.push(...expanded);
-          }
+    if (isResourceVerb()) {
+      // Resources take only the enclosing groups' prefix, namespace and middleware: attributes
+      // chained before the verb are passed as options, and only `as` and `middleware` count.
+      const register = (resName: string, ctrl: string, declared: boolean) => {
+        const fqn = controllerFqn(ctrl, useImports, groupNamespaces);
+        const expanded = expandResourceRoute(frameworkName, resName, fqn, ctx.resolveSymbolToFile(fqn) ?? filePath,
+          groupPrefixes, groupMiddlewares, verb!.startsWith('APIRESOURCE'), resourceOptions, groupNames);
+        if (declared) for (const r of expanded) r.metadata!.confidence = 'declared';
+        routes.push(...expanded);
+      };
+      if (verb === 'RESOURCE' || verb === 'APIRESOURCE') {
+        if (controllerClass) register(uri, controllerClass, false);
+      } else {
+        // Route::resources([...]) / apiResources([...]): one resource per `name => controller`,
+        // all sharing the options array.
+        for (const { key, value } of phpArrayEntries(verbArgs[0]) ?? []) {
+          const ctrl = classArg(value, scope);
+          if (key !== null && ctrl) register(phpString(`'${key}'`, scope) ?? key, ctrl, /::class$/.test(value));
         }
       }
     } else {
@@ -2072,10 +2182,12 @@ function processRouteChain(
     }
   }
   // Handlers given as Class::class (array form or resource controller) are declared, not inferred.
-  if (handlerStr && /::class\b/.test(handlerStr))
+  // (Route::resources() decides per controller above.)
+  if (handlerStr && /::class\b/.test(handlerStr) && verb !== 'RESOURCES' && verb !== 'APIRESOURCES')
     for (const r of routes.slice(routesBefore)) (r.metadata ??= {}).confidence = 'declared';
   // A {dynamic} URI part or prefix (from this chain, a group or the mount) flags the route.
-  const domain = chainDomain ?? [...groupStack].reverse().find(g => g.domain)?.domain ?? null;
+  // A domain chained before a resource is not a resource option, so Laravel ignores it.
+  const domain = (isResourceVerb() ? null : chainDomain) ?? [...groupStack].reverse().find(g => g.domain)?.domain ?? null;
   for (const r of routes.slice(routesBefore)) {
     if (r.path.split('/').includes(DYNAMIC)) (r.metadata ??= {}).dynamic = true;
     if (domain && !isGroup) (r.metadata ??= {}).domain = domain;

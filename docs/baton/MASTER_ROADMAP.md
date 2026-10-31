@@ -98,7 +98,7 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-99** Release (owner-initiated) — DEFERRED, P1, 2h; depends on nothing.
 - **M1-03-R1** Laravel route-file walker: string/comment-aware lexing and brace-less groups — DONE, P1, 10h; depends on M1-03, M1-06.
 - **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — DONE, P1, 8h; depends on M1-07, M1-04.
-- **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — IN_PROGRESS, P2, 4h; depends on M1-05.
+- **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — DONE, P2, 4h; depends on M1-05.
 
 ## M2 — Cross-language precision and HTTP pairing
 
