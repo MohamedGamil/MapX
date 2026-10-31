@@ -6,6 +6,10 @@ import {
 import { analyzeOptionsComponent } from '../src/parsers/languages/vue-options.js';
 import { VueParser } from '../src/parsers/languages/vue.js';
 import { getBuiltinLanguages } from '../src/languages/registry.js';
+import { changedRoutes, navigatesTo, type NavTarget, type StoredRoute } from '../src/parsers/languages/vue-navigation.js';
+import { execFileSync } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M3-02: Vue template pass (edge contract rules 1, 2, 4 and 5 in docs/baton/iterations/M3-01.md).
@@ -260,4 +264,247 @@ export default {
     expect(edges.filter((e) => /Unregistered|unused\.js|#refresh/.test(e))).toEqual([]);
     expect(query(root, `SELECT name, kind FROM symbols WHERE file_path = 'src/App.vue' AND kind = 'class'`)).toEqual([{ name: 'App', kind: 'class' }]);
   });
+});
+
+// M3-08: the global registry follows registration edits on sync, and is per manifest folder.
+describe('global registry on sync and per app (M3-08)', () => {
+  type Row = { source_file: string; source_symbol: string | null; target_file: string; target_symbol: string; edge_type: string };
+  const key = (e: Row) => `${e.source_file}#${e.source_symbol} -${e.edge_type}-> ${e.target_file}#${e.target_symbol}`;
+  const renders = (root: string) => query<Row>(root, `SELECT * FROM edges WHERE edge_type = 'render'`).map(key).sort();
+  const snapshot = (root: string) => query<Row>(root, 'SELECT * FROM edges').map(key).sort();
+  const ids = (root: string, file: string) => query<{ id: number }>(root, 'SELECT id FROM symbols WHERE file_path = ? ORDER BY id', file).map((r) => r.id);
+  const git = (root: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: root, stdio: 'pipe' });
+
+  const main = (userCard: boolean) => `import { createApp } from 'vue';
+import App from './App.vue';
+import BaseIcon from './components/BaseIcon.vue';
+${userCard ? "import UserCard from './components/UserCard.vue';\n" : ''}import { registerWidgets } from './plugins/widgets';
+
+const app = createApp(App);
+app.component('BaseIcon', BaseIcon);
+${userCard ? "app.component('UserCard', UserCard);\n" : ''}registerWidgets(app);
+app.mount('#app');
+`;
+
+  it.each([['without git', false], ['with git', true]])(
+    'adds and removes the render edges of unchanged components using the tag, as scan --force (%s)',
+    (_, useGit) => {
+      const root = workspace({
+        'package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^3.4.0' } }),
+        '.gitignore': '.mapx/\n',
+        'src/main.js': main(false),
+        'src/plugins/widgets.js': `export function registerWidgets(app) {
+  const modules = import.meta.glob('../widgets/*.vue', { eager: true });
+  for (const [path, mod] of Object.entries(modules)) app.component(path.split('/').pop().replace('.vue', ''), mod.default);
+}
+`,
+        'src/App.vue': '<template>\n  <div><base-icon /><user-card /><new-widget /></div>\n</template>\n',
+        'src/views/Other.vue': '<template>\n  <section><UserCard :id="1" /></section>\n</template>\n',
+        'src/views/Plain.vue': '<template>\n  <p>plain</p>\n</template>\n',
+        'src/components/BaseIcon.vue': '<template><i /></template>\n',
+        'src/components/UserCard.vue': '<template><div /></template>\n',
+        'src/widgets/OldWidget.vue': '<template><b /></template>\n',
+      }, useGit ? [''] : []);
+      // With git, each edit is committed: sync diffs against the last scanned commit.
+      const commit = () => { if (useGit) { git(root, 'add', '-A'); git(root, 'commit', '-qm', 'edit'); } };
+      const edit = (path: string, text: string) => { writeFileSync(join(root, path), text); commit(); };
+      try {
+        commit();
+        init(root);
+        mapx(root, 'scan', root);
+        expect(renders(root)).toEqual(['src/App.vue#App -render-> src/components/BaseIcon.vue#BaseIcon']);
+        const plain = ids(root, 'src/views/Plain.vue');
+        expect(plain).toHaveLength(1);
+
+        // Registration added in main.js only: both users gain the edge; Plain.vue is not re-parsed.
+        edit('src/main.js', main(true));
+        mapx(root, 'sync', root);
+        expect(renders(root)).toEqual([
+          'src/App.vue#App -render-> src/components/BaseIcon.vue#BaseIcon',
+          'src/App.vue#App -render-> src/components/UserCard.vue#UserCard',
+          'src/views/Other.vue#Other -render-> src/components/UserCard.vue#UserCard',
+        ]);
+        expect(ids(root, 'src/views/Plain.vue')).toEqual(plain);
+        let synced = snapshot(root);
+        mapx(root, 'scan', root, '--force');
+        expect(snapshot(root)).toEqual(synced);
+
+        // A .vue file added under an auto-registered folder: the component already using its tag.
+        edit('src/widgets/NewWidget.vue', '<template><em /></template>\n');
+        mapx(root, 'sync', root);
+        expect(renders(root)).toContain('src/App.vue#App -render-> src/widgets/NewWidget.vue#NewWidget');
+        synced = snapshot(root);
+        mapx(root, 'scan', root, '--force');
+        expect(snapshot(root)).toEqual(synced);
+
+        // Registration removed again: the edges go, as with a forced scan.
+        const before = ids(root, 'src/views/Plain.vue');
+        edit('src/main.js', main(false));
+        mapx(root, 'sync', root);
+        expect(renders(root)).toEqual([
+          'src/App.vue#App -render-> src/components/BaseIcon.vue#BaseIcon',
+          'src/App.vue#App -render-> src/widgets/NewWidget.vue#NewWidget',
+        ]);
+        expect(ids(root, 'src/views/Plain.vue')).toEqual(before);
+        synced = snapshot(root);
+        mapx(root, 'scan', root, '--force');
+        expect(snapshot(root)).toEqual(synced);
+      } finally {
+        cleanup(root);
+      }
+    },
+    180000,
+  );
+
+  const router = (renamed: boolean) => `import { createRouter, createWebHistory } from 'vue-router';
+import HomeView from '../views/HomeView.vue';
+import UserView from '../views/UserView.vue';
+import ProfileView from '../views/ProfileView.vue';
+
+const routes = [
+  { path: '/', name: 'home', component: HomeView },
+  { path: '/users/:id', name: '${renamed ? 'profile' : 'user'}', component: ${renamed ? 'ProfileView' : 'UserView'} },
+];
+
+export default createRouter({ history: createWebHistory(), routes });
+`;
+
+  it.each([['without git', false], ['with git', true]])(
+    'updates the navigate edges of unchanged callers when a route is renamed or re-targeted, as scan --force (%s)',
+    (_, useGit) => {
+      const root = workspace({
+        'package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^3.4.0', 'vue-router': '^4.3.0' } }),
+        '.gitignore': '.mapx/\n',
+        'src/router/index.js': router(false),
+        'src/components/Nav.vue': `<template>
+  <nav>
+    <router-link :to="{ name: 'profile' }">Profile</router-link>
+    <router-link to="/users/1">First user</router-link>
+    <router-link to="/">Home</router-link>
+  </nav>
+</template>
+`,
+        'src/components/Card.vue': `<template>
+  <div @click="open" />
+</template>
+
+<script>
+export default {
+  methods: {
+    open() { this.$router.push({ name: 'user', params: { id: 1 } }); },
+  },
+};
+</script>
+`,
+        'src/components/Plain.vue': '<template>\n  <p>plain</p>\n</template>\n',
+        // A store navigates too (M3-11); a module without navigation is not re-parsed.
+        'src/stores/session.js': "import router from '../router';\n\nexport function logout() {\n  router.push({ name: 'profile', params: { id: 1 } });\n}\n",
+        'src/utils/format.js': 'export function format(v) {\n  return String(v);\n}\n',
+        'src/views/HomeView.vue': '<template><main /></template>\n',
+        'src/views/UserView.vue': '<template><main /></template>\n',
+        'src/views/ProfileView.vue': '<template><main /></template>\n',
+      }, useGit ? [''] : []);
+      const navigates = () => query<Row>(root, `SELECT * FROM edges WHERE edge_type = 'navigate'`).map(key).sort();
+      const commit = () => { if (useGit) { git(root, 'add', '-A'); git(root, 'commit', '-qm', 'edit'); } };
+      try {
+        commit();
+        init(root);
+        mapx(root, 'scan', root);
+        expect(navigates()).toEqual([
+          'src/components/Card.vue#open -navigate-> src/views/UserView.vue#UserView',
+          'src/components/Nav.vue#Nav -navigate-> src/views/HomeView.vue#HomeView',
+          'src/components/Nav.vue#Nav -navigate-> src/views/UserView.vue#UserView',
+        ]);
+        const plain = ids(root, 'src/components/Plain.vue');
+        const format = ids(root, 'src/utils/format.js');
+
+        // The router file alone: route `user` renamed `profile`, its component now ProfileView.
+        writeFileSync(join(root, 'src/router/index.js'), router(true));
+        commit();
+        mapx(root, 'sync', root);
+        // Nav's and the store's `{ name: 'profile' }` now resolve and `/users/1` reaches the new
+        // component; Card's `{ name: 'user' }` no longer names a route.
+        expect(navigates()).toEqual([
+          'src/components/Nav.vue#Nav -navigate-> src/views/HomeView.vue#HomeView',
+          'src/components/Nav.vue#Nav -navigate-> src/views/ProfileView.vue#ProfileView',
+          'src/components/Nav.vue#Nav -navigate-> src/views/ProfileView.vue#ProfileView',
+          'src/stores/session.js#logout -navigate-> src/views/ProfileView.vue#ProfileView',
+        ]);
+        expect(ids(root, 'src/components/Plain.vue')).toEqual(plain);
+        expect(ids(root, 'src/utils/format.js')).toEqual(format);
+        const synced = snapshot(root);
+        mapx(root, 'scan', root, '--force');
+        expect(snapshot(root)).toEqual(synced);
+      } finally {
+        cleanup(root);
+      }
+    },
+    180000,
+  );
+
+  it('finds the changed route records, the redirects reaching them, and the SFCs navigating there', () => {
+    const r = (path: string, name: string | null, component: string | null, redirect: NavTarget | null = null): StoredRoute =>
+      ({ path, name, component, redirect, parent: false });
+    const before = {
+      'src/router/index.js': [r('/', 'home', './Home.vue'), r('/users/:id', 'user', './User.vue'), r('/me', null, null, { name: 'user' })],
+      'src/router/admin.js': [r('/admin', 'admin', './Admin.vue')],
+    };
+    const after = {
+      ...before,
+      'src/router/index.js': [r('/', 'home', './Home.vue'), r('/users/:id', 'user', './Profile.vue'), r('/me', null, null, { name: 'user' })],
+    };
+    // The re-targeted record, and the redirect-only `/me` that reaches it; nothing unchanged.
+    const changed = changedRoutes(before, after);
+    expect(changed.map((c) => `${c.path} ${c.component}`).sort()).toEqual(['/me null', '/users/:id ./Profile.vue', '/users/:id ./User.vue']);
+    expect(changedRoutes(before, before)).toEqual([]);
+    const sfc = (to: string) => `<template>\n  <router-link ${to}>x</router-link>\n</template>\n`;
+    expect(navigatesTo('src/X.vue', sfc(`:to="{ name: 'user' }"`), changed)).toBe(true);
+    expect(navigatesTo('src/X.vue', sfc('to="/users/7"'), changed)).toBe(true);
+    expect(navigatesTo('src/X.vue', sfc('to="/me"'), changed)).toBe(true);
+    expect(navigatesTo('src/X.vue', sfc('to="/admin"'), changed)).toBe(false);
+    expect(navigatesTo('src/X.vue', sfc(`:to="{ name: 'home' }"`), changed)).toBe(false);
+    // A store or guard module (M3-11).
+    const store = (target: string) => `import router from '../router';\nexport function go() { router.push(${target}); }\n`;
+    expect(navigatesTo('src/stores/session.js', store(`{ name: 'user' }`), changed)).toBe(true);
+    expect(navigatesTo('src/stores/session.js', store(`'/admin'`), changed)).toBe(false);
+  });
+
+  it('keeps one registry per app folder (two package.json files)', () => {
+    const app = (name: string, onlyA: boolean) => ({
+      [`${name}/package.json`]: JSON.stringify({ name, dependencies: { vue: '^3.4.0' } }),
+      [`${name}/src/main.js`]: `import { createApp } from 'vue';
+import App from './App.vue';
+import Widget from './components/Widget.vue';
+${onlyA ? "import OnlyA from './components/OnlyA.vue';\n" : ''}
+const app = createApp(App);
+app.component('Widget', Widget);
+${onlyA ? "app.component('OnlyA', OnlyA);\n" : ''}app.mount('#app');
+`,
+      [`${name}/src/App.vue`]: '<template>\n  <div><widget /><only-a /></div>\n</template>\n',
+      [`${name}/src/components/Widget.vue`]: '<template><i /></template>\n',
+      // App B has a file of the same name, never registered there.
+      [`${name}/src/components/OnlyA.vue`]: '<template><b /></template>\n',
+    });
+    const root = workspace({ ...app('appA', true), ...app('appB', false) });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      expect(renders(root)).toEqual([
+        'appA/src/App.vue#App -render-> appA/src/components/OnlyA.vue#OnlyA',
+        'appA/src/App.vue#App -render-> appA/src/components/Widget.vue#Widget',
+        'appB/src/App.vue#App -render-> appB/src/components/Widget.vue#Widget',
+      ]);
+      // App B registers its own OnlyA: a plain scan re-links B's App to B's file only.
+      writeFileSync(join(root, 'appB/src/main.js'), app('appB', true)['appB/src/main.js']!);
+      mapx(root, 'scan', root);
+      expect(renders(root)).toEqual([
+        'appA/src/App.vue#App -render-> appA/src/components/OnlyA.vue#OnlyA',
+        'appA/src/App.vue#App -render-> appA/src/components/Widget.vue#Widget',
+        'appB/src/App.vue#App -render-> appB/src/components/OnlyA.vue#OnlyA',
+        'appB/src/App.vue#App -render-> appB/src/components/Widget.vue#Widget',
+      ]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
 });

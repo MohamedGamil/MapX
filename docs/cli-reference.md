@@ -68,6 +68,7 @@ Perform a full scan of all source files. Builds the graph from scratch.
 - File reads are parallelized for faster scanning
 - Survives interruptions: progress is saved per-file, re-run to resume
 - Unchanged files are not re-parsed. The exception is a moved target: when a file is removed, the names its referrers resolved into it are remembered, and when a new or changed file names one of them, those referrers are re-parsed, so a class moved to another file is found at its new path without `--force`
+- Vue global components: when a new, changed or deleted JS/TS file adds, removes or retargets a `Vue.component` / `app.component` registration (or a `.vue` file joins or leaves an auto-registered folder), the unchanged `.vue` files using that tag are re-parsed, and no others. Likewise, when a Vue Router route record is added, removed, renamed or given another component or redirect, the unchanged `.vue` files and JS/TS modules navigating to it are re-parsed. Each app folder with its own `package.json` keeps its own global registry
 - In a git repo, each file stores its blob id at HEAD (also for a repo that is not at the workspace root), unless the working-tree content differs from HEAD
 
 ```bash
@@ -90,6 +91,7 @@ Incremental scan. Detects changed files via git, or via content hashes outside g
 - When the effective include/exclude filters differ from the last scan (config or flags), every file is re-parsed once, as `mapx scan` does.
 - When git reports a rename, the old path leaves the index and the files that referenced it are re-parsed.
 - When a removed file's referenced names appear in a new or changed file (a class moved to another file, in one sync or across two, with or without git), the files that referenced it are re-parsed, as `mapx scan` does.
+- When a Vue global registration changes (`app.component('X', X)` added, removed or retargeted, or a `.vue` file added to or removed from an auto-registered folder), the `.vue` files using `<X/>` are re-parsed, as `mapx scan` does, although none of them changed. The same holds for a Vue Router route renamed or given another component in the router file: the `.vue` files and JS/TS modules navigating to it are re-parsed.
 - A file git lists whose content is still the blob that was indexed (a mode change, or the commit of an edit an earlier sync indexed) is not re-parsed. Sync records the blob id of every file it indexes.
 - A file that was indexed while untracked or only staged leaves the index once it is deleted, although git lists neither side of it.
 

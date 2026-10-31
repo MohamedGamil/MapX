@@ -7216,7 +7216,10 @@
       "affectedFiles": [
         "src/parsers/languages/vue-template.ts",
         "src/core/scanner.ts",
-        "tests/vue-template.test.ts"
+        "tests/vue-template.test.ts",
+        "src/parsers/languages/vue-navigation.ts",
+        "docs/cli-reference.md",
+        "docs/mcp-integration.md"
       ],
       "acceptanceCriteria": [
         "Adding or removing `app.component(\"X\", X)` in main.js and running sync (no .vue file changed) adds or removes the render edges from every component using <X/>, matching scan --force (e2e test).",
@@ -7228,14 +7231,27 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-vue-template",
       "actualHours": null,
       "startedAt": "2026-10-31T08:10:20.778Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T09:19:32.396Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-08.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-template.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-08.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-08.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T08:10:20.399Z",
@@ -7248,6 +7264,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T09:19:32.027Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T09:19:32.396Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-template.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-08.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-08.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

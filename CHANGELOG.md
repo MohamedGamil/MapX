@@ -47,6 +47,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `scan` and `sync` now re-link Vue render and navigate edges when a global component registration (`app.component`, `Vue.component` or an auto-registered folder) or a Vue Router route record changes, without re-parsing unrelated components, and each app folder with its own `package.json` keeps its own global registry (M3-08).
 - The HTTP pass and Vue Router route components follow imports through the same alias resolution as the rest of the graph (tsconfig/jsconfig `paths`, vite / webpack aliases), so an axios client imported through Laravel's `@` → `resources/js` keeps its base URL (M3-12).
 - Symbol resolution is now case-sensitive except where the language is not (PHP class, function and method names; Pascal), so `Cart` no longer links to a `cart` function or constant and global calls like `fetch()` no longer link to a Vuex `FETCH` mutation (M3-10).
 - PHP calls to plain and namespaced functions now link to the file that declares the function, and `require` / `include` statements (with or without parentheses, including `__DIR__ . '/…'`) link to the included file (M0-04-R5).

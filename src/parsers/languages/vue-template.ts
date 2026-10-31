@@ -431,3 +431,52 @@ export function globalRegistrations(text: string): GlobalRegistrations {
   }
   return { named, globs };
 }
+
+/** The `.vue` files among `vueFiles` that a glob registration in `registrar` registers (relative folders only). */
+export function vueGlobFiles(registrar: string, { dir, deep }: GlobalRegistrations['globs'][number], vueFiles: Iterable<string>): string[] {
+  if (!dir.startsWith('.')) return [];
+  const parts = registrar.split('/').slice(0, -1);
+  for (const part of dir.split('/')) {
+    if (part === '..') { if (parts.pop() === undefined) return []; } else if (part && part !== '.') parts.push(part);
+  }
+  const prefix = parts.join('/');
+  return [...vueFiles].filter((file) => {
+    const rest = prefix ? (file.startsWith(prefix + '/') ? file.slice(prefix.length + 1) : null) : file;
+    return rest !== null && (deep || !rest.includes('/'));
+  });
+}
+
+/**
+ * Component names whose global registration differs between two records of a repo's registrations
+ * (registrar file → `globalRegistrations()`), M3-08: a named entry added, removed or retargeted;
+ * the `.vue` files under a changed glob's old and new folders; and `movedVue` (added or deleted
+ * `.vue` files) under any glob of `next`.
+ */
+export function changedGlobalNames(
+  previous: Record<string, GlobalRegistrations>, next: Record<string, GlobalRegistrations>, vueFiles: string[], movedVue: string[],
+): Set<string> {
+  const names = new Set<string>();
+  const entries = (r?: GlobalRegistrations) => new Set((r?.named ?? []).map((n) => `${n.name}\0${n.specifier}`));
+  for (const path of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+    const [before, after] = [previous[path], next[path]];
+    if (JSON.stringify(before) === JSON.stringify(after)) continue;
+    const [a, b] = [entries(before), entries(after)];
+    for (const e of a) if (!b.has(e)) names.add(e.split('\0')[0]!);
+    for (const e of b) if (!a.has(e)) names.add(e.split('\0')[0]!);
+    if (JSON.stringify(before?.globs ?? []) === JSON.stringify(after?.globs ?? [])) continue;
+    for (const glob of [...(before?.globs ?? []), ...(after?.globs ?? [])]) {
+      for (const file of vueGlobFiles(path, glob, [...vueFiles, ...movedVue])) names.add(vueComponentName(file));
+    }
+  }
+  for (const [path, { globs }] of Object.entries(next)) {
+    for (const glob of globs) for (const file of vueGlobFiles(path, glob, movedVue)) names.add(vueComponentName(file));
+  }
+  return names;
+}
+
+/** Whether an SFC's text has a tag naming one of `names` (`<user-card>` names `UserCard`); text only, so it may over-match. */
+export function usesTag(text: string, names: Set<string>): boolean {
+  if (names.size === 0) return false;
+  for (const m of text.matchAll(/<([A-Za-z][\w-]*)/g)) if (names.has(toPascal(m[1]!))) return true;
+  return false;
+}

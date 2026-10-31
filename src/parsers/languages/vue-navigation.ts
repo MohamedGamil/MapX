@@ -421,3 +421,45 @@ export function buildRouteTable(
   }
   return table;
 }
+
+// ── Sync (M3-08) ────────────────────────────────────────────────────────────────────────────────
+
+/** A route record as the scanner keeps it between scans: without its line. */
+export type StoredRoute = Omit<RouteRecord, 'line'>;
+
+const asResolved = (routes: StoredRoute[]): ResolvedRoute[] => routes.map((r) => ({ ...r, line: 0, file: '', componentFile: null }));
+
+/**
+ * The route records that differ between two records of a repo's route tables (router file →
+ * records): added, removed or changed (name, path, component, redirect), with the records whose
+ * redirect reaches one of them (up to 4 hops, as `matchRoute` follows).
+ */
+export function changedRoutes(previous: Record<string, StoredRoute[]>, next: Record<string, StoredRoute[]>): StoredRoute[] {
+  const changed: StoredRoute[] = [];
+  for (const file of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+    const before = (previous[file] ?? []).map((r) => JSON.stringify(r));
+    const after = (next[file] ?? []).map((r) => JSON.stringify(r));
+    for (const r of before) if (!after.includes(r)) changed.push(JSON.parse(r));
+    for (const r of after) if (!before.includes(r)) changed.push(JSON.parse(r));
+  }
+  if (changed.length === 0) return changed;
+  const seen = new Set(changed.map((r) => JSON.stringify(r)));
+  const redirects = [...Object.values(previous), ...Object.values(next)].flat().filter((r) => r.redirect);
+  for (let hop = 0; hop < 4; hop++) {
+    const reached = redirects.filter((r) => !seen.has(JSON.stringify(r)) && candidates(r.redirect!, asResolved(changed)).routes.length > 0);
+    if (reached.length === 0) break;
+    for (const r of reached) if (!seen.has(JSON.stringify(r))) { seen.add(JSON.stringify(r)); changed.push(r); }
+  }
+  return changed;
+}
+
+/**
+ * Whether a file (an SFC, or a JS/TS module as M3-11 reads it) navigates to a target one of `routes`
+ * may answer (by name, path or pattern); over-matches.
+ */
+export function navigatesTo(filePath: string, source: string, routes: StoredRoute[]): boolean {
+  if (routes.length === 0 || !/router/i.test(source)) return false;
+  const table = asResolved(routes);
+  const refs = filePath.endsWith('.vue') ? navigationReferences(source) : moduleNavigationReferences(source, []);
+  return refs.some((ref) => candidates(ref.metadata!.navigate as NavTarget, table).routes.length > 0);
+}
