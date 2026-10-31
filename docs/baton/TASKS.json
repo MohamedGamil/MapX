@@ -7126,6 +7126,82 @@
       "description": "Found by M3-02 (2026-10-31): editing only main.js does not update existing .vue render edges on sync; the global registry is per repo, not per manifest folder."
     },
     {
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-04.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M3-09.md"
+      ],
+      "affectedFiles": [
+        "src/core/import-resolvers.ts",
+        "src/core/scanner.ts",
+        "tests/legacy-imports.test.ts",
+        "tests/vue-script-setup.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`@/x` resolves through `compilerOptions.paths` in tsconfig.json/jsconfig.json (with baseUrl, extends) when present, else the `@` alias in vite.config.* / vue.config.js when statically readable, else `src/` (e2e tests for each).",
+        "A Laravel-style `@` → resources/js alias (vite.config.js) resolves render, mixin and composable imports in a .vue file (e2e test).",
+        "Aliases are scoped to the nearest config folder, so two apps with different `@` roots resolve independently (test).",
+        "The edges, routes and HTTP scorers do not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-imports.test.ts tests/vue-script-setup.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-setup",
+      "actualHours": null,
+      "startedAt": "2026-10-31T08:28:47.747Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-10-31T08:28:46.627Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T08:28:47.747Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-09",
+      "title": "JS/TS import aliases from tsconfig/jsconfig paths and Vite/webpack alias config",
+      "objective": ".fish files yield function symbols and call edges.",
+      "milestone": "M3",
+      "description": "Found by M3-04 (2026-10-31): resolveImportPath maps @/ only to src/, affecting Vue render edges, mixins and composables; M3-04 added a path-suffix fallback only."
+    },
+    {
       "id": "M4-01",
       "milestone": "M4",
       "title": "Recall/precision scoring in CI",
