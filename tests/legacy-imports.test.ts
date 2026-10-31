@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { resolveGoImport, resolveJvmImport, resolvePhpImport, resolvePythonImport, resolveRustImport, type ImportContext } from '../src/core/import-resolvers.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M0-12-R1: import edges for languages whose imports name modules, packages or namespaces.
@@ -111,7 +113,7 @@ describe('import edges through the scanner', () => {
   afterAll(() => cleanup(root));
 
   const imports = (source: string) =>
-    query<{ target_file: string }>(root, "SELECT target_file FROM edges WHERE source_file = ? AND edge_type IN ('import','require') ORDER BY target_file", source)
+    query<{ target_file: string }>(root, "SELECT DISTINCT target_file FROM edges WHERE source_file = ? AND edge_type IN ('import','require') ORDER BY target_file", source)
       .map((e) => e.target_file);
 
   it.each([
@@ -123,5 +125,107 @@ describe('import edges through the scanner', () => {
     ['cs/App.cs', ['cs/Data/Repo.cs', 'cs/Lib/Models.cs']],
   ])('%s has exactly its internal import edge', (source, expected) => {
     expect(imports(source)).toEqual(expected);
+  });
+});
+
+// M0-12-R4: per-language precision (review 2026-10-31). Each source lists exactly its import edges
+// as `target [target_symbol]`; an absent case has no edge.
+describe('import precision (M0-12-R4)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      // Ruby: require_relative is relative only; plain require searches load paths, not the file's own directory.
+      'missing.rb': 'X = 1\n',
+      'lib/mygem.rb': "require 'mygem/version'\nrequire_relative 'missing'\nrequire 'json'\n",
+      'lib/mygem/version.rb': "VERSION = '1'\n",
+      'lib/mygem/json.rb': 'module FakeJson; end\n',
+      'lib/mygem/cli.rb': "require 'json'\nrequire 'mygem/version'\n",
+      'spec/spec_helper.rb': 'RSPEC = 1\n',
+      'spec/cli_spec.rb': "require 'spec_helper'\nrequire_relative '../lib/mygem'\n",
+      'app/models/concern.rb': 'module Concern; end\n',
+      'app/models/user.rb': "require_relative 'concern'\nrequire 'concern'\n",
+      // Java multi-module: the module sharing the longest directory prefix wins.
+      'jv/services/billing/src/main/java/com/acme/model/Account.java': 'package com.acme.model;\npublic class Account {}\n',
+      'jv/services/orders/src/main/java/com/acme/model/Account.java': 'package com.acme.model;\npublic class Account {}\n',
+      'jv/services/orders/src/main/java/com/acme/app/OrderApp.java': 'package com.acme.app;\nimport com.acme.model.Account;\npublic class OrderApp {}\n',
+      'jv/services/billing/src/main/java/com/acme/app/BillApp.java': 'package com.acme.app;\nimport com.acme.model.Account;\npublic class BillApp {}\n',
+      // Python: aliases, several names, siblings; target_symbol is the module, not the statement.
+      'py/pkg/__init__.py': 'def helper():\n    return 0\n',
+      'py/pkg/a.py': 'A = 1\n',
+      'py/pkg/b.py': 'B = 1\n',
+      'py/main.py': 'import pkg.a as pa\nfrom pkg import a, b as bee\nfrom pkg import helper\n',
+      'py/pkg/sub/__init__.py': '',
+      'py/pkg/sub/d.py': 'D = 1\n',
+      'py/pkg/sub/c.py': 'from . import d\nfrom ..a import A\n',
+      'py/src/shared/util.py': 'U = 1\n',
+      'py/src/app/main.py': 'import shared.util\n',
+      // C#: using static, alias, global::, nested namespaces, and the file whose types are used.
+      'cs/Lib/Helpers.cs': 'namespace Lib { public static class Helpers { public static int Twice(int x) => x * 2; } }\n',
+      'cs/Lib/Other.cs': 'namespace Lib { public class Other {} }\n',
+      'cs/Nested.cs': 'namespace Outer { namespace Inner { public class Deep {} } }\n',
+      'cs/Models/User.cs': 'namespace Lib.Models { public class User {} }\n',
+      'cs/Models/Order.cs': 'namespace Lib.Models { public class Order {} }\n',
+      'cs/App.cs': [
+        'using static Lib.Helpers;',
+        'using M = Lib.Models;',
+        'using global::Outer.Inner;',
+        'using Lib;',
+        'namespace App { class A { void Run() { var o = new Other(); var u = new M.User(); var d = new Deep(); } } }',
+      ].join('\n'),
+      // Rust: `mod foo;` and uniform paths; external crates have no edge.
+      'rs/src/main.rs': 'mod net;\nmod util;\nuse net::Client;\nuse serde::Deserialize;\nfn main() {}\n',
+      'rs/src/net/mod.rs': 'pub mod client;\n',
+      'rs/src/net/client.rs': 'pub struct Client;\n',
+      'rs/src/util.rs': 'pub fn u() {}\n',
+      // Go: a nested module importing its parent module's package.
+      'go/go.mod': 'module example.com/proj\n\ngo 1.22\n',
+      'go/internal/lib/lib.go': 'package lib\nfunc Do() {}\n',
+      'go/tools/go.mod': 'module example.com/proj/tools\n\ngo 1.22\n',
+      'go/tools/internal/fmtx/fmtx.go': 'package fmtx\nfunc F() {}\n',
+      'go/tools/cmd/gen/main.go': 'package main\nimport (\n  "example.com/proj/internal/lib"\n  "example.com/proj/tools/internal/fmtx"\n)\nfunc main() { lib.Do(); fmtx.F() }\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  const edges = (source: string) =>
+    query<{ target_file: string; target_symbol: string }>(
+      root, "SELECT target_file, target_symbol FROM edges WHERE source_file = ? AND edge_type IN ('import','require') ORDER BY target_file, target_symbol", source,
+    ).map((e) => `${e.target_file} [${e.target_symbol}]`);
+
+  it.each([
+    // Ruby
+    ['lib/mygem.rb', ['lib/mygem/version.rb [mygem/version]']],
+    ['lib/mygem/cli.rb', ['lib/mygem/version.rb [mygem/version]']],
+    ['spec/cli_spec.rb', ['lib/mygem.rb [../lib/mygem]', 'spec/spec_helper.rb [spec_helper]']],
+    // require_relative finds its sibling; the plain require of the same name does not (app/models is no load path).
+    ['app/models/user.rb', ['app/models/concern.rb [concern]']],
+    // Java
+    ['jv/services/orders/src/main/java/com/acme/app/OrderApp.java', ['jv/services/orders/src/main/java/com/acme/model/Account.java [com.acme.model.Account]']],
+    ['jv/services/billing/src/main/java/com/acme/app/BillApp.java', ['jv/services/billing/src/main/java/com/acme/model/Account.java [com.acme.model.Account]']],
+    // Python
+    ['py/main.py', ['py/pkg/__init__.py [pkg]', 'py/pkg/a.py [pkg.a]', 'py/pkg/a.py [pkg.a]', 'py/pkg/b.py [pkg.b]']],
+    ['py/pkg/sub/c.py', ['py/pkg/a.py [..a]', 'py/pkg/sub/d.py [.d]']],
+    ['py/src/app/main.py', ['py/src/shared/util.py [shared.util]']],
+    // C#
+    ['cs/App.cs', ['cs/Lib/Helpers.cs [Lib.Helpers]', 'cs/Lib/Other.cs [Lib]', 'cs/Models/User.cs [Lib.Models]', 'cs/Nested.cs [Outer.Inner]']],
+    // Rust
+    ['rs/src/main.rs', ['rs/src/net/mod.rs [net]', 'rs/src/net/mod.rs [net::Client]', 'rs/src/util.rs [util]']],
+    ['rs/src/net/mod.rs', ['rs/src/net/client.rs [client]']],
+    // Go
+    ['go/tools/cmd/gen/main.go', ['go/internal/lib/lib.go [example.com/proj/internal/lib]', 'go/tools/internal/fmtx/fmtx.go [example.com/proj/tools/internal/fmtx]']],
+  ])('%s', (source, expected) => {
+    expect(edges(source)).toEqual(expected);
+  });
+
+  // The C# resolver reads namespaces from the symbol index, which also holds the symbols of files
+  // a sync does not re-parse (formerly a separate store query that no test exercised).
+  it('C#: after a sync that re-parses only App.cs, namespaces declared in stored files still resolve', () => {
+    const before = edges('cs/App.cs');
+    expect(before).toHaveLength(4);
+    writeFileSync(join(root, 'cs/App.cs'), readFileSync(join(root, 'cs/App.cs'), 'utf8') + '\n// touched\n');
+    mapx(root, 'sync', root);
+    expect(edges('cs/App.cs')).toEqual(before);
   });
 });

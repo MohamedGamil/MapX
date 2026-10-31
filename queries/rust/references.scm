@@ -4,6 +4,9 @@
 (use_declaration
   argument: (_) @ref.target_import) @ref.type_import
 
+; `mod foo;` declares a child module in foo.rs or foo/mod.rs (M0-12-R4); inline `mod foo { … }` has a body
+(mod_item !body name: (identifier) @ref.target_import) @ref.type_import
+
 ; Function calls
 (call_expression
   function: (identifier) @ref.target_call) @ref.type_call

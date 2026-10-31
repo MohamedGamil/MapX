@@ -4,6 +4,10 @@
 (import_statement
   [(dotted_name) (identifier)] @ref.target_import) @ref.type_import
 
+; aliased: import foo.bar as fb (M0-12-R4)
+(import_statement
+  (aliased_import name: (dotted_name) @ref.target_import)) @ref.type_import
+
 ; from ... import: from foo import bar
 ; The whole statement is the target: the resolver needs the module (with relative dots) and
 ; the imported names to tell a submodule (from pkg import mod) from a name in pkg/__init__.py.

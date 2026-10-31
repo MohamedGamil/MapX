@@ -35,6 +35,11 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-22-R1** Verify and test the I22 usability deliverables — DONE, P2, 5h; depends on M0-22.
 - **M0-23** Scan summary edge count disagrees with stored edges — DONE, P2, 4h; depends on nothing.
 - **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
+- **M0-02-R3** Git renames, nested-repo diffs and symlinked nested repos in incremental sync — IN_PROGRESS, P2, 4h; depends on M0-02-R2.
+- **M0-10-R3** mapx_workspaces F18 fields and duplicate config cleanup — BACKLOG, P2, 3h; depends on M0-10-R2.
+- **M0-03-R4** edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching — BACKLOG, P2, 4h; depends on M0-03-R3, M0-05-R4.
+- **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — IN_PROGRESS, P2, 5h; depends on M0-17-R2.
+- **M0-32-R2** Cycle smells keep their path order; small follow-ups from integration — IN_PROGRESS, P2, 3h; depends on M0-32-R1, M2-06-R1, M0-07-R2, M0-09-R3.
 - **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.
 - **M0-32-R1** Architecture analysis: iterative SCC, no stack overflow on large cyclic graphs — DONE, P1, 4h; depends on M0-32.
@@ -75,7 +80,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — DONE, P2, 4h; depends on M0-10-R1.
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — DONE, P1, 6h; depends on M0-12-R1, M0-12-R2.
-- **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — IN_PROGRESS, P2, 6h; depends on M0-12-R3.
+- **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — DONE, P2, 6h; depends on M0-12-R3.
 - **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — DONE, P2, 6h; depends on M0-17-R1, M0-01-R1.
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
 - **M0-05-R4** MCP parity for Laravel relationships and bindings — DONE, P2, 3h; depends on M0-05-R2.
@@ -96,6 +101,7 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-09** Route line numbers, symbol targets and middleware metadata — DONE, P0, 8h; depends on M1-01, M1-02.
 - **M1-98** M1 acceptance: re-score Laravel fixture — DONE, P0, 3h; depends on M1-02, M1-03, M1-04, M1-05, M1-06, M1-07, M1-08, M1-09.
 - **M1-99** Release (owner-initiated) — DEFERRED, P1, 2h; depends on nothing.
+- **M1-05-R2** Laravel resources: singleton, scoped, middlewareFor, per-route prefix/domain keys — IN_PROGRESS, P2, 4h; depends on M1-05-R1.
 - **M1-03-R1** Laravel route-file walker: string/comment-aware lexing and brace-less groups — DONE, P1, 10h; depends on M1-03, M1-06.
 - **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — DONE, P1, 8h; depends on M1-07, M1-04.
 - **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — DONE, P2, 4h; depends on M1-05.
@@ -120,7 +126,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 
 Templates, Options/Composition API, state stores and router navigation in Vue 2.7 and 3.
 
-- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BLOCKED, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1.
+- **M3-01** Vue SFC fixture set (2.7 and 3.x) — BLOCKED, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1, M0-02-R3, M0-10-R3, M0-03-R4, M0-17-R3, M1-05-R2, M0-32-R2.
 - **M3-02** Vue template pass — BACKLOG, P1, 14h; depends on M3-01.
 - **M3-03** Options API member resolution — BACKLOG, P1, 12h; depends on M3-01.
 - **M3-04** <script setup> macros and composables — BACKLOG, P1, 10h; depends on M3-01.

@@ -3,6 +3,8 @@
 ; Using directives
 ; `using Lib.Models;` (the `name` field only exists on aliases: using X = Y)
 (using_directive !name [(identifier) (qualified_name)] @ref.target_import) @ref.type_import
+; `using M = Lib.Models;` (M0-12-R4): the aliased name follows the alias
+(using_directive name: (identifier) . [(identifier) (qualified_name)] @ref.target_import) @ref.type_import
 
 ; Class/struct inheritance: class Foo : Bar
 (base_list

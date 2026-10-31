@@ -23,7 +23,7 @@ import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, norm
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, urlHost } from '../frameworks/http/pairing.js';
-import { importResolverFor } from './import-resolvers.js';
+import { importResolverFor, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -31,6 +31,11 @@ import { BUILTIN_GLOBALS } from '../parsers/common-methods.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python']);
+
+/** Symbol index entry: a declaration by name, with its file, scope and kind. */
+type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string };
+const NAMESPACE_KINDS = new Set(['namespace']);
+const TYPE_KINDS = new Set(['class', 'struct', 'interface', 'enum', 'record', 'trait']);
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
@@ -70,7 +75,7 @@ export class Scanner {
   private workspaceFileMap = new Map<string, string>();
   private dartPackageMap = new Map<string, string>();
   private cachedActiveDetectors = new Map<string, any[]>();
-  private symbolIndex: Map<string, Array<{ name: string; file: string; scope: string | null; kind?: string }>> | null = null;
+  private symbolIndex: Map<string, SymbolIndexEntry[]> | null = null;
   private parallel: boolean;
 
   constructor(
@@ -1095,24 +1100,37 @@ export class Scanner {
     const sourceLanguage = this.languageOf(sourcePath);
     const isJsOrTs = /\.([cm]?[jt]sx?|vue|svelte)$/.test(sourcePath) || sourceLanguage === 'javascript' || sourceLanguage === 'typescript';
 
+    const resolver = sourceLanguage ? importResolverFor(sourceLanguage) : undefined;
+    // Simple names this file uses (C# picks, among the files declaring a namespace, those whose types it uses).
+    let referencedNames: Set<string> | undefined;
+    const usedNames = () => (referencedNames ??= new Set(refs
+      .filter(r => r.referenceType !== 'import' && r.referenceType !== 'require' && typeof r.targetName === 'string')
+      .map(r => r.targetName.replace(/<[\s\S]*$/, '').split(/\.|::/).pop()!)));
+
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
       if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
-      let targetFile: string | null = null;
+      // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
+      // named by the module/namespace rather than the raw statement (M0-12-R4).
+      let targets: { file: string; symbol: string }[];
 
-      if (ref.referenceType === 'require' && !(sourceLanguage && importResolverFor(sourceLanguage))) {
-        targetFile = this.resolveRequirePath(ref.targetName, sourcePath, fileMap);
-      } else if (ref.referenceType === 'require') {
-        targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
-      } else if (ref.referenceType === 'import') {
-        targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
+      if (resolver && (ref.referenceType === 'import' || ref.referenceType === 'require')) {
+        targets = this.resolveModuleImport(resolver, ref.targetName, sourcePath, fileMap, usedNames);
       } else {
-        // Calls and instantiations skip value symbols (constants, variables) (M0-17-R2).
-        const callable = ref.referenceType === 'call' || ref.referenceType === 'instantiation';
-        targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable);
+        let targetFile: string | null = null;
+        if (ref.referenceType === 'require') {
+          targetFile = this.resolveRequirePath(ref.targetName, sourcePath, fileMap);
+        } else if (ref.referenceType === 'import') {
+          targetFile = this.resolveImportPath(ref.targetName, sourcePath, fileMap);
+        } else {
+          // Calls and instantiations skip value symbols (constants, variables) (M0-17-R2).
+          const callable = ref.referenceType === 'call' || ref.referenceType === 'instantiation';
+          targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable);
+        }
+        targets = targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
       }
 
-      if (targetFile) {
+      for (const { file: targetFile, symbol: targetSymbol } of targets) {
         const targetRepoName = fileMap.get(targetFile);
 
         let sourceSymbol: string | null = ref.sourceSymbol;
@@ -1137,7 +1155,7 @@ export class Scanner {
           sourceFile: sourcePath,
           targetFile,
           sourceSymbol,
-          targetSymbol: ref.targetName,
+          targetSymbol,
           edgeType: ref.referenceType,
           repo: repoName,
           weight: 1.0,
@@ -1185,34 +1203,41 @@ export class Scanner {
     return lang;
   }
 
+  /** Languages whose imports name modules, packages or namespaces (Java, Rust, Go, Python, Ruby, C#, PHP). */
+  private resolveModuleImport(
+    resolver: NonNullable<ReturnType<typeof importResolverFor>>,
+    target: string,
+    sourcePath: string,
+    fileMap: Map<string, string>,
+    referencedNames: () => Set<string>,
+  ): ImportHit[] {
+    // One Set per phase and file map, so the resolvers' index over it is built once.
+    if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
+    const files = this.importFiles.files;
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    // The symbol index holds every stored symbol plus this phase's parse results, so a namespace
+    // declared in a file the scan does not re-parse is found too.
+    const declaring = (name: string, kinds: Set<string>) => [...new Set(
+      (this.symbolIndex?.get(name) ?? []).filter(e => e.name === name && kinds.has(e.kind ?? '')).map(e => e.file),
+    )];
+    return resolver(target, sourcePath, {
+      files,
+      readText: (path) => {
+        if (!this.importTextCache.has(path)) {
+          const abs = resolve(workspaceRoot, path);
+          this.importTextCache.set(path, existsSync(abs) ? readFileSync(abs, 'utf-8') : null);
+        }
+        return this.importTextCache.get(path)!;
+      },
+      namespaceFiles: (namespace) => declaring(namespace, NAMESPACE_KINDS),
+      typeFiles: (name) => declaring(name, TYPE_KINDS),
+      get referencedNames() { return referencedNames(); },
+    });
+  }
+
   private resolveImportPath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
     if (!target || typeof target !== 'string') return null;
 
-    // Languages whose imports name modules/packages/namespaces (Java, Rust, Go, Python, Ruby, C#…)
-    const language = this.languageOf(sourcePath);
-    const resolver = language ? importResolverFor(language) : undefined;
-    if (resolver) {
-      // One Set per phase and file map, so the resolvers' index over it is built once.
-      if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
-      const files = this.importFiles.files;
-      const workspaceRoot = this.config.getWorkspaceRoot();
-      return resolver(target, sourcePath, {
-        files,
-        readText: (path) => {
-          if (!this.importTextCache.has(path)) {
-            const abs = resolve(workspaceRoot, path);
-            this.importTextCache.set(path, existsSync(abs) ? readFileSync(abs, 'utf-8') : null);
-          }
-          return this.importTextCache.get(path)!;
-        },
-        // The in-memory index covers files of this scan not yet written to the store.
-        namespaceFiles: (namespace) => [...new Set([
-          ...(this.symbolIndex?.get(namespace.toLowerCase()) ?? []).filter(e => e.name === namespace).map(e => e.file),
-          ...(this.store.raw.prepare("SELECT DISTINCT file_path FROM symbols WHERE kind = 'namespace' AND name = ?").all(namespace) as { file_path: string }[])
-            .map(r => r.file_path),
-        ])],
-      });
-    }
     let resolvedTarget = target;
 
     // ── Dart: skip stdlib (`dart:core`, `dart:async`, etc.) ─────────────────
@@ -1815,13 +1840,13 @@ export class Scanner {
     repoName: string,
     parsedPaths?: string[],
     results?: ParseResult[]
-  ): Map<string, Array<{ name: string; file: string; scope: string | null; kind?: string }>> {
+  ): Map<string, SymbolIndexEntry[]> {
     // A new symbol index starts a resolution phase: the file set, go.mod texts and languages
     // may have changed since the last one (long-lived scanners: watch, MCP).
     this.importFiles = null;
     this.importTextCache.clear();
     this.languageCache.clear();
-    const index = new Map<string, Array<{ name: string; file: string; scope: string | null; kind?: string }>>();
+    const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 
     const addEntry = (name: string, file: string, scope: string | null, kind?: string) => {

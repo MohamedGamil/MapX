@@ -37,6 +37,26 @@ function csharpBaseType(node: any): 'extends' | 'implements' | null {
   return /^I[A-Z]/.test(name) && !/(Exception|Attribute|EventArgs)$/.test(name) ? 'implements' : 'extends';
 }
 
+/**
+ * Import targets whose meaning the bare text loses (M0-12-R4): Ruby `require_relative 'x'` becomes
+ * `./x`, relative to the file, unlike `require 'x'`. Other targets pass through.
+ */
+function markImportTarget(node: any, text: string): string {
+  if (node.type === 'string_content') {
+    const call = node.parent?.parent?.parent;
+    if (call?.type === 'call' && call.childForFieldName('method')?.text === 'require_relative' && !text.startsWith('.')) return `./${text}`;
+  }
+  return text;
+}
+
+/** C# `namespace Outer { namespace Inner {} }` declares Outer.Inner (M0-12-R4). */
+function csharpQualifiedNamespace(node: any, name: string): string {
+  for (let p = node.parent; p; p = p.parent) {
+    if (p.type === 'namespace_declaration') name = `${p.childForFieldName('name')?.text}.${name}`;
+  }
+  return name;
+}
+
 export class GenericWasmParser implements LanguageParser {
   readonly languageName: string;
   readonly supportedExtensions: string[];
@@ -111,6 +131,8 @@ export class GenericWasmParser implements LanguageParser {
                 name = capture.node.text;
               }
             }
+
+            if (kind === 'namespace' && capture.node.type === 'namespace_declaration') name = csharpQualifiedNamespace(capture.node, name);
 
             const startLine = capture.node.startPosition.row + 1;
             const endLine = capture.node.endPosition.row + 1;
@@ -216,7 +238,7 @@ export class GenericWasmParser implements LanguageParser {
             // Scala `import a.b.{C, D => E}` is one node naming several targets (M0-17-R1).
             const targetTexts = capture.node.type === 'import_declaration' && refType === 'import'
               ? scalaImportTargets(capture.node)
-              : [capture.node.text];
+              : [refType === 'import' || refType === 'require' ? markImportTarget(capture.node, capture.node.text) : capture.node.text];
             for (const targetText of targetTexts) {
             if (!targetText || typeof targetText !== 'string') continue;
             const csharpBase = csharpBaseType(capture.node);

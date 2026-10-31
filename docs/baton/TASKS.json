@@ -10310,14 +10310,22 @@
         "npx vitest run tests/legacy-imports.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-imports",
       "actualHours": null,
       "startedAt": "2026-10-31T02:53:56.953Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T04:00:07.111Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-imports.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R4.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T02:53:56.554Z",
@@ -10330,6 +10338,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T04:00:06.763Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T04:00:07.111Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-imports.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R4.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
