@@ -6972,15 +6972,28 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-template",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T08:10:20.778Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T08:10:20.399Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T08:10:20.778Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
