@@ -5355,6 +5355,64 @@
     {
       "priority": "P2",
       "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-08.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R6.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/git-tracker.ts",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Reproduce first: edit a committed file, sync, revert it to HEAD (git checkout -- f), sync: the index equals scan --force (e2e test). If it already holds, record the evidence and close with the test."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-02-R6",
+      "title": "git sync re-parses a file whose working-tree edit was reverted to HEAD",
+      "objective": "After an edit is synced and then reverted to HEAD content, the next sync restores the HEAD symbols and edges.",
+      "milestone": "M0",
+      "description": "Observed by M3-08 (2026-10-31), not yet reproduced in isolation: git sync seems to miss a working-tree edit later reverted to HEAD content, so the file is never re-parsed."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
         "min": 3,
         "expected": 5,
         "max": 7

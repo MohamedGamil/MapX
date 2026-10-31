@@ -1,6 +1,6 @@
 # MapX project state
 
-Updated 2026-10-31, after session 6 (review remediation). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-10-31, after session 7 (M3 Vue SFC semantics). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
@@ -9,7 +9,7 @@ Updated 2026-10-31, after session 6 (review remediation). Plan baseline: `develo
 | M0 Delivered baseline and remediation | All review 2026-10-31 remediation DONE (session 6) | Follow-ups found during session 6 also DONE (M0-02-R3/R4/R5, M0-03-R4, M0-10-R3, M0-17-R3, M0-32-R1/R2) and M0-04-R3 |
 | M1 Laravel route correctness | M1-03-R1, M1-07-R1, M1-05-R1, M1-05-R2 DONE | M1-05-R3 DONE (D014). M1-99 (release) DEFERRED (D007) |
 | M2 Cross-language precision and HTTP pairing | M2-04-R2, M2-06-R1 DONE | |
-| M3 Vue SFC semantics | 0 of 6 | M3-01 is unblocked by the plan (every remediation dependency DONE); start it only with the owner's go-ahead |
+| M3 Vue SFC semantics | **12 of 12 DONE** (session 7) | Edge scorer 13.5% → 100% recall, 62.5% → 99.0% precision (119 labels, 23 negatives, 1 FP: `formatter.format()` → enclosing `format`, see M0-17-R4) |
 | M4 Measurement and DX | 0 of 7 | M4-03 (scan superlinear past ~5,000 files, measured in session 6) and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
 | M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 (fixture + scorer) and M5-02 (config schema) are promotable and parallel-safe with M3 (new `src/arch/` paths). M5-12 is an epic. Interface deps: M5-10 → M3-04, M5-12 → M4-03, M5-18 → M4-01 |
 
@@ -33,6 +33,17 @@ Deptrac analysed and abstracted for MapX (`docs/research/deptrac/`, six document
 - **M0-38:** the profiler honours `graphExcludePatterns`.
 - **M1-01 … M1-09, M1-98:** Laravel mount graph. On the 41-route fixture: URI recall 67% → 100%, handler recall 57% → 100%, precision 60% → 100%, false positives 2 → 0.
 - **M2-01:** reproduced name-only PHP → JS edges through the framework resolver; resolution now fails closed. MapX's own edge counts are unchanged.
+
+## Session 7 (2026-10-31): M3 Vue SFC semantics
+
+Owner go-ahead for M3. Each task ran in its own worktree lane, was cherry-picked onto `develop` and closed with registered evidence (`4194c1e` … `db0c8b1`).
+
+- **M3-01:** Vue 2.7 + 3 fixture (`tests/fixtures/vue-sfc`), edge contract (`iterations/M3-01.md`), `scripts/eval/score-edges.ts`. Baseline recall 13.5%, precision 62.5%.
+- **M3-02 … M3-06:** template pass and component symbols, Options API `this.x()` and mixins, `<script setup>` macros and composables, Vuex/Pinia by namespace and store import, Vue Router `navigate` edges (new edge type).
+- **Added during M3 from lane findings:** M3-07 (framework detection from sub-folder package.json, scoped), M3-08 (global registry and route records re-link on sync, per app), M3-09 (tsconfig/jsconfig/vite/webpack aliases), M3-10 (case-sensitive name lookup; MapX self-scan lost 49 wrong `call` edges), M3-11 (navigation from stores, guards and composables), M3-12 (HTTP pass and vue-router use the shared alias resolver). Also M0-04-R5 (PHP global function calls and require/include had no edges at all).
+- **Edge scorer:** recall 13.5% → 100% (119/119), precision 62.5% → 99.0%, false positives 5 → 1 of 23 negatives. Routes and HTTP scorers unchanged at 1.0.
+- **Registered, not started:** M0-17-R4 (calls on library/DOM receivers link to same-named project symbols; the remaining edges FP), M0-02-R6 (git sync after an edit reverted to HEAD; unreproduced), M4-08 (scorer flag strictness, P3).
+- **Process notes:** the M3-01 lane ran without the lane brief (deleted in a scratchpad cleanup) and transitioned its own task with real evidence; the brief was restored and later lanes followed it. Fifteen cloned tasks had a copied `objective`; corrected in `b4ec122`.
 
 ## Session 6 (2026-10-31): review remediation
 
@@ -101,9 +112,8 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 ## Next
 
-- M3-01 (Vue SFC fixture set) once the owner gives the go-ahead; per D010 every remediation task is now DONE.
-- M5-01 and M5-02 (architecture rules fixture and config schema) are promotable; specs in `iterations/M5-01.md` and `M5-02.md`. The computed critical path is now M5's 62 h chain because it is the longest remaining dependency chain, not because it precedes M3 (D013).
-- Owner decisions pending (see below).
+- M5-01 and M5-02 (architecture rules fixture and config schema) are promotable; specs in `iterations/M5-01.md` and `M5-02.md` (D013).
+- M0-17-R4 (library/DOM receivers; the last edges false positive) and M0-02-R6 (sync after revert) in BACKLOG.
 - M4-03: scan time is superlinear past ~5,000 files (80–133 s at 10,000, 323 s at 20,000).
 
 ## Done in session 3
@@ -121,7 +131,7 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 ## Latest validation
 
-2026-10-31, end of session 6 (`develop@3c24c1d`): `npm run check` exit 0: plan valid (144 tasks), changelog coverage 86 entries, typecheck, 88 test files with 1491 passed and 1 skipped (`MAPX_SLOW_TESTS`), skill tests. Routes scorer: 114 labels, URI 90/90, handler 87/87, precision 1, 0 FP. HTTP scorer: 46 labels, every metric 1.0, 0 wrong pairs. `scripts/check-package.ts`: 259 files, 4.36 MB packed, dashboard 690,760 B gzipped (ceiling 737,280).
+2026-10-31, end of session 7 (`develop@db0c8b1`): `npm run check` exit 0: plan valid (154 tasks), changelog coverage 99 entries, typecheck, 94 test files with 1596 passed and 1 skipped (`MAPX_SLOW_TESTS`), skill tests. Edges scorer: 119 labels, recall 1.0, precision 0.990, 1 FP of 23 negatives. Routes scorer: 114 labels, URI 90/90, handler 87/87, precision 1, 0 FP. HTTP scorer: 46 labels, every metric 1.0. `scripts/check-package.ts`: 259 files, 4.36 MB packed, dashboard 690,760 B gzipped (ceiling 737,280).
 
 ## Owner decisions recorded
 
