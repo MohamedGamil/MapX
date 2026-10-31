@@ -5874,10 +5874,10 @@
         "npx vitest run tests/architecture-scc.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-http",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T02:55:42.607Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -5887,6 +5887,12 @@
           "at": "2026-10-31T02:53:56.145Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:55:42.607Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
