@@ -104,3 +104,4 @@ flowchart LR
 - M0-05-R2 ← M0-05-R1 (hard)
 - M0-09-R2 ← M0-09-R1 (hard), M0-07-R1 (hard)
 - M0-10-R1 ← M0-10 (hard)
+- M0-05-R3 ← M0-05-R2 (hard)

@@ -1,15 +1,15 @@
 # MapX project state
 
-Updated 2026-10-31, end of session 4. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`; this session's work is uncommitted until the owner commits it.
+Updated 2026-10-31, end of session 5. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. All session 5 work is committed, one commit per task (`fa0a6e5` … `b371030`).
 
 ## Milestones
 
 | Milestone | Status | Notes |
 | --- | --- | --- |
-| M0 Delivered baseline and remediation | legacy imports, the first remediation round and M0-41 DONE | **18 audit remediation tasks open (D010: before M3)** |
+| M0 Delivered baseline and remediation | **all 18 M0-41 audit remediation tasks DONE** | M0-05-R3 (P2, hook edge verifiability) added to BACKLOG; not an M3 blocker |
 | M1 Laravel route correctness | **10 of 10 active tasks DONE** | M1-99 (release) DEFERRED: owner-initiated (D007) |
 | M2 Cross-language precision and HTTP pairing | **8 of 9 DONE** | M2-01 … M2-06 plus M2-03-R1 and M2-04-R1 done; M2-07 (P2 review follow-ups) promotable |
-| M3 Vue SFC semantics | 0 of 6 | M3-01 BLOCKED until remediation is done (D010) |
+| M3 Vue SFC semantics | 0 of 6 | **M3-01 promotable**: its remediation quality dependencies are DONE |
 | M4 Measurement and DX | 0 of 7 | M4-03 and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
 
 Live list: `npm run plan:scan`.
@@ -29,6 +29,35 @@ Live list: `npm run plan:scan`.
 - **M1-01 … M1-09, M1-98:** Laravel mount graph. On the 41-route fixture: URI recall 67% → 100%, handler recall 57% → 100%, precision 60% → 100%, false positives 2 → 0.
 - **M2-01:** reproduced name-only PHP → JS edges through the framework resolver; resolution now fails closed. MapX's own edge counts are unchanged.
 
+## Session 5 (2026-10-31): M0-41 remediation (D010)
+
+All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a mutation check, and its own commit.
+
+- **P0:**
+  - M0-05-R1: reference metadata persisted;
+  - M0-06-R1: workers use the language parsers;
+  - M0-07-R1: scoped package name, working binaries;
+  - M0-12-R1: module, package and namespace imports for 7 languages;
+  - M0-12-R2: all grammars bundled, `lang info`, shebangs.
+- **P1:**
+  - M0-04-R1: PHP namespace resolution;
+  - M0-11-R1: impact, callees, staleness;
+  - M0-20-R1: NestJS;
+  - M0-02-R1: filters;
+  - M0-09-R1 and M0-09-R2: agent files and templates (SSE, Continue, Aider, Zed);
+  - M0-08-R1: Leiden, depth-0 cluster view, class trace, fallback SVG;
+  - M0-10-R1: F18 workspace surface;
+  - M0-17-R1: 11-language extraction accuracy;
+  - M0-03-R2: metrics and edges surface;
+  - M0-05-R2: Laravel relationships, middleware edges, models section, bindings.
+- **P2:** M0-18-R1 (anonymous default class scope); M0-01-R1 (inferred member calls; dashed means inferred).
+- **Found while fixing:**
+  - A fresh parallel scan dropped `fileMetadata`, so PHP namespace clusters were missing (fixed in M0-08-R1).
+  - The MCP config merge overwrote unparseable JSONC settings files (fixed in M0-09-R2).
+  - `workspaces sync` registered every sibling repo (peers are opt-in now; M0-10-R1).
+  - Hook edges ignore declared confidence (new **M0-05-R3**, P2).
+- **Suite:** 86 files, 1244 tests; `npm run check` passes.
+
 ## Session 4 (2026-10-30/31): clearing open defects (D009, D010)
 
 - **Committed:**
@@ -43,7 +72,9 @@ Live list: `npm run plan:scan`.
 
 ## Next
 
-Run `/baton`. It picks the critical-path P0 remediation first (M0-05-R1 persist reference metadata; M0-06-R1 PHP post-processing in worker scans; M0-07-R1 package name in generated MCP configs; M0-12-R2 tiers; M0-12-R1 non-JS imports), then the P1s, then the P2s. Each task's acceptance criteria are the auditors' reproduced failing inputs.
+- **M3-01** (Vue SFC fixture set, critical path) is promotable. It was planned to start in a fresh session; get the owner's go-ahead first.
+- Also promotable: M4-03, M4-05 and M4-04. In backlog: M0-05-R3 (P2).
+- Consider an independent `/baton-review` of the session 5 remediation commits before M3. The reports record self-run mutation checks, not independent reviews.
 
 ## Done in session 3
 

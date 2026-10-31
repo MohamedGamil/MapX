@@ -47,25 +47,26 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-22-R2** CLI mapx search: full file listing and truncation totals — DONE, P1, 2h; depends on M0-22-R1.
 - **M0-40** Type-check tests and scripts — DONE, P1, 2h; depends on nothing.
 - **M0-41** Criterion-level audit of the unaudited legacy iterations — DONE, P1, 10h; depends on nothing.
-- **M0-06-R1** Run PHP post-processing in parallel worker scans (facades, dispatch, Laravel roles) — READY, P0, 8h; depends on M0-06.
-- **M0-05-R1** Persist reference metadata and route edge verifiability — READY, P0, 6h; depends on M0-05.
-- **M0-04-R1** PHP name resolution: use imports, namespaces, facades, qualified names — READY, P1, 12h; depends on M0-04.
-- **M0-12-R1** Import resolution for Java, Rust, Go, Python, Ruby and C# — READY, P0, 14h; depends on M0-12, M0-17.
-- **M0-12-R2** Language tiers: all bundled (amend spec), lang info, shebang detection — READY, P0, 4h; depends on M0-12.
-- **M0-17-R1** Language extraction accuracy (Ruby, C++, C#, Dart, Python, Go, Kotlin and symbol naming) — READY, P1, 14h; depends on M0-17, M0-12.
-- **M0-07-R1** Package name and distribution correctness — READY, P0, 4h; depends on M0-07, M0-09.
-- **M0-09-R1** Agent integration files: correctness defects — READY, P1, 8h; depends on M0-09.
-- **M0-08-R1** Clusters and trace defects — READY, P1, 10h; depends on M0-08.
-- **M0-11-R1** Impact, callees, staleness and globals defects — READY, P1, 8h; depends on M0-11, M0-21, M0-18.
-- **M0-20-R1** NestJS and GraphQL extraction defects — READY, P1, 5h; depends on M0-20.
-- **M0-02-R1** Glob filter defects — READY, P1, 5h; depends on M0-02, M0-04.
-- **M0-01-R1** Edge verifiability for JS/TS member calls and DOT styling — READY, P2, 5h; depends on M0-01.
-- **M0-18-R1** TSX anonymous default class method scope — READY, P2, 2h; depends on M0-18.
+- **M0-06-R1** Run PHP post-processing in parallel worker scans (facades, dispatch, Laravel roles) — DONE, P0, 8h; depends on M0-06.
+- **M0-05-R1** Persist reference metadata and route edge verifiability — DONE, P0, 6h; depends on M0-05.
+- **M0-04-R1** PHP name resolution: use imports, namespaces, facades, qualified names — DONE, P1, 12h; depends on M0-04.
+- **M0-12-R1** Import resolution for Java, Rust, Go, Python, Ruby and C# — DONE, P0, 14h; depends on M0-12, M0-17.
+- **M0-12-R2** Language tiers: all bundled (amend spec), lang info, shebang detection — DONE, P0, 4h; depends on M0-12.
+- **M0-17-R1** Language extraction accuracy (Ruby, C++, C#, Dart, Python, Go, Kotlin and symbol naming) — DONE, P1, 14h; depends on M0-17, M0-12.
+- **M0-07-R1** Package name and distribution correctness — DONE, P0, 4h; depends on M0-07, M0-09.
+- **M0-09-R1** Agent integration files: correctness defects — DONE, P1, 8h; depends on M0-09.
+- **M0-08-R1** Clusters and trace defects — DONE, P1, 10h; depends on M0-08.
+- **M0-11-R1** Impact, callees, staleness and globals defects — DONE, P1, 8h; depends on M0-11, M0-21, M0-18.
+- **M0-20-R1** NestJS and GraphQL extraction defects — DONE, P1, 5h; depends on M0-20.
+- **M0-02-R1** Glob filter defects — DONE, P1, 5h; depends on M0-02, M0-04.
+- **M0-01-R1** Edge verifiability for JS/TS member calls and DOT styling — DONE, P2, 5h; depends on M0-01.
+- **M0-18-R1** TSX anonymous default class method scope — DONE, P2, 2h; depends on M0-18.
 - **M0-03-R1** Unbuilt CLI/MCP surface promised by I03, I05, I09 and I10 — CANCELLED, P1, 30h; depends on M0-03, M0-05, M0-09, M0-10.
-- **M0-03-R2** metrics and edges CLI/MCP surface (F02/F04) — BACKLOG, P1, 10h; depends on M0-03, M0-05-R1.
-- **M0-05-R2** Laravel structure surface: relationships, middleware edges, LLM sections (F07–F09) — BACKLOG, P1, 10h; depends on M0-05-R1.
-- **M0-09-R2** Agent template deliverables: SSE, Continue, Aider, Zed (F17) — BACKLOG, P1, 6h; depends on M0-09-R1, M0-07-R1.
-- **M0-10-R1** Workspace surface: flags, table, cross-repo counts, JSONC (F18) — READY, P1, 10h; depends on M0-10.
+- **M0-03-R2** metrics and edges CLI/MCP surface (F02/F04) — DONE, P1, 10h; depends on M0-03, M0-05-R1.
+- **M0-05-R2** Laravel structure surface: relationships, middleware edges, LLM sections (F07–F09) — DONE, P1, 10h; depends on M0-05-R1.
+- **M0-09-R2** Agent template deliverables: SSE, Continue, Aider, Zed (F17) — DONE, P1, 6h; depends on M0-09-R1, M0-07-R1.
+- **M0-10-R1** Workspace surface: flags, table, cross-repo counts, JSONC (F18) — DONE, P1, 10h; depends on M0-10.
+- **M0-05-R3** Hook edges honour declared confidence (verifiability) — BACKLOG, P2, 3h; depends on M0-05-R2.
 
 ## M1 — Laravel route correctness
 
