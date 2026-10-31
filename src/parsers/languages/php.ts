@@ -104,6 +104,8 @@ export class PhpParser extends GenericWasmParser {
 
       // F05: Build UseImportTable
       const useTable = new Map<string, string>();
+      // `use function App\fmt [as f]`: lower-cased local name → function FQN (M0-04-R5).
+      const useFunctions = new Map<string, string>();
       const useClauses = refCaptures.get('ref.target_use_clause') || [];
       for (const capture of useClauses) {
         const node = capture.node;
@@ -125,6 +127,8 @@ export class PhpParser extends GenericWasmParser {
         const declaration = parent?.type === 'namespace_use_group' ? parent.parent : parent;
         const isKeyword = (c: any) => c.type === 'function' || c.type === 'const';
         const importsClass = !node.children.some(isKeyword) && !declaration?.children.some(isKeyword);
+        const isFunction = (c: any) => c.type === 'function';
+        const importsFunction = node.children.some(isFunction) || !!declaration?.children.some(isFunction);
 
         const targetNode = (node.namedChildCount > 0 ? node.namedChild(0) : null) || node;
         const targetText = targetNode.text;
@@ -146,6 +150,8 @@ export class PhpParser extends GenericWasmParser {
 
         const importName = aliasText || shortName;
         if (importsClass) useTable.set(importName, fullTarget);
+        // Function names are case-insensitive in PHP (M0-04-R5).
+        if (importsFunction) useFunctions.set(importName.toLowerCase(), fullTarget.replace(/^\\/, ''));
 
         // Emit import reference
         references.push({
@@ -185,7 +191,9 @@ export class PhpParser extends GenericWasmParser {
           captureName === 'ref.target_property' ||
           captureName === 'ref.target_dispatch' ||
           captureName === 'ref.target_dispatch_static' ||
-          captureName === 'ref.target_notify'
+          captureName === 'ref.target_notify' ||
+          captureName === 'ref.target_function_call' ||
+          captureName === 'ref.target_require'
         ) {
           continue;
         }
@@ -235,6 +243,83 @@ export class PhpParser extends GenericWasmParser {
             });
           }
         }
+      }
+
+      // Function calls, with the candidate FQNs in PHP's resolution order: `\X\f` is fully
+      // qualified; `use function` names the function; a qualified name expands its first segment
+      // through `use` or the current namespace; an unqualified name tries the current namespace,
+      // then the global function (M0-04-R5).
+      const functionCandidates = (raw: string): string[] => {
+        if (raw.startsWith('\\')) return [raw.substring(1)];
+        const relative = raw.match(/^namespace\\(.+)$/i)?.[1];
+        if (relative) return [currentNamespace ? `${currentNamespace}\\${relative}` : relative];
+        if (raw.includes('\\')) return [resolveToFqn(raw)];
+        const imported = useFunctions.get(raw.toLowerCase());
+        if (imported) return [imported];
+        return currentNamespace ? [`${currentNamespace}\\${raw}`, raw] : [raw];
+      };
+      for (const capture of refCaptures.get('ref.target_function_call') || []) {
+        const raw = capture.node.text;
+        if (!raw) continue;
+        const candidates = functionCandidates(raw);
+        const shortName = raw.split('\\').at(-1)!;
+        references.push({
+          sourceSymbol: null,
+          targetName: candidates[0]!,
+          referenceType: 'call',
+          startLine: capture.node.startPosition.row + 1,
+          verifiability: COMMON_FRAMEWORK_METHODS.has(shortName) ? 'inferred' : 'verified',
+          phpFunction: candidates,
+        });
+      }
+
+      // require / include: string literals, __DIR__, dirname(__FILE__ | __DIR__) and `.`
+      // concatenation. A __DIR__ path is emitted as `__DIR__/…` (relative to the including file),
+      // a literal as written; variables and constants are not evaluated (M0-04-R5).
+      const DIR = '\u0000DIR';
+      const evalPath = (node: any): string | null => {
+        switch (node.type) {
+          case 'parenthesized_expression':
+            return node.namedChildCount === 1 ? evalPath(node.namedChild(0)) : null;
+          case 'string':
+          case 'encapsed_string':
+            // Interpolation and escape sequences are not evaluated.
+            return node.namedChildren.every((c: any) => c.type === 'string_content')
+              ? node.namedChildren.map((c: any) => c.text).join('')
+              : null;
+          case 'name':
+            return node.text === '__DIR__' ? DIR : null;
+          case 'function_call_expression': {
+            if (node.childForFieldName('function')?.text !== 'dirname') return null;
+            const args = (node.childForFieldName('arguments')?.namedChildren ?? []).filter((c: any) => c.type === 'argument');
+            if (args.length !== 1) return null;
+            const arg = args[0].text;
+            return arg === '__FILE__' ? DIR : arg === '__DIR__' ? `${DIR}/..` : null;
+          }
+          case 'binary_expression': {
+            if (node.child(1)?.text !== '.') return null;
+            const left = evalPath(node.child(0));
+            const right = evalPath(node.child(2));
+            return left === null || right === null ? null : left + right;
+          }
+          default:
+            return null;
+        }
+      };
+      for (const capture of refCaptures.get('ref.target_require') || []) {
+        const path = evalPath(capture.node);
+        if (!path) continue;
+        let target: string;
+        if (path.startsWith(`${DIR}/`)) target = `__DIR__${path.substring(DIR.length)}`;
+        else if (path.includes(DIR) || path.startsWith('/') || path.includes('://')) continue;
+        else target = path;
+        references.push({
+          sourceSymbol: null,
+          targetName: target,
+          referenceType: 'require',
+          startLine: capture.node.startPosition.row + 1,
+          verifiability: 'verified',
+        });
       }
 
       // F06: Helper function to find named type descendants
@@ -765,6 +850,7 @@ export class PhpParser extends GenericWasmParser {
 
     for (const ref of finalReferences) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
+      if (ref.phpFunction) continue; // a function call is never a facade
       if (ref.referenceType === 'call' || ref.referenceType === 'instantiation') {
         const shortName = ref.targetName.split('\\').at(-1) ?? ref.targetName;
         // Only a real facade reference is rewritten: the facade class itself, or a global alias

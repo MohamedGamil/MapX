@@ -1,24 +1,14 @@
 ; PHP Reference / Dependency Extraction
 
-(require_once_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
+; The whole path expression ("x.php", ('x.php'), __DIR__ . '/x.php'); php.ts evaluates it (M0-04-R5).
+(require_once_expression (_) @ref.target_require) @ref.type_require
+(require_expression (_) @ref.target_require) @ref.type_require
+(include_once_expression (_) @ref.target_require) @ref.type_require
+(include_expression (_) @ref.target_require) @ref.type_require
 
-(require_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
-
-(include_once_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
-
-(include_expression
-  (parenthesized_expression
-    (string
-      (string_content) @ref.target_require))) @ref.type_require
+; Function calls: helper(), \App\fmt(), Sub\fmt(), namespace\fmt(); not $callable() (M0-04-R5)
+(function_call_expression
+  function: [(name) (qualified_name) (relative_name)] @ref.target_function_call) @ref.type_function_call
 
 ; F05: Namespace use clauses
 (namespace_use_clause) @ref.target_use_clause

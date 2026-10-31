@@ -11089,7 +11089,7 @@
       ],
       "acceptanceCriteria": [
         "`function run() { return helper_fmt(1); }` with `helper_fmt` declared in another file (loaded by require_once) gives a call edge run → helpers.php#helper_fmt; a call inside a class method likewise (e2e test).",
-        "`require_once \"helpers.php\"` / `include __DIR__.\"/x.php\"` give an import edge to the resolved file when it exists (e2e test).",
+        "`require_once \"helpers.php\"` / `include __DIR__.\"/x.php\"` give a `require` edge (the type Ruby and Lua includes already use) to the resolved file when it exists (e2e test).",
         "Namespaced functions (`use function App\\fmt;`, `\\App\\fmt()`) resolve only to the function declared in that namespace; PHP built-ins (strlen, array_map) give no edge (test).",
         "The routes scorer is unchanged."
       ],
@@ -11098,14 +11098,27 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-php",
       "actualHours": null,
       "startedAt": "2026-10-31T07:52:19.039Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T08:10:09.201Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-04-R5.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-php-resolution.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-04-R5.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-04-R5.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T07:52:18.686Z",
@@ -11118,6 +11131,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T08:10:08.728Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T08:10:09.201Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-php-resolution.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-04-R5.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-04-R5.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

@@ -263,3 +263,114 @@ describe('a use-imported FQN with no matching file', () => {
     expect(rows).toEqual(['app/Http/Controllers/Money.php App\\Http\\Controllers\\Money']);
   });
 });
+
+// M0-04-R5: global function calls and require/include gave zero edges (no query capture for
+// function calls; include patterns needed parentheses; `require` went to the namespace resolver).
+describe('PHP function calls and includes', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'helpers.php': "<?php\n\nfunction helper_fmt($n)\n{\n    return strlen((string) $n);\n}\n",
+      'lib/util.php': "<?php\n\nfunction util_join(array $a)\n{\n    return implode(',', array_map('trim', $a));\n}\n",
+      'bootstrap/boot.php': '<?php\n',
+      'public/index.php': [
+        '<?php',
+        "require dirname(__DIR__) . '/bootstrap/boot.php';",
+        "require __DIR__ . '/../missing.php';",
+      ].join('\n'),
+      'main.php': [
+        '<?php',
+        'require_once "helpers.php";',
+        'include __DIR__ . "/lib/util.php";',
+        "require_once('bootstrap/boot.php');",
+        '',
+        'function run()',
+        '{',
+        '    return helper_fmt(1) . util_join([]) . strlen("x") . count([]);',
+        '}',
+        '',
+        'class Runner',
+        '{',
+        '    public function count() { return 0; }',
+        '    public function go()',
+        '    {',
+        '        return helper_fmt(2);',
+        '    }',
+        '}',
+      ].join('\n'),
+      // Namespaced functions: `fmt` in two namespaces, a global `fallback`, a method named `fmt`.
+      'app/Support/functions.php': '<?php\nnamespace App\\Support;\n\nfunction fmt($v) { return $v; }\n',
+      'app/Other/functions.php': '<?php\nnamespace App\\Other;\n\nfunction fmt($v) { return $v; }\nfunction local_only() { return 1; }\n',
+      'app/global.php': '<?php\n\nfunction fallback() { return 1; }\nfunction local_only() { return 2; }\n',
+      'app/Formatter.php': '<?php\nnamespace App;\n\nclass Formatter { public function fmt($v) { return $v; } }\n',
+      'app/Http/Imported.php': [
+        '<?php',
+        'namespace App\\Http;',
+        'use function App\\Support\\fmt;',
+        'use function App\\Support\\{fmt as format};',
+        'class Imported',
+        '{',
+        '    public function a() { return fmt(1); }',
+        '    public function b() { return format(2); }',
+        '    public function c() { return \\App\\Support\\fmt(3) . fallback(); }',
+        '}',
+      ].join('\n'),
+      'app/Other/Caller.php': [
+        '<?php',
+        'namespace App\\Other;',
+        'class Caller',
+        '{',
+        // Unqualified in App\Other: its own fmt and local_only win over the global local_only.
+        '    public function b() { return fmt(1) . local_only() . namespace\\fmt(2); }',
+        '}',
+      ].join('\n'),
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  type Row = { source_file: string; source_symbol: string | null; target_file: string; target_symbol: string; edge_type: string };
+  const rows = (where: string) => query<Row>(root, `SELECT DISTINCT source_file, source_symbol, target_file, target_symbol, edge_type FROM edges WHERE ${where}`)
+    .map((e) => `${e.source_file}#${e.source_symbol} -${e.edge_type}-> ${e.target_file}#${e.target_symbol}`).sort();
+
+  it('links global function calls to the declaring file, from functions and methods', () => {
+    expect(rows("source_file = 'main.php' AND edge_type = 'call'")).toEqual([
+      'main.php#Runner::go -call-> helpers.php#helper_fmt',
+      'main.php#run -call-> helpers.php#helper_fmt',
+      'main.php#run -call-> lib/util.php#util_join',
+    ]);
+    // strlen / implode / array_map are built-ins, declared nowhere in the workspace; count() is
+    // not Runner::count.
+    expect(rows("source_file IN ('helpers.php', 'lib/util.php') AND edge_type = 'call'")).toEqual([]);
+  });
+
+  it('links require and include, in every form, to the resolved file', () => {
+    expect(rows("edge_type IN ('require', 'import')")).toEqual([
+      'main.php#null -require-> bootstrap/boot.php#bootstrap/boot.php',
+      'main.php#null -require-> helpers.php#helpers.php',
+      'main.php#null -require-> lib/util.php#__DIR__/lib/util.php',
+      'public/index.php#null -require-> bootstrap/boot.php#__DIR__/../bootstrap/boot.php',
+    ]);
+  });
+
+  it('resolves namespaced functions by namespace only, with the global fallback for unqualified names', () => {
+    expect(rows("source_file IN ('app/Http/Imported.php', 'app/Other/Caller.php') AND edge_type = 'call'")).toEqual([
+      'app/Http/Imported.php#Imported::a -call-> app/Support/functions.php#App\\Support\\fmt',
+      'app/Http/Imported.php#Imported::b -call-> app/Support/functions.php#App\\Support\\fmt',
+      'app/Http/Imported.php#Imported::c -call-> app/Support/functions.php#App\\Support\\fmt',
+      'app/Http/Imported.php#Imported::c -call-> app/global.php#fallback',
+      'app/Other/Caller.php#Caller::b -call-> app/Other/functions.php#App\\Other\\fmt',
+      'app/Other/Caller.php#Caller::b -call-> app/Other/functions.php#App\\Other\\local_only',
+    ]);
+  });
+
+  // The scan above parses its 12 files in worker threads; the main thread must give the same edges.
+  it('gives the same call and require edges when parsed on the main thread', () => {
+    const where = "edge_type IN ('call', 'require')";
+    const parallel = rows(where);
+    expect(parallel.length).toBeGreaterThan(0);
+    mapx(root, 'scan', root, '--force', '--no-parallel');
+    expect(rows(where)).toEqual(parallel);
+  }, 120000);
+});

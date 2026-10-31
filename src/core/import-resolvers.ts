@@ -330,6 +330,23 @@ export function resolvePhpImport(target: string, sourcePath: string, ctx: Import
   return hits.length ? closest(hits, sourcePath) : null;
 }
 
+/**
+ * PHP `require` / `include` paths, as the parser emits them: `__DIR__/…` is relative to the
+ * including file's folder; a plain relative path is tried there, then at the workspace root (PHP's
+ * include path with the entry script at the root). Only an indexed file other than the source
+ * resolves (M0-04-R5).
+ */
+export function resolvePhpInclude(target: string, sourcePath: string, ctx: ImportContext): string | null {
+  const dir = dirOf(sourcePath);
+  const fromDir = target.startsWith('__DIR__/');
+  const rel = fromDir ? target.substring('__DIR__/'.length) : target;
+  const candidates = fromDir ? [posix.join(dir, rel)] : [posix.join(dir, rel), posix.normalize(rel)];
+  return candidates.find((c) => !c.startsWith('../') && c !== sourcePath && ctx.files.has(c)) ?? null;
+}
+
+/** A namespace (`App\Models\User`) never holds `/` or `.php`; an include path does. */
+const isPhpIncludePath = (target: string) => target.includes('/') || /\.php$/i.test(target);
+
 type Resolver = (target: string, sourcePath: string, ctx: ImportContext) => ImportHit[];
 
 /** One hit when `file` resolved, named `symbol`. */
@@ -352,7 +369,9 @@ const LANGUAGE_RESOLVERS: Record<string, Resolver> = {
   // The `./` marker on require_relative targets is the parser's, not the source's.
   ruby: single(resolveRubyImport, (t) => t.replace(/^\.\/(?!\.)/, '')),
   'c-sharp': (t, s, c) => resolveCSharpImports(t, s, c).map((file) => ({ file, symbol: csharpName(t) })),
-  php: single(resolvePhpImport, (t) => t.replace(/^\\/, '')),
+  php: (t, s, c) => isPhpIncludePath(t)
+    ? single(resolvePhpInclude, (path) => path)(t, s, c)
+    : single(resolvePhpImport, (name) => name.replace(/^\\/, ''))(t, s, c),
 };
 
 /** Resolver for `language` (target file hits, possibly none), or undefined when the language uses path-style imports. */

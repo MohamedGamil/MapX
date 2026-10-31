@@ -977,9 +977,18 @@
         "duration": 4,
         "earliestStart": 90,
         "earliestFinish": 94,
+        "latestStart": 118,
+        "latestFinish": 122,
+        "slack": 28
+      },
+      {
+        "id": "M3-08",
+        "duration": 4,
+        "earliestStart": 104,
+        "earliestFinish": 108,
         "latestStart": 122,
         "latestFinish": 126,
-        "slack": 32
+        "slack": 18
       },
       {
         "id": "M4-01",
@@ -1342,7 +1351,7 @@
         "slack": 34
       }
     ],
-    "totalEffort": 903
+    "totalEffort": 907
   },
   "remaining": {
     "duration": 62,
@@ -2315,9 +2324,18 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 62,
+        "latestStart": 58,
+        "latestFinish": 58,
+        "slack": 58
+      },
+      {
+        "id": "M3-08",
+        "duration": 4,
+        "earliestStart": 0,
+        "earliestFinish": 4,
+        "latestStart": 58,
         "latestFinish": 62,
-        "slack": 62
+        "slack": 58
       },
       {
         "id": "M4-01",
@@ -2492,12 +2510,12 @@
       },
       {
         "id": "M0-04-R5",
-        "duration": 4,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 4,
-        "latestStart": 58,
+        "earliestFinish": 0,
+        "latestStart": 62,
         "latestFinish": 62,
-        "slack": 58
+        "slack": 62
       },
       {
         "id": "M5-01",
@@ -3331,123 +3349,129 @@
         "finish": 32
       },
       {
-        "id": "M4-01",
+        "id": "M3-08",
         "worker": 0,
         "start": 32,
-        "finish": 37
+        "finish": 36
+      },
+      {
+        "id": "M4-01",
+        "worker": 0,
+        "start": 36,
+        "finish": 41
       },
       {
         "id": "M4-02",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-31",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-33",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-34",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-35",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-36",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-37",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-38",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M0-39",
         "worker": 0,
-        "start": 37,
-        "finish": 37
+        "start": 41,
+        "finish": 41
       },
       {
         "id": "M4-03",
         "worker": 0,
-        "start": 37,
-        "finish": 45
+        "start": 41,
+        "finish": 49
       },
       {
         "id": "M4-04",
         "worker": 0,
-        "start": 45,
-        "finish": 57
+        "start": 49,
+        "finish": 61
       },
       {
         "id": "M4-05",
         "worker": 0,
-        "start": 57,
-        "finish": 61
+        "start": 61,
+        "finish": 65
       },
       {
         "id": "M4-06",
         "worker": 0,
-        "start": 61,
-        "finish": 61
+        "start": 65,
+        "finish": 65
       },
       {
         "id": "M4-07",
         "worker": 0,
-        "start": 61,
-        "finish": 61
+        "start": 65,
+        "finish": 65
       },
       {
         "id": "M0-22-R2",
         "worker": 0,
-        "start": 61,
-        "finish": 61
+        "start": 65,
+        "finish": 65
       },
       {
         "id": "M0-40",
         "worker": 0,
-        "start": 61,
-        "finish": 61
+        "start": 65,
+        "finish": 65
       },
       {
         "id": "M0-41",
         "worker": 0,
-        "start": 61,
-        "finish": 61
+        "start": 65,
+        "finish": 65
       },
       {
         "id": "M0-03-R1",
         "worker": 0,
-        "start": 61,
-        "finish": 61
+        "start": 65,
+        "finish": 65
       },
       {
         "id": "M0-04-R5",
         "worker": 0,
-        "start": 61,
+        "start": 65,
         "finish": 65
       },
       {

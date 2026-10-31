@@ -43,6 +43,11 @@ export interface ExtractedReference {
   metadata?: Record<string, any>;
   /** `this.x()` in a Vue Options API component: where `x` may be declared (M3-03). Not stored. */
   vueThis?: VueThisScope;
+  /**
+   * A PHP function call: the candidate function FQNs in PHP's resolution order (the namespaced
+   * name, then the global fallback). Resolves only to `function` symbols (M0-04-R5). Not stored.
+   */
+  phpFunction?: string[];
 }
 
 /** Edge contract rule 6 (docs/baton/iterations/M3-01.md): the candidates for `this.x()`. */

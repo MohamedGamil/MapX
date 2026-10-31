@@ -1192,6 +1192,9 @@ export class Scanner {
         targets = this.resolveVueReference(ref, vueHint, sourcePath, fileMap);
       } else if (resolver && (ref.referenceType === 'import' || ref.referenceType === 'require')) {
         targets = this.resolveModuleImport(resolver, ref.targetName, sourcePath, fileMap, usedNames);
+      } else if (ref.phpFunction) {
+        // A PHP function call: the first candidate declared as a function in its namespace (M0-04-R5).
+        targets = this.resolvePhpFunction(ref.phpFunction, sourcePath);
       } else {
         let targetFile: string | null = null;
         if (ref.referenceType === 'require') {
@@ -1539,6 +1542,27 @@ export class Scanner {
         // Skip unreadable pubspec files
       }
     }
+  }
+
+  /**
+   * A PHP function call: the first candidate FQN (`App\fmt`, then the global `fmt`) that a PHP file
+   * declaring that namespace declares as a function, preferring the calling file. Never a method,
+   * class or constant; built-ins are declared nowhere, so they resolve to nothing. The edge names
+   * the matched candidate (M0-04-R5).
+   */
+  private resolvePhpFunction(candidates: string[], sourcePath: string): { file: string; symbol: string }[] {
+    for (const fqn of candidates) {
+      const parts = fqn.split('\\');
+      const name = parts.pop()!.toLowerCase();
+      const namespace = parts.join('\\').toLowerCase();
+      const files = (this.symbolIndex?.get(name) ?? [])
+        .filter(e => e.kind === 'function' && e.name.toLowerCase() === name
+          && this.phpNamespaces.has(e.file) && this.phpNamespaces.get(e.file)!.toLowerCase() === namespace)
+        .map(e => e.file)
+        .sort();
+      if (files.length) return [{ file: files.includes(sourcePath) ? sourcePath : files[0]!, symbol: fqn }];
+    }
+    return [];
   }
 
   private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string, callableOnly = false): string | null {

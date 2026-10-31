@@ -42,6 +42,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- PHP calls to plain and namespaced functions now link to the file that declares the function, and `require` / `include` statements (with or without parentheses, including `__DIR__ . '/…'`) link to the included file (M0-04-R5).
 - A `package.json` or `composer.json` in a sub-folder now turns on Vue Router, NestJS, Next.js, React Router, TanStack Router, SvelteKit, Symfony or Yii detection for the files in that folder only, so a frontend sub-app is detected without affecting a backend beside it (M3-07).
 - `mapx lang list` and `mapx_lang_list` now report a language whose grammar file is missing as missing, and generated agent files state the language count from the registry (23) (M0-12-R6).
 - Laravel routes now honour `withoutMiddleware`/`withoutMiddlewareFor` (routes, groups, resources, the `excluded_middleware` keys), report `{post:slug}` as `{post}` with its binding field, and keep only the last of a repeated chained `middleware`/`prefix`/`namespace` attribute, as Laravel's router does (M1-05-R3).

@@ -80,7 +80,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — DONE, P1, 6h; depends on M0-02-R1.
 - **M0-04-R2** PHP resolution never maps vendor names to app files; tree-sitter $listen — DONE, P1, 8h; depends on M0-04-R1.
 - **M0-04-R3** Laravel: ->middleware(X::class) route middleware edges via the route file use table — DONE, P2, 3h; depends on M0-04-R2.
-- **M0-04-R5** PHP global function calls and require/include produce edges — IN_PROGRESS, P1, 4h; depends on M0-04-R3.
+- **M0-04-R5** PHP global function calls and require/include produce edges — DONE, P1, 4h; depends on M0-04-R3.
 - **M0-09-R4** Continue integration in Continue's documented format (D014, amends F17) — DONE, P2, 4h; depends on M0-09-R3.
 - **M0-12-R5** Fish shell grammar: functions and calls (D014) — DONE, P2, 4h; depends on M0-12-R4.
 - **M0-12-R6** Language count after fish (23) in templates and docs; lang list flags missing grammars — DONE, P2, 2h; depends on M0-12-R5, M0-09-R4.
@@ -137,10 +137,11 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-01** Vue SFC fixture set (2.7 and 3.x) — DONE, P1, 6h; depends on M0-06-R1, M0-05-R1, M0-04-R1, M0-12-R1, M0-12-R2, M0-17-R1, M0-07-R1, M0-09-R1, M0-08-R1, M0-11-R1, M0-20-R1, M0-02-R1, M0-01-R1, M0-18-R1, M0-03-R2, M0-05-R2, M0-09-R2, M0-10-R1, M0-05-R3, M0-20-R2, M0-11-R2, M0-02-R2, M0-04-R2, M0-09-R3, M0-10-R2, M0-12-R3, M0-12-R4, M0-17-R2, M0-03-R3, M0-05-R4, M0-07-R2, M1-03-R1, M1-07-R1, M1-05-R1, M2-04-R2, M2-06-R1, M0-32-R1, M0-02-R3, M0-10-R3, M0-03-R4, M0-17-R3, M1-05-R2, M0-32-R2, M0-02-R4, M0-02-R5, M0-04-R3, M0-09-R4, M0-12-R5, M1-05-R3, M0-12-R6.
 - **M3-02** Vue template pass — DONE, P1, 14h; depends on M3-01.
 - **M3-03** Options API member resolution — DONE, P1, 12h; depends on M3-01.
-- **M3-04** <script setup> macros and composables — BACKLOG, P1, 10h; depends on M3-01.
+- **M3-04** <script setup> macros and composables — IN_PROGRESS, P1, 10h; depends on M3-01.
 - **M3-05** Vuex and Pinia resolution — IN_PROGRESS, P1, 14h; depends on M3-03.
-- **M3-06** Vue Router navigation edges — BACKLOG, P1, 8h; depends on M3-02.
+- **M3-06** Vue Router navigation edges — IN_PROGRESS, P1, 8h; depends on M3-02.
 - **M3-07** Framework detection from package.json files below the repo root — DONE, P2, 4h; depends on M3-01.
+- **M3-08** Vue global registry: re-link on sync, scope per manifest folder — BACKLOG, P2, 4h; depends on M3-02, M3-07.
 
 ## M4 — Measurement and developer experience
 
