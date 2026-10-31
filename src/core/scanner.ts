@@ -1151,12 +1151,18 @@ export class Scanner {
           }
         }
 
+        // C# base lists: the parser guesses class or interface from the name; an indexed target's
+        // kind decides (M0-17-R3).
+        const edgeType = sourceLanguage === 'c-sharp' && (ref.referenceType === 'extends' || ref.referenceType === 'implements') && symbols
+          ? this.csharpBaseEdgeType(ref, targetFile, symbols)
+          : ref.referenceType;
+
         edges.push({
           sourceFile: sourcePath,
           targetFile,
           sourceSymbol,
           targetSymbol,
-          edgeType: ref.referenceType,
+          edgeType,
           repo: repoName,
           weight: 1.0,
           verifiability: ref.verifiability ?? 'verified',
@@ -1168,6 +1174,23 @@ export class Scanner {
     }
 
     return edges;
+  }
+
+  /**
+   * C# `class A : X` in a class's base list: implements when X resolves to an indexed interface,
+   * extends when it resolves to an indexed class. Interfaces extend and structs implement whatever
+   * the target, so their parser type stands, as does a target of another kind.
+   */
+  private csharpBaseEdgeType(ref: ExtractedReference, targetFile: string, symbols: any[]): ExtractedReference['referenceType'] {
+    const owner = symbols
+      .filter((s) => ['class', 'interface', 'struct'].includes(s.kind) && s.startLine <= ref.startLine && ref.startLine <= s.endLine)
+      .sort((a, b) => (a.endLine - a.startLine) - (b.endLine - b.startLine))[0];
+    if (owner?.kind !== 'class') return ref.referenceType;
+    const name = ref.targetName.split('.').pop()!;
+    const candidates = this.symbolIndex?.get(name)
+      ?? this.store.getSymbolsForFile(targetFile).map((s: any) => ({ name: s.name, file: targetFile, kind: s.kind }));
+    const kind = candidates.find((m) => m.file === targetFile && m.name === name && (m.kind === 'class' || m.kind === 'interface'))?.kind;
+    return kind === 'interface' ? 'implements' : kind === 'class' ? 'extends' : ref.referenceType;
   }
 
   private resolveRequirePath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {

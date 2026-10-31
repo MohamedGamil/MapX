@@ -13,10 +13,13 @@
     (extends_clause
       (identifier) @ref.target_extends))) @ref.type_extends
 
+; `implements Run<T>` names Run (M0-17-R3). `extends Base<T>` already captures the identifier.
 (class_declaration
   (class_heritage
-    (implements_clause
-      (type_identifier) @ref.target_implements))) @ref.type_implements
+    (implements_clause [
+      (type_identifier) @ref.target_implements
+      (generic_type name: (type_identifier) @ref.target_implements)
+    ]))) @ref.type_implements
 
 (new_expression
   constructor: (identifier) @ref.target_instantiation) @ref.type_instantiation

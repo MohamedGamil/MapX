@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { getParserForFile } from '../src/parsers/parser-registry.js';
+import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M0-17-R1: per-language extraction defects reproduced by the M0-41 audit (I17).
 async function parse(file: string, src: string) {
@@ -142,5 +143,113 @@ describe('language extraction accuracy', () => {
     expect((await parse('a.swift', 'class Box {\n  init(size: Int) {}\n}\n')).symbols).toContain('method:Box::init');
     const scala = await parse('a.scala', 'import scala.collection.mutable.ListBuffer\nimport com.ex.lib.{Bar, Baz => Q}\nimport com.ex._\nobject M\n');
     expect(scala.refs).toEqual(['import:scala.collection.mutable.ListBuffer', 'import:com.ex.lib.Bar', 'import:com.ex.lib.Baz', 'import:com.ex._']);
+  });
+});
+
+// M0-17-R3: generic bases, exported let/var and local arrows (limitations of M0-17-R2).
+describe('language extraction accuracy: generic bases and JS bindings', () => {
+  const bases = (refs: string[]) => refs.filter((x) => /^(extends|implements):/.test(x)).sort();
+
+  it('Java: generic and qualified bases name their type', async () => {
+    const r = await parse('A.java', [
+      'class A extends Base<String> implements Run<T>, Other {}',
+      'interface I extends J<T>, K {}',
+      'class B extends java.util.ArrayList<String> {}',
+      'class C extends Plain {}',
+    ].join('\n'));
+    expect(bases(r.refs)).toEqual(['extends:Base', 'extends:J', 'extends:K', 'extends:Plain', 'extends:java.util.ArrayList', 'implements:Other', 'implements:Run']);
+  });
+
+  it('Kotlin: a generic superclass and interface name their type', async () => {
+    const r = await parse('a.kt', 'class A : Base<String>(), Run<T>, Other {}\n');
+    expect(bases(r.refs)).toEqual(['extends:Base', 'implements:Other', 'implements:Run']);
+  });
+
+  it('TypeScript and TSX: generic extends and implements name their type', async () => {
+    const src = 'class A extends Base<T> implements Run<T>, Other {}\n';
+    expect(bases((await parse('a.ts', src)).refs)).toEqual(['extends:Base', 'implements:Other', 'implements:Run']);
+    expect(bases((await parse('a.tsx', src)).refs)).toEqual(['extends:Base', 'implements:Other', 'implements:Run']);
+  });
+
+  it('JavaScript and TypeScript: exported let/var are variables; TS top-level bindings are symbols', async () => {
+    const js = await parse('a.js', 'export let x = 1;\nexport var y = 2;\nexport let f = () => 1;\nfunction g() { let z = 1; return z; }\n');
+    expect(js.symbols.sort()).toEqual(['function:f', 'function:g', 'variable:x', 'variable:y']);
+    const ts = await parse('a.ts', [
+      'export let x: number = 1;',
+      'export var y = 2;',
+      'export const e = 5;',
+      'const c = 3;',
+      'let d = 4;',
+      'var v = 6;',
+      'type T = number;',
+      'const a = () => 1, b = 2;',
+      'function g() { let z = 1; return z; }',
+    ].join('\n'));
+    expect(ts.symbols.sort()).toEqual(['constant:T', 'constant:b', 'constant:c', 'constant:e', 'function:a', 'function:g', 'variable:d', 'variable:v', 'variable:x', 'variable:y']);
+  });
+
+  it('JavaScript and TypeScript: an arrow declared inside a function is not a symbol', async () => {
+    const src = [
+      'function outer() { const f = () => 1; var h = function () {}; return f() + h(); }',
+      'class Foo { run() { const cb = () => 2; return cb(); } }',
+      'const top = () => { const inner = () => 3; return inner(); };',
+      'export const exp = () => 4;',
+    ].join('\n');
+    for (const file of ['a.js', 'a.ts']) {
+      expect((await parse(file, src)).symbols.sort()).toEqual(['class:Foo', 'function:exp', 'function:outer', 'function:top', 'method:Foo::run']);
+    }
+  });
+});
+
+// M0-17-R3: generic bases resolve to their class; C# base kinds follow the indexed target.
+describe('generic bases and C# base kinds end to end', () => {
+  let root: string;
+  type Edge = { source_symbol: string | null; edge_type: string; target_symbol: string; target_file: string };
+  const bases = (file: string) => query<Edge>(root,
+    "SELECT source_symbol, edge_type, target_symbol, target_file FROM edges WHERE source_file = ? AND edge_type IN ('extends', 'implements') ORDER BY source_symbol, target_symbol", file);
+
+  beforeAll(() => {
+    root = workspace({
+      'java/JBase.java': 'public class JBase<T> {}\n',
+      'java/JA.java': 'public class JA extends JBase<String> {}\n',
+      'kt/KBase.kt': 'open class KBase<T>\n',
+      'kt/KA.kt': 'class KA : KBase<String>()\n',
+      'ts/tbase.ts': 'export class TBase<T> {}\nexport interface TRun<T> {}\n',
+      'ts/ta.ts': "import { TBase, TRun } from './tbase';\nexport class TA extends TBase<number> implements TRun<number> {}\n",
+      // Shape is an interface without the I prefix; IPhone is a class with it.
+      'cs/Types.cs': 'namespace N {\npublic interface Shape {}\npublic class Item {}\npublic class IPhone {}\n}\n',
+      'cs/Use.cs': [
+        'namespace N {',
+        'class Box : Shape {}',
+        'class Phone : IPhone {}',
+        'class Pair : Item, Shape {}',
+        'interface IAll : Shape {}',
+        'struct S : Shape {}',
+        '}',
+      ].join('\n'),
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('Java, Kotlin and TypeScript generic bases are extends edges to the base class', () => {
+    expect(bases('java/JA.java')).toEqual([{ source_symbol: 'JA', edge_type: 'extends', target_symbol: 'JBase', target_file: 'java/JBase.java' }]);
+    expect(bases('kt/KA.kt')).toEqual([{ source_symbol: 'KA', edge_type: 'extends', target_symbol: 'KBase', target_file: 'kt/KBase.kt' }]);
+    expect(bases('ts/ta.ts')).toEqual([
+      { source_symbol: 'TA', edge_type: 'extends', target_symbol: 'TBase', target_file: 'ts/tbase.ts' },
+      { source_symbol: 'TA', edge_type: 'implements', target_symbol: 'TRun', target_file: 'ts/tbase.ts' },
+    ]);
+  });
+
+  it('C#: an indexed interface is implemented and an indexed class extended, whatever the name', () => {
+    expect(bases('cs/Use.cs')).toEqual([
+      { source_symbol: 'Box', edge_type: 'implements', target_symbol: 'Shape', target_file: 'cs/Types.cs' },
+      { source_symbol: 'IAll', edge_type: 'extends', target_symbol: 'Shape', target_file: 'cs/Types.cs' },
+      { source_symbol: 'Pair', edge_type: 'extends', target_symbol: 'Item', target_file: 'cs/Types.cs' },
+      { source_symbol: 'Pair', edge_type: 'implements', target_symbol: 'Shape', target_file: 'cs/Types.cs' },
+      { source_symbol: 'Phone', edge_type: 'extends', target_symbol: 'IPhone', target_file: 'cs/Types.cs' },
+      { source_symbol: 'S', edge_type: 'implements', target_symbol: 'Shape', target_file: 'cs/Types.cs' },
+    ]);
   });
 });

@@ -38,7 +38,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-02-R3** Git renames, nested-repo diffs and symlinked nested repos in incremental sync — IN_PROGRESS, P2, 4h; depends on M0-02-R2.
 - **M0-10-R3** mapx_workspaces F18 fields and duplicate config cleanup — BACKLOG, P2, 3h; depends on M0-10-R2.
 - **M0-03-R4** edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching — IN_PROGRESS, P2, 4h; depends on M0-03-R3, M0-05-R4.
-- **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — IN_PROGRESS, P2, 5h; depends on M0-17-R2.
+- **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — DONE, P2, 5h; depends on M0-17-R2.
 - **M0-32-R2** Cycle smells keep their path order; small follow-ups from integration — DONE, P2, 3h; depends on M0-32-R1, M2-06-R1, M0-07-R2, M0-09-R3.
 - **M0-31** Scanner performance and incremental scanning (0.3.x) — DONE, P1, 0h; depends on nothing.
 - **M0-32** Architecture analysis: profiler, roles, Leiden, smells, DSM, layers (0.3.2+) — DONE, P1, 0h; depends on nothing.

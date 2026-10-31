@@ -144,12 +144,13 @@ describe('workspace surface (F18)', () => {
     expect(status).toContain('Cross-repo edges: 2 (main → ui: 2)');
 
     const exported = mapx(root, 'export', '--all');
+    // TypeScript top-level `const icon` and `const web` are constant symbols (M0-17-R3).
     expect(exported).toContain([
       '## Repos (4)',
       '- main (primary) — 1 files, 1 symbols',
-      '- ui (submodule) — 2 files, 1 symbols',
+      '- ui (submodule) — 2 files, 2 symbols',
       '- tools (vscode-workspace) — 1 files, 1 symbols',
-      '- web (folder) — 1 files, 0 symbols',
+      '- web (folder) — 1 files, 1 symbols',
       '',
       '## Cross-repo dependencies (2 edges)',
       'main → ui: 2 import/instantiation',

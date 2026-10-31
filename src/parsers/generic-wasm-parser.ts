@@ -57,6 +57,19 @@ function csharpQualifiedNamespace(node: any, name: string): string {
   return name;
 }
 
+const JS_FUNCTION_NODES = new Set([
+  'function_declaration', 'function_expression', 'function', 'arrow_function', 'method_definition',
+  'generator_function_declaration', 'generator_function', 'class_static_block',
+]);
+
+/** True when a JS/TS node sits inside a function, arrow or method body. */
+function insideFunctionBody(node: any): boolean {
+  for (let curr = node.parent; curr; curr = curr.parent) {
+    if (JS_FUNCTION_NODES.has(curr.type)) return true;
+  }
+  return false;
+}
+
 export class GenericWasmParser implements LanguageParser {
   readonly languageName: string;
   readonly supportedExtensions: string[];
@@ -109,6 +122,9 @@ export class GenericWasmParser implements LanguageParser {
               const value = capture.node.childForFieldName('value')?.type;
               if (value === 'arrow_function' || value === 'function_expression' || value === 'function' || value === 'class' || value === 'generator_function') continue;
             }
+            // A `const f = () => …` inside a function or method body is a local binding, like a
+            // local constant, not a module function (M0-17-R3).
+            if (baseKind === 'function' && capture.node.type === 'variable_declarator' && insideFunctionBody(capture.node)) continue;
             seenNodeIds.add(capture.node.id);
 
             let kind = baseKind;

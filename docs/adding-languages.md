@@ -104,6 +104,10 @@ Example (Ruby):
   (#eq? @_new "new")) @ref.type_instantiation
 ```
 
+#### Constants as call targets
+
+`call` and `instantiation` references resolve by name. In JavaScript, TypeScript and Python they skip `constant` and `variable` symbols, because a binding whose value is a function is already a `function` symbol there. In every other language a `constant` stays a call target, because there it can be callable: C function-like macros, Rust tuple variants, Lua `local f = function … end` and Bash aliases. If a new language's constants and variables are never callable, add it to `VALUE_SYMBOL_LANGUAGES` in `src/core/scanner.ts`.
+
 ### Using Predicates
 
 Tree-sitter queries support `#eq?` and `#match?` predicates for precision:

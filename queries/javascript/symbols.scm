@@ -60,6 +60,18 @@
   (variable_declaration
     (variable_declarator name: (identifier) @symbol.name) @symbol.kind_variable))
 
+; `export let x` / `export var x` (M0-17-R3)
+(program
+  (export_statement
+    declaration: (lexical_declaration
+      kind: "let"
+      (variable_declarator name: (identifier) @symbol.name) @symbol.kind_variable)))
+
+(program
+  (export_statement
+    declaration: (variable_declaration
+      (variable_declarator name: (identifier) @symbol.name) @symbol.kind_variable)))
+
 ; Class fields: `bar = 1;`, `static baz = 2;`
 (field_definition
   property: (property_identifier) @symbol.name) @symbol.kind_property

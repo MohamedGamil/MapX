@@ -24,15 +24,17 @@
 (enum_declaration
   name: (identifier) @symbol.name) @symbol.kind_enum
 
+; The kind sits on the declarator, as in JavaScript, so the name binds to the same node whichever
+; pattern claims it (M0-17-R3).
 (lexical_declaration
   (variable_declarator
     name: (identifier) @symbol.name
-    value: [(arrow_function) (function_expression)])) @symbol.kind_function
+    value: [(arrow_function) (function_expression)]) @symbol.kind_function)
 
 (variable_declaration
   (variable_declarator
     name: (identifier) @symbol.name
-    value: [(arrow_function) (function_expression)])) @symbol.kind_function
+    value: [(arrow_function) (function_expression)]) @symbol.kind_function)
 
 (export_statement
   [
@@ -46,3 +48,36 @@
     (class_declaration)
     (class)
   ] @symbol.kind_class)
+
+; Top-level `const` / `let` / `var` bindings that are not functions, exported or not, as in
+; JavaScript (M0-17-R3). GenericWasmParser drops declarators whose value is a function or class.
+(program
+  (lexical_declaration
+    kind: "const"
+    (variable_declarator name: (identifier) @symbol.name) @symbol.kind_constant))
+
+(program
+  (export_statement
+    declaration: (lexical_declaration
+      kind: "const"
+      (variable_declarator name: (identifier) @symbol.name) @symbol.kind_constant)))
+
+(program
+  (lexical_declaration
+    kind: "let"
+    (variable_declarator name: (identifier) @symbol.name) @symbol.kind_variable))
+
+(program
+  (export_statement
+    declaration: (lexical_declaration
+      kind: "let"
+      (variable_declarator name: (identifier) @symbol.name) @symbol.kind_variable)))
+
+(program
+  (variable_declaration
+    (variable_declarator name: (identifier) @symbol.name) @symbol.kind_variable))
+
+(program
+  (export_statement
+    declaration: (variable_declaration
+      (variable_declarator name: (identifier) @symbol.name) @symbol.kind_variable)))
