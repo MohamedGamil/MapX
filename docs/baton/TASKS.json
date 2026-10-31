@@ -6373,15 +6373,28 @@
         "npx vitest run tests/parsers-integration.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. @click=\"save\" yields a call edge to the component's save method.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-template",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T07:27:04.431Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T07:27:04.136Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:27:04.431Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -6433,15 +6446,28 @@
         "npx vitest run tests/parsers-integration.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. this.save() inside methods resolves to methods.save in the same SFC.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-options",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T07:27:05.044Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T07:27:04.746Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:27:05.044Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -6669,15 +6695,28 @@
         "npx vitest run tests/vue-sfc.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue-detect",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T07:27:05.676Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T07:27:05.323Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T07:27:05.676Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
