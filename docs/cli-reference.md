@@ -86,6 +86,9 @@ Incremental scan. Detects changed files via git, or via content hashes outside g
 
 - When a file that was removed comes back (a restored file, or a branch switch), the files that referenced it are re-parsed, so its inbound edges return.
 - When the effective include/exclude filters differ from the last scan (config or flags), every file is re-parsed once, as `mapx scan` does.
+- When git reports a rename, the old path leaves the index and the files that referenced it are re-parsed.
+
+In a repo that sits inside a larger git checkout, only changes under the repo's folder count, with paths relative to it.
 
 ```bash
 mapx update [/path] [--exclude <glob>] [--include <glob>] [--repo <name>] [--all] [--no-parallel]

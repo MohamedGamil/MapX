@@ -56,6 +56,27 @@ function getPooledParser(language: Language): Parser {
   return parser;
 }
 
+/**
+ * Compiled queries per language. Compiling a query costs far more than running it (about 130 ms
+ * for each PHP query), so each (language, query) pair is compiled once per process, as the parse
+ * workers already do; small scans and syncs parse on the main thread (M0-02-R3).
+ */
+const queryCache = new Map<Language, Map<string, Query | null>>();
+
+function compiledQuery(language: Language, source: string): Query | null {
+  let bySource = queryCache.get(language);
+  if (!bySource) queryCache.set(language, (bySource = new Map()));
+  if (!bySource.has(source)) {
+    try {
+      bySource.set(source, new Query(language, source));
+    } catch (e: any) {
+      if (!e.message?.includes('no query')) throw e;
+      bySource.set(source, null);
+    }
+  }
+  return bySource.get(source)!;
+}
+
 export async function parseWithQueries(
   source: string,
   language: Language,
@@ -76,8 +97,8 @@ export async function parseWithQueries(
   const nameByNodeId = new Map<number, string>();
   const scopeByNodeId = new Map<number, string>();
 
-  try {
-    const symQuery = new Query(language, symbolsQuery);
+  const symQuery = compiledQuery(language, symbolsQuery);
+  if (symQuery) {
     const symMatches = symQuery.captures(tree.rootNode);
     const kindNodeIds = new Set<number>();
     for (const capture of symMatches) {
@@ -110,20 +131,16 @@ export async function parseWithQueries(
         }
       }
     }
-  } catch (e: any) {
-    if (!e.message?.includes('no query')) throw e;
   }
 
-  try {
-    const refQuery = new Query(language, referencesQuery);
+  const refQuery = compiledQuery(language, referencesQuery);
+  if (refQuery) {
     const refMatches = refQuery.captures(tree.rootNode);
     for (const capture of refMatches) {
       const existing = refCaptures.get(capture.name) || [];
       existing.push(capture);
       refCaptures.set(capture.name, existing);
     }
-  } catch (e: any) {
-    if (!e.message?.includes('no query')) throw e;
   }
 
   return { symbols: symbolCaptures, references: refCaptures, nameByNodeId, scopeByNodeId };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { Parser } from 'web-tree-sitter';
+import { Parser, Query } from 'web-tree-sitter';
 import { loadLanguage, parseWithQueries } from '../src/parsers/wasm-parser.js';
 
 // M0-37: exercise the real parser pool in src/parsers/wasm-parser.ts (CHANGELOG 0.3.4). A pooled
@@ -36,5 +36,29 @@ describe('WASM parser pool', () => {
     const parsed = await parseWithQueries('function c() {}', js, SYMBOLS, '');
     expect(parsed.symbols.get('symbol.name')?.[0]?.node.text).toBe('c');
     expect(setLanguage).not.toHaveBeenCalled();
+  });
+
+  // M0-02-R3: compiling a query costs far more than running it, and small scans and syncs parse on
+  // the main thread, so each (language, query) pair is compiled once and reused.
+  it('compiles each query once per language and reuses it', async () => {
+    const js = await loadLanguage({ name: 'javascript', grammarWasm: 'wasm/tree-sitter-javascript.wasm' } as any);
+    const php = await loadLanguage({ name: 'php', grammarWasm: 'wasm/tree-sitter-php.wasm' } as any);
+    const captures = vi.spyOn(Query.prototype, 'captures');
+    const REFS = '(call_expression function: (identifier) @ref.name)';
+    for (let i = 0; i < 3; i++) {
+      const parsed = await parseWithQueries(`function f${i}() { g${i}(); }`, js, SYMBOLS, REFS);
+      expect(parsed.symbols.get('symbol.name')?.[0]?.node.text).toBe(`f${i}`);
+      expect(parsed.references.get('ref.name')?.[0]?.node.text).toBe(`g${i}`);
+    }
+    await parseWithQueries('<?php function h() {}', php, '(function_definition name: (name) @symbol.name)', '');
+
+    // Six runs on JS (symbols and references, three files) use two compiled queries; PHP its own.
+    const queries = captures.mock.contexts as Query[];
+    expect(queries).toHaveLength(8);
+    expect(new Set(queries.slice(0, 6)).size).toBe(2);
+    expect(queries[0]).toBe(queries[2]);
+    expect(queries[1]).toBe(queries[3]);
+    expect(queries.slice(0, 6)).not.toContain(queries[6]);
+    expect(queries.slice(0, 6)).not.toContain(queries[7]);
   });
 });

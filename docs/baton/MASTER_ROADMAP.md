@@ -35,7 +35,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-22-R1** Verify and test the I22 usability deliverables — DONE, P2, 5h; depends on M0-22.
 - **M0-23** Scan summary edge count disagrees with stored edges — DONE, P2, 4h; depends on nothing.
 - **M0-30** Reconcile untracked post-I22 work into the plan — DONE, P1, 6h; depends on nothing.
-- **M0-02-R3** Git renames, nested-repo diffs and symlinked nested repos in incremental sync — IN_PROGRESS, P2, 4h; depends on M0-02-R2.
+- **M0-02-R3** Git renames, nested-repo diffs and symlinked nested repos in incremental sync — DONE, P2, 4h; depends on M0-02-R2.
 - **M0-10-R3** Workspaces: F18 fields, duplicate config cleanup, cross-repo references after workspaces add — IN_PROGRESS, P2, 5h; depends on M0-10-R2.
 - **M0-03-R4** edges/deps parity: cross-repo incoming edges, unindexed-file message, MCP path matching — DONE, P2, 4h; depends on M0-03-R3, M0-05-R4.
 - **M0-17-R3** Extraction: generic bases, exported let/var, local arrows, callable constants in other languages — DONE, P2, 5h; depends on M0-17-R2.
@@ -102,6 +102,7 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-98** M1 acceptance: re-score Laravel fixture — DONE, P0, 3h; depends on M1-02, M1-03, M1-04, M1-05, M1-06, M1-07, M1-08, M1-09.
 - **M1-99** Release (owner-initiated) — DEFERRED, P1, 2h; depends on nothing.
 - **M1-05-R2** Laravel resources: singleton, scoped, middlewareFor, per-route prefix/domain keys — DONE, P2, 4h; depends on M1-05-R1.
+- **M1-05-R3** Laravel routes: withoutMiddleware, implicit binding fields on plain routes, repeated chained attributes — BACKLOG, P3, 4h; depends on M1-05-R2.
 - **M1-03-R1** Laravel route-file walker: string/comment-aware lexing and brace-less groups — DONE, P1, 10h; depends on M1-03, M1-06.
 - **M1-07-R1** Laravel reachability is unknown, not false, for unevaluated mounts; registry keeps both duplicates — DONE, P1, 8h; depends on M1-07, M1-04.
 - **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — DONE, P2, 4h; depends on M1-05.

@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `sync` now drops the old path of a git rename and re-links its referrers, picks up changes in a repo nested inside a larger git checkout, treats a symlink to a registered repo as that repo, and small scans and syncs no longer recompile tree-sitter queries for every file (M0-02-R3).
 - Laravel `Route::singleton`/`apiSingleton` (with `creatable`/`destroyable` and the plural forms), `->scoped()` binding fields, `->middlewareFor()` and route-level `prefix`/`domain` keys now match Laravel's router, including its placement of a route's own prefix before the group prefix (M1-05-R2).
 - `mapx edges <file>` / `mapx_edges` now list edges from every repo of a workspace (incoming rows carry `sourceRepo`) and report a path that is not indexed instead of "No edges", and `mapx_dependencies` accepts globs and partial names like `mapx deps` (M0-03-R4).
 - Java and TypeScript generic bases (`extends Base<T>`, `implements Run<T>`) are extracted, `export let`/`export var` and TypeScript top-level bindings are symbols, arrows declared inside functions are no longer top-level functions, and C# base lists use the indexed target's kind to choose extends or implements (M0-17-R3).

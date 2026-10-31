@@ -4,6 +4,23 @@ import { resolve, join, dirname } from 'node:path';
 export interface GitFileStatus {
   path: string;
   status: 'added' | 'modified' | 'removed' | 'renamed' | 'unchanged';
+  /** The path before a rename; it no longer exists (M0-02-R3). */
+  oldPath?: string;
+}
+
+const STATUS: Record<string, GitFileStatus['status']> = {
+  'A': 'added', 'M': 'modified', 'D': 'removed', 'R': 'renamed', 'C': 'modified',
+};
+
+/** Parses `git diff --name-status` lines. A rename (`R<score> old new`) keeps its old path. */
+function parseNameStatus(output: string): GitFileStatus[] {
+  return output.trim().split('\n').filter(Boolean).map(line => {
+    const parts = line.split('\t');
+    const status = STATUS[parts[0].charAt(0)] || 'modified';
+    const change: GitFileStatus = { path: parts[parts.length - 1], status };
+    if (status === 'renamed' && parts.length > 2) change.oldPath = parts[1];
+    return change;
+  });
 }
 
 export interface GitBlobHash {
@@ -42,57 +59,26 @@ export function getGitBlobHashes(repoRoot: string): Map<string, string> {
 export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus[] {
   const changes: GitFileStatus[] = [];
 
+  // `--relative`: in a repo nested inside a larger checkout, git prints paths from the top level
+  // and lists changes outside the repo; the scanner resolves paths against the repo root (M0-02-R3).
   try {
-    let command: string;
-    if (since) {
-      command = `git diff --name-status ${since}`;
-    } else {
-      command = 'git diff --name-status HEAD';
-    }
-
-    const output = execSync(command, {
+    const output = execSync(`git diff --name-status --relative ${since || 'HEAD'}`, {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
     });
-
-    for (const line of output.trim().split('\n').filter(Boolean)) {
-      const parts = line.split('\t');
-      const status = parts[0].charAt(0);
-      const filePath = parts[parts.length - 1];
-
-      const statusMap: Record<string, GitFileStatus['status']> = {
-        'A': 'added',
-        'M': 'modified',
-        'D': 'removed',
-        'R': 'renamed',
-        'C': 'modified',
-      };
-
-      changes.push({ path: filePath, status: statusMap[status] || 'modified' });
-    }
+    changes.push(...parseNameStatus(output));
   } catch {
     // no previous commit or not a git repo
   }
 
   try {
-    const stagedOutput = execSync('git diff --name-status --cached', {
+    const stagedOutput = execSync('git diff --name-status --relative --cached', {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
-    }).trim();
-
-    for (const line of stagedOutput.split('\n').filter(Boolean)) {
-      const parts = line.split('\t');
-      const status = parts[0].charAt(0);
-      const filePath = parts[parts.length - 1];
-
-      if (!changes.find(c => c.path === filePath)) {
-        const statusMap: Record<string, GitFileStatus['status']> = {
-          'A': 'added', 'M': 'modified', 'D': 'removed', 'R': 'renamed',
-        };
-        changes.push({ path: filePath, status: statusMap[status] || 'modified' });
-      }
-    }
+    });
+    for (const change of parseNameStatus(stagedOutput))
+      if (!changes.find(c => c.path === change.path)) changes.push(change);
   } catch {
     // no staged changes
   }

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LARAVEL_DEFAULT_EXCLUDES } from '../src/core/config.js';
-import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
 
 // M0-02-R1: glob filter defects.
 const php = (ns: string, cls: string, body = '') => `<?php\nnamespace ${ns};\n${body}\nclass ${cls} {}\n`;
@@ -20,17 +20,19 @@ const files = {
   'public/index.php': "<?php\nrequire __DIR__.'/../bootstrap/app.php';\n",
 };
 
+// Every test starts from, and leaves behind, the unfiltered index built once here: a scan costs a
+// CLI process, so the tests do not rescan to establish it (M0-02-R3).
 describe('glob filters', () => {
   let root: string;
   beforeAll(() => {
     root = workspace(files);
     init(root);
+    mapx(root, 'scan', root);
   }, 60000);
   afterAll(() => cleanup(root));
   const edgeCount = () => query<{ n: number }>(root, 'SELECT count(*) AS n FROM edges')[0]!.n;
 
   it('restores inbound edges after an exclude is removed', () => {
-    mapx(root, 'scan', root);
     const original = edgeCount();
     expect(original).toBeGreaterThan(0);
     mapx(root, 'scan', root, '--exclude', 'app/Services/**');
@@ -50,7 +52,7 @@ describe('glob filters', () => {
   // so `**/_*` pruned every directory and directory-name patterns stopped pruning.
   it('prunes directories named by a pattern, and only those', () => {
     const paths = () => query<{ path: string }>(root, "SELECT path FROM files WHERE path LIKE 'app/%' ORDER BY path").map((f) => f.path);
-    const all = (mapx(root, 'scan', root), paths());
+    const all = paths();
     mapx(root, 'scan', root, '--exclude', '**/_*');
     expect(paths()).toEqual(all);
     mapx(root, 'scan', root, '--exclude', '**/Controllers');
@@ -72,7 +74,6 @@ describe('glob filters', () => {
     type Export = { clusters: { name: string }[]; memberships: { filePath: string; clusterName: string }[] };
     const exportJson = (...args: string[]) => JSON.parse(mapx(root, 'export', '-d', root, '--format', 'json', ...args)) as Export;
     const excluded = (p: string) => p.startsWith('app/Models/');
-    mapx(root, 'scan', root);
     const full = exportJson();
     // Clusters whose members are all excluded files (App.Models): the filtered export must drop them.
     const onlyExcluded = full.clusters.map((c) => c.name).filter((name) => {
@@ -95,9 +96,9 @@ describe('glob filters', () => {
   // M0-02-R2: `./` and Windows-style separators name the same files at scan time.
   it('normalises ./ and backslash patterns at scan time', () => {
     const paths = () => query<{ path: string }>(root, 'SELECT path FROM files ORDER BY path').map((f) => f.path);
-    mapx(root, 'scan', root, '--exclude', 'app/Services/**');
-    const expected = paths();
-    expect(expected.some((p) => p.startsWith('app/Services/'))).toBe(false);
+    const all = paths();
+    expect(all).toContain(USER_SERVICE);
+    const expected = all.filter((p) => !p.startsWith('app/Services/'));
     mapx(root, 'scan', root, '--exclude', './app/Services/**');
     expect(paths()).toEqual(expected);
     mapx(root, 'scan', root, '--exclude', 'app\\Services\\**');
@@ -178,15 +179,17 @@ describe('inbound edges of a deleted and restored file', () => {
   }, 120000);
 });
 
+// Files and edge tuples, to compare an incremental result with `scan --force`.
+const snapshot = (root: string) => ({
+  files: query<{ path: string }>(root, 'SELECT path FROM files ORDER BY path').map((f) => f.path),
+  edges: query<{ e: string }>(
+    root,
+    "SELECT source_file || '|' || target_file || '|' || edge_type || '|' || coalesce(source_symbol, '') || '|' || coalesce(target_symbol, '') || '|' || verifiability AS e FROM edges ORDER BY e",
+  ).map((r) => r.e),
+});
+
 // M0-02-R2: sync honours config filter changes as scan does.
 describe('sync after a config filter change', () => {
-  const snapshot = (root: string) => ({
-    files: query<{ path: string }>(root, 'SELECT path FROM files ORDER BY path').map((f) => f.path),
-    edges: query<{ e: string }>(
-      root,
-      "SELECT source_file || '|' || target_file || '|' || edge_type || '|' || coalesce(source_symbol, '') || '|' || coalesce(target_symbol, '') || '|' || verifiability AS e FROM edges ORDER BY e",
-    ).map((r) => r.e),
-  });
   const setExcludes = (root: string, change: (p: string[]) => string[]) => {
     const path = join(root, '.mapx', 'config.json');
     const config = JSON.parse(readFileSync(path, 'utf8'));
@@ -226,6 +229,9 @@ describe('sync after a config filter change', () => {
 });
 
 describe('Laravel default excludes at scan time', () => {
+  // The default settings are scanned once and shared by the tests that need them.
+  let defaults: string[] | undefined;
+  const scanDefaults = () => (defaults ??= scanWith({}));
   const scanWith = (settings: Record<string, unknown>) => {
     const root = workspace({ ...files, artisan: '#!/usr/bin/env php\n<?php\n' });
     init(root);
@@ -245,7 +251,7 @@ describe('Laravel default excludes at scan time', () => {
   };
 
   it('applies them for framework: laravel even when the config lists no globs', () => {
-    expect(scanWith({})).not.toContain('resources/views/welcome.blade.php');
+    expect(scanDefaults()).not.toContain('resources/views/welcome.blade.php');
   }, 60000);
 
   it('respects a declined suggestion', () => {
@@ -254,7 +260,7 @@ describe('Laravel default excludes at scan time', () => {
 
   // M0-02-R2: a list keeps only the defaults it names, so one default can be dropped.
   it('drops a single default when laravelDefaultExcludes lists the others', () => {
-    expect(scanWith({})).not.toContain('public/index.php');
+    expect(scanDefaults()).not.toContain('public/index.php');
     const indexed = scanWith({ laravelDefaultExcludes: LARAVEL_DEFAULT_EXCLUDES.filter((p) => p !== 'public/**') });
     expect(indexed).toContain('public/index.php');
     expect(indexed).not.toContain('resources/views/welcome.blade.php');
@@ -282,6 +288,117 @@ describe('Laravel default excludes at scan time', () => {
       expect(indexed).toContain('api/app/Models/User.php');
       expect(indexed).not.toContain('api/public/index.php');
       expect(indexed).not.toContain('api/resources/views/welcome.blade.php');
+    } finally {
+      cleanup(root);
+    }
+  }, 60000);
+});
+
+// M0-02-R3: git renames, repos nested in a larger checkout, and repos registered through a symlink.
+describe('incremental sync: git renames, nested and symlinked repos', () => {
+  const ACCOUNT_SERVICE = 'app/Services/AccountService.php';
+  const touching = (root: string, path: string) =>
+    query<{ e: string }>(
+      root,
+      "SELECT source_file || ' -> ' || target_file || ' ' || edge_type AS e FROM edges WHERE (source_file = ? OR target_file = ?) AND source_file != target_file ORDER BY e",
+      path,
+      path,
+    ).map((r) => r.e);
+
+  it('sync after git mv removes the old path and matches scan --force', () => {
+    const root = workspace(files, ['.']);
+    try {
+      writeFileSync(join(root, '.gitignore'), '.mapx/\n');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+      const original = snapshot(root);
+      expect(inbound(root)).toEqual(expect.arrayContaining([`app/Models/User.php -> ${USER_SERVICE} import`]));
+
+      // Committed rename. The class keeps its name: the `use` imports no longer resolve (PSR-4
+      // path), but UserController's parameter type still resolves to the class at its new path.
+      git(root, 'mv', USER_SERVICE, ACCOUNT_SERVICE);
+      git(root, 'commit', '-qm', 'rename');
+      mapx(root, 'sync', root);
+      const synced = snapshot(root);
+      expect(synced.files).toContain(ACCOUNT_SERVICE);
+      expect(synced.files).not.toContain(USER_SERVICE);
+      expect(touching(root, USER_SERVICE)).toEqual([]);
+      expect(touching(root, ACCOUNT_SERVICE)).toEqual([`app/Http/Controllers/UserController.php -> ${ACCOUNT_SERVICE} param_type`]);
+      mapx(root, 'scan', root, '--force');
+      expect(synced).toEqual(snapshot(root));
+
+      // Renamed back, staged but not committed: the diff against HEAD reports a rename too, and the
+      // tree is the scanned original again.
+      git(root, 'mv', ACCOUNT_SERVICE, USER_SERVICE);
+      mapx(root, 'sync', root);
+      expect(snapshot(root)).toEqual(original);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('sync in a repo nested inside a larger checkout indexes repo-relative paths', () => {
+    // The MapX workspace is api/; git's top level is its parent, which also holds web/.
+    const outer = workspace(
+      {
+        ...Object.fromEntries(Object.entries(files).map(([p, c]) => [`api/${p}`, c])),
+        'web/main.ts': 'export const web = 1;\n',
+        '.gitignore': '.mapx/\n',
+      },
+      ['.'],
+    );
+    const root = join(outer, 'api');
+    try {
+      git(outer, 'add', '-A');
+      git(outer, 'commit', '-qm', 'init');
+      init(root);
+      mapx(root, 'scan', root);
+
+      writeFileSync(join(root, 'app/Models/User.php'), php('App\\Models', 'User', 'use App\\Services\\UserService;\nclass Profile {}'));
+      writeFileSync(join(outer, 'web/main.ts'), 'export const web = 2;\n');
+      git(outer, 'rm', '-q', 'api/app/Services/MailService.php');
+      git(outer, 'commit', '-qam', 'change');
+      mapx(root, 'sync', root);
+
+      const symbols = query<{ name: string; file_path: string }>(root, "SELECT name, file_path FROM symbols WHERE name = 'Profile'");
+      expect(symbols).toEqual([{ name: 'Profile', file_path: 'app/Models/User.php' }]);
+      const synced = snapshot(root);
+      expect(synced.files).not.toContain('app/Services/MailService.php');
+      expect(synced.files.filter((p) => p.startsWith('api/') || p.startsWith('web/') || p.startsWith('..'))).toEqual([]);
+      mapx(root, 'scan', root, '--force');
+      expect(synced).toEqual(snapshot(root));
+    } finally {
+      cleanup(outer);
+    }
+  }, 120000);
+
+  it('the nested-repo check treats a symlink to a registered repo as that repo', () => {
+    const root = workspace(
+      { 'src/app.ts': 'export const app = 1;\n', 'packages/web/index.ts': 'export const web = 1;\n', 'libs/ui/button.ts': 'export const button = 1;\n' },
+      ['.', 'libs/ui'],
+    );
+    try {
+      symlinkSync(join(root, 'packages/web'), join(root, 'web-link'));
+      symlinkSync(join(root, 'libs/ui'), join(root, 'ui-link'));
+      init(root);
+      // Registered through their symlinks only, as an older config may have them (M0-10-R2).
+      const path = join(root, '.mapx', 'config.json');
+      const config = JSON.parse(readFileSync(path, 'utf8'));
+      config.repos = [config.repos[0], { name: 'web', path: 'web-link' }, { name: 'ui', path: 'ui-link' }];
+      writeFileSync(path, JSON.stringify(config));
+
+      const { stderr } = mapxWithStderr(root, 'scan', root, '--all');
+      // The plain folder is not indexed a second time under main, and the checkout is not taken
+      // for an unregistered nested repo.
+      const indexed = query<{ repo: string; path: string }>(root, 'SELECT repo, path FROM files ORDER BY path');
+      expect(indexed.filter((f) => f.repo === config.repos[0].name).map((f) => f.path)).toEqual(['src/app.ts']);
+      expect(indexed.filter((f) => f.repo !== config.repos[0].name)).toEqual([
+        { repo: 'ui', path: 'ui-link/button.ts' },
+        { repo: 'web', path: 'web-link/index.ts' },
+      ]);
+      expect(stderr).not.toContain('unregistered nested git repository');
     } finally {
       cleanup(root);
     }

@@ -63,6 +63,21 @@ describe('git-tracker module', () => {
     expect(changed).toContainEqual({ path: 'src/new.ts', status: 'added' });
   });
 
+  // M0-02-R3: a rename keeps its old path, and the diffs are relative to the repo folder.
+  it('getChangedFiles keeps the old path of a rename and diffs with --relative', () => {
+    vi.mocked(execSync).mockReturnValueOnce('R087\tsrc/a.ts\tsrc/b.ts\nC100\tsrc/c.ts\tsrc/d.ts\n');
+    vi.mocked(execSync).mockReturnValueOnce('R100\tsrc/e.ts\tsrc/f.ts\n');
+    vi.mocked(execSync).mockReturnValueOnce('');
+
+    expect(getChangedFiles('/mock-repo', 'abc123')).toEqual([
+      { path: 'src/b.ts', status: 'renamed', oldPath: 'src/a.ts' },
+      { path: 'src/d.ts', status: 'modified' },
+      { path: 'src/f.ts', status: 'renamed', oldPath: 'src/e.ts' },
+    ]);
+    const commands = vi.mocked(execSync).mock.calls.map(([c]) => c);
+    expect(commands.slice(0, 2)).toEqual(['git diff --name-status --relative abc123', 'git diff --name-status --relative --cached']);
+  });
+
   it('getCurrentCommitSha and getPreviousCommitSha parse shas', () => {
     vi.mocked(execSync).mockReturnValueOnce('sha123\n');
     expect(getCurrentCommitSha('/mock-repo')).toBe('sha123');

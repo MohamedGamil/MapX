@@ -19,6 +19,7 @@ import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, isGitRepo } from './git-tracker.js';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
 import { FrameworkRegistry } from '../frameworks/framework-registry.js';
+import { canonicalPath } from './workspace-manager.js';
 import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, normalizePattern, shebangLanguage } from './file-rules.js';
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
@@ -541,6 +542,16 @@ export class Scanner {
     const toRemove: string[] = [];
     const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string }> = [];
 
+    // A rename is listed by its new path; its old path leaves the index, and the files with edges
+    // into it are re-parsed so references that now resolve to the new path find it (M0-02-R3).
+    const renamedReferrers = new Set<string>();
+    for (const change of changes) {
+      if (!change.oldPath) continue;
+      const oldPath = relative(workspaceRoot, resolve(repoRoot, change.oldPath)).replace(/\\/g, '/');
+      toRemove.push(oldPath);
+      for (const r of this.store.getReferrers(oldPath)) renamedReferrers.add(r);
+    }
+
     for (const change of changes) {
       const absolutePath = resolve(repoRoot, change.path);
       const relativePath = relative(workspaceRoot, absolutePath).replace(/\\/g, '/');
@@ -560,9 +571,10 @@ export class Scanner {
       }
     }
 
-    // Unchanged files of this repo that had edges into a removed file now back (M0-02-R2).
+    // Unchanged files of this repo that had edges into a removed file now back (M0-02-R2), or into
+    // a renamed file's old path.
     const reindexed = new Set(toReindex.map(r => r.path));
-    for (const r of this.takeReferrers(repo.name, [...reindexed])) {
+    for (const r of new Set([...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers])) {
       if (reindexed.has(r) || toRemove.includes(r) || this.store.getFile(r)?.repo !== repo.name) continue;
       const absolutePath = resolve(workspaceRoot, r);
       const fileInfo = existsSync(absolutePath) ? await this.getFileInfo(absolutePath, r) : null;
@@ -694,12 +706,15 @@ export class Scanner {
     }
 
     // Another registered repo nested inside this one indexes its own files; walking into it
-    // would index them twice under two repos and inflate counts (M0-23).
-    const ownRoot = resolve(repoRoot);
-    const registeredRoots = new Set(this.config.repos.map(r => resolve(workspaceRoot, r.path)));
+    // would index them twice under two repos and inflate counts (M0-23). Roots are compared by
+    // canonical path, so a repo registered through a symlink is recognised at its real folder
+    // (M0-02-R3). The walk never follows symlinks, so a child's canonical path is its parent's
+    // plus its name.
+    const ownRoot = canonicalPath(repoRoot);
+    const registeredRoots = new Set(this.config.repos.map(r => canonicalPath(resolve(workspaceRoot, r.path))));
     const nestedRepoRoots = new Set([...registeredRoots].filter(p => p !== ownRoot));
 
-    const walk = async (currentDir: string) => {
+    const walk = async (currentDir: string, canonicalDir: string) => {
       const entries = await readdir(currentDir, { withFileTypes: true });
 
       for (const entry of entries) {
@@ -710,22 +725,23 @@ export class Scanner {
         const fullPath = join(currentDir, entry.name);
 
         if (entry.isDirectory()) {
+          const canonical = join(canonicalDir, entry.name);
           const relDir = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
           if (this.shouldExcludeDir(relDir, excludes)) continue;
 
-          if (nestedRepoRoots.has(resolve(fullPath))) continue;
+          if (nestedRepoRoots.has(canonical)) continue;
 
           // Check if this directory contains a .git entry (file or directory)
           // and is NOT the root or any registered repository path.
           const gitPath = join(fullPath, '.git');
           if (existsSync(gitPath)) {
-            if (!registeredRoots.has(resolve(fullPath))) {
+            if (!registeredRoots.has(canonical)) {
               console.warn(`\n⚠️ Warning: Found unregistered nested git repository at ${fullPath}. Skipping walk inside this directory.`);
               continue;
             }
           }
 
-          await walk(fullPath);
+          await walk(fullPath, canonical);
         } else if (entry.isFile()) {
           const relPath = relative(workspaceRoot, fullPath).replace(/\\/g, '/');
           if (!matcher(relPath)) continue;
@@ -765,7 +781,7 @@ export class Scanner {
       }
     };
 
-    await walk(repoRoot);
+    await walk(repoRoot, ownRoot);
     return files;
   }
 
@@ -1543,6 +1559,8 @@ export class Scanner {
     const removed = this.removedFiles(repoName);
     let changed = false;
     for (const p of paths) {
+      // References parsed later in this scan must not resolve to a removed file (M0-02-R3).
+      this.workspaceFileMap.delete(p);
       if (!this.store.getFile(p)) continue;
       removed[p] = [...new Set([...(removed[p] ?? []), ...this.store.getReferrers(p)])];
       changed = true;
