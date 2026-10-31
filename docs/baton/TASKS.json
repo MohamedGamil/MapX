@@ -6250,10 +6250,10 @@
         "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Fixtures cover template handlers, component tags, v-model, this.x() calls, mixins, defineProps/defineEmits, a composable, Vuex map helpers and a Pinia store.",
-      "status": "BLOCKED",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-vue",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T06:49:06.803Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -6271,6 +6271,18 @@
           "to": "BLOCKED",
           "evidence": [],
           "note": "D010: the remediation backlog comes before M3; quality dependencies added in the same structured edit (READY → BLOCKED could not go through the tool while the plan was mid-edit)."
+        },
+        {
+          "at": "2026-10-31T06:49:06.474Z",
+          "from": "BLOCKED",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T06:49:06.803Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
         }
       ],
       "criticalPath": false,
