@@ -9001,20 +9001,52 @@
         "npx vitest run tests/legacy-nestjs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "lane-misc",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-10-31T01:53:55.760Z",
+      "completedAt": "2026-10-31T02:02:59.658Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-20-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-nestjs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-20-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T00:30:45.070Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T01:53:55.760Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:02:59.386Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:02:59.658Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-nestjs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-20-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -9431,10 +9463,10 @@
         "npx vitest run tests/legacy-imports.test.ts tests/legacy-languages.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-imports",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T01:53:54.951Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -9444,6 +9476,12 @@
           "at": "2026-10-31T00:30:46.667Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T01:53:54.951Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -9635,15 +9673,28 @@
         "npx vitest run tests/legacy-metrics-edges.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-cli",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T01:53:55.490Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T01:53:48.269Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T01:53:55.490Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -9825,10 +9876,10 @@
         "npx tsx scripts/eval/score-routes.ts tests/fixtures/laravel-routes --json --min-recall 0.95 --max-fp 0"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-laravel",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T01:53:54.685Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -9838,6 +9889,12 @@
           "at": "2026-10-31T00:30:46.954Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T01:53:54.685Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -10033,10 +10090,10 @@
         "npx tsx scripts/eval/score-http.ts tests/fixtures/vue-http --json --min-recall 0.8 --min-precision 0.95"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-http",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T01:53:55.228Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -10046,6 +10103,12 @@
           "at": "2026-10-31T00:30:47.521Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T01:53:55.228Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
