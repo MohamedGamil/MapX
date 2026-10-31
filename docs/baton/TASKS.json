@@ -5122,9 +5122,9 @@
     {
       "priority": "P2",
       "estimate": {
-        "min": 2,
-        "expected": 3,
-        "max": 5
+        "min": 3,
+        "expected": 5,
+        "max": 7
       },
       "risk": "low",
       "area": [
@@ -5140,7 +5140,8 @@
       "blockingConditions": [],
       "sources": [
         "docs/baton/reports/M0-10-R2.md",
-        "specs/features/F18-git-workspace-submodules.md"
+        "specs/features/F18-git-workspace-submodules.md",
+        "docs/baton/reports/M0-03-R4.md"
       ],
       "outputs": [
         "fix",
@@ -5151,34 +5152,50 @@
         "src/core/workspace-summary.ts",
         "src/core/config.ts",
         "src/mcp.ts",
-        "tests/legacy-workspaces.test.ts"
+        "tests/legacy-workspaces.test.ts",
+        "src/core/scanner.ts",
+        "src/cli.ts"
       ],
       "acceptanceCriteria": [
         "mapx_workspaces entries carry absolute path, relativePath, isRegistered and isInitialised as F18 specifies (MCP test).",
-        "A config holding the same repo twice (also via a symlink) is collapsed to one entry on load or sync, with a message (test)."
+        "A config holding the same repo twice (also via a symlink) is collapsed to one entry on load or sync, with a message (test).",
+        "After `workspaces add <repo>` in a workspace whose primary repo is not yet indexed, a plain `scan --all` (no --force) resolves the new repo's references into the primary repo, matching scan --all --force (e2e test)."
       ],
       "verificationCommands": [
         "npx vitest run tests/legacy-workspaces.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-cli",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T04:15:38.511Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T04:15:38.119Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T04:15:38.511Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
       "id": "M0-10-R3",
-      "title": "mapx_workspaces F18 fields and duplicate config cleanup",
+      "title": "Workspaces: F18 fields, duplicate config cleanup, cross-repo references after workspaces add",
       "objective": "mapx_workspaces returns every F18 field and existing duplicate repo entries are collapsed.",
       "milestone": "M0",
-      "description": "Found by M0-10-R2 (2026-10-31): mapx_workspaces lacks F18 path/relativePath/isRegistered/isInitialised (D010: implement as specified); duplicate entries already in configs are not cleaned up."
+      "description": "Found by M0-10-R2 (2026-10-31): mapx_workspaces lacks F18 path/relativePath/isRegistered/isInitialised (D010: implement as specified); duplicate entries already in configs are not cleaned up. Found by M0-03-R4 (2026-10-31): workspaces add scans the new repo before the primary repo is indexed, and its references into the primary repo stay unresolved after a later scan --all until --force."
     },
     {
       "priority": "P2",
