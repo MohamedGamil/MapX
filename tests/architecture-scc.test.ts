@@ -143,7 +143,8 @@ describe('ArchitectureAnalyzer cycle smells (M0-32-R1)', () => {
   });
 });
 
-describe('mapx scan on a long cyclic import chain (M0-32-R1)', () => {
+// Minutes long: opt in with MAPX_SLOW_TESTS=1; the in-memory 20,000/100,000-node tests above guard the fix on every run.
+describe.skipIf(!process.env.MAPX_SLOW_TESTS)('mapx scan on a long cyclic import chain (M0-32-R1)', () => {
   let root: string | undefined;
   afterAll(() => {
     if (root) cleanup(root);
