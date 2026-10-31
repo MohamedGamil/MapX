@@ -29,4 +29,6 @@ class HomeController
     public function exports() {}
     public function afterExports() {}
     public function commentedEntry() {}
+    public function article() {}
+    public function book() {}
 }

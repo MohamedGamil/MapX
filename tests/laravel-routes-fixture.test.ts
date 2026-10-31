@@ -37,7 +37,9 @@ describe('Laravel route fixture labels', () => {
       // M1-05-R1: resource options arrays, nesting and shallow, Route::resources, action arrays without `uses`.
       'resource-options', 'resource-excluded', 'nested-resource', 'nested-wrong', 'resources-array', 'action-array',
       // M1-05-R2: singletons and route-level prefix keys.
-      'singleton', 'singleton-excluded', 'route-prefix', 'route-prefix-wrong'])
+      'singleton', 'singleton-excluded', 'route-prefix', 'route-prefix-wrong',
+      // M1-05-R3: implicit binding fields ({post:slug}) reported as {post}.
+      'binding-field'])
       expect(patterns, p).toContain(p);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
     for (const l of labels) {

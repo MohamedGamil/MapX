@@ -118,3 +118,9 @@ Route::singleton('profile', ProfileController::class)->except('edit');
 Route::apiSingleton('teams.logo', LogoController::class)->creatable();
 Route::get('status', ['prefix' => 'v3', 'uses' => 'HomeController@status']);
 Route::prefix('lead')->get('chained', [HomeController::class, 'chained']);
+
+// M1-05-R3: implicit binding fields, in the URI and in a group prefix, are reported as {param}.
+Route::get('articles/{article:slug}', [HomeController::class, 'article']);
+Route::prefix('authors/{author:uuid}')->group(function () {
+    Route::get('books/{book:isbn?}', [HomeController::class, 'book']);
+});

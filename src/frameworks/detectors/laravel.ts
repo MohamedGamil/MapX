@@ -39,6 +39,8 @@ interface LaravelWorkspaceContext {
       prefix: string;
       namespace: string;
       middlewares: string[];
+      /** `->withoutMiddleware()` of the mount (M1-05-R3). */
+      excluded?: string[];
     }>;
   };
   /** Route files reachable from an entry point, each with every mount that loads it. */
@@ -57,6 +59,8 @@ interface LaravelWorkspaceContext {
 interface RouteMount {
   prefixes: string[];
   middlewares: string[];
+  /** Excluded middleware of the enclosing groups (`withoutMiddleware`, `excluded_middleware`). */
+  excluded?: string[];
   namespaces: string[];
   controller: string | null;
   /** Route::domain() / 'domain' => of the enclosing groups, when any. */
@@ -253,12 +257,15 @@ function parseRouteServiceProvider(source: string, providerPath: string, wctx: L
       if (relativeRoutePath) {
         let prefix = '';
         let namespace = classNamespace;
-        const middlewares: string[] = [];
+        let middlewares: string[] = [];
+        const excluded: string[] = [];
 
+        // Chained RouteRegistrar attributes: a repeated one replaces the last (M1-05-R3), except
+        // withoutMiddleware, which accumulates.
         for (const call of parsed.calls) {
           if (call.name === 'prefix') {
             const args = parseArgs(call.args);
-            if (args[0]) prefix = (prefix ? `${prefix}/` : '') + args[0];
+            if (args[0]) prefix = args[0];
           } else if (call.name === 'namespace') {
             const args = parseArgs(call.args);
             if (args[0]) {
@@ -270,7 +277,9 @@ function parseRouteServiceProvider(source: string, providerPath: string, wctx: L
               }
             }
           } else if (call.name === 'middleware') {
-            middlewares.push(...listArg(call.args));
+            middlewares = listArg(call.args);
+          } else if (call.name === 'withoutMiddleware') {
+            excluded.push(...listArg(call.args));
           } else if (call.name === 'group' && (call.args.trim().startsWith('[') || call.args.trim().startsWith('array('))) {
             const groupAttrs = parseGroupAttributes(call.args);
             if (groupAttrs.prefixes[0]) {
@@ -280,14 +289,17 @@ function parseRouteServiceProvider(source: string, providerPath: string, wctx: L
               namespace = groupAttrs.namespaces[0];
             }
             middlewares.push(...groupAttrs.middlewares);
+            excluded.push(...groupAttrs.excluded);
           }
         }
 
+        // Class constants are named by the provider's own use table (M0-04-R3).
+        const names = (list: string[]) => middlewareClassNames(list, parseUseImports(text), fileNamespace(text));
         wctx.routeServiceProvider.routes[relativeRoutePath] = {
           prefix,
           namespace,
-          // Class constants are named by the provider's own use table (M0-04-R3).
-          middlewares: middlewareClassNames(middlewares, parseUseImports(text), fileNamespace(text)),
+          middlewares: names(middlewares),
+          ...(excluded.length ? { excluded: names(excluded) } : {}),
         };
       }
     }
@@ -402,7 +414,7 @@ async function buildMountGraph(workspaceRoot: string, root: string, rootIndex: n
     for (const [file, config] of Object.entries(legacy.routeServiceProvider.routes))
       entries.push({
         file: normalizeMountPath(rel(file)),
-        frame: { ...emptyFrame(), prefixes: config.prefix ? [config.prefix] : [], middlewares: config.middlewares, namespaces: config.namespace ? [config.namespace] : [] },
+        frame: { ...emptyFrame(), prefixes: config.prefix ? [config.prefix] : [], middlewares: config.middlewares, excluded: config.excluded, namespaces: config.namespace ? [config.namespace] : [] },
         via: rspPath,
       });
   }
@@ -479,12 +491,9 @@ function getInitialGroupConfig(normalizedPath: string, wctx: LaravelWorkspaceCon
 }
 
 async function resolveRouteMiddlewares(routes: RouteBinding[], wctx: LaravelWorkspaceContext) {
-  for (const r of routes) {
-    const mws = r.middlewares || r.metadata?.middlewares;
-    if (!mws) continue;
-
+  const resolve = (list: string[]) => {
     const expanded: string[] = [];
-    for (const mw of mws) {
+    for (const mw of list) {
       if (wctx.kernelMiddlewares.groups[mw]) {
         for (const subMw of wctx.kernelMiddlewares.groups[mw]) {
           const resolved = wctx.kernelMiddlewares.aliases[subMw] || subMw;
@@ -495,8 +504,16 @@ async function resolveRouteMiddlewares(routes: RouteBinding[], wctx: LaravelWork
         expanded.push(resolved);
       }
     }
+    return expanded;
+  };
+  for (const r of routes) {
+    const mws = r.middlewares || r.metadata?.middlewares;
+    if (!mws) continue;
 
-    const uniqueMws = Array.from(new Set(expanded));
+    // Router::resolveMiddleware: excluded names go through the same aliases and groups, and
+    // remove exact matches only (`throttle` does not remove `throttle:60,1`). M1-05-R3.
+    const excluded = new Set(resolve((r.metadata?.excludedMiddlewares as string[] | undefined) ?? []));
+    const uniqueMws = Array.from(new Set(resolve(mws))).filter(mw => !excluded.has(mw));
     r.middlewares = uniqueMws;
     if (r.metadata) {
       r.metadata.middlewares = uniqueMws;
@@ -1197,9 +1214,10 @@ function pathArg(raw: string, scope: PhpScope): string {
   return phpString(raw, scope, DYNAMIC) ?? DYNAMIC;
 }
 
-function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], namespaces: string[], domain: string | null, names: string[] } {
+function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope()): { prefixes: string[], middlewares: string[], excluded: string[], namespaces: string[], domain: string | null, names: string[] } {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
+  const excluded: string[] = [];
   const namespaces: string[] = [];
   const names: string[] = [];
   let domain: string | null = null;
@@ -1213,7 +1231,7 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
     const paren = getParenthesizedContent(trimmed, 5);
     if (paren) arrayContent = paren.content;
   } else {
-    return { prefixes, middlewares, namespaces, domain, names };
+    return { prefixes, middlewares, excluded, namespaces, domain, names };
   }
 
   if (arrayContent) {
@@ -1256,9 +1274,12 @@ function parseGroupAttributes(argsStr: string, scope: PhpScope = literalScope())
         }
       }
     }
+
+    // 4. Excluded middleware, merged into nested groups like `middleware` (M1-05-R3).
+    for (const e of phpArrayEntries(`[${arrayContent}]`) ?? []) if (e.key === 'excluded_middleware') excluded.push(...listArg(e.value));
   }
 
-  return { prefixes, middlewares, namespaces, domain, names };
+  return { prefixes, middlewares, excluded, namespaces, domain, names };
 }
 
 /**
@@ -1310,10 +1331,29 @@ interface ResourceOptions {
   bindingFields?: Record<string, string>;
   /** `middleware_for` / `->middlewareFor()`: an action's middleware, replacing `middleware`. */
   middlewareFor?: Record<string, string[]>;
+  /** `excluded_middleware` / `->withoutMiddleware()`: removed from every action (M1-05-R3). */
+  excluded?: string[];
+  /** `excluded_middleware_for` / `->withoutMiddlewareFor()`: also removed from that action. */
+  excludedFor?: Record<string, string[]>;
 }
 
 /** Laravel's Router::uniqueMiddleware: first occurrence wins. */
 const uniqueMiddleware = (list: string[]) => [...new Set(list)];
+
+/**
+ * Laravel's RouteUri::parse: an implicit binding field (`{post:slug}`, `{post:slug?}`) leaves the
+ * URI as `{post}` / `{post?}` and becomes a binding field, in URI order (M1-05-R3).
+ */
+function parseRouteUri(uri: string): { uri: string; bindingFields: Record<string, string> } {
+  const bindingFields: Record<string, string> = {};
+  const parsed = uri.replace(/\{([\w:]+?)\??\}/g, (match: string) => {
+    if (!match.includes(':')) return match;
+    const [param, field] = match.replace(/^\{|\??\}$/g, '').split(':');
+    bindingFields[param!] = field!;
+    return match.endsWith('?}') ? `{${param}?}` : `{${param}}`;
+  });
+  return { uri: parsed, bindingFields };
+}
 
 /** The options array of `Route::resource($name, $controller, $options)` and `Route::resources($map, $options)`. */
 function parseResourceOptions(arg: string | undefined, scope: PhpScope): ResourceOptions {
@@ -1331,6 +1371,10 @@ function parseResourceOptions(arg: string | undefined, scope: PhpScope): Resourc
     else if (key === 'middleware_for') {
       options.middlewareFor = {};
       for (const e of phpArrayEntries(value) ?? []) if (e.key !== null) options.middlewareFor[e.key] = listArg(e.value);
+    } else if (key === 'excluded_middleware') options.excluded = listArg(value);
+    else if (key === 'excluded_middleware_for') {
+      options.excludedFor = {};
+      for (const e of phpArrayEntries(value) ?? []) if (e.key !== null) options.excludedFor[e.key] = listArg(e.value);
     }
   }
   return options;
@@ -1388,6 +1432,7 @@ function expandResourceRoute(
   options: ResourceOptions = {},
   namePrefix = '',
   singleton = false,
+  groupExcluded: string[] = [],
 ): RouteBinding[] {
   const clean = resourceName.replace(/^\/+|\/+$/g, '');
   const name = clean.slice(clean.lastIndexOf('/') + 1);
@@ -1413,6 +1458,9 @@ function expandResourceRoute(
   const only = options.only ?? (isApi ? apiActions.filter(a => !options.except?.includes(a)) : undefined);
   const middlewaresFor = (action: string) =>
     [...groupMiddlewares, ...(options.middlewareFor?.[action] ?? options.middleware ?? [])];
+  // ResourceRegistrar::register: an action's `excluded_middleware_for` is merged after `excluded_middleware`.
+  const excludedFor = (action: string) => [...groupExcluded, ...(options.excludedFor?.[action]
+    ? uniqueMiddleware([...(options.excluded ?? []), ...options.excludedFor[action]!]) : options.excluded ?? [])];
 
   // Singletons: the URI is the resource URI itself (getResourceUri drops the last wildcard), and
   // show/create/store keep the full nested name even when shallow.
@@ -1441,10 +1489,14 @@ function expandResourceRoute(
     .filter(def => (!only || only.includes(def.action)) && !options.except?.includes(def.action))
     .map(def => {
     const n = def.member ? memberName : name;
-    const fullPath = ('/' + [...cleanPrefixes, resourceUri(n)].join('/') + def.pathSuffix).replace(/\/+/g, '/').replace(/\/$/, '') || '/';
-    // setResourceBindingFields: the scoped field of each wildcard in the route's URI, in URI order.
-    const bindingFields = Object.fromEntries([...fullPath.matchAll(/\{(\w+)\}/g)]
-      .filter(m => options.bindingFields?.[m[1]!] !== undefined).map(m => [m[1]!, options.bindingFields![m[1]!]!]));
+    // The Route constructor parses `{param:field}` (a group prefix can carry one) out of the URI.
+    const parsed = parseRouteUri(('/' + [...cleanPrefixes, resourceUri(n)].join('/') + def.pathSuffix).replace(/\/+/g, '/').replace(/\/$/, '') || '/');
+    const fullPath = parsed.uri;
+    // setResourceBindingFields (scoped()) replaces them: the scoped field of each wildcard in the
+    // route's URI, in URI order.
+    const bindingFields = options.bindingFields ? Object.fromEntries([...fullPath.matchAll(/\{(\w+)\}/g)]
+      .filter(m => options.bindingFields?.[m[1]!] !== undefined).map(m => [m[1]!, options.bindingFields![m[1]!]!])) : parsed.bindingFields;
+    const excluded = excludedFor(def.action);
     return {
       framework: frameworkName,
       method: def.method,
@@ -1455,6 +1507,7 @@ function expandResourceRoute(
         confidence: 'inferred',
         resourceType: isApi ? (singleton ? 'apiSingleton' : 'apiResource') : singleton ? 'singleton' : 'resource',
         middlewares: middlewaresFor(def.action),
+        ...(excluded.length ? { excludedMiddlewares: excluded } : {}),
         name: routeName(n, def.action),
         ...(Object.keys(bindingFields).length ? { bindingFields } : {}),
       }
@@ -1700,10 +1753,15 @@ interface WalkOptions {
   provider?: boolean;
 }
 
-/** Group attributes declared by a chain itself (prefix, middleware, namespace, controller, group array). */
+/**
+ * Group attributes declared by a chain itself (prefix, middleware, namespace, controller, group
+ * array). A repeated RouteRegistrar attribute replaces the last one, except withoutMiddleware,
+ * which accumulates (M1-05-R3).
+ */
 function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
   const prefixes: string[] = [];
   const middlewares: string[] = [];
+  const excluded: string[] = [];
   const namespaces: string[] = [];
   const names: string[] = [];
   let controller: string | null = null;
@@ -1711,7 +1769,7 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
   for (const call of calls) {
     if (call.name === 'prefix') {
       const a = parseArgs(call.args, true)[0];
-      if (a) prefixes.push(pathArg(a, scope));
+      if (a) prefixes.splice(0, prefixes.length, pathArg(a, scope));
     } else if (call.name === 'name' || call.name === 'as') {
       // A RouteRegistrar attribute: the last one wins.
       const a = parseArgs(call.args, true)[0];
@@ -1720,24 +1778,26 @@ function chainAttributes(calls: ChainedCall[], scope: PhpScope) {
     } else if (call.name === 'domain') {
       const a = parseArgs(call.args, true)[0];
       if (a) domain = pathArg(a, scope);
-    } else if (call.name === 'middleware' || call.name === 'withoutMiddleware') {
-      if (call.name === 'withoutMiddleware') continue;
-      middlewares.push(...listArg(call.args));
+    } else if (call.name === 'middleware') {
+      middlewares.splice(0, middlewares.length, ...listArg(call.args));
+    } else if (call.name === 'withoutMiddleware') {
+      excluded.push(...listArg(call.args));
     } else if (call.name === 'namespace') {
       const a = parseArgs(call.args)[0];
-      if (a) namespaces.push(a);
+      if (a) namespaces.splice(0, namespaces.length, a);
     } else if (call.name === 'controller') {
       controller = parseArgs(call.args)[0]?.match(/([a-zA-Z0-9_\\]+)/)?.[1] ?? null;
     } else if (call.name === 'group' && /^\s*(\[|array\()/.test(call.args)) {
       const attrs = parseGroupAttributes(call.args, scope);
       prefixes.push(...attrs.prefixes);
       middlewares.push(...attrs.middlewares);
+      excluded.push(...attrs.excluded);
       namespaces.push(...attrs.namespaces);
       names.push(...attrs.names);
       domain = attrs.domain ?? domain;
     }
   }
-  return { prefixes, middlewares, namespaces, controller, domain, names };
+  return { prefixes, middlewares, excluded, namespaces, controller, domain, names };
 }
 
 /** Quoted names and class constants of a PHP list: 'auth', "verified", EnsureX::class, \A\B::class. */
@@ -1811,6 +1871,8 @@ function unwrapParens(expr: string): string {
 interface GroupFrame {
   prefixes: string[];
   middlewares: string[];
+  /** Excluded middleware (`withoutMiddleware`, `excluded_middleware`). */
+  excluded?: string[];
   namespaces: string[];
   /** Route name prefixes, concatenated outermost first. */
   names: string[];
@@ -1853,6 +1915,7 @@ function walkRouteFile(
   const groupStack: GroupFrame[] = [{
     prefixes: frame.prefixes,
     middlewares: frame.middlewares,
+    excluded: frame.excluded ?? [],
     namespaces: frame.namespaces,
     names: frame.names ?? [],
     controller: frame.controller,
@@ -1865,6 +1928,7 @@ function walkRouteFile(
   const current = () => ({
     prefixes: groupStack.flatMap(g => g.prefixes),
     middlewares: groupStack.flatMap(g => g.middlewares),
+    excluded: groupStack.flatMap(g => g.excluded ?? []),
     namespaces: groupStack.flatMap(g => g.namespaces),
     names: groupStack.flatMap(g => g.names),
     controller: [...groupStack].reverse().find(g => g.controller)?.controller ?? null,
@@ -1882,13 +1946,14 @@ function walkRouteFile(
     const end = closed > 0 ? closed : code.length;
     globLoops.push({ variable: loop[2]!, pattern: parseArgs(loop[1]!, true)[0] ?? '', at: m.index!, start: head.endIndex, end });
   }
-  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; namespaces: string[]; controller: string | null; domain?: string | null; names?: string[] } = { prefixes: [], middlewares: [], namespaces: [], controller: null }) => {
+  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; excluded?: string[]; namespaces: string[]; controller: string | null; domain?: string | null; names?: string[] } = { prefixes: [], middlewares: [], namespaces: [], controller: null }) => {
     const base = current();
     const push = (file: string, sub?: number) => mounts.push({
       file: normalizeMountPath(file),
       frame: {
         prefixes: [...base.prefixes, ...extra.prefixes],
         middlewares: middlewareNames([...base.middlewares, ...extra.middlewares]),
+        excluded: middlewareNames([...base.excluded, ...(extra.excluded ?? [])]),
         namespaces: [...base.namespaces, ...extra.namespaces],
         names: [...base.names, ...(extra.names ?? [])],
         controller: extra.controller ?? base.controller,
@@ -1975,6 +2040,7 @@ function walkRouteFile(
         if (r.middlewares) r.middlewares = middlewareNames(r.middlewares);
         const meta = (r.metadata ??= {});
         if (Array.isArray(meta.middlewares)) meta.middlewares = middlewareNames(meta.middlewares);
+        if (Array.isArray(meta.excludedMiddlewares)) meta.excludedMiddlewares = middlewareNames(meta.excludedMiddlewares);
         meta.line = line;
         meta.order = [i];
         if (inConditional() || bracelessIf(i)) meta.conditional = true;
@@ -2008,7 +2074,9 @@ function processRouteChain(
   let handlerStr: string | null = null;
   let chainController: string | null = null;
   const chainPrefixes: string[] = [];
+  /** Middleware and excluded middleware of a group opened by this chain. */
   const chainMiddlewares: string[] = [];
+  const chainExcluded: string[] = [];
   const chainNamespaces: string[] = [];
   /** Name prefixes of a group opened by this chain. */
   const chainNames: string[] = [];
@@ -2021,6 +2089,14 @@ function processRouteChain(
   /** `->prefix()` / `->domain()` called on the route after the verb. */
   const postPrefixes: string[] = [];
   let postDomain: string | undefined;
+  /**
+   * Middleware before the verb or group (a RouteRegistrar attribute: the last one wins) and after
+   * the verb (Route::middleware() appends). withoutMiddleware accumulates either way (M1-05-R3).
+   */
+  let middlewareAttribute: string[] | undefined;
+  const postMiddlewares: string[] = [];
+  let excludedAttribute: string[] | undefined;
+  const postExcluded: string[] = [];
   let isGroup = false;
   const isResourceVerb = () => /^(API)?(RESOURCE|SINGLETON)S?$/.test(verb ?? '');
 
@@ -2028,10 +2104,13 @@ function processRouteChain(
     if (call.name === 'group') {
       isGroup = true;
       if (nameAttribute !== undefined) chainNames.push(nameAttribute);
+      chainMiddlewares.push(...(middlewareAttribute ?? []));
+      chainExcluded.push(...(excludedAttribute ?? []));
       if (call.args) {
         const groupAttrs = parseGroupAttributes(call.args, scope);
         chainPrefixes.push(...groupAttrs.prefixes);
         chainMiddlewares.push(...groupAttrs.middlewares);
+        chainExcluded.push(...groupAttrs.excluded);
         chainNamespaces.push(...groupAttrs.namespaces);
         chainNames.push(...groupAttrs.names);
         chainDomain = groupAttrs.domain ?? chainDomain;
@@ -2063,6 +2142,15 @@ function processRouteChain(
         const merged = uniqueMiddleware([...(resourceOptions.middleware ?? []), ...listArg(list)]);
         for (const m of listArg(methods)) resourceOptions.middlewareFor = { ...resourceOptions.middlewareFor, [m]: merged };
       }
+    } else if (call.name === 'withoutMiddlewareFor') {
+      // PendingResourceRegistration::withoutMiddlewareFor(): replaces those actions' entries.
+      const [methods, list] = parseArgs(call.args, true);
+      if (methods && list) for (const m of listArg(methods)) resourceOptions.excludedFor = { ...resourceOptions.excludedFor, [m]: listArg(list) };
+    } else if (call.name === 'withoutMiddleware') {
+      const list = listArg(call.args);
+      if (isResourceVerb()) resourceOptions.excluded = [...(resourceOptions.excluded ?? []), ...list];
+      else if (verb) postExcluded.push(...list);
+      else excludedAttribute = [...(excludedAttribute ?? []), ...list];
     } else if (call.name === 'domain') {
       const raw = parseArgs(call.args, true)[0];
       if (raw && verb) postDomain = pathArg(raw, scope);
@@ -2090,7 +2178,8 @@ function processRouteChain(
         // array: RouteRegistrar passes `$this->attributes + $options`. Prefix, namespace and
         // domain attributes are not resource options, so Laravel ignores them.
         if (nameAttribute !== undefined) resourceOptions.as = nameAttribute;
-        if (chainMiddlewares.length) resourceOptions.middleware = [...chainMiddlewares];
+        if (middlewareAttribute !== undefined) resourceOptions.middleware = [...middlewareAttribute];
+        if (excludedAttribute !== undefined) resourceOptions.excluded = [...excludedAttribute];
       }
     } else if (call.name === 'match') {
       const args = parseArgs(call.args);
@@ -2121,22 +2210,23 @@ function processRouteChain(
       const raw = parseArgs(call.args, true)[0];
       if (raw && verb) postPrefixes.push(pathArg(raw, scope));
       else if (raw) {
-        chainPrefixes.push(pathArg(raw, scope));
+        // A RouteRegistrar attribute, for a route or a group: the last one wins.
+        chainPrefixes.splice(0, chainPrefixes.length, pathArg(raw, scope));
         prefixAttribute = pathArg(raw, scope);
       }
     } else if (call.name === 'middleware') {
       const list = listArg(call.args);
-      chainMiddlewares.push(...list);
       // PendingResourceRegistration::middleware() replaces the resource's middleware option and
       // is appended to every middlewareFor entry.
       if (isResourceVerb()) {
         resourceOptions.middleware = list;
         for (const [m, value] of Object.entries(resourceOptions.middlewareFor ?? {}))
           resourceOptions.middlewareFor![m] = uniqueMiddleware([...value, ...list]);
-      }
+      } else if (verb) postMiddlewares.push(...list);
+      else middlewareAttribute = list;
     } else if (call.name === 'namespace') {
       const args = parseArgs(call.args);
-      if (args[0]) chainNamespaces.push(args[0]);
+      if (args[0]) chainNamespaces.splice(0, chainNamespaces.length, args[0]);
     } else if (call.name === 'only' || call.name === 'except') {
       resourceOptions[call.name] = listArg(call.args);
     } else if (call.name === 'parameters') {
@@ -2156,7 +2246,9 @@ function processRouteChain(
   let actionName: string | undefined;
   let actionPrefix: string | undefined;
   let actionDomain: string | undefined;
-  const actionMiddlewares: string[] = [];
+  /** The action's `middleware` / `excluded_middleware` keys replace the chained attributes (`array_merge($attributes, $action)`). */
+  let actionMiddlewares: string[] | undefined;
+  let actionExcluded: string[] | undefined;
   const action = verb && !isResourceVerb() ? phpArrayEntries(handlerStr ?? undefined) : null;
   if (action?.some(e => e.key !== null)) {
     let uses: string | null = null;
@@ -2168,7 +2260,8 @@ function processRouteChain(
       } else if (key === 'as') actionName = phpString(value, scope) ?? undefined;
       else if (key === 'prefix') actionPrefix = pathArg(value, scope);
       else if (key === 'domain') actionDomain = pathArg(value, scope);
-      else if (key === 'middleware') actionMiddlewares.push(...listArg(value));
+      else if (key === 'middleware') actionMiddlewares = listArg(value);
+      else if (key === 'excluded_middleware') actionExcluded = listArg(value);
       else if (key === null && callable === null && /^(function\b|fn\b|static\b|\[)/.test(value)) callable = value;
     }
     handlerStr = uses ?? callable;
@@ -2176,6 +2269,7 @@ function processRouteChain(
 
   const groupPrefixes = groupStack.flatMap(g => g.prefixes);
   const groupMiddlewares = groupStack.flatMap(g => g.middlewares);
+  const groupExcluded: string[] = groupStack.flatMap(g => g.excluded ?? []);
   const groupNamespaces = groupStack.flatMap(g => g.namespaces);
   const groupNames: string = groupStack.flatMap(g => g.names ?? []).join('');
 
@@ -2184,7 +2278,9 @@ function processRouteChain(
   // attribute: `array_merge($attributes, $action)`), then each `->prefix()` called on the route.
   const routePrefix = actionPrefix ?? prefixAttribute;
   const fullPrefixes = [...[...postPrefixes].reverse(), ...(routePrefix !== undefined ? [routePrefix] : []), ...groupPrefixes];
-  const fullMiddlewares = [...groupMiddlewares, ...actionMiddlewares, ...chainMiddlewares];
+  // RouteGroup::merge puts the group's middleware first; Route::middleware() calls append.
+  const fullMiddlewares = [...groupMiddlewares, ...(actionMiddlewares ?? middlewareAttribute ?? []), ...postMiddlewares];
+  const fullExcluded = [...groupExcluded, ...(actionExcluded ?? excludedAttribute ?? []), ...postExcluded];
   const fullNamespaces = [...groupNamespaces, ...chainNamespaces];
   // Laravel's route name: group prefixes, then the action's `as` (or a `->name()` attribute set
   // before the verb), then every `->name()` after it. A named group names even unnamed routes.
@@ -2197,6 +2293,7 @@ function processRouteChain(
     groupStack.push({
       prefixes: chainPrefixes,
       middlewares: chainMiddlewares,
+      excluded: chainExcluded,
       namespaces: chainNamespaces,
       names: chainNames,
       controller: activeController,
@@ -2242,7 +2339,7 @@ function processRouteChain(
       const register = (resName: string, ctrl: string, declared: boolean) => {
         const fqn = controllerFqn(ctrl, useImports, groupNamespaces);
         const expanded = expandResourceRoute(frameworkName, resName, fqn, ctx.resolveSymbolToFile(fqn) ?? filePath,
-          groupPrefixes, groupMiddlewares, verb!.startsWith('API'), resourceOptions, groupNames, verb!.includes('SINGLETON'));
+          groupPrefixes, groupMiddlewares, verb!.startsWith('API'), resourceOptions, groupNames, verb!.includes('SINGLETON'), groupExcluded);
         if (declared) for (const r of expanded) r.metadata!.confidence = 'declared';
         routes.push(...expanded);
       };
@@ -2268,7 +2365,12 @@ function processRouteChain(
 
       const cleanPrefixes = fullPrefixes.map(p => p.replace(/^\/|\/$/g, '')).filter(Boolean);
       const cleanUri = uri.replace(/^\/|\/$/g, '');
-      const fullPath = '/' + [...cleanPrefixes, cleanUri].join('/');
+      // RouteUri::parse: `{post:slug}` is reported as `{post}` with a binding field. Each
+      // `->prefix()` after the verb re-parses the already stripped URI, so only the last one's
+      // own fields survive, as in Laravel.
+      const parsed = parseRouteUri('/' + [...cleanPrefixes, cleanUri].join('/'));
+      const fullPath = parsed.uri;
+      const bindingFields = postPrefixes.length ? parseRouteUri(postPrefixes[postPrefixes.length - 1]!).bindingFields : parsed.bindingFields;
 
       routes.push({
         framework: frameworkName,
@@ -2279,7 +2381,9 @@ function processRouteChain(
         metadata: {
           confidence: 'inferred',
           middlewares: fullMiddlewares,
+          ...(fullExcluded.length ? { excludedMiddlewares: fullExcluded } : {}),
           ...(routeName ? { name: routeName } : {}),
+          ...(Object.keys(bindingFields).length ? { bindingFields } : {}),
         },
       });
     }

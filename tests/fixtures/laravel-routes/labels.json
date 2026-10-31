@@ -897,6 +897,22 @@
       "uri": "api/lead/chained",
       "handler": "HomeController@chained",
       "expect": "absent"
+    },
+    {
+      "id": "L113",
+      "pattern": "binding-field",
+      "method": "GET",
+      "uri": "api/articles/{article}",
+      "handler": "HomeController@article",
+      "expect": "live"
+    },
+    {
+      "id": "L114",
+      "pattern": "binding-field",
+      "method": "GET",
+      "uri": "api/authors/{author}/books/{book}",
+      "handler": "HomeController@book",
+      "expect": "live"
     }
   ]
 }

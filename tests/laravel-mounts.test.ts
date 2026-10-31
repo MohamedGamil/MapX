@@ -640,6 +640,195 @@ describe('M0-04-R3: ->middleware(X::class) through the route file use table', ()
   });
 });
 
+// M1-05-R3: excluded middleware, implicit binding fields in plain URIs and repeated RouteRegistrar
+// attributes. EXPECTED is frozen output of laravel/framework v12.70.2 for this exact route file,
+// mounted like the default routes/api.php (prefix api, middleware api, App\\Http\\Controllers). Its
+// middleware is what Router::gatherRouteMiddleware keeps: Route::middleware() minus excludedMiddleware().
+describe('M1-05-R3: withoutMiddleware, {param:field} URIs and repeated chained attributes match Laravel', () => {
+  let root: string;
+  let routes: (RouteView & { domain?: string; metadata?: { bindingFields?: Record<string, string> } })[];
+  const EXPECTED = [
+    'GET /api/open - OpenController@show [api,throttle] -',
+    'GET /api/limited - OpenController@limited [api,auth,throttle:60,1] -',
+    'GET /api/bare - OpenController@bare [] -',
+    'GET /api/lean - OpenController@lean [api,etag] -',
+    'GET /api/calm - OpenController@calm [api,auth] -',
+    'GET /api/notes notes.index NoteController@index [api,auth] -',
+    'GET /api/calmer - OpenController@calmer [api,log] -',
+    'GET /api/panel - PanelController@index [api,App\\Http\\Middleware\\Audit,auth] -',
+    'GET /api/trail - PanelController@trail [api,App\\Http\\Middleware\\EnsureAdmin,auth] -',
+    'GET /api/legacy - OpenController@legacy [api,auth] -',
+    'GET /api/photos photos.index PhotoController@index [api,auth] -',
+    'GET /api/photos/{photo} photos.show PhotoController@show [api,auth] -',
+    'GET /api/videos videos.index VideoController@index [api,verified] -',
+    'GET /api/videos/{video} videos.show VideoController@show [api,verified] -',
+    'GET /api/clips clips.index ClipController@index [api,auth] -',
+    'GET /api/clips/{clip} clips.show ClipController@show [api] -',
+    'GET /api/tags tags.index TagController@index [] -',
+    'GET /api/settings settings.show SettingsController@show [api] -',
+    'GET /api/settings/edit settings.edit SettingsController@edit [api,auth] -',
+    'GET /api/twice - RepeatController@twice [api,second] -',
+    'GET /api/after - RepeatController@after [api,first,second,third] -',
+    'GET /api/override - RepeatController@override [api,action,later] -',
+    'GET /api/grouped - RepeatController@grouped [api,inner] -',
+    'GET /api/pens pens.index PenController@index [api,second] -',
+    'GET /api/two/nested - RepeatController@nested [api] -',
+    'GET /api/roster - RosterController@index [api] -',
+    'GET /api/named b.route RepeatController@named [api] -',
+    'GET /api/posts/{post} - PostController@show [api] - {"post":"slug"}',
+    'GET /api/users/{user}/posts/{post?} - PostController@byUser [api] - {"post":"slug"}',
+    'GET /api/files/{file} - FileController@handle [api] - {"file":"hash"}',
+    'POST /api/files/{file} - FileController@handle [api] - {"file":"hash"}',
+    'GET /api/teams/{team}/members/{member} - MemberController@show [api] - {"team":"uuid","member":"email"}',
+    'GET /api/teams/{team}/items/{item} items.show ItemController@show [api] - {"team":"uuid"}',
+    'GET /api/teams/{team}/boards/{board} boards.show BoardController@show [api] - {"board":"code"}',
+    'GET /v2/api/tags/{tag} - TagController@byName [api] -',
+  ];
+  const line = (r: (typeof routes)[number]) => {
+    const fields = r.metadata?.bindingFields;
+    return `${r.method} ${r.path} ${r.name ?? '-'} ${r.handlerSymbol?.split('\\').pop() ?? 'Closure'} [${r.middlewares.join(',')}] ${r.domain ?? '-'}` +
+      (fields && Object.keys(fields).length ? ` ${JSON.stringify(fields)}` : '');
+  };
+  const mw = (name: string) => `<?php\nnamespace App\\Http\\Middleware;\nclass ${name} { public function handle($request, $next) { return $next($request); } }\n`;
+
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'app/Http/Middleware/EnsureAdmin.php': mw('EnsureAdmin'),
+      'app/Http/Middleware/Audit.php': mw('Audit'),
+      'routes/api.php': [
+        '<?php',
+        'use App\\Http\\Middleware\\EnsureAdmin;',
+        'use App\\Http\\Middleware as Mw;',
+        'use Illuminate\\Support\\Facades\\Route;',
+        '',
+        '// withoutMiddleware on a route, before and after the verb, on groups and with class constants.',
+        "Route::middleware(['auth', 'throttle'])->group(function () {",
+        "    Route::get('open', 'OpenController@show')->withoutMiddleware('auth');",
+        "    Route::get('limited', 'OpenController@limited')->middleware('throttle:60,1')->withoutMiddleware('throttle');",
+        '});',
+        "Route::withoutMiddleware('api')->get('bare', 'OpenController@bare');",
+        "Route::withoutMiddleware('log')->withoutMiddleware('cache')->get('lean', 'OpenController@lean')->middleware(['log', 'cache', 'etag']);",
+        "Route::withoutMiddleware(['throttle'])->group(function () {",
+        "    Route::get('calm', 'OpenController@calm')->middleware(['throttle', 'auth']);",
+        "    Route::resource('notes', 'NoteController')->middleware(['throttle', 'auth'])->only(['index']);",
+        "    Route::group(['excluded_middleware' => ['auth']], function () {",
+        "        Route::get('calmer', 'OpenController@calmer')->middleware(['throttle', 'auth', 'log']);",
+        '    });',
+        '});',
+        "Route::middleware([EnsureAdmin::class, Mw\\Audit::class, 'auth'])->group(function () {",
+        "    Route::get('panel', 'PanelController@index')->withoutMiddleware(EnsureAdmin::class);",
+        "    Route::get('trail', 'PanelController@trail')->withoutMiddleware([Mw\\Audit::class]);",
+        '});',
+        "Route::get('legacy', ['middleware' => ['auth', 'log'], 'excluded_middleware' => ['log'], 'uses' => 'OpenController@legacy']);",
+        '',
+        '// Resources: withoutMiddleware, withoutMiddlewareFor, the options keys and a chained attribute.',
+        "Route::resource('photos', 'PhotoController')->middleware(['auth', 'log'])->withoutMiddleware('log')->only(['index', 'show']);",
+        "Route::apiResource('videos', 'VideoController')->middleware(['auth', 'verified'])->withoutMiddlewareFor('index', 'verified')->withoutMiddlewareFor(['show', 'index'], ['auth'])->only(['index', 'show']);",
+        "Route::resource('clips', 'ClipController', ['middleware' => ['auth', 'log'], 'excluded_middleware' => ['log'], 'excluded_middleware_for' => ['show' => ['auth']]])->only(['index', 'show']);",
+        "Route::withoutMiddleware('api')->resource('tags', 'TagController')->withoutMiddleware('auth')->middleware('auth')->only(['index']);",
+        "Route::singleton('settings', 'SettingsController')->middleware('auth')->withoutMiddlewareFor('show', 'auth')->only(['show', 'edit']);",
+        '',
+        '// Repeated chained attributes: a RouteRegistrar attribute is replaced, Route::middleware() appends.',
+        "Route::middleware('first')->middleware('second')->get('twice', 'RepeatController@twice');",
+        "Route::middleware('first')->get('after', 'RepeatController@after')->middleware('second')->middleware('third');",
+        "Route::middleware('first')->get('override', ['middleware' => 'action', 'uses' => 'RepeatController@override'])->middleware('later');",
+        "Route::middleware('outer')->middleware('inner')->group(function () {",
+        "    Route::get('grouped', 'RepeatController@grouped');",
+        '});',
+        "Route::middleware('first')->middleware('second')->resource('pens', 'PenController')->only(['index']);",
+        "Route::prefix('one')->prefix('two')->group(function () {",
+        "    Route::get('nested', 'RepeatController@nested');",
+        '});',
+        "Route::namespace('Admin')->namespace('Staff')->group(function () {",
+        "    Route::get('roster', 'RosterController@index');",
+        '});',
+        "Route::name('a.')->name('b.')->group(function () {",
+        "    Route::get('named', 'RepeatController@named')->name('route');",
+        '});',
+        '',
+        '// Implicit binding fields in plain route URIs and group prefixes.',
+        "Route::get('posts/{post:slug}', 'PostController@show');",
+        "Route::get('users/{user}/posts/{post:slug?}', 'PostController@byUser');",
+        "Route::match(['get', 'post'], 'files/{file:hash}', 'FileController@handle');",
+        "Route::prefix('teams/{team:uuid}')->group(function () {",
+        "    Route::get('members/{member:email}', 'MemberController@show');",
+        "    Route::resource('items', 'ItemController')->only(['show']);",
+        "    Route::resource('boards', 'BoardController')->scoped(['board' => 'code'])->only(['show']);",
+        '});',
+        "Route::get('tags/{tag:name}', 'TagController@byName')->prefix('v2');",
+      ].join('\n'),
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    routes = JSON.parse(mapx(root, 'routes', root, '--json'));
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it("reports exactly Laravel's route list: excluded middleware removed, binding fields split from the URI", () => {
+    // One line per method, like the oracle: Route::match() is one route with several methods.
+    expect(routes.flatMap((r) => r.method.split('|').map((method) => line({ ...r, method }))).sort()).toEqual([...EXPECTED].sort());
+  });
+
+  it('links a middleware class only from the routes that keep it', () => {
+    const edges = query<{ target_file: string; metadata: string }>(root,
+      "SELECT target_file, metadata FROM edges WHERE source_file = 'routes/api.php' AND edge_type = 'middleware' ORDER BY target_file")
+      .map((e) => `${e.target_file} ${JSON.parse(e.metadata).routes.join(',')}`);
+    expect(edges).toEqual([
+      'app/Http/Middleware/Audit.php GET /api/panel',
+      'app/Http/Middleware/EnsureAdmin.php GET /api/trail',
+    ]);
+  });
+
+  it('keeps the last chained namespace attribute for a group', () => {
+    expect(routes.find((r) => r.path === '/api/roster')?.handlerSymbol).toBe('App\\Http\\Controllers\\Staff\\RosterController@index');
+  });
+});
+
+// M1-05-R3: the same attribute rules for a RouteServiceProvider mount and a `->group(<path>)` mount.
+// The expected list is laravel/framework v12.70.2 output for the provider's chain and these two files.
+describe('M1-05-R3: repeated attributes and withoutMiddleware on provider and file mounts match Laravel', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'app/Providers/RouteServiceProvider.php': [
+        '<?php',
+        'namespace App\\Providers;',
+        'use Illuminate\\Foundation\\Support\\Providers\\RouteServiceProvider as ServiceProvider;',
+        'use Illuminate\\Support\\Facades\\Route;',
+        'class RouteServiceProvider extends ServiceProvider',
+        '{',
+        '    public function boot(): void',
+        '    {',
+        '        $this->routes(function () {',
+        "            Route::middleware('web')->middleware(['extra', 'auth'])->prefix('lost')->prefix('portal')->withoutMiddleware('extra')->group(base_path('routes/portal.php'));",
+        '        });',
+        '    }',
+        '}',
+      ].join('\n'),
+      'routes/portal.php': [
+        '<?php',
+        'use Illuminate\\Support\\Facades\\Route;',
+        "Route::get('home', 'PortalController@home');",
+        "Route::middleware('first')->middleware(['second', 'log'])->prefix('lost')->prefix('admin')->withoutMiddleware('auth')->group(__DIR__.'/portal-admin.php');",
+      ].join('\n'),
+      'routes/portal-admin.php': "<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::get('stats', 'PortalController@stats')->withoutMiddleware('log');\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it("reports Laravel's prefixes and gathered middleware", () => {
+    const routes: RouteView[] = JSON.parse(mapx(root, 'routes', root, '--json'));
+    expect(routes.map((r) => `${r.method} ${r.path} ${r.handlerSymbol?.split('\\').pop()} [${r.middlewares.join(',')}]`).sort()).toEqual([
+      'GET /portal/admin/stats PortalController@stats [second]',
+      'GET /portal/home PortalController@home [auth]',
+    ]);
+  });
+});
+
 // Review 2026-10-31: the M1-08 test seeded frameworks.json and used artisan, so detection from
 // composer.json alone was never exercised.
 describe('M1-08: a nested Laravel app found from composer.json alone', () => {
