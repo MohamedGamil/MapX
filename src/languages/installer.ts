@@ -14,9 +14,14 @@ function known(name: string): LanguageDefinition {
   return def;
 }
 
-/** Every supported language is bundled, so it is always available. */
+/**
+ * A supported language is available when its bundled grammar file is present (static file types
+ * need none). A missing WASM means a broken install, not an uninstalled language (M0-12-R6).
+ */
 export function isLanguageInstalled(name: string): boolean {
-  return name in languages();
+  if (!(name in languages())) return false;
+  const info = describeLanguage(name);
+  return !info.grammar || info.grammarPresent;
 }
 
 /** Returns a message: all grammars are bundled, nothing is downloaded or copied. */
@@ -55,11 +60,15 @@ const fileMatches = (def: { extensions: string[]; filenames?: string[] }) => [..
 
 /** Text of `mapx lang list` and `mapx_lang_list` (one formatter keeps the CLI and MCP in step). */
 export function formatLanguageList(): string {
-  const lines = ['Supported languages (all grammars are bundled):'];
-  for (const [name, def] of Object.entries(languages())) {
-    lines.push(`  - ${name} (${fileMatches(def)} | tier: ${def.tier} | status: ${isLanguageInstalled(name) ? 'bundled' : 'unavailable'})`);
-  }
-  return lines.join('\n');
+  const rows = Object.entries(languages()).map(([name, def]) => {
+    const status = isLanguageInstalled(name) ? 'bundled' : 'missing';
+    return { status, line: `  - ${name} (${fileMatches(def)} | tier: ${def.tier} | status: ${status})` };
+  });
+  const missing = rows.filter((r) => r.status === 'missing').length;
+  const header = missing
+    ? `Supported languages (${missing} grammar ${missing === 1 ? 'file is' : 'files are'} missing; reinstall MapX):`
+    : 'Supported languages (all grammars are bundled):';
+  return [header, ...rows.map((r) => r.line)].join('\n');
 }
 
 /** Text of `mapx lang info <lang>` and `mapx_lang_info`; throws on an unknown language. */

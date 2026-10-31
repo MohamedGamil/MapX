@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { getLanguageForFile, languageFromShebang } from '../src/languages/registry.js';
+import { getBuiltinLanguages, getLanguageForFile, languageFromShebang, supportedLanguageCount } from '../src/languages/registry.js';
 import { buildServer } from '../src/mcp.js';
 import { TEMPLATES } from '../src/agents/templates.js';
-import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, mapxEnv, query, workspace } from './helpers/e2e.js';
+
+// Preload fixture that makes named grammar files look missing (M0-12-R6).
+const HIDE_GRAMMAR = pathToFileURL(join(__dirname, 'fixtures/languages/hide-grammar.mjs')).href;
 
 // M0-12-R2 (D010): all grammars bundled, lang info, install/uninstall no-ops, shebang detection.
 describe('language CLI', () => {
@@ -261,6 +265,25 @@ describe('language tools: MCP and CLI agree (M0-12-R3)', () => {
     expect(() => mapx(root, 'lang', 'info', 'klingon')).toThrow();
     expect((await call('mapx_lang_install', { lang: 'ruby' })).isError).toBe(false);
   });
+
+  // M0-12-R6: a missing WASM file was still listed as bundled.
+  it('reports a grammar whose WASM file is missing as missing, in both', async () => {
+    const cli = mapxEnv(root, { MAPX_TEST_HIDE_GRAMMAR: 'tree-sitter-fish.wasm', NODE_OPTIONS: `--import=${HIDE_GRAMMAR}` }, 'lang', 'list');
+    expect(cli).toMatch(/- fish \(\.fish \| tier: bundled \| status: missing\)/);
+    expect(cli).toMatch(/- bash \(.* \| status: bundled\)/);
+    expect(cli.split('\n')[0]).toBe('Supported languages (1 grammar file is missing; reinstall MapX):');
+
+    const { hideGrammars } = (await import(HIDE_GRAMMAR)) as { hideGrammars: (names: string[]) => () => void };
+    const restore = hideGrammars(['tree-sitter-fish.wasm']);
+    try {
+      const { text, isError } = await call('mapx_lang_list');
+      expect(isError).toBe(false);
+      expect(text).toBe(cli.trimEnd());
+    } finally {
+      restore();
+    }
+    expect((await call('mapx_lang_list')).text).toMatch(/- fish \(\.fish \| tier: bundled \| status: bundled\)/);
+  });
 });
 
 // No doc or generated agent template tells users to install a language (D010).
@@ -282,5 +305,40 @@ describe('docs and templates follow D010 (M0-12-R3)', () => {
 
   it('documents mapx_lang_info wherever the language tools are listed', () => {
     for (const [key, text] of Object.entries(sources)) if (text.includes('mapx_lang_list')) expect(text, key).toContain('mapx_lang_info');
+  });
+});
+
+// M0-12-R6: language counts in docs and templates follow the registry (23 after fish, M0-12-R5).
+describe('language counts match the registry (M0-12-R6)', () => {
+  const repo = join(__dirname, '..');
+  const count = supportedLanguageCount();
+  const sources: Record<string, string> = {
+    'README.md': readFileSync(join(repo, 'README.md'), 'utf8'),
+    'src/agents.stub.md': readFileSync(join(repo, 'src/agents.stub.md'), 'utf8'),
+  };
+  // docs/baton holds dated plan records; they quote counts as they were.
+  for (const f of readdirSync(join(repo, 'docs'), { recursive: true }) as string[])
+    if (f.endsWith('.md') && !f.startsWith('baton')) sources[`docs/${f}`] = readFileSync(join(repo, 'docs', f), 'utf8');
+  for (const [key, t] of Object.entries(TEMPLATES)) sources[`template:${key}`] = t.content;
+
+  it('counts 23 languages: every grammar, TSX as TypeScript, no static file types', () => {
+    expect(count).toBe(23);
+  });
+
+  it.each(Object.keys(sources))('%s states the registry count', (key) => {
+    // "Tier 1 languages" names a tier, not a count.
+    for (const m of sources[key]!.matchAll(/(?<!\btier\s)\b(\d+)\s+(?:supported\s+)?languages\b/gi)) expect(Number(m[1]), `${key}: "${m[0]}"`).toBe(count);
+  });
+
+  it('docs/configuration.md lists the registry tiers with their counts', () => {
+    const tiers = Object.values(getBuiltinLanguages()).filter((l) => l.tier !== 'static' && l.name !== 'tsx');
+    const text = sources['docs/configuration.md']!;
+    for (const [label, tier] of [['Built-in', 'built-in'], ['Bundled', 'bundled']]) {
+      const row = text.match(new RegExp(`^\\| \\*\\*${label}\\*\\* \\| ([^|]+) \\| (\\d+) \\|$`, 'm'));
+      expect(row, label).not.toBeNull();
+      const names = row![1]!.split(',').map((n) => n.trim());
+      expect(Number(row![2]), label).toBe(names.length);
+      expect(names.length, label).toBe(tiers.filter((l) => l.tier === tier).length);
+    }
   });
 });

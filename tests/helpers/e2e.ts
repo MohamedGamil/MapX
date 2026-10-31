@@ -29,6 +29,16 @@ export function mapx(cwd: string, ...args: string[]): string {
   });
 }
 
+/** Like `mapx`, with extra environment variables (e.g. NODE_OPTIONS for a test preload). */
+export function mapxEnv(cwd: string, env: Record<string, string>, ...args: string[]): string {
+  return execFileSync(process.execPath, ['--import', TSX, MAIN, ...args], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1', ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
 /** Like `mapx`, but returns stderr too (for asserting warnings). */
 export function mapxWithStderr(cwd: string, ...args: string[]): { stdout: string; stderr: string } {
   const r = spawnSync(process.execPath, ['--import', TSX, MAIN, ...args], {

@@ -6,7 +6,7 @@ Baseline: `develop@e9c0c3f` plus the other agent's uncommitted work (`src/cli.ts
 
 | Asset | Where | Reuse for |
 |---|---|---|
-| Typed, verifiability-tagged edges across 22 languages, including framework edges (`route`, `binding`, `dispatch`, `notify`, `hook`, `middleware`, `relation`, `render`, `http`) | `src/types.ts` `ReferenceType`, store `edges` | Dependency model (AR-02) and dependency scope (AR-06) |
+| Typed, verifiability-tagged edges across 23 languages, including framework edges (`route`, `binding`, `dispatch`, `notify`, `hook`, `middleware`, `relation`, `render`, `http`) | `src/types.ts` `ReferenceType`, store `edges` | Dependency model (AR-02) and dependency scope (AR-06) |
 | Namespace/FQN resolution for PHP and import resolution for 7 more languages | M0-04-R1, M0-12-R1 | `name` selector on qualified names |
 | `extends`/`implements` edges | parsers | `extends`/`implements`/`inherits` selectors |
 | Role classifier: 5 weighted signals, user `settings.architecture.overrides` (glob → role), stored signals | `src/core/role-classifier.ts` | `role` selector; inference (AR-15); `explain` |
@@ -213,6 +213,6 @@ Writing this dogfood file is a natural acceptance test for the epic: `mapx check
 | G3 external nodes grow the DB and change existing edge counts, metrics and PageRank | Store externals in a **separate table** (`external_refs`), not in `edges`, so existing metrics are unchanged unless they opt in. Fixture-check MapX's own edge counts, as M2-01 did. |
 | Regex selectors over qualified names behave differently per language | Normalise `qualifiedName` per language (AR-01) and test every selector on a polyglot fixture |
 | Inferred edges cause false CI failures | `policy.inferred: "warn"` by default |
-| Scope creep (22 languages × 18 selectors) | Fixtures-first (D004). Tier 1 languages first; every selector ships with a fixture row. |
+| Scope creep (23 languages × 18 selectors) | Fixtures-first (D004). Tier 1 languages first; every selector ships with a fixture row. |
 | Overlap with `FlowValidator` produces double reporting | §3.3 single-source rule |
 | Dashboard size | D006 ceiling enforced by CI |

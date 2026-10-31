@@ -505,6 +505,14 @@ export function getBuiltinLanguages(): Record<string, LanguageDefinition> {
   return { ...BUILTIN_LANGUAGES };
 }
 
+/**
+ * The language count docs and agent templates state: every language with a grammar, TSX counted
+ * as TypeScript; static file types (Markdown, HTML, …) are not languages (M0-12-R6).
+ */
+export function supportedLanguageCount(): number {
+  return Object.values(BUILTIN_LANGUAGES).filter((l) => l.tier !== 'static' && l.name !== 'tsx').length;
+}
+
 /** Interpreter named by a `#!` line → language, for extensionless scripts. */
 const SHEBANG_LANGUAGES: [RegExp, string][] = [
   [/\b(?:ba|z|k|da)?sh\b/, 'bash'],

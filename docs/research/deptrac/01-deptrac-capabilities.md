@@ -138,7 +138,7 @@ Deptrac dogfoods all of this: its own `deptrac.php` defines 15 layers, mostly di
 
 | Limitation | Consequence | MapX opportunity |
 |---|---|---|
-| PHP only | Polyglot repos need one tool per language (ArchUnit, dependency-cruiser, import-linter, go-arch-lint, NetArchTest, …), each with its own configuration | One rule model over 22 languages |
+| PHP only | Polyglot repos need one tool per language (ArchUnit, dependency-cruiser, import-linter, go-arch-lint, NetArchTest, …), each with its own configuration | One rule model over 23 languages |
 | Static symbol-level dependencies only | No routes, DI container bindings, events, HTTP calls, message buses or DB relations | MapX already has `route`, `binding`, `dispatch`, `notify`, `hook`, `http` and `relation` edges |
 | Single repository | No cross-repo rules (frontend ↛ admin API, service A ↛ service B DB) | MapX workspaces and cross-repo `http` edges |
 | Layers are hand-written regexes | High setup cost; empty or wrong layers fail silently until `debug:unassigned` is run | MapX's role classifier, clusters and framework detectors can **propose** layers |

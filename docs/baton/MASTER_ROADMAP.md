@@ -82,7 +82,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-04-R3** Laravel: ->middleware(X::class) route middleware edges via the route file use table — DONE, P2, 3h; depends on M0-04-R2.
 - **M0-09-R4** Continue integration in Continue's documented format (D014, amends F17) — DONE, P2, 4h; depends on M0-09-R3.
 - **M0-12-R5** Fish shell grammar: functions and calls (D014) — DONE, P2, 4h; depends on M0-12-R4.
-- **M0-12-R6** Language count after fish (23) in templates and docs; lang list flags missing grammars — IN_PROGRESS, P2, 2h; depends on M0-12-R5, M0-09-R4.
+- **M0-12-R6** Language count after fish (23) in templates and docs; lang list flags missing grammars — DONE, P2, 2h; depends on M0-12-R5, M0-09-R4.
 - **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
 - **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — DONE, P2, 4h; depends on M0-10-R1.
 - **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — DONE, P1, 6h; depends on M0-12-R1, M0-12-R2.

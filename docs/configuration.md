@@ -87,8 +87,8 @@ All 23 supported languages are pre-configured. No `languages` entry is needed un
 
 | Tier | Languages | Count |
 |------|-----------|-------|
-| **Built-in** | PHP, JavaScript, TypeScript, Vue | 4 |
-| **Bundled** | Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Lua, Elixir, Zig, Bash, Fish, Pascal | 19 |
+| **Built-in** | PHP, JavaScript, TypeScript, Python, Go, Rust, Java, C# | 8 |
+| **Bundled** | Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Vue, Lua, Elixir, Zig, Bash, Fish, Pascal | 15 |
 
 List all available languages and status with:
 ```bash

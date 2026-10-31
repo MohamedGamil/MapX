@@ -38,9 +38,12 @@ export interface McpConfigEntry {
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { supportedLanguageCount } from '../languages/registry.js';
 
 /** The npm package that provides the `mapx` binary (the unscoped name `mapx` is not ours). */
 export const NPM_PACKAGE = '@mgamil/mapx';
+/** Stated in every template, derived from the registry (M0-12-R6). */
+const LANGUAGE_COUNT = supportedLanguageCount();
 
 /**
  * Build the mapx MCP server command: the global `mapx` binary installed by
@@ -190,7 +193,7 @@ This project uses **MapxGraph** — a local code graph memory system that provid
 
 ## What MapxGraph Does
 
-MapxGraph scans source files across **22 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
+MapxGraph scans source files across **${LANGUAGE_COUNT} languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to \`.mapx/\`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
 
 This means you (the LLM) can quickly understand the codebase structure without reading every file.
 
@@ -306,7 +309,7 @@ When running as an MCP server, MapxGraph exposes these tools:
     isAppend: false,
     content: `# MapxGraph - Claude Integration Guide
 
-This project is configured with **MapxGraph** for codebase navigation and graph query support across **22 languages**.
+This project is configured with **MapxGraph** for codebase navigation and graph query support across **${LANGUAGE_COUNT} languages**.
 
 ## Claude Desktop Configuration
 
@@ -368,7 +371,7 @@ To share one long-running server between clients, start it with \`mapx serve --s
     filename: '.cursor/rules/mapx.mdc',
     isAppend: false,
     content: `---
-description: Rules for using MapxGraph for codebase understanding, symbol search, and data-flow tracing across 22 languages
+description: Rules for using MapxGraph for codebase understanding, symbol search, and data-flow tracing across ${LANGUAGE_COUNT} languages
 globs: ["**/*"]
 alwaysApply: false
 ---
@@ -400,7 +403,7 @@ Use MapxGraph commands or MCP tools to understand code structure.
     isAppend: true,
     content: `## MapxGraph Integration
 
-This project uses MapxGraph (22 languages, 33 MCP tools). You can run the following CLI commands to understand the codebase:
+This project uses MapxGraph (${LANGUAGE_COUNT} languages, 33 MCP tools). You can run the following CLI commands to understand the codebase:
 - \`mapx export\` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
 - \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`)
 - \`mapx search <term> --kind class\` - Advanced filtered search (auto-expands if kind has 0 results)
@@ -429,7 +432,7 @@ trigger: model_decided
 ---
 # MapxGraph Rules for Windsurf
 
-This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **33 MCP tools**.
+This project utilizes MapxGraph to maintain local code indexes across **${LANGUAGE_COUNT} languages** with **33 MCP tools**.
 
 Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_export\` / \`mapx export\` on startup.
@@ -451,7 +454,7 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
     isAppend: true,
     content: `## MapxGraph Rules for Cline
 
-This project is indexed by MapxGraph (22 languages, 33 MCP tools).
+This project is indexed by MapxGraph (${LANGUAGE_COUNT} languages, 33 MCP tools).
 Auto-start the MCP server with the configured directory \`{{PROJECT_DIR}}\`.
 Available tools:
 - \`mapx_export\` - Call this first to get the summary.
@@ -470,7 +473,7 @@ Available tools:
     companions: ['aider-conf'],
     content: `# MapxGraph Aider Integration
 
-Use MapxGraph commands in this repository to analyze code across **22 languages**.
+Use MapxGraph commands in this repository to analyze code across **${LANGUAGE_COUNT} languages**.
 
 ## Loading this file
 
@@ -501,7 +504,7 @@ To load it by hand instead, run \`aider --read AIDER.md\` (or \`/read-only AIDER
     isAppend: false,
     content: `# MapxGraph Gemini Integration
 
-Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** with **33 MCP tools**.
+Utilize MapxGraph to obtain codebase context for Gemini across **${LANGUAGE_COUNT} languages** with **33 MCP tools**.
 
 ## CLI Commands
 
@@ -530,7 +533,7 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
     isAppend: false,
     companions: ['continue-impact', 'continue-callers', 'continue-context', 'continue-sync'],
     legacyFiles: ['.continue/mapx.yaml'],
-    content: `# MapxGraph MCP server for Continue (22 languages, 33 MCP tools)
+    content: `# MapxGraph MCP server for Continue (${LANGUAGE_COUNT} languages, 33 MCP tools)
 name: MapxGraph
 version: '{{MAPX_VERSION}}'
 schema: v1
@@ -564,7 +567,7 @@ mcpServers:
     mcpConfigs: ['zed'],
     content: `# Zed Assistant MapxGraph Instructions
 
-This project uses MapxGraph (22 languages, 33 MCP tools).
+This project uses MapxGraph (${LANGUAGE_COUNT} languages, 33 MCP tools).
 \`mapx agents generate --providers zed\` also registers the mapx MCP server under \`context_servers\` in \`.zed/settings.json\`, keeping your other settings.
 
 ## Key Commands
@@ -588,7 +591,7 @@ This project uses MapxGraph (22 languages, 33 MCP tools).
 ## Context
 
 Triggered when a new task is received, before any planning, reasoning, or execution steps begin.
-This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 33 MCP tools) that provides persistent, structured understanding of the codebase.
+This project is indexed by **MapxGraph** — a local code graph memory system (${LANGUAGE_COUNT} languages, 33 MCP tools) that provides persistent, structured understanding of the codebase.
 
 ## Requirements
 

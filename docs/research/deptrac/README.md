@@ -5,7 +5,7 @@ Prepared 2026-10-31 from `deptrac/deptrac@66595d1` (its source plus bundled docs
 | File | Contents |
 |---|---|
 | [01-deptrac-capabilities.md](01-deptrac-capabilities.md) | What Deptrac does, verified against its code: pipeline, 21 collectors, ruleset semantics and the exact rule-handler order, result model and exit codes, 13 formatters, debug commands, extension points, developer benefits, limitations |
-| [02-abstract-feature-model.md](02-abstract-feature-model.md) | Language-agnostic feature definitions **AR-01 … AR-19**: element, dependency, layer, selectors (Deptrac collectors generalised to 22 languages plus MapX-native ones), policy, visibility, evaluation order, finding model, baseline, configuration schema, introspection, views, presets/inference, reporters, exit contract, smells, MCP |
+| [02-abstract-feature-model.md](02-abstract-feature-model.md) | Language-agnostic feature definitions **AR-01 … AR-19**: element, dependency, layer, selectors (Deptrac collectors generalised to 23 languages plus MapX-native ones), policy, visibility, evaluation order, finding model, baseline, configuration schema, introspection, views, presets/inference, reporters, exit contract, smells, MCP |
 | [03-mapx-gap-and-integration.md](03-mapx-gap-and-integration.md) | What MapX already has, gaps G1–G11 with code evidence, module layout (`src/arch/`), CLI/MCP/dashboard design, per-language parser needs, framework presets, a dogfood configuration for MapX itself, risks |
 | [04-plan-draft.md](04-plan-draft.md) | Milestone M5 in phases, a dependency graph, sequencing against the in-flight work, and the retrofit checklist |
 | [05-requirements.md](05-requirements.md) | **Revision 2 requirement register**: 23 requirements (MUST/SHOULD/COULD) with acceptance, delivering and verifying tasks; the revision log; the integration scope as applied |
@@ -13,7 +13,7 @@ Prepared 2026-10-31 from `deptrac/deptrac@66595d1` (its source plus bundled docs
 
 ## Bottom line
 
-**Deptrac's core idea transfers almost unchanged; its implementation does not need to.** It is a small, sharp model: declare layers as predicates over code elements, allow-list the dependencies between them, classify every dependency, report, and fail CI. All of it is computable from a dependency graph. MapX already has a richer graph than Deptrac: 22 languages, framework, HTTP and cross-repo edges, verifiability, roles and clusters. What MapX lacks is the *declared* half: user layers, rulesets, a baseline and a CI contract. Today its layer check is a hard-coded role order (`flow-validator.ts`) that always exits 0.
+**Deptrac's core idea transfers almost unchanged; its implementation does not need to.** It is a small, sharp model: declare layers as predicates over code elements, allow-list the dependencies between them, classify every dependency, report, and fail CI. All of it is computable from a dependency graph. MapX already has a richer graph than Deptrac: 23 languages, framework, HTTP and cross-repo edges, verifiability, roles and clusters. What MapX lacks is the *declared* half: user layers, rulesets, a baseline and a CI contract. Today its layer check is a hard-coded role order (`flow-validator.ts`) that always exits 0.
 
 What MapX can do that Deptrac can't:
 

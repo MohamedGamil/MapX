@@ -39,6 +39,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- `mapx lang list` and `mapx_lang_list` now report a language whose grammar file is missing as missing, and generated agent files state the language count from the registry (23) (M0-12-R6).
 - Laravel routes now honour `withoutMiddleware`/`withoutMiddlewareFor` (routes, groups, resources, the `excluded_middleware` keys), report `{post:slug}` as `{post}` with its binding field, and keep only the last of a repeated chained `middleware`/`prefix`/`namespace` attribute, as Laravel's router does (M1-05-R3).
 - Laravel route middleware given as class constants (`->middleware(EnsureAdmin::class)`, `Route::middleware([X::class])->group(...)`) is now named through the route file's `use` statements and linked to the middleware class (M0-04-R3).
 - PHP `use` imports and namespaced class references now resolve only to the class declared in that namespace, so stock Laravel apps no longer get self-imports or `Illuminate\…` names linked to app files, and `$listen` is read from the syntax tree (M0-04-R2).

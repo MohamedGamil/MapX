@@ -5,6 +5,7 @@ import { cleanup, mapx, mapxWithStderr, workspace } from './helpers/e2e.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer } from '../src/mcp.js';
+import { supportedLanguageCount } from '../src/languages/registry.js';
 
 const CONTINUE_SERVER = '.continue/mcpServers/mapx.yaml';
 const CONTINUE_PROMPTS = ['mapx-impact', 'mapx-callers', 'mapx-context', 'mapx-sync'].map((n) => `.continue/prompts/${n}.md`);
@@ -148,6 +149,13 @@ describe('agent template deliverables', () => {
     expect(md).toMatch(/"command": "npx"[\s\S]*"serve",\s*"--dir"/);
     expect(md).toContain('mapx serve --sse --port 4567');
     expect(md).toContain('"url": "http://localhost:4567/sse"');
+  });
+
+  it('states the registry language count in generated files (M0-12-R6)', () => {
+    const count = supportedLanguageCount();
+    expect(read('CLAUDE.md')).toContain(`across **${count} languages**`);
+    expect(read('AIDER.md')).toContain(`across **${count} languages**`);
+    expect(read('.zed/mapx-instructions.md')).toContain(`(${count} languages,`);
   });
 
   it('gives Continue slash commands as invokable prompts (M0-09-R4)', () => {

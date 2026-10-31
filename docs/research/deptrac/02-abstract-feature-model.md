@@ -1,6 +1,6 @@
 # Abstract feature model: architecture rules for MapX
 
-This file restates Deptrac's features as **language-agnostic definitions** that MapX can implement once over its graph (files, symbols and typed edges in 22 languages) instead of over PHP ASTs. Every definition has a stable ID (`AR-nn`), so later tasks, requirements and specs can cite it.
+This file restates Deptrac's features as **language-agnostic definitions** that MapX can implement once over its graph (files, symbols and typed edges in 23 languages) instead of over PHP ASTs. Every definition has a stable ID (`AR-nn`), so later tasks, requirements and specs can cite it.
 
 Working name: **MapX Architecture Rules** (`mapx check`, `mapx arch …`, `mapx_arch_*`).
 

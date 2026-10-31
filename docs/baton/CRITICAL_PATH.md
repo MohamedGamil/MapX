@@ -6,10 +6,10 @@ Remaining longest dependency path: **62h** (full-plan path: 126h).
 
 M5-01 → M5-03 → M5-04 → M5-05 → M5-08 → M5-16 → M5-98
 
-Remaining effort min/expected/max: **203 / 278 / 374h**. Capacity: 1 engineer(s) × 20 h/week → **13.9 weeks**, conditional finish **2027-02-07** (as of 2026-11-02).
+Remaining effort min/expected/max: **202 / 276 / 371h**. Capacity: 1 engineer(s) × 20 h/week → **13.8 weeks**, conditional finish **2027-02-06** (as of 2026-11-02).
 
 ## Open items and blockers
-- M3-01 (BLOCKED): M0-12-R6
+- M3-01 (BLOCKED): prerequisites satisfied
 - M3-02 (BACKLOG): M3-01
 - M3-03 (BACKLOG): M3-01
 - M3-04 (BACKLOG): M3-01
@@ -19,7 +19,6 @@ Remaining effort min/expected/max: **203 / 278 / 374h**. Capacity: 1 engineer(s)
 - M4-03 (BACKLOG): prerequisites satisfied
 - M4-04 (BACKLOG): prerequisites satisfied
 - M4-05 (BACKLOG): prerequisites satisfied
-- M0-12-R6 (IN_PROGRESS): prerequisites satisfied
 - M5-01 (BACKLOG): prerequisites satisfied
 - M5-02 (BACKLOG): prerequisites satisfied
 - M5-03 (BACKLOG): M5-01; M5-02
@@ -43,14 +42,13 @@ Remaining effort min/expected/max: **203 / 278 / 374h**. Capacity: 1 engineer(s)
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
 |---|---:|---:|---:|---:|---:|
-| M0-12-R6 | 0 | 2 | 18 | 20 | 18 |
-| M3-01 | 2 | 8 | 20 | 26 | 18 |
-| M3-02 | 8 | 22 | 40 | 54 | 32 |
-| M3-03 | 8 | 20 | 36 | 48 | 28 |
-| M3-04 | 8 | 18 | 26 | 36 | 18 |
-| M3-05 | 20 | 34 | 48 | 62 | 28 |
-| M3-06 | 22 | 30 | 54 | 62 | 32 |
-| M4-01 | 8 | 13 | 51 | 56 | 43 |
+| M3-01 | 0 | 6 | 20 | 26 | 20 |
+| M3-02 | 6 | 20 | 40 | 54 | 34 |
+| M3-03 | 6 | 18 | 36 | 48 | 30 |
+| M3-04 | 6 | 16 | 26 | 36 | 20 |
+| M3-05 | 18 | 32 | 48 | 62 | 30 |
+| M3-06 | 20 | 28 | 54 | 62 | 34 |
+| M4-01 | 6 | 11 | 51 | 56 | 45 |
 | M4-03 | 0 | 8 | 30 | 38 | 30 |
 | M4-04 | 0 | 12 | 50 | 62 | 50 |
 | M4-05 | 0 | 4 | 58 | 62 | 58 |
@@ -63,7 +61,7 @@ Remaining effort min/expected/max: **203 / 278 / 374h**. Capacity: 1 engineer(s)
 | M5-07 | 42 | 48 | 50 | 56 | 8 |
 | M5-08 | 42 | 52 | 42 | 52 | 0 |
 | M5-09 | 22 | 30 | 54 | 62 | 32 |
-| M5-10 | 18 | 34 | 36 | 52 | 18 |
+| M5-10 | 16 | 32 | 36 | 52 | 20 |
 | M5-11 | 34 | 42 | 52 | 60 | 18 |
 | M5-12 | 22 | 46 | 38 | 62 | 16 |
 | M5-13 | 34 | 40 | 44 | 50 | 10 |
