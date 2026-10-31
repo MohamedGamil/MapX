@@ -9605,13 +9605,12 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [
-        "Owner decision: implement the F02/F04 JSON shapes and options as specified, or record the current shapes as the contract (D010 says implement as specified)."
-      ],
+      "blockingConditions": [],
       "sources": [
         "docs/baton/reviews/REVIEW-2026-10-31-fb75474ba377.md",
         "specs/features/F02-metrics-engine.md",
-        "specs/features/F04-edge-querying.md"
+        "specs/features/F04-edge-querying.md",
+        "docs/baton/DECISIONS.md"
       ],
       "outputs": [
         "fix",
@@ -9625,8 +9624,11 @@
         "tests/legacy-metrics-edges.test.ts"
       ],
       "acceptanceCriteria": [
-        "JSON shapes, defaults and options match F02/F04 or the decision that replaces them.",
-        "Invalid --top or --format values exit non-zero with a message.",
+        "metrics --format json and mapx_metrics return the D012 envelope {dir, generatedAt, summary{files,edges,density}, files[{path,language,inDegree,outDegree,totalDegree,instability,pagerank}]}.",
+        "metrics text prints the F02 RANK/IN/OUT/TOTAL/INSTABILITY table with the Files/Edges/Graph density header; 20 rows by default, --top 0 lists every file; --exclude <glob,...> drops matching files.",
+        "edges <file> --format json and mapx_edges return {file, direction, incoming[], outgoing[]} in camelCase with targetRepo and line; --direction incoming leaves outgoing empty and vice versa; edges without a file keeps the flat list.",
+        "edges <file> text prints Incoming (n) / Outgoing (n) sections with arrows and a clear message when the file has no edges.",
+        "Invalid --top (abc, -1) or --format (yaml) values exit non-zero with a message; --direction without a file is rejected with a message.",
         "mapx_edges type accepts an array; verifiedOnly is tested through MCP."
       ],
       "verificationCommands": [
@@ -9650,7 +9652,7 @@
       "title": "metrics/edges output shapes and option validation per F02/F04",
       "objective": "metrics and edges JSON, defaults and options match F02/F04, or a decision records the divergence.",
       "milestone": "M0",
-      "description": "Review 2026-10-31 P2: F02 specifies `{dir, generated_at, summary, files:[{in_degree,…}]}`, --top default 20, --exclude and a RANK/TOTAL text table; F04 specifies `{file, direction, incoming[], outgoing[]}` and MCP type as an array (an array currently throws in queryEdges). --top abc/-1/0 and --format yaml are silent no-ops; edges --direction without a file is ignored. MCP verifiedOnly is untested (mutant survived)."
+      "description": "Review 2026-10-31 P2: F02 specifies `{dir, generated_at, summary, files:[{in_degree,…}]}`, --top default 20, --exclude and a RANK/TOTAL text table; F04 specifies `{file, direction, incoming[], outgoing[]}` and MCP type as an array (an array currently throws in queryEdges). --top abc/-1/0 and --format yaml are silent no-ops; edges --direction without a file is ignored. MCP verifiedOnly is untested (mutant survived). Owner decision D012 (2026-10-31): spec structures with camelCase keys."
     },
     {
       "priority": "P2",

@@ -74,3 +74,14 @@ Context: the M0-41 audit found 0 of 16 legacy iterations fully confirmed (`revie
 ## D011 — Distribution facts (M0-07-R1, 2026-10-31)
 
 The package is `@mgamil/mapx` (the unscoped `mapx` is not ours), and the supported Node floor is 20.18 (`engines`; better-sqlite3 12 requires it). F13's "npm install -g mapx" and "Node 18" are superseded by these facts. Generated configs and docs use the scoped name.
+
+## D012 — metrics and edges output contract (owner Q&A, 2026-10-31)
+
+Context: review 2026-10-31 found `metrics` and `edges` output diverging from F02/F04 (task M0-03-R3). The owner compared samples and chose:
+
+- **`metrics --format json` / `mapx_metrics`:** F02's envelope with camelCase keys, matching `export --format json`: `{ dir, generatedAt, summary: { files, edges, density }, files: [{ path, language, inDegree, outDegree, totalDegree, instability, pagerank }] }`.
+- **`metrics` text:** F02's ranked table (`RANK FILE IN OUT TOTAL INSTABILITY`) under a `Files | Edges | Graph density` header with the instability legend; `--top` defaults to 20 (`--top 0` lists every file); `--exclude <glob,...>` is added.
+- **`edges <file> --format json` / `mapx_edges`:** F04's `{ file, direction, incoming[], outgoing[] }` with camelCase keys, keeping `targetRepo` and `line`. Incoming rows carry `sourceFile`, outgoing rows `targetFile`. Without a file (`--from`/`--to`) the flat edge list stays.
+- **`edges <file>` text:** F04's `Incoming (n)` / `Outgoing (n)` sections with ←/→ arrows, and a clear message when there are no edges.
+
+camelCase supersedes F02/F04's snake_case keys; everything else follows the specs.
