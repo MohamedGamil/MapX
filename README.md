@@ -34,7 +34,7 @@
 * **~80% LLM Cost Reduction** - Feeds exact signatures and dependency pathways to LLM agents rather than raw files, slashing context window costs.
 * **Deep Symbol & Semantics Mapping** - Automatically extracts classes, methods, functions, interfaces, traits, structs, modules, and namespaces along with call graphs.
 * **Framework Intelligent** - Maps out routing paths and hook bindings for 22 frameworks (Laravel, Next.js, Spring, Flutter, and more).
-* **32 MCP Tools** - Seamlessly feeds structured code graph intelligence to LLMs across Claude Desktop, Cursor, VS Code, and other MCP clients.
+* **33 MCP Tools** - Seamlessly feeds structured code graph intelligence to LLMs across Claude Desktop, Cursor, VS Code, and other MCP clients.
 * **Zero Cloud** - Keeps all metadata, graphs, and schemas fully offline and local in `.mapx/`.
 
 <br>
@@ -56,7 +56,7 @@
 - [MCP Integration](#mcp-integration)
   - [Claude Desktop](#claude-desktop-claude_desktop_configjson)
   - [Cursor / VS Code](#cursor--vs-code-cursor-mcpjson)
-  - [Available MCP tools (32 total)](#available-mcp-tools-32-total)
+  - [Available MCP tools (33 total)](#available-mcp-tools-33-total)
 - [Programmatic Usage](#programmatic-usage)
 - [Supported Languages](#supported-languages)
   - [Built-in (Tier 1) — Dedicated Parsers](#built-in-tier-1--dedicated-parsers)
@@ -79,14 +79,14 @@
 
 ## Features
 
-- **22 languages + static file indexing** — all built-in or bundled out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart) plus static indexing for Markdown, HTML, CSS/SCSS, and JSON.
+- **22 languages + static file indexing** — all built-in or bundled out-of-the-box (PHP, JS, TS, Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Scala, Vue, Svelte, Lua, Elixir, Zig, Bash, Pascal, Dart) plus static indexing for Markdown, HTML, CSS/SCSS, JSON, YAML and fish scripts.
 - **Parallel Scanning Workers** — Offloads AST parsing to multi-threaded worker pools based on CPU core availability (up to 8x speedups).
 - **Parser Pooling** — In-memory parser cache that reuses active WASM tree-sitter grammars to avoid initialization overhead.
 - **O(1) Pre-Scan Indexing** — Fast lookup index mapping imports, scopes, and namespace resolutions instantly.
 - **Git & Content Hash Sync** — Git-aware change tracker for repo files and hash-based delta-checks for non-git workspaces.
 - **Resumable Batch checkpoints** — Checklist states are persisted; interrupted scans pick up exactly where they stopped.
 - **Deep symbol extraction** — Classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces.
-- **32 MCP tools** — Scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and language management.
+- **33 MCP tools** — Scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and language management.
 - **Flexible search** — Wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON formats.
 - **Data flow tracing** — Upstream/downstream trace routes, source/sink identification, and change blast radius analysis.
 - **Framework detection** — Parses routing routes, middleware, and hooks across 22 backend, frontend, and mobile frameworks.
@@ -232,9 +232,8 @@ mapx -d /path/to/project export
 | `mapx export --format=toon` | TOON compact format (with `--delimiter`, `--key-folding`) |
 | `mapx export -o out.txt` | Write export to a file |
 | `mapx summary [path]` | One-line project summary |
-| `mapx lang list` | List supported languages and status |
-| `mapx lang install <name>` | Install a custom user-defined language |
-| `mapx lang uninstall <name>` | Uninstall a custom language |
+| `mapx lang list` | List supported languages, extensions and tiers (all grammars are bundled) |
+| `mapx lang info <name>` | Show a language's extensions, file names and grammar files |
 | `mapx ui` | Open the web dashboard for interactive visualization |
 | `mapx workspaces list` | List registered repositories |
 | `mapx workspaces add <path>` | Register a new repository |
@@ -310,7 +309,7 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 }
 ```
 
-### Available MCP tools (32 total)
+### Available MCP tools (33 total)
 
 | Category | Tools |
 |----------|-------|
@@ -321,7 +320,7 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 | **Export** | `mapx_export`, `mapx_context` |
 | **Orchestration** | `mapx_batch`, `mapx_agents_generate` |
 | **Workspaces** | `mapx_workspaces` |
-| **Language Management** | `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall` |
+| **Language Management** | `mapx_lang_list`, `mapx_lang_info` (all grammars are bundled; `mapx_lang_install` and `mapx_lang_uninstall` are no-ops) |
 
 See [docs/mcp-integration.md](docs/mcp-integration.md) for full tool parameters and client setup.
 
@@ -377,7 +376,7 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | Rust | `.rs` | structs, traits, enums, functions, impl blocks, constants, modules, macros |
 | Java | `.java` | classes, interfaces, enums, methods, fields, constants, packages |
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, namespaces, records |
-| Ruby | `.rb` | classes, modules, methods, constants, properties |
+| Ruby | `.rb`, `.rake`, `.gemspec`, `Rakefile`, `Gemfile` | classes, modules, methods, constants, properties |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros |
 | C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties |
@@ -387,7 +386,7 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | Lua | `.lua` | functions, methods, variables |
 | Elixir | `.ex`, `.exs` | modules, functions, macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests |
-| Bash | `.sh`, `.bash` | functions, variables, aliases |
+| Bash | `.sh`, `.bash`, `.zsh` | functions, variables, aliases |
 | Pascal | `.pas`, `.pp` | classes, records, interfaces, methods, functions, constants, units |
 | Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types, constants, library namespaces |
 
@@ -399,6 +398,9 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
 | CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
 | JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
+| Fish | `.fish` | none (indexed as files; no fish grammar is bundled) |
+
+Extensionless scripts are indexed by their `#!` line (bash/sh/zsh, python, node/deno/bun, ts-node/tsx, ruby, php, lua, elixir, fish).
 
 All languages track **imports**, **inheritance/implementation**, **instantiation**, and **calls** where applicable. See [docs/adding-languages.md](docs/adding-languages.md) to add your own.
 
@@ -522,7 +524,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | [Getting Started](docs/getting-started.md) | Installation, quick start, supported languages |
 | [Programmatic Usage](docs/programmatic-usage.md) | Detailed TypeScript/JavaScript API integration guide |
 | [CLI Reference](docs/cli-reference.md) | All commands and their flags |
-| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 32 tools |
+| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 33 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |

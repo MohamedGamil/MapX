@@ -296,7 +296,7 @@ When active, the MCP server prints all incoming JSON-RPC calls and their outcome
 
 This is highly useful when debugging integrations with clients like Claude Desktop, Cursor, or custom LLM frameworks.
 
-## Available Tools (32 total)
+## Available Tools (33 total)
 
 ### Graph Building
 
@@ -478,17 +478,20 @@ Parameters:
 
 ### Language Management
 
+Every grammar ships bundled with MapX; there is nothing to download or install. The output matches `mapx lang list` and `mapx lang info`.
+
 #### `mapx_lang_list`
-List supported languages and their status/tier.
+List supported languages with their extensions, file names (e.g. `Rakefile`) and tier.
 - No parameters required
 
-#### `mapx_lang_install`
-Install a dynamic language grammar.
-- `lang` (string, required): Language name to install
+#### `mapx_lang_info`
+Show a language's tier, extensions, file names and resolved grammar and query files.
+- `lang` (string, required): Language name
+- An unknown language returns an error result (`isError: true`)
 
-#### `mapx_lang_uninstall`
-Uninstall a previously installed language grammar.
-- `lang` (string, required): Language name to uninstall
+#### `mapx_lang_install` / `mapx_lang_uninstall`
+Compatibility no-ops: they report that the grammar is bundled and nothing is installed or removed. To skip a language's files, use an exclude pattern.
+- `lang` (string, required): Language name; an unknown or missing language returns an error result (`isError: true`)
 
 ### Orchestration & LLM Helpers
 

@@ -89,7 +89,7 @@ When running as an MCP server, MapxGraph exposes 32 tools:
 - **Analysis:** `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics` (`format: "json"` gives `{ dir, generatedAt, summary, files[] }`; `top`, default 20, 0 = all; `exclude`), `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers`
 - **Export:** `mapx_export` (llm, json, dot, svg, toon), `mapx_context`
 - **Workspaces:** `mapx_workspaces` (list, discover)
-- **Languages:** `mapx_lang_list`, `mapx_lang_install`, `mapx_lang_uninstall`
+- **Languages:** `mapx_lang_list`, `mapx_lang_info` (all grammars are bundled; `mapx_lang_install` and `mapx_lang_uninstall` are no-ops)
 - **Orchestration:** `mapx_batch`, `mapx_agents_generate`
 
 ## When to Use

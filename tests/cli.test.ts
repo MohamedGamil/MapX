@@ -176,6 +176,8 @@ vi.mock('../src/core/impact-analyzer.js', () => ({
 
 vi.mock('../src/languages/installer.js', () => ({
   isLanguageInstalled: vi.fn().mockReturnValue(true),
+  formatLanguageList: vi.fn().mockReturnValue('Supported languages (all grammars are bundled):'),
+  formatLanguageInfo: vi.fn().mockReturnValue('python'),
   installLanguage: vi.fn().mockResolvedValue(true),
   uninstallLanguage: vi.fn().mockResolvedValue(true)
 }));

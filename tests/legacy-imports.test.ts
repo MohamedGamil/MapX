@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { resolvePythonImport, resolveRustImport, type ImportContext } from '../src/core/import-resolvers.js';
+import { resolveGoImport, resolveJvmImport, resolvePhpImport, resolvePythonImport, resolveRustImport, type ImportContext } from '../src/core/import-resolvers.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M0-12-R1: import edges for languages whose imports name modules, packages or namespaces.
@@ -29,6 +29,58 @@ describe('import resolvers', () => {
     expect(resolveRustImport('super::super::util', 'src/net/client.rs', c)).toBe('src/util.rs');
     expect(resolveRustImport('super::client::Client', 'src/net/mod.rs', c)).toBeNull();
     expect(resolveRustImport('std::collections::HashMap', 'src/main.rs', c)).toBeNull();
+  });
+});
+
+// M0-12-R3: resolution was quadratic, since every Java/Go/PHP import scanned the whole file set.
+// A Set that counts full iterations shows the resolvers index it once, however many imports follow.
+class CountingSet extends Set<string> {
+  iterations = 0;
+  [Symbol.iterator]() {
+    this.iterations++;
+    return super[Symbol.iterator]();
+  }
+}
+
+describe('import resolution indexes (M0-12-R3)', () => {
+  const files = [
+    'a/src/main/java/com/ex/lib/Bar.java',
+    'b/src/main/java/com/ex/lib/Bar.java',
+    'a/src/main/java/com/ex/app/Main.java',
+    'go/internal/lib/z.go',
+    'go/internal/lib/a.go',
+    'go/internal/lib/a_test.go',
+    'app/Services/UserService.php',
+    'vendor/acme/src/Services/UserService.php',
+  ];
+  for (let i = 0; i < 2000; i++) files.push(`gen/src/main/java/com/gen/p${i % 40}/C${i}.java`);
+  const texts = { 'go/go.mod': 'module example.com/proj\n' };
+
+  it('index each file set once, not once per import', () => {
+    const set = new CountingSet(files);
+    const c: ImportContext = { files: set, readText: (p) => (texts as Record<string, string>)[p] ?? null };
+    for (let i = 0; i < 2000; i++) {
+      expect(resolveJvmImport(`com.gen.p${i % 40}.C${i}`, 'gen/src/main/java/com/gen/p0/C0.java', c, ['.java'])).toBe(`gen/src/main/java/com/gen/p${i % 40}/C${i}.java`);
+      expect(resolveJvmImport('java.util.List', 'gen/src/main/java/com/gen/p0/C0.java', c, ['.java', '.kt'])).toBeNull();
+    }
+    expect(resolveGoImport('"example.com/proj/internal/lib"', 'go/cmd/main.go', c)).toBe('go/internal/lib/a.go');
+    expect(resolvePhpImport('App\\Services\\UserService', 'app/Http/Kernel.php', c)).toBe('app/Services/UserService.php');
+    expect(set.iterations).toBe(1);
+  });
+
+  it('keep the same answers: shortest path, same top directory, case-insensitive PHP, non-test Go file', () => {
+    const c: ImportContext = { files: new Set(files), readText: (p) => (texts as Record<string, string>)[p] ?? null };
+    expect(resolveJvmImport('com.ex.lib.Bar', 'a/src/main/java/com/ex/app/Main.java', c, ['.java'])).toBe('a/src/main/java/com/ex/lib/Bar.java');
+    expect(resolveJvmImport('com.ex.lib.Bar', 'b/x/Other.java', c, ['.java'])).toBe('b/src/main/java/com/ex/lib/Bar.java');
+    // A static member falls back one segment to its class.
+    expect(resolveJvmImport('com.ex.lib.Bar.CONST', 'a/src/main/java/com/ex/app/Main.java', c, ['.java'])).toBe('a/src/main/java/com/ex/lib/Bar.java');
+    expect(resolveJvmImport('ex.lib.Bar', 'a/X.java', c, ['.java'])).toBe('a/src/main/java/com/ex/lib/Bar.java');
+    expect(resolveJvmImport('lib.Bar', 'z/X.java', c, ['.java'])).toBe('a/src/main/java/com/ex/lib/Bar.java');
+    expect(resolveJvmImport('x.Bar', 'a/X.java', c, ['.java'])).toBeNull();
+    expect(resolveGoImport('"example.com/proj/internal/lib"', 'go/cmd/main.go', c)).toBe('go/internal/lib/a.go');
+    expect(resolveGoImport('"example.com/proj/internal/none"', 'go/cmd/main.go', c)).toBeNull();
+    expect(resolvePhpImport('app\\services\\userservice', 'app/X.php', c)).toBe('app/Services/UserService.php');
+    expect(resolvePhpImport('Acme\\Services\\UserService', 'vendor/acme/src/X.php', c)).toBe('vendor/acme/src/Services/UserService.php');
   });
 });
 

@@ -15,7 +15,7 @@ export interface ProviderTemplate {
 /**
  * MCP config definitions for agent tools.
  * Each entry generates a project-local JSON config file that auto-registers
- * mapx as an MCP server so the agent can discover all 32 tools on startup.
+ * mapx as an MCP server so the agent can discover all 33 tools on startup.
  *
  * Config files use the sentinel-block pattern (<!-- mapx --> markers are not
  * used — the entire file is owned by mapx and can safely be overwritten).
@@ -227,9 +227,8 @@ mapx -d /path/to/project scan
 - \`mapx impact <symbol> [--dir path] [--depth depth]\` - Change impact analysis with fuzzy pre-check
 - \`mapx node <symbol> [--dir path] [--source] [--format text|json] [--include-members]\` - Inspect a symbol node with optional source code and member listing
 - \`mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]\` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
-- \`mapx lang list\` - List supported languages and status
-- \`mapx lang install <lang>\` - Install dynamic language support
-- \`mapx lang uninstall <lang>\` - Uninstall dynamic language support
+- \`mapx lang list\` - List supported languages, extensions and tiers (all grammars are bundled)
+- \`mapx lang info <lang>\` - Show a language's extensions, file names and grammar files
 - \`mapx serve --dir /path\` - Start stdio MCP server
 - \`mapx serve --sse --port <port>\` - Start SSE (HTTP) MCP server
 - \`mapx ui [--port <port>]\` - Open web dashboard for interactive visualization
@@ -268,9 +267,9 @@ When running as an MCP server, MapxGraph exposes these tools:
 - \`mapx_export\` - Export compact graph summary (formats: llm, json, dot, svg, toon)
 - \`mapx_context\` - Intelligent, token-budgeted workspace context builder
 - \`mapx_workspaces\` - Retrieve workspace configuration and repositories (list/discover)
-- \`mapx_lang_list\` - List supported languages and status
-- \`mapx_lang_install\` - Install dynamic language support
-- \`mapx_lang_uninstall\` - Uninstall dynamic language support
+- \`mapx_lang_list\` - List supported languages, extensions and tiers (all grammars are bundled)
+- \`mapx_lang_info\` - Show a language's extensions, file names and grammar files
+- \`mapx_lang_install\` / \`mapx_lang_uninstall\` - Compatibility no-ops: grammars are bundled, nothing is installed or removed
 - \`mapx_batch\` - Execute multiple operations in a single call (search, node, callers, callees, deps)
 - \`mapx_agents_generate\` - Generate/update agent integration instructions and rules
 
@@ -330,7 +329,7 @@ To share one long-running server between clients, start it with \`mapx serve --s
 }
 \`\`\`
 
-## MCP Tools Available (32 total)
+## MCP Tools Available (33 total)
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
@@ -338,7 +337,7 @@ To share one long-running server between clients, start it with \`mapx serve --s
 **Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
-**Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
+**Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
 **Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Workflows
@@ -362,7 +361,7 @@ alwaysApply: false
 
 Use MapxGraph commands or MCP tools to understand code structure.
 
-## Available MCP Tools (32 total)
+## Available MCP Tools (33 total)
 
 **Graph:** \`mapx_scan\`, \`mapx_sync\`
 **Search:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
@@ -370,7 +369,7 @@ Use MapxGraph commands or MCP tools to understand code structure.
 **Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\`
-**Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
+**Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
 **Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Workflow
@@ -386,7 +385,7 @@ Use MapxGraph commands or MCP tools to understand code structure.
     isAppend: true,
     content: `## MapxGraph Integration
 
-This project uses MapxGraph (22 languages, 32 MCP tools). You can run the following CLI commands to understand the codebase:
+This project uses MapxGraph (22 languages, 33 MCP tools). You can run the following CLI commands to understand the codebase:
 - \`mapx export\` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
 - \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`)
 - \`mapx search <term> --kind class\` - Advanced filtered search (auto-expands if kind has 0 results)
@@ -415,7 +414,7 @@ trigger: model_decided
 ---
 # MapxGraph Rules for Windsurf
 
-This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **32 MCP tools**.
+This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **33 MCP tools**.
 
 Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_export\` / \`mapx export\` on startup.
@@ -437,7 +436,7 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
     isAppend: true,
     content: `## MapxGraph Rules for Cline
 
-This project is indexed by MapxGraph (22 languages, 32 MCP tools).
+This project is indexed by MapxGraph (22 languages, 33 MCP tools).
 Auto-start the MCP server with the configured directory \`{{PROJECT_DIR}}\`.
 Available tools:
 - \`mapx_export\` - Call this first to get the summary.
@@ -487,7 +486,7 @@ To load it by hand instead, run \`aider --read AIDER.md\` (or \`/read-only AIDER
     isAppend: false,
     content: `# MapxGraph Gemini Integration
 
-Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** with **32 MCP tools**.
+Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** with **33 MCP tools**.
 
 ## CLI Commands
 
@@ -512,7 +511,7 @@ Utilize MapxGraph to obtain codebase context for Gemini across **22 languages** 
   continue: {
     filename: '.continue/mapx.yaml',
     isAppend: false,
-    content: `# Continue configuration for MapxGraph (22 languages, 32 MCP tools)
+    content: `# Continue configuration for MapxGraph (22 languages, 33 MCP tools)
 contextProviders:
   - name: cmd
     args:
@@ -551,7 +550,7 @@ slashCommands:
     mcpConfigs: ['zed'],
     content: `# Zed Assistant MapxGraph Instructions
 
-This project uses MapxGraph (22 languages, 32 MCP tools).
+This project uses MapxGraph (22 languages, 33 MCP tools).
 \`mapx agents generate --providers zed\` also registers the mapx MCP server under \`context_servers\` in \`.zed/settings.json\`, keeping your other settings.
 
 ## Key Commands
@@ -575,7 +574,7 @@ This project uses MapxGraph (22 languages, 32 MCP tools).
 ## Context
 
 Triggered when a new task is received, before any planning, reasoning, or execution steps begin.
-This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 32 MCP tools) that provides persistent, structured understanding of the codebase.
+This project is indexed by **MapxGraph** — a local code graph memory system (22 languages, 33 MCP tools) that provides persistent, structured understanding of the codebase.
 
 ## Requirements
 
@@ -613,7 +612,7 @@ After completing file writes:
 **Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
-**Languages:** \`mapx_lang_list\`, \`mapx_lang_install\`, \`mapx_lang_uninstall\`
+**Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
 **Orchestration:** \`mapx_batch\`, \`mapx_agents_generate\`
 
 ## Key Principles
@@ -628,7 +627,7 @@ After completing file writes:
     isAppend: false,
     content: `# MapX MCP Server - Agent Instructions Guide
 
-MapX exposes **32** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
+MapX exposes **33** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
 
 ---
 
@@ -736,8 +735,8 @@ Follows data-bearing edges forward/backward through the graph to trace data prop
 - \`mapx_export\`: Export compact graph summary (formats: llm, json, dot, svg, toon).
 - \`mapx_workspaces\`: Retrieve workspace configuration and repositories (list/discover).
 
-### 14. \`mapx_lang_list\` / \`mapx_lang_install\` / \`mapx_lang_uninstall\`
-Manage supported languages and dynamic grammar installation.
+### 14. \`mapx_lang_list\` / \`mapx_lang_info\` / \`mapx_lang_install\` / \`mapx_lang_uninstall\`
+List supported languages and show a language's extensions, file names and grammar files. Every grammar is bundled, so \`mapx_lang_install\` and \`mapx_lang_uninstall\` only report that nothing needs installing or removing.
 
 ### 15. \`mapx_routes\` / \`mapx_hooks\` / \`mapx_edges\` / \`mapx_metrics\`
 - \`mapx_routes\`: List HTTP routes parsed from controllers.

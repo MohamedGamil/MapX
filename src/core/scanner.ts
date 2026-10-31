@@ -1061,14 +1061,15 @@ export class Scanner {
     symbols?: any[],
   ): GraphEdge[] {
     const edges: GraphEdge[] = [];
+    // From the path, or the shebang language discovery stored for an extensionless script.
+    const sourceLanguage = this.languageOf(sourcePath);
+    const isJsOrTs = /\.([cm]?[jt]sx?|vue|svelte)$/.test(sourcePath) || sourceLanguage === 'javascript' || sourceLanguage === 'typescript';
 
     for (const ref of refs) {
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
-      const isJsOrTs = /\.([cm]?[jt]sx?|vue|svelte)$/.test(sourcePath);
       if (isJsOrTs && BUILTIN_GLOBALS.has(ref.targetName)) continue;
       let targetFile: string | null = null;
 
-      const sourceLanguage = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages())?.name;
       if (ref.referenceType === 'require' && !(sourceLanguage && importResolverFor(sourceLanguage))) {
         targetFile = this.resolveRequirePath(ref.targetName, sourcePath, fileMap);
       } else if (ref.referenceType === 'require') {
@@ -1135,21 +1136,33 @@ export class Scanner {
     return null;
   }
 
-  private importFileSets = new WeakMap<Map<string, string>, Set<string>>();
+  // Per resolution phase (reset by buildSymbolIndex): the file set import resolvers index once
+  // (M0-12-R3), go.mod texts, and each path's language.
+  private importFiles: { map: Map<string, string>; files: Set<string> } | null = null;
   private importTextCache = new Map<string, string | null>();
+  private languageCache = new Map<string, string | null>();
+
+  /** Language of an indexed path: its extension or file name, else what discovery stored (shebang scripts). */
+  private languageOf(path: string): string | null {
+    let lang = this.languageCache.get(path);
+    if (lang === undefined) {
+      lang = getLanguageForFile(path, this.config.getResolvedUserLanguages())?.name
+        ?? ((this.store.getFile(path)?.language as string | undefined) || null);
+      this.languageCache.set(path, lang);
+    }
+    return lang;
+  }
 
   private resolveImportPath(target: string, sourcePath: string, fileMap: Map<string, string>): string | null {
     if (!target || typeof target !== 'string') return null;
 
     // Languages whose imports name modules/packages/namespaces (Java, Rust, Go, Python, Ruby, C#…)
-    const language = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages())?.name;
+    const language = this.languageOf(sourcePath);
     const resolver = language ? importResolverFor(language) : undefined;
     if (resolver) {
-      let files = this.importFileSets.get(fileMap);
-      if (!files) {
-        files = new Set(fileMap.keys());
-        this.importFileSets.set(fileMap, files);
-      }
+      // One Set per phase and file map, so the resolvers' index over it is built once.
+      if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
+      const files = this.importFiles.files;
       const workspaceRoot = this.config.getWorkspaceRoot();
       return resolver(target, sourcePath, {
         files,
@@ -1286,13 +1299,7 @@ export class Scanner {
   private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
 
-    let sourceLang: string | null = null;
-    if (sourcePath) {
-      const langDef = getLanguageForFile(sourcePath, this.config.getResolvedUserLanguages());
-      if (langDef) {
-        sourceLang = langDef.name;
-      }
-    }
+    const sourceLang = sourcePath ? this.languageOf(sourcePath) : null;
 
     // Fail closed: without a known source language there is no safe way to pick a candidate
     // across languages, so name-only resolution returns nothing (M2-01).
@@ -1300,9 +1307,7 @@ export class Scanner {
       if (!sourceLang) return [];
       return matches.filter(m => {
         const targetPath = (m.file_path || m.file) as string;
-        const targetLangDef = getLanguageForFile(targetPath, this.config.getResolvedUserLanguages());
-        const targetLang = targetLangDef ? targetLangDef.name : '';
-        return areLanguagesCompatible(sourceLang!, targetLang);
+        return areLanguagesCompatible(sourceLang!, this.languageOf(targetPath) ?? '');
       });
     };
 
@@ -1724,6 +1729,11 @@ export class Scanner {
     parsedPaths?: string[],
     results?: ParseResult[]
   ): Map<string, Array<{ name: string; file: string; scope: string | null }>> {
+    // A new symbol index starts a resolution phase: the file set, go.mod texts and languages
+    // may have changed since the last one (long-lived scanners: watch, MCP).
+    this.importFiles = null;
+    this.importTextCache.clear();
+    this.languageCache.clear();
     const index = new Map<string, Array<{ name: string; file: string; scope: string | null }>>();
     const excludeSet = new Set(parsedPaths || []);
 

@@ -84,6 +84,8 @@ vi.mock('../src/core/git-tracker.js', () => ({
 
 vi.mock('../src/languages/installer.js', () => ({
   isLanguageInstalled: (lang: string) => lang === 'typescript',
+  formatLanguageList: () => 'Supported languages (all grammars are bundled):\n  - typescript (.ts | tier: built-in | status: bundled)',
+  formatLanguageInfo: (lang: string) => lang,
   installLanguage: vi.fn().mockImplementation((lang: string) => {
     if (lang === 'invalid') throw new Error('Simulated install error');
     return Promise.resolve();

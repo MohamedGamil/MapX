@@ -372,27 +372,23 @@ mapx summary [/path]
 
 ## `mapx lang list`
 
-List all supported languages with their tier and status.
+List all supported languages with their extensions, file names (e.g. `Rakefile`, `Gemfile`) and tier. Every grammar ships bundled with MapX; nothing is downloaded or installed. `mapx_lang_list` returns the same text.
 
 ```bash
 mapx lang list
 ```
 
-## `mapx lang install <lang>`
+## `mapx lang info <lang>`
 
-Install a dynamic (installable-tier) language grammar.
-
-```bash
-mapx lang install python   # Install Python grammar
-```
-
-## `mapx lang uninstall <lang>`
-
-Uninstall a previously installed language grammar.
+Show a language's tier, extensions, file names and resolved grammar and query files. An unknown language exits with code 1. `mapx_lang_info` returns the same text.
 
 ```bash
-mapx lang uninstall python
+mapx lang info ruby
 ```
+
+## `mapx lang install <lang>` / `mapx lang uninstall <lang>`
+
+Compatibility no-ops: they report that the grammar is bundled and nothing is installed or removed. To skip a language's files, use an exclude pattern (`mapx scan --exclude "**/*.sh"`).
 
 ## `mapx ui`
 

@@ -5,6 +5,8 @@ import { homedir } from 'node:os';
 export interface LanguageDefinition {
   name: string;
   extensions: string[];
+  /** Exact file names (no extension) that belong to the language, e.g. `Rakefile`. */
+  filenames?: string[];
   grammarWasm: string;
   queries: {
     symbols: string;
@@ -196,6 +198,7 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
   ruby: {
     name: 'ruby',
     extensions: ['.rb', '.rake', '.gemspec'],
+    filenames: ['Rakefile', 'Gemfile'],
     grammarWasm: 'wasm/tree-sitter-ruby.wasm',
     queries: {
       symbols: 'queries/ruby/symbols.scm',
@@ -481,6 +484,16 @@ const BUILTIN_LANGUAGES: Record<string, LanguageDefinition> = {
     nodeMappings: {},
     tier: 'static',
   },
+  // F20 lists `.fish` under Bash, but fish syntax is not bash (the bash grammar mis-parses it) and
+  // no fish grammar is bundled: fish scripts are indexed as files without symbols (M0-12-R3).
+  fish: {
+    name: 'fish',
+    extensions: ['.fish'],
+    grammarWasm: '',
+    queries: { symbols: '', references: '' },
+    nodeMappings: {},
+    tier: 'static',
+  },
 };
 
 export function getBuiltinLanguages(): Record<string, LanguageDefinition> {
@@ -491,6 +504,8 @@ export function getBuiltinLanguages(): Record<string, LanguageDefinition> {
 const SHEBANG_LANGUAGES: [RegExp, string][] = [
   [/\b(?:ba|z|k|da)?sh\b/, 'bash'],
   [/\bpython[\d.]*\b/, 'python'],
+  [/^(?:ts-node|tsx)$/, 'typescript'],
+  [/^fish$/, 'fish'],
   [/\b(?:node|nodejs|deno|bun)\b/, 'javascript'],
   [/\bruby\b/, 'ruby'],
   [/\bphp\b/, 'php'],
@@ -517,10 +532,10 @@ export function getLanguageForFile(
   userLanguages: Record<string, LanguageDefinition> = {}
 ): LanguageDefinition | null {
   const ext = '.' + filePath.split('.').pop()?.toLowerCase();
-  if (!ext) return null;
+  const base = filePath.slice(Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')) + 1);
 
   for (const lang of Object.values({ ...BUILTIN_LANGUAGES, ...userLanguages })) {
-    if (lang.extensions.includes(ext)) {
+    if (lang.extensions.includes(ext) || lang.filenames?.includes(base)) {
       return lang;
     }
   }

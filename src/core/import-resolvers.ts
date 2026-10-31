@@ -15,12 +15,54 @@ export interface ImportContext {
 const dirOf = (p: string) => (posix.dirname(p) === '.' ? '' : posix.dirname(p));
 const join = (...parts: string[]) => posix.join(...parts.filter(Boolean));
 const first = (ctx: ImportContext, candidates: string[]) => candidates.find((c) => ctx.files.has(c)) ?? null;
+const baseOf = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+
+/** Lookup tables over one file set, so each import costs a bucket lookup rather than a scan of every file (M0-12-R3). */
+interface ImportIndex {
+  /** basename → files with that basename. */
+  byBase: Map<string, string[]>;
+  /** lower-case basename → files (PHP namespaces are matched case-insensitively). */
+  byLowerBase: Map<string, string[]>;
+  /** directory → its non-test .go files, sorted. */
+  goByDir: Map<string, string[]>;
+}
+
+// Built once per file set: the scanner hands every resolver of a scan the same Set.
+const indexes = new WeakMap<Set<string>, ImportIndex>();
+
+function indexOf(ctx: ImportContext): ImportIndex {
+  let index = indexes.get(ctx.files);
+  if (index) return index;
+  index = { byBase: new Map(), byLowerBase: new Map(), goByDir: new Map() };
+  const push = (m: Map<string, string[]>, k: string, f: string) => {
+    const list = m.get(k);
+    if (list) list.push(f);
+    else m.set(k, [f]);
+  };
+  for (const f of ctx.files) {
+    const base = baseOf(f);
+    push(index.byBase, base, f);
+    push(index.byLowerBase, base.toLowerCase(), f);
+    if (f.endsWith('.go') && !f.endsWith('_test.go')) push(index.goByDir, dirOf(f), f);
+  }
+  for (const list of index.goByDir.values()) list.sort();
+  indexes.set(ctx.files, index);
+  return index;
+}
+
+/** Files of `bucket` whose path ends with `suffix` as whole path segments, shortest first. */
+function matchSuffix(bucket: string[] | undefined, suffix: string, path: (f: string) => string = (f) => f): string[] {
+  if (!bucket) return [];
+  const hits = bucket.filter((f) => {
+    const p = path(f);
+    return p === suffix || p.endsWith(`/${suffix}`);
+  });
+  return hits.sort((a, b) => a.length - b.length || a.localeCompare(b));
+}
 
 /** Indexed files whose path ends with `suffix` (as whole path segments), shortest first. */
 function bySuffix(ctx: ImportContext, suffix: string): string[] {
-  const hits: string[] = [];
-  for (const f of ctx.files) if (f === suffix || f.endsWith(`/${suffix}`)) hits.push(f);
-  return hits.sort((a, b) => a.length - b.length || a.localeCompare(b));
+  return matchSuffix(indexOf(ctx).byBase.get(baseOf(suffix)), suffix);
 }
 
 /** Java, Kotlin, Scala: `com.ex.lib.Bar` → …/com/ex/lib/Bar.<ext>; a static member or nested class falls back one segment. */
@@ -83,8 +125,7 @@ export function resolveGoImport(target: string, sourcePath: string, ctx: ImportC
     if (module) {
       if (path !== module && !path.startsWith(`${module}/`)) return null;
       const pkgDir = join(dir, path.slice(module.length + 1));
-      const files = [...ctx.files].filter((f) => dirOf(f) === pkgDir && f.endsWith('.go') && !f.endsWith('_test.go')).sort();
-      return files[0] ?? null;
+      return indexOf(ctx).goByDir.get(pkgDir)?.[0] ?? null;
     }
     if (!dir) return null;
   }
@@ -152,12 +193,11 @@ export function resolveCSharpImport(target: string, _sourcePath: string, ctx: Im
 export function resolvePhpImport(target: string, sourcePath: string, ctx: ImportContext): string | null {
   const parts = target.replace(/^\\/, '').split('\\').filter(Boolean);
   if (parts.length < 2) return null;
-  const lower = new Map<string, string>();
-  for (const f of ctx.files) if (f.endsWith('.php')) lower.set(f.toLowerCase(), f);
+  const { byLowerBase } = indexOf(ctx);
   // Longest suffix first: App/Services/UserService.php, then Services/UserService.php.
   for (let start = 0; start <= parts.length - 2; start++) {
     const suffix = `${parts.slice(start).join('/')}.php`.toLowerCase();
-    const hits = [...lower.entries()].filter(([l]) => l === suffix || l.endsWith(`/${suffix}`)).map(([, f]) => f).sort((a, b) => a.length - b.length);
+    const hits = matchSuffix(byLowerBase.get(baseOf(suffix)), suffix, (f) => f.toLowerCase());
     if (hits.length) return hits.find((h) => h.split('/')[0] === sourcePath.split('/')[0]) ?? hits[0]!;
   }
   return null;

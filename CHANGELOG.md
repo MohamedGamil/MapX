@@ -37,6 +37,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx export --format dot --cluster auto --depth 0` renders the cluster-level view: cluster nodes with file counts and cluster-to-cluster edges labelled with their count and types, with `penwidth` scaled by count. (M0-08-R1)
 
 ### Fixed
+- Import resolution no longer slows down with repository size (Java/Kotlin/Scala, Go and PHP imports use an index built once per scan), shebang scripts get call edges, `Rakefile`/`Gemfile` index as Ruby and `.fish` files are indexed, and `mapx_lang_info` matches `mapx lang info` (M0-12-R3).
 - `mapx_query` now lists an Eloquent model's relationships and `mapx_dependencies` lists a provider's abstract → concrete bindings, matching the CLI (M0-05-R4).
 - The "graph may be stale" warning now applies the scanner's own file rules, so files a scan never indexes (outside `includePatterns`, Laravel default excludes, dotfiles, `node_modules`/`coverage`) no longer keep it on; `impact` lists import-only dependants only when they import the symbol, and `callees` shows the called method's own line (or none) instead of a same-named method's or the call site's (M0-11-R2).
 - `mapx metrics` graph density now counts distinct file pairs, so it stays between 0 and 1 instead of exceeding 1 when files share several edges (M0-03-R3).

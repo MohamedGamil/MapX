@@ -154,7 +154,7 @@ Every `SymbolKind` that appears in your `symbols.scm` should have a correspondin
        function: 'function_definition',
        // ... all symbol kinds your queries capture
      },
-     tier: 'built-in', // or 'bundled' / 'installable'
+     tier: 'bundled', // or 'built-in' (dedicated parser) / 'static' (no grammar)
    },
    ```
 

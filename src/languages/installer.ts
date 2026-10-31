@@ -35,6 +35,7 @@ export interface LanguageInfo {
   name: string;
   tier: string;
   extensions: string[];
+  filenames: string[];
   grammar: string | null;
   grammarPresent: boolean;
   queries: string[];
@@ -47,5 +48,30 @@ export function describeLanguage(name: string): LanguageInfo {
   const abs = (p: string) => (isAbsolute(p) ? p : resolve(root, p));
   const grammar = def.grammarWasm ? abs(def.grammarWasm) : null;
   const queries = def.queries ? [def.queries.symbols, def.queries.references].filter(Boolean).map(abs) : [];
-  return { name: def.name, tier: def.tier, extensions: def.extensions, grammar, grammarPresent: !!grammar && existsSync(grammar), queries };
+  return { name: def.name, tier: def.tier, extensions: def.extensions, filenames: def.filenames ?? [], grammar, grammarPresent: !!grammar && existsSync(grammar), queries };
+}
+
+const fileMatches = (def: { extensions: string[]; filenames?: string[] }) => [...def.extensions, ...(def.filenames ?? [])].join(', ');
+
+/** Text of `mapx lang list` and `mapx_lang_list` (one formatter keeps the CLI and MCP in step). */
+export function formatLanguageList(): string {
+  const lines = ['Supported languages (all grammars are bundled):'];
+  for (const [name, def] of Object.entries(languages())) {
+    lines.push(`  - ${name} (${fileMatches(def)} | tier: ${def.tier} | status: ${isLanguageInstalled(name) ? 'bundled' : 'unavailable'})`);
+  }
+  return lines.join('\n');
+}
+
+/** Text of `mapx lang info <lang>` and `mapx_lang_info`; throws on an unknown language. */
+export function formatLanguageInfo(name: string): string {
+  const info = describeLanguage(name);
+  const lines = [
+    info.name,
+    `  Tier:       ${info.tier}`,
+    `  Extensions: ${info.extensions.join(', ')}`,
+  ];
+  if (info.filenames.length) lines.push(`  File names: ${info.filenames.join(', ')}`);
+  lines.push(`  Grammar:    ${info.grammar ? `${info.grammar}${info.grammarPresent ? '' : ' (missing!)'}` : 'none (static parser)'}`);
+  if (info.queries.length) lines.push(`  Queries:    ${info.queries.join(', ')}`);
+  return lines.join('\n');
 }

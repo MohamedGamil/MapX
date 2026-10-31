@@ -174,6 +174,8 @@ vi.mock('../src/core/impact-analyzer.js', () => ({
 
 vi.mock('../src/languages/installer.js', () => ({
   isLanguageInstalled: vi.fn().mockReturnValue(true),
+  formatLanguageList: vi.fn().mockReturnValue('Supported languages (all grammars are bundled):\n  - typescript (.ts | tier: built-in | status: bundled)'),
+  formatLanguageInfo: vi.fn().mockReturnValue('typescript'),
   // D010: all grammars are bundled; install/uninstall return an explanatory message.
   installLanguage: vi.fn().mockResolvedValue("'python' is bundled with MapX; nothing to install."),
   uninstallLanguage: vi.fn().mockResolvedValue("'python' is bundled with MapX and cannot be uninstalled.")

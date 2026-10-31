@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, writeFileSync } from 'node:fs';
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { getLanguageForFile, languageFromShebang } from '../src/languages/registry.js';
+import { buildServer } from '../src/mcp.js';
+import { TEMPLATES } from '../src/agents/templates.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M0-12-R2 (D010): all grammars bundled, lang info, install/uninstall no-ops, shebang detection.
@@ -87,5 +91,142 @@ describe('sync and shebang scripts', () => {
     mapx(root, 'sync', root);
     const symbols = query<{ name: string }>(root, 'SELECT name FROM symbols').map((s) => s.name);
     expect(symbols).toEqual(expect.arrayContaining(['greet', 'bye', 'NewThing']));
+  });
+});
+
+// M0-12-R3: shebang scripts take part in reference resolution; F20 file names; worker path; MCP/CLI parity.
+describe('shebang scripts in the graph, F20 file names (M0-12-R3)', () => {
+  it('maps ts-node/tsx to typescript and fish to fish; Rakefile, Gemfile and .fish have a language', () => {
+    expect(languageFromShebang('#!/usr/bin/env ts-node')?.name).toBe('typescript');
+    expect(languageFromShebang('#!/usr/bin/env -S tsx --watch')?.name).toBe('typescript');
+    expect(languageFromShebang('#!/usr/bin/env node')?.name).toBe('javascript');
+    expect(languageFromShebang('#!/usr/bin/fish')?.name).toBe('fish');
+    for (const [file, lang] of [['Rakefile', 'ruby'], ['Gemfile', 'ruby'], ['tools/Rakefile', 'ruby'], ['conf.d/env.fish', 'fish']])
+      expect(getLanguageForFile(file)?.name, file).toBe(lang);
+    expect(getLanguageForFile('MyRakefile')).toBeNull();
+  });
+
+  // More than 10 files to parse, so the scan goes through the worker pool (scanner.parseFilesParallel).
+  let root: string;
+  beforeAll(() => {
+    const files: Record<string, string> = {
+      'bin/tool': '#!/usr/bin/env python3\ndef helper():\n    return 1\n\ndef main():\n    return helper() + shared_util()\n',
+      'bin/ops': '#!/usr/bin/env python3\ndef ops_entry():\n    return 2\n',
+      'lib/util.py': 'def shared_util():\n    return 2\n',
+      'app.py': 'def run():\n    return ops_entry()\n',
+      Rakefile: "class BuildTasks\n  def build; end\nend\ntask :default do\nend\n",
+      Gemfile: "source 'https://rubygems.org'\ngem 'rake'\n",
+      'config/fish/config.fish': 'function greet\n  echo hi\nend\n',
+    };
+    for (let i = 0; i < 12; i++) files[`pad/m${i}.py`] = `def pad_${i}():\n    return ${i}\n`;
+    root = workspace(files);
+    for (const f of ['bin/tool', 'bin/ops']) chmodSync(join(root, f), 0o755);
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  const calls = (source: string) =>
+    query<{ source_symbol: string; target_symbol: string; target_file: string }>(
+      root, "SELECT source_symbol, target_symbol, target_file FROM edges WHERE source_file = ? AND edge_type = 'call' ORDER BY target_symbol", source);
+
+  it('a python shebang script gets its call edges, in the same file and across files', () => {
+    expect(calls('bin/tool')).toEqual([
+      { source_symbol: 'main', target_symbol: 'helper', target_file: 'bin/tool' },
+      { source_symbol: 'main', target_symbol: 'shared_util', target_file: 'lib/util.py' },
+    ]);
+  });
+
+  it('a shebang script is a call target too', () => {
+    expect(calls('app.py')).toEqual([{ source_symbol: 'run', target_symbol: 'ops_entry', target_file: 'bin/ops' }]);
+  });
+
+  it('indexes Rakefile and Gemfile as Ruby and .fish files (without symbols), through the workers', () => {
+    const files = query<{ path: string; language: string }>(root, "SELECT path, language FROM files WHERE path NOT LIKE 'pad/%' ORDER BY path");
+    expect(files).toEqual([
+      { path: 'Gemfile', language: 'ruby' },
+      { path: 'Rakefile', language: 'ruby' },
+      { path: 'app.py', language: 'python' },
+      { path: 'bin/ops', language: 'python' },
+      { path: 'bin/tool', language: 'python' },
+      { path: 'config/fish/config.fish', language: 'fish' },
+      { path: 'lib/util.py', language: 'python' },
+    ]);
+    const symbols = (file: string) => query<{ name: string }>(root, 'SELECT name FROM symbols WHERE file_path = ? ORDER BY name', file).map((s) => s.name);
+    expect(symbols('Rakefile')).toEqual(expect.arrayContaining(['BuildTasks', 'build']));
+    expect(symbols('bin/tool')).toEqual(['helper', 'main']);
+    expect(symbols('config/fish/config.fish')).toEqual([]);
+  });
+});
+
+// D010 parity: mapx_lang_list / mapx_lang_info return the CLI's text; unknown languages are tool errors.
+describe('language tools: MCP and CLI agree (M0-12-R3)', () => {
+  let root: string;
+  let client: Client;
+  beforeAll(async () => {
+    root = workspace({ 'a.ts': 'export const a = 1;\n' });
+    init(root);
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    client = new Client({ name: 'test', version: '0' });
+    await client.connect(clientSide);
+  }, 60000);
+  afterAll(async () => {
+    await client.close();
+    cleanup(root);
+  });
+
+  const call = async (name: string, args: Record<string, unknown> = {}) => {
+    const res = (await client.callTool({ name, arguments: args })) as { content: { text: string }[]; isError?: boolean };
+    return { text: res.content.map((c) => c.text).join('\n'), isError: !!res.isError };
+  };
+
+  it('mapx_lang_list matches `mapx lang list`, says bundled, never Installed', async () => {
+    const { text, isError } = await call('mapx_lang_list');
+    expect(isError).toBe(false);
+    expect(text).toBe(mapx(root, 'lang', 'list').trimEnd());
+    expect(text).toMatch(/- ruby \(\.rb, \.rake, \.gemspec, Rakefile, Gemfile \| tier: bundled \| status: bundled\)/);
+    expect(text).toMatch(/- fish \(\.fish \| tier: static/);
+    expect(text).not.toMatch(/Installed/);
+  });
+
+  it('mapx_lang_info matches `mapx lang info`', async () => {
+    const { text, isError } = await call('mapx_lang_info', { lang: 'ruby' });
+    expect(isError).toBe(false);
+    expect(text).toBe(mapx(root, 'lang', 'info', 'ruby').trimEnd());
+    expect(text).toContain('File names: Rakefile, Gemfile');
+  });
+
+  it('unknown or missing languages are errors in both', async () => {
+    for (const tool of ['mapx_lang_info', 'mapx_lang_install', 'mapx_lang_uninstall']) {
+      const unknown = await call(tool, { lang: 'klingon' });
+      expect(unknown.isError, tool).toBe(true);
+      expect(unknown.text, tool).toContain("Unknown language 'klingon'");
+      expect((await call(tool, {})).isError, tool).toBe(true);
+    }
+    expect(() => mapx(root, 'lang', 'info', 'klingon')).toThrow();
+    expect((await call('mapx_lang_install', { lang: 'ruby' })).isError).toBe(false);
+  });
+});
+
+// No doc or generated agent template tells users to install a language (D010).
+describe('docs and templates follow D010 (M0-12-R3)', () => {
+  const repo = join(__dirname, '..');
+  const sources: Record<string, string> = {
+    'README.md': readFileSync(join(repo, 'README.md'), 'utf8'),
+    'docs/mcp-integration.md': readFileSync(join(repo, 'docs/mcp-integration.md'), 'utf8'),
+    'docs/cli-reference.md': readFileSync(join(repo, 'docs/cli-reference.md'), 'utf8'),
+    'src/agents.stub.md': readFileSync(join(repo, 'src/agents.stub.md'), 'utf8'),
+  };
+  for (const [key, t] of Object.entries(TEMPLATES)) sources[`template:${key}`] = t.content;
+
+  it.each(Object.keys(sources))('%s does not describe installing a language', (key) => {
+    const text = sources[key]!;
+    expect(text).not.toMatch(/\b(?:un)?install(?:s|ing|ation)?\b[^.,|\n]{0,40}\b(?:language|grammar)/i);
+    expect(text).not.toMatch(/\b(?:language|grammar)s?\s+(?:un)?install/i);
+  });
+
+  it('documents mapx_lang_info wherever the language tools are listed', () => {
+    for (const [key, text] of Object.entries(sources)) if (text.includes('mapx_lang_list')) expect(text, key).toContain('mapx_lang_info');
   });
 });

@@ -9345,7 +9345,7 @@
           "evidence": []
         }
       ],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -9500,15 +9500,28 @@
         "npx vitest run tests/legacy-workspaces.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "lane-cli",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-10-31T02:51:26.459Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-10-31T02:51:25.576Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:51:26.459Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -9572,14 +9585,22 @@
         "npx vitest run tests/legacy-imports.test.ts tests/legacy-languages.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "lane-imports",
       "actualHours": null,
       "startedAt": "2026-10-31T01:53:54.951Z",
-      "completedAt": null,
+      "completedAt": "2026-10-31T02:53:21.917Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-imports.test.ts tests/legacy-languages.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R3.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-10-31T00:30:46.667Z",
@@ -9592,9 +9613,27 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:53:21.483Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-10-31T02:53:21.917Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-imports.test.ts tests/legacy-languages.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R3.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -9655,7 +9694,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",

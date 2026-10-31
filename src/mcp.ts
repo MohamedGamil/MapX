@@ -25,8 +25,7 @@ import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, staleCount, staleNames } from './core/staleness.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
-import { getBuiltinLanguages } from './languages/registry.js';
-import { isLanguageInstalled, installLanguage, uninstallLanguage } from './languages/installer.js';
+import { formatLanguageInfo, formatLanguageList, installLanguage, uninstallLanguage } from './languages/installer.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus } from './ui-events.js';
@@ -578,10 +577,21 @@ EXAMPLES:
       },
       {
         name: 'mapx_lang_list',
-        description: 'List all supported languages, their extensions, tier, and installation status.',
+        description: 'List all supported languages with their extensions/file names and tier. All grammars are bundled (same output as `mapx lang list`).',
         inputSchema: {
           type: 'object',
           properties: {},
+        },
+      },
+      {
+        name: 'mapx_lang_info',
+        description: 'Show a language\'s tier, extensions, file names and resolved grammar/query files (same output as `mapx lang info`).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            lang: { type: 'string', description: 'Name of the language (e.g. python, ruby, bash)' }
+          },
+          required: ['lang'],
         },
       },
       {
@@ -2028,38 +2038,24 @@ Callees: ${callees.length}`;
         };
       }
 
-      case 'mapx_lang_list': {
-        const langs = getBuiltinLanguages();
-        const listStr = Object.entries(langs)
-          .map(([name, def]) => {
-            const installed = isLanguageInstalled(name) ? 'Installed' : 'Not Installed';
-            return `- ${name} (${def.extensions.join(', ')} | tier: ${def.tier} | status: ${installed})`;
-          })
-          .join('\n');
-        return { content: [{ type: 'text', text: `Supported languages:\n${listStr}` }] };
-      }
+      case 'mapx_lang_list':
+        return { content: [{ type: 'text', text: formatLanguageList() }] };
 
-      case 'mapx_lang_install': {
-        const { lang } = args as { lang: string };
-        if (!lang) {
-          return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }] };
-        }
-        try {
-          return { content: [{ type: 'text', text: await installLanguage(lang) }] };
-        } catch (err: any) {
-          return { content: [{ type: 'text', text: `Error installing language '${lang}': ${err.message}` }] };
-        }
-      }
-
+      // Unknown or missing languages are tool errors (isError), like the CLI's non-zero exit.
+      case 'mapx_lang_info':
+      case 'mapx_lang_install':
       case 'mapx_lang_uninstall': {
-        const { lang } = args as { lang: string };
+        const { lang } = (args ?? {}) as { lang?: string };
         if (!lang) {
-          return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }] };
+          return { content: [{ type: 'text', text: 'Error: Missing "lang" parameter.' }], isError: true };
         }
+        const action = name === 'mapx_lang_info' ? 'describing' : name === 'mapx_lang_install' ? 'installing' : 'uninstalling';
         try {
-          return { content: [{ type: 'text', text: await uninstallLanguage(lang) }] };
+          const text = name === 'mapx_lang_info' ? formatLanguageInfo(lang)
+            : name === 'mapx_lang_install' ? await installLanguage(lang) : await uninstallLanguage(lang);
+          return { content: [{ type: 'text', text }] };
         } catch (err: any) {
-          return { content: [{ type: 'text', text: `Error uninstalling language '${lang}': ${err.message}` }] };
+          return { content: [{ type: 'text', text: `Error ${action} language '${lang}': ${err.message}` }], isError: true };
         }
       }
 
@@ -2557,7 +2553,7 @@ function generateConfigs(dir: string, transport: 'stdio' | 'sse', port?: number)
     '  Available tools: mapx_scan, mapx_sync, mapx_query, mapx_dependencies, mapx_export, mapx_status, mapx_metrics, mapx_edges,',
     '                    mapx_clusters, mapx_trace, mapx_sources, mapx_sinks, mapx_search, mapx_context, mapx_callers, mapx_callees,',
     '                    mapx_impact, mapx_node, mapx_files, mapx_routes, mapx_hooks, mapx_workspaces, mapx_agents_generate,',
-    '                    mapx_lang_list, mapx_lang_install, mapx_lang_uninstall',
+    '                    mapx_lang_list, mapx_lang_info, mapx_lang_install, mapx_lang_uninstall',
     '',
   );
 

@@ -281,20 +281,22 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
     return { ...empty, errors: [{ message: `Failed to read ${job.filePath}` }] };
   }
 
-  const ext = job.filePath.substring(job.filePath.lastIndexOf('.'));
+  // The scanner's language comes first, as on the main thread: it covers shebang scripts and
+  // file names such as Rakefile, which have no extension to match.
   let langKey = '';
   let langDef: any = null;
-  for (const [key, def] of langDefs) {
-    if (def.extensions.includes(ext)) {
-      langKey = key;
-      langDef = def;
-      break;
-    }
-  }
-  // Extensionless scripts: the scanner detected the language from the shebang line.
-  if (!langKey && job.language && langDefs.has(job.language)) {
+  if (job.language && langDefs.has(job.language)) {
     langKey = job.language;
     langDef = langDefs.get(langKey);
+  } else {
+    const ext = job.filePath.substring(job.filePath.lastIndexOf('.'));
+    for (const [key, def] of langDefs) {
+      if (def.extensions.includes(ext)) {
+        langKey = key;
+        langDef = def;
+        break;
+      }
+    }
   }
   if (!langKey) return empty;
 

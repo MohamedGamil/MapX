@@ -72,8 +72,8 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-02-R2** Inbound edges survive a file disappearing and coming back; filters in sync and JSON export — IN_PROGRESS, P1, 6h; depends on M0-02-R1.
 - **M0-04-R2** PHP resolution never maps vendor names to app files; tree-sitter $listen — READY, P1, 8h; depends on M0-04-R1.
 - **M0-09-R3** Agent files: line endings, legacy edited blocks and JSONC merges — DONE, P1, 6h; depends on M0-09-R2.
-- **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — BACKLOG, P2, 4h; depends on M0-10-R1.
-- **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — IN_PROGRESS, P1, 6h; depends on M0-12-R1, M0-12-R2.
+- **M0-10-R2** Workspace table and discovery edge cases; stronger workspace tests — IN_PROGRESS, P2, 4h; depends on M0-10-R1.
+- **M0-12-R3** Linear-time import resolution; shebang scripts resolve references; D010 docs — DONE, P1, 6h; depends on M0-12-R1, M0-12-R2.
 - **M0-12-R4** Import resolution precision for Ruby, Java, Python, C#, Rust and Go — BACKLOG, P2, 6h; depends on M0-12-R3.
 - **M0-17-R2** Extraction precision: non-callable call targets, C++/C#/Go names, built-in receivers — BACKLOG, P2, 6h; depends on M0-17-R1, M0-01-R1.
 - **M0-03-R3** metrics/edges output shapes and option validation per F02/F04 — DONE, P2, 5h; depends on M0-03-R2.
