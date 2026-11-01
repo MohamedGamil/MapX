@@ -14,8 +14,10 @@ async function main() {
   if (!existsSync(distDir)) {
     mkdirSync(distDir, { recursive: true });
   }
-  // Drop a map left over from an earlier opt-in build.
+  // Drop a map left over from an earlier opt-in build, and the chunks of the last build: their
+  // names carry content hashes, so stale ones would pile up and ship.
   rmSync(resolve(distDir, 'main.js.map'), { force: true });
+  rmSync(resolve(distDir, 'chunks'), { recursive: true, force: true });
 
   // Progress goes to stderr: npm prints lifecycle output on stdout, as part of `npm pack --json`.
   console.error('Bundling Mapx Web Dashboard client...');
@@ -30,15 +32,20 @@ async function main() {
     cpSync(resolve(srcDir, 'assets'), resolve(distDir, 'assets'), { recursive: true });
   }
 
-  // Run esbuild
+  // Run esbuild. ES modules with code splitting (M4-20): main.js is what the page loads first;
+  // the layout engines other than fCoSE are chunks loaded on first use, and layout-worker.js is
+  // the worker that lays out large graphs. Code both use (cytoscape) is a shared chunk.
   await build({
-    entryPoints: [resolve(srcDir, 'main.ts')],
+    entryPoints: [resolve(srcDir, 'main.ts'), resolve(srcDir, 'layout-worker.ts')],
     bundle: true,
     minify: true,
+    format: 'esm',
+    splitting: true,
+    chunkNames: 'chunks/[name]-[hash]',
     // Source maps are opt-in for local debugging; they are never shipped (docs/baton D005).
     sourcemap: process.env.MAPX_UI_SOURCEMAP === '1',
     platform: 'browser',
-    outfile: resolve(distDir, 'main.js'),
+    outdir: distDir,
     define: {
       'process.env.NODE_ENV': '"production"'
     }

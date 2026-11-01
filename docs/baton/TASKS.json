@@ -21816,14 +21816,32 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T22:00:17.589Z",
+      "completedAt": "2026-11-01T22:53:06.083Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-20.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run test:ui",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-20.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-20.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-20.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T21:10:05.356Z",
@@ -21842,6 +21860,40 @@
           "from": "BLOCKED",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T22:00:17.589Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T22:53:05.796Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T22:53:06.083Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run test:ui",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-20.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-20.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-20.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -21878,7 +21930,10 @@
         "scripts/build-ui.ts",
         "tests/ui/",
         "tests/ui-server.test.ts",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "src/ui/layout-worker.ts",
+        "scripts/check-package.ts",
+        "tests/ui-server-compression.test.ts"
       ],
       "acceptanceCriteria": [
         "The initial gzipped JavaScript the dashboard loads is at least 30% smaller than the M4-16 baseline (check-package and the report).",

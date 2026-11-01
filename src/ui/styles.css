@@ -2273,3 +2273,19 @@ code, pre, kbd, samp { font-family: var(--font-mono); }
 .bar-fill { display: block; }
 .metric-card, .arch-card { background: var(--bg-panel); border: 1px solid var(--border-base); }
 .graph-toolbar .form-select { padding-right: 28px !important; }
+
+/* While a layout runs off the main thread (M4-20), the canvas says so instead of showing nodes
+   stacked at their start positions. Synchronous layouts never paint this state. */
+body[data-graph="layout"] #cy::after {
+  content: "Laying out the graph…";
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: var(--fs-md);
+  background: color-mix(in srgb, var(--bg-main) 88%, transparent);
+  border-radius: inherit;
+}

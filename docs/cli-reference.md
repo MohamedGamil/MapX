@@ -432,7 +432,10 @@ The dashboard:
 - **Keyboard:** every control can be reached with Tab and shows a focus ring. Arrow keys switch between Routes and Hooks, and Escape closes the drawer or the graph's details panel.
 - **Graph details:** the details panel opens when you select a node or edge.
 - **Clusters Map grouping:** the map groups files by architecture layer, or by directory when most files have no layer.
-- **Rate limit:** `/api/graph`, `/api/graph/meta` and `/api/context` are rate-limited to 10 requests a minute per client. Clients on the same machine are exempt, judged by the connection's address.
+- **Rate limit:** `/api/graph`, `/api/graph/meta` and `/api/context` are rate-limited to 10 requests a minute per client. The dashboard itself and command-line clients on the same machine are exempt. A web page from another site is not, even on the same machine.
+- **Loading:** only the default layout engine (fCoSE) loads with the page. ELK, Dagre and Cola load the first time you choose them.
+- **Large graphs:** an fCoSE layout of more than 600 elements runs in a background worker, so the page stays responsive. If the worker can't start, the layout runs on the page as before.
+- **Compression:** API responses over 1 KB, scripts and styles are sent compressed (brotli or gzip) when the browser accepts it.
 
 ## `mapx workspaces`
 

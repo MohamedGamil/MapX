@@ -4,8 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGzip } from 'node:zlib';
-import { pipeline, Readable } from 'node:stream';
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
 import { applyCollapsedRepos } from './core/workspace-summary.js';
@@ -117,6 +116,42 @@ export function isOwnLocalClient(req: IncomingMessage): boolean {
   const origin = req.headers.origin;
   return !origin || origin === `http://${req.headers.host}`;
 }
+
+/** Bodies smaller than this go out as they are: compressing them saves little. */
+const COMPRESS_MIN_BYTES = 1024;
+
+/**
+ * The encoding to send a body in: brotli when the client accepts it, else gzip, else none (M4-20).
+ * Only `br` and `gzip` tokens without `q=0` count.
+ */
+export function pickEncoding(acceptEncoding: string | string[] | undefined): 'br' | 'gzip' | null {
+  const header = Array.isArray(acceptEncoding) ? acceptEncoding.join(',') : acceptEncoding ?? '';
+  const accepted = new Set(header.split(',').map((part) => part.trim().toLowerCase()).filter((part) => !/;\s*q=0(\.0+)?\s*$/.test(part)).map((part) => part.split(';')[0]!.trim()));
+  if (accepted.has('br')) return 'br';
+  if (accepted.has('gzip') || accepted.has('*')) return 'gzip';
+  return null;
+}
+
+/** Compresses `body` for `encoding`; brotli at a fast level, since the dashboard compresses per request. */
+function encode(body: Buffer, encoding: 'br' | 'gzip'): Buffer {
+  return encoding === 'br'
+    ? brotliCompressSync(body, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5, [zlibConstants.BROTLI_PARAM_SIZE_HINT]: body.length } })
+    : gzipSync(body, { level: 6 });
+}
+
+/** Sends a body, compressed when the client accepts it and it is large enough. */
+function sendBody(req: IncomingMessage, res: ServerResponse, status: number, contentType: string, body: Buffer, extraHeaders: Record<string, string> = {}) {
+  const encoding = body.length >= COMPRESS_MIN_BYTES ? pickEncoding(req.headers['accept-encoding']) : null;
+  const headers: Record<string, string | number> = { 'Content-Type': contentType, Vary: 'Accept-Encoding', ...extraHeaders };
+  const payload = encoding ? encode(body, encoding) : body;
+  if (encoding) headers['Content-Encoding'] = encoding;
+  headers['Content-Length'] = payload.length;
+  res.writeHead(status, headers);
+  res.end(payload);
+}
+
+/** Static files compressed once per file version (path, size and mtime) and encoding. */
+const staticCache = new Map<string, Buffer>();
 
 /** `Config.load` plus the duplicate-entry collapse the CLI and MCP loaders apply (M0-10-R4). */
 async function loadConfig(dir: string, store: Store): Promise<Config> {
@@ -322,29 +357,8 @@ export function startUiServer(opts: ServerOpts) {
             responseBody = elements;
           }
 
-          const payload = JSON.stringify(responseBody);
-
-          // --- Gzip compression for large responses ---
-          const acceptEncoding = req.headers['accept-encoding'] || '';
-          const clientAcceptsGzip = typeof acceptEncoding === 'string' && acceptEncoding.includes('gzip');
-
-          if (payload.length > 1 * 1024 * 1024 && clientAcceptsGzip) {
-            res.writeHead(200, {
-              'Content-Type': 'application/json',
-              'Content-Encoding': 'gzip',
-              'Transfer-Encoding': 'chunked'
-            });
-            const source = Readable.from([payload]);
-            const gzip = createGzip();
-            pipeline(source, gzip, res, (err: any) => {
-              if (err && !res.destroyed) {
-                res.end();
-              }
-            });
-          } else {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(payload);
-          }
+          // Compressed when the client accepts it (M4-20): the 2,000-file graph is about 1 MB of JSON.
+          sendBody(req, res, 200, 'application/json', Buffer.from(JSON.stringify(responseBody)));
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }
@@ -757,8 +771,23 @@ export function startUiServer(opts: ServerOpts) {
           '.png': 'image/png'
         };
         const contentType = contentTypes[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': contentType });
-        res.end(readFileSync(safeAssetPath));
+        // Scripts, styles and markup go out compressed, cached per file version (M4-20).
+        const encoding = ['.js', '.css', '.html', '.svg', '.json'].includes(ext) ? pickEncoding(req.headers['accept-encoding']) : null;
+        if (!encoding) {
+          res.writeHead(200, { 'Content-Type': contentType, Vary: 'Accept-Encoding' });
+          res.end(readFileSync(safeAssetPath));
+        } else {
+          const stat = statSync(safeAssetPath);
+          const key = `${safeAssetPath}:${stat.size}:${stat.mtimeMs}:${encoding}`;
+          let body = staticCache.get(key);
+          if (!body) {
+            body = encode(readFileSync(safeAssetPath), encoding);
+            if (staticCache.size >= 64) staticCache.clear(); // rebuilt bundles leave old versions behind
+            staticCache.set(key, body);
+          }
+          res.writeHead(200, { 'Content-Type': contentType, 'Content-Encoding': encoding, 'Content-Length': body.length, Vary: 'Accept-Encoding' });
+          res.end(body);
+        }
       } else {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');

@@ -96,3 +96,27 @@ for (const { tab, shows } of TABS) {
     expect(errors).toEqual([]);
   });
 }
+
+test('a layout engine other than fCoSE loads on first use and lays out the graph (M4-20)', async ({ page }) => {
+  const errors = watchErrors(page);
+  // Script bytes (decoded) fetched per chunk name, recorded as responses arrive.
+  const loaded = new Map<string, number>();
+  page.on('response', async (r) => {
+    if (!r.url().includes('/chunks/')) return;
+    const name = r.url().split('/').pop()!;
+    loaded.set(name, (await r.body().catch(() => Buffer.alloc(0))).length);
+  });
+  const engineBytes = (layout: string) => [...loaded].filter(([n]) => n.startsWith(`cytoscape-${layout}-`)).reduce((n, [, b]) => n + b, 0);
+  await page.goto(served.url);
+  await graphReady(page);
+  expect(engineBytes('elk')).toBe(0); // not part of the first load
+  // Each engine arrives on first use, with its code: a chunk holding the engine itself, not a
+  // re-export of code the first load already carried.
+  const minBytes: Record<string, number> = { elk: 500_000, dagre: 20_000, cola: 40_000 };
+  for (const layout of ['elk', 'dagre', 'cola']) {
+    await page.selectOption('#select-layout', layout);
+    await graphReady(page);
+    await expect.poll(() => engineBytes(layout), { message: layout }).toBeGreaterThan(minBytes[layout]!);
+  }
+  expect(errors).toEqual([]);
+});

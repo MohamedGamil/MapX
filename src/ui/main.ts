@@ -1,14 +1,31 @@
 import cytoscape from 'cytoscape';
-import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
-import cola from 'cytoscape-cola';
-import elk from 'cytoscape-elk';
 import { DETAILS_PLACEHOLDER, initDetailsPanel, initNavDrawer, initTheme } from './chrome.js';
 
-cytoscape.use(dagre);
 cytoscape.use(fcose);
-cytoscape.use(cola);
-cytoscape.use(elk);
+
+/**
+ * Layout engines other than the default (fCoSE) load on first use (M4-20): ELK alone was two
+ * thirds of the dashboard's JavaScript, and few sessions pick it.
+ */
+const LAZY_LAYOUTS: Record<string, () => Promise<any>> = {
+  elk: () => import('cytoscape-elk'),
+  cola: () => import('cytoscape-cola'),
+  dagre: () => import('cytoscape-dagre'),
+};
+const loadedLayouts = new Set<string>();
+
+/** Loads and registers a lazy layout engine; null when it is built in or already loaded. */
+function ensureLayout(name: string): Promise<void> | null {
+  const load = LAZY_LAYOUTS[name];
+  if (!load || loadedLayouts.has(name)) return null;
+  return load().then((mod) => {
+    if (!loadedLayouts.has(name)) {
+      cytoscape.use(mod.default ?? mod);
+      loadedLayouts.add(name);
+    }
+  });
+}
 
 // Base Configuration and State
 let currentTab = 'graph';
@@ -406,8 +423,10 @@ function getLayoutConfigForName(layoutName: string, elementCount?: number): any 
         padding: 60,
         nodeDimensionsIncludeLabels: true,
         uniformNodeDimensions: false,
-        nodeRepulsion: () => 250000,
-        idealEdgeLength: () => 180,
+        // On large graphs fCoSE's time is the repulsion between nodes within a range that grows
+        // with the ideal edge length: shorter edges halve the layout of 2,000 files (M4-20).
+        nodeRepulsion: () => ((elementCount || 0) > 1500 ? 120000 : 250000),
+        idealEdgeLength: () => ((elementCount || 0) > 1500 ? 70 : 180),
         edgeElasticity: () => 0.35,
         gravity: 0.08,
         gravityRange: 2.5,
@@ -1028,13 +1047,11 @@ function updateGraphDisplay() {
   if (!cyInstance) return;
 
   const newElements = buildGraphElementsForMode();
-
-  cyInstance.batch(() => {
+  const elementCount = newElements.length;
+  const replaceElements = () => cyInstance.batch(() => {
     cyInstance.elements().remove();
     cyInstance.add(newElements);
   });
-
-  const elementCount = newElements.length;
 
   // Resolve the layout config for this mode change.
   // All paths go through getLayoutConfigForName so the pre-scatter in runLayout
@@ -1064,13 +1081,175 @@ function updateGraphDisplay() {
     layoutConfig = { ...layoutConfig, randomize: true };
   }
 
-  runLayout(layoutConfig);
+  // A large fCoSE layout runs in the worker on the raw elements, which are then added once, already
+  // placed: no render of nodes stacked at the origin, and no second pass over their styles (M4-20).
+  if (layoutConfig.name === 'fcose' && elementCount > WORKER_LAYOUT_MIN && prelayoutInWorker(newElements, layoutConfig, replaceElements)) {
+    syncLayoutSelect();
+    return;
+  }
 
-  // Update layout dropdown UI
+  replaceElements();
+  runLayout(layoutConfig);
+  syncLayoutSelect();
+}
+
+function syncLayoutSelect() {
+
   const layoutSelect = document.getElementById('select-layout') as HTMLSelectElement;
   if (layoutSelect && layoutSelect.value !== activeLayoutName) {
     layoutSelect.value = activeLayoutName;
   }
+}
+
+/**
+ * Lays out elements that are not drawn yet in the worker; the old graph is cleared meanwhile, and
+ * the new one added with its positions. False when no worker can run.
+ */
+function prelayoutInWorker(elements: any[], config: any, replaceElements: () => void): boolean {
+  const degree = new Map<string, number>();
+  const edges: Array<{ id: string; source: string; target: string }> = [];
+  for (const el of elements) {
+    const d = el.data;
+    if (d?.source && d?.target) {
+      edges.push({ id: d.id, source: d.source, target: d.target });
+      degree.set(d.source, (degree.get(d.source) ?? 0) + 1);
+      degree.set(d.target, (degree.get(d.target) ?? 0) + 1);
+    }
+  }
+  const nodes: WorkerNode[] = elements.filter((el) => el.data && !el.data.source).map((el) => ({ id: el.data.id, parent: el.data.parent, ...estimatedSize(el.data, degree.get(el.data.id) ?? 0), x: 0, y: 0 }));
+  if (activeLayout) {
+    try { activeLayout.stop(); } catch { /* ignored */ }
+    activeLayout = null;
+  }
+  const started = startWorkerLayout(nodes, edges, config, (positions) => {
+    for (const el of elements) {
+      const p = el.data && !el.data.source ? positions[el.data.id] : undefined;
+      if (p) el.position = p;
+    }
+    replaceElements();
+    finishWorkerLayout(config);
+  }, () => {
+    replaceElements();
+    runLayoutOnMainThread(config);
+  });
+  if (!started) return false;
+  cyInstance.elements().remove(); // the old view goes; the canvas shows the layout notice
+  markGraph('layout');
+  return true;
+}
+
+/** fCoSE runs in a worker once the visible graph has more elements than this (M4-20). */
+const WORKER_LAYOUT_MIN = 600;
+let layoutWorker: Worker | null | undefined;
+let layoutSeq = 0;
+type Positions = Record<string, { x: number; y: number }>;
+type WorkerNode = { id: string; parent?: string; w: number; h: number; x: number; y: number };
+let pendingWorkerLayout: { seq: number; onPositions: (p: Positions) => void; onFail: () => void } | null = null;
+
+/** Option values the worker can receive: functions returning constants are evaluated. */
+function serializableOptions(config: any): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(config)) {
+    if (typeof v === 'function') {
+      try {
+        const value = (v as () => unknown)();
+        if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') out[k] = value;
+      } catch { /* depends on its node argument: left to the worker's default */ }
+    } else if (v === null || ['number', 'boolean', 'string'].includes(typeof v)) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/** The main-thread layout, also the fallback when the worker cannot run. */
+function runLayoutOnMainThread(layoutConfig: any) {
+  activeLayout = cyInstance.layout(layoutConfig);
+  activeLayout.one('layoutstop', () => markGraph('ready'));
+  activeLayout.run();
+}
+
+function onWorkerLayout(event: MessageEvent<{ seq: number; positions?: Positions; error?: string; ms?: number }>) {
+  const { seq, positions, error, ms } = event.data;
+  performance.mark('mapx:layout-received');
+  if (ms !== undefined) document.body.dataset.layoutMs = String(ms); // how long the worker took (tests, M4-20)
+  const pending = pendingWorkerLayout;
+  if (!pending || seq !== pending.seq || !cyInstance) return; // superseded by a later layout
+  pendingWorkerLayout = null;
+  if (error || !positions) {
+    console.warn(`Layout worker failed (${error}); laying out on the main thread.`);
+    pending.onFail();
+    return;
+  }
+  pending.onPositions(positions);
+}
+
+/** Finishes a worker layout: fit, then the same signals a cytoscape layout gives. */
+function finishWorkerLayout(config: any) {
+  if (config.fit !== false) cyInstance.fit(undefined, config.padding ?? 50);
+  activeLayout = null;
+  cyInstance.emit('layoutstop');
+  markGraph('ready');
+}
+
+/**
+ * Posts a graph to the layout worker (started on first use). False when no worker can run, so
+ * the caller lays out on the main thread; otherwise exactly one of the callbacks runs, unless a
+ * later layout supersedes this one.
+ */
+function startWorkerLayout(nodes: WorkerNode[], edges: Array<{ id: string; source: string; target: string }>, config: any, onPositions: (p: Positions) => void, onFail: () => void): boolean {
+  if (layoutWorker === null || typeof Worker === 'undefined') return false;
+  if (!layoutWorker) {
+    try {
+      layoutWorker = new Worker(new URL('layout-worker.js', document.baseURI), { type: 'module' });
+      layoutWorker.onmessage = onWorkerLayout;
+      layoutWorker.onerror = (e) => {
+        console.warn(`Layout worker unavailable (${e.message || 'load error'}); laying out on the main thread.`);
+        layoutWorker?.terminate();
+        layoutWorker = null;
+        const pending = pendingWorkerLayout;
+        pendingWorkerLayout = null;
+        if (pending && cyInstance) pending.onFail();
+      };
+    } catch {
+      layoutWorker = null;
+      return false;
+    }
+  }
+  const seq = ++layoutSeq;
+  pendingWorkerLayout = { seq, onPositions, onFail };
+  layoutWorker.postMessage({ seq, nodes, edges, options: serializableOptions(config) });
+  performance.mark('mapx:layout-posted');
+  return true;
+}
+
+/** A node's drawn size with its label, estimated as the graph style draws it (about 6.5 px a character at 11 px). */
+function estimatedSize(data: any, degree: number): { w: number; h: number } {
+  const label = String(data.label ?? '');
+  const side = data.type === 'cluster-group'
+    ? 70 + Math.min(Math.log2(data.fileCount || 1) * 8, 40)
+    : 32 + Math.min(degree * 2, 48);
+  return { w: Math.max(side, label.length * 6.5 + 8), h: side + (label ? 18 : 0) };
+}
+
+/**
+ * Runs an fCoSE layout in the layout worker: posts the visible nodes (with their sizes including
+ * labels) and edges, and applies the positions it returns. False when no worker can be started,
+ * so the caller lays out on the main thread.
+ */
+function runLayoutInWorker(layoutConfig: any): boolean {
+  const visible = cyInstance.elements(':visible');
+  const nodes: WorkerNode[] = visible.nodes().map((n: any) => ({ id: n.id(), parent: n.data('parent'), ...estimatedSize(n.data(), n.degree()), x: 0, y: 0 }));
+  const edges = visible.edges().map((e: any) => ({ id: e.id(), source: e.source().id(), target: e.target().id() }));
+  return startWorkerLayout(nodes, edges, layoutConfig, (positions) => {
+    cyInstance.batch(() => {
+      cyInstance.nodes().forEach((node: any) => {
+        const p = positions[node.id()];
+        if (p && !node.isParent()) node.position(p);
+      });
+    });
+    finishWorkerLayout(layoutConfig);
+  }, () => runLayoutOnMainThread(layoutConfig));
 }
 
 function runLayout(layoutConfig: any) {
@@ -1081,10 +1260,28 @@ function runLayout(layoutConfig: any) {
       // Ignored
     }
   }
+  pendingWorkerLayout = null; // a newer layout supersedes one still in the worker
+
+  // A layout engine loaded on demand: run once it has arrived.
+  const loading = ensureLayout(layoutConfig.name);
+  if (loading) {
+    markGraph('layout');
+    loading.then(() => { if (cyInstance) runLayout(layoutConfig); }).catch((err) => {
+      console.error(`Failed to load the ${layoutConfig.name} layout:`, err);
+      markGraph('error');
+    });
+    return;
+  }
 
   const visibleCount = cyInstance.elements(':visible').length;
   if (visibleCount > 200) {
     layoutConfig = { ...layoutConfig, animate: false };
+  }
+
+  // Large fCoSE layouts run in the worker, which randomizes the start itself (M4-20).
+  if (layoutConfig.name === 'fcose' && visibleCount > WORKER_LAYOUT_MIN) {
+    markGraph('layout');
+    if (runLayoutInWorker(layoutConfig)) return;
   }
 
   // Pre-scatter nodes to random positions before any physics/force layout runs.
@@ -1106,9 +1303,7 @@ function runLayout(layoutConfig: any) {
 
   markGraph('layout');
   if (visibleCount > 200) {
-    activeLayout = cyInstance.layout(layoutConfig);
-    activeLayout.one('layoutstop', () => markGraph('ready'));
-    activeLayout.run();
+    runLayoutOnMainThread(layoutConfig);
     return;
   }
 
@@ -1937,9 +2132,8 @@ async function loadGraph() {
     // The first layout runs after its listener is attached: a synchronous (unanimated) layout
     // stops inside run(), so a listener added after construction would miss it.
     showOverlay('Running layout…');
-    activeLayout = cyInstance.layout(getLayoutOptions(showClusters, false));
-    activeLayout.one('layoutstop', () => { hideOverlay(); markGraph('ready'); });
-    activeLayout.run();
+    cyInstance.one('layoutstop', () => hideOverlay());
+    runLayout(getLayoutOptions(showClusters, false));
     // Safety net: always hide after 10 s even if the event never fires.
     setTimeout(() => hideOverlay(), 10000);
 
