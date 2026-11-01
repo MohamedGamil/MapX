@@ -1,12 +1,13 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { execFileSync, spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
 import { appendFileSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getBuiltinLanguages } from '../src/languages/registry.js';
 import { grammarLoadCounts, loadLanguage } from '../src/parsers/wasm-parser.js';
 import { Scanner, type WorkerStats } from '../src/core/scanner.js';
-import { AffinityScheduler, POOL_SIZING, ParseWorkerPool, availableMemory, createParsePool, parseWorkersSetting, poolSize } from '../src/core/worker-pool.js';
+import { AffinityScheduler, BATCH_FILES, POOL_SIZING, ParseWorkerPool, availableMemory, createParsePool, parseWorkersSetting, poolSize } from '../src/core/worker-pool.js';
 import { Store } from '../src/core/store.js';
 import { Config } from '../src/core/config.js';
 import { MapxGraph } from '../src/core/graph.js';
@@ -536,6 +537,24 @@ describe('M4-12: files are dealt to workers by language', () => {
     expect(run.makespan).toBeLessThan(80);
   });
 
+  it('steals the language with the most work left, not a small one at the end of a queue (review 2026-11-01)', () => {
+    // Lane 0 plans 38 of a; lane 1 plans 2 of a, 30 of b, then 6 of c.
+    const list = [
+      ...Array.from({ length: 40 }, () => ({ key: 'a', weight: 100 })),
+      ...Array.from({ length: 30 }, () => ({ key: 'b', weight: 100 })),
+      ...Array.from({ length: 6 }, () => ({ key: 'c', weight: 100 })),
+    ];
+    const scheduler = new AffinityScheduler(list, [new Set(), new Set()]);
+    const taken: string[] = [];
+    for (let i = 0; i < 40; i++) taken.push(list[scheduler.next(0)!]!.key);
+    expect(taken.every((k) => k === 'a')).toBe(true);
+    expect(list[scheduler.next(0)!]!.key).toBe('b');
+    // The rest of a batch never takes a grammar the lane does not hold.
+    const other = new AffinityScheduler(list, [new Set(), new Set()]);
+    for (let i = 0; i < 40; i++) other.next(0);
+    expect(other.next(0, false)).toBeUndefined();
+  });
+
   it('serves files a crashed worker left before the lane\'s own queue, and drains them', () => {
     const list = Array.from({ length: 10 }, () => ({ key: 'php', weight: 100 }));
     const scheduler = new AffinityScheduler(list, [new Set(), new Set()]);
@@ -633,4 +652,137 @@ describe('M4-12: files are dealt to workers by language', () => {
       cleanup(root);
     }
   }, 180000);
+});
+
+describe('M4-14: files go to workers in batches', () => {
+  it('sends at most ceil(N / batch) + workers job messages and one context message per worker', () => {
+    const root = workspace(tsFiles('src', 150));
+    try {
+      init(root);
+      const { stats } = mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_PARSE_WORKERS: '4' }, 'scan');
+      const [run] = stats;
+      expect(run!.workers.reduce((n, w) => n + w.files, 0)).toBe(150);
+      expect(BATCH_FILES).toBe(16);
+      expect(run!.messages!.jobs).toBeLessThanOrEqual(Math.ceil(150 / 16) + 4);
+      expect(run!.messages!.context).toBeLessThanOrEqual(4);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('reports progress for every file, and hands back a failing file alone while its batch is used', async () => {
+    const root = workspace(tsFiles('src', 60));
+    const saved = { ...process.env };
+    try {
+      process.env['MAPX_PARSE_WORKERS'] = '2';
+      process.env['MAPX_TEST_WORKER_FAIL'] = 'src/m7.ts';
+      const config = await Config.load(root);
+      let last = { current: 0, total: 0 };
+      const scanner = new Scanner(new Store(':memory:'), config, new MapxGraph(config.repos[0]!.name), (p) => {
+        if (p.phase === 'parse') last = { current: p.current, total: p.total };
+      });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        await scanner.scanFull();
+        expect(warn.mock.calls.flat().join('\n')).toContain('1 file(s) parsed on the main thread');
+      } finally {
+        warn.mockRestore();
+      }
+      expect(last).toEqual({ current: 60, total: 60 });
+      expect(scanner.lastWorkerStats!.handbacks).toBe(1);
+      expect(scanner.lastWorkerStats!.workers.reduce((n, w) => n + w.files, 0)).toBe(60);
+    } finally {
+      process.env = saved;
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('posts a batch\'s results one by one when they will not clone together, handing back only the bad one', () => {
+    const root = workspace(tsFiles('src', 40));
+    try {
+      init(root);
+      const { output, stats } = mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_PARSE_WORKERS: '2', MAPX_TEST_WORKER_UNCLONEABLE: 'src/m5.ts' }, 'scan');
+      expect(output).not.toContain('Parallel parsing unavailable');
+      expect(output).toContain('[mapx] 1 file(s) parsed on the main thread: a worker could not return them (src/m5.ts: DataCloneError');
+      expect(stats[0]!.handbacks).toBe(1);
+      const parallel = indexRows(root);
+      unlinkSync(join(root, '.mapx/mapx.db'));
+      mapxWithStderr(root, 'scan', '--no-parallel');
+      expect(indexRows(root)).toEqual(parallel);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('retries the files of a batch a worker died on one per message, blaming only the file that kills alone', () => {
+    const root = workspace(tsFiles('src', 60));
+    try {
+      init(root);
+      const { output, stats } = mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_PARSE_WORKERS: '2', MAPX_TEST_WORKER_EXIT: 'src/m20.ts' }, 'scan');
+      expect(output).toContain('[mapx] 1 file(s) parsed on the main thread: a worker could not return them (src/m20.ts: worker exited with code 3).');
+      expect(stats[0]!.handbacks).toBe(1);
+      const parallel = indexRows(root);
+      unlinkSync(join(root, '.mapx/mapx.db'));
+      mapxWithStderr(root, 'scan', '--no-parallel');
+      expect(indexRows(root)).toEqual(parallel);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+describe('M4-14 review: crash accounting and the batch watchdog (fake workers)', () => {
+  /** A worker that answers batches at once, dies on `killer`, and never answers a batch holding `silent`. */
+  function fakePool(size: number, opts: { killer?: number; silent?: number }) {
+    const received: number[][] = [];
+    class FakeWorker extends EventEmitter {
+      constructor() { super(); process.nextTick(() => this.emit('message', { type: 'ready' })); }
+      postMessage(msg: any) {
+        if (msg?.type === 'stats') { process.nextTick(() => this.emit('message', { type: 'stats', files: 0, grammars: [] })); return; }
+        if (msg?.type !== 'batch') return;
+        const ids = msg.jobs.map((j: any) => j.id as number);
+        received.push(ids);
+        if (opts.killer !== undefined && ids.includes(opts.killer)) { process.nextTick(() => this.emit('exit', 3)); return; }
+        if (opts.silent !== undefined && ids.includes(opts.silent)) return;
+        process.nextTick(() => this.emit('message', { type: 'results', seq: msg.seq, results: ids.map((id: number) => ({ id, symbols: [], references: [], errors: [] })) }));
+      }
+      terminate() { return Promise.resolve(0); }
+      ref() { return this; }
+      unref() { return this; }
+    }
+    const pool = new ParseWorkerPool({ size, workerUrl: new URL('file:///fake.js'), spawn: () => new FakeWorker() as any, idleMs: 60_000 });
+    const files = Array.from({ length: 200 }, (_, i) => ({ absolutePath: `/w/src/f${i}.ts`, language: 'typescript', sizeBytes: 100 }));
+    const context = { languages: { typescript: { tier: 'built-in' } }, assetRoot: '' };
+    const run = () => pool.parse(files, '/w', context, () => {}, () => false, size);
+    return { pool, received, run };
+  }
+
+  it('one killer file on a pool of 1 costs only itself, and is tried alone exactly twice', async () => {
+    const { pool, received, run } = fakePool(1, { killer: 50 });
+    try {
+      const batch = await run();
+      expect(batch.handbacks).toEqual([50]);
+      expect(batch.handbackReason).toBe('worker exited with code 3');
+      expect(batch.results.filter(Boolean)).toHaveLength(199);
+      // Once in its batch (not blamed), then twice alone (blamed).
+      expect(received.filter((ids) => ids.includes(50)).map((ids) => ids.length > 1)).toEqual([true, false, false]);
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('ends a batch that never answers, and hands back only the silent file', async () => {
+    process.env['MAPX_WORKER_BATCH_TIMEOUT_MS'] = '150';
+    const { pool, received, run } = fakePool(2, { silent: 120 });
+    try {
+      const batch = await run();
+      expect(batch.handbacks).toEqual([120]);
+      expect(batch.handbackReason).toBe('no answer within 150 ms');
+      expect(batch.results.filter(Boolean)).toHaveLength(199);
+      expect(received.filter((ids) => ids.includes(120)).map((ids) => ids.length > 1)).toEqual([true, false, false]);
+    } finally {
+      delete process.env['MAPX_WORKER_BATCH_TIMEOUT_MS'];
+      await pool.close();
+    }
+  }, 20000);
 });

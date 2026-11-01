@@ -27,6 +27,13 @@ import { relative } from 'node:path';
  *   one worker is slower than the main thread;
  * - a worker costs 60 to 110 MB (V8 isolate, parser modules, grammars), more on large files.
  */
+/**
+ * Files per worker message (M4-14): up to 16 files or 256 KB of source, so a 3,000-file batch costs
+ * about 200 round trips instead of 3,000, while a lane's last batch stays small enough to balance.
+ */
+export const BATCH_FILES = 16;
+export const BATCH_BYTES = 256 * 1024;
+
 export const POOL_SIZING = {
   /** Source a cold worker must have to repay its startup (about 350 ms of parsing). */
   coldBytesPerWorker: 384 * 1024,
@@ -141,7 +148,7 @@ export interface PoolFile {
  * per-call scans of every queue were quadratic).
  */
 class LaneQueue {
-  private readonly groups = new Map<string, { items: number[]; head: number }>();
+  private readonly groups = new Map<string, { items: number[]; head: number; weight: number }>();
   private readonly order: string[] = [];
   private cursor = 0;
   weight = 0;
@@ -152,8 +159,9 @@ class LaneQueue {
   push(index: number): void {
     const key = this.items[index]!.key;
     let group = this.groups.get(key);
-    if (!group) { group = { items: [], head: 0 }; this.groups.set(key, group); this.order.push(key); }
+    if (!group) { group = { items: [], head: 0, weight: 0 }; this.groups.set(key, group); this.order.push(key); }
     group.items.push(index);
+    group.weight += this.items[index]!.weight;
     this.weight += this.items[index]!.weight;
     this.size++;
   }
@@ -180,13 +188,14 @@ class LaneQueue {
     return this.took(group.items.pop()!);
   }
 
-  /** The last file of the last language with files left, for another lane. */
-  popAny(): number | undefined {
-    for (let k = this.order.length - 1; k >= 0; k--) {
-      const index = this.popKey(this.order[k]!);
-      if (index !== undefined) return index;
+  /** The language with the most work left here, and that work's weight. */
+  heaviestGroup(): { key: string; weight: number } | undefined {
+    let best: { key: string; weight: number } | undefined;
+    for (const key of this.order) {
+      const g = this.groups.get(key)!;
+      if (g.head < g.items.length && (!best || g.weight > best.weight)) best = { key, weight: g.weight };
     }
-    return undefined;
+    return best;
   }
 
   remaining(): number[] {
@@ -194,13 +203,15 @@ class LaneQueue {
   }
 
   clear(): void {
-    for (const g of this.groups.values()) g.items.length = g.head;
+    for (const g of this.groups.values()) { g.items.length = g.head; g.weight = 0; }
     this.weight = 0;
     this.size = 0;
   }
 
   private took(index: number): number {
-    this.weight -= this.items[index]!.weight;
+    const w = this.items[index]!.weight;
+    this.weight -= w;
+    this.groups.get(this.items[index]!.key)!.weight -= w;
     this.size--;
     return index;
   }
@@ -293,8 +304,11 @@ export class AffinityScheduler {
     }
   }
 
-  /** The next file for `lane`, or undefined when the lane should end. */
-  next(lane: number): number | undefined {
+  /**
+   * The next file for `lane`, or undefined when the lane should end. With `newGrammar` false (the
+   * rest of a batch after its first file), never a language the lane does not hold (M4-14).
+   */
+  next(lane: number, newGrammar = true): number | undefined {
     if (this.retry.length > 0) return this.retry.shift();
     const own = this.queues[lane]!.shift();
     if (own !== undefined) return own;
@@ -311,13 +325,18 @@ export class AffinityScheduler {
       }
     }
     if (victim >= 0) return this.queues[victim]!.popKey(victimKey);
-    // The largest remaining queue, if a grammar load pays off there.
-    let largest = -1;
+    if (!newGrammar) return undefined;
+    // The language with the most work left in another lane, if a grammar load pays off there
+    // (review 2026-11-01: taking a queue's last language stole small languages, loading their
+    // grammars twice).
+    let best: { lane: number; key: string; weight: number } | undefined;
     for (let l = 0; l < this.queues.length; l++) {
-      if (l !== lane && this.queues[l]!.size > 0 && (largest < 0 || this.queues[l]!.weight > this.queues[largest]!.weight)) largest = l;
+      if (l === lane) continue;
+      const g = this.queues[l]!.heaviestGroup();
+      if (g && (!best || g.weight > best.weight)) best = { lane: l, ...g };
     }
-    if (largest < 0 || this.queues[largest]!.weight < this.penalty) return undefined;
-    const index = this.queues[largest]!.popAny()!;
+    if (!best || best.weight < this.penalty) return undefined;
+    const index = this.queues[best.lane]!.popKey(best.key)!;
     keys.add(this.items[index]!.key);
     return index;
   }
@@ -396,11 +415,14 @@ export class ParseWorkerPool {
   private contextVersion = 0;
   private idleTimer: NodeJS.Timeout | null = null;
   private running = false;
+  private batchSeq = 0;
   private closing = false;
   private queueTail: Promise<unknown> = Promise.resolve();
-  /** Workers started over the pool's lifetime, and parse batches served. */
+  /** Workers started over the pool's lifetime, parse batches served, and messages sent to workers. */
   started = 0;
   batches = 0;
+  jobMessages = 0;
+  contextMessages = 0;
 
   constructor(options: WorkerPoolOptions) {
     this.size = Math.max(1, options.size);
@@ -462,6 +484,7 @@ export class ParseWorkerPool {
     let handbackReason: string | undefined;
     const crashes = new Map<number, number>();
     let replacements = 0;
+    let soloDeaths = 0;
     const staticLanguages = new Set(Object.entries(context.languages).filter(([, d]) => (d as any)?.tier === 'static').map(([name]) => name));
     const keyOf = (f: PoolFile) => (f.language && !staticLanguages.has(f.language) ? GRAMMAR_OF[f.language] ?? f.language : '');
     const handBack = (index: number, reason: string) => {
@@ -492,31 +515,56 @@ export class ParseWorkerPool {
         files.map(f => ({ key: keyOf(f), weight: Math.max(1, (f.sizeBytes ?? 1) * (keyOf(f) === '' ? 0.05 : 1)) })),
         lanes.map(w => w.languages),
       );
+      // Files retried after a worker died on their batch travel alone, so a file that kills a
+      // worker is identified, and only such a death counts toward its hand-back (M4-14).
+      const solo = new Set<number>();
+      const takeBatch = (laneIndex: number): number[] => {
+        const first = plan.next(laneIndex);
+        if (first === undefined) return [];
+        const batch = [first];
+        if (solo.has(first)) return batch;
+        let bytes = files[first]!.sizeBytes ?? 0;
+        while (batch.length < BATCH_FILES && bytes < BATCH_BYTES) {
+          // The rest of the batch: no grammar the lane does not hold.
+          const index = plan.next(laneIndex, false);
+          if (index === undefined) break;
+          if (solo.has(index)) { plan.requeue(index); break; }
+          batch.push(index);
+          bytes += files[index]!.sizeBytes ?? 0;
+        }
+        return batch;
+      };
       const lane = async (initial: PoolWorker, laneIndex: number) => {
         let pw: PoolWorker | null = initial;
         try { await pw.ready; } catch { pw = null; }
         for (;;) {
           // A close() mid-batch ends the lanes: no replacement worker starts after it.
           if (isAborted() || this.closing) return;
-          const index = plan.next(laneIndex);
-          if (index === undefined) return;
+          const batch = takeBatch(laneIndex);
+          if (batch.length === 0) return;
           if (!pw || !pw.alive) {
-            if (replacements >= this.size * 2) { handBack(index, 'worker restarts exhausted'); continue; }
+            // Only deaths on a file alone count toward the cap: a batch death turns its files solo,
+            // so it happens at most once per killer file (review 2026-11-01: counting it handed back
+            // 185 of 200 files on a pool of 1 with one killer file).
+            if (soloDeaths > this.size * 2) { for (const i of batch) handBack(i, 'worker restarts exhausted'); continue; }
             replacements++;
             pw = this.start();
             plan.resetLane(laneIndex);
-            try { await pw.ready; } catch { pw.alive = false; handBack(index, 'a worker could not start'); continue; }
+            try { await pw.ready; } catch { pw.alive = false; for (const i of batch) handBack(i, 'a worker could not start'); continue; }
           }
-          const key = keyOf(files[index]!);
-          if (key) pw.languages.add(key);
-          const outcome = await this.run<R>(pw, index, files[index]!, workspaceRoot);
-          if (outcome.kind === 'result') {
-            results[index] = outcome.result;
-            onResult(index, outcome.result);
-          } else if (outcome.kind === 'handback') {
-            handBack(index, outcome.reason);
+          for (const i of batch) { const key = keyOf(files[i]!); if (key) pw.languages.add(key); }
+          const outcome = await this.runJobs<R>(pw, batch, files, workspaceRoot);
+          if (outcome.kind === 'done') {
+            for (const [index, result] of outcome.results) { results[index] = result; onResult(index, result); }
+            for (const [index, reason] of outcome.handbacks) handBack(index, reason);
+          } else if (batch.length > 1) {
+            // The worker died on one of these files: each is retried alone.
+            for (const i of batch) { solo.add(i); plan.requeue(i); }
           } else {
-            // The worker died on this file: another worker tries it once, then the main thread.
+            // It died on this file alone: another worker tries it once, then the main thread.
+            const index = batch[0]!;
+            solo.add(index);
+            soloDeaths++;
             const n = (crashes.get(index) ?? 0) + 1;
             crashes.set(index, n);
             if (n >= 2) handBack(index, outcome.reason);
@@ -575,34 +623,66 @@ export class ParseWorkerPool {
     return pw;
   }
 
-  private run<R>(pw: PoolWorker, index: number, file: PoolFile, workspaceRoot: string):
-    Promise<{ kind: 'result'; result: R } | { kind: 'handback'; reason: string } | { kind: 'crash'; reason: string }> {
+  /** Sends `batch` to the worker in one message; resolves with its results and hand-backs, or a crash. */
+  private runJobs<R>(pw: PoolWorker, batch: number[], files: PoolFile[], workspaceRoot: string):
+    Promise<{ kind: 'done'; results: Array<[number, R]>; handbacks: Array<[number, string]> } | { kind: 'crash'; reason: string }> {
     const { worker } = pw;
     worker.ref();
     pw.busy = true;
     if (pw.contextVersion !== this.contextVersion) {
       worker.postMessage({ type: 'context', ...this.context });
       pw.contextVersion = this.contextVersion;
+      this.contextMessages++;
     }
+    const seq = ++this.batchSeq;
+    const pending = new Set(batch);
+    // A batch that never answers (a parse that never ends) would hold its lane forever: after
+    // 30 s plus 1 s per 100 KB, the worker is terminated and the batch takes the crash path
+    // (review 2026-11-01). MAPX_WORKER_BATCH_TIMEOUT_MS overrides it.
+    const bytes = batch.reduce((n, i) => n + (files[i]!.sizeBytes ?? 0), 0);
+    const configured = Number(process.env['MAPX_WORKER_BATCH_TIMEOUT_MS']);
+    const timeoutMs = Number.isFinite(configured) && configured > 0 ? configured : 30_000 + bytes / 100;
+    const results: Array<[number, R]> = [];
+    const handbacks: Array<[number, string]> = [];
     return new Promise((resolveRun) => {
+      let finished = false;
+      const watchdog = setTimeout(() => {
+        pw.alive = false;
+        void worker.terminate();
+        done({ kind: 'crash', reason: `no answer within ${Math.round(timeoutMs)} ms` });
+      }, timeoutMs);
       const done = (outcome: any) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(watchdog);
         worker.off('message', onMessage);
         worker.off('error', onError);
         worker.off('exit', onExit);
         pw.busy = false;
         resolveRun(outcome);
       };
+      // A worker answers with one results message, or one per file when the batch's results would
+      // not clone together.
       const onMessage = (msg: any) => {
-        if (msg?.id !== index) return;
-        if (msg.retryOnMainThread) done({ kind: 'handback', reason: String(msg.retryOnMainThread) });
-        else done({ kind: 'result', result: msg });
+        if (msg?.type !== 'results' || msg.seq !== seq) return;
+        for (const r of msg.results ?? []) {
+          if (!pending.delete(r.id)) continue;
+          if (r.retryOnMainThread) handbacks.push([r.id, String(r.retryOnMainThread)]);
+          else results.push([r.id, r as R]);
+        }
+        if (pending.size === 0) done({ kind: 'done', results, handbacks });
       };
       const onError = (err: Error) => { pw.alive = false; void worker.terminate(); done({ kind: 'crash', reason: `${err?.name ?? 'Error'}: ${err?.message || err}` }); };
       const onExit = (code: number) => { pw.alive = false; done({ kind: 'crash', reason: `worker exited with code ${code}` }); };
       worker.on('message', onMessage);
       worker.on('error', onError);
       worker.on('exit', onExit);
-      worker.postMessage({ id: index, filePath: relative(workspaceRoot, file.absolutePath).replace(/\\/g, '/'), absolutePath: file.absolutePath, language: file.language });
+      this.jobMessages++;
+      worker.postMessage({
+        type: 'batch',
+        seq,
+        jobs: batch.map(i => ({ id: i, filePath: relative(workspaceRoot, files[i]!.absolutePath).replace(/\\/g, '/'), absolutePath: files[i]!.absolutePath, language: files[i]!.language })),
+      });
     });
   }
 

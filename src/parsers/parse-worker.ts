@@ -470,24 +470,42 @@ function applyContext(context: any): void {
 async function main() {
   if (workerData?.languages) applyContext(workerData);
 
-  parentPort!.on('message', async (job: ParseJob | { type: 'stats' } | { type: 'context' }) => {
-    if ('type' in job) {
-      if (job.type === 'context') applyContext(job);
-      else parentPort!.postMessage({ type: 'stats', files: filesParsed, grammars: grammarLoadCounts() });
+  parentPort!.on('message', async (msg: { type: 'batch'; seq: number; jobs: ParseJob[] } | { type: 'stats' } | { type: 'context' }) => {
+    if (msg.type === 'context') { applyContext(msg); return; }
+    if (msg.type === 'stats') {
+      parentPort!.postMessage({ type: 'stats', files: filesParsed, grammars: grammarLoadCounts() });
       return;
     }
-    // Test hook: this worker dies on this file, to exercise crash replacement (tests/worker-pool.test.ts).
-    if (process.env['MAPX_TEST_WORKER_EXIT'] === job.filePath) process.exit(3);
-    filesParsed++;
-    // A result that cannot be posted (a value structured clone rejects) or a parse that throws
-    // hands this one file back to the main thread, instead of failing the worker and with it the
-    // whole parallel scan (M0-06-R2).
+    // A batch of files (M4-14): parsed one after another, answered in one message.
+    const results: any[] = [];
+    for (const job of msg.jobs) {
+      // Test hook: this worker dies on this file, to exercise crash replacement (tests/worker-pool.test.ts).
+      if (process.env['MAPX_TEST_WORKER_EXIT'] === job.filePath) process.exit(3);
+      filesParsed++;
+      // A parse that throws hands this one file back to the main thread, instead of failing the
+      // worker and with it the whole parallel scan (M0-06-R2).
+      try {
+        // Test hook: fail this one file, to exercise the hand-back (tests/binary-workers.test.ts).
+        if (process.env['MAPX_TEST_WORKER_FAIL'] === job.filePath) throw new Error('MAPX_TEST_WORKER_FAIL');
+        const result: any = await parseFile(job);
+        // Test hook: a result structured clone rejects, to exercise the per-file fallback below.
+        if (process.env['MAPX_TEST_WORKER_UNCLONEABLE'] === job.filePath) result.symbols.push({ name: 'x', bad: () => 0 });
+        results.push(result);
+      } catch (err: any) {
+        results.push({ id: job.id, retryOnMainThread: `${err?.name ?? 'Error'}: ${err?.message ?? err}` });
+      }
+    }
     try {
-      // Test hook: fail this one file, to exercise the hand-back (tests/binary-workers.test.ts).
-      if (process.env['MAPX_TEST_WORKER_FAIL'] === job.filePath) throw new Error('MAPX_TEST_WORKER_FAIL');
-      parentPort!.postMessage(await parseFile(job));
-    } catch (err: any) {
-      parentPort!.postMessage({ id: job.id, retryOnMainThread: `${err?.name ?? 'Error'}: ${err?.message ?? err}` });
+      parentPort!.postMessage({ type: 'results', seq: msg.seq, results });
+    } catch {
+      // A result structured clone rejects: post them one by one, handing back the ones that fail.
+      for (const r of results) {
+        try {
+          parentPort!.postMessage({ type: 'results', seq: msg.seq, results: [r] });
+        } catch (err: any) {
+          parentPort!.postMessage({ type: 'results', seq: msg.seq, results: [{ id: r.id, retryOnMainThread: `${err?.name ?? 'Error'}: ${err?.message ?? err}` }] });
+        }
+      }
     }
   });
 

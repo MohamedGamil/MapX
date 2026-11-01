@@ -101,13 +101,18 @@ vi.mock('node:worker_threads', () => {
         process.nextTick(() => {
           this.emit('exit', 1);
         });
-      } else {
+      } else if (msg?.type === 'batch') {
+        // The batched protocol (M4-14): one results message per batch.
         process.nextTick(() => {
           this.emit('message', {
-            id: msg.id,
-            symbols: [{ name: 'WorkerSym', kind: 'function', startLine: 2, endLine: 4 }],
-            references: [],
-            errors: []
+            type: 'results',
+            seq: msg.seq,
+            results: msg.jobs.map((job: any) => ({
+              id: job.id,
+              symbols: [{ name: 'WorkerSym', kind: 'function', startLine: 2, endLine: 4 }],
+              references: [],
+              errors: []
+            })),
           });
         });
       }

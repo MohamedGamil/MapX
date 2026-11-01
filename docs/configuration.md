@@ -150,6 +150,7 @@ To drop a single default, list the ones to keep. Also remove the pattern from `e
 - **Overrides:** a whole number in `parseWorkers`, or in `MAPX_PARSE_WORKERS`, fixes the count, at most one per file and at most `max(CPUs, 8)`; `0` means one thread. Other values are ignored with one warning.
 - **Grammars:** a worker loads a language's tree-sitter grammar only when it first parses a file of that language, and holds each grammar and compiled query once.
 - **Distribution by language:** a batch's languages are laid end to end, the largest first, and cut into one equal share per worker. A large language spreads over several workers, small languages share one, and each worker loads only the grammars of its share. In `mapx serve`, a batch uses the workers that already hold most of its languages, and each share goes to the worker holding the most of it. Vue and Svelte files count as TypeScript, the grammar their scripts are read with. A worker that runs out of work takes files of a language it already holds, and loads another grammar only when enough work remains to repay it.
+- **Batches:** a worker receives up to 16 files (or 256 KB) per message and answers in one message. A file that fails is still handed back on its own. When a worker dies on a batch, the batch's files are retried one per message, so only the file that kills a worker on its own is blamed. A batch that gets no answer within 30 s plus 1 s per 100 KB (`MAPX_WORKER_BATCH_TIMEOUT_MS`) is treated as a worker death.
 - **One pool per run:** the parse batches of a scan or sync (each repo, re-resolution passes) share one pool of workers, so each worker starts, and loads its grammars, once per run. The CLI closes the pool when the run ends.
 - **One pool per server:** `mapx serve` keeps one pool across `mapx_scan` and `mapx_sync` calls.
   - **Idle timeout:** its workers close after `MAPX_WORKER_IDLE_MS` milliseconds without work (default 60000).
@@ -159,7 +160,7 @@ To drop a single default, list the ones to keep. Also remove the pattern from `e
 - **Statistics:** `MAPX_WORKER_STATS=1` prints one line per scan or sync run that parsed on workers, to stderr. It reports the workers started during the run, the parse batches, the files and grammars of each live worker over its lifetime, the files handed back to the main thread, and the process's peak RSS:
 
   ```
-  [mapx] worker-stats {"started":8,"batches":3,"workers":[{"files":363,"grammars":[{"grammar":"php","loads":1}, …]}, …],"handbacks":0,"peakRssMb":671}
+  [mapx] worker-stats {"started":8,"batches":3,"messages":{"jobs":188,"context":8},"workers":[{"files":363,"grammars":[{"grammar":"php","loads":1}, …]}, …],"handbacks":0,"peakRssMb":671}
   ```
 - **Hand-back:** a file a worker cannot return is parsed again on the main thread, with a warning.
 - **Benchmark:** `npx tsx scripts/bench/workers.ts [--files N | --corpus <dir> --copies K] [--bin <binary>]` compares a parallel and a one-thread scan of a generated multi-language project, or of copies of a real directory: wall time, peak RSS, worker statistics, and whether the two indexes are identical.

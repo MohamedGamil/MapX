@@ -202,6 +202,8 @@ export interface WorkerStats {
   started: number;
   /** Parse batches the run sent to the pool. */
   batches: number;
+  /** Messages the run sent to workers: job batches and context updates (M4-14). */
+  messages?: { jobs: number; context: number };
   /** The live workers: files parsed and grammars loaded over each worker's lifetime. */
   workers: Array<{ files: number; grammars: Array<{ grammar: string; loads: number }> }>;
   handbacks: number;
@@ -388,7 +390,7 @@ export class Scanner {
   private sharedPool: ParseWorkerPool | null = null;
   private runPool: ParseWorkerPool | null = null;
   private runHandbacks = 0;
-  private runStart = { started: 0, batches: 0 };
+  private runStart = { started: 0, batches: 0, jobMessages: 0, contextMessages: 0 };
 
   private recordWorkerStats(stats: WorkerStats): void {
     try { stats.peakRssMb = Math.round(process.resourceUsage().maxRSS / 1024); } catch { /* runtime without resourceUsage */ }
@@ -1428,7 +1430,8 @@ export class Scanner {
   private beginParseRun(): void {
     this.lastWorkerStats = null;
     this.runHandbacks = 0;
-    this.runStart = { started: this.sharedPool?.started ?? 0, batches: this.sharedPool?.batches ?? 0 };
+    const p = this.sharedPool;
+    this.runStart = { started: p?.started ?? 0, batches: p?.batches ?? 0, jobMessages: p?.jobMessages ?? 0, contextMessages: p?.contextMessages ?? 0 };
   }
 
   /** Ends a run: records what the workers did, and closes the run's own pool (M4-11). */
@@ -1439,6 +1442,7 @@ export class Scanner {
         this.recordWorkerStats({
           started: pool.started - this.runStart.started,
           batches: pool.batches - this.runStart.batches,
+          messages: { jobs: pool.jobMessages - this.runStart.jobMessages, context: pool.contextMessages - this.runStart.contextMessages },
           workers: await pool.workerStats(),
           handbacks: this.runHandbacks,
         });

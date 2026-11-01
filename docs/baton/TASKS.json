@@ -20887,23 +20887,75 @@
         "docs/baton/reports/M0-06-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T17:02:59.990Z",
+      "completedAt": "2026-11-01T17:36:15.713Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-14.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-14.md"
+        },
+        {
+          "command": "npx tsx scripts/bench/workers.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-14.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-14.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T17:02:25.602Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T17:02:59.990Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T17:36:15.372Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T17:36:15.713Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-14.md"
+            },
+            {
+              "command": "npx tsx scripts/bench/workers.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-14.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-14.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -20925,14 +20977,19 @@
       ],
       "affectedFiles": [
         "src/core/worker-pool.ts",
+        "src/core/scanner.ts",
         "src/parsers/parse-worker.ts",
         "tests/worker-pool.test.ts",
+        "tests/scanner-coverage.test.ts",
+        "docs/configuration.md",
         "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "Messages to workers for N files are at most ceil(N / batch size) plus one per worker for control, by MAPX_WORKER_STATS (test).",
+        "Job messages to workers for N files of B bytes are at most ceil(N / 16) + ceil(B / 256 KB) + workers (each lane may end on a partial batch), plus at most one context message per worker, by MAPX_WORKER_STATS (test).",
         "Progress still reaches every file, and one failing file of a batch is handed back alone while the rest of the batch is used (test, MAPX_TEST_WORKER_FAIL).",
-        "The index equals --no-parallel; bench wall time before and after is in the report."
+        "The index equals --no-parallel; bench wall time before and after is in the report.",
+        "A worker that dies on a batch is not blamed on the batch: its files are retried one per message, and only a file that kills a worker on its own counts toward the hand-back (test).",
+        "A batch that never answers is ended by a watchdog (30 s + 1 s per 100 KB, MAPX_WORKER_BATCH_TIMEOUT_MS) and takes the crash path; only deaths on a file alone count toward the replacement cap (fake-worker tests)."
       ],
       "verificationCommands": [
         "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
@@ -20959,7 +21016,7 @@
         "docs/baton/reports/M0-06-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "claude",
       "actualHours": null,
       "startedAt": null,
@@ -20967,7 +21024,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-01T17:36:16.244Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
