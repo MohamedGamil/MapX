@@ -112,7 +112,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-07-R3** The MCP server reports the package version; the installer names itself for uninstall — DONE, P2, 1h; depends on M0-07-R2.
 - **M0-10-R5** scan and sync with no repo named cover every registered repo — DONE, P1, 4h; depends on M0-10-R4.
 - **M0-06-R2** The compiled binary parses on worker threads — DONE, P1, 4h; depends on M0-06-R1.
-- **M0-32-R3** Architecture tab data: cycle smells name the real cycle; the profile ignores graph-excluded frameworks — READY, P1, 4h; depends on M0-32-R2.
+- **M0-32-R3** Architecture tab data: cycle smells name the real cycle; the profile ignores graph-excluded frameworks — DONE, P1, 4h; depends on M0-32-R2.
 
 ## M1 — Laravel route correctness
 

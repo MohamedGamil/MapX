@@ -463,6 +463,16 @@ export class LaravelDetector implements FrameworkDetector {
     return hasComposerDependency(projectRoot, files, ['laravel/framework', 'laravel/lumen-framework']);
   }
 
+  /** What detect() found: the folders of indexed artisan files, and the app roots on disk. */
+  appRoots(projectRoot: string, files: string[], repoPrefix: string): string[] {
+    const roots = new Set<string>();
+    for (const f of files) {
+      if (f === 'artisan' || f.endsWith('/artisan')) roots.add(f.slice(0, Math.max(0, f.length - '/artisan'.length)));
+    }
+    for (const r of findLaravelRoots(projectRoot)) roots.add([repoPrefix, r].filter(Boolean).join('/'));
+    return [...roots];
+  }
+
   beginScan(workspaceRoot: string): void {
     workspaceInitializationPromises.delete(workspaceRoot);
     controllerCache.clear();

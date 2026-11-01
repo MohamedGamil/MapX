@@ -398,6 +398,12 @@ export interface FrameworkDetector {
    * activates it only for the files under that folder (M3-07).
    */
   readonly manifestDependencies?: { manifest: 'package.json' | 'composer.json'; names: string[] };
+  /**
+   * The folders holding the apps `detect()` found, for a detector that activates repo-wide on apps
+   * nested anywhere: workspace-relative like `files` ('' for the workspace root). The codebase
+   * profile leaves out a framework whose apps all lie in graph-excluded folders (M0-32-R3).
+   */
+  appRoots?(projectRoot: string, files: string[], repoPrefix: string): string[];
   extractRoutes(filePath: string, content: string, ctx: ScanContext): Promise<RouteBinding[]>;
   extractHooks?(filePath: string, content: string, ctx: ScanContext): Promise<HookBinding[]>;
   /** Called once before a repo's files are extracted; drop any per-workspace cache here. */

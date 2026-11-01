@@ -62,7 +62,9 @@ export class ArchitectureAnalyzer {
     for (const e of edges) {
       const src = e.source_file as string;
       const tgt = e.target_file as string;
-      if (adj.has(src) && adj.has(tgt)) {
+      // A file's edges to itself (calls between its own functions) are no dependency cycle, and
+      // made the shortest cycle through a file the file itself (M0-32-R3: `a.ts -> a.ts`).
+      if (src !== tgt && adj.has(src) && adj.has(tgt)) {
         adj.get(src)!.push(tgt);
       }
     }

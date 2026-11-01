@@ -21820,8 +21820,9 @@
       ],
       "affectedFiles": [
         "src/core/architecture-analyzer.ts",
-        "src/core/codebase-profiler.ts",
         "src/core/scanner.ts",
+        "src/types.ts",
+        "src/frameworks/detectors/laravel.ts",
         "tests/architecture-data.test.ts",
         "CHANGELOG.md"
       ],
@@ -21834,20 +21835,62 @@
         "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T19:09:49.106Z",
+      "completedAt": "2026-11-01T19:31:42.567Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-32-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/architecture-data.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-32-R3.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-32-R3.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T19:09:33.597Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T19:09:49.106Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T19:31:41.213Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T19:31:42.567Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/architecture-data.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-32-R3.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-32-R3.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

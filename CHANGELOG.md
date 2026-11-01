@@ -18,6 +18,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - Sharing compiled grammar code between parse workers was evaluated and rejected, so `web-tree-sitter` is not patched. Compiling a grammar costs at most 8 ms per worker, under 1% of a worker's startup, and every route depends on the library's internals (M4-15, D026).
 
 ### Fixed
+- **The Architecture tab's data:**
+  - A cyclic-dependency smell names the multi-file cycle it found (`js-aliases.ts -> client-calls.ts -> js-aliases.ts`). It used to show a file's calls between its own functions as the cycle (`js-aliases.ts -> js-aliases.ts`).
+  - The codebase profile lists only frameworks found outside `graphExcludePatterns`. A Laravel fixture app under `tests/` no longer appears next to "Has Backend: no"; its routes are still extracted (M0-32-R3).
 - The standalone binary parses on worker threads: the build embeds the parse worker, which every parallel scan failed to load (`Cannot find module '/$bunfs/parsers/parse-worker.js'`), and `scripts/package.sh` smoke-scans the host binary and fails the build if it falls back to one thread. A PHP call named after an `Object.prototype` member (`$x->toString()`, `valueOf`, `constructor`) no longer reads that member as a Laravel facade: the call was dropped, and on worker threads it made the whole scan fall back to one thread. The same lookup is fixed for Vuex `dispatch`/`commit` and map helpers, and for Laravel resource names: `Route::resource('constructor', …)` lost every route of its file. A result a worker cannot hand back is parsed again on the main thread for that file only, with a warning (M0-06-R2).
 - The MCP server reports the installed version in its `initialize` response (it said `0.1.3`), and the self-extracting installer's uninstall hint names the installer instead of its deleted temporary copy (M0-07-R3).
 

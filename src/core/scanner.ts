@@ -3,6 +3,7 @@ import { accessSync, constants as fsConstants, existsSync, readFileSync, readdir
 import { resolve, relative, extname, join, basename, dirname, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
+import picomatch from 'picomatch';
 import { ParseWorkerPool, availableMemory, createParsePool, parseWorkersSetting, poolSize } from './worker-pool.js';
 import { Store } from './store.js';
 import { findAssetRoot } from '../parsers/assets.js';
@@ -63,7 +64,7 @@ const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
  */
 const DETECTION_INPUT = /(^|\/)(package\.json|composer\.(json|lock)|pyproject\.toml|requirements[^/]*\.txt|Pipfile|go\.mod|Cargo\.toml|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|Package\.swift|artisan|manage\.py|setup\.(py|cfg)|svelte\.config\.[cm]?[jt]s)$/;
 /** Bump when the post-scan analysis changes what it stores: the next sync then reruns it (M4-04). */
-const ANALYSIS_VERSION = 1;
+const ANALYSIS_VERSION = 2;
 /** The last segment of a dotted name that is a file extension, not a member: `utils.ts` stays whole. */
 const COMMON_EXTENSIONS = new Set([
   'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt',
@@ -3846,8 +3847,41 @@ export class Scanner {
         activeFrameworks = JSON.parse(readFileSync(frameworksPath, 'utf-8'));
       } catch {}
     }
+    // The profile describes the code the graph analyses: a framework found only in graph-excluded
+    // folders (a fixture app under tests/) is left out of it, though detection and route extraction
+    // still cover those folders (M0-32-R3).
+    const graphExclude = this.config.settings.graphExcludePatterns;
+    const excludedDir = graphExclude?.length ? picomatch(graphExclude, { dot: true }) : null;
+    const scopes = this.frameworkScopes(repoRoot);
+    const repoPrefix = relative(workspaceRoot, repoRoot).replace(/\\/g, '/');
+    const detectors = this.cachedActiveDetectors.get(repoRoot) ?? [];
+    // The repo's indexed paths, read once and only when a framework's folders must be tested.
+    let indexed: string[] | null = null;
+    const repoFiles = () => (indexed ??= this.store.getAllFiles(repo.name).map(f => f.path as string));
+    // The folders a framework was found in: its manifest scopes, or the apps a repo-wide detector
+    // found (Laravel's artisan folders), workspace-relative. None known: the whole repo.
+    const foldersOf = (name: string): string[] | undefined => {
+      const scoped = scopes.get(name);
+      if (scoped) return scoped;
+      const detector: any = detectors.find((d: any) => d.name === name);
+      return detector?.appRoots ? detector.appRoots(repoRoot, repoFiles(), repoPrefix) : undefined;
+    };
+    // A folder describes the code the graph analyses when it holds an indexed file of this repo
+    // that is not graph-excluded: judged on the files, whatever the glob shape (**/_*,
+    // **/fixtures/*). A folder with none of this repo's files (another repo nested in it) does not.
+    const folderExcluded = (dir: string): boolean => {
+      if (!excludedDir || dir === '') return false;
+      const prefix = dir + '/';
+      return !repoFiles().some(p => p.startsWith(prefix) && !excludedDir(p));
+    };
+    const profileFrameworks = excludedDir
+      ? activeFrameworks.filter(name => {
+          const dirs = foldersOf(name);
+          return !dirs || dirs.length === 0 || dirs.some(dir => !folderExcluded(dir));
+        })
+      : activeFrameworks;
     const profiler = new CodebaseProfiler(this.store);
-    const profile = profiler.profile(repo.name, activeFrameworks, this.config.settings.graphExcludePatterns);
+    const profile = profiler.profile(repo.name, profileFrameworks, graphExclude);
     this.store.setMeta('codebase_profile:' + repo.name, JSON.stringify(profile));
 
     // 3. Classify all files
