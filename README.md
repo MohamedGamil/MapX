@@ -1,3 +1,7 @@
+<p align="center">
+<img src="docs/images/mapx-logo.png" width="128" height="128" alt="MapX logo">
+</p>
+
 <h1 align="center">MapX</h1>
 
 <p align="center">

@@ -201,7 +201,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-16** Dashboard UX/UI audit with a measured baseline — DONE, P1, 10h; depends on M4-15.
 - **M4-19** Browser test harness for the dashboard — READY, P1, 10h; depends on M4-16.
 - **M4-17** Dashboard look and feel: design system, themes, responsive and accessible — BACKLOG, P1, 10h; depends on M4-16, M4-19, M0-32-R3.
-- **M4-18** New MapX logo in the dashboard, favicon and docs — BACKLOG, P2, 10h; depends on M4-17.
+- **M4-18** New MapX logo: dashboard, favicons, docs, and the mapx init banner — DONE, P2, 10h; depends on M4-16.
 - **M4-20** Dashboard performance on large workspaces — BACKLOG, P1, 10h; depends on M4-16, M4-19.
 - **M4-21** Multi-repo workspaces in the dashboard — BACKLOG, P1, 10h; depends on M4-17.
 - **M4-22** Read-only config view in the dashboard — BACKLOG, P2, 10h; depends on M4-21.

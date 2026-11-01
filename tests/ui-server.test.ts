@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
+import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { startUiServer } from '../src/ui-server.js';
 import { cleanup, init, mapx, workspace } from './helpers/e2e.js';
 
@@ -26,6 +29,21 @@ describe('UI server endpoints', () => {
     cleanup(root);
   });
   const get = (path: string, auth = true) => fetch(base + path, { headers: auth ? { Authorization: 'Bearer secret' } : {} });
+
+  it('serves the logo and favicons as PNG, and the page links them (M4-18)', async () => {
+    const repoRoot = resolve(__dirname, '..');
+    // CI runs the tests before building the package: build the dashboard when its assets are missing.
+    if (!existsSync(join(repoRoot, 'dist/ui/assets/mapx-logo-128.png'))) execFileSync('npm', ['run', '-s', 'build:ui'], { cwd: repoRoot, stdio: 'pipe' });
+    for (const asset of ['mapx-logo-128.png', 'favicon-32.png', 'favicon-16.png', 'apple-touch-icon.png']) {
+      const res = await get(`/assets/${asset}`, false);
+      expect(res.status, asset).toBe(200);
+      expect(res.headers.get('content-type')).toBe('image/png');
+      expect(Buffer.from(await res.arrayBuffer()).subarray(1, 4).toString()).toBe('PNG');
+    }
+    const page = await (await get('/', false)).text();
+    expect(page).toContain('src="assets/mapx-logo-128.png"');
+    expect(page).toContain('href="assets/favicon-32.png"');
+  }, 60000);
 
   it('rejects API calls without the token', async () => {
     expect((await get('/api/status', false)).status).toBe(401);

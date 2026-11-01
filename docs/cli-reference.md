@@ -20,6 +20,8 @@ mapx -d /path/to/project scan
 
 ## `mapx init`
 
+In a terminal at least 64 columns wide, init first prints the MapX logo as text art in `#ff02fe`. It uses 24-bit colour where the terminal reports it, otherwise the nearest 256 colour, and prints the logo plain under `NO_COLOR`. The logo is never printed in a pipe or in CI, and `MAPX_NO_BANNER=1` turns it off.
+
 Initialize MapxGraph in the current project. Creates `.mapx/` directory, `AGENTS.md`, and auto-adds `.mapx/` to `.gitignore`.
 
 ```bash

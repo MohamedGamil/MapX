@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdirSync, copyFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, copyFileSync, cpSync, existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 async function main() {
@@ -24,6 +24,10 @@ async function main() {
   copyFileSync(resolve(srcDir, 'index.html'), resolve(distDir, 'index.html'));
   if (existsSync(resolve(srcDir, 'styles.css'))) {
     copyFileSync(resolve(srcDir, 'styles.css'), resolve(distDir, 'styles.css'));
+  }
+  // The logo and favicons (scripts/brand/logo-assets.sh, D028).
+  if (existsSync(resolve(srcDir, 'assets'))) {
+    cpSync(resolve(srcDir, 'assets'), resolve(distDir, 'assets'), { recursive: true });
   }
 
   // Run esbuild

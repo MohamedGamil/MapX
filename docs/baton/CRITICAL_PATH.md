@@ -6,7 +6,7 @@ Remaining longest dependency path: **102h** (full-plan path: 205h).
 
 M4-19 → M4-17 → M4-21 → M4-23 → M5-01 → M5-03 → M5-04 → M5-05 → M5-08 → M5-16 → M5-98
 
-Remaining effort min/expected/max: **187 / 260 / 374h**. Capacity: 1 engineer(s) × 20 h/week → **13.0 weeks**, conditional finish **2027-02-01** (as of 2026-11-02).
+Remaining effort min/expected/max: **181 / 250 / 358h**. Capacity: 1 engineer(s) × 20 h/week → **12.5 weeks**, conditional finish **2027-01-28** (as of 2026-11-02).
 
 ## Open items and blockers
 - M5-01 (BACKLOG): M4-19; M4-17; M4-20; M4-21; M4-22; M4-23
@@ -35,7 +35,6 @@ Remaining effort min/expected/max: **187 / 260 / 374h**. Capacity: 1 engineer(s)
 - M5-24 (BACKLOG): M5-20; M5-21; M5-22; M5-23; M5-04
 - M4-19 (READY): prerequisites satisfied
 - M4-17 (BACKLOG): M4-19
-- M4-18 (BACKLOG): M4-17; Owner supplies the new logo (SVG preferred, with colour and usage notes)
 - M4-20 (BACKLOG): M4-19
 - M4-21 (BACKLOG): M4-17
 - M4-22 (BACKLOG): M4-21
@@ -74,4 +73,3 @@ Remaining effort min/expected/max: **187 / 260 / 374h**. Capacity: 1 engineer(s)
 | M5-22 | 68 | 73 | 91 | 96 | 23 |
 | M5-23 | 68 | 72 | 92 | 96 | 24 |
 | M5-24 | 74 | 80 | 96 | 102 | 22 |
-| M4-18 | 20 | 30 | 92 | 102 | 72 |

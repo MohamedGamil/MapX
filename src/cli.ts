@@ -1,3 +1,4 @@
+import { printBanner } from './branding.js';
 import { Command } from 'commander';
 import { resolve, join, dirname, relative, basename, sep } from 'node:path';
 import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -341,6 +342,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--no-discover', 'Skip monorepo / nested-repo discovery step')
     .option('--no-workspaces', 'Skip the submodule and VS Code workspace registration step')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      // The MapX logo heads init's output on a terminal (D028); never in pipes or CI.
+      printBanner();
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const isLaravel = detectLaravel(dir);
       let shouldAddLaravelExcludes = false;

@@ -1867,11 +1867,11 @@
       {
         "id": "M4-18",
         "duration": 10,
-        "earliestStart": 98,
-        "earliestFinish": 108,
+        "earliestStart": 70,
+        "earliestFinish": 80,
         "latestStart": 195,
         "latestFinish": 205,
-        "slack": 97
+        "slack": 125
       }
     ],
     "totalEffort": 1209
@@ -3730,21 +3730,21 @@
       },
       {
         "id": "M4-18",
-        "duration": 10,
-        "earliestStart": 20,
-        "earliestFinish": 30,
-        "latestStart": 92,
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 102,
         "latestFinish": 102,
-        "slack": 72
+        "slack": 102
       }
     ],
-    "totalEffort": 260
+    "totalEffort": 250
   },
   "resourceSchedule": {
-    "hours": 260,
-    "weeks": 13,
+    "hours": 250,
+    "weeks": 12.5,
     "forecastAsOf": "2026-11-02",
-    "conditionalDate": "2027-02-01",
+    "conditionalDate": "2027-01-28",
     "assignments": [
       {
         "id": "M0-01",
@@ -4974,7 +4974,7 @@
         "id": "M4-18",
         "worker": 0,
         "start": 250,
-        "finish": 260
+        "finish": 250
       }
     ]
   }

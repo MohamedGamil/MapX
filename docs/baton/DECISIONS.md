@@ -276,3 +276,11 @@ Choices:
 - **Order:** M5-01 and M5-02 wait for all of them except M4-18, which waits on the owner's logo file and does not block M5.
 - **Tooling:** `@playwright/test` (Apache-2.0) is accepted as a dev dependency for real-browser tests. CI installs Chromium; without a browser, the tests skip and say so.
 - **Config view:** read-only first. Editing would be a later task with its own write API.
+
+## D028 — The new MapX logo and the init banner (owner, 2026-11-01)
+
+The owner supplied the logo symbol `mapx-logo.png` (1024×1024, transparent background) and a text-art logo `mapx-logo.txt`, with the colour `#ff02fe` for the text art.
+- **The symbol:** used wherever MapX shows a logo: the dashboard header and favicons, the README and the docs.
+- **The text art:** printed in `#ff02fe` as the header of `mapx init`, before its other output.
+
+The source files live in `assets/brand/`. M4-18 no longer waits for M4-17's redesign, which builds on the logo instead.

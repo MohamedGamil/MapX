@@ -223,7 +223,7 @@ flowchart LR
 - M4-16 ← M4-15 (hard)
 - M4-19 ← M4-16 (hard)
 - M4-17 ← M4-16 (hard), M4-19 (hard), M0-32-R3 (hard)
-- M4-18 ← M4-17 (hard)
+- M4-18 ← M4-16 (hard)
 - M4-20 ← M4-16 (hard), M4-19 (hard)
 - M4-21 ← M4-17 (hard)
 - M4-22 ← M4-21 (hard)

@@ -21457,59 +21457,128 @@
         "dashboard"
       ],
       "optionalDependencies": [],
-      "blockingConditions": [
-        "Owner supplies the new logo (SVG preferred, with colour and usage notes)"
-      ],
+      "blockingConditions": [],
       "sources": [
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "BACKLOG",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T19:52:09.104Z",
+      "completedAt": "2026-11-01T20:01:00.468Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M4-18.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/branding.test.ts tests/ui-server.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-18.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-18.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-18.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T19:52:08.785Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T19:52:09.104Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T20:01:00.185Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T20:01:00.468Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/branding.test.ts tests/ui-server.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-18.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-18.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-18.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
       "milestone": "M4",
       "id": "M4-18",
-      "title": "New MapX logo in the dashboard, favicon and docs",
-      "objective": "Replace the text logo with the owner's new logo in the dashboard header (both themes), the favicon set and the docs.",
-      "description": "D027. Waits for the owner's logo file.",
+      "title": "New MapX logo: dashboard, favicons, docs, and the mapx init banner",
+      "objective": "Use the owner's logo symbol (assets/brand/mapx-logo.png) wherever MapX shows a logo: the dashboard header and favicons, the README and docs. Print the owner's text-art logo (assets/brand/mapx-logo.txt) in #ff02fe as the header of mapx init.",
+      "description": "D028 (owner, 2026-11-01): the owner supplied mapx-logo.png (1024x1024, transparent) and mapx-logo.txt, with the colour #ff02fe for the text art. The logo no longer waits for M4-17; M4-17 builds on it.",
       "dependencies": [
         {
-          "id": "M4-17",
+          "id": "M4-16",
           "type": "hard"
         }
       ],
       "outputs": [
-        "logo assets",
-        "favicons",
-        "docs images",
+        "assets/brand/",
+        "generated logo sizes and favicons",
+        "dashboard header and favicons",
+        "README and docs logo",
+        "mapx init banner",
+        "tests",
         "reports/M4-18.md"
       ],
       "affectedFiles": [
+        "assets/brand/",
+        "scripts/brand/logo-assets.sh",
+        "src/ui/assets/",
         "src/ui/index.html",
         "src/ui/styles.css",
-        "src/ui/assets/",
+        "scripts/build-ui.ts",
+        "src/branding.ts",
+        "src/cli.ts",
         "README.md",
         "docs/images/",
-        "scripts/build-ui.ts",
-        "CHANGELOG.md"
+        "tests/branding.test.ts",
+        "tests/ui-server.test.ts",
+        "CHANGELOG.md",
+        "docs/cli-reference.md"
       ],
       "acceptanceCriteria": [
-        "The dashboard header shows the supplied logo, legible in light and dark themes (screenshots in the report; tests/ui checks it loads).",
-        "A favicon set (SVG, 32 px PNG, 180 px apple-touch) is served by the dashboard (tests/ui).",
-        "README.md and the docs use the new logo; the bundle and package stay under their size checks."
+        "The dashboard header shows the logo symbol beside the MapX wordmark, and the dashboard serves a favicon set (32 px and 16 px PNG, 180 px apple-touch icon) generated from assets/brand/mapx-logo.png; GET of each asset answers 200 image/png, and index.html links them (tests/ui-server.test.ts, built dashboard).",
+        "README.md shows the logo at the top; the logo sizes are regenerated from the source by scripts/brand/logo-assets.sh.",
+        "mapx init prints the text-art logo, trimmed of its blank lines and trailing spaces, before its other output, in #ff02fe (24-bit colour when the terminal reports it, the nearest 256-colour code otherwise); without colour under NO_COLOR; not at all when stdout is not a terminal, when the terminal is narrower than the art, or with MAPX_NO_BANNER (tests/branding.test.ts).",
+        "The art embedded in src/branding.ts equals assets/brand/mapx-logo.txt trimmed, so the npm package and the compiled binary need no file at run time (test).",
+        "The package and the dashboard bundle stay under their size checks (check-package)."
       ],
       "verificationCommands": [
-        "npm run test:ui",
+        "npx vitest run tests/branding.test.ts tests/ui-server.test.ts",
         "npx tsx scripts/check-package.ts",
         "npm run check"
       ]
