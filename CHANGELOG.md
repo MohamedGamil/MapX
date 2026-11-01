@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Fixed
+- The MCP server reports the installed version in its `initialize` response (it said `0.1.3`), and the self-extracting installer's uninstall hint names the installer instead of its deleted temporary copy (M0-07-R3).
+
 ## [0.3.7] — 2026-11-01
 
 ### Added

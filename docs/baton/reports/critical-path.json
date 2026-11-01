@@ -1710,9 +1710,18 @@
         "latestStart": 199,
         "latestFinish": 205,
         "slack": 22
+      },
+      {
+        "id": "M0-07-R3",
+        "duration": 1,
+        "earliestStart": 6,
+        "earliestFinish": 7,
+        "latestStart": 204,
+        "latestFinish": 205,
+        "slack": 198
       }
     ],
-    "totalEffort": 1068
+    "totalEffort": 1069
   },
   "remaining": {
     "duration": 62,
@@ -3408,6 +3417,15 @@
         "latestStart": 56,
         "latestFinish": 62,
         "slack": 22
+      },
+      {
+        "id": "M0-07-R3",
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 62,
+        "latestFinish": 62,
+        "slack": 62
       }
     ],
     "totalEffort": 190
@@ -4538,6 +4556,12 @@
         "id": "M5-24",
         "worker": 0,
         "start": 184,
+        "finish": 190
+      },
+      {
+        "id": "M0-07-R3",
+        "worker": 0,
+        "start": 190,
         "finish": 190
       }
     ]

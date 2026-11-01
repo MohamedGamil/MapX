@@ -71,3 +71,20 @@ describe('MCP usability (F38)', () => {
     expect(guide.content).toContain('mapx_context');
   });
 });
+
+describe('MCP server identity (M0-07-R3)', () => {
+  it('reports the package version in its initialize response, as mapx --version does', async () => {
+    const { VERSION } = await import('../src/version.js');
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    const server = buildServer();
+    await server.connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    try {
+      expect(client.getServerVersion()).toEqual({ name: 'mapx', version: VERSION });
+      expect(VERSION).toMatch(/^\d+\.\d+\.\d+/);
+    } finally {
+      await client.close();
+    }
+  });
+});

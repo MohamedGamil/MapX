@@ -13,6 +13,7 @@ import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
 import { Scanner } from './core/scanner.js';
 import { buildPathFilter } from './core/file-rules.js';
+import { VERSION } from './version.js';
 import { Config } from './core/config.js';
 import { FlowTracer, TraceNode } from './core/flow-tracer.js';
 import { AgentGenerator, needsConsent, droppedCommentsWarning } from './agents/generator.js';
@@ -104,7 +105,8 @@ interface ServeOptions {
 
 export function buildServer(options?: ServeOptions): Server {
   const server = new Server(
-    { name: 'mapx', version: '0.1.3' },
+    // The package version, as `mapx --version` reports it (M0-07-R3; was a stale '0.1.3').
+    { name: 'mapx', version: VERSION },
     { capabilities: { tools: {} } }
   );
 

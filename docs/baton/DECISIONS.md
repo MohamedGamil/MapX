@@ -197,3 +197,22 @@ The owner asked for these steps (D007: owner-initiated):
 - **Install.** The tarball is installed globally with nvm's npm. `mapx --version` gives 0.3.7, and a smoke scan links a Svelte template handler.
 
 Nothing was published. No `v0.3.7` tag was requested, so none was made.
+
+## D023 — v0.3.7 tagged; binary user install (owner, 2026-11-01)
+
+The owner asked for:
+- **A tag.** `v0.3.7` is an annotated tag on `8914c5b`. It is local; nothing was pushed.
+- **A Linux binary user install with the project's own installer,** not as a Node package.
+  - `make package-linux` built `dist/release/mapx-0.3.7-linux-x64.tar.gz` and the self-extracting installer; `checksums-sha256.txt` verifies them.
+  - `./mapx-0.3.7-linux-x64-installer.sh --local` installed `~/.local/bin/mapx` (a bun-compiled binary of 110 MB) and `~/.local/share/mapx/{wasm,queries,ui}`.
+  - The npm-global copy left in nvm Node 24's prefix was uninstalled, so `mapx` resolves only to `~/.local/bin/mapx`.
+
+**Verified** outside the repository, with a minimal PATH that holds no nvm Node:
+- `mapx --version` gives 0.3.7, and `lang list` works;
+- `init` and `scan` cover TS, Python, PHP and Svelte, with the expected callers;
+- `mapx ui` serves `/` and `/main.js` from `~/.local/share/mapx/ui`;
+- `mapx serve` answers MCP `initialize`.
+
+That check found M0-07-R3: the MCP server reported version 0.1.3, and the installer's uninstall hint named a deleted temporary path. Both are fixed on `develop` for the next version. The installed `v0.3.7` binary still has them.
+
+**Environment.** The default Node is now nvm 26.13.0, so the repository's `better-sqlite3` was rebuilt for it (`npm rebuild better-sqlite3`; `node_modules` only).

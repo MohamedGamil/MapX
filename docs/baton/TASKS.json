@@ -19941,6 +19941,116 @@
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-07-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "src/mcp.ts uses VERSION",
+        "test",
+        "reports/M0-07-R3.md"
+      ],
+      "affectedFiles": [
+        "src/mcp.ts",
+        "scripts/make-installer.sh",
+        "scripts/templates/install.sh",
+        "tests/mcp-usability.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "An MCP client connected to buildServer() reads serverInfo { name: \"mapx\", version } equal to src/version.ts VERSION (tests/mcp-usability.test.ts)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/mcp-usability.test.ts",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-01T13:50:33.351Z",
+      "completedAt": "2026-11-01T13:56:11.383Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-07-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/mcp-usability.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R3.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R3.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T13:50:33.085Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:50:33.351Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:56:11.105Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:56:11.383Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/mcp-usability.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R3.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R3.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-07-R3",
+      "title": "The MCP server reports the package version; the installer names itself for uninstall",
+      "objective": "The MCP initialize response carries the VERSION file's version, as mapx --version does.",
+      "milestone": "M0",
+      "description": "Found 2026-11-01 while verifying the 0.3.7 binary install (D023): mapx serve answered initialize with serverInfo.version 0.1.3, hard-coded in src/mcp.ts buildServer."
     }
   ]
 }

@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@42f7225f3b5f3a4a33353cdb58056017f7cb40b1 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
+Revision: develop@8914c5bbbbfe132a79176c14d5a48f47a3b80ce5 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
 
 ## Baseline
-Last completed: M0-17-R6 — Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings.
-Evidence: `npx vitest run tests/heuristic-followups.test.ts tests/vue-navigation.test.ts tests/legacy-imports.test.ts tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts` (exit 0) → docs/baton/reports/M0-17-R6.md; `npm run eval` (exit 0) → docs/baton/reports/M0-17-R6.md; `npm run check` (exit 0) → docs/baton/reports/M0-17-R6.md.
+Last completed: M0-07-R3 — The MCP server reports the package version; the installer names itself for uninstall.
+Evidence: `npx vitest run tests/mcp-usability.test.ts` (exit 0) → docs/baton/reports/M0-07-R3.md; `npm run check` (exit 0) → docs/baton/reports/M0-07-R3.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect

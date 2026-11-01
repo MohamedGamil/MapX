@@ -127,6 +127,8 @@ tail -n +"$_PL" "$0" | $_B64D | tar xz -C "$_TMP" \
 _INST="$_TMP/mapx-${_V}/install.sh"
 [ -f "$_INST" ] || _die "install.sh not found in archive (expected: $_INST)"
 chmod +x "$_INST"
+# install.sh is deleted with $_TMP: its uninstall hint names this installer instead.
+MAPX_INSTALLER="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"; export MAPX_INSTALLER
 
 # ── Delegate to install.sh ─────────────────────────────────────────────────
 if [ -n "$_SCOPE_VAL" ]; then

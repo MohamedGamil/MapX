@@ -203,7 +203,8 @@ do_install() {
     echo "    mapx scan"
     echo "    mapx export"
     echo ""
-    echo "Uninstall: $0 --uninstall"
+    # From a self-extracting installer, $0 is a deleted temp copy: name the installer (M0-07-R3).
+    echo "Uninstall: ${MAPX_INSTALLER:-$0} --uninstall"
 }
 
 do_uninstall() {
