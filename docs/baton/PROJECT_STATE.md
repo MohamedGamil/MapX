@@ -147,12 +147,34 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 ## Next
 
-Work order set by the owner (D019):
-1. M4: done (M4-02, M4-06 and M4-07 stay deferred). M4-04 should also remove the second `discoverFiles` walk in `scanFull` (M4-03 report).
-2. The gap tasks: all done: M0-17-R6 (heuristic follow-ups), M0-12-R10 (Svelte templates), M2-08 (calls resolve through the file's imports), M0-02-R10 (interrupted syncs), M0-02-R9 (go.mod / composer.json in sync).
-3. M5, starting with M5-01 and M5-02.
+Work order set by the owner:
+1. **M4 worker resources (D025): done.**
 
-No owner decision is pending. The remediation is committed in `8be5cdb`.
+   | Task | Result |
+   | --- | --- |
+   | M4-10 | Grammars per worker, loaded once |
+   | M4-11 | A persistent pool |
+   | M4-13 | Sizing |
+   | M4-12 | Language affinity |
+   | M4-14 | Batching |
+   | M4-15 | Evaluated; no tree-sitter patch (D026) |
+
+2. **M4 dashboard (D027), in order:**
+
+   | Task | Work |
+   | --- | --- |
+   | M4-16 | UX/UI audit |
+   | M4-19 | Playwright harness |
+   | M4-17 | Design system, themes and accessibility |
+   | M4-20 | Performance |
+   | M4-21 | Multi-repo views |
+   | M4-22 | Read-only config view |
+   | M4-23 | Cross-repo HTTP view |
+   | M4-18 | New logo, blocked until the owner supplies it; it does not block M5 |
+
+3. **M5**, starting with M5-01 and M5-02. They hard-depend on the D025 and D027 tasks, except M4-18.
+
+Pending owner input: the new logo file for M4-18.
 
 ## Done in session 3
 
@@ -196,6 +218,9 @@ Earlier:
 - **D006:** the dashboard bundle target is re-baselined to a 720 KiB gzipped ceiling, enforced by `scripts/check-package.ts` and CI. M0-15-R2 is DONE.
 - **D007:** releases are owner-initiated. M1-99 is DEFERRED and the gate is now `G-RELEASE` (`ownerInitiated`). Agents don't request it; work accumulates under CHANGELOG `[Unreleased]`.
 
+- **D027 (2026-11-01):** the dashboard tasks M4-16 to M4-23 come before M5 (except M4-18, the logo); `@playwright/test` is a dev dependency; the config view is read-only first.
+- **D026 (2026-11-01):** no tree-sitter patch for sharing compiled grammar code; M4-15 closed on the evaluation.
+- **D025 (2026-11-01):** the parse-worker resource tasks M4-10 to M4-15 come before M5.
 - **D024 (2026-11-01):** scan and sync, from the CLI and MCP, cover every registered repo unless one is named. A missing repo folder is skipped with a warning (M0-10-R5).
 - **D023 (2026-11-01):** v0.3.7 tagged; installed as a user binary with the self-extracting installer; npm-global copy removed. Found and fixed M0-07-R3 (MCP version, installer hint).
 - **D022 (2026-11-01):** version 0.3.7 built and installed locally; annotated tag v0.3.6 at its bump commit (local, not pushed).

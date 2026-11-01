@@ -256,3 +256,23 @@ M4-15 evaluated sharing compiled grammar code across parse workers; the evidence
 - **Routes:** every route needs patching `web-tree-sitter`, re-implementing its private `Language` constructor, or a custom threaded build.
 
 The owner chose not to patch. M4-15 closes on the evaluation. Revisit only if `web-tree-sitter` gains a public API that loads a precompiled `WebAssembly.Module` under Node.
+
+## D027 — Dashboard look and feel, tooling and workspace features before M5 (owner, 2026-11-01)
+
+The owner asked for these new M4 tasks:
+
+| Task | Item |
+| --- | --- |
+| M4-16 | An audit of the dashboard's look and feel and UX |
+| M4-19 | A browser test harness |
+| M4-17 | A design system, themes, and responsive, accessible layout |
+| M4-18 | The new logo, which the owner will supply |
+| M4-20 | Dashboard performance |
+| M4-21 | Multi-repo workspaces |
+| M4-22 | A config view |
+| M4-23 | A cross-repo HTTP communication view, like majles's frontend to backend |
+
+Choices:
+- **Order:** M5-01 and M5-02 wait for all of them except M4-18, which waits on the owner's logo file and does not block M5.
+- **Tooling:** `@playwright/test` (Apache-2.0) is accepted as a dev dependency for real-browser tests. CI installs Chromium; without a browser, the tests skip and say so.
+- **Config view:** read-only first. Editing would be a later task with its own write API.

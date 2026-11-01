@@ -14693,6 +14693,34 @@
         {
           "id": "M4-15",
           "type": "hard"
+        },
+        {
+          "id": "M4-16",
+          "type": "hard"
+        },
+        {
+          "id": "M4-19",
+          "type": "hard"
+        },
+        {
+          "id": "M4-17",
+          "type": "hard"
+        },
+        {
+          "id": "M4-20",
+          "type": "hard"
+        },
+        {
+          "id": "M4-21",
+          "type": "hard"
+        },
+        {
+          "id": "M4-22",
+          "type": "hard"
+        },
+        {
+          "id": "M4-23",
+          "type": "hard"
         }
       ],
       "sources": [
@@ -14890,6 +14918,34 @@
         },
         {
           "id": "M4-15",
+          "type": "hard"
+        },
+        {
+          "id": "M4-16",
+          "type": "hard"
+        },
+        {
+          "id": "M4-19",
+          "type": "hard"
+        },
+        {
+          "id": "M4-17",
+          "type": "hard"
+        },
+        {
+          "id": "M4-20",
+          "type": "hard"
+        },
+        {
+          "id": "M4-21",
+          "type": "hard"
+        },
+        {
+          "id": "M4-22",
+          "type": "hard"
+        },
+        {
+          "id": "M4-23",
           "type": "hard"
         }
       ],
@@ -21117,6 +21173,565 @@
       "verificationCommands": [
         "npx vitest run tests/worker-pool.test.ts",
         "npx tsx scripts/bench/workers.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard",
+        "research"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "READY",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-01T18:53:07.579Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-16",
+      "title": "Dashboard UX/UI audit with a measured baseline",
+      "objective": "Evaluate the dashboard's look and feel, usability and performance on fixture workspaces, with screenshots and measured baselines, and rank the findings.",
+      "description": "D027. The dashboard (src/ui: main.ts 3,656 lines, styles.css, index.html; 7 tabs; Cytoscape) has had no design review or browser test.",
+      "dependencies": [
+        {
+          "id": "M4-15",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "docs/research/dashboard-ux-audit.md",
+        "screenshots",
+        "scripts/ui/audit.ts",
+        "reports/M4-16.md"
+      ],
+      "affectedFiles": [
+        "scripts/ui/audit.ts",
+        "docs/research/dashboard-ux-audit.md",
+        "docs/research/dashboard-ux-audit/",
+        "package.json",
+        "package-lock.json"
+      ],
+      "acceptanceCriteria": [
+        "scripts/ui/audit.ts serves the dashboard on two fixture workspaces (a generated multi-language project and a copy of MapX's own sources) and captures every tab at 1440x900, 1024x768 and 390x844 (PNG, at most 5 MB in all, under docs/research/dashboard-ux-audit/).",
+        "The audit records, with the commands that produce them: the dashboard bundle's gzipped size, load time to an interactive graph, graph render time at about 500 and 2,000 nodes, and axe accessibility violations by impact.",
+        "docs/research/dashboard-ux-audit.md lists the findings per tab, each ranked P1/P2 with a screenshot reference and the task that owns its fix (M4-17, M4-20, M4-21, M4-22 or M4-23)."
+      ],
+      "verificationCommands": [
+        "npx tsx scripts/ui/audit.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-19",
+      "title": "Browser test harness for the dashboard",
+      "objective": "Real-browser tests (Playwright) load every dashboard tab on fixture workspaces and guard against console errors, failed API calls and render-time regressions.",
+      "description": "D027: @playwright/test is accepted as a dev dependency (Apache-2.0).",
+      "dependencies": [
+        {
+          "id": "M4-16",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "@playwright/test devDependency",
+        "playwright.config.ts",
+        "tests/ui/*.spec.ts",
+        "npm run test:ui",
+        "CI job",
+        "reports/M4-19.md"
+      ],
+      "affectedFiles": [
+        "package.json",
+        "package-lock.json",
+        "playwright.config.ts",
+        "tests/ui/",
+        ".github/workflows/ci.yml",
+        "docs/benchmarking.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "npm run test:ui builds the dashboard, scans a fixture workspace, serves it on a free port, and opens every tab in Chromium: each tab's main panel renders content, with no console error, page error or failed /api request (tests/ui/smoke.spec.ts).",
+        "A render budget test fails when the graph tab takes more than the M4-16 baseline plus 20% to render the ~500-node fixture (tests/ui/perf.spec.ts).",
+        "CI runs the UI tests after installing Chromium; without a browser the tests skip with a message saying so.",
+        "Breaking one tab's loader makes the smoke test fail (mutation check in the report)."
+      ],
+      "verificationCommands": [
+        "npm run test:ui",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-17",
+      "title": "Dashboard look and feel: design system, themes, responsive and accessible",
+      "objective": "Give the dashboard a consistent design system (tokens for colour, type, spacing, radius, elevation), light and dark themes, a responsive layout and accessible contrast and focus, across every tab.",
+      "description": "D027. Scope and priorities come from the M4-16 audit.",
+      "dependencies": [
+        {
+          "id": "M4-16",
+          "type": "hard"
+        },
+        {
+          "id": "M4-19",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "design tokens",
+        "themes",
+        "responsive layout",
+        "UI tests",
+        "reports/M4-17.md"
+      ],
+      "affectedFiles": [
+        "src/ui/styles.css",
+        "src/ui/index.html",
+        "src/ui/main.ts",
+        "tests/ui/",
+        "scripts/ui/",
+        "docs/",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "styles.css defines colours, type scale, spacing, radii and shadows as CSS custom properties, and no colour literal appears outside the token blocks (a check script, run by the UI tests).",
+        "Light and dark themes follow prefers-color-scheme, with a toggle that persists; in both themes axe reports no serious or critical violations, colour contrast included, on every tab (tests/ui).",
+        "At 390, 1024 and 1440 px wide no tab scrolls horizontally, and the sidebar collapses on narrow screens (tests/ui).",
+        "Every navigation item and control is reachable with Tab and shows a visible focus ring (tests/ui).",
+        "Each M4-16 P1 finding owned by this task is resolved, with before/after screenshots in the report; the bundle stays under its gzipped ceiling (check-package)."
+      ],
+      "verificationCommands": [
+        "npm run test:ui",
+        "npx tsx scripts/check-package.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [
+        "Owner supplies the new logo (SVG preferred, with colour and usage notes)"
+      ],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-18",
+      "title": "New MapX logo in the dashboard, favicon and docs",
+      "objective": "Replace the text logo with the owner's new logo in the dashboard header (both themes), the favicon set and the docs.",
+      "description": "D027. Waits for the owner's logo file.",
+      "dependencies": [
+        {
+          "id": "M4-17",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "logo assets",
+        "favicons",
+        "docs images",
+        "reports/M4-18.md"
+      ],
+      "affectedFiles": [
+        "src/ui/index.html",
+        "src/ui/styles.css",
+        "src/ui/assets/",
+        "README.md",
+        "docs/images/",
+        "scripts/build-ui.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "The dashboard header shows the supplied logo, legible in light and dark themes (screenshots in the report; tests/ui checks it loads).",
+        "A favicon set (SVG, 32 px PNG, 180 px apple-touch) is served by the dashboard (tests/ui).",
+        "README.md and the docs use the new logo; the bundle and package stay under their size checks."
+      ],
+      "verificationCommands": [
+        "npm run test:ui",
+        "npx tsx scripts/check-package.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-20",
+      "title": "Dashboard performance on large workspaces",
+      "objective": "Make the dashboard load and render large graphs faster, with targets set from the M4-16 baseline.",
+      "description": "D027. Candidates: lazy-load the layout engines (elk, cola, dagre, fcose) on first use, compress and trim API payloads, render large graphs progressively.",
+      "dependencies": [
+        {
+          "id": "M4-16",
+          "type": "hard"
+        },
+        {
+          "id": "M4-19",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "performance changes",
+        "perf tests",
+        "reports/M4-20.md"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "src/ui-server.ts",
+        "scripts/build-ui.ts",
+        "tests/ui/",
+        "tests/ui-server.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "The initial gzipped JavaScript the dashboard loads is at least 30% smaller than the M4-16 baseline (check-package and the report).",
+        "On the ~2,000-node fixture, time to an interactive graph is at least 30% below the M4-16 baseline, and no main-thread task during loading exceeds the target set in the report (tests/ui/perf.spec.ts, Performance API).",
+        "/api/graph for that fixture is served compressed and at least 30% smaller on the wire than the baseline (test)."
+      ],
+      "verificationCommands": [
+        "npm run test:ui",
+        "npx tsx scripts/check-package.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-21",
+      "title": "Multi-repo workspaces in the dashboard",
+      "objective": "The dashboard shows every registered repo: a workspace overview, a repo switcher, and repo-scoped views, with cross-repo edges marked.",
+      "description": "D027. The UI server reads only the primary repo (config.repo) for clusters, profile, smells, DSM and metrics.",
+      "dependencies": [
+        {
+          "id": "M4-17",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "/api/repos",
+        "repo parameter on repo-scoped endpoints",
+        "repo switcher and overview",
+        "tests",
+        "reports/M4-21.md"
+      ],
+      "affectedFiles": [
+        "src/ui-server.ts",
+        "src/ui/main.ts",
+        "src/ui/index.html",
+        "src/ui/styles.css",
+        "tests/ui-server.test.ts",
+        "tests/ui/",
+        "docs/cli-reference.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "/api/repos lists every registered repo with path, files, symbols, edges, last scan time and git state; on a 3-repo fixture the counts equal the store's (tests/ui-server.test.ts).",
+        "Clusters, profile, smells, DSM, metrics, symbols, routes and the graph accept ?repo=<name> (default: as documented), each tested on the 3-repo fixture.",
+        "The dashboard has a repo switcher (All plus each repo), kept in the URL, and a workspace overview; switching repo changes the graph to that repo's files, and cross-repo edges are drawn distinctly (tests/ui)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-server.test.ts",
+        "npm run test:ui",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P2",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-22",
+      "title": "Read-only config view in the dashboard",
+      "objective": "The dashboard shows the effective configuration: repos, include and exclude patterns, parse workers, PHP facade map, HTTP clients and hosts, user languages. Each value is marked default or user-set, with validation warnings.",
+      "description": "D027: read-only first; editing would be a later task with its own write API.",
+      "dependencies": [
+        {
+          "id": "M4-21",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "/api/config",
+        "Config tab",
+        "tests",
+        "reports/M4-22.md"
+      ],
+      "affectedFiles": [
+        "src/ui-server.ts",
+        "src/ui/main.ts",
+        "src/ui/index.html",
+        "src/ui/styles.css",
+        "tests/ui-server.test.ts",
+        "tests/ui/",
+        "docs/configuration.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "/api/config returns the effective settings with each value's source (default or user), the repos and user languages, and validation warnings, such as an invalid parseWorkers or an unknown setting (tests/ui-server.test.ts).",
+        "The server exposes no write method for config: POST, PUT, PATCH and DELETE on /api/config answer 405 (test).",
+        "A Config tab renders the settings, sources and warnings (tests/ui)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-server.test.ts",
+        "npm run test:ui",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "dashboard"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-23",
+      "title": "Cross-repo HTTP communication view in the dashboard",
+      "objective": "Show how repos talk over HTTP: frontend call sites paired with backend routes and handlers, unmatched calls, and a repo-to-repo flow, as for majles's frontend and backend.",
+      "description": "D027. Builds on M2 HTTP pairing (http edges, .mapx/http-calls.json, mapx routes --clients).",
+      "dependencies": [
+        {
+          "id": "M4-21",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "/api/http",
+        "HTTP tab and flow view",
+        "tests",
+        "reports/M4-23.md"
+      ],
+      "affectedFiles": [
+        "src/ui-server.ts",
+        "src/ui/main.ts",
+        "src/ui/index.html",
+        "src/ui/styles.css",
+        "tests/ui-server.test.ts",
+        "tests/ui/",
+        "tests/fixtures/",
+        "docs/",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "/api/http returns the client call sites (file, line, method, URL, client), their matched route and handler (file, symbol, repo), and unmatched calls, per repo pair; on a synthetic two-repo fixture (Vue/axios frontend, Laravel backend) the pairs and unmatched calls equal mapx routes --clients --json and --unmatched (tests/ui-server.test.ts).",
+        "An HTTP tab lists the pairs with filters (method, repo pair, matched or unmatched) and a repo-to-repo flow diagram weighted by pair counts; selecting a pair shows both source locations (tests/ui).",
+        "The graph view marks http edges between repos (tests/ui)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-server.test.ts",
+        "npm run test:ui",
         "npm run check"
       ]
     }
