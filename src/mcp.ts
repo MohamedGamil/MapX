@@ -12,6 +12,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { Store } from './core/store.js';
 import { MapxGraph } from './core/graph.js';
 import { Scanner } from './core/scanner.js';
+import { createParsePool, type ParseWorkerPool } from './core/worker-pool.js';
 import { buildPathFilter } from './core/file-rules.js';
 import { VERSION } from './version.js';
 import { Config } from './core/config.js';
@@ -101,6 +102,18 @@ interface ServeOptions {
   sse?: boolean;
   port?: number;
   debug?: boolean;
+}
+
+/**
+ * One parse worker pool for the server's lifetime (M4-11): successive mapx_scan / mapx_sync calls
+ * reuse its workers and their loaded grammars. Workers close after MAPX_WORKER_IDLE_MS without work
+ * (default 60 s), and an idle worker never keeps the process alive.
+ */
+let parsePool: ParseWorkerPool | null = null;
+export function mcpParsePool(): ParseWorkerPool {
+  const idle = Number(process.env['MAPX_WORKER_IDLE_MS']);
+  parsePool ??= createParsePool({ idleMs: Number.isFinite(idle) && idle > 0 ? idle : 60_000 });
+  return parsePool;
 }
 
 export function buildServer(options?: ServeOptions): Server {
@@ -739,7 +752,7 @@ EXAMPLE:
         const parallel = (args as any)?.parallel;
 
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel });
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel, pool: mcpParsePool() });
           const result = await scanner.scanFull(repoNames, { force });
           return {
             content: [{
@@ -775,7 +788,7 @@ EXAMPLE:
         const parallel = (args as any)?.parallel;
 
         try {
-          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel });
+          const scanner = new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { excludes: exclude, includes: include, parallel, pool: mcpParsePool() });
           const result = await scanner.scanIncremental(repoNames);
           return {
             content: [{

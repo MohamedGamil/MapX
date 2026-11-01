@@ -1,6 +1,6 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { readFile } from 'node:fs/promises';
-import { getParserForFile } from './parser-registry.js';
+import { clearParserCache, getParserForFile } from './parser-registry.js';
 import { compiledQuery, getPooledParser, grammarLoadCounts, loadLanguage, loadQueryFile } from './wasm-parser.js';
 import { ignoredSymbolsForFile, type ScopedIgnoredSymbols } from './ignored-symbols.js';
 // The main thread's JSONC normaliser (already loaded through parser-registry), so worker and
@@ -140,7 +140,11 @@ interface ParseResult {
   errors: Array<{ message: string; line?: number }>;
 }
 
-let langDefs: Map<string, any>;
+// The run's context: from workerData at start, replaced by each {type:'context'} message, so a pooled
+// worker parses every run with that run's languages, ignored symbols and facade map (M4-11).
+let langDefs: Map<string, any> = new Map();
+let userLanguages: Record<string, any> | undefined;
+let facadeMap: Record<string, string> | undefined;
 let nameByNodeId: Map<number, string>;
 let scopedIgnoredSymbols: ScopedIgnoredSymbols | undefined;
 // Worker statistics (M4-10): files parsed; wasm-parser counts the grammar loads.
@@ -257,8 +261,8 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
   try {
     // Test hook: skip the language parser for this file, to exercise the capture walk below.
     if (process.env['MAPX_TEST_WORKER_FALLBACK'] === job.filePath) throw new Error('MAPX_TEST_WORKER_FALLBACK');
-    const parser = getParserForFile(job.filePath, workerData.userLanguages, job.language);
-    const result = await parser.parse(job.filePath, source, { facadeMap: workerData.facadeMap, ignoredSymbols });
+    const parser = getParserForFile(job.filePath, userLanguages, job.language);
+    const result = await parser.parse(job.filePath, source, { facadeMap, ignoredSymbols });
     return { id: job.id, ...result };
   } catch {
     // Fall back to the generic capture walk below.
@@ -449,18 +453,31 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
   }
 }
 
+let userLanguagesKey = '';
+function applyContext(context: any): void {
+  if (!context) return;
+  langDefs = new Map(Object.entries(context.languages ?? {}));
+  scopedIgnoredSymbols = context.ignoredSymbols ?? undefined;
+  userLanguages = context.userLanguages ?? undefined;
+  // Parsers are cached by language name: another workspace's definition of a language must not
+  // reuse this one's parser (review 2026-11-01).
+  const key = JSON.stringify(userLanguages ?? {});
+  if (key !== userLanguagesKey) clearParserCache();
+  userLanguagesKey = key;
+  facadeMap = context.facadeMap ?? undefined;
+}
+
 async function main() {
-  langDefs = new Map(Object.entries(workerData.languages));
-  if (workerData.ignoredSymbols) {
-    scopedIgnoredSymbols = workerData.ignoredSymbols;
-  }
+  if (workerData?.languages) applyContext(workerData);
 
-
-  parentPort!.on('message', async (job: ParseJob | { type: 'stats' }) => {
+  parentPort!.on('message', async (job: ParseJob | { type: 'stats' } | { type: 'context' }) => {
     if ('type' in job) {
-      parentPort!.postMessage({ type: 'stats', files: filesParsed, grammars: grammarLoadCounts() });
+      if (job.type === 'context') applyContext(job);
+      else parentPort!.postMessage({ type: 'stats', files: filesParsed, grammars: grammarLoadCounts() });
       return;
     }
+    // Test hook: this worker dies on this file, to exercise crash replacement (tests/worker-pool.test.ts).
+    if (process.env['MAPX_TEST_WORKER_EXIT'] === job.filePath) process.exit(3);
     filesParsed++;
     // A result that cannot be posted (a value structured clone rejects) or a parse that throws
     // hands this one file back to the main thread, instead of failing the worker and with it the

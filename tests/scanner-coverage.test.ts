@@ -116,6 +116,9 @@ vi.mock('node:worker_threads', () => {
     terminate() {
       return Promise.resolve(0);
     }
+
+    ref() { return this; }
+    unref() { return this; }
   }
 
   return { Worker: MockWorker };
@@ -434,12 +437,14 @@ describe('Scanner Coverage Boost', () => {
     expect(successResults[0].symbols).toHaveLength(1);
     expect(successResults[0].symbols[0].name).toBe('WorkerSym');
 
+    await scanner['endParseRun'](); // each case is a run of its own, with a pool of its own (M4-11)
     // 2. Parallel workers init failure (message: error) -> fallback to main thread
     (globalThis as any).mockWorkerFailInit = true;
     const initFailResults = await scanner['parseFilesParallel'](files, '/workspace');
     expect(initFailResults).toHaveLength(15);
     expect(initFailResults[0].symbols[0].name).toBe('A'); // main thread mock returns name 'A'
 
+    await scanner['endParseRun'](); // each case is a run of its own, with a pool of its own (M4-11)
     // 3. Parallel workers init error event -> fallback to main thread
     (globalThis as any).mockWorkerFailInit = false;
     (globalThis as any).mockWorkerThrowOnMessage = true;
@@ -447,6 +452,7 @@ describe('Scanner Coverage Boost', () => {
     expect(throwResults).toHaveLength(15);
     expect(throwResults[0].symbols[0].name).toBe('A');
 
+    await scanner['endParseRun'](); // each case is a run of its own, with a pool of its own (M4-11)
     // 4. Parallel workers execution error -> fallback to main thread
     (globalThis as any).mockWorkerThrowOnMessage = false;
     (globalThis as any).mockWorkerFailExecution = true;
@@ -454,6 +460,7 @@ describe('Scanner Coverage Boost', () => {
     expect(execFailResults).toHaveLength(15);
     expect(execFailResults[0].symbols[0].name).toBe('A');
 
+    await scanner['endParseRun'](); // each case is a run of its own, with a pool of its own (M4-11)
     // 5. Parallel workers exit code failure -> fallback to main thread
     (globalThis as any).mockWorkerFailExecution = false;
     (globalThis as any).mockWorkerExitNonZero = true;

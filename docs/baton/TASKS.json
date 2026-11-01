@@ -20489,23 +20489,75 @@
         "docs/baton/reports/M0-06-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T15:48:20.517Z",
+      "completedAt": "2026-11-01T16:07:57.068Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-11.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-11.md"
+        },
+        {
+          "command": "npx tsx scripts/bench/workers.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-11.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-11.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T15:48:11.117Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T15:48:20.517Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T16:07:56.780Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T16:07:57.068Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-11.md"
+            },
+            {
+              "command": "npx tsx scripts/bench/workers.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-11.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-11.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -20531,8 +20583,8 @@
         "src/core/scanner.ts",
         "src/parsers/parse-worker.ts",
         "src/mcp.ts",
-        "src/cli.ts",
         "tests/worker-pool.test.ts",
+        "tests/scanner-coverage.test.ts",
         "docs/configuration.md",
         "docs/mcp-integration.md",
         "CHANGELOG.md"
@@ -20542,7 +20594,8 @@
         "Two mapx_sync calls on one MCP server within the idle timeout start no new workers for the second; after the idle timeout the pool has no live workers (test, short timeout through MAPX_WORKER_IDLE_MS).",
         "A reused worker parses with the current run's context: changing settings.php.facadeMap between two MCP scans changes the facade edges as a fresh process does (test).",
         "A worker killed while parsing is replaced and its files are parsed again; the index equals --no-parallel (test).",
-        "The CLI exits right after a scan or sync (no live worker keeps it alive), and an aborted scan terminates the pool (test)."
+        "The CLI exits right after a scan or sync (no live worker keeps it alive), and an aborted scan terminates the pool (test).",
+        "Concurrent MCP scans of two workspaces queue on the shared pool and each parses with its own settings (test)."
       ],
       "verificationCommands": [
         "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
@@ -20569,7 +20622,7 @@
         "docs/baton/reports/M0-06-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "claude",
       "actualHours": null,
       "startedAt": null,
@@ -20577,7 +20630,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-01T16:07:57.345Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",

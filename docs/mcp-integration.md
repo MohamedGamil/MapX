@@ -312,6 +312,8 @@ Incremental update: sync changed files only. Like `mapx sync`, it re-parses the 
 - `repo` (string, optional): Sync only this registered repository. Without it, every registered repository is synced (as `all: true`)
 - `all` (boolean, optional): Sync all registered repositories (the default)
 
+The server keeps one pool of parse workers across `mapx_scan` and `mapx_sync` calls, so a call reuses the workers and grammars of the previous one. The workers close after `MAPX_WORKER_IDLE_MS` milliseconds without work (default 60000); see [Parallel parsing](configuration.md#parallel-parsing).
+
 ### Symbol & File Discovery
 
 #### `mapx_query`

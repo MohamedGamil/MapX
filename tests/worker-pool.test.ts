@@ -1,9 +1,18 @@
-import { describe, it, expect, afterAll } from 'vitest';
-import { unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { describe, it, expect, afterAll, vi } from 'vitest';
+import { execFileSync, spawn } from 'node:child_process';
+import { appendFileSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { getBuiltinLanguages } from '../src/languages/registry.js';
 import { grammarLoadCounts, loadLanguage } from '../src/parsers/wasm-parser.js';
-import type { WorkerStats } from '../src/core/scanner.js';
+import { Scanner, type WorkerStats } from '../src/core/scanner.js';
+import { ParseWorkerPool } from '../src/core/worker-pool.js';
+import { Store } from '../src/core/store.js';
+import { Config } from '../src/core/config.js';
+import { MapxGraph } from '../src/core/graph.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { buildServer, mcpParsePool } from '../src/mcp.js';
 import { cleanup, init, mapxWithStderr, query, workspace } from './helpers/e2e.js';
 
 // Parse worker resources (D025): M4-10 grammars per worker, M4-11 pool, M4-13 sizing,
@@ -98,4 +107,221 @@ describe('M4-10: a thread loads each grammar file once, only when it parses that
       expect(indexRows(root)).toEqual(parallel);
     }, 120000);
   });
+});
+
+const git = (cwd: string, ...args: string[]) =>
+  execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd, stdio: 'pipe' });
+/** n TypeScript files under dir/, each calling the next. */
+const tsFiles = (dir: string, n: number, tag = '') => Object.fromEntries(Array.from({ length: n }, (_, i) =>
+  [`${dir}/m${i}.ts`, `import { f${(i + 1) % n} } from './m${(i + 1) % n}';\nexport function f${i}(x: number): number { return x > 0 ? f${(i + 1) % n}(x - 1) : x; }${tag}\n`]));
+
+describe('M4-11: one controlled pool of workers', () => {
+  it('serves every parse batch of a multi-repo scan --all, starting each worker once', () => {
+    const root = workspace({ ...tsFiles('src', 12), ...tsFiles('libs/a', 12), ...tsFiles('libs/b', 12) }, ['.', 'libs/a', 'libs/b']);
+    try {
+      init(root);
+      mapxWithStderr(root, 'workspaces', 'add', 'libs/a');
+      mapxWithStderr(root, 'workspaces', 'add', 'libs/b');
+      const { output, stats } = mapxStats(root, { MAPX_WORKER_STATS: '1' }, 'scan', '--all', '--force');
+      expect(output).not.toContain('Parallel parsing unavailable');
+      expect(stats).toHaveLength(1);
+      const [run] = stats;
+      // A batch per repo at least: before the pool, each batch started its own workers.
+      expect(run!.batches).toBeGreaterThanOrEqual(3);
+      expect(run!.started).toBe(run!.workers.length);
+      expect(run!.started).toBeLessThanOrEqual(8);
+      expect(run!.workers.reduce((n, w) => n + w.files, 0)).toBeGreaterThanOrEqual(36);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('replaces a worker that dies, hands back a file that killed two, and indexes what one thread does', () => {
+    const root = workspace(tsFiles('src', 14));
+    try {
+      init(root);
+      const { output, stats } = mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_TEST_WORKER_EXIT: 'src/m3.ts' }, 'scan');
+      expect(output).not.toContain('Parallel parsing unavailable');
+      expect(output).toContain('[mapx] 1 file(s) parsed on the main thread: a worker could not return them (src/m3.ts: worker exited with code 3).');
+      expect(stats[0]!.handbacks).toBe(1);
+      const parallel = indexRows(root);
+      expect(parallel.symbols).toContainEqual(expect.objectContaining({ file_path: 'src/m3.ts', name: 'f3' }));
+      unlinkSync(join(root, '.mapx/mapx.db'));
+      mapxWithStderr(root, 'scan', '--no-parallel');
+      expect(indexRows(root)).toEqual(parallel);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('lets the CLI exit as soon as a scan ends, whatever the idle timeout', () => {
+    const root = workspace(tsFiles('src', 14));
+    try {
+      init(root);
+      const start = Date.now();
+      mapxStats(root, { MAPX_WORKER_IDLE_MS: '600000' }, 'scan');
+      expect(Date.now() - start).toBeLessThan(30000);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('closes the run\'s pool when a scan is aborted', async () => {
+    const root = workspace(tsFiles('src', 40));
+    const close = vi.spyOn(ParseWorkerPool.prototype, 'close');
+    try {
+      const config = await Config.load(root);
+      let scanner: Scanner;
+      scanner = new Scanner(new Store(':memory:'), config, new MapxGraph(config.repos[0]!.name), (p) => {
+        if (p.phase === 'parse' && p.current >= 1) scanner.abort();
+      });
+      const result = await scanner.scanFull();
+      expect(result.interrupted).toBe(true);
+      expect(close).toHaveBeenCalled();
+      expect((scanner as any).runPool).toBeNull();
+      const pool = close.mock.contexts[0] as ParseWorkerPool;
+      expect(pool.liveWorkers).toBe(0);
+    } finally {
+      close.mockRestore();
+      cleanup(root);
+    }
+  }, 120000);
+
+  describe('in mapx serve (one pool across tool calls)', () => {
+    let root: string;
+    let client: Client;
+    afterAll(async () => {
+      await client?.close();
+      await mcpParsePool().close();
+      cleanup(root);
+    });
+    const call = async (name: string, args: Record<string, unknown>) =>
+      ((await client.callTool({ name, arguments: { dir: root, ...args } })) as any).content[0].text as string;
+
+    it('reuses its workers for the next call, parses with each call\'s context, and closes them when idle', async () => {
+      process.env['MAPX_WORKER_IDLE_MS'] = '1500';
+      const files: Record<string, string> = {
+        ...tsFiles('src', 12),
+        'app/Services/ThingService.php': '<?php\nnamespace App\\Services;\nclass ThingService { public function make() { return 1; } }\n',
+        // No namespace: an unqualified Thing is a global alias, which settings.php.facadeMap rewrites.
+        'app/UseIt.php': '<?php\nclass UseIt { public function go() { return Thing::make(); } }\n',
+      };
+      root = workspace(files);
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      init(root);
+      const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+      await buildServer().connect(serverSide);
+      client = new Client({ name: 'test', version: '1.0.0' });
+      await client.connect(clientSide);
+      const pool = mcpParsePool();
+      delete process.env['MAPX_WORKER_IDLE_MS'];
+
+      await call('mapx_scan', { force: true });
+      const startedAfterScan = pool.started;
+      expect(startedAfterScan).toBeGreaterThan(0);
+      const facadeEdges = () => query(root, "SELECT target_file FROM edges WHERE source_file = 'app/UseIt.php' AND target_file = 'app/Services/ThingService.php'");
+      expect(facadeEdges()).toEqual([]);
+
+      // Another call within the idle timeout: same workers, this call's context (a facade map).
+      const configPath = join(root, '.mapx/config.json');
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      config.settings.php = { ...(config.settings.php ?? {}), facadeMap: { Thing: 'App\\Services\\ThingService' } };
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      await call('mapx_scan', { force: true });
+      expect(pool.started).toBe(startedAfterScan);
+      expect(facadeEdges().length).toBeGreaterThan(0);
+
+      for (let i = 0; i < 12; i++) appendFileSync(join(root, `src/m${i}.ts`), `export const v${i} = ${i};\n`);
+      await call('mapx_sync', {});
+      expect(pool.started).toBe(startedAfterScan);
+      expect(query(root, "SELECT name FROM symbols WHERE name = 'v7'")).toHaveLength(1);
+      expect(pool.liveWorkers).toBeGreaterThan(0);
+
+      await new Promise((r) => setTimeout(r, 3000));
+      expect(pool.liveWorkers).toBe(0);
+    }, 120000);
+  });
+});
+
+describe('M4-11 review: the shared pool under concurrent tool calls, and process exit', () => {
+  it('runs concurrent MCP scans of two workspaces one batch at a time, each with its own settings', async () => {
+    const php = (map: boolean) => {
+      const files: Record<string, string> = {
+        'app/Services/ThingService.php': '<?php\nnamespace App\\Services;\nclass ThingService { public function make() { return 1; } }\n',
+      };
+      for (let i = 0; i < 150; i++) files[`app/U${i}.php`] = `<?php\nclass U${i} { public function go() { return Thing::make(); } }\n`;
+      const root = workspace(files);
+      init(root);
+      if (map) {
+        const configPath = join(root, '.mapx/config.json');
+        const config = JSON.parse(readFileSync(configPath, 'utf8'));
+        config.settings.php = { ...(config.settings.php ?? {}), facadeMap: { Thing: 'App\\Services\\ThingService' } };
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+      }
+      return root;
+    };
+    const plain = php(false);
+    const mapped = php(true);
+    const warn = vi.spyOn(console, 'warn');
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    try {
+      const scan = (dir: string) => client.callTool({ name: 'mapx_scan', arguments: { dir, force: true } });
+      await Promise.all([scan(plain), scan(mapped)]);
+      const thing = (root: string) => query(root, "SELECT source_file FROM edges WHERE target_file = 'app/Services/ThingService.php' AND edge_type = 'call'").length;
+      expect(thing(plain)).toBe(0);
+      expect(thing(mapped)).toBe(150);
+      expect(warn.mock.calls.flat().join('\n')).not.toContain('Parallel parsing unavailable');
+    } finally {
+      warn.mockRestore();
+      await client.close();
+      await mcpParsePool().close();
+      cleanup(plain);
+      cleanup(mapped);
+    }
+  }, 180000);
+
+  it('lets mapx serve exit when stdin closes, though its idle workers have a long timeout', async () => {
+    const root = workspace(tsFiles('src', 14));
+    init(root);
+    const main = resolve(__dirname, '../src/main.ts');
+    const tsx = pathToFileURL(resolve(__dirname, '../node_modules/tsx/dist/loader.mjs')).href;
+    const child = spawn(process.execPath, ['--import', tsx, main, 'serve', '--dir', root], {
+      env: { ...process.env, MAPX_WORKER_IDLE_MS: '600000', MAPX_WORKER_STATS: '1', MAPX_NO_TELEMETRY: '1' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    const exited = new Promise<number | null>((r) => child.on('exit', (code) => r(code)));
+    const send = (msg: unknown) => child.stdin.write(JSON.stringify(msg) + '\n');
+    const response = (id: number) => new Promise<void>((r, reject) => {
+      const timer = setInterval(() => {
+        if (stdout.split('\n').some((l) => l.includes(`"id":${id}`))) { clearInterval(timer); r(); }
+      }, 50);
+      setTimeout(() => { clearInterval(timer); reject(new Error(`no response ${id}: ${stderr}`)); }, 60000);
+    });
+    try {
+      send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '1' } } });
+      await response(1);
+      send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+      send({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'mapx_scan', arguments: { dir: root } } });
+      await response(2);
+      // The scan ran on the shared pool, whose workers are now idle for up to 10 minutes.
+      expect(stderr).toContain('[mapx] worker-stats');
+      const start = Date.now();
+      child.stdin.end();
+      const winner = await Promise.race([exited.then(() => 'exited'), new Promise((r) => setTimeout(() => r('alive'), 15000))]);
+      expect(winner).toBe('exited');
+      expect(Date.now() - start).toBeLessThan(15000);
+    } finally {
+      child.kill('SIGKILL');
+      cleanup(root);
+    }
+  }, 120000);
 });

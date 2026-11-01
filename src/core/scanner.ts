@@ -3,7 +3,7 @@ import { accessSync, constants as fsConstants, existsSync, readFileSync, readdir
 import { resolve, relative, extname, join, basename, dirname, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
-import { Worker } from 'node:worker_threads';
+import { ParseWorkerPool, createParsePool } from './worker-pool.js';
 import { Store } from './store.js';
 import { findAssetRoot } from '../parsers/assets.js';
 import { ClusterEngine } from './cluster-engine.js';
@@ -193,39 +193,19 @@ function wordIn(text: string, name: string): boolean {
   return new RegExp(`(?<![\\w$])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(text);
 }
 
-/**
- * The parse worker's module, from the scanner's own import.meta.url.
- * - **Source** (tsx, Vitest): `src/parsers/parse-worker.ts`.
- * - **npm build** (tsup, unbundled): `dist/parsers/parse-worker.js`.
- * - **bun --compile binary:** every module is bundled into the binary's own, at `<root>/<binary>` in
- *   bun's embedded filesystem (`/$bunfs/root/` on Unix, `B:/~BUN/root/` on Windows); the worker,
- *   a second entrypoint of the build, sits beside it at `<root>/parsers/parse-worker.js` (M0-06-R2).
- */
-export function parseWorkerUrl(moduleUrl: string): URL {
-  if (/\/(\$bunfs|~BUN)\//.test(moduleUrl)) return new URL('./parsers/parse-worker.js', moduleUrl);
-  return new URL(`../parsers/parse-worker${moduleUrl.endsWith('.ts') ? '.ts' : '.js'}`, moduleUrl);
-}
+// The parse worker's module: see worker-pool.ts (moved there with the pool, M4-11).
+export { parseWorkerUrl } from './worker-pool.js';
 
 /** What the parse workers of one parallel run did (M4-10). Printed with MAPX_WORKER_STATS=1. */
 export interface WorkerStats {
+  /** Workers started during the run (a shared pool's live workers are reused). */
   started: number;
+  /** Parse batches the run sent to the pool. */
+  batches: number;
+  /** The live workers: files parsed and grammars loaded over each worker's lifetime. */
   workers: Array<{ files: number; grammars: Array<{ grammar: string; loads: number }> }>;
   handbacks: number;
   peakRssMb?: number;
-}
-
-function requestWorkerStats(worker: Worker): Promise<WorkerStats['workers'][number]> {
-  return new Promise((resolveStats) => {
-    const timer = setTimeout(() => { worker.off('message', onMessage); resolveStats({ files: -1, grammars: [] }); }, 2000);
-    const onMessage = (msg: any) => {
-      if (msg?.type !== 'stats') return;
-      clearTimeout(timer);
-      worker.off('message', onMessage);
-      resolveStats({ files: msg.files, grammars: msg.grammars });
-    };
-    worker.on('message', onMessage);
-    worker.postMessage({ type: 'stats' });
-  });
 }
 
 export class Scanner {
@@ -262,7 +242,7 @@ export class Scanner {
     config: Config,
     graph: MapxGraph,
     onProgress?: ProgressCallback,
-    options?: { excludes?: string[]; includes?: string[]; parallel?: boolean }
+    options?: { excludes?: string[]; includes?: string[]; parallel?: boolean; pool?: ParseWorkerPool }
   ) {
     this.store = store;
     this.config = config;
@@ -272,6 +252,8 @@ export class Scanner {
     this.cliExcludes = options?.excludes ?? [];
     this.cliIncludes = options?.includes ?? [];
     this.parallel = options?.parallel !== false;
+    // A pool shared across runs (mapx serve); without one, each run starts and closes its own.
+    this.sharedPool = options?.pool ?? null;
   }
 
   abort(): void {
@@ -401,6 +383,10 @@ export class Scanner {
    */
   /** The parse workers' statistics of the last parallel run, for tests and MAPX_WORKER_STATS (M4-10). */
   lastWorkerStats: WorkerStats | null = null;
+  private sharedPool: ParseWorkerPool | null = null;
+  private runPool: ParseWorkerPool | null = null;
+  private runHandbacks = 0;
+  private runStart = { started: 0, batches: 0 };
 
   private recordWorkerStats(stats: WorkerStats): void {
     try { stats.peakRssMb = Math.round(process.resourceUsage().maxRSS / 1024); } catch { /* runtime without resourceUsage */ }
@@ -432,7 +418,7 @@ export class Scanner {
     }
     try {
       const reposToScan = this.reposToScan(repoNames);
-      this.lastWorkerStats = null;
+      this.beginParseRun();
 
       this.workspaceFileMap.clear();
       for (const f of this.store.getAllFiles()) {
@@ -489,7 +475,7 @@ export class Scanner {
         totalFiles: filesScanned,
       };
     } finally {
-      await this.releaseScanLock();
+      try { await this.endParseRun(); } finally { await this.releaseScanLock(); }
     }
   }
 
@@ -751,7 +737,7 @@ export class Scanner {
     }
     try {
       const reposToScan = this.reposToScan(repoNames);
-      this.lastWorkerStats = null;
+      this.beginParseRun();
 
       this.workspaceFileMap.clear();
       for (const f of this.store.getAllFiles()) {
@@ -808,7 +794,7 @@ export class Scanner {
         totalFiles: filesScanned,
       };
     } finally {
-      await this.releaseScanLock();
+      try { await this.endParseRun(); } finally { await this.releaseScanLock(); }
     }
   }
 
@@ -1373,180 +1359,74 @@ export class Scanner {
     ignoredSymbols?: ScopedIgnoredSymbols,
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
-    const workerCount = Math.min(this.concurrency, files.length, 8);
-    const workerUrl = parseWorkerUrl(import.meta.url);
-
-    const workers: Worker[] = [];
-    const readyPromises: Promise<void>[] = [];
-    const languages = {
-      ...getBuiltinLanguages(),
-      ...this.config.getResolvedUserLanguages()
+    const pool = this.parsePool();
+    // The run's context: a pooled worker may have parsed another run, or another workspace (M4-11).
+    const context = {
+      languages: { ...getBuiltinLanguages(), ...this.config.getResolvedUserLanguages() },
+      ignoredSymbols,
+      userLanguages: this.config.getResolvedUserLanguages(),
+      facadeMap: this.config.settings.php?.facadeMap,
+      assetRoot: findAssetRoot(import.meta.url),
     };
-    const assetRoot = findAssetRoot(import.meta.url);
-    // Workers parse with the same language parsers as the main thread (PHP post-processing etc.).
-    const userLanguages = this.config.getResolvedUserLanguages();
-    const facadeMap = this.config.settings.php?.facadeMap;
-
-    for (let i = 0; i < workerCount; i++) {
-      const worker = /\.ts$/.test(workerUrl.pathname)
-        ? new Worker(
-            // Resolve tsx from MapX's own install, not from the scanned workspace (which usually
-            // has no tsx), otherwise every source-mode scan silently fell back to one thread.
-            `import { register } from '${import.meta.resolve('tsx/esm/api')}';
-             register();
-             import('${workerUrl.href}');`,
-            {
-              eval: true,
-              workerData: { languages, ignoredSymbols, assetRoot, userLanguages, facadeMap }
-            }
-          )
-        : new Worker(workerUrl, {
-            workerData: { languages, ignoredSymbols, assetRoot, userLanguages, facadeMap }
-          });
-      workers.push(worker);
-
-      readyPromises.push(new Promise<void>((resolveReady, rejectReady) => {
-        const onMessage = (msg: any) => {
-          if (msg.type === 'ready') {
-            worker.off('message', onMessage);
-            worker.off('error', onError);
-            resolveReady();
-          } else if (msg.type === 'error') {
-            worker.off('message', onMessage);
-            worker.off('error', onError);
-            rejectReady(new Error(msg.error || 'Worker init error'));
-          }
-        };
-        const onError = (err: Error) => {
-          worker.off('message', onMessage);
-          worker.off('error', onError);
-          rejectReady(err);
-        };
-        worker.on('message', onMessage);
-        worker.on('error', onError);
-      }));
-    }
-
-    // Wait for all workers to be initialized
-    await Promise.all(readyPromises);
-
-    let nextIdx = 0;
+    const relPath = (f: FileInfo) => relative(workspaceRoot, f.absolutePath).replace(/\\/g, '/');
     const results: ParseResult[] = new Array(files.length);
-    const mainThreadRetries: number[] = [];
-    let retryReason: string | undefined;
+    const batch = await pool.parse<any>(files, workspaceRoot, context, (index, msg) => {
+      // fileMetadata carries the PHP namespace; dropping it lost namespace clusters on every
+      // fresh parallel scan (M0-08-R1).
+      results[index] = {
+        symbols: msg.symbols || [],
+        references: msg.references || [],
+        errors: msg.errors || [],
+        ...(msg.fileMetadata ? { fileMetadata: msg.fileMetadata } : {}),
+      };
+      onFileParsed?.(relPath(files[index]!));
+    }, () => this.aborted);
 
-    const runWorkerLoop = async (worker: Worker) => {
-      return new Promise<void>((resolveLoop, rejectLoop) => {
-        let currentResolve: (() => void) | null = null;
-        let currentReject: ((err: Error) => void) | null = null;
-
-        const onMessage = (msg: any) => {
-          const resultIndex = msg.id;
-          if (msg.retryOnMainThread) {
-            // The worker could not hand this file's result over: the main thread parses it below.
-            mainThreadRetries.push(resultIndex);
-            retryReason ??= String(msg.retryOnMainThread);
-            if (currentResolve) {
-              const cb = currentResolve;
-              currentResolve = null;
-              cb();
-            }
-            return;
-          }
-          // fileMetadata carries the PHP namespace; dropping it lost namespace clusters on every
-          // fresh parallel scan (M0-08-R1).
-          results[resultIndex] = {
-            symbols: msg.symbols || [],
-            references: msg.references || [],
-            errors: msg.errors || [],
-            ...(msg.fileMetadata ? { fileMetadata: msg.fileMetadata } : {}),
-          };
-
-          const fileInfo = files[resultIndex];
-          const relPath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
-          onFileParsed?.(relPath);
-
-          if (currentResolve) {
-            const cb = currentResolve;
-            currentResolve = null;
-            cb();
-          }
-        };
-
-        const onError = (err: Error) => {
-          if (currentReject) {
-            currentReject(err);
-          } else {
-            rejectLoop(err);
-          }
-        };
-
-        const onExit = (code: number) => {
-          if (code !== 0) {
-            const err = new Error(`Worker exited with code ${code}`);
-            if (currentReject) currentReject(err);
-            else rejectLoop(err);
-          }
-        };
-
-        worker.on('message', onMessage);
-        worker.on('error', onError);
-        worker.on('exit', onExit);
-
-        const nextJob = () => {
-          if (this.aborted || nextIdx >= files.length) {
-            worker.off('message', onMessage);
-            worker.off('error', onError);
-            worker.off('exit', onExit);
-            resolveLoop();
-            return;
-          }
-
-          const i = nextIdx++;
-          const fileInfo = files[i];
-          const relPath = relative(workspaceRoot, fileInfo.absolutePath).replace(/\\/g, '/');
-
-          new Promise<void>((res, rej) => {
-            currentResolve = res;
-            currentReject = rej;
-            worker.postMessage({
-              id: i,
-              filePath: relPath,
-              absolutePath: fileInfo.absolutePath,
-              language: fileInfo.language
-            });
-          }).then(() => {
-            nextJob();
-          }).catch((err) => {
-            worker.off('message', onMessage);
-            worker.off('error', onError);
-            worker.off('exit', onExit);
-            rejectLoop(err);
-          });
-        };
-
-        nextJob();
-      });
-    };
-
-    let perWorker: WorkerStats['workers'] = [];
-    try {
-      await Promise.all(workers.map(w => runWorkerLoop(w)));
-      perWorker = await Promise.all(workers.map(w => requestWorkerStats(w)));
-    } finally {
-      await Promise.all(workers.map(w => w.terminate()));
+    this.runHandbacks += batch.handbacks.length;
+    if (batch.handbacks.length > 0 && !this.aborted) {
+      // Said, not silent: a hand-back is a parser bug (a result structured clone rejects, or a throw)
+      // or a worker that died on the file twice.
+      const first = files[batch.handbacks[0]!]!;
+      console.warn(`[mapx] ${batch.handbacks.length} file(s) parsed on the main thread: a worker could not return them (${relPath(first)}: ${batch.handbackReason}).`);
+      const retried = await this.parseOnMainThread(batch.handbacks.map(i => files[i]!), workspaceRoot, ignoredSymbols, onFileParsed);
+      batch.handbacks.forEach((fileIndex, k) => { results[fileIndex] = retried[k]!; });
     }
-    this.recordWorkerStats({ started: workers.length, workers: perWorker, handbacks: mainThreadRetries.length });
-
-    if (mainThreadRetries.length > 0 && !this.aborted) {
-      // Said, not silent: a hand-back is a parser bug (a result structured clone rejects, or a throw).
-      const first = files[mainThreadRetries[0]!]!;
-      console.warn(`[mapx] ${mainThreadRetries.length} file(s) parsed on the main thread: a worker could not return them (${relative(workspaceRoot, first.absolutePath).replace(/\\/g, '/')}: ${retryReason}).`);
-      const retried = await this.parseOnMainThread(mainThreadRetries.map(i => files[i]), workspaceRoot, ignoredSymbols, onFileParsed);
-      mainThreadRetries.forEach((fileIndex, k) => { results[fileIndex] = retried[k]; });
-    }
-
     return results;
+  }
+
+  /** The pool this run parses with: the shared one (mapx serve), or the run's own, made on first use. */
+  private parsePool(): ParseWorkerPool {
+    if (this.sharedPool) return this.sharedPool;
+    this.runPool ??= createParsePool({ size: Math.min(this.concurrency, 8) });
+    return this.runPool;
+  }
+
+  /** Marks the start of a scan or sync run, for its worker statistics. */
+  private beginParseRun(): void {
+    this.lastWorkerStats = null;
+    this.runHandbacks = 0;
+    this.runStart = { started: this.sharedPool?.started ?? 0, batches: this.sharedPool?.batches ?? 0 };
+  }
+
+  /** Ends a run: records what the workers did, and closes the run's own pool (M4-11). */
+  private async endParseRun(): Promise<void> {
+    const pool = this.sharedPool ?? this.runPool;
+    try {
+      if (pool && pool.batches > this.runStart.batches) {
+        this.recordWorkerStats({
+          started: pool.started - this.runStart.started,
+          batches: pool.batches - this.runStart.batches,
+          workers: await pool.workerStats(),
+          handbacks: this.runHandbacks,
+        });
+      }
+    } finally {
+      if (this.runPool) {
+        const own = this.runPool;
+        this.runPool = null;
+        await own.close();
+      }
+    }
   }
 
   private async parseOnMainThread(
