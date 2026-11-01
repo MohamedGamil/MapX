@@ -6,8 +6,21 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const NAMED = ['white', 'black', 'red', 'green', 'blue', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey', 'cyan', 'magenta', 'silver', 'navy', 'teal', 'maroon', 'olive', 'lime', 'aqua', 'fuchsia', 'brown', 'gold', 'indigo', 'violet', 'crimson', 'coral', 'salmon', 'tomato', 'khaki', 'beige', 'ivory', 'lavender', 'plum', 'orchid', 'tan', 'chocolate', 'turquoise'];
-const LITERAL = new RegExp(String.raw`#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(|\b(?:${NAMED.join('|')})\b`, 'g');
+// Every CSS named colour (CSS Color 4). System colours (canvas, highlight…) are left out: their
+// names are also common identifiers, such as the graph's `grid-area: canvas`.
+const NAMED = ('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood ' +
+  'cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen ' +
+  'darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray ' +
+  'darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia ' +
+  'gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender ' +
+  'lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink ' +
+  'lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta ' +
+  'maroon mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise ' +
+  'mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid ' +
+  'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red ' +
+  'rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow ' +
+  'springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen').split(' ');
+const LITERAL = new RegExp(String.raw`#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(|\b(?:${NAMED.join('|')})\b`, 'gi');
 const TOKEN_BLOCK = /^:root(\[data-theme="(light|dark)"\])?$/;
 
 export interface TokenViolation { line: number; selector: string; text: string }
@@ -15,8 +28,11 @@ export interface TokenViolation { line: number; selector: string; text: string }
 /** Colour literals outside the token blocks of `css`. */
 export function findColourLiterals(css: string): TokenViolation[] {
   const violations: TokenViolation[] = [];
-  // Blank comments out, keeping line numbers.
-  const src = css.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, ' '));
+  // Blank comments and quoted strings out (keeping line numbers): a brace or a colour name inside
+  // `content: "…"` or a url("…") is not CSS structure or a colour.
+  const blank = (c: string) => c.replace(/[^\n]/g, ' ');
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, blank);
+  const src = withoutComments.replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, (q) => q[0] + blank(q.slice(1, -1)) + q[0]);
   const lineAt = (i: number) => src.slice(0, i).split('\n').length;
   // Walk rules; at-rule blocks (@media, @supports) are entered, and their rules checked the same way.
   const stack: Array<{ selector: string; start: number }> = [];
@@ -24,13 +40,15 @@ export function findColourLiterals(css: string): TokenViolation[] {
   for (let i = 0; i < src.length; i++) {
     const ch = src[i];
     if (ch === '{') {
-      stack.push({ selector: src.slice(segmentStart, i).trim(), start: i + 1 });
+      // Selectors keep their strings (:root[data-theme="light"]); positions are the same in both.
+      stack.push({ selector: withoutComments.slice(segmentStart, i).trim(), start: i + 1 });
       segmentStart = i + 1;
     } else if (ch === '}') {
       const rule = stack.pop();
       if (rule && !rule.selector.startsWith('@')) checkBlock(rule.selector, src.slice(rule.start, i), rule.start);
       segmentStart = i + 1;
-    } else if (ch === ';' && stack.length && stack[stack.length - 1]!.selector.startsWith('@')) {
+    } else if (ch === ';' && (stack.length === 0 || stack[stack.length - 1]!.selector.startsWith('@'))) {
+      // A statement at-rule (@import, @charset, @layer a, b;) ends here: the next selector starts after it.
       segmentStart = i + 1;
     }
   }

@@ -45,17 +45,39 @@ export function initNavDrawer() {
   const open = document.getElementById('btn-nav-open');
   const backdrop = document.getElementById('nav-backdrop');
   const title = document.getElementById('mobile-title');
-  const setOpen = (isOpen: boolean) => {
-    layout?.classList.toggle('nav-open', isOpen);
-    open?.setAttribute('aria-expanded', String(isOpen));
-    if (isOpen) (document.querySelector('.nav-item.active') as HTMLElement | null)?.focus();
+  const sidebar = document.getElementById('sidebar');
+  const isOpen = () => !!layout?.classList.contains('nav-open');
+  const setOpen = (value: boolean) => {
+    layout?.classList.toggle('nav-open', value);
+    open?.setAttribute('aria-expanded', String(value));
+    // Focus moves into the drawer (visibility: hidden while closed, visible at once when opened).
+    // Retried after the next frame and after the slide, for engines that apply the style late.
+    if (value) {
+      const focusActive = () => {
+        const item = document.querySelector('.nav-item.active') as HTMLElement | null;
+        item?.focus();
+        return document.activeElement === item;
+      };
+      if (!focusActive()) requestAnimationFrame(() => { if (!focusActive()) setTimeout(focusActive, 250); });
+    }
   };
-  open?.addEventListener('click', () => setOpen(!layout?.classList.contains('nav-open')));
+  open?.addEventListener('click', () => setOpen(!isOpen()));
   backdrop?.addEventListener('click', () => setOpen(false));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && layout?.classList.contains('nav-open')) {
+    if (!isOpen()) return;
+    if (e.key === 'Escape') {
+      e.preventDefault(); // one Escape closes one thing: the drawer, not also the details panel
       setOpen(false);
       open?.focus();
+    } else if (e.key === 'Tab' && sidebar) {
+      // Focus stays in the open drawer: Tab wraps around its controls.
+      const items = [...sidebar.querySelectorAll<HTMLElement>('button, [href], input, select, [tabindex="0"]')].filter((el) => el.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && (active === first || !sidebar.contains(active))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || !sidebar.contains(active))) { e.preventDefault(); first.focus(); }
     }
   });
   document.querySelectorAll('.nav-item').forEach((item) => {
@@ -91,6 +113,9 @@ export function initDetailsPanel(onClose: () => void, onResize: () => void) {
   };
   document.getElementById('btn-details-close')?.addEventListener('click', close);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && container.classList.contains('has-selection') && !document.querySelector('.app-layout.nav-open')) close();
+    if (e.key !== 'Escape' || e.defaultPrevented || !container.classList.contains('has-selection')) return;
+    // Escape in a text field (the focus search, a tag input) belongs to that field.
+    if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select')) return;
+    close();
   });
 }

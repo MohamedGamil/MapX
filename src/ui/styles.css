@@ -2248,7 +2248,8 @@ code, pre, kbd, samp { font-family: var(--font-mono); }
     transition: transform var(--dur-base) var(--ease), visibility var(--dur-base);
     box-shadow: var(--shadow-lg);
   }
-  .app-layout.nav-open .sidebar { transform: none; visibility: visible; }
+  /* Visible at once when opening (it can take focus now); hidden only after the slide when closing. */
+  .app-layout.nav-open .sidebar { transform: none; visibility: visible; transition: transform var(--dur-base) var(--ease), visibility 0s; }
   .app-layout.nav-open .nav-backdrop { display: block; position: fixed; inset: 0; z-index: 90; background: color-mix(in srgb, var(--shadow-color) 45%, transparent); }
   .sidebar .logo-text, .sidebar .status-indicator, .sidebar .sidebar-footer, .nav-label { display: revert; }
   .sidebar .logo-text { display: inline; }
@@ -2261,6 +2262,7 @@ code, pre, kbd, samp { font-family: var(--font-mono); }
   .col-optional { display: none; }
   .graph-toolbar .toolbar-group-label { display: none; }
   .bar-row { grid-template-columns: minmax(0, 6rem) minmax(0, 1fr) auto; }
+  .graph-container.has-selection .details-panel { max-height: 45%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

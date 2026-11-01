@@ -2389,6 +2389,7 @@ async function loadGraph() {
             smellsHtml = `
               <div style="border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
                 <span class="detail-stat-label" style="color: var(--danger); font-weight: bold;">Smells & Health</span>
+                <ul style="list-style: none; padding: 0; margin: 0;">
                   ${fileSmells.map((s: any) => `
                     <li style="margin-bottom: 4px;">
                       <span class="smell-badge-mini ${escapeHtml(s.severity.toLowerCase())}">${escapeHtml(s.severity.toUpperCase())}</span>
@@ -2522,7 +2523,7 @@ async function loadGraph() {
                   ${signals.map((s: any) => `
                     <li style="margin-bottom: 4px;">
                       <strong>[${escapeHtml(s.source)}]</strong> 
-                      <span style="color: ${escapeHtml(LAYER_COLORS[`layer:${s.role}`] || 'var(--text-main)')}; font-weight: 500;">${escapeHtml(s.role)}</span> 
+                      <span style="color: ${layerToken(s.role)}; font-weight: 500;">${escapeHtml(s.role)}</span> 
                       <span style="color: var(--text-muted); font-size: 10px;">(conf: ${s.confidence.toFixed(2)})</span>
                       <div style="margin-top: 2px; color: var(--text-muted);">${escapeHtml(s.reason)}</div>
                     </li>
@@ -2831,7 +2832,7 @@ async function loadSymbolDetails(name: string) {
         ${data.sourceCode ? `
           <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0;">
             <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source Code</span>
-            <pre class="neat-scrollbar" style="background: var(--bg-panel); color: var(--text-main); padding: 12px; border-radius: 6px; overflow: auto; font-family: inherit; font-size: 11px; margin: 4px 0 0 0; border: 1px solid color-mix(in srgb, var(--overlay) 5%, transparent); line-height: 1.5; flex: 1; min-height: 0;">${escapeHtml(data.sourceCode)}</pre>
+            <pre class="neat-scrollbar" tabindex="0" role="region" aria-label="Source code" style="background: var(--bg-panel); color: var(--text-main); padding: 12px; border-radius: 6px; overflow: auto; font-family: inherit; font-size: 11px; margin: 4px 0 0 0; border: 1px solid color-mix(in srgb, var(--overlay) 5%, transparent); line-height: 1.5; flex: 1; min-height: 0;">${escapeHtml(data.sourceCode)}</pre>
           </div>
         ` : ''}
       </div>
@@ -2999,7 +3000,7 @@ async function loadMetrics() {
         gitStatusHTML = `
           <div>
             <strong>Git Status:</strong> ⚠ Stale (${escapeHtml(git.changesCount)} changed files since last scan)
-            <ul style="padding-left: 20px; margin-top: 5px; max-height: 100px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+            <ul tabindex="0" aria-label="Changed files" style="padding-left: 20px; margin-top: 5px; max-height: 100px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
               ${changesList}
             </ul>
           </div>
@@ -3207,6 +3208,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (tabBtn) {
       tabBtn.click();
     }
+  };
+
+  // Test hook (M4-17): select a graph element as a tap would, so browser tests can open the
+  // details panel without hitting canvas coordinates. Returns false when nothing matching is drawn.
+  (window as any).__mapxSelect = (id?: string): boolean => {
+    // Without an id: the first drawn file node.
+    const el = id ? cyInstance?.getElementById(id) : cyInstance?.nodes('[type="file"]').first();
+    if (!el || el.empty()) return false;
+    el.emit('tap');
+    return true;
   };
 
   // Keyboard: Enter or Space on a file badge acts as a click (they are role="button" spans).

@@ -107,6 +107,17 @@ export function isLoopback(address: string | undefined): boolean {
   return address === '::1' || address.startsWith('127.') || address.startsWith('::ffff:127.');
 }
 
+/**
+ * The dashboard's own user: a loopback client whose request is not cross-site, i.e. it sends no
+ * Origin (curl, the CLI) or the dashboard's own origin. A web page in another tab also connects
+ * from loopback, but sends its own Origin, and stays rate-limited.
+ */
+export function isOwnLocalClient(req: IncomingMessage): boolean {
+  if (!isLoopback(req.socket.remoteAddress)) return false;
+  const origin = req.headers.origin;
+  return !origin || origin === `http://${req.headers.host}`;
+}
+
 /** `Config.load` plus the duplicate-entry collapse the CLI and MCP loaders apply (M0-10-R4). */
 async function loadConfig(dir: string, store: Store): Promise<Config> {
   const config = await Config.load(dir);
@@ -183,7 +194,7 @@ export function startUiServer(opts: ServerOpts) {
 
     // Handle Rate Limiting for specific endpoints
     if (pathname === '/api/context' || pathname === '/api/graph' || pathname === '/api/graph/meta') {
-      if (!isLoopback(req.socket.remoteAddress) && isRateLimited(ip)) {
+      if (!isOwnLocalClient(req) && isRateLimited(ip)) {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Rate limit exceeded: max 10 requests per minute' }));
         return;

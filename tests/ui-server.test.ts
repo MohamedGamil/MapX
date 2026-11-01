@@ -54,6 +54,20 @@ describe('UI server endpoints', () => {
     }
   });
 
+  it('rate-limits a cross-site page on this machine: its Origin is not the dashboard (M4-17 review)', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const res = await fetch(base + '/api/graph/meta', { headers: { Authorization: 'Bearer secret', Origin: 'https://evil.example' } });
+      statuses.push(res.status);
+      await res.arrayBuffer();
+    }
+    expect(statuses.slice(0, 10).every((s) => s === 200)).toBe(true);
+    expect(statuses.slice(10)).toEqual([429, 429]);
+    // The dashboard's own origin is still exempt.
+    const own = await fetch(base + '/api/graph/meta', { headers: { Authorization: 'Bearer secret', Origin: base } });
+    expect(own.status).toBe(200);
+  });
+
   it('treats only loopback socket addresses as local (M4-17)', () => {
     for (const a of ['127.0.0.1', '127.1.2.3', '::1', '::ffff:127.0.0.1']) expect(isLoopback(a), a).toBe(true);
     for (const a of [undefined, '', '10.0.0.5', '192.168.1.2', '::ffff:10.0.0.5', '203.0.113.9', 'fe80::1']) expect(isLoopback(a), String(a)).toBe(false);

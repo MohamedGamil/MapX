@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@b3283557387a5094a72210be94370a8c39f29706 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
+Revision: develop@1cecd874e24f94b5333678406175f2d244fa4483 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
 
 ## Baseline
-Last completed: M4-17 — Dashboard look and feel: design system, themes, responsive and accessible.
-Evidence: `npm run test:ui` (exit 0) → docs/baton/reports/M4-17.md; `npx tsx scripts/check-package.ts` (exit 0) → docs/baton/reports/M4-17.md; `npm run check` (exit 0) → docs/baton/reports/M4-17.md.
+Last completed: M4-24 — Escape scanned values in the dashboard HTML.
+Evidence: `npm run test:ui` (exit 0) → docs/baton/reports/M4-24.md; `npm run check` (exit 0) → docs/baton/reports/M4-24.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M4-21 — Multi-repo workspaces in the dashboard. Prerequisites: M4-17. Read docs/baton/iterations/M4-21.md. Objective: The dashboard shows every registered repo: a workspace overview, a repo switcher, and repo-scoped views, with cross-repo edges marked. Expected outputs: /api/repos; repo parameter on repo-scoped endpoints; repo switcher and overview; tests; reports/M4-21.md. Verify: `npx vitest run tests/ui-server.test.ts`; `npm run test:ui`; `npm run check`.
-Also eligible: M4-24.
+Also eligible: M4-20.
 Active work: none. One active iteration per owner.
 
 ## Observe

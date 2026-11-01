@@ -247,3 +247,90 @@ test('the details panel takes room only while something is selected', async ({ b
   await expect(page.locator('#graph-details')).toBeHidden();
   await context.close();
 });
+
+/** Shows the Full Codebase graph and selects a file node as a tap would (the __mapxSelect hook). */
+async function selectFile(page: Page, id = 'src/d0/m0.ts') {
+  await page.selectOption('#select-graph-mode', 'full');
+  await graphReady(page);
+  expect(await page.evaluate((i) => window.__mapxSelect(i), id)).toBe(true);
+  await expect(page.locator('#graph-details')).toBeVisible();
+}
+
+async function axeSerious(page: Page): Promise<string[]> {
+  await page.addScriptTag({ path: AXE });
+  const result: any = await page.evaluate(() => window.axe.run(document, { resultTypes: ['violations'] }));
+  return result.violations.filter((v: any) => v.impact === 'serious' || v.impact === 'critical')
+    .map((v: any) => `${v.id} (${v.impact}) ${v.nodes.slice(0, 3).map((n: any) => n.target.join(' ')).join(' | ')}`);
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`${theme} theme: the selection details and a symbol's details pass axe (review 2026-11-01)`, async ({ browser }) => {
+    for (const { width, height } of [WIDTHS[0]!, WIDTHS[2]!]) {
+      const { context, page, errors } = await open(browser, { width, height, colorScheme: theme });
+      // A file with classification signals, whose roles are drawn in their layer's colour.
+      await selectFile(page, 'app/Http/Controllers/OrderController.php');
+      await expect(page.locator('#classification-signals-container li').first()).toBeVisible();
+      await page.waitForTimeout(300);
+      const graph = await axeSerious(page);
+      await showTab(page, 'symbols');
+      await page.locator('#table-symbols tbody .link-btn').first().click();
+      await expect(page.locator('#symbol-detail-view pre')).toBeVisible();
+      await page.waitForTimeout(300);
+      const symbols = await axeSerious(page);
+      expect(errors).toEqual([]);
+      expect([...graph.map((g) => `${width} graph: ${g}`), ...symbols.map((s) => `${width} symbols: ${s}`)]).toEqual([]);
+      await context.close();
+    }
+  });
+}
+
+test('Escape closes one thing at a time, and not from a text field (review 2026-11-01)', async ({ browser }) => {
+  const { context, page } = await open(browser, { width: 390, height: 844 });
+  await selectFile(page);
+  // The drawer over an open details panel: Escape closes the drawer only.
+  await page.click('#btn-nav-open');
+  await expect(page.locator('#sidebar')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sidebar')).toBeHidden();
+  await expect(page.locator('#graph-details')).toBeVisible();
+  // Escape in the focus search belongs to the search.
+  await page.selectOption('#select-graph-mode', 'focus');
+  await graphReady(page);
+  expect(await page.evaluate(() => window.__mapxSelect())).toBe(true);
+  await expect(page.locator('#graph-details')).toBeVisible();
+  await page.focus('#focus-search-input');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#graph-details')).toBeVisible();
+  // Elsewhere (a button), Escape closes the details panel.
+  await page.focus('#btn-details-close');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#graph-details')).toBeHidden();
+  await context.close();
+});
+
+test('the open drawer takes focus and keeps it (review 2026-11-01)', async ({ browser }) => {
+  const { context, page } = await open(browser, { width: 390, height: 844 });
+  await page.click('#btn-nav-open');
+  await expect(page.locator('#sidebar')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.getElementById('sidebar').contains(document.activeElement))).toBe(true);
+  for (let i = 0; i < 15; i++) {
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.getElementById('sidebar').contains(document.activeElement)), `after ${i + 1} Tab presses`).toBe(true);
+  }
+  await page.keyboard.press('Shift+Tab');
+  expect(await page.evaluate(() => document.getElementById('sidebar').contains(document.activeElement))).toBe(true);
+  await context.close();
+});
+
+test('the focus mode controls are reached with Tab and show a focus ring (review 2026-11-01)', async ({ browser }) => {
+  const { context, page } = await open(browser);
+  await page.selectOption('#select-graph-mode', 'focus');
+  await graphReady(page);
+  await page.focus('#select-graph-mode');
+  const { reached, noRing } = await tabThrough(page, 25);
+  for (const id of ['focus-search-input']) expect([...reached]).toContain(id);
+  const depth = [...reached].filter((k) => k.includes('depth-btn'));
+  expect(depth.length).toBe(3);
+  expect(noRing).toEqual([]);
+  await context.close();
+});
