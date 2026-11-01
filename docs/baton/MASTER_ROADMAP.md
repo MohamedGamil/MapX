@@ -194,8 +194,8 @@ Fixture scoring in CI; optional message edges.
 - **M4-10** Workers load only the grammars of the files they parse, once per thread — DONE, P1, 8h; depends on M0-06-R2.
 - **M4-11** A persistent, controlled worker pool — DONE, P1, 8h; depends on M4-10.
 - **M4-13** Parse pool sizing from the work and the machine — DONE, P1, 8h; depends on M4-11.
-- **M4-12** Language-aware distribution of files to workers — READY, P1, 8h; depends on M4-13.
-- **M4-14** Batched worker messages — BACKLOG, P1, 8h; depends on M4-12.
+- **M4-12** Language-aware distribution of files to workers — DONE, P1, 8h; depends on M4-13.
+- **M4-14** Batched worker messages — READY, P1, 8h; depends on M4-12.
 - **M4-15** Shared compiled grammar code across workers, after a risk evaluation — BACKLOG, P1, 8h; depends on M4-14.
 
 ## M5 — Architecture rules (Deptrac-inspired)

@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { getBuiltinLanguages } from '../src/languages/registry.js';
 import { grammarLoadCounts, loadLanguage } from '../src/parsers/wasm-parser.js';
 import { Scanner, type WorkerStats } from '../src/core/scanner.js';
-import { POOL_SIZING, ParseWorkerPool, availableMemory, parseWorkersSetting, poolSize } from '../src/core/worker-pool.js';
+import { AffinityScheduler, POOL_SIZING, ParseWorkerPool, availableMemory, createParsePool, parseWorkersSetting, poolSize } from '../src/core/worker-pool.js';
 import { Store } from '../src/core/store.js';
 import { Config } from '../src/core/config.js';
 import { MapxGraph } from '../src/core/graph.js';
@@ -445,4 +445,192 @@ describe('M4-13 review: memory figure, setting parsing, static files', () => {
       cleanup(root);
     }
   });
+});
+
+describe('M4-12: files are dealt to workers by language', () => {
+  const MIX = { php: 300, typescript: 150, python: 6, go: 6, ruby: 6 } as const;
+  const items = () => Object.entries(MIX).flatMap(([key, n]) => Array.from({ length: n }, () => ({ key, weight: 100 })));
+
+  /**
+   * Runs the scheduler, lane l parsing one file every period[l] ticks (1 by default); returns the
+   * languages per lane, the files per lane and the makespan in ticks.
+   */
+  function simulate(scheduler: AffinityScheduler, lanes: number, list = items(), period: number[] = []) {
+    const held = Array.from({ length: lanes }, () => new Set<string>());
+    const done = new Array(lanes).fill(0);
+    const active = new Set(Array.from({ length: lanes }, (_, i) => i));
+    let ticks = 0;
+    let parsed = 0;
+    while (active.size > 0) {
+      ticks++;
+      for (const lane of [...active]) {
+        if (ticks % (period[lane] ?? 1) !== 0) continue;
+        const index = scheduler.next(lane);
+        if (index === undefined) { active.delete(lane); continue; }
+        held[lane]!.add(list[index]!.key);
+        done[lane]++;
+        parsed++;
+      }
+    }
+    return { held, done, parsed, makespan: period.length > 0 ? ticks : Math.max(...done) };
+  }
+
+  it('loads each minority language on one worker, stays within languages + workers grammar loads, and balances the work', () => {
+    const lanes = 4;
+    const run = simulate(new AffinityScheduler(items(), Array.from({ length: lanes }, () => new Set())), lanes);
+    expect(run.parsed).toBe(468);
+    for (const minority of ['python', 'go', 'ruby']) expect(run.held.filter((h) => h.has(minority))).toHaveLength(1);
+    const loads = run.held.reduce((n, h) => n + h.size, 0);
+    expect(loads).toBeLessThanOrEqual(Object.keys(MIX).length + lanes);
+    // Within 15% of a perfect split (117 files a lane).
+    expect(run.makespan).toBeLessThanOrEqual(Math.ceil((468 / lanes) * 1.15));
+  });
+
+  it('gives a language to the workers that already hold it (a warm pool)', () => {
+    const list = [...Array.from({ length: 40 }, () => ({ key: 'php', weight: 100 })), ...Array.from({ length: 40 }, () => ({ key: 'python', weight: 100 }))];
+    const scheduler = new AffinityScheduler(list, [new Set(['python']), new Set(['php'])]);
+    const [first, second] = scheduler.plan();
+    expect(new Set(first!.map((i) => list[i]!.key))).toEqual(new Set(['python']));
+    expect(new Set(second!.map((i) => list[i]!.key))).toEqual(new Set(['php']));
+  });
+
+  it('a fast lane takes a slow lane\'s files of a language it holds, without loading another grammar', () => {
+    const list = [...Array.from({ length: 40 }, () => ({ key: 'php', weight: 100 })), ...Array.from({ length: 2 }, () => ({ key: 'go', weight: 100 }))];
+    // Lane 0 parses at half speed: alone it would need 2 × 21 = 42 ticks.
+    const run = simulate(new AffinityScheduler(list, [new Set(), new Set()]), 2, list, [2, 1]);
+    expect(run.parsed).toBe(42);
+    expect(run.makespan).toBeLessThanOrEqual(30);
+    expect(run.done[1]).toBeGreaterThan(21);
+    expect(run.held.filter((h) => h.has('go'))).toHaveLength(1);
+  });
+
+  it('a lane out of work takes files of a language it holds first, and never loads a grammar for less than a load\'s worth', () => {
+    const list = [
+      ...Array.from({ length: 10 }, () => ({ key: 'php', weight: 100 })),
+      ...Array.from({ length: 30 }, () => ({ key: 'php', weight: 100 })),
+      { key: 'go', weight: 100 },
+    ];
+    const scheduler = new AffinityScheduler(list, [new Set(['php']), new Set(['php'])]);
+    const run = simulate(scheduler, 2, list);
+    expect(run.parsed).toBe(41);
+    expect(Math.abs(run.done[0] - run.done[1])).toBeLessThanOrEqual(1);
+    expect(run.held.filter((h) => h.has('go'))).toHaveLength(1);
+  });
+
+  it('schedules 400,000 files on 8 lanes, with a slow lane forcing steals, in under 2 s (array queues took 6 s)', () => {
+    const keys = ['php', 'typescript', 'python', 'go', 'ruby', ''];
+    const list = Array.from({ length: 400_000 }, (_, i) => ({ key: keys[i % 6]!, weight: 50 + (i % 400) }));
+    const start = performance.now();
+    const run = simulate(new AffinityScheduler(list, Array.from({ length: 8 }, () => new Set<string>())), 8, list, [4, 1, 1, 1, 1, 1, 1, 1]);
+    expect(run.parsed).toBe(400_000);
+    expect(performance.now() - start).toBeLessThan(2000);
+  });
+
+  it('an idle lane takes a language it does not hold from the largest queue when a grammar load pays off', () => {
+    // Three languages, one lane each; lane 2 is three times faster and holds only c.
+    const list = (['a', 'b', 'c'] as const).flatMap((key) => Array.from({ length: 30 }, () => ({ key, weight: 10_000 })));
+    const run = simulate(new AffinityScheduler(list, [new Set(), new Set(), new Set()]), 3, list, [3, 3, 1]);
+    expect(run.parsed).toBe(90);
+    expect(run.held[2]!.size).toBeGreaterThan(1);
+    // Alone, the slow lanes would need 90 ticks.
+    expect(run.makespan).toBeLessThan(80);
+  });
+
+  it('serves files a crashed worker left before the lane\'s own queue, and drains them', () => {
+    const list = Array.from({ length: 10 }, () => ({ key: 'php', weight: 100 }));
+    const scheduler = new AffinityScheduler(list, [new Set(), new Set()]);
+    const first = scheduler.next(0)!;
+    scheduler.requeue(first);
+    expect(scheduler.next(1)).toBe(first);
+    scheduler.requeue(first);
+    expect(scheduler.drain()).toContain(first);
+    expect(scheduler.next(0)).toBeUndefined();
+  });
+
+  it('forgets what a replaced lane held', () => {
+    // Lane 0 plans [1000, 10], lane 1 [1000, 10]. Lane 1 empties its queue and lane 0 parses its
+    // first file: 10 bytes of php remain, less than a grammar load's worth (a quarter share, 252).
+    const list = [1000, 10, 1000, 10].map((weight) => ({ key: 'php', weight }));
+    const holding = new AffinityScheduler(list, [new Set(), new Set()]);
+    const reset = new AffinityScheduler(list, [new Set(), new Set()]);
+    for (const s of [holding, reset]) {
+      while (s.plan()[1]!.length > 0) s.next(1);
+      s.next(0);
+    }
+    reset.resetLane(1);
+    expect(holding.next(1)).toBeDefined();
+    expect(reset.next(1)).toBeUndefined();
+  });
+
+  it.each([
+    ['lanes holding {php, ts} and {php}: php to the php-only lane, ts to the other', [['php', 'typescript'], ['php']], [['typescript'], ['php']]],
+    ['lanes holding {go} and {ruby}: go stays on the go lane', [['go'], ['ruby']], [['go'], ['php']]],
+  ] as const)('matches a warm pool\'s segments by what the lanes hold: %s', (_name, known, expected) => {
+    const first = known[0]![1] === undefined && known[0]![0] === 'go' ? 'php' : 'php';
+    const list = [
+      ...Array.from({ length: 20 }, () => ({ key: first, weight: 100 })),
+      ...Array.from({ length: 20 }, () => ({ key: known[0]![0] === 'go' ? 'go' : 'typescript', weight: 100 })),
+    ];
+    const plan = new AffinityScheduler(list, known.map((k) => new Set<string>(k))).plan();
+    expect(plan.map((q) => [...new Set(q.map((i) => list[i]!.key))].sort())).toEqual(expected);
+  });
+
+  it('records the languages each pooled worker parsed, and gives a later batch to the worker holding it', async () => {
+    const root = workspace({
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`app/P${i}.php`, `<?php\nclass P${i} { public function a() { return ${i}; } }\n`])),
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`py/m${i}.py`, `def f${i}():\n    return ${i}\n`])),
+    });
+    const pool = createParsePool({ size: 2 });
+    try {
+      const context = { languages: getBuiltinLanguages(), userLanguages: {}, assetRoot: resolve(__dirname, '..') };
+      const file = (path: string, language: string) => ({ absolutePath: join(root, path), language, sizeBytes: 100 });
+      const php = Array.from({ length: 8 }, (_, i) => file(`app/P${i}.php`, 'php'));
+      const py = Array.from({ length: 8 }, (_, i) => file(`py/m${i}.py`, 'python'));
+      await pool.parse([...php, ...py], root, context, () => {}, () => false, 2);
+      const grammarsOf = async () => (await pool.workerStats()).map((w) => w.grammars.map((g) => g.grammar).sort());
+      // What each worker is recorded to hold is what it loaded.
+      const after1 = await grammarsOf();
+      expect(pool.workerLanguages()).toEqual(after1);
+      expect(after1.flat().filter((g) => g === 'python').length).toBeGreaterThanOrEqual(1);
+      // A python-only batch on one lane goes to a worker holding python: no new python load.
+      const pythonLoads = after1.flat().filter((g) => g === 'python').length;
+      await pool.parse(py, root, context, () => {}, () => false, 1);
+      const after2 = await grammarsOf();
+      expect(after2.flat().filter((g) => g === 'python').length).toBe(pythonLoads);
+      expect(pool.workerLanguages()).toEqual(after2);
+    } finally {
+      await pool.close();
+      cleanup(root);
+    }
+  }, 120000);
+
+  it('deals a real scan of that mix to 4 workers by language, and indexes what one thread does', () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 300; i++) files[`app/P${i}.php`] = `<?php\nnamespace App;\nclass P${i} { public function run(P${(i + 1) % 300} $o) { return $o->helper(); } public function helper() { return ${i}; } }\n`;
+    Object.assign(files, tsFiles('src', 150));
+    for (let i = 0; i < 6; i++) {
+      files[`py/m${i}.py`] = `def f${i}():\n    return ${i}\n`;
+      files[`go/m${i}.go`] = `package g\n\nfunc F${i}() int { return ${i} }\n`;
+      files[`rb/c${i}.rb`] = `class C${i}\n  def run\n    ${i}\n  end\nend\n`;
+    }
+    const root = workspace(files);
+    try {
+      init(root);
+      const { output, stats } = mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_PARSE_WORKERS: '4' }, 'scan');
+      expect(output).not.toContain('Parallel parsing unavailable');
+      const [run] = stats;
+      expect(run!.started).toBe(4);
+      const grammars = run!.workers.map((w) => new Set(w.grammars.map((g) => g.grammar)));
+      for (const minority of ['python', 'go', 'ruby']) expect(grammars.filter((g) => g.has(minority))).toHaveLength(1);
+      expect(grammars.reduce((n, g) => n + g.size, 0)).toBeLessThanOrEqual(5 + 4);
+      expect(run!.workers.every((w) => w.files > 0)).toBe(true);
+
+      const parallel = indexRows(root);
+      unlinkSync(join(root, '.mapx/mapx.db'));
+      mapxWithStderr(root, 'scan', '--no-parallel');
+      expect(indexRows(root)).toEqual(parallel);
+    } finally {
+      cleanup(root);
+    }
+  }, 180000);
 });

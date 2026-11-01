@@ -131,6 +131,219 @@ export function availableMemory(probe: MemoryProbe = processProbe()): number {
 export interface PoolFile {
   absolutePath: string;
   language?: string;
+  sizeBytes?: number;
+}
+
+/**
+ * One lane's files, grouped by language in plan order, with head pointers: taking from the front,
+ * taking a language's last file, and the lane's remaining weight are all cheap, so scheduling a
+ * batch of any size costs about lanes × languages per file (review: arrays with shift() and
+ * per-call scans of every queue were quadratic).
+ */
+class LaneQueue {
+  private readonly groups = new Map<string, { items: number[]; head: number }>();
+  private readonly order: string[] = [];
+  private cursor = 0;
+  weight = 0;
+  size = 0;
+
+  constructor(private readonly items: ReadonlyArray<{ key: string; weight: number }>) {}
+
+  push(index: number): void {
+    const key = this.items[index]!.key;
+    let group = this.groups.get(key);
+    if (!group) { group = { items: [], head: 0 }; this.groups.set(key, group); this.order.push(key); }
+    group.items.push(index);
+    this.weight += this.items[index]!.weight;
+    this.size++;
+  }
+
+  /** The next file in plan order. */
+  shift(): number | undefined {
+    while (this.cursor < this.order.length) {
+      const group = this.groups.get(this.order[this.cursor]!)!;
+      if (group.head < group.items.length) return this.took(group.items[group.head++]!);
+      this.cursor++;
+    }
+    return undefined;
+  }
+
+  countOf(key: string): number {
+    const group = this.groups.get(key);
+    return group ? group.items.length - group.head : 0;
+  }
+
+  /** The last file of `key`, for another lane. */
+  popKey(key: string): number | undefined {
+    const group = this.groups.get(key);
+    if (!group || group.head >= group.items.length) return undefined;
+    return this.took(group.items.pop()!);
+  }
+
+  /** The last file of the last language with files left, for another lane. */
+  popAny(): number | undefined {
+    for (let k = this.order.length - 1; k >= 0; k--) {
+      const index = this.popKey(this.order[k]!);
+      if (index !== undefined) return index;
+    }
+    return undefined;
+  }
+
+  remaining(): number[] {
+    return this.order.flatMap(key => { const g = this.groups.get(key)!; return g.items.slice(g.head); });
+  }
+
+  clear(): void {
+    for (const g of this.groups.values()) g.items.length = g.head;
+    this.weight = 0;
+    this.size = 0;
+  }
+
+  private took(index: number): number {
+    this.weight -= this.items[index]!.weight;
+    this.size--;
+    return index;
+  }
+}
+
+/**
+ * Language-aware assignment of a batch's files to lanes (M4-12, D025). Each lane is one worker; a
+ * worker loads a grammar for every language it parses, so files are dealt by language:
+ * - the batch's languages are laid end to end, the heaviest first, and cut into one equal segment
+ *   per lane: big languages span several lanes, small ones share the last, a lane holds only the
+ *   languages crossing its segment (grammar loads at most lanes + languages - 1), and the work is
+ *   balanced; with a warm pool, a segment goes to a lane that already holds its main language;
+ * - a lane takes from its own queue; when it is empty, from another lane's files of a language it
+ *   holds, and then from the largest remaining queue if at least the penalty's worth of work is
+ *   left there (about one grammar load, at most a quarter of a share: a grammar load must pay
+ *   off); otherwise the lane ends and the owner finishes.
+ * Files a crashed worker left come first, to any lane. Weights are bytes, static-tier files a
+ * twentieth (as in the scanner's sizing), and static files have no grammar.
+ */
+/**
+ * Languages parsed with another language's grammar: Vue and Svelte read their scripts with the
+ * TypeScript grammar (vue-ast.ts, checked with MAPX_WORKER_STATS), so their files are TypeScript work
+ * for affinity (review 2026-11-01).
+ */
+const GRAMMAR_OF: Record<string, string> = { vue: 'typescript', svelte: 'typescript' };
+
+export class AffinityScheduler {
+  /** About one grammar load (100 ms) of parsing on real code, in weighted bytes. */
+  static readonly GRAMMAR_LOAD_BYTES = 110 * 1024;
+  private readonly queues: LaneQueue[];
+  private readonly keys: Array<Set<string>>;
+  private readonly retry: number[] = [];
+  private readonly penalty: number;
+
+  constructor(
+    private readonly items: Array<{ key: string; weight: number }>,
+    /** Languages each lane's worker already holds (from earlier batches). */
+    known: Array<Set<string>>,
+  ) {
+    const lanes = Math.max(1, known.length);
+    this.keys = known.map(k => new Set(k));
+    this.queues = known.map(() => new LaneQueue(items));
+    const total = items.reduce((n, it) => n + it.weight, 0);
+    const share = total / lanes;
+    this.penalty = Math.min(AffinityScheduler.GRAMMAR_LOAD_BYTES, share / 4);
+
+    // Languages end to end, the heaviest first (static files last), cut into one segment per lane:
+    // a lane holds only the languages crossing its segment, so grammar loads stay within
+    // lanes + languages - 1 while every lane gets an equal share.
+    const byKey = new Map<string, number[]>();
+    items.forEach((it, i) => { const list = byKey.get(it.key); if (list) list.push(i); else byKey.set(it.key, [i]); });
+    const weightOf = (list: number[]) => list.reduce((n, i) => n + items[i]!.weight, 0);
+    const order = [...byKey.entries()]
+      .map(([key, list]) => ({ key, list, weight: weightOf(list) }))
+      .sort((a, b) => (a.key === '' ? 1 : 0) - (b.key === '' ? 1 : 0) || b.weight - a.weight || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+    const segments: number[][] = Array.from({ length: lanes }, () => []);
+    let acc = 0;
+    for (const { list } of order) {
+      for (const i of list) {
+        // The segment this file's midpoint falls in.
+        const mid = acc + items[i]!.weight / 2;
+        segments[Math.min(lanes - 1, Math.floor(mid / share))]!.push(i);
+        acc += items[i]!.weight;
+      }
+    }
+    // Segments to lanes by the weight of each segment the lane's worker already holds (a warm pool):
+    // the largest overlaps first, ties to the lane holding fewer languages; the rest in order.
+    const overlap = (segment: number[], lane: number) =>
+      segment.reduce((n, i) => n + (this.keys[lane]!.has(items[i]!.key) ? items[i]!.weight : 0), 0);
+    const pairs: Array<{ seg: number; lane: number; w: number }> = [];
+    for (let seg = 0; seg < segments.length; seg++) {
+      for (let lane = 0; lane < lanes; lane++) {
+        const w = overlap(segments[seg]!, lane);
+        if (w > 0) pairs.push({ seg, lane, w });
+      }
+    }
+    pairs.sort((a, b) => b.w - a.w || this.keys[a.lane]!.size - this.keys[b.lane]!.size || a.seg - b.seg || a.lane - b.lane);
+    const laneOf = new Array<number>(segments.length).fill(-1);
+    const taken = new Set<number>();
+    for (const { seg, lane } of pairs) {
+      if (laneOf[seg]! >= 0 || taken.has(lane)) continue;
+      laneOf[seg] = lane;
+      taken.add(lane);
+    }
+    const free = Array.from({ length: lanes }, (_, l) => l).filter(l => !taken.has(l))
+      .sort((a, b) => this.keys[a]!.size - this.keys[b]!.size || a - b);
+    for (let seg = 0; seg < segments.length; seg++) {
+      const lane = laneOf[seg]! >= 0 ? laneOf[seg]! : free.shift()!;
+      for (const i of segments[seg]!) { this.queues[lane]!.push(i); this.keys[lane]!.add(items[i]!.key); }
+    }
+  }
+
+  /** The next file for `lane`, or undefined when the lane should end. */
+  next(lane: number): number | undefined {
+    if (this.retry.length > 0) return this.retry.shift();
+    const own = this.queues[lane]!.shift();
+    if (own !== undefined) return own;
+    const keys = this.keys[lane]!;
+    // Another lane's files of a language this lane holds (or static files): no grammar to load.
+    let victim = -1;
+    let victimKey = '';
+    let victimCount = 0;
+    for (let l = 0; l < this.queues.length; l++) {
+      if (l === lane || this.queues[l]!.size === 0) continue;
+      for (const key of ['', ...keys]) {
+        const n = this.queues[l]!.countOf(key);
+        if (n > victimCount) { victim = l; victimKey = key; victimCount = n; }
+      }
+    }
+    if (victim >= 0) return this.queues[victim]!.popKey(victimKey);
+    // The largest remaining queue, if a grammar load pays off there.
+    let largest = -1;
+    for (let l = 0; l < this.queues.length; l++) {
+      if (l !== lane && this.queues[l]!.size > 0 && (largest < 0 || this.queues[l]!.weight > this.queues[largest]!.weight)) largest = l;
+    }
+    if (largest < 0 || this.queues[largest]!.weight < this.penalty) return undefined;
+    const index = this.queues[largest]!.popAny()!;
+    keys.add(this.items[index]!.key);
+    return index;
+  }
+
+  /** A file a crashed worker left: the next lane to ask takes it. */
+  requeue(index: number): void {
+    this.retry.push(index);
+  }
+
+  /** The lane's worker was replaced: its new worker holds no language yet. */
+  resetLane(lane: number): void {
+    this.keys[lane] = new Set();
+  }
+
+  /** Every file not yet handed out. */
+  drain(): number[] {
+    const rest = [...this.retry, ...this.queues.flatMap(q => q.remaining())];
+    this.retry.length = 0;
+    for (const q of this.queues) q.clear();
+    return rest;
+  }
+
+  /** The files planned for each lane, for tests. */
+  plan(): number[][] {
+    return this.queues.map(q => q.remaining());
+  }
 }
 
 export interface PoolContext {
@@ -160,6 +373,8 @@ interface PoolWorker {
   contextVersion: number;
   busy: boolean;
   alive: boolean;
+  /** Languages this worker has parsed, so holds the grammars of (M4-12). */
+  languages: Set<string>;
 }
 
 export interface WorkerPoolOptions {
@@ -247,9 +462,8 @@ export class ParseWorkerPool {
     let handbackReason: string | undefined;
     const crashes = new Map<number, number>();
     let replacements = 0;
-    let next = 0;
-    const queue: number[] = [];
-    const take = (): number | undefined => (queue.length > 0 ? queue.shift() : next < files.length ? next++ : undefined);
+    const staticLanguages = new Set(Object.entries(context.languages).filter(([, d]) => (d as any)?.tier === 'static').map(([name]) => name));
+    const keyOf = (f: PoolFile) => (f.language && !staticLanguages.has(f.language) ? GRAMMAR_OF[f.language] ?? f.language : '');
     const handBack = (index: number, reason: string) => {
       handbacks.push(index);
       handbackReason ??= reason;
@@ -258,27 +472,43 @@ export class ParseWorkerPool {
     try {
       const wanted = Math.max(1, Math.min(this.size, files.length, maxLanes));
       while (this.liveWorkers < wanted) this.start();
-      const lanes = this.workers.filter(w => w.alive).slice(0, wanted);
+      // The live workers that already hold most of the batch's languages (review 2026-11-01: the
+      // first `wanted` were taken whatever they held).
+      const batchWeight = new Map<string, number>();
+      for (const f of files) { const k = keyOf(f); batchWeight.set(k, (batchWeight.get(k) ?? 0) + (f.sizeBytes ?? 1)); }
+      const held = (w: PoolWorker) => [...w.languages].reduce((n, k) => n + (batchWeight.get(k) ?? 0), 0);
+      const lanes = this.workers.filter(w => w.alive)
+        .map((w, order) => ({ w, order, held: held(w) }))
+        .sort((a, b) => b.held - a.held || a.order - b.order)
+        .slice(0, wanted)
+        .map(x => x.w);
       // Any worker that starts proves the pool usable; if none does, the caller falls back.
       const readiness = await Promise.allSettled(lanes.map(w => w.ready));
       if (readiness.every(r => r.status === 'rejected')) {
         throw (readiness[0] as PromiseRejectedResult).reason;
       }
 
-      const lane = async (initial: PoolWorker) => {
+      const plan = new AffinityScheduler(
+        files.map(f => ({ key: keyOf(f), weight: Math.max(1, (f.sizeBytes ?? 1) * (keyOf(f) === '' ? 0.05 : 1)) })),
+        lanes.map(w => w.languages),
+      );
+      const lane = async (initial: PoolWorker, laneIndex: number) => {
         let pw: PoolWorker | null = initial;
         try { await pw.ready; } catch { pw = null; }
         for (;;) {
           // A close() mid-batch ends the lanes: no replacement worker starts after it.
           if (isAborted() || this.closing) return;
-          const index = take();
+          const index = plan.next(laneIndex);
           if (index === undefined) return;
           if (!pw || !pw.alive) {
             if (replacements >= this.size * 2) { handBack(index, 'worker restarts exhausted'); continue; }
             replacements++;
             pw = this.start();
+            plan.resetLane(laneIndex);
             try { await pw.ready; } catch { pw.alive = false; handBack(index, 'a worker could not start'); continue; }
           }
+          const key = keyOf(files[index]!);
+          if (key) pw.languages.add(key);
           const outcome = await this.run<R>(pw, index, files[index]!, workspaceRoot);
           if (outcome.kind === 'result') {
             results[index] = outcome.result;
@@ -290,19 +520,24 @@ export class ParseWorkerPool {
             const n = (crashes.get(index) ?? 0) + 1;
             crashes.set(index, n);
             if (n >= 2) handBack(index, outcome.reason);
-            else queue.push(index);
+            else plan.requeue(index);
           }
         }
       };
-      await Promise.all(lanes.map(lane));
+      await Promise.all(lanes.map((w, i) => lane(w, i)));
       // Files left by lanes that ended (abort excepted) are the main thread's.
-      if (!isAborted()) for (let i = take(); i !== undefined; i = take()) handBack(i, this.closing ? 'the pool closed' : 'no worker left');
+      if (!isAborted()) for (const i of plan.drain()) handBack(i, this.closing ? 'the pool closed' : 'no worker left');
       return { results, handbacks, handbackReason };
     } finally {
       this.running = false;
       for (const w of this.workers) if (w.alive) w.worker.unref();
       this.armIdle();
     }
+  }
+
+  /** The languages (grammar keys) each live worker has parsed, for tests (M4-12). */
+  workerLanguages(): string[][] {
+    return this.workers.filter(w => w.alive).map(w => [...w.languages].sort());
   }
 
   /** Statistics of the live workers (files parsed and grammars loaded over their lifetime). */
@@ -322,7 +557,7 @@ export class ParseWorkerPool {
   private start(): PoolWorker {
     const worker = this.spawnWorker(this.workerUrl, {});
     this.started++;
-    const pw: PoolWorker = { worker, ready: Promise.resolve(), contextVersion: 0, busy: false, alive: true };
+    const pw: PoolWorker = { worker, ready: Promise.resolve(), contextVersion: 0, busy: false, alive: true, languages: new Set() };
     pw.ready = new Promise<void>((resolveReady, rejectReady) => {
       const onMessage = (msg: any) => {
         if (msg?.type === 'ready') { cleanup(); resolveReady(); }
