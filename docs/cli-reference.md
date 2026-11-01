@@ -62,7 +62,7 @@ The uninit command will:
 
 ## `mapx scan`
 
-Perform a full scan of all source files. Builds the graph from scratch.
+Perform a full scan of all source files. Builds the graph from scratch. Without `--repo`, every registered repository is scanned, as with `--all`: run at a workspace root, `mapx scan` covers the nested repos registered there as well as the root repo.
 
 - Shows real-time progress: discover, index, and parse phases
 - File reads are parallelized for faster scanning
@@ -70,7 +70,7 @@ Perform a full scan of all source files. Builds the graph from scratch.
 - Unchanged files are not re-parsed. The exception is a moved target: when a file is removed, the names its referrers resolved into it are remembered, and when a new or changed file names one of them, those referrers are re-parsed, so a class moved to another file is found at its new path without `--force`
 - Vue global components: when a new, changed or deleted JS/TS file adds, removes or retargets a `Vue.component` / `app.component` registration (or a `.vue` file joins or leaves an auto-registered folder), the unchanged `.vue` files using that tag are re-parsed, and no others. Likewise, when a Vue Router route record is added, removed, renamed or given another component or redirect, the unchanged `.vue` files and JS/TS modules navigating to it are re-parsed. Each Vue app (the nearest folder with a bundler config, or a `package.json` listing a build tool such as vite or `@vue/cli-service`, whatever the root `package.json` lists) keeps its own global registry and route table; a component library (vue as a peer dependency, a library build, or a published entry) shares its registrations with every app, and a component another app's registering file imports also sees that app's registrations. Where two files of an app register one name, the first by path wins. Adding or removing a `package.json` re-parses the files whose app changed and the files that navigate
 - In a git repo, each file stores its blob id at HEAD (also for a repo that is not at the workspace root), unless the working-tree content differs from HEAD
-- With `--all`, the result does not depend on the order of the registered repos: a repo resolved before another repo of the run was indexed, and the files a repo parsed before another repo of the run changed, are resolved once more at the end; files of one repo that referenced a file another repo removed and restored are re-parsed. As within one repo, an unchanged file is not re-parsed because another repo gained a symbol it could now link to
+- Scanning several repos (the default, or `--all`), the result does not depend on the order of the registered repos: a repo resolved before another repo of the run was indexed, and the files a repo parsed before another repo of the run changed, are resolved once more at the end; files of one repo that referenced a file another repo removed and restored are re-parsed. As within one repo, an unchanged file is not re-parsed because another repo gained a symbol it could now link to
 - A symbol named by several files resolves to the one nearest the referencing file (most shared leading folders), then the first by path, so a scan and a sync pick the same file
 
 ```bash
@@ -81,7 +81,7 @@ Options:
 - `--exclude` — Exclude glob patterns (repeatable)
 - `--include` — Include glob patterns (repeatable)
 - `--repo` — Scan only a specific registered repository
-- `--all` — Scan all registered repositories
+- `--all` — Scan all registered repositories (the default). A registered repo whose folder is missing is skipped with a warning and keeps its index
 - `--force` — Force re-parsing of all files (bypasses file caching and rebuilds all symbols and edges)
 - `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
 
@@ -100,7 +100,7 @@ Incremental scan. Detects changed files via git, or via content hashes outside g
 - A `git mv a b` that leaves a copy at `a` keeps both files.
 - Gitignored files are indexed as `mapx scan` indexes them (see [Gitignored files](configuration.md#gitignored-files)).
 - Files of another registered repo nested in this one stay with that repo; they are synced with it.
-- With `--all`, a file of one repo that referenced a file another repo removed and restored is re-parsed (in the same run, or by its own repo's next sync), and a repo that was removed with `workspaces remove` and added back is resolved again by the others.
+- Syncing several repos (the default, or `--all`), a file of one repo that referenced a file another repo removed and restored is re-parsed (in the same run, or by its own repo's next sync), and a repo that was removed with `workspaces remove` and added back is resolved again by the others.
 
 In a repo that sits inside a larger git checkout, only changes under the repo's folder count, with paths relative to it.
 
@@ -113,7 +113,7 @@ Options:
 - `--exclude` — Exclude glob patterns (repeatable)
 - `--include` — Include glob patterns (repeatable)
 - `--repo` — Update only a specific registered repository
-- `--all` — Update all registered repositories
+- `--all` — Update all registered repositories (the default: without `--repo`, every registered repository is synced)
 - `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
 
 ## `mapx status`

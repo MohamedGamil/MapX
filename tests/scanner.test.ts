@@ -273,7 +273,8 @@ describe('Scanner module', () => {
     // Mock existsSync for lock to return true
     mockExistsSync = (p) => {
       if (p.endsWith('scan.lock')) return true;
-      return false;
+      // The repo's folder exists: a missing one is skipped (M0-10-R5).
+      return p === '/workspace';
     };
     // Mock readFileSync for lock to return pid 999999
     mockReadFileSync = (p) => {

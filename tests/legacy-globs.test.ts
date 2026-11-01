@@ -695,10 +695,13 @@ describe('git sync gives the index scan --force gives', () => {
       mapx(root, 'scan', '--all');
       writeFileSync(join(root, 'packages/web/added.ts'), 'export function added() {}\n');
       writeFileSync(join(root, 'packages/web/index.ts'), 'export function web() { return 2; }\n');
-      mapx(root, 'sync', root);
+      // The primary repo's sync leaves the nested repo's files to it.
+      const primary = JSON.parse(readFileSync(join(root, '.mapx/config.json'), 'utf8')).repos[0].name as string;
+      mapx(root, 'sync', root, '--repo', primary);
       const synced = rows(root);
       expect(synced.files.filter((f) => f.startsWith('packages/web/'))).toEqual(['packages/web/index.ts|web']);
-      mapx(root, 'sync', '--all');
+      // A plain sync covers every registered repo (M0-10-R5).
+      mapx(root, 'sync', root);
       expect(rows(root).files.filter((f) => f.startsWith('packages/web/'))).toEqual(['packages/web/added.ts|web', 'packages/web/index.ts|web']);
       const all = rows(root);
       mapx(root, 'scan', '--all', '--force');

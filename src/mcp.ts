@@ -124,8 +124,8 @@ export function buildServer(options?: ServeOptions): Server {
           properties: {
             exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
-            repo: { type: 'string', description: 'Scan only a specific registered repository' },
-            all: { type: 'boolean', description: 'Scan all registered repositories' },
+            repo: { type: 'string', description: 'Scan only this registered repository (default: every registered repository)' },
+            all: { type: 'boolean', description: 'Scan all registered repositories (the default when repo is not given)' },
             force: { type: 'boolean', description: 'Force re-parsing of all files (bypass cache)' },
             parallel: { type: 'boolean', description: 'Enable parallel parsing via worker threads (default: true)' },
             ...dirProperty,
@@ -140,8 +140,8 @@ export function buildServer(options?: ServeOptions): Server {
           properties: {
             exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
             include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
-            repo: { type: 'string', description: 'Update/sync only a specific registered repository' },
-            all: { type: 'boolean', description: 'Update/sync all registered repositories' },
+            repo: { type: 'string', description: 'Update/sync only this registered repository (default: every registered repository)' },
+            all: { type: 'boolean', description: 'Update/sync all registered repositories (the default when repo is not given)' },
             parallel: { type: 'boolean', description: 'Enable parallel parsing via worker threads (default: true)' },
             ...dirProperty,
           },

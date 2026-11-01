@@ -598,8 +598,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .argument('[path]', 'Target directory')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
-    .option('--repo <name>', 'Scan only a specific registered repository')
-    .option('--all', 'Scan all registered repositories')
+    .option('--repo <name>', 'Scan only a specific registered repository (default: every registered repository)')
+    .option('--all', 'Scan all registered repositories (the default)')
     .option('--force', 'Force re-parsing of all files (bypass cache)', false)
     .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
@@ -655,8 +655,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .argument('[path]', 'Target directory')
     .option('--exclude <glob>', 'Exclude glob pattern(s)', collectPatterns, [])
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
-    .option('--repo <name>', 'Update only a specific registered repository')
-    .option('--all', 'Update all registered repositories')
+    .option('--repo <name>', 'Update only a specific registered repository (default: every registered repository)')
+    .option('--all', 'Update all registered repositories (the default)')
     .option('--no-parallel', 'Disable parallel parsing (use single thread)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());

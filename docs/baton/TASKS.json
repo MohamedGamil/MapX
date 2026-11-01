@@ -20051,6 +20051,206 @@
       "objective": "The MCP initialize response carries the VERSION file's version, as mapx --version does.",
       "milestone": "M0",
       "description": "Found 2026-11-01 while verifying the 0.3.7 binary install (D023): mapx serve answered initialize with serverInfo.version 0.1.3, hard-coded in src/mcp.ts buildServer."
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-01T14:13:28.874Z",
+      "completedAt": "2026-11-01T14:44:18.063Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-10-R5.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/workspace-default-scope.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-10-R5.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-10-R5.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T14:13:28.311Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T14:13:28.874Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T14:44:17.752Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T14:44:18.063Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/workspace-default-scope.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-10-R5.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-10-R5.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M0",
+      "id": "M0-10-R5",
+      "title": "scan and sync with no repo named cover every registered repo",
+      "objective": "mapx scan, mapx sync and the MCP mapx_scan/mapx_sync tools, given neither --repo nor --all, index every registered repository, as --all does.",
+      "description": "Found 2026-11-01 testing the 0.3.7 binary install: in a workspace registering a root repo and nested backend/ and frontend/ repos, mapx scan --force at the workspace root reset and re-walked only repos[0]; the nested repos were never scanned and the rebuilt index held the root repo's 8 files. The docs promise a full scan of all source files.",
+      "dependencies": [
+        {
+          "id": "M0-10-R4",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "Scanner default repo selection",
+        "test",
+        "docs",
+        "reports/M0-10-R5.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "docs/cli-reference.md",
+        "docs/mcp-integration.md",
+        "tests/workspace-default-scope.test.ts",
+        "tests/legacy-globs.test.ts",
+        "tests/scanner.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "In a temp workspace with a root repo and two registered nested git repos, mapx scan --force run at the root (no --repo/--all) re-indexes all three repos: each repo's files, symbols and edges equal those of scan --all on a fresh index (tests/workspace-default-scope.test.ts, real CLI).",
+        "After editing a file of a nested repo, mapx sync at the root (no flags) re-parses it, and the MCP mapx_sync tool with no repo argument does the same (tests/workspace-default-scope.test.ts).",
+        "--repo <name> still scans only that repo (tests/workspace-default-scope.test.ts).",
+        "A registered repo whose folder is missing is skipped with a warning and keeps its index; the other repos are scanned and synced (tests/workspace-default-scope.test.ts)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/workspace-default-scope.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-01T14:44:18.381Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-01T14:13:28.585Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T14:44:18.381Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M0",
+      "id": "M0-06-R2",
+      "title": "The compiled binary parses on worker threads",
+      "objective": "The bun-compiled binary embeds the parse worker and scans on worker threads, producing the same index as a one-thread scan.",
+      "description": "Found 2026-11-01 testing the 0.3.7 binary install: every parallel scan printed [mapx] Parallel parsing unavailable (Cannot find module '/$bunfs/parsers/parse-worker.js'); parsing on one thread. bun build --compile was given only src/main.ts, so the worker module was never embedded, and the scanner resolved it one folder above the embedded root. Verifying at scale (a 3,481-file Laravel project) found a second cause, in Node and in the binary: a PHP call named after an Object.prototype member ($x->toString()) read that member from the Laravel facade map as the facade class; the call was dropped, and on a worker thread the function-valued result failed structured clone, so the whole parallel scan fell back to one thread.",
+      "dependencies": [
+        {
+          "id": "M0-06-R1",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "worker entrypoint in every bun build",
+        "scanner worker URL in the binary",
+        "e2e test",
+        "reports/M0-06-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/parse-worker.ts",
+        "src/parsers/languages/php.ts",
+        "scripts/package.sh",
+        "scripts/build-all.ts",
+        "Makefile",
+        "tests/binary-workers.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A binary built by bun build --compile with the build's entrypoints scans a temp workspace of more than 10 files without the Parallel parsing unavailable warning, using worker threads, and its index (files, symbols, edges) equals that of the same binary with --no-parallel (tests/binary-workers.test.ts; skipped when bun is absent).",
+        "Every bun build --compile command in Makefile, scripts/package.sh and scripts/build-all.ts names src/parsers/parse-worker.ts as an entrypoint (tests/binary-workers.test.ts).",
+        "scripts/package.sh fails the build when the packaged binary falls back to one thread (smoke scan).",
+        "A PHP call named toString, valueOf or constructor links to the declaring class's method; a parallel scan of such files (source mode and the compiled binary) prints no fallback warning and indexes what --no-parallel does (tests/binary-workers.test.ts).",
+        "A parse result a worker cannot post is parsed again on the main thread for that file only; the scan stays on worker threads (mutation check in reports/M0-06-R2.md)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/binary-workers.test.ts",
+        "npm run check"
+      ]
     }
   ]
 }

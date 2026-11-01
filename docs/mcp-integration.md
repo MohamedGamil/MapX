@@ -303,10 +303,14 @@ This is highly useful when debugging integrations with clients like Claude Deskt
 #### `mapx_scan`
 Full scan: parse all files, build graph. Unchanged files are not re-parsed, except the referrers of a removed file whose referenced names a new or changed file now holds (a moved class), and the `.vue` files using a tag whose Vue global registration changed or the files navigating to a Vue Router route that changed, as `mapx scan` does.
 - `dir` (string, optional): Target project directory
+- `repo` (string, optional): Scan only this registered repository. Without it, every registered repository is scanned (as `all: true`), so a workspace root's nested repos are covered too
+- `all` (boolean, optional): Scan all registered repositories (the default)
 
 #### `mapx_sync`
 Incremental update: sync changed files only. Like `mapx sync`, it re-parses the referrers of a removed file that comes back, drops the old path of a git rename and re-parses its referrers, re-parses the referrers of a removed file when a new or changed file names what they referenced in it (the target moved), re-parses the `.vue` files using a tag whose Vue global registration changed (`app.component` added, removed or retargeted) or navigating to a route record that changed (renamed, another component), skips a file git lists whose blob is the one indexed, drops a deleted file that was indexed while untracked or only staged, re-indexes an edit reverted to the committed content, keeps both files of a `git mv` that left a copy behind, indexes gitignored files as a scan does, leaves the files of a nested registered repo to that repo, and re-parses everything once when the include/exclude filters have changed since the last scan.
 - `dir` (string, optional): Target project directory
+- `repo` (string, optional): Sync only this registered repository. Without it, every registered repository is synced (as `all: true`)
+- `all` (boolean, optional): Sync all registered repositories (the default)
 
 ### Symbol & File Discovery
 

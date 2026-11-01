@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Changed
+- `mapx scan` and `mapx sync`, and the MCP `mapx_scan` and `mapx_sync` tools, cover every registered repository unless `--repo` (`repo`) names one, as `--all` does. Run at a workspace root, a plain `mapx scan --force` re-indexed only the root repo, leaving the nested repos registered there unscanned (M0-10-R5).
+
 ### Fixed
 - The MCP server reports the installed version in its `initialize` response (it said `0.1.3`), and the self-extracting installer's uninstall hint names the installer instead of its deleted temporary copy (M0-07-R3).
 

@@ -216,3 +216,13 @@ The owner asked for:
 That check found M0-07-R3: the MCP server reported version 0.1.3, and the installer's uninstall hint named a deleted temporary path. Both are fixed on `develop` for the next version. The installed `v0.3.7` binary still has them.
 
 **Environment.** The default Node is now nvm 26.13.0, so the repository's `better-sqlite3` was rebuilt for it (`npm rebuild better-sqlite3`; `node_modules` only).
+
+## D024 — scan and sync cover every registered repo by default (owner report, 2026-11-01)
+
+Testing the installed `v0.3.7` binary, the owner ran `mapx scan --force` in a workspace whose config registers the root repo and the nested git repos `backend/` and `frontend/`. Only the root repo was reset and re-walked. The nested repos were not scanned, and the rebuilt index held the root repo's 8 files.
+
+Scan and sync now cover every registered repository unless one is named: `mapx scan`, `mapx sync`, `mapx_scan` and `mapx_sync`.
+- **Why:** the user expects that, and `docs/cli-reference.md` already promised "a full scan of all source files".
+- **Flags:** `--repo <name>` (MCP `repo`) still limits the run to one repo. `--all` stays accepted as the explicit form.
+- **Callers that name repos are unchanged:** `workspaces add` and `workspaces sync` pass explicit names.
+- **Implemented by:** M0-10-R5.

@@ -357,6 +357,28 @@ export class Scanner {
     try { await unlink(this.getLockPath()); } catch { /* already gone */ }
   }
 
+  /**
+   * The repos a scan or sync covers: the named ones, or every registered repo when none is named
+   * or 'all' is (M0-10-R5). Covering only the primary repo left nested repos unscanned by a
+   * `mapx scan` at the workspace root.
+   * A registered repo whose folder is missing (not cloned here, moved away) is skipped with a
+   * warning and keeps its index: it failed the whole run with ENOENT, the other repos included.
+   */
+  private reposToScan(repoNames?: string[]): string[] {
+    const names = !repoNames || repoNames.length === 0 || repoNames.includes('all')
+      ? this.config.repos.map(r => r.name)
+      : repoNames;
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    return names.filter((name) => {
+      const repo = this.config.repos.find(r => r.name === name);
+      if (!repo) return true;
+      const root = resolve(workspaceRoot, repo.path);
+      if (existsSync(root)) return true;
+      console.warn(`[mapx] Skipped repo ${name}: its folder ${root} does not exist. Its index is kept; \`mapx workspaces remove ${name}\` drops it.`);
+      return false;
+    });
+  }
+
   async scanFull(repoNames?: string[], options?: { force?: boolean }): Promise<ScanResult> {
     const acquired = await this.acquireScanLock();
     if (!acquired) {
@@ -365,9 +387,7 @@ export class Scanner {
       throw new Error(`Another scan is already running on this project (PID ${pid}). Wait for it to finish or delete ${lockPath} if it is stale.`);
     }
     try {
-      const reposToScan = repoNames && repoNames.length > 0
-        ? (repoNames.includes('all') ? this.config.repos.map(r => r.name) : repoNames)
-        : [this.config.repos[0].name];
+      const reposToScan = this.reposToScan(repoNames);
 
       this.workspaceFileMap.clear();
       for (const f of this.store.getAllFiles()) {
@@ -685,9 +705,7 @@ export class Scanner {
       throw new Error(`Another scan is already running on this project (PID ${pid}). Wait for it to finish or delete ${lockPath} if it is stale.`);
     }
     try {
-      const reposToScan = repoNames && repoNames.length > 0
-        ? (repoNames.includes('all') ? this.config.repos.map(r => r.name) : repoNames)
-        : [this.config.repos[0].name];
+      const reposToScan = this.reposToScan(repoNames);
 
       this.workspaceFileMap.clear();
       for (const f of this.store.getAllFiles()) {
