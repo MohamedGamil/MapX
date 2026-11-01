@@ -105,6 +105,9 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-12-R8** Svelte script blocks: symbols and references through the JS/TS parsers — DONE, P2, 6h; depends on M0-11-R3.
 - **M0-12-R9** Python namespace packages are not search roots for absolute imports — DONE, P2, 2h; depends on M0-12-R7.
 - **M0-02-R8** Sync re-links referrers of renamed or removed symbols, and re-resolves after manifest changes — DONE, P2, 5h; depends on M0-02-R7, M0-17-R4.
+- **M0-02-R9** Sync follows go.mod module paths and composer.json PSR-4 autoload changes — BACKLOG, P2, 3h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8.
+- **M0-12-R10** Svelte templates: calls, event handlers and child components — BACKLOG, P2, 5h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-12-R8.
+- **M0-17-R6** Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings — BACKLOG, P2, 6h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8, M3-11-R1, M3-09-R1, M0-17-R5.
 
 ## M1 — Laravel route correctness
 
@@ -146,6 +149,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06-R1** HTTP pairing needs literal evidence; host affinity; honest pairing tests — DONE, P1, 6h; depends on M2-06, M2-07.
 - **M2-06-R2** HTTP pairing honours Route::domain — DONE, P2, 2h; depends on M2-06-R1.
 - **M2-04-R3** HTTP URL follow-ups: shadowed baseURL constants, nested dotenv defaults — DONE, P2, 2h; depends on M2-04-R2.
+- **M2-08** Calls resolve through the file's own imports before name lookup — BACKLOG, P1, 8h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-17-R4, M0-02-R7.
 
 ## M3 — Vue SFC semantics
 
@@ -188,8 +192,8 @@ Fixture scoring in CI; optional message edges.
 
 Declared layers, selectors and allow-rules over the MapX graph in every supported language, enforced in CI, explorable in CLI/MCP/dashboard.
 
-- **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — BACKLOG, P1, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
-- **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — BACKLOG, P1, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
+- **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — BACKLOG, P1, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6.
+- **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — BACKLOG, P1, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6.
 - **M5-03** Element view, core selectors and layer membership with selector trace — BACKLOG, P1, 10h; depends on M5-01, M5-02.
 - **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — BACKLOG, P1, 12h; depends on M5-03.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — BACKLOG, P1, 8h; depends on M5-04.
@@ -199,7 +203,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-09** Hierarchy and member selectors (transitive ancestry, depth, members) — BACKLOG, P2, 8h; depends on M5-03.
 - **M5-10** Capture decorators/attributes and doc tags in symbol metadata (tier 1) — BACKLOG, P1, 16h; depends on M5-01, M3-04.
 - **M5-11** Visibility rules: private selectors and internal markers — BACKLOG, P2, 8h; depends on M5-04, M5-10.
-- **M5-12** External, builtin and ambient elements with package attribution — BACKLOG, P1, 24h; depends on M5-01, M5-03, M4-03.
+- **M5-12** External, builtin and ambient elements with package attribution — CANCELLED, P1, 24h; depends on M5-01, M5-03, M4-03.
 - **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — BACKLOG, P2, 6h; depends on M5-04.
 - **M5-14** MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates — BACKLOG, P1, 8h; depends on M5-05, M5-08.
 - **M5-15** Dashboard Architecture view and /api/arch endpoints — BACKLOG, P3, 12h; depends on M5-05, M5-13.
@@ -207,4 +211,10 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — BACKLOG, P2, 12h; depends on M5-04, M5-06.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — BACKLOG, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
+- **M5-19** External references store: capture unresolved out-of-workspace references — BACKLOG, P1, 6h; depends on M5-03, M5-01, M4-03.
+- **M5-20** External references: npm package attribution and builtins — BACKLOG, P2, 6h; depends on M5-19, M5-01.
+- **M5-21** External references: Composer package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
+- **M5-22** External references: pip/Poetry/uv package attribution and builtins — BACKLOG, P2, 5h; depends on M5-19, M5-01.
+- **M5-23** External references: Go modules package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
+- **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — BACKLOG, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 

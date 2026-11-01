@@ -9246,7 +9246,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -14349,6 +14349,22 @@
         {
           "id": "M0-12-R9",
           "type": "hard"
+        },
+        {
+          "id": "M2-08",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R9",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R10",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R6",
+          "type": "hard"
         }
       ],
       "sources": [
@@ -14502,6 +14518,22 @@
         },
         {
           "id": "M0-12-R9",
+          "type": "hard"
+        },
+        {
+          "id": "M2-08",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R9",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R10",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R6",
           "type": "hard"
         }
       ],
@@ -15131,7 +15163,7 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
+      "status": "CANCELLED",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -15139,7 +15171,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-01T00:06:05.077Z",
+          "from": "BACKLOG",
+          "to": "CANCELLED",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "epic",
@@ -18393,6 +18432,790 @@
           ]
         }
       ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M2-08",
+      "milestone": "M2",
+      "title": "Calls resolve through the file's own imports before name lookup",
+      "objective": "A call or instantiation of a name the file imports from a project module links to that module's declaration (through re-exports), never to another file's same-named symbol; only unimported names fall back to name lookup.",
+      "description": "Owner Q&A 2026-11-01 (D019), from the independent reviews of the 2026-10-31 remediation (reviewers K, L, O; pre-existing): `import { create } from './utils'; create()` linked `src/b.js#create`, and `import { formatMoney } from './util'` linked a private `src/c.ts#formatMoney`, because bare-name resolution ignores the file's import of the name.",
+      "priority": "P1",
+      "estimate": {
+        "min": 5,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "resolution"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-01",
+          "type": "hard"
+        },
+        {
+          "id": "M4-03",
+          "type": "hard"
+        },
+        {
+          "id": "M4-04",
+          "type": "hard"
+        },
+        {
+          "id": "M4-05",
+          "type": "hard"
+        },
+        {
+          "id": "M4-08",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R4",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R7",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-17-R4.md",
+        "docs/baton/reports/M0-02-R7.md",
+        "docs/baton/reports/M3-11-R1.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M2-08.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/import-resolvers.ts",
+        "tests/legacy-language-accuracy.test.ts",
+        "tests/legacy-imports.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "JS/TS (and .vue/.svelte scripts): `import { create } from './utils'; create()` and `import { create as make } from './utils'; make()` link `utils#create` when another, nearer or alphabetically earlier file also declares `create`; a re-export (`export { create } from './impl'`) is followed (e2e).",
+        "Python: `from utils import create; create()` and `import utils; utils.create()` link `utils.py#create` over a same-named function elsewhere (e2e).",
+        "Unimported names keep name resolution; the edges, routes and HTTP scorers do not drop; MapX self-scan call-edge changes are listed and justified in the report."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-imports.test.ts",
+        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-02-R9",
+      "milestone": "M0",
+      "title": "Sync follows go.mod module paths and composer.json PSR-4 autoload changes",
+      "objective": "After a go.mod module path or a composer.json autoload mapping changes, sync re-resolves the files whose imports depend on it, as scan --force does.",
+      "description": "Owner Q&A 2026-11-01 (D019), from reviewer N (2026-11-01, reproduced): M0-02-R8 tracks package.json, tsconfig/jsconfig, bundler configs and __init__.py, but not go.mod or composer.json, so sync keeps stale Go and PHP import edges.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-01",
+          "type": "hard"
+        },
+        {
+          "id": "M4-03",
+          "type": "hard"
+        },
+        {
+          "id": "M4-04",
+          "type": "hard"
+        },
+        {
+          "id": "M4-05",
+          "type": "hard"
+        },
+        {
+          "id": "M4-08",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-02-R8.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R9.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Changing the module path in go.mod re-resolves the Go files importing it, so sync equals scan --force (e2e).",
+        "Changing a composer.json `autoload.psr-4` mapping re-resolves the PHP files whose `use` statements it governs, so sync equals scan --force (e2e)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-12-R10",
+      "milestone": "M0",
+      "title": "Svelte templates: calls, event handlers and child components",
+      "objective": "A .svelte template's expressions give call references, its event handlers handler references, and its components render edges, by the same exact rules as .vue templates.",
+      "description": "Owner Q&A 2026-11-01 (D019); M0-12-R8 read only the <script> blocks (its report, Limitations).",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-01",
+          "type": "hard"
+        },
+        {
+          "id": "M4-03",
+          "type": "hard"
+        },
+        {
+          "id": "M4-04",
+          "type": "hard"
+        },
+        {
+          "id": "M4-05",
+          "type": "hard"
+        },
+        {
+          "id": "M4-08",
+          "type": "hard"
+        },
+        {
+          "id": "M0-12-R8",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-12-R8.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-12-R10.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/svelte.ts",
+        "tests/svelte.test.ts",
+        "docs/getting-started.md",
+        "README.md"
+      ],
+      "acceptanceCriteria": [
+        "`{format(x)}`, `on:click={save}` / `onclick={save}` and `{#each items as item}{item.name}{/each}` give call references to the component's own or imported functions, owned by the component; each-block and let: aliases never resolve to same-named methods (e2e).",
+        "`<Child />` and `<ui.Button />` give render edges to the imported component files only (e2e).",
+        "Template references inside {@html}, comments and <style> are ignored; the edges scorer does not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/svelte.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-17-R6",
+      "milestone": "M0",
+      "title": "Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings",
+      "objective": "Close the heuristic gaps the 2026-11-01 reviews recorded: sync after a rename whose old name survives as text, Vue Router shadowing and guard returns, Laravel module aliases, and over-broad factory-binding promotion.",
+      "description": "Owner Q&A 2026-11-01 (D019). Sources: M0-02-R8 report (reviewer O P2-3), M3-11-R1 report (reviewer O P2-5/P2-6), D017 (Laravel module `@/`), M0-17-R5 report (reviewer L P2-11).",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-01",
+          "type": "hard"
+        },
+        {
+          "id": "M4-03",
+          "type": "hard"
+        },
+        {
+          "id": "M4-04",
+          "type": "hard"
+        },
+        {
+          "id": "M4-05",
+          "type": "hard"
+        },
+        {
+          "id": "M4-08",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R8",
+          "type": "hard"
+        },
+        {
+          "id": "M3-11-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M3-09-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-02-R8.md",
+        "docs/baton/reports/M3-11-R1.md",
+        "docs/baton/reports/M0-17-R5.md",
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-17-R6.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/languages/vue-navigation.ts",
+        "src/core/js-aliases.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "tests/legacy-globs.test.ts",
+        "tests/vue-navigation.test.ts",
+        "tests/legacy-imports.test.ts",
+        "tests/legacy-language-accuracy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A function renamed while its old name stays in a comment or string of the file drops its callers' edges on sync, as scan --force (e2e).",
+        "A shadowed `next` / `push` (parameter, local, template v-for or v-slot) gives no navigate edge, and a nested function's return with an object, literal-union or function return type is not the guard's (test).",
+        "A Laravel module folder (Modules/*) whose own bundler config declares no `@` alias takes the enclosing Laravel app's `@` (test).",
+        "A module-level binding to a call stays a `function` symbol only when the workspace calls it by name; `const app = createApp(App); app.mount()` gives a value (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts tests/vue-navigation.test.ts tests/legacy-imports.test.ts tests/legacy-language-accuracy.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-19",
+      "milestone": "M5",
+      "title": "External references store: capture unresolved out-of-workspace references",
+      "objective": "Unresolved import and call references whose target lies outside the workspace are kept in a new external_refs table (store migration), never as edges.",
+      "description": "Unresolved import and call references whose target lies outside the workspace are kept in a new external_refs table (store migration), never as edges. Decomposed from epic M5-12 (D019).",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "graph",
+        "arch",
+        "ecosystems"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-03",
+          "type": "hard"
+        },
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        },
+        {
+          "id": "M4-03",
+          "type": "interface"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#4-risks-and-conflicts",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M5-19.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/store.ts",
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A store migration adds external_refs (file, line, specifier, symbol, kind); a scan of the arch-rules fixture fills it for every unresolved bare-specifier import (test).",
+        "MapX self-scan edge counts, metrics and PageRank are unchanged (externals live outside edges) (measured in the report).",
+        "Sync keeps external_refs equal to scan --force after edits and deletions (e2e)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-20",
+      "milestone": "M5",
+      "title": "External references: npm package attribution and builtins",
+      "objective": "external_refs rows of the npm ecosystem carry package, direct/transitive and dev/prod attribution from package.json and package-lock / pnpm-lock / yarn.lock, and references to Node built-in modules (`node:fs`, `fs`) and ambient browser/Node globals are classified builtin or ambient.",
+      "description": "external_refs rows of the npm ecosystem carry package, direct/transitive and dev/prod attribution from package.json and package-lock / pnpm-lock / yarn.lock, and references to Node built-in modules (`node:fs`, `fs`) and ambient browser/Node globals are classified builtin or ambient. Decomposed from epic M5-12 (D019).",
+      "priority": "P2",
+      "estimate": {
+        "min": 5,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "graph",
+        "arch",
+        "ecosystems"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-19",
+          "type": "hard"
+        },
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#4-risks-and-conflicts",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M5-20.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/**",
+        "tests/external-refs.test.ts",
+        "tests/fixtures/arch-rules"
+      ],
+      "acceptanceCriteria": [
+        "npm fixture rows in tests/fixtures/arch-rules (direct, transitive, dev-only, builtin) reach recall and precision 1.0 in score-arch (fixture labels).",
+        "A missing or unreadable npm lockfile gives direct attribution from the manifest only, flagged, never a crash (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-21",
+      "milestone": "M5",
+      "title": "External references: Composer package attribution and builtins",
+      "objective": "external_refs rows of the Composer ecosystem carry package, direct/transitive and dev/prod attribution from composer.json and composer.lock, and references to PHP internal classes and functions are classified builtin or ambient.",
+      "description": "external_refs rows of the Composer ecosystem carry package, direct/transitive and dev/prod attribution from composer.json and composer.lock, and references to PHP internal classes and functions are classified builtin or ambient. Decomposed from epic M5-12 (D019).",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 4,
+        "max": 7
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "graph",
+        "arch",
+        "ecosystems"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-19",
+          "type": "hard"
+        },
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#4-risks-and-conflicts",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M5-21.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/**",
+        "tests/external-refs.test.ts",
+        "tests/fixtures/arch-rules"
+      ],
+      "acceptanceCriteria": [
+        "Composer fixture rows in tests/fixtures/arch-rules (direct, transitive, dev-only, builtin) reach recall and precision 1.0 in score-arch (fixture labels).",
+        "A missing or unreadable Composer lockfile gives direct attribution from the manifest only, flagged, never a crash (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-22",
+      "milestone": "M5",
+      "title": "External references: pip/Poetry/uv package attribution and builtins",
+      "objective": "external_refs rows of the pip/Poetry/uv ecosystem carry package, direct/transitive and dev/prod attribution from requirements*.txt, pyproject.toml (Poetry, PEP 621) and uv.lock / poetry.lock, and references to the Python standard library are classified builtin or ambient.",
+      "description": "external_refs rows of the pip/Poetry/uv ecosystem carry package, direct/transitive and dev/prod attribution from requirements*.txt, pyproject.toml (Poetry, PEP 621) and uv.lock / poetry.lock, and references to the Python standard library are classified builtin or ambient. Decomposed from epic M5-12 (D019).",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "graph",
+        "arch",
+        "ecosystems"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-19",
+          "type": "hard"
+        },
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#4-risks-and-conflicts",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M5-22.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/**",
+        "tests/external-refs.test.ts",
+        "tests/fixtures/arch-rules"
+      ],
+      "acceptanceCriteria": [
+        "pip/Poetry/uv fixture rows in tests/fixtures/arch-rules (direct, transitive, dev-only, builtin) reach recall and precision 1.0 in score-arch (fixture labels).",
+        "A missing or unreadable pip/Poetry/uv lockfile gives direct attribution from the manifest only, flagged, never a crash (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-23",
+      "milestone": "M5",
+      "title": "External references: Go modules package attribution and builtins",
+      "objective": "external_refs rows of the Go modules ecosystem carry package, direct/transitive and dev/prod attribution from go.mod and go.sum, and references to the Go standard library are classified builtin or ambient.",
+      "description": "external_refs rows of the Go modules ecosystem carry package, direct/transitive and dev/prod attribution from go.mod and go.sum, and references to the Go standard library are classified builtin or ambient. Decomposed from epic M5-12 (D019).",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 4,
+        "max": 7
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "graph",
+        "arch",
+        "ecosystems"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-19",
+          "type": "hard"
+        },
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#4-risks-and-conflicts",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M5-23.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/**",
+        "tests/external-refs.test.ts",
+        "tests/fixtures/arch-rules"
+      ],
+      "acceptanceCriteria": [
+        "Go modules fixture rows in tests/fixtures/arch-rules (direct, transitive, dev-only, builtin) reach recall and precision 1.0 in score-arch (fixture labels).",
+        "A missing or unreadable Go modules lockfile gives direct attribution from the manifest only, flagged, never a crash (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-24",
+      "milestone": "M5",
+      "title": "Package, builtin and ambient selectors; uncovered and vendor-confinement reporting",
+      "objective": "Architecture rules can select elements by package, builtin and ambient access, and the check reports uncovered external dependencies and vendor-confinement violations.",
+      "description": "Architecture rules can select elements by package, builtin and ambient access, and the check reports uncovered external dependencies and vendor-confinement violations. Decomposed from epic M5-12 (D019).",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 9
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "graph",
+        "arch",
+        "ecosystems"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-20",
+          "type": "hard"
+        },
+        {
+          "id": "M5-21",
+          "type": "hard"
+        },
+        {
+          "id": "M5-22",
+          "type": "hard"
+        },
+        {
+          "id": "M5-23",
+          "type": "hard"
+        },
+        {
+          "id": "M5-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#2-gaps",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#4-risks-and-conflicts",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04",
+        "docs/baton/DECISIONS.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M5-24.md"
+      ],
+      "affectedFiles": [
+        "src/arch/selectors/**",
+        "tests/external-refs.test.ts",
+        "tests/fixtures/arch-rules"
+      ],
+      "acceptanceCriteria": [
+        "`package`, `builtin` and `ambient` selectors match the fixture rows exactly (test).",
+        "Uncovered, vendor-confinement and dev-dependency fixture rows reach recall/precision 1.0 for npm, Composer, pip and Go in score-arch."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

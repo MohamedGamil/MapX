@@ -1,6 +1,6 @@
 # MapX project state
 
-Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
@@ -8,10 +8,10 @@ Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D
 | --- | --- | --- |
 | M0 Delivered baseline and remediation | Remediation of the 2db08bd review DONE | P1 M0-02-R6, M0-02-R7, M0-04-R6, M0-10-R4 and P2 M0-09-R5, M0-11-R3, M0-12-R7/R8/R9, M0-17-R4/R5, M0-20-R3, M0-02-R8 DONE |
 | M1 Laravel route correctness | M1-07-R2, M1-03-R2 DONE | Routes scorer: 145 labels, URI/handler/attribute recall 1, precision 1, 0 FP. M1-99 (release) DEFERRED (D007) |
-| M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2 DONE | HTTP scorer: 48 labels, every metric 1.0 |
+| M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2 DONE; M2-08 BACKLOG (D019) | HTTP scorer: 48 labels, every metric 1.0 |
 | M3 Vue SFC semantics | All remediation DONE (M3-08-R1, M3-09-R1, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1) | Edge scorer: 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives: v3-039) |
-| M4 Measurement and DX | 0 of 7 | M4-03 (scan superlinear past ~5,000 files, measured in session 6) and M4-05 promotable; M4-02, M4-06 and M4-07 deferred |
-| M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 (fixture + scorer) and M5-02 (config schema) are promotable and parallel-safe with M3 (new `src/arch/` paths). M5-12 is an epic. Interface deps: M5-10 → M3-04, M5-12 → M4-03, M5-18 → M4-01 |
+| M4 Measurement and DX | M4-09 DONE | Next (D019): M4-01, M4-03, M4-08, M4-05, M4-04. M4-02, M4-06 and M4-07 deferred |
+| M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
 
 Live list: `npm run plan:scan`.
 
@@ -33,7 +33,7 @@ Live list: `npm run plan:scan`.
   - on an 18,000-file repo, a no-op sync takes 2.5–3.5 s against 5.8–6.3 s on base, and a no-op scan 12 s against 18 s;
   - MapX's own call edges went from 2,634 to 2,589: 51 removed, mostly wrong links of calls on locals, and 6 added (2 wrong `p.start()` guesses, documented).
 - **Corrected decisions:** D016 (Svelte docs claim, then real extraction in M0-12-R8), D017 (app boundaries), D018 (Python roots). Each replaced a criterion authored by the review, not by the owner.
-- **Known gaps recorded in reports, not fixed:**
+- **Known gaps recorded in reports** (now tasks M2-08, M0-02-R9, M0-12-R10 and M0-17-R6, D019):
   - calls are resolved by name, not through the file's named import;
   - `go.mod` and `composer.json` changes are not followed by sync;
   - a renamed name surviving in a comment keeps old edges until a force scan;
@@ -147,8 +147,12 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 ## Next
 
-- M5-01 and M5-02 (architecture rules fixture and config schema) are promotable, and so are M4-01, M4-03, M4-04, M4-05 and M4-08. No owner decision is pending.
-- Nothing from the remediation is committed beyond `00407d6` (the review). The working tree holds all 24 tasks; commit when the owner asks.
+Work order set by the owner (D019):
+1. All remaining M4 tasks: M4-01, M4-03, M4-08, M4-05, M4-04.
+2. The gap tasks: M2-08 (P1), M0-02-R9, M0-12-R10, M0-17-R6.
+3. M5, starting with M5-01 and M5-02.
+
+No owner decision is pending. The remediation is committed in `8be5cdb`.
 
 ## Done in session 3
 
@@ -178,6 +182,8 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 - **D006:** the dashboard bundle target is re-baselined to a 720 KiB gzipped ceiling, enforced by `scripts/check-package.ts` and CI. M0-15-R2 is DONE.
 - **D007:** releases are owner-initiated. M1-99 is DEFERRED and the gate is now `G-RELEASE` (`ownerInitiated`). Agents don't request it; work accumulates under CHANGELOG `[Unreleased]`.
+
+- **D019 (2026-11-01):** D016–D018 ratified; gap tasks registered; order M4 → gap tasks → M5; M5-12 decomposed into M5-19 … M5-24.
 
 Resolved in session 6 (D014): Continue writes its documented layout (M0-09-R4, amends F17); a fish grammar is bundled (M0-12-R5, Unlicense, +19 KB packed); M1-05-R3 promoted to P2 and done. No owner decisions are pending.
 

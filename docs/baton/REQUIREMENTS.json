@@ -296,7 +296,7 @@
     "source": "docs/research/deptrac/05-requirements.md MUST, G6/§3.3",
     "taskIds": [
       "M5-16",
-      "M5-12"
+      "M5-19"
     ],
     "verificationTaskIds": [
       "M5-16"
@@ -380,7 +380,12 @@
     "requirement": "External, builtin and ambient references are persisted outside `edges` with package, direct/transitive and dev/prod attribution for npm, Composer, pip and Go; package/builtin/ambient selectors and uncovered reporting",
     "source": "docs/research/deptrac/05-requirements.md SHOULD, AR-04/G3/G9",
     "taskIds": [
-      "M5-12"
+      "M5-19",
+      "M5-20",
+      "M5-21",
+      "M5-22",
+      "M5-23",
+      "M5-24"
     ],
     "verificationTaskIds": [
       "M5-98"

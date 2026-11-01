@@ -150,3 +150,20 @@ Python itself puts a script's own folder on `sys.path`, so a namespace folder ou
 `import logging` in `src/nsp/app.py` with no `__init__.py` anywhere therefore links a sibling `logging.py`, as running that file would. M0-12-R9's AC2 (that case) is replaced with the reviewer's layouts. The criterion was authored by the review, not by the owner.
 
 D015 addendum (2026-11-01): the remediation tasks registered during the remediation itself (M0-02-R8, M0-12-R8, M0-12-R9) join D015's list, so they too come before the M4 and M5 tasks. M4-09 (test hygiene, registered the same day) is done.
+
+## D019 — Owner Q&A after the 2db08bd remediation (owner, 2026-11-01)
+
+The owner answered four questions after the remediation was committed (`8be5cdb`):
+- **Decisions D016, D017 and D018 are ratified** as recorded. Each had replaced a criterion authored by the review, not by the owner.
+- **The known gaps the remediation recorded become tasks** (BACKLOG):
+  - M2-08 (P1): calls resolve through the file's own imports before name lookup;
+  - M0-02-R9: sync follows `go.mod` module paths and `composer.json` PSR-4 changes;
+  - M0-12-R10: Svelte templates (calls, event handlers, child components);
+  - M0-17-R6: heuristic follow-ups (a renamed name surviving in a comment, Vue Router shadowing and guard returns, a Laravel module's own `@/`, factory-binding promotion).
+- **Order:** all remaining M4 tasks first (M4-01, M4-03, M4-08, M4-05, M4-04), then the four gap tasks, then M5. Each gap task takes a hard dependency on those five M4 tasks, and M5-01 and M5-02 take a hard dependency on the four gap tasks. M4-02, M4-06 and M4-07 stay DEFERRED.
+- **Epic M5-12 is decomposed now** and cancelled (as M0-03-R1 was), into:
+  - M5-19: the `external_refs` store and capture;
+  - M5-20 … M5-23: package attribution and builtins for npm, Composer, pip/Poetry/uv and Go modules, each with its own fixture rows at recall/precision 1.0;
+  - M5-24: package, builtin and ambient selectors, with uncovered and vendor-confinement reporting.
+
+  REQ-ARCH-008 now traces to M5-19 and REQ-ARCH-014 to M5-19 … M5-24.
