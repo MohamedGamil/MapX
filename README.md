@@ -382,7 +382,7 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals |
-| Svelte | `.svelte` | the component, `export let` props, and the functions, classes, methods and constants of its `<script>` blocks (`context="module"` too), with their imports, calls and instantiations as in a `.js` / `.ts` file; the template is not read |
+| Svelte | `.svelte` | the component, `export let` props, and the functions, classes, methods and constants of its `<script>` blocks (`context="module"` too), with their imports, calls and instantiations as in a `.js` / `.ts` file; template calls, event handlers and `use:` actions link to the component's own or imported functions, and component tags (`<Child />`, `<ui.Button />`) give render edges |
 | Lua | `.lua` | functions, methods, variables |
 | Elixir | `.ex`, `.exs` | modules, functions, macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests |

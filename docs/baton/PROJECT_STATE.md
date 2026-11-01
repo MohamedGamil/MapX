@@ -149,7 +149,7 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 Work order set by the owner (D019):
 1. M4: done (M4-02, M4-06 and M4-07 stay deferred). M4-04 should also remove the second `discoverFiles` walk in `scanFull` (M4-03 report).
-2. The gap tasks: M0-12-R10, M0-17-R6. Done: M2-08 (calls resolve through the file's imports), M0-02-R10 (interrupted syncs), M0-02-R9 (go.mod / composer.json in sync).
+2. The gap tasks: M0-17-R6. Done: M0-12-R10 (Svelte templates), M2-08 (calls resolve through the file's imports), M0-02-R10 (interrupted syncs), M0-02-R9 (go.mod / composer.json in sync).
 3. M5, starting with M5-01 and M5-02.
 
 No owner decision is pending. The remediation is committed in `8be5cdb`.

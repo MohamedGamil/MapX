@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- Svelte templates are read: `{expr}` calls, block headers, attribute values, event handlers (`on:click={save}`, `onclick={save}`) and `use:` / transition directives link to the component's own or imported functions, and component tags (`<Child />`, `<ui.Button />`, `<svelte:component this={X}>`) give render edges, through barrels too. Each-block, `let:`, `{@const}` and snippet names are never resolved; `{@html}`, comments and `<style>` are ignored (M0-12-R10).
+
 ### Fixed
 - `mapx sync` follows `go.mod` module-path and `composer.json` PSR-4 changes, re-resolving the Go or PHP files they govern, so sync equals a full scan. An edit made before upgrading and before the first sync on this version needs one `mapx scan --force` (M0-02-R9).
 - An interrupted `mapx sync` (Ctrl-C) no longer loses the symbols and edges of the files it had started re-indexing: the next sync re-parses them, and `mapx status` lists them meanwhile (M0-02-R10).

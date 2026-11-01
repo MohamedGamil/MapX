@@ -116,10 +116,12 @@ describe.each([['workers', []], ['main thread', ['--no-parallel']]])('Svelte scr
   });
 
   it('gives the same edge targets as a .ts module holding the same code', () => {
+    // The scripts' edges; the template's render edges are M0-12-R10's.
     const targets = (file: string) =>
-      [...new Set(edges(file).filter((e) => e.target_file !== file).map((e) => `${e.edge_type} ${e.target_file} ${e.target_symbol ?? ''}`))].sort();
+      [...new Set(edges(file).filter((e) => e.target_file !== file && e.edge_type !== 'render').map((e) => `${e.edge_type} ${e.target_file} ${e.target_symbol ?? ''}`))].sort();
     expect(targets('src/twin.ts').length).toBeGreaterThan(0);
     expect(targets('src/Counter.svelte')).toEqual(targets('src/twin.ts'));
+    expect(edges('src/Counter.svelte').filter((e) => e.edge_type === 'render').map((e) => e.target_file)).toEqual(['src/Child.svelte']);
   });
 });
 
@@ -200,5 +202,138 @@ describe('Svelte script discovery and bindings (review)', () => {
     expect(JSON.parse(component.metadata).props).toEqual(['own']);
     expect(symbols('src/Mod.svelte').filter((s) => ['count', 'total'].includes(s.name)).map((s) => s.kind)).toEqual(['variable', 'variable']);
     expect(edges('src/stats.ts')).toEqual([]);
+  });
+});
+
+describe('Svelte templates: calls, event handlers and child components (M0-12-R10)', () => {
+  let root: string;
+  type E = { source_symbol: string | null; target_file: string; target_symbol: string; edge_type: string };
+  let edges: E[];
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', devDependencies: { svelte: '^4.2.0' } }),
+      'src/lib/format.ts': 'export function format(x: number) { return String(x); }\nexport function save() { return 0; }\n',
+      'src/lib/ui/index.js': "export { default as Button } from './Button.svelte';\n",
+      'src/lib/ui/Button.svelte': '<button><slot /></button>\n',
+      'src/routes/Child.svelte': '<p>child</p>\n',
+      // Decoys a name lookup would find.
+      'src/routes/Other.svelte': '<script>\n  function remove() {}\n  function helper() {}\n</script>\n',
+      'src/routes/Page.svelte': `<script>
+  import { format } from '../lib/format';
+  import Child from './Child.svelte';
+  import * as ui from '../lib/ui/index.js';
+  let items = [];
+  function save() {}
+  function remove(id) {}
+  function item() {}
+  // Declared here: a read {@html helper()} would link it.
+  function helper() {}
+</script>
+
+<!-- {remove()} in a comment -->
+<p>{format(1)}</p>
+<button on:click={save}>s</button>
+<button onclick={() => remove(1)}>r</button>
+{#each items as item}{item.name}{item()}{/each}
+<Child />
+<ui.Button />
+{@html helper()}
+
+<style>.a { color: red; } /* {remove()} */</style>
+`,
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+    edges = query<E>(root, `SELECT source_symbol, target_file, target_symbol, edge_type FROM edges
+      WHERE source_file = 'src/routes/Page.svelte' AND edge_type IN ('call', 'render') ORDER BY 4, 2, 3`);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  const calls = () => edges.filter((e) => e.edge_type === 'call').map((e) => `${e.source_symbol} -> ${e.target_file}#${e.target_symbol}`);
+
+  it('gives template calls and handlers edges to the component\'s own or imported functions, owned by the component', () => {
+    expect(calls()).toEqual([
+      'Page -> src/lib/format.ts#format',
+      'Page -> src/routes/Page.svelte#remove',
+      'Page -> src/routes/Page.svelte#save',
+    ]);
+  });
+
+  it('never resolves an each-block alias, and ignores {@html}, comments and <style>', () => {
+    expect(calls().some((c) => c.endsWith('#item') || c.endsWith('#helper'))).toBe(false);
+    expect(edges.some((e) => e.target_file === 'src/routes/Other.svelte')).toBe(false);
+  });
+
+  it('gives render edges to imported components, also through a namespace import and a barrel', () => {
+    expect(edges.filter((e) => e.edge_type === 'render').map((e) => `${e.target_file}#${e.target_symbol}`)).toEqual([
+      'src/lib/ui/Button.svelte#Button',
+      'src/routes/Child.svelte#Child',
+    ]);
+  });
+});
+
+describe('Svelte templates: review cases (M0-12-R10, review 2026-11-01)', () => {
+  let root: string;
+  type E = { source_file: string; source_symbol: string | null; target_file: string; target_symbol: string; edge_type: string };
+  let edges: E[];
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', devDependencies: { svelte: '^5.0.0', vue: '^3.4.0' } }),
+      'src/lib/render.ts': 'export function render(x: number) { return x; }\nexport function key(x: number) { return x; }\nexport function fade() { return {}; }\n',
+      'src/lib/ui/index.js': "export { default as PrimaryButton } from './Button.svelte';\n",
+      'src/lib/ui/Button.svelte': '<button><slot /></button>\n',
+      'src/routes/Card.svelte': '<div />\n',
+      'src/routes/Page.svelte': `<script>
+  import { render, key, fade } from '../lib/render';
+  import { PrimaryButton } from '../lib/ui/index.js';
+  import Card from './Card.svelte';
+  let rows = [];
+  let isOnline = true;
+  function item() {}
+  function helper() {}
+  function isOnlineCheck() {}
+</script>
+
+<p>{'it\\'s'}</p>
+{#each rows as item}{item()}{/each}
+{@html helper()}
+<p>Don't stop</p>
+<p>{render(1)} {key(2)}</p>
+<Status online={isOnline} />
+<div transition:fade>x</div>
+<svelte:component this={Card} />
+<PrimaryButton />
+`,
+      // Vue: a component imported from a non-.vue barrel (the render branch follows the barrel).
+      'src/vue/components/Foo.vue': '<template><i /></template>\n',
+      'src/vue/components/index.ts': "export { default as Foo } from './Foo.vue';\n",
+      'src/vue/App.vue': "<script setup>\nimport { Foo } from './components';\n</script>\n<template><Foo /></template>\n",
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+    edges = query<E>(root, `SELECT source_file, source_symbol, target_file, target_symbol, edge_type FROM edges
+      WHERE source_file IN ('src/routes/Page.svelte', 'src/vue/App.vue') AND edge_type IN ('call', 'render') ORDER BY 1, 5, 3, 4`);
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  const from = (file: string, type: string) => edges.filter((e) => e.source_file === file && e.edge_type === type).map((e) => `${e.target_file}#${e.target_symbol}`);
+
+  it('keeps reading the template after an escaped quote inside {…}', () => {
+    const calls = from('src/routes/Page.svelte', 'call');
+    expect(calls).not.toContain('src/routes/Page.svelte#item');
+    expect(calls).not.toContain('src/routes/Page.svelte#helper');
+    expect(from('src/routes/Page.svelte', 'render')).toEqual(expect.arrayContaining(['src/routes/Card.svelte#Card']));
+  });
+
+  it('links calls named like Svelte block words, and transition directives; a prop named on… is no handler', () => {
+    expect(from('src/routes/Page.svelte', 'call')).toEqual(['src/lib/render.ts#fade', 'src/lib/render.ts#key', 'src/lib/render.ts#render']);
+  });
+
+  it('renders <svelte:component this={X}> and a component a barrel re-exports under a new name', () => {
+    expect(from('src/routes/Page.svelte', 'render')).toEqual(['src/lib/ui/Button.svelte#Button', 'src/routes/Card.svelte#Card']);
+  });
+
+  it('renders a Vue component imported from a non-.vue barrel', () => {
+    expect(from('src/vue/App.vue', 'render')).toEqual(['src/vue/components/Foo.vue#Foo']);
   });
 });

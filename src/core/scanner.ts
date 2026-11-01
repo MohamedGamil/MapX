@@ -87,6 +87,8 @@ const MANIFEST_FAMILIES = [
 ];
 /** A family key of the config signatures: a NUL-prefixed key, which no folder name can be (review 2026-11-01). */
 const isFamilyKey = (key: string) => key.startsWith('\0');
+/** Component files a template render edge may target: Vue and Svelte (M0-12-R10). */
+const COMPONENT_FILE = /\.(vue|svelte)$/;
 /** Modules whose calls resolve through import bindings (M2-08). */
 const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
 
@@ -2008,10 +2010,16 @@ export class Scanner {
     ref: ExtractedReference, hint: VueResolveHint, sourcePath: string, fileMap: Map<string, string>,
   ): { file: string; symbol: string }[] {
     if (ref.referenceType === 'render') {
-      const file = hint.global
+      const from = hint.from?.[0];
+      let file = hint.global
         ? this.vueGlobalComponents(sourcePath, fileMap).get(ref.targetName)
-        : hint.from?.[0] && this.resolveImportPath(hint.from[0].specifier, sourcePath, fileMap);
-      return file && file.endsWith('.vue') ? [{ file, symbol: vueComponentName(file) }] : [];
+        : from && this.resolveImportPath(from.specifier, sourcePath, fileMap);
+      // A Svelte `<ui.Button>` of `import * as ui from './ui'`: Button in that module, through its
+      // re-exports (M0-12-R10).
+      if (file && from && from.name !== 'default' && !COMPONENT_FILE.test(file)) {
+        file = this.moduleMember(from.specifier, from.name, sourcePath, fileMap)?.file ?? this.defaultReExport(file, from.name, fileMap);
+      }
+      return file && COMPONENT_FILE.test(file) ? [{ file, symbol: vueComponentName(file).replace(/\.svelte$/, '') }] : [];
     }
     if (hint.sameFile && this.fileDefines(sourcePath, ref.targetName)) return [{ file: sourcePath, symbol: ref.targetName }];
     for (const { specifier, name } of hint.from ?? []) {
@@ -2020,6 +2028,20 @@ export class Scanner {
     }
     const hit = ref.vueThis ? resolveThisMember(ref.targetName, ref.vueThis, this.vueResolveContext(sourcePath, fileMap)) : null;
     return hit ? [hit] : [];
+  }
+
+  /**
+   * The component a barrel re-exports under a new name: `export { default as PrimaryButton } from
+   * './Button.svelte'` (review 2026-11-01). Null when `file` holds no such re-export.
+   */
+  private defaultReExport(file: string, name: string, fileMap: Map<string, string>): string | null {
+    const text = this.readWorkspaceText(file) ?? '';
+    for (const m of text.matchAll(/\bexport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+      if (!m[1]!.split(',').some(part => new RegExp(`^\\s*default\\s+as\\s+${name.replace(/[$]/g, '\\$')}\\s*$`).test(part))) continue;
+      const target = this.resolveImportPath(m[2]!, file, fileMap);
+      if (target && COMPONENT_FILE.test(target)) return target;
+    }
+    return null;
   }
 
   /**

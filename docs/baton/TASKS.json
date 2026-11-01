@@ -19130,15 +19130,18 @@
         "docs/baton/reports/M0-12-R8.md"
       ],
       "outputs": [
-        "fix",
-        "regression tests",
+        "svelteTemplateReferences",
+        "render edges to .svelte components",
+        "tests",
         "reports/M0-12-R10.md"
       ],
       "affectedFiles": [
         "src/parsers/languages/svelte.ts",
+        "src/core/scanner.ts",
         "tests/svelte.test.ts",
         "docs/getting-started.md",
-        "README.md"
+        "README.md",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
         "`{format(x)}`, `on:click={save}` / `onclick={save}` and `{#each items as item}{item.name}{/each}` give call references to the component's own or imported functions, owned by the component; each-block and let: aliases never resolve to same-named methods (e2e).",
@@ -19146,18 +19149,79 @@
         "Template references inside {@html}, comments and <style> are ignored; the edges scorer does not drop."
       ],
       "verificationCommands": [
-        "npx vitest run tests/svelte.test.ts"
+        "npx vitest run tests/svelte.test.ts",
+        "npm run eval",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T12:57:08.984Z",
+      "completedAt": "2026-11-01T13:08:35.587Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R10.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/svelte.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R10.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R10.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R10.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T12:57:08.677Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T12:57:08.984Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:08:35.309Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:08:35.587Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/svelte.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R10.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R10.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R10.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

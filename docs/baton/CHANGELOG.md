@@ -45,3 +45,4 @@
 - M2-08 DONE: calls resolve through the file's own imports (JS/TS, Vue/Svelte, Python), through re-exports; sync re-parses a changed module's importers. Review: 2 P1 (sync divergence, exponential export * walk) and P2s, all fixed.
 - M0-02-R10 DONE: both sync paths write file hashes only after the parse result; git sync re-parses null-hash files and drops unreadable ones. Review P2s fixed.
 - M0-02-R9 DONE: sync tracks go.mod and composer.json signatures per folder (NUL-prefixed family keys, per-family marker). Review P2s fixed.
+- M0-12-R10 DONE: Svelte template references with Vue resolution hints; render branch accepts .svelte and follows barrels (also Vue). Review P1 (escaped quote) and P2s fixed.
