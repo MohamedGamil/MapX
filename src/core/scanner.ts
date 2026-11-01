@@ -70,6 +70,16 @@ const COMMON_EXTENSIONS = new Set([
   'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb',
   'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md',
 ]);
+const readable = (path: string) => {
+  try {
+    accessSync(path, fsConstants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+/** The scan time of a file whose re-indexing has not written its result yet (M0-02-R10). */
+const UNSCANNED = new Date(0).toISOString();
 /** Modules whose calls resolve through import bindings (M2-08). */
 const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
 
@@ -788,6 +798,12 @@ export class Scanner {
         changes.push({ path: relative(repoRoot, absolutePath).replace(/\\/g, '/'), status: 'modified' });
         continue;
       }
+      // Cleared by a sync that was interrupted before writing its parse result: its hashes are still
+      // null, and git may not list it (an unchanged referrer). Parse it again (M0-02-R10).
+      if (exists && !f.content_hash) {
+        changes.push({ path: relative(repoRoot, absolutePath).replace(/\\/g, '/'), status: 'modified' });
+        continue;
+      }
       if (committed.has(f.path as string) || exists) continue;
       changes.push({ path: relative(repoRoot, absolutePath).replace(/\\/g, '/'), status: 'removed' });
     }
@@ -844,8 +860,15 @@ export class Scanner {
         continue;
       }
       const fileInfo = await this.getFileInfo(absolutePath, relativePath);
-      // Only a regular file: git lists an untracked nested repo or submodule as its folder.
-      if (!fileInfo && statSync(absolutePath).isFile()) analysisInput = true;
+      // An indexed file no parser can read any more (unreadable, its language removed) leaves the
+      // index, as the walk drops it; otherwise it would be listed again on every sync (review 2026-11-01).
+      if (!fileInfo && this.store.getFile(relativePath)?.repo === repo.name) {
+        toRemove.push(relativePath);
+        continue;
+      }
+      // Only a regular file it can read: git lists an untracked nested repo or submodule as its folder,
+      // and an unreadable file is no input to anything (review 2026-11-01).
+      if (!fileInfo && statSync(absolutePath).isFile() && readable(absolutePath)) analysisInput = true;
       if (fileInfo) {
         const bytes = await readFile(absolutePath);
         // Listed, but the indexed blob is still the content (a mode change, or a commit of what an
@@ -907,11 +930,13 @@ export class Scanner {
           path: p,
           repo: repo.name,
           language: fileInfo.language,
-          // The blob id of the indexed bytes (`git hash-object`), which the skip above compares
-          // with: the next sync skips the file while its content stays the same (M0-02-R5).
-          gitBlobHash: blobHash,
-          contentHash,
-          lastScanned: new Date().toISOString(),
+          // Set by setFileHashes once the parse result is written: a sync interrupted before that
+          // leaves them null, so the next sync re-parses the file (M0-02-R10). The blob id is then
+          // what the skip above compares with (M0-02-R5).
+          gitBlobHash: null,
+          contentHash: null,
+          // Until the result is written the file reads as never scanned, so `mapx status` lists it.
+          lastScanned: UNSCANNED,
           sizeBytes: fileInfo.sizeBytes,
           lines: fileInfo.lines,
         });
@@ -962,10 +987,11 @@ export class Scanner {
 
     this.store.inTransaction(() => {
       for (let i = 0; i < toReindex.length && !this.aborted; i++) {
-        const { path: relPath, fileInfo } = toReindex[i];
+        const { path: relPath, fileInfo, contentHash, blobHash } = toReindex[i];
         const result = parseResults[i];
 
         this.writeParseResult(relPath, result, repo.name);
+        this.store.setFileHashes(relPath, contentHash, blobHash);
 
         totalSymbols += result.symbols.length;
         totalEdges += result.references.length;
@@ -3946,8 +3972,10 @@ export class Scanner {
           repo: repo.name,
           language: f.language,
           gitBlobHash: null,
-          contentHash: f.contentHash,
-          lastScanned: new Date().toISOString(),
+          // Set once the parse result is written (M0-02-R10): until then the file reads as new,
+          // and as never scanned, so `mapx status` lists it.
+          contentHash: null,
+          lastScanned: UNSCANNED,
           sizeBytes: f.sizeBytes,
           lines: f.lines,
         });
@@ -4003,6 +4031,7 @@ export class Scanner {
         const result = parseResults[i];
 
         this.writeParseResult(f.relativePath, result, repo.name);
+        this.store.setFileHashes(f.relativePath, f.contentHash, null);
 
         totalSymbols += result.symbols.length;
         totalEdges += result.references.length;

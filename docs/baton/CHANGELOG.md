@@ -43,3 +43,4 @@
 - M4-04 re-scoped from measurement (post-scan is synchronous CPU work; the walk is ~6% of a scan) to: paths-only pre-walk, and a git sync early exit when nothing indexed or analysed changed (11 s → 2 s at 16,000 files), with an analysis inputs fingerprint. DONE. Added M0-02-R10 (P1, pre-existing: an interrupted git sync loses symbols), a hard dependency of M5-01 and M5-02.
 - 2026-11-01: version 0.3.6 bumped, built and installed locally at the owner's request (D021; not published).
 - M2-08 DONE: calls resolve through the file's own imports (JS/TS, Vue/Svelte, Python), through re-exports; sync re-parses a changed module's importers. Review: 2 P1 (sync divergence, exponential export * walk) and P2s, all fixed.
+- M0-02-R10 DONE: both sync paths write file hashes only after the parse result; git sync re-parses null-hash files and drops unreadable ones. Review P2s fixed.

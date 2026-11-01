@@ -19651,8 +19651,8 @@
     {
       "id": "M0-02-R10",
       "milestone": "M0",
-      "title": "An interrupted git sync loses the symbols of the files it started re-indexing",
-      "objective": "A git sync interrupted after it stored new blob hashes but before it wrote parse results leaves those files re-parsed by the next sync, so the index equals scan --force.",
+      "title": "An interrupted sync loses the symbols of the files it started re-indexing",
+      "objective": "A git or hash sync interrupted after it started re-indexing files leaves them re-parsed by the next sync, so the index equals scan --force.",
       "description": "Found by the M4-04 independent review (2026-11-01, reproduced on the pre-M4-04 scanner too): _scanIncrementalForRepo upserts the new git_blob_hash and deletes symbols/edges before parsing; on abort nothing is written, and the next sync skips the files because their blob matches. M4-04 made it worse: that next sync now also skips the post-scan analysis.",
       "priority": "P1",
       "estimate": {
@@ -19676,31 +19676,90 @@
         "docs/baton/reports/M4-04.md"
       ],
       "outputs": [
-        "fix",
-        "regression tests",
-        "reports/M0-02-R9.md"
+        "Store.setFileHashes",
+        "hashes written after parse results in both sync paths",
+        "tests/sync-interrupt.test.ts",
+        "reports/M0-02-R10.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "tests/scan-redundancy.test.ts"
+        "src/core/store.ts",
+        "tests/sync-interrupt.test.ts",
+        "tests/scanner.test.ts",
+        "tests/scanner-coverage.test.ts",
+        "tests/scanner-hash-incremental.test.ts",
+        "tests/dart-resolution.test.ts",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "A git sync aborted between storing blob hashes and writing parse results (SIGINT, or abort() from onProgress) is followed by a sync whose symbols and edges equal scan --force (e2e).",
-        "The skip-by-blob path never skips a listed file whose stored state is incomplete (no symbols written since its blob was stored) (test)."
+        "Git repo: a sync aborted after the first re-indexed file is written is followed by a sync whose symbols and edges equal scan --force (tests/sync-interrupt.test.ts).",
+        "The same for a non-git (hash sync) workspace.",
+        "An uninterrupted sync still skips unchanged files: a second sync parses nothing and emits no cluster progress (test).",
+        "After a completed sync the re-indexed files' content_hash, metadata and namespace equal scan --force (test with a PHP namespace)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/scan-redundancy.test.ts"
+        "npx vitest run tests/sync-interrupt.test.ts tests/scan-redundancy.test.ts",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T11:57:15.947Z",
+      "completedAt": "2026-11-01T12:21:36.495Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R10.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/sync-interrupt.test.ts tests/scan-redundancy.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R10.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R10.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T11:57:15.455Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T11:57:15.947Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T12:21:36.200Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T12:21:36.495Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/sync-interrupt.test.ts tests/scan-redundancy.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R10.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R10.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

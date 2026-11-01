@@ -340,6 +340,12 @@ export class Store {
     );
   }
 
+  /** A file's content and git blob hashes and scan time, once its parse result is written (M0-02-R10). */
+  setFileHashes(filePath: string, contentHash: string | null, gitBlobHash: string | null): void {
+    this.backend.prepare('UPDATE files SET content_hash = ?, git_blob_hash = ?, last_scanned = ? WHERE path = ?')
+      .run(contentHash, gitBlobHash, new Date().toISOString(), filePath);
+  }
+
   updateFileMetadata(filePath: string, metadata: Record<string, any>): void {
     const file = this.getFile(filePath);
     let merged = { ...metadata };
