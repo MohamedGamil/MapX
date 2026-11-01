@@ -1,0 +1,7 @@
+{
+  "graph500": {
+    "baselineMs": 720,
+    "allowance": 0.2,
+    "source": "M4-16 audit (docs/research/dashboard-ux-audit.md): default graph ready on the generated 500-file fixture took 563-720 ms over three runs; the slowest is the baseline."
+  }
+}

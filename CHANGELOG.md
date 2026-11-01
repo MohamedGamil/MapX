@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- **Browser tests for the dashboard.** `npm run test:ui` (Playwright, Chromium) scans generated fixture workspaces, serves each with `mapx ui` and opens every tab: each must render its content with no console error, page error or failed `/api` request, and the graph must render the 500-file fixture within the M4-16 baseline plus 20%. CI runs them as the `UI` job; without an installed Chromium they skip and say so. The dashboard marks its graph state on `<body data-graph>` and a `mapx:graph-ready` performance mark for them (M4-19).
+
 ### Changed
 - **New MapX logo.** The owner's logo symbol is in the dashboard header beside the wordmark, as the dashboard's favicons (16 and 32 px, and a 180 px apple-touch icon) and at the top of the README; `scripts/brand/logo-assets.sh` regenerates the sizes from `assets/brand/mapx-logo.png`. `mapx init` opens with the text-art logo in `#ff02fe` (24-bit colour where the terminal supports it, else the nearest 256 colour; plain under `NO_COLOR`), and only in a terminal at least 64 columns wide; `MAPX_NO_BANNER` turns it off (M4-18, D028).
 - `mapx scan` and `mapx sync`, and the MCP `mapx_scan` and `mapx_sync` tools, cover every registered repository unless `--repo` (`repo`) names one, as `--all` does. Run at a workspace root, a plain `mapx scan --force` re-indexed only the root repo, leaving the nested repos registered there unscanned (M0-10-R5).

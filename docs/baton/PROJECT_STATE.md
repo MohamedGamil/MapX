@@ -163,18 +163,17 @@ Work order set by the owner:
 
    | Task | Work |
    | --- | --- |
-   | M4-16 | UX/UI audit |
-   | M4-19 | Playwright harness |
+   | M4-16 | UX/UI audit: done (`fa31104`) |
+   | M4-19 | Playwright harness: done, `npm run test:ui` |
    | M4-17 | Design system, themes and accessibility |
    | M4-20 | Performance |
    | M4-21 | Multi-repo views |
    | M4-22 | Read-only config view |
    | M4-23 | Cross-repo HTTP view |
-   | M4-18 | New logo, blocked until the owner supplies it; it does not block M5 |
+   | M4-18 | New logo: done (`d246259`, D028); it does not block M5 |
 
 3. **M5**, starting with M5-01 and M5-02. They hard-depend on the D025 and D027 tasks, except M4-18.
 
-Pending owner input: the new logo file for M4-18.
 
 ## Done in session 3
 

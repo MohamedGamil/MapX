@@ -113,7 +113,8 @@
     "plan:report": "tsx scripts/baton/cli.ts report",
     "plan:handoff": "tsx scripts/baton/cli.ts handoff",
     "plan:transition": "tsx scripts/baton/cli.ts transition",
-    "plan:scan": "node .claude/skills/baton/scripts/baton-scan.mjs docs/baton/TASKS.json"
+    "plan:scan": "node .claude/skills/baton/scripts/baton-scan.mjs docs/baton/TASKS.json",
+    "test:ui": "playwright test"
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",

@@ -13,6 +13,16 @@ cytoscape.use(elk);
 let currentTab = 'graph';
 let cyInstance: any = null;
 
+/**
+ * The graph's state on `<body data-graph>` (loading, layout, ready, empty, error), and a
+ * `mapx:graph-ready` performance mark each time a layout finishes: what the browser tests and
+ * the audit wait on and time (M4-19).
+ */
+function markGraph(state: 'loading' | 'layout' | 'ready' | 'empty' | 'error') {
+  document.body.dataset.graph = state;
+  if (state === 'ready') performance.mark('mapx:graph-ready');
+}
+
 // Tab switcher logic
 const tabs = document.querySelectorAll('.nav-item');
 tabs.forEach(tab => {
@@ -1061,8 +1071,10 @@ function runLayout(layoutConfig: any) {
     });
   }
 
+  markGraph('layout');
   if (visibleCount > 200) {
     activeLayout = cyInstance.layout(layoutConfig);
+    activeLayout.one('layoutstop', () => markGraph('ready'));
     activeLayout.run();
     return;
   }
@@ -1086,6 +1098,7 @@ function runLayout(layoutConfig: any) {
   }
 
   activeLayout = cyInstance.layout(layoutConfig);
+  activeLayout.one('layoutstop', () => markGraph('ready'));
   activeLayout.run();
 }
 
@@ -1335,9 +1348,10 @@ async function loadGraph() {
   };
 
   showOverlay('Fetching graph data…');
+  markGraph('loading');
   try {
     const res = await fetch('/api/graph');
-    if (!res.ok) { hideOverlay(); return; }
+    if (!res.ok) { hideOverlay(); markGraph('error'); return; }
     rawGraphElements = (await res.json()).filter((el: any) => {
       // Drop self-loop edges (source === target) — they are scanner artifacts
       // and produce an "invalid endpoints" warning in cytoscape
@@ -1386,6 +1400,7 @@ async function loadGraph() {
 
     if (initialElements.length === 0) {
       hideOverlay();
+      markGraph('empty');
       container.innerHTML = '<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; font-size: 15px; color: var(--text-muted); text-align: center; gap: 8px; padding: 20px;"><div style="font-size: 24px;">🕸️</div><div>No codebase graph elements found.</div><div style="font-size: 12px; opacity: 0.8;">Run a scan using the mapx CLI/MCP to index files and generate the graph.</div></div>';
       return;
     }
@@ -1836,13 +1851,15 @@ async function loadGraph() {
           }
         }
       ],
-      layout: getLayoutOptions(showClusters, false)
+      layout: { name: 'preset' }
     });
 
-    // Hide the loading overlay once the initial layout is done (or immediately
-    // if layout is not animated).
+    // The first layout runs after its listener is attached: a synchronous (unanimated) layout
+    // stops inside run(), so a listener added after construction would miss it.
     showOverlay('Running layout…');
-    cyInstance.one('layoutstop', () => hideOverlay());
+    activeLayout = cyInstance.layout(getLayoutOptions(showClusters, false));
+    activeLayout.one('layoutstop', () => { hideOverlay(); markGraph('ready'); });
+    activeLayout.run();
     // Safety net: always hide after 10 s even if the event never fires.
     setTimeout(() => hideOverlay(), 10000);
 
@@ -2598,6 +2615,7 @@ async function loadGraph() {
 
   } catch (err) {
     hideOverlay();
+    markGraph('error');
     console.error('Failed to load graph:', err);
   }
 }

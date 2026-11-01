@@ -111,3 +111,23 @@ In `floors.json`:
 - `patterns` bounds each labelled pattern. `"*"` applies to every pattern, and a named pattern overrides it metric by metric.
 
 A floors file naming an unknown scorer, metric or pattern, or a recall or precision outside [0, 1], is rejected with exit 2 before anything is scanned. A scan that fails also exits 2, after the other scorers have reported. Floors only rise: when a change improves a score, raise its floor in the same change.
+
+## Dashboard browser tests
+
+`npm run test:ui` runs the dashboard in headless Chromium (Playwright, `playwright.config.ts`). It builds the dashboard, scans generated fixture workspaces with the source CLI, serves each with `mapx ui` on a free port, and drives it:
+
+| Spec | Checks |
+| --- | --- |
+| `tests/ui/smoke.spec.ts` | Every tab renders its content: the graph's layout finishes, symbols and routes fill their tables, the architecture profile and DSM appear, a context build returns files, metrics fill, and a logged tool call shows. No tab may log a console error or page error, or get a failed `/api` request. |
+| `tests/ui/perf.spec.ts` | The time from navigation to the first finished graph layout on the generated 500-file fixture. The median of three cold loads must stay within the budget in `tests/ui/budgets.json`: the M4-16 baseline (720 ms) plus 20%. |
+
+The dashboard marks its graph state on `<body data-graph>` (`loading`, `layout`, `ready`, `empty`, `error`) and records a `mapx:graph-ready` performance mark each time a layout finishes. The tests wait on these instead of on fixed delays.
+
+```bash
+npx playwright install chromium            # once; without it the specs skip and say so
+npm run test:ui                            # all specs
+npm run test:ui -- smoke                   # one spec
+MAPX_UI_PERF_SCALE=2 npm run test:ui       # double the render budget on slower hardware
+```
+
+CI runs them as the `UI` job, with `MAPX_UI_PERF_SCALE=2` because shared runners are slower than the machine the baseline was measured on. `npx tsx scripts/ui/audit.ts` is the fuller audit behind the baseline: screenshots at three widths, axe accessibility results and Full Codebase timings (M4-16, `docs/research/dashboard-ux-audit.md`).

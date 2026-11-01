@@ -21308,23 +21308,65 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T21:06:29.710Z",
+      "completedAt": "2026-11-01T21:09:25.532Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-19.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run test:ui",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-19.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-19.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T19:09:33.944Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T21:06:29.710Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T21:09:25.240Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T21:09:25.532Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run test:ui",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-19.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-19.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
