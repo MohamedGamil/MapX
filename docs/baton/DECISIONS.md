@@ -248,3 +248,11 @@ The owner accepted these items as M4 work, to be completed before M5:
 Startup time is a desired outcome. M4-15 evaluates the risk of patching tree-sitter before anything changes: a route without a patch may be implemented, but any patch needs the owner's approval first.
 
 M5-01 and M5-02 hard-depend on all six tasks.
+
+## D026 — No tree-sitter patch for sharing compiled grammar code (owner, 2026-11-01)
+
+M4-15 evaluated sharing compiled grammar code across parse workers; the evidence is in `reports/M4-15.md`.
+- **Cost:** compiling a grammar costs 0.1–8 ms per worker on Node 26 and Bun 1.4, against about 377 ms of worker startup. Most of that startup is the worker's own boot, then about 48 ms of query compilation, which cannot be shared.
+- **Routes:** every route needs patching `web-tree-sitter`, re-implementing its private `Language` constructor, or a custom threaded build.
+
+The owner chose not to patch. M4-15 closes on the evaluation. Revisit only if `web-tree-sitter` gains a public API that loads a precompiled `WebAssembly.Module` under Node.

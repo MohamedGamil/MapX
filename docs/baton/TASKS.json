@@ -21013,26 +21013,79 @@
       "blockingConditions": [],
       "sources": [
         "docs/baton/DECISIONS.md",
-        "docs/baton/reports/M0-06-R2.md"
+        "docs/baton/reports/M0-06-R2.md",
+        "docs/baton/DECISIONS.md#D026"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T17:36:33.736Z",
+      "completedAt": "2026-11-01T17:44:07.226Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-15.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/worker-pool.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-15.md"
+        },
+        {
+          "command": "npx tsx scripts/bench/workers.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-15.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-15.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T17:36:16.244Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T17:36:33.736Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T17:44:06.794Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T17:44:07.226Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/worker-pool.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-15.md"
+            },
+            {
+              "command": "npx tsx scripts/bench/workers.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-15.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-15.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -21052,10 +21105,7 @@
         "implementation or decision"
       ],
       "affectedFiles": [
-        "src/parsers/wasm-parser.ts",
-        "src/parsers/parse-worker.ts",
-        "src/core/worker-pool.ts",
-        "tests/worker-pool.test.ts",
+        "docs/baton/reports/M4-15.md",
         "docs/baton/DECISIONS.md",
         "CHANGELOG.md"
       ],
