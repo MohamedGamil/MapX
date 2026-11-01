@@ -138,6 +138,7 @@
     "nan": "^2.22.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@toon-format/toon": "^4.4.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/cytoscape": "^3.21.9",
@@ -145,6 +146,7 @@
     "@types/node": "^22.19.19",
     "@types/picomatch": "^4.0.3",
     "@vitest/coverage-v8": "^4.1.7",
+    "axe-core": "^4.14.0",
     "esbuild": "^0.28.0",
     "graphology-types": "^0.24.8",
     "tree-sitter-bash": "^0.25.1",
