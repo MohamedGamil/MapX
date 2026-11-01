@@ -110,6 +110,8 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-17-R6** Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings — DONE, P2, 6h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8, M3-11-R1, M3-09-R1, M0-17-R5.
 - **M0-02-R10** An interrupted sync loses the symbols of the files it started re-indexing — DONE, P1, 4h; depends on M4-04.
 - **M0-07-R3** The MCP server reports the package version; the installer names itself for uninstall — DONE, P2, 1h; depends on M0-07-R2.
+- **M0-10-R5** scan and sync with no repo named cover every registered repo — DONE, P1, 4h; depends on M0-10-R4.
+- **M0-06-R2** The compiled binary parses on worker threads — DONE, P1, 4h; depends on M0-06-R1.
 
 ## M1 — Laravel route correctness
 

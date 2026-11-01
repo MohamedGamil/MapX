@@ -12,6 +12,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx scan` and `mapx sync`, and the MCP `mapx_scan` and `mapx_sync` tools, cover every registered repository unless `--repo` (`repo`) names one, as `--all` does. Run at a workspace root, a plain `mapx scan --force` re-indexed only the root repo, leaving the nested repos registered there unscanned (M0-10-R5).
 
 ### Fixed
+- The standalone binary parses on worker threads: the build embeds the parse worker, which every parallel scan failed to load (`Cannot find module '/$bunfs/parsers/parse-worker.js'`), and `scripts/package.sh` smoke-scans the host binary and fails the build if it falls back to one thread. A PHP call named after an `Object.prototype` member (`$x->toString()`, `valueOf`, `constructor`) no longer reads that member as a Laravel facade: the call was dropped, and on worker threads it made the whole scan fall back to one thread. The same lookup is fixed for Vuex `dispatch`/`commit` and map helpers, and for Laravel resource names: `Route::resource('constructor', …)` lost every route of its file. A result a worker cannot hand back is parsed again on the main thread for that file only, with a warning (M0-06-R2).
 - The MCP server reports the installed version in its `initialize` response (it said `0.1.3`), and the self-extracting installer's uninstall hint names the installer instead of its deleted temporary copy (M0-07-R3).
 
 ## [0.3.7] — 2026-11-01

@@ -193,6 +193,19 @@ function wordIn(text: string, name: string): boolean {
   return new RegExp(`(?<![\\w$])${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w$])`).test(text);
 }
 
+/**
+ * The parse worker's module, from the scanner's own import.meta.url.
+ * - **Source** (tsx, Vitest): `src/parsers/parse-worker.ts`.
+ * - **npm build** (tsup, unbundled): `dist/parsers/parse-worker.js`.
+ * - **bun --compile binary:** every module is bundled into the binary's own, at `<root>/<binary>` in
+ *   bun's embedded filesystem (`/$bunfs/root/` on Unix, `B:/~BUN/root/` on Windows); the worker,
+ *   a second entrypoint of the build, sits beside it at `<root>/parsers/parse-worker.js` (M0-06-R2).
+ */
+export function parseWorkerUrl(moduleUrl: string): URL {
+  if (/\/(\$bunfs|~BUN)\//.test(moduleUrl)) return new URL('./parsers/parse-worker.js', moduleUrl);
+  return new URL(`../parsers/parse-worker${moduleUrl.endsWith('.ts') ? '.ts' : '.js'}`, moduleUrl);
+}
+
 export class Scanner {
   private store: Store;
   private config: Config;
@@ -1314,7 +1327,7 @@ export class Scanner {
       } catch (err: any) {
         // Fallback to main thread on error (e.g. worker initialization/spawn error). Say so: a
         // silent fallback hid a broken worker bootstrap for every source-mode scan (M0-06-R1).
-        console.warn(`[mapx] Parallel parsing unavailable (${err?.message ?? err}); parsing on one thread.`);
+        console.warn(`[mapx] Parallel parsing unavailable (${err?.message || err?.name || err}); parsing on one thread.`);
         return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
       }
     }
@@ -1328,9 +1341,7 @@ export class Scanner {
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
     const workerCount = Math.min(this.concurrency, files.length, 8);
-    const workerExt = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
-    // If running in Vitest/TS, point to parse-worker.ts, otherwise parse-worker.js
-    const workerUrl = new URL(`../parsers/parse-worker${workerExt}`, import.meta.url);
+    const workerUrl = parseWorkerUrl(import.meta.url);
 
     const workers: Worker[] = [];
     const readyPromises: Promise<void>[] = [];
@@ -1388,6 +1399,8 @@ export class Scanner {
 
     let nextIdx = 0;
     const results: ParseResult[] = new Array(files.length);
+    const mainThreadRetries: number[] = [];
+    let retryReason: string | undefined;
 
     const runWorkerLoop = async (worker: Worker) => {
       return new Promise<void>((resolveLoop, rejectLoop) => {
@@ -1396,6 +1409,17 @@ export class Scanner {
 
         const onMessage = (msg: any) => {
           const resultIndex = msg.id;
+          if (msg.retryOnMainThread) {
+            // The worker could not hand this file's result over: the main thread parses it below.
+            mainThreadRetries.push(resultIndex);
+            retryReason ??= String(msg.retryOnMainThread);
+            if (currentResolve) {
+              const cb = currentResolve;
+              currentResolve = null;
+              cb();
+            }
+            return;
+          }
           // fileMetadata carries the PHP namespace; dropping it lost namespace clusters on every
           // fresh parallel scan (M0-08-R1).
           results[resultIndex] = {
@@ -1476,6 +1500,14 @@ export class Scanner {
       await Promise.all(workers.map(w => runWorkerLoop(w)));
     } finally {
       await Promise.all(workers.map(w => w.terminate()));
+    }
+
+    if (mainThreadRetries.length > 0 && !this.aborted) {
+      // Said, not silent: a hand-back is a parser bug (a result structured clone rejects, or a throw).
+      const first = files[mainThreadRetries[0]!]!;
+      console.warn(`[mapx] ${mainThreadRetries.length} file(s) parsed on the main thread: a worker could not return them (${relative(workspaceRoot, first.absolutePath).replace(/\\/g, '/')}: ${retryReason}).`);
+      const retried = await this.parseOnMainThread(mainThreadRetries.map(i => files[i]), workspaceRoot, ignoredSymbols, onFileParsed);
+      mainThreadRetries.forEach((fileIndex, k) => { results[fileIndex] = retried[k]; });
     }
 
     return results;

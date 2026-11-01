@@ -88,7 +88,7 @@ function namespacedHelpers(root: Node, imports: Map<string, string>): Map<string
       if (pattern?.type === 'identifier') {
         for (const helper of Object.keys(MAP_HELPER_KINDS)) helpers.set(`${pattern.text}.${helper}`, { helper, namespace });
       } else if (pattern?.type === 'object_pattern') {
-        for (const [local, helper] of patternNames(pattern)) if (MAP_HELPER_KINDS[helper]) helpers.set(local, { helper, namespace });
+        for (const [local, helper] of patternNames(pattern)) if (Object.hasOwn(MAP_HELPER_KINDS, helper)) helpers.set(local, { helper, namespace });
       }
     }
   }
@@ -126,7 +126,8 @@ export function mapHelperEntries(call: Node | null, imports: Map<string, string>
   while (root.parent) root = root.parent;
   const bound = namespacedHelpers(root, imports).get(callee);
   const helper = bound?.helper ?? callee;
-  const kind = MAP_HELPER_KINDS[helper];
+  // Own keys only: a name such as `hasOwnProperty` read an Object.prototype function (M0-06-R2).
+  const kind = Object.hasOwn(MAP_HELPER_KINDS, helper) ? MAP_HELPER_KINDS[helper] : undefined;
   if (!kind) return [];
   const args = call.childForFieldName('arguments')?.namedChildren ?? [];
   const first = !bound && args.length >= 2 ? args[0] : null;
@@ -345,7 +346,7 @@ class StorePass {
     if (!callee) return;
     const property = callee.type === 'member_expression' ? callee.childForFieldName('property') : null;
     // `store.dispatch('x')` is Vuex whatever `store` is bound to: Pinia stores have no dispatch / commit.
-    const vuexCall = !!CALL_KINDS[property?.text ?? ''] && args[0]?.type === 'string';
+    const vuexCall = Object.hasOwn(CALL_KINDS, property?.text ?? '') && args[0]?.type === 'string';
     const pinia = vuexCall ? null : this.piniaStore(callee.type === 'member_expression' ? callee.childForFieldName('object') : null, node);
     const destructured = callee.type === 'identifier' && !this.component ? this.destructuredMember(callee.text, node) : null;
     if (pinia && property?.type === 'property_identifier') {
@@ -360,7 +361,8 @@ class StorePass {
       this.target(callee, destructured.member, destructured.store, callee.text);
     } else {
       const method = callee.type === 'identifier' ? callee.text : property?.text ?? '';
-      const kind = CALL_KINDS[method];
+      // Own keys only: `routes.hasOwnProperty('users/list')` read an Object.prototype function as the kind (M0-06-R2).
+      const kind = Object.hasOwn(CALL_KINDS, method) ? CALL_KINDS[method] : undefined;
       const path = stringValue(args[0]);
       if (!kind || !path) return;
       const receiver = callee.type === 'member_expression' ? callee.childForFieldName('object')?.text ?? '' : '';

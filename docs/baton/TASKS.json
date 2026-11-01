@@ -20187,14 +20187,27 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
       "startedAt": "2026-11-01T14:44:18.381Z",
-      "completedAt": null,
+      "completedAt": "2026-11-01T15:00:27.702Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-06-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/binary-workers.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-06-R2.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-06-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T14:13:28.585Z",
@@ -20207,6 +20220,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T15:00:27.406Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T15:00:27.702Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/binary-workers.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-06-R2.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-06-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -20234,6 +20270,8 @@
         "src/core/scanner.ts",
         "src/parsers/parse-worker.ts",
         "src/parsers/languages/php.ts",
+        "src/parsers/languages/vue-stores.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
         "scripts/package.sh",
         "scripts/build-all.ts",
         "Makefile",
@@ -20245,7 +20283,7 @@
         "Every bun build --compile command in Makefile, scripts/package.sh and scripts/build-all.ts names src/parsers/parse-worker.ts as an entrypoint (tests/binary-workers.test.ts).",
         "scripts/package.sh fails the build when the packaged binary falls back to one thread (smoke scan).",
         "A PHP call named toString, valueOf or constructor links to the declaring class's method; a parallel scan of such files (source mode and the compiled binary) prints no fallback warning and indexes what --no-parallel does (tests/binary-workers.test.ts).",
-        "A parse result a worker cannot post is parsed again on the main thread for that file only; the scan stays on worker threads (mutation check in reports/M0-06-R2.md)."
+        "A file a worker cannot return is parsed again on the main thread for that file only, with a warning; the scan stays on worker threads and indexes what --no-parallel does (tests/binary-workers.test.ts, MAPX_TEST_WORKER_FAIL hook)."
       ],
       "verificationCommands": [
         "npx vitest run tests/binary-workers.test.ts",

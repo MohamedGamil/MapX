@@ -47,7 +47,7 @@ if (!only.length && !dryRun) {
 
 console.log('\nBuilding binaries...');
 for (const { target, outfile } of targets) {
-  const command = `bun build --compile --minify --define MAPX_BUILD_VERSION='"${VERSION}"' --target=${target} ./src/main.ts --outfile ${JSON.stringify(outfile)}`;
+  const command = `bun build --compile --minify --define MAPX_BUILD_VERSION='"${VERSION}"' --target=${target} ./src/main.ts ./src/parsers/parse-worker.ts --outfile ${JSON.stringify(outfile)}`;
   if (dryRun) {
     console.log(`  ${command}`);
     continue;

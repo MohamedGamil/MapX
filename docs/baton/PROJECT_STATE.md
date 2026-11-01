@@ -1,6 +1,6 @@
 # MapX project state
 
-Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). All remaining M4 tasks are done: M4-01 (`a4bd752`), M4-03 (`1391d31`), M4-08 (`ac26e66`), M4-05 (`e4fc861`, D020) and M4-04. Plan baseline: `develop@7e5aa19` (0.3.5). Version 0.3.7, tagged `v0.3.7` at `8914c5b` and installed as the Linux binary in `~/.local/bin` with the project's installer (D023); v0.3.6 tagged at `e1d5da0`. Not published or pushed. BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). All remaining M4 tasks are done: M4-01 (`a4bd752`), M4-03 (`1391d31`), M4-08 (`ac26e66`), M4-05 (`e4fc861`, D020) and M4-04. Plan baseline: `develop@7e5aa19` (0.3.5). Version 0.3.7, tagged `v0.3.7` at `8914c5b` and installed as the Linux binary in `~/.local/bin` with the project's installer (D023); v0.3.6 tagged at `e1d5da0`. Not published or pushed. Owner testing of the installed binary found two defects, fixed on `develop` after `v0.3.7`: M0-10-R5 (scan/sync cover every registered repo by default, D024) and M0-06-R2 (the binary parses on worker threads; prototype-key lookups in the PHP, Vuex and Laravel code). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
@@ -169,6 +169,12 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 ## Latest validation
 
+2026-11-01, after M0-10-R5 and M0-06-R2:
+- **`npm run check`:** exit 0. The plan has 190 tasks; 106 test files, 1870 passed and 1 skipped.
+- **`npm run eval`:** exit 0, and all floors hold.
+- **`make package-linux`:** exit 0, with the new smoke scan reporting worker threads.
+- **Scale check:** the compiled binary scanned a 3,481-file Laravel copy in 25.5 s on worker threads, against 37.7 s on one thread. The index was identical, and peak RSS was 3.8 GB.
+
 2026-11-01, after M4-04 (uncommitted on `develop@e4fc861`):
 - **`npm run check`:** exit 0 (plan valid with 187 tasks, changelog coverage 134 entries, typecheck, 100 test files with 1811 passed and 1 skipped, skill tests).
 - **`npm run eval`:** exit 0. Routes, HTTP and edges all hold their floors; edges precision 0.9915 against a floor of 0.99.
@@ -190,6 +196,7 @@ Earlier:
 - **D006:** the dashboard bundle target is re-baselined to a 720 KiB gzipped ceiling, enforced by `scripts/check-package.ts` and CI. M0-15-R2 is DONE.
 - **D007:** releases are owner-initiated. M1-99 is DEFERRED and the gate is now `G-RELEASE` (`ownerInitiated`). Agents don't request it; work accumulates under CHANGELOG `[Unreleased]`.
 
+- **D024 (2026-11-01):** scan and sync, from the CLI and MCP, cover every registered repo unless one is named. A missing repo folder is skipped with a warning (M0-10-R5).
 - **D023 (2026-11-01):** v0.3.7 tagged; installed as a user binary with the self-extracting installer; npm-global copy removed. Found and fixed M0-07-R3 (MCP version, installer hint).
 - **D022 (2026-11-01):** version 0.3.7 built and installed locally; annotated tag v0.3.6 at its bump commit (local, not pushed).
 - **D021 (2026-11-01):** version 0.3.6 (owner request): synced, built (npm tarball and linux binary), installed globally from the local tarball; not published.

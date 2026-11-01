@@ -858,8 +858,10 @@ export class PhpParser extends GenericWasmParser {
         // Cache/Event/Response is the app's own class.
         const isFacadeReference = ref.targetName === shortName || ref.targetName === `Illuminate\\Support\\Facades\\${shortName}`;
         if (shortName !== 'Route' && isFacadeReference) {
-          const resolved = mergedFacadeMap[shortName];
-          if (resolved) {
+          // Own keys only: `$x->toString()` read Object.prototype.toString, a function, as the facade's
+          // class; that dropped the call and failed every parallel scan reaching it (M0-06-R2).
+          const resolved = Object.hasOwn(mergedFacadeMap, shortName) ? mergedFacadeMap[shortName] : undefined;
+          if (typeof resolved === 'string' && resolved) {
             ref.targetName = resolved;
             ref.verifiability = 'inferred';
             ref.metadata = {

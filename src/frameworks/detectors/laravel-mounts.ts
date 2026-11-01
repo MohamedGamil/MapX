@@ -233,7 +233,7 @@ export function phpString(expr: string, scope: PhpScope, fallback?: string): str
       const inner = pathExpr ? phpString(pathExpr, scope) : '';
       if ((name === null || inner === null) && fallback === undefined) return null;
       out += name === null || inner === null ? fallback : posix.join(scope.root, MODULES_DIR, name, inner);
-    } else if ((m = part.match(/^(\w+)\s*\(\s*(.*?)\s*\)$/s)) && m[1]! in PATH_HELPERS) {
+    } else if ((m = part.match(/^(\w+)\s*\(\s*(.*?)\s*\)$/s)) && Object.hasOwn(PATH_HELPERS, m[1]!)) {
       const inner = m[2] ? phpString(m[2], scope) : '';
       if (inner === null && fallback === undefined) return null;
       out += inner === null ? fallback : posix.join(scope.root, PATH_HELPERS[m[1]!]!, inner);
@@ -496,7 +496,8 @@ function singularWord(word: string): string {
   const lower = word.toLowerCase();
   if (UNCOUNTABLE.has(lower)) return word;
   const keepCase = (s: string) => (word[0] === word[0]!.toUpperCase() ? s[0]!.toUpperCase() + s.slice(1) : s);
-  if (IRREGULAR[lower]) return keepCase(IRREGULAR[lower]!);
+  // Own keys only: `Route::resource('constructor', …)` read an Object.prototype function and threw (M0-06-R2).
+  if (Object.hasOwn(IRREGULAR, lower)) return keepCase(IRREGULAR[lower]!);
   const rules: [RegExp, string][] = [
     [/(quiz)zes$/i, '$1'],
     [/(matr|vert|ind)ices$/i, '$1ix'],

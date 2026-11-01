@@ -511,8 +511,16 @@ async function main() {
   await initLanguages();
 
   parentPort!.on('message', async (job: ParseJob) => {
-    const result = await parseFile(job);
-    parentPort!.postMessage(result);
+    // A result that cannot be posted (a value structured clone rejects) or a parse that throws
+    // hands this one file back to the main thread, instead of failing the worker and with it the
+    // whole parallel scan (M0-06-R2).
+    try {
+      // Test hook: fail this one file, to exercise the hand-back (tests/binary-workers.test.ts).
+      if (process.env['MAPX_TEST_WORKER_FAIL'] === job.filePath) throw new Error('MAPX_TEST_WORKER_FAIL');
+      parentPort!.postMessage(await parseFile(job));
+    } catch (err: any) {
+      parentPort!.postMessage({ id: job.id, retryOnMainThread: `${err?.name ?? 'Error'}: ${err?.message ?? err}` });
+    }
   });
 
   parentPort!.postMessage({ type: 'ready' });
