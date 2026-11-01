@@ -3,7 +3,7 @@ import { accessSync, constants as fsConstants, existsSync, readFileSync, readdir
 import { resolve, relative, extname, join, basename, dirname, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
-import { ParseWorkerPool, createParsePool } from './worker-pool.js';
+import { ParseWorkerPool, availableMemory, createParsePool, parseWorkersSetting, poolSize } from './worker-pool.js';
 import { Store } from './store.js';
 import { findAssetRoot } from '../parsers/assets.js';
 import { ClusterEngine } from './cluster-engine.js';
@@ -207,6 +207,8 @@ export interface WorkerStats {
   handbacks: number;
   peakRssMb?: number;
 }
+
+const STATIC_LANGUAGES = new Set(Object.values(getBuiltinLanguages()).filter(l => l.tier === 'static').map(l => l.name));
 
 export class Scanner {
   private store: Store;
@@ -1340,9 +1342,10 @@ export class Scanner {
     onFileParsed?: (relPath: string) => void
   ): Promise<ParseResult[]> {
     if (files.length === 0) return [];
-    if (this.parallel && files.length > 10) {
+    const lanes = this.parallel ? this.workerLanes(files) : 0;
+    if (lanes > 0) {
       try {
-        return await this.parseWithWorkers(files, workspaceRoot, ignoredSymbols, onFileParsed);
+        return await this.parseWithWorkers(files, workspaceRoot, ignoredSymbols, onFileParsed, lanes);
       } catch (err: any) {
         // Fallback to main thread on error (e.g. worker initialization/spawn error). Say so: a
         // silent fallback hid a broken worker bootstrap for every source-mode scan (M0-06-R1).
@@ -1353,11 +1356,31 @@ export class Scanner {
     return this.parseOnMainThread(files, workspaceRoot, ignoredSymbols, onFileParsed);
   }
 
+  /**
+   * Workers for a batch (M4-13): settings.parseWorkers / MAPX_PARSE_WORKERS, or poolSize from the
+   * batch's bytes, the CPUs, the available memory and the workers already running.
+   */
+  private workerLanes(files: FileInfo[]): number {
+    const pool = this.sharedPool ?? this.runPool;
+    return poolSize({
+      files: files.length,
+      // Static-tier files (JSON, YAML, Markdown, CSS, HTML) are scanned by a few regexes, not a
+      // grammar: their bytes cost a twentieth of source code's (review 2026-11-01: 19 MB of JSON took
+      // 8 workers and 1 GB for a 6% gain).
+      bytes: files.reduce((n, f) => n + (f.sizeBytes || 0) * (STATIC_LANGUAGES.has(f.language) ? 0.05 : 1), 0),
+      cpus: cpus().length || 1,
+      availableMemory: availableMemory(),
+      warmWorkers: pool?.liveWorkers ?? 0,
+      setting: parseWorkersSetting(this.config.settings.parseWorkers),
+    });
+  }
+
   private async parseWithWorkers(
     files: FileInfo[],
     workspaceRoot: string,
     ignoredSymbols?: ScopedIgnoredSymbols,
-    onFileParsed?: (relPath: string) => void
+    onFileParsed?: (relPath: string) => void,
+    lanes?: number,
   ): Promise<ParseResult[]> {
     const pool = this.parsePool();
     // The run's context: a pooled worker may have parsed another run, or another workspace (M4-11).
@@ -1380,7 +1403,7 @@ export class Scanner {
         ...(msg.fileMetadata ? { fileMetadata: msg.fileMetadata } : {}),
       };
       onFileParsed?.(relPath(files[index]!));
-    }, () => this.aborted);
+    }, () => this.aborted, lanes);
 
     this.runHandbacks += batch.handbacks.length;
     if (batch.handbacks.length > 0 && !this.aborted) {
@@ -1397,7 +1420,7 @@ export class Scanner {
   /** The pool this run parses with: the shared one (mapx serve), or the run's own, made on first use. */
   private parsePool(): ParseWorkerPool {
     if (this.sharedPool) return this.sharedPool;
-    this.runPool ??= createParsePool({ size: Math.min(this.concurrency, 8) });
+    this.runPool ??= createParsePool();
     return this.runPool;
   }
 

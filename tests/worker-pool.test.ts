@@ -6,14 +6,17 @@ import { pathToFileURL } from 'node:url';
 import { getBuiltinLanguages } from '../src/languages/registry.js';
 import { grammarLoadCounts, loadLanguage } from '../src/parsers/wasm-parser.js';
 import { Scanner, type WorkerStats } from '../src/core/scanner.js';
-import { ParseWorkerPool } from '../src/core/worker-pool.js';
+import { POOL_SIZING, ParseWorkerPool, availableMemory, parseWorkersSetting, poolSize } from '../src/core/worker-pool.js';
 import { Store } from '../src/core/store.js';
 import { Config } from '../src/core/config.js';
 import { MapxGraph } from '../src/core/graph.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer, mcpParsePool } from '../src/mcp.js';
-import { cleanup, init, mapxWithStderr, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapxWithStderr, query, workspace, useParseWorkers } from './helpers/e2e.js';
+
+// These scans exercise the parse workers; test projects are below the automatic break-even (M4-13).
+useParseWorkers(4);
 
 // Parse worker resources (D025): M4-10 grammars per worker, M4-11 pool, M4-13 sizing,
 // M4-12 distribution, M4-14 batching.
@@ -324,4 +327,122 @@ describe('M4-11 review: the shared pool under concurrent tool calls, and process
       cleanup(root);
     }
   }, 120000);
+});
+
+describe('M4-13: pool size from the work and the machine', () => {
+  const KB = 1024;
+  const MB = 1024 * KB;
+  const GB = 1024 * MB;
+  const machine = { cpus: 16, availableMemory: 16 * GB };
+
+  it.each([
+    ['a small batch parses on the main thread', { files: 20, bytes: 50 * KB }, 0],
+    ['below two cold workers\' worth', { files: 300, bytes: 700 * KB }, 0],
+    ['two cold workers\' worth', { files: 300, bytes: 2 * POOL_SIZING.coldBytesPerWorker }, 2],
+    ['MapX\'s own sources (3.4 MB)', { files: 383, bytes: 3.4 * MB }, 8],
+    ['never more than 8', { files: 5000, bytes: 70 * MB }, 8],
+    ['never more than CPUs - 1', { files: 5000, bytes: 70 * MB, cpus: 4 }, 3],
+    ['two CPUs leave one: the main thread', { files: 5000, bytes: 70 * MB, cpus: 2 }, 0],
+    ['never more than half the free memory holds', { files: 5000, bytes: 70 * MB, availableMemory: 1 * GB }, 4],
+    ['too little memory for two', { files: 5000, bytes: 70 * MB, availableMemory: 300 * MB }, 0],
+    ['never more than the files', { files: 3, bytes: 30 * MB }, 3],
+    ['running workers need less source', { files: 40, bytes: 200 * KB, warmWorkers: 4 }, 4],
+    ['one running worker alone does not', { files: 40, bytes: 200 * KB, warmWorkers: 1 }, 0],
+    ['a number is used as given', { files: 20, bytes: 10 * KB, setting: 3 }, 3],
+    ['a number never exceeds the files', { files: 2, bytes: 10 * KB, setting: 6 }, 2],
+    ['0 is the main thread', { files: 5000, bytes: 70 * MB, setting: 0 }, 0],
+  ] as const)('%s', (_name, input, expected) => {
+    expect(poolSize({ ...machine, ...input })).toBe(expected);
+  });
+
+  it('reads MAPX_PARSE_WORKERS before settings.parseWorkers, and ignores invalid values with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      expect(parseWorkersSetting(undefined, null)).toBe('auto');
+      expect(parseWorkersSetting(3, null)).toBe(3);
+      expect(parseWorkersSetting(3, '0')).toBe(0);
+      expect(parseWorkersSetting('auto', '5')).toBe(5);
+      expect(parseWorkersSetting(2, '')).toBe(2);
+      expect(parseWorkersSetting(-1, 'many')).toBe('auto');
+      expect(warn).toHaveBeenCalledTimes(2);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('a small "auto" scan starts no worker; settings.parseWorkers 2 starts two; --no-parallel wins over it', () => {
+    const root = workspace(tsFiles('src', 14));
+    try {
+      init(root);
+      expect(mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_PARSE_WORKERS: 'auto' }, 'scan', '--force').stats).toEqual([]);
+      const configPath = join(root, '.mapx/config.json');
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      config.settings.parseWorkers = 2;
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      const configured = mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_PARSE_WORKERS: '' }, 'scan', '--force').stats;
+      expect(configured).toHaveLength(1);
+      expect(configured[0]!.started).toBe(2);
+      expect(mapxStats(root, { MAPX_WORKER_STATS: '1', MAPX_PARSE_WORKERS: '' }, 'scan', '--force', '--no-parallel').stats).toEqual([]);
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
+});
+
+describe('M4-13 review: memory figure, setting parsing, static files', () => {
+  const MB = 1024 * 1024;
+  const GB = 1024 * MB;
+
+  it.each([
+    ['Bun in a 600 MB cgroup reports the host\'s free memory as available: the limit less RSS wins', { freemem: 11 * GB, available: 11 * GB, limit: 600 * MB, rss: 100 * MB }, 500 * MB],
+    ['Node at its cgroup limit (available 0) stays at 0, not the host\'s free memory', { freemem: 11 * GB, available: 0, limit: 600 * MB, rss: 650 * MB }, 0],
+    ['no limit (0): the lower of free and available', { freemem: 8 * GB, available: 6 * GB, limit: 0, rss: 100 * MB }, 6 * GB],
+    ['an unlimited sentinel is ignored', { freemem: 8 * GB, available: 8 * GB, limit: 2 ** 64, rss: 100 * MB }, 8 * GB],
+    ['a runtime without the figures: free memory', { freemem: 3 * GB, rss: 100 * MB }, 3 * GB],
+  ] as const)('%s', (_name, m, expected) => {
+    expect(availableMemory({
+      freemem: () => m.freemem,
+      availableMemory: 'available' in m ? () => m.available : undefined,
+      constrainedMemory: 'limit' in m ? () => m.limit : undefined,
+      rss: () => m.rss,
+    })).toBe(expected);
+  });
+
+  it('accepts only "auto" and whole numbers, warning once per invalid value', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const bad of [' ', '\t', '1e1', '0x10', '4 ', '-1', '2.5']) expect(parseWorkersSetting(undefined, bad)).toBe('auto');
+      for (const bad of [true, [4], 2.5, -3, {}]) expect(parseWorkersSetting(bad, null)).toBe('auto');
+      expect(parseWorkersSetting(undefined, '12')).toBe(12);
+      expect(parseWorkersSetting(0, null)).toBe(0);
+      const before = warn.mock.calls.length;
+      parseWorkersSetting(undefined, '1e1');
+      parseWorkersSetting(true, null);
+      expect(warn.mock.calls.length).toBe(before);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('weighs JSON and other static files at a twentieth of code', async () => {
+    const root = workspace({ 'src/a.ts': 'export const a = 1;\n' });
+    try {
+      const config = await Config.load(root);
+      const scanner: any = new Scanner(new Store(':memory:'), config, new MapxGraph(config.repos[0]!.name));
+      const batch = (language: string) => Array.from({ length: 60 }, (_, i) => ({ absolutePath: join(root, `f${i}`), language, sizeBytes: Math.round((19 * MB) / 60), lines: 1 }));
+      const saved = process.env['MAPX_PARSE_WORKERS'];
+      process.env['MAPX_PARSE_WORKERS'] = 'auto';
+      try {
+        const json = scanner.workerLanes(batch('json'));
+        const ts = scanner.workerLanes(batch('typescript'));
+        expect(json).toBeLessThanOrEqual(2);
+        expect(ts).toBeGreaterThanOrEqual(json);
+      } finally {
+        if (saved === undefined) delete process.env['MAPX_PARSE_WORKERS'];
+        else process.env['MAPX_PARSE_WORKERS'] = saved;
+      }
+    } finally {
+      cleanup(root);
+    }
+  });
 });

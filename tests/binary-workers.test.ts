@@ -6,7 +6,10 @@ import { join, resolve } from 'node:path';
 import { parseWorkerUrl } from '../src/core/scanner.js';
 import { getParserForFile } from '../src/parsers/parser-registry.js';
 import { resourceParam } from '../src/frameworks/detectors/laravel-mounts.js';
-import { cleanup, init, mapxWithStderr, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapxWithStderr, query, workspace, useParseWorkers } from './helpers/e2e.js';
+
+// These scans exercise the parse workers; test projects are below the automatic break-even (M4-13).
+useParseWorkers(4);
 
 // M0-06-R2: the bun-compiled binary embeds the parse worker and scans on worker threads. It printed
 // "Parallel parsing unavailable (Cannot find module '/$bunfs/parsers/parse-worker.js')" on every

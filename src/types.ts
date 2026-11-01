@@ -216,6 +216,12 @@ export interface MapxConfig {
     php?: {
       facadeMap?: Record<string, string>;
     };
+    /**
+     * Parse workers per batch (M4-13): "auto" (default) sizes the pool from the bytes to parse, the
+     * CPUs and the available memory; a number uses that many workers (at most one per file); 0 parses
+     * on the main thread. MAPX_PARSE_WORKERS overrides it; --no-parallel forces 0.
+     */
+    parseWorkers?: 'auto' | number;
     /** Frontend HTTP clients MapX cannot recognise on its own (D008). */
     http?: {
       clients?: { receiver: string; baseURL?: string }[];

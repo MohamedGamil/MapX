@@ -20622,23 +20622,75 @@
         "docs/baton/reports/M0-06-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T16:08:20.281Z",
+      "completedAt": "2026-11-01T16:31:31.658Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-13.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/worker-pool.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-13.md"
+        },
+        {
+          "command": "npx tsx scripts/bench/workers.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-13.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-13.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T16:07:57.345Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T16:08:20.281Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T16:31:31.391Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T16:31:31.658Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/worker-pool.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-13.md"
+            },
+            {
+              "command": "npx tsx scripts/bench/workers.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-13.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-13.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -20662,15 +20714,29 @@
       "affectedFiles": [
         "src/core/worker-pool.ts",
         "src/core/scanner.ts",
-        "src/core/config.ts",
+        "src/types.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
         "tests/worker-pool.test.ts",
+        "tests/helpers/e2e.ts",
+        "tests/scanner-coverage.test.ts",
+        "tests/binary-workers.test.ts",
+        "tests/legacy-languages.test.ts",
+        "tests/legacy-php-resolution.test.ts",
+        "tests/legacy-php-worker.test.ts",
+        "tests/svelte.test.ts",
+        "tests/vue-sfc.test.ts",
+        "scripts/package.sh",
+        "scripts/bench/workers.ts",
         "docs/configuration.md",
+        "docs/cli-reference.md",
         "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
         "poolSize returns 0 below the measured break-even file count, never more than cpus - 1, 8, ceil(files / filesPerWorker), or what half the free memory holds at the measured per-worker cost (table-driven unit tests, tests/worker-pool.test.ts).",
         "settings.parseWorkers (a number, 0 = one thread, or \"auto\") caps the pool; --no-parallel still forces one thread (test).",
-        "The break-even and per-worker memory figures come from the bench and are recorded in the report."
+        "The break-even and per-worker memory figures come from the bench and are recorded in the report.",
+        "The available-memory figure honours container limits under Node and Bun (constrainedMemory less RSS), and static-tier files weigh a twentieth of code bytes (tests)."
       ],
       "verificationCommands": [
         "npx vitest run tests/worker-pool.test.ts",
@@ -20697,7 +20763,7 @@
         "docs/baton/reports/M0-06-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "claude",
       "actualHours": null,
       "startedAt": null,
@@ -20705,7 +20771,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-01T16:31:31.928Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
+import { afterAll, beforeAll } from 'vitest';
 
 const MAIN = resolve(__dirname, '../../src/main.ts');
 // Absolute loader URL: the temp workspace has no node_modules to resolve `tsx` from.
@@ -75,4 +76,21 @@ export function query<T = Record<string, unknown>>(root: string, sql: string, ..
 
 export function cleanup(root: string): void {
   rmSync(root, { recursive: true, force: true });
+}
+
+/**
+ * Makes this test file's scans parse on `n` workers (MAPX_PARSE_WORKERS), restoring the variable
+ * afterwards. Test projects are far below the automatic break-even (M4-13), so a test that means to
+ * exercise the workers says so.
+ */
+export function useParseWorkers(n: number | 'auto' = 4): void {
+  let saved: string | undefined;
+  beforeAll(() => {
+    saved = process.env['MAPX_PARSE_WORKERS'];
+    process.env['MAPX_PARSE_WORKERS'] = String(n);
+  });
+  afterAll(() => {
+    if (saved === undefined) delete process.env['MAPX_PARSE_WORKERS'];
+    else process.env['MAPX_PARSE_WORKERS'] = saved;
+  });
 }

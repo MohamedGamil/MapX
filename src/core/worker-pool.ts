@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads';
-import { cpus } from 'node:os';
+import { cpus, freemem } from 'node:os';
 import { relative } from 'node:path';
 
 /**
@@ -17,6 +17,116 @@ import { relative } from 'node:path';
  *   batch; after that the batch's remaining files are handed back.
  * - `close()` terminates every worker; the pool can start new ones afterwards.
  */
+
+/**
+ * Pool sizing constants (M4-13), measured on MapX's own sources (383 files, 3.4 MB; Node 26,
+ * 16 cores; docs/baton/reports/M4-13.md):
+ * - the main thread parses about 1.1 KB of source per ms;
+ * - a cold pool takes 260 ms (1 worker) to 560 ms (8) to return its first result;
+ * - 2 workers parse 1.68 times faster than the main thread, 4 workers 2.7 times, 8 workers 3.6 times;
+ *   one worker is slower than the main thread;
+ * - a worker costs 60 to 110 MB (V8 isolate, parser modules, grammars), more on large files.
+ */
+export const POOL_SIZING = {
+  /** Source a cold worker must have to repay its startup (about 350 ms of parsing). */
+  coldBytesPerWorker: 384 * 1024,
+  /** Source a running (warm) worker needs: no startup to repay, only the message round trips. */
+  warmBytesPerWorker: 48 * 1024,
+  /** Memory a worker is assumed to take, conservatively. */
+  perWorkerBytes: 128 * 1024 * 1024,
+  /** Share of the available memory the workers may take. */
+  memoryShare: 0.5,
+  maxWorkers: 8,
+} as const;
+
+export interface PoolSizeInput {
+  /** Files and bytes of source of the batch. */
+  files: number;
+  bytes: number;
+  cpus: number;
+  availableMemory: number;
+  /** Workers already running in the pool (no startup cost). */
+  warmWorkers?: number;
+  /** settings.parseWorkers / MAPX_PARSE_WORKERS. */
+  setting?: 'auto' | number;
+}
+
+/**
+ * Workers for one parse batch (M4-13); 0 means the main thread. "auto": as many workers as the
+ * batch's bytes repay (cold, or warm for running workers), but never one alone, and never more than
+ * CPUs - 1, 8, the files, or what half the available memory holds. A number is used as given, at
+ * most one worker per file.
+ */
+export function poolSize(input: PoolSizeInput): number {
+  const { files, bytes, cpus, availableMemory, warmWorkers = 0, setting = 'auto' } = input;
+  if (typeof setting === 'number') return Math.max(0, Math.min(Math.floor(setting), files));
+  const cap = Math.min(
+    POOL_SIZING.maxWorkers,
+    Math.max(cpus - 1, 1),
+    files,
+    Math.floor((availableMemory * POOL_SIZING.memoryShare) / POOL_SIZING.perWorkerBytes),
+  );
+  const cold = Math.floor(bytes / POOL_SIZING.coldBytesPerWorker);
+  const warm = Math.min(warmWorkers, Math.floor(bytes / POOL_SIZING.warmBytesPerWorker));
+  const n = Math.min(cap, Math.max(cold, warm));
+  return n >= 2 ? n : 0;
+}
+
+const warnedSettings = new Set<string>();
+
+/**
+ * settings.parseWorkers, overridden by MAPX_PARSE_WORKERS: "auto", or a whole number ≥ 0 (digits
+ * only; a number in the config must be an integer). Anything else is ignored with one warning per
+ * value per process (review 2026-11-01: "1e1", "0x10", blanks, true and [4] were accepted).
+ */
+export function parseWorkersSetting(configured: unknown, env: string | null | undefined = process.env['MAPX_PARSE_WORKERS']): 'auto' | number {
+  for (const value of [env, configured]) {
+    if (value === undefined || value === null || value === '') continue;
+    if (value === 'auto') return 'auto';
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value;
+    if (typeof value === 'string' && /^\d+$/.test(value)) return Number(value);
+    const shown = JSON.stringify(value);
+    if (!warnedSettings.has(shown)) {
+      warnedSettings.add(shown);
+      console.warn(`[mapx] Ignoring parseWorkers ${shown}: expected "auto" or a whole number ≥ 0.`);
+    }
+  }
+  return 'auto';
+}
+
+/** The memory figures availableMemory reads; injectable for tests. */
+export interface MemoryProbe {
+  freemem: () => number;
+  availableMemory?: () => number;
+  constrainedMemory?: () => number;
+  rss: () => number;
+}
+
+const processProbe = (): MemoryProbe => ({
+  freemem,
+  availableMemory: (process as any).availableMemory?.bind(process),
+  constrainedMemory: (process as any).constrainedMemory?.bind(process),
+  rss: () => process.memoryUsage().rss,
+});
+
+/**
+ * Memory the process can still use: the lowest of the host's free memory, the runtime's available
+ * memory, and the container limit less this process's RSS (review 2026-11-01). Bun reports the host's
+ * free memory as available even inside a cgroup limit; Node's 0 at the limit is the limit's
+ * minus-RSS, never replaced by the host's figure.
+ */
+export function availableMemory(probe: MemoryProbe = processProbe()): number {
+  const figures = [probe.freemem()];
+  try {
+    const available = probe.availableMemory?.();
+    if (typeof available === 'number' && available > 0) figures.push(available);
+  } catch { /* runtime without it */ }
+  try {
+    const limit = probe.constrainedMemory?.();
+    if (typeof limit === 'number' && limit > 0 && limit < Number.MAX_SAFE_INTEGER) figures.push(Math.max(0, limit - probe.rss()));
+  } catch { /* runtime without it */ }
+  return Math.min(...figures);
+}
 
 export interface PoolFile {
   absolutePath: string;
@@ -110,8 +220,9 @@ export class ParseWorkerPool {
     context: PoolContext,
     onResult: (index: number, result: R) => void,
     isAborted: () => boolean,
+    maxLanes = this.size,
   ): Promise<PoolBatchResult<R>> {
-    const batch = this.queueTail.then(() => this.runBatch<R>(files, workspaceRoot, context, onResult, isAborted));
+    const batch = this.queueTail.then(() => this.runBatch<R>(files, workspaceRoot, context, onResult, isAborted, maxLanes));
     this.queueTail = batch.catch(() => undefined);
     return batch;
   }
@@ -122,6 +233,7 @@ export class ParseWorkerPool {
     context: PoolContext,
     onResult: (index: number, result: R) => void,
     isAborted: () => boolean,
+    maxLanes: number,
   ): Promise<PoolBatchResult<R>> {
     if (this.running) throw new Error('ParseWorkerPool: one batch at a time');
     this.running = true;
@@ -144,7 +256,7 @@ export class ParseWorkerPool {
     };
 
     try {
-      const wanted = Math.min(this.size, files.length);
+      const wanted = Math.max(1, Math.min(this.size, files.length, maxLanes));
       while (this.liveWorkers < wanted) this.start();
       const lanes = this.workers.filter(w => w.alive).slice(0, wanted);
       // Any worker that starts proves the pool usable; if none does, the caller falls back.
@@ -305,7 +417,8 @@ export function parseWorkerUrl(moduleUrl: string): URL {
  */
 export function createParsePool(options: { size?: number; idleMs?: number } = {}): ParseWorkerPool {
   return new ParseWorkerPool({
-    size: options.size ?? Math.min(cpus().length || 4, 8),
+    // An upper bound: workers start only as batches need them (poolSize decides per batch).
+    size: options.size ?? Math.max(cpus().length || 4, POOL_SIZING.maxWorkers),
     idleMs: options.idleMs,
     workerUrl: parseWorkerUrl(import.meta.url),
     spawn: (workerUrl, workerData) => /\.ts$/.test(workerUrl.pathname)

@@ -3,10 +3,13 @@
 // language), scans it with the real CLI on worker threads and with --no-parallel, and prints wall
 // time, peak RSS and the parallel run's worker statistics (MAPX_WORKER_STATS). No real code is involved.
 //   npx tsx scripts/bench/workers.ts [--files 3000] [--mix typescript:40,php:35,vue:10,python:5,go:5,ruby:5]
-//                                    [--bin <compiled mapx>] [--keep] [--json]
+//                                    [--corpus <dir> [--copies 1]] [--bin <compiled mapx>] [--keep] [--json]
+// --corpus scans copies of an existing directory instead (for example `git archive HEAD src tests`
+// of MapX itself): generated files parse much faster per byte than real code. MAPX_PARSE_WORKERS
+// and the other variables pass through to the scans.
 // Exit code 1 when the parallel index differs from the one-thread index; 2 on usage or scan errors.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -46,6 +49,12 @@ const MIX: Array<[Lang, number]> = (value('mix') ?? 'typescript:40,php:35,vue:10
   return [lang as Lang, Number(weight)];
 });
 const BIN = value('bin');
+const CORPUS = value('corpus');
+const COPIES = Number(value('copies') ?? '1');
+if (CORPUS && (!existsSync(CORPUS) || !Number.isInteger(COPIES) || COPIES < 1)) {
+  console.error('--corpus needs an existing directory, and --copies a whole number ≥ 1');
+  process.exit(2);
+}
 const JSON_OUT = process.argv.includes('--json');
 const KEEP = process.argv.includes('--keep');
 
@@ -138,8 +147,11 @@ function digest(root: string) {
 const root = mkdtempSync(join(tmpdir(), 'mapx-bench-workers-'));
 try {
   const total = MIX.reduce((sum, [, w]) => sum + w, 0);
-  const counts = MIX.map(([lang, w]) => [lang, Math.max(2, Math.round((FILES * w) / total))] as const);
-  for (const [lang, n] of counts) generate(root, lang, n);
+  const counts: Array<readonly [string, number]> = CORPUS
+    ? [[`corpus ${CORPUS} ×${COPIES}`, COPIES]]
+    : MIX.map(([lang, w]) => [lang, Math.max(2, Math.round((FILES * w) / total))] as const);
+  if (CORPUS) for (let k = 0; k < COPIES; k++) cpSync(CORPUS, join(root, `copy${k}`), { recursive: true });
+  else for (const [lang, n] of counts) generate(root, lang as Lang, n);
   write(root, 'package.json', JSON.stringify({ name: 'bench-workers', version: '1.0.0', dependencies: { vue: '^3.4.0' } }));
   write(root, 'vite.config.ts', "export default { resolve: { alias: { '@': '/web' } } };\n");
 
@@ -163,7 +175,7 @@ try {
   } else {
     const ws = parallel.workerStats;
     const loads = ws ? ws.workers.reduce((n: number, w: any) => n + w.grammars.reduce((m: number, g: any) => m + g.loads, 0), 0) : null;
-    console.log(`${report.runtime}; ${FILES} files ${JSON.stringify(report.files)}`);
+    console.log(`${report.runtime}; ${CORPUS ? '' : `${FILES} files `}${JSON.stringify(report.files)}`);
     console.log(`  parallel:  ${parallel.ms} ms, peak RSS ${parallel.peakRssMb ?? '?'} MB${parallel.fallback ? ' (FELL BACK TO ONE THREAD)' : ''}` +
       (ws ? `, ${ws.started} workers, ${loads} grammar loads, ${ws.handbacks} hand-backs` : ''));
     if (ws) for (const [i, w] of ws.workers.entries()) console.log(`    worker ${i}: ${w.files} files; ${w.grammars.map((g: any) => g.loads > 1 ? `${g.grammar}×${g.loads}` : g.grammar).join(', ')}`);

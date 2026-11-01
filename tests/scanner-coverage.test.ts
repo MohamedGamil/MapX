@@ -425,7 +425,11 @@ describe('Scanner Coverage Boost', () => {
       lines: 10
     }));
 
-    // 1. Parallel workers success case
+    // 1. Parallel workers success case. 15 files of 100 bytes are far below the automatic
+    // break-even: ask for workers explicitly (M4-13).
+    const savedWorkers = process.env['MAPX_PARSE_WORKERS'];
+    process.env['MAPX_PARSE_WORKERS'] = '4';
+    try {
     (scanner as any).parallel = true;
     (globalThis as any).mockWorkerFailInit = false;
     (globalThis as any).mockWorkerThrowOnMessage = false;
@@ -468,6 +472,10 @@ describe('Scanner Coverage Boost', () => {
     expect(exitFailResults).toHaveLength(15);
     expect(exitFailResults[0].symbols[0].name).toBe('A');
 
+    } finally {
+      if (savedWorkers === undefined) delete process.env['MAPX_PARSE_WORKERS'];
+      else process.env['MAPX_PARSE_WORKERS'] = savedWorkers;
+    }
     // Clean up globals
     delete (globalThis as any).mockWorkerFailInit;
     delete (globalThis as any).mockWorkerThrowOnMessage;

@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, query, workspace, useParseWorkers } from './helpers/e2e.js';
+
+// These scans exercise the parse workers; test projects are below the automatic break-even (M4-13).
+useParseWorkers(4);
 
 // M0-04-R1: PHP name resolution — use imports as edges, own-namespace resolution, facades vs
 // imports, Request/Response as classes, qualified names in extends/implements/new.

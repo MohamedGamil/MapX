@@ -104,6 +104,7 @@ mapx lang list
 | `includePatterns` | string[] | [] | If set, only include matching files |
 | `graphExcludePatterns` | string[] | `["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]` | Glob patterns for files to exclude from PageRank rankings and graph analysis (files are still indexed but deprioritized) |
 | `laravelDefaultExcludes` | boolean \| string[] | `true` | Laravel's default excludes for repos with `"framework": "laravel"` (see below). `false` turns them off; a list applies only the patterns it names. |
+| `parseWorkers` | `"auto"` \| number | `"auto"` | Parse workers per batch; see [Parallel parsing](#parallel-parsing). `"auto"` sizes the pool from the source to parse, the CPUs and the available memory. A number uses that many workers, at most one per file; `0` parses on the main thread. `MAPX_PARSE_WORKERS` overrides it, and `--no-parallel` forces one thread. |
 
 Patterns match workspace-relative paths with `/` separators. A leading `./` is ignored, and `\` is read as `/`, so `./app/Models/**` and `app\Models\**` both mean `app/Models/**`. Because of this, a backslash cannot escape a glob character. Changing the patterns makes the next `scan` or `sync` re-parse every file once, so that edges into files that come back in are restored.
 
@@ -133,7 +134,20 @@ To drop a single default, list the ones to keep. Also remove the pattern from `e
 
 ## Parallel parsing
 
-`mapx scan` and `mapx sync` parse files on worker threads. `--no-parallel` (MCP: `parallel: false`) parses on the main thread instead.
+`mapx scan` and `mapx sync` parse files on worker threads when the work repays them. `--no-parallel` (MCP: `parallel: false`) always parses on the main thread.
+- **How many workers** (`settings.parseWorkers: "auto"`, the default), for each parse batch:
+  - **None** below about 768 KB of source, since a cold worker needs about 384 KB to repay its startup.
+  - **Otherwise** at least two workers, and at most the lowest of:
+    - one per 384 KB;
+    - CPUs − 1;
+    - 8;
+    - the number of files;
+    - what half the available memory holds at 128 MB per worker.
+  - **Warm workers:** workers already running, as in `mapx serve`, need only 48 KB each.
+  - **Basis:** the figures were measured on real code (MapX's own sources: about 1.1 KB parsed per ms on one thread, and a 1.7× to 3.6× parse speed-up with 2 to 8 workers).
+  - **Static files:** JSON, YAML, Markdown, CSS and HTML count a twentieth of their bytes, because they are scanned without a grammar.
+  - **Available memory:** the lowest of the host's free memory, the runtime's figure and the container's limit less the process's RSS.
+- **Overrides:** a whole number in `parseWorkers`, or in `MAPX_PARSE_WORKERS`, fixes the count, at most one per file and at most `max(CPUs, 8)`; `0` means one thread. Other values are ignored with one warning.
 - **Grammars:** a worker loads a language's tree-sitter grammar only when it first parses a file of that language, and holds each grammar and compiled query once.
 - **One pool per run:** the parse batches of a scan or sync (each repo, re-resolution passes) share one pool of workers, so each worker starts, and loads its grammars, once per run. The CLI closes the pool when the run ends.
 - **One pool per server:** `mapx serve` keeps one pool across `mapx_scan` and `mapx_sync` calls.
@@ -147,7 +161,7 @@ To drop a single default, list the ones to keep. Also remove the pattern from `e
   [mapx] worker-stats {"started":8,"batches":3,"workers":[{"files":363,"grammars":[{"grammar":"php","loads":1}, …]}, …],"handbacks":0,"peakRssMb":671}
   ```
 - **Hand-back:** a file a worker cannot return is parsed again on the main thread, with a warning.
-- **Benchmark:** `npx tsx scripts/bench/workers.ts [--files N] [--bin <binary>]` compares a parallel and a one-thread scan of a generated multi-language project: wall time, peak RSS, worker statistics, and whether the two indexes are identical.
+- **Benchmark:** `npx tsx scripts/bench/workers.ts [--files N | --corpus <dir> --copies K] [--bin <binary>]` compares a parallel and a one-thread scan of a generated multi-language project, or of copies of a real directory: wall time, peak RSS, worker statistics, and whether the two indexes are identical.
 
 ## Architecture & Role Classification
 

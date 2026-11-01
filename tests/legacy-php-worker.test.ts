@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { cleanup, init, mapxWithStderr, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapxWithStderr, query, workspace, useParseWorkers } from './helpers/e2e.js';
+
+// These scans exercise the parse workers; test projects are below the automatic break-even (M4-13).
+useParseWorkers(4);
 
 // M0-06-R1: worker-thread scans (default for > 10 files) must apply PHP post-processing exactly
 // like sequential scans: facades, dispatch/notify edges and Laravel roles.

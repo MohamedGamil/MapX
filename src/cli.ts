@@ -601,7 +601,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--repo <name>', 'Scan only a specific registered repository (default: every registered repository)')
     .option('--all', 'Scan all registered repositories (the default)')
     .option('--force', 'Force re-parsing of all files (bypass cache)', false)
-    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
+    .option('--no-parallel', 'Parse on the main thread only (default: worker threads when the work repays them; see settings.parseWorkers)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
@@ -657,7 +657,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--include <glob>', 'Include glob pattern(s)', collectPatterns, [])
     .option('--repo <name>', 'Update only a specific registered repository (default: every registered repository)')
     .option('--all', 'Update all registered repositories (the default)')
-    .option('--no-parallel', 'Disable parallel parsing (use single thread)')
+    .option('--no-parallel', 'Parse on the main thread only (default: worker threads when the work repays them; see settings.parseWorkers)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);

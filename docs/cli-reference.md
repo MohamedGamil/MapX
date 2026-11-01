@@ -83,7 +83,7 @@ Options:
 - `--repo` — Scan only a specific registered repository
 - `--all` — Scan all registered repositories (the default). A registered repo whose folder is missing is skipped with a warning and keeps its index
 - `--force` — Force re-parsing of all files (bypasses file caching and rebuilds all symbols and edges)
-- `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
+- `--no-parallel` — Parse on the main thread only. By default, a batch large enough to repay worker startup (about 768 KB of source) parses on worker threads, sized from the source, the CPUs and the available memory; see `settings.parseWorkers` in [Parallel parsing](configuration.md#parallel-parsing)
 
 ## `mapx update` / `mapx sync`
 
@@ -114,7 +114,7 @@ Options:
 - `--include` — Include glob patterns (repeatable)
 - `--repo` — Update only a specific registered repository
 - `--all` — Update all registered repositories (the default: without `--repo`, every registered repository is synced)
-- `--no-parallel` — Disable parallel parsing via worker threads (runs sequentially on main thread)
+- `--no-parallel` — Parse on the main thread only. By default, a batch large enough to repay worker startup (about 768 KB of source) parses on worker threads, sized from the source, the CPUs and the available memory; see `settings.parseWorkers` in [Parallel parsing](configuration.md#parallel-parsing)
 
 ## `mapx status`
 

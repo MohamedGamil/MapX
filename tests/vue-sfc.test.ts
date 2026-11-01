@@ -12,6 +12,10 @@ import { SymfonyDetector } from '../src/frameworks/detectors/symfony.ts';
 import { VueRouterDetector } from '../src/frameworks/detectors/vue-router.ts';
 import { ignoredSymbolsForFile } from '../src/parsers/ignored-symbols.ts';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.ts';
+import { useParseWorkers } from './helpers/e2e.js';
+
+// These scans exercise the parse workers; test projects are below the automatic break-even (M4-13).
+useParseWorkers(4);
 
 // M3-01: Vue SFC edge fixture + scorer (contract: docs/baton/iterations/M3-01.md, "Edge contract").
 // The floors are recorded in scripts/eval/floors.json (M4-01), which `npm run eval` also checks in CI;

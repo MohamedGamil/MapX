@@ -8,7 +8,10 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { getBuiltinLanguages, getLanguageForFile, languageFromShebang, supportedLanguageCount } from '../src/languages/registry.js';
 import { buildServer } from '../src/mcp.js';
 import { TEMPLATES } from '../src/agents/templates.js';
-import { cleanup, init, mapx, mapxEnv, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, mapxEnv, query, workspace, useParseWorkers } from './helpers/e2e.js';
+
+// These scans exercise the parse workers; test projects are below the automatic break-even (M4-13).
+useParseWorkers(4);
 
 // Preload fixture that makes named grammar files look missing (M0-12-R6).
 const HIDE_GRAMMAR = pathToFileURL(join(__dirname, 'fixtures/languages/hide-grammar.mjs')).href;

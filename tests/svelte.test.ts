@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, query, workspace, useParseWorkers } from './helpers/e2e.js';
+
+// These scans exercise the parse workers; test projects are below the automatic break-even (M4-13).
+useParseWorkers(4);
 
 // M0-12-R8: a .svelte file's <script> blocks go through the JS/TS parsers, as a .vue file's do,
 // so its symbols and references are those of a .ts module holding the same code.

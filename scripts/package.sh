@@ -63,7 +63,7 @@ smoke_binary() {
         rm -rf "${ws:?}"; error "Smoke test: $bin init failed"
     fi
     # A worker fails f1.ts on purpose (test hook): only a scan on worker threads reports the hand-back.
-    if ! out="$(cd "$ws" && MAPX_TEST_WORKER_FAIL=f1.ts "$bin" scan 2>&1)"; then
+    if ! out="$(cd "$ws" && MAPX_PARSE_WORKERS=2 MAPX_TEST_WORKER_FAIL=f1.ts "$bin" scan 2>&1)"; then
         rm -rf "${ws:?}"; error "Smoke test: $bin scan failed: $out"
     fi
     rm -rf "${ws:?}"
