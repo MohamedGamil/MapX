@@ -131,6 +131,18 @@ To drop a single default, list the ones to keep. Also remove the pattern from `e
 }
 ```
 
+## Parallel parsing
+
+`mapx scan` and `mapx sync` parse files on worker threads. `--no-parallel` (MCP: `parallel: false`) parses on the main thread instead.
+- **Grammars:** a worker loads a language's tree-sitter grammar only when it first parses a file of that language, and holds each grammar and compiled query once.
+- **Statistics:** `MAPX_WORKER_STATS=1` prints one line per parallel run to stderr. It reports the workers started, the files and grammars each worker handled, the files handed back to the main thread, and the process's peak RSS:
+
+  ```
+  [mapx] worker-stats {"started":8,"workers":[{"files":363,"grammars":[{"grammar":"php","loads":1}, …]}, …],"handbacks":0,"peakRssMb":671}
+  ```
+- **Hand-back:** a file a worker cannot return is parsed again on the main thread, with a warning.
+- **Benchmark:** `npx tsx scripts/bench/workers.ts [--files N] [--bin <binary>]` compares a parallel and a one-thread scan of a generated multi-language project: wall time, peak RSS, worker statistics, and whether the two indexes are identical.
+
 ## Architecture & Role Classification
 
 MapxGraph dynamically profiles your codebase and classifies files into architectural roles. You can customize the classifier archetype, custom roles, and specific file classification overrides by adding an `architecture` section to the `settings` block in `.mapx/config.json`:

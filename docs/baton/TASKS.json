@@ -14669,6 +14669,30 @@
         {
           "id": "M0-02-R10",
           "type": "hard"
+        },
+        {
+          "id": "M4-10",
+          "type": "hard"
+        },
+        {
+          "id": "M4-11",
+          "type": "hard"
+        },
+        {
+          "id": "M4-13",
+          "type": "hard"
+        },
+        {
+          "id": "M4-12",
+          "type": "hard"
+        },
+        {
+          "id": "M4-14",
+          "type": "hard"
+        },
+        {
+          "id": "M4-15",
+          "type": "hard"
         }
       ],
       "sources": [
@@ -14842,6 +14866,30 @@
         },
         {
           "id": "M0-02-R10",
+          "type": "hard"
+        },
+        {
+          "id": "M4-10",
+          "type": "hard"
+        },
+        {
+          "id": "M4-11",
+          "type": "hard"
+        },
+        {
+          "id": "M4-13",
+          "type": "hard"
+        },
+        {
+          "id": "M4-12",
+          "type": "hard"
+        },
+        {
+          "id": "M4-14",
+          "type": "hard"
+        },
+        {
+          "id": "M4-15",
           "type": "hard"
         }
       ],
@@ -20287,6 +20335,481 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/binary-workers.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-06-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-01T15:33:41.190Z",
+      "completedAt": "2026-11-01T15:48:10.825Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M4-10.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts tests/worker-parsing.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-10.md"
+        },
+        {
+          "command": "npx tsx scripts/bench/workers.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-10.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-10.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T15:33:17.708Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T15:33:41.190Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T15:48:10.525Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T15:48:10.825Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts tests/worker-parsing.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-10.md"
+            },
+            {
+              "command": "npx tsx scripts/bench/workers.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-10.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-10.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-10",
+      "title": "Workers load only the grammars of the files they parse, once per thread",
+      "objective": "A parse worker loads a tree-sitter grammar only when it parses a file of that language, and each grammar and compiled query exists once per thread; worker activity is measurable.",
+      "description": "Found 2026-11-01 (D025): every worker pre-warmed all 23 grammars and compiled their queries (about 90 MB and 735 ms per thread) into a map only the fallback capture walk reads, while the language parsers loaded each used grammar again through wasm-parser.ts, and vue-ast.ts loaded TypeScript a third time.",
+      "dependencies": [
+        {
+          "id": "M0-06-R2",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "lazy, deduplicated grammar loading",
+        "worker statistics (MAPX_WORKER_STATS)",
+        "scripts/bench/workers.ts",
+        "tests/worker-pool.test.ts",
+        "reports/M4-10.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/parse-worker.ts",
+        "src/parsers/wasm-parser.ts",
+        "src/parsers/languages/vue-ast.ts",
+        "src/core/scanner.ts",
+        "scripts/bench/workers.ts",
+        "tests/worker-pool.test.ts",
+        "docs/configuration.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "With MAPX_WORKER_STATS=1 a scan prints one [mapx] worker-stats line (JSON) per parallel run with workers started, files parsed per worker, grammars loaded per worker, hand-backs and peak RSS (tests/worker-pool.test.ts).",
+        "On a fixture of PHP, TypeScript and Vue files only, no worker loads a grammar of another language, and no thread loads one grammar file twice (vue-ast and the TypeScript parser share it) (tests/worker-pool.test.ts).",
+        "Files, symbols and edges of a parallel scan equal --no-parallel on the generated bench fixture and on the test fixture (test; bench output in the report).",
+        "Peak RSS and wall time of a parallel scan of the generated bench fixture, before and after, are recorded in the report.",
+        "The worker's generic capture walk (a file its language parser failed on) still extracts symbols with the shared per-thread grammar caches (tests/worker-pool.test.ts, MAPX_TEST_WORKER_FALLBACK)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts tests/worker-parsing.test.ts",
+        "npx tsx scripts/bench/workers.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-06-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
+      "status": "READY",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-01T15:48:11.117Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-11",
+      "title": "A persistent, controlled worker pool",
+      "objective": "One pool of parse workers serves every parse batch of a scan or sync, and in mapx serve successive tool calls, with an explicit lifecycle: idle timeout, crash replacement, abort and shutdown.",
+      "description": "D025. Workers were started and terminated for every parseFilesParallel call (three call sites; multi-repo runs and second passes call it repeatedly), so each batch paid worker startup and grammar loading again. Per-run context (ignored symbols, facade map, user languages) travelled in workerData and must move to messages for reuse.",
+      "dependencies": [
+        {
+          "id": "M4-10",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "src/core/worker-pool.ts",
+        "scanner and MCP use the pool",
+        "tests",
+        "reports/M4-11.md"
+      ],
+      "affectedFiles": [
+        "src/core/worker-pool.ts",
+        "src/core/scanner.ts",
+        "src/parsers/parse-worker.ts",
+        "src/mcp.ts",
+        "src/cli.ts",
+        "tests/worker-pool.test.ts",
+        "docs/configuration.md",
+        "docs/mcp-integration.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A scan --all of a multi-repo workspace whose run parses in several batches (repos and second passes) starts each worker once: workers started equals the pool size (tests/worker-pool.test.ts, MAPX_WORKER_STATS).",
+        "Two mapx_sync calls on one MCP server within the idle timeout start no new workers for the second; after the idle timeout the pool has no live workers (test, short timeout through MAPX_WORKER_IDLE_MS).",
+        "A reused worker parses with the current run's context: changing settings.php.facadeMap between two MCP scans changes the facade edges as a fresh process does (test).",
+        "A worker killed while parsing is replaced and its files are parsed again; the index equals --no-parallel (test).",
+        "The CLI exits right after a scan or sync (no live worker keeps it alive), and an aborted scan terminates the pool (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
+        "npx tsx scripts/bench/workers.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-06-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-13",
+      "title": "Parse pool sizing from the work and the machine",
+      "objective": "The number of parse workers follows the files to parse, the CPUs and the free memory, with a setting to cap or disable it.",
+      "description": "D025. The pool size was min(cpus, files, 8) for any batch of more than 10 files, whatever the memory: 8 workers on a 3,481-file project raised peak RSS from 2.0 to 3.8 GB.",
+      "dependencies": [
+        {
+          "id": "M4-11",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "poolSize function",
+        "settings.parseWorkers",
+        "tests",
+        "reports/M4-13.md"
+      ],
+      "affectedFiles": [
+        "src/core/worker-pool.ts",
+        "src/core/scanner.ts",
+        "src/core/config.ts",
+        "tests/worker-pool.test.ts",
+        "docs/configuration.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "poolSize returns 0 below the measured break-even file count, never more than cpus - 1, 8, ceil(files / filesPerWorker), or what half the free memory holds at the measured per-worker cost (table-driven unit tests, tests/worker-pool.test.ts).",
+        "settings.parseWorkers (a number, 0 = one thread, or \"auto\") caps the pool; --no-parallel still forces one thread (test).",
+        "The break-even and per-worker memory figures come from the bench and are recorded in the report."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts",
+        "npx tsx scripts/bench/workers.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-06-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-12",
+      "title": "Language-aware distribution of files to workers",
+      "objective": "Files are dealt to workers by language, so each grammar is loaded by as few workers as its share of the work needs.",
+      "description": "D025. Files went to whichever worker was free, so on a mixed project every worker loaded every language it met.",
+      "dependencies": [
+        {
+          "id": "M4-13",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "language-affine scheduling with work stealing",
+        "tests",
+        "reports/M4-12.md"
+      ],
+      "affectedFiles": [
+        "src/core/worker-pool.ts",
+        "tests/worker-pool.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "On a fixture of 4 workers with 300 PHP, 150 TypeScript and 6 each of Python, Go and Ruby files, each of the three minority languages is loaded by exactly one worker, and total grammar loads are at most languages + workers (tests/worker-pool.test.ts, MAPX_WORKER_STATS).",
+        "An idle worker takes work from another queue rather than wait (no worker idles while files remain), and the index equals --no-parallel (test).",
+        "Bench wall time is not worse than 10% above M4-13's on the generated fixture (report)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts",
+        "npx tsx scripts/bench/workers.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-06-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-14",
+      "title": "Batched worker messages",
+      "objective": "Files go to workers and results come back in batches bounded by count and bytes, cutting message overhead while keeping per-file progress and per-file hand-back.",
+      "description": "D025. One message per file each way: 3,481 files meant about 7,000 structured-clone round trips.",
+      "dependencies": [
+        {
+          "id": "M4-12",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "batched protocol",
+        "tests",
+        "reports/M4-14.md"
+      ],
+      "affectedFiles": [
+        "src/core/worker-pool.ts",
+        "src/parsers/parse-worker.ts",
+        "tests/worker-pool.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Messages to workers for N files are at most ceil(N / batch size) plus one per worker for control, by MAPX_WORKER_STATS (test).",
+        "Progress still reaches every file, and one failing file of a batch is handed back alone while the rest of the batch is used (test, MAPX_TEST_WORKER_FAIL).",
+        "The index equals --no-parallel; bench wall time before and after is in the report."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts tests/binary-workers.test.ts",
+        "npx tsx scripts/bench/workers.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "scanner",
+        "performance"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md",
+        "docs/baton/reports/M0-06-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. Benchmark before/after with scripts/bench/workers.ts on the generated fixture; the index must be identical to --no-parallel.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-15",
+      "title": "Shared compiled grammar code across workers, after a risk evaluation",
+      "objective": "Workers stop compiling the same grammar WebAssembly each, if that can be done without breaking web-tree-sitter; the risks are evaluated first.",
+      "description": "D025: the owner accepted the startup-time goal on condition that patching tree-sitter is evaluated for risk beforehand.",
+      "dependencies": [
+        {
+          "id": "M4-14",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "risk evaluation in reports/M4-15.md",
+        "implementation or decision"
+      ],
+      "affectedFiles": [
+        "src/parsers/wasm-parser.ts",
+        "src/parsers/parse-worker.ts",
+        "src/core/worker-pool.ts",
+        "tests/worker-pool.test.ts",
+        "docs/baton/DECISIONS.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "The report measures grammar compile time per worker with 1 and N workers under Node and the bun binary, and states whether V8 or Bun already shares compiled code between workers.",
+        "The report lists every route to share compiled grammar code (Language.load inputs, emscripten hooks, patching web-tree-sitter), each with its failure modes on a web-tree-sitter upgrade.",
+        "If a route without patching web-tree-sitter cuts worker grammar startup by at least 30% on the bench, it is implemented, the index equals --no-parallel and a test covers it; if only patching routes remain, nothing is patched and the owner is asked (decision recorded)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts",
+        "npx tsx scripts/bench/workers.ts",
         "npm run check"
       ]
     }

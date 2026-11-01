@@ -1,7 +1,7 @@
 import { Parser, Language, Query, QueryCapture } from 'web-tree-sitter';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { resolve, dirname, join, isAbsolute } from 'node:path';
+import { resolve, dirname, join, isAbsolute, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { LanguageDefinition } from '../languages/registry.js';
 
@@ -25,12 +25,35 @@ function ensureInit(): Promise<void> {
   return initPromise;
 }
 
-export async function loadLanguage(langDef: LanguageDefinition): Promise<Language> {
-  await ensureInit();
+/** Grammar files loaded in this thread, with how many times each was loaded (M4-10). */
+const grammarLoads = new Map<string, number>();
+
+export function grammarLoadCounts(): Array<{ grammar: string; loads: number }> {
+  return [...grammarLoads].map(([path, loads]) => ({ grammar: basename(path).replace(/^tree-sitter-/, '').replace(/\.wasm$/, ''), loads }));
+}
+
+/**
+ * One Language per grammar file per thread (M4-10): parsers sharing a grammar (the TypeScript and
+ * JavaScript parsers, the Vue script parser) share its Language, its compiled queries and its pooled
+ * parser. Each grammar was loaded once per user. A promise, so concurrent first uses share one load;
+ * a failed load is forgotten, so a later use retries.
+ */
+const languageByPath = new Map<string, Promise<Language>>();
+
+export function loadLanguage(langDef: LanguageDefinition): Promise<Language> {
   const wasmPath = isAbsolute(langDef.grammarWasm) ? langDef.grammarWasm : resolve(PROJECT_ROOT, langDef.grammarWasm);
-  const wasmBuffer = await readFile(wasmPath);
-  const language = await Language.load(wasmBuffer);
-  return language;
+  let loading = languageByPath.get(wasmPath);
+  if (!loading) {
+    loading = (async () => {
+      await ensureInit();
+      const language = await Language.load(await readFile(wasmPath));
+      grammarLoads.set(wasmPath, (grammarLoads.get(wasmPath) ?? 0) + 1);
+      return language;
+    })();
+    languageByPath.set(wasmPath, loading);
+    loading.catch(() => { if (languageByPath.get(wasmPath) === loading) languageByPath.delete(wasmPath); });
+  }
+  return loading;
 }
 
 export interface ParsedCaptures {
@@ -46,7 +69,7 @@ export interface ParsedCaptures {
  */
 const parserPool = new Map<Language, Parser>();
 
-function getPooledParser(language: Language): Parser {
+export function getPooledParser(language: Language): Parser {
   let parser = parserPool.get(language);
   if (!parser) {
     parser = new Parser();
@@ -63,7 +86,7 @@ function getPooledParser(language: Language): Parser {
  */
 const queryCache = new Map<Language, Map<string, Query | null>>();
 
-function compiledQuery(language: Language, source: string): Query | null {
+export function compiledQuery(language: Language, source: string): Query | null {
   let bySource = queryCache.get(language);
   if (!bySource) queryCache.set(language, (bySource = new Map()));
   if (!bySource.has(source)) {

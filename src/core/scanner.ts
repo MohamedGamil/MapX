@@ -206,6 +206,28 @@ export function parseWorkerUrl(moduleUrl: string): URL {
   return new URL(`../parsers/parse-worker${moduleUrl.endsWith('.ts') ? '.ts' : '.js'}`, moduleUrl);
 }
 
+/** What the parse workers of one parallel run did (M4-10). Printed with MAPX_WORKER_STATS=1. */
+export interface WorkerStats {
+  started: number;
+  workers: Array<{ files: number; grammars: Array<{ grammar: string; loads: number }> }>;
+  handbacks: number;
+  peakRssMb?: number;
+}
+
+function requestWorkerStats(worker: Worker): Promise<WorkerStats['workers'][number]> {
+  return new Promise((resolveStats) => {
+    const timer = setTimeout(() => { worker.off('message', onMessage); resolveStats({ files: -1, grammars: [] }); }, 2000);
+    const onMessage = (msg: any) => {
+      if (msg?.type !== 'stats') return;
+      clearTimeout(timer);
+      worker.off('message', onMessage);
+      resolveStats({ files: msg.files, grammars: msg.grammars });
+    };
+    worker.on('message', onMessage);
+    worker.postMessage({ type: 'stats' });
+  });
+}
+
 export class Scanner {
   private store: Store;
   private config: Config;
@@ -377,6 +399,15 @@ export class Scanner {
    * A registered repo whose folder is missing (not cloned here, moved away) is skipped with a
    * warning and keeps its index: it failed the whole run with ENOENT, the other repos included.
    */
+  /** The parse workers' statistics of the last parallel run, for tests and MAPX_WORKER_STATS (M4-10). */
+  lastWorkerStats: WorkerStats | null = null;
+
+  private recordWorkerStats(stats: WorkerStats): void {
+    try { stats.peakRssMb = Math.round(process.resourceUsage().maxRSS / 1024); } catch { /* runtime without resourceUsage */ }
+    this.lastWorkerStats = stats;
+    if (process.env['MAPX_WORKER_STATS']) console.error(`[mapx] worker-stats ${JSON.stringify(stats)}`);
+  }
+
   private reposToScan(repoNames?: string[]): string[] {
     const names = !repoNames || repoNames.length === 0 || repoNames.includes('all')
       ? this.config.repos.map(r => r.name)
@@ -401,6 +432,7 @@ export class Scanner {
     }
     try {
       const reposToScan = this.reposToScan(repoNames);
+      this.lastWorkerStats = null;
 
       this.workspaceFileMap.clear();
       for (const f of this.store.getAllFiles()) {
@@ -719,6 +751,7 @@ export class Scanner {
     }
     try {
       const reposToScan = this.reposToScan(repoNames);
+      this.lastWorkerStats = null;
 
       this.workspaceFileMap.clear();
       for (const f of this.store.getAllFiles()) {
@@ -1496,11 +1529,14 @@ export class Scanner {
       });
     };
 
+    let perWorker: WorkerStats['workers'] = [];
     try {
       await Promise.all(workers.map(w => runWorkerLoop(w)));
+      perWorker = await Promise.all(workers.map(w => requestWorkerStats(w)));
     } finally {
       await Promise.all(workers.map(w => w.terminate()));
     }
+    this.recordWorkerStats({ started: workers.length, workers: perWorker, handbacks: mainThreadRetries.length });
 
     if (mainThreadRetries.length > 0 && !this.aborted) {
       // Said, not silent: a hand-back is a parser bug (a result structured clone rejects, or a throw).

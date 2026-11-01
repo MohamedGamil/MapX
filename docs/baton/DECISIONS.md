@@ -226,3 +226,25 @@ Scan and sync now cover every registered repository unless one is named: `mapx s
 - **Flags:** `--repo <name>` (MCP `repo`) still limits the run to one repo. `--all` stays accepted as the explicit form.
 - **Callers that name repos are unchanged:** `workspaces add` and `workspaces sync` pass explicit names.
 - **Implemented by:** M0-10-R5.
+
+## D025 — Parse worker resources: follow-up M4 work before M5 (owner, 2026-11-01)
+
+Background: M0-06-R2 made parallel scans work at scale. On a 3,481-file project, 8 workers raised peak RSS from 2.0 to 3.8 GB, and measurement found duplicated work:
+- **Pre-warm:** every worker loaded and compiled all 23 grammars (about 90 MB and 735 ms per thread). Only the fallback walk reads them.
+- **Double loading:** the language parsers loaded each used grammar again.
+- **Short-lived workers:** workers were started and terminated for every parse batch.
+
+The owner accepted these items as M4 work, to be completed before M5:
+
+| Task | Item |
+| --- | --- |
+| M4-10 | Load only the grammars of the files a worker parses, once per thread, and make worker activity measurable |
+| M4-11 | Keep a pool of workers alive, provided it is well controlled and removes redundant work: one pool per scan or sync run, kept across MCP tool calls with an idle timeout, crash replacement, abort and shutdown |
+| M4-13 | Size the pool from the work, the CPUs and the free memory |
+| M4-12 | Distribute files to workers by language |
+| M4-14 | Batch worker messages |
+| M4-15 | Share compiled grammar code across workers |
+
+Startup time is a desired outcome. M4-15 evaluates the risk of patching tree-sitter before anything changes: a route without a patch may be implemented, but any patch needs the owner's approval first.
+
+M5-01 and M5-02 hard-depend on all six tasks.

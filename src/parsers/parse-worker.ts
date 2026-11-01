@@ -1,9 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { getParserForFile } from './parser-registry.js';
+import { compiledQuery, getPooledParser, grammarLoadCounts, loadLanguage, loadQueryFile } from './wasm-parser.js';
 import { ignoredSymbolsForFile, type ScopedIgnoredSymbols } from './ignored-symbols.js';
 // The main thread's JSONC normaliser (already loaded through parser-registry), so worker and
 // main-thread JSON references match (M0-32-R2).
@@ -142,33 +140,11 @@ interface ParseResult {
   errors: Array<{ message: string; line?: number }>;
 }
 
-let parserReady = false;
-let Parser: any;
-let Language: any;
-let Query: any;
-let loadedLanguages: Map<string, { language: any; symbolsQuery: string; referencesQuery: string; parser: any; compiledSymQuery: any; compiledRefQuery: any }> = new Map();
 let langDefs: Map<string, any>;
-let assetRoot: string;
 let nameByNodeId: Map<number, string>;
 let scopedIgnoredSymbols: ScopedIgnoredSymbols | undefined;
-
-async function initParser(): Promise<void> {
-  if (parserReady) return;
-  assetRoot = workerData.assetRoot;
-  const mod = await import('web-tree-sitter');
-  Parser = mod.Parser;
-  Language = mod.Language;
-  Query = mod.Query;
-  await Parser.init({
-    locateFile(path: string) {
-      if (path === 'web-tree-sitter.wasm') {
-        return resolve(assetRoot, 'wasm', 'web-tree-sitter.wasm');
-      }
-      return path;
-    }
-  });
-  parserReady = true;
-}
+// Worker statistics (M4-10): files parsed; wasm-parser counts the grammar loads.
+let filesParsed = 0;
 
 const COMMON_FRAMEWORK_METHODS = new Set([
   'useState', 'useEffect', 'useContext', 'useReducer', 'useCallback', 'useMemo', 'useRef', 'useImperativeHandle', 'useLayoutEffect', 'useDebugValue',
@@ -279,6 +255,8 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
   // Parse with the same language parser the main thread uses, so language post-processing
   // (PHP facades, dispatch/notify, Laravel roles, TSX defaults, …) is identical in both paths.
   try {
+    // Test hook: skip the language parser for this file, to exercise the capture walk below.
+    if (process.env['MAPX_TEST_WORKER_FALLBACK'] === job.filePath) throw new Error('MAPX_TEST_WORKER_FALLBACK');
     const parser = getParserForFile(job.filePath, workerData.userLanguages, job.language);
     const result = await parser.parse(job.filePath, source, { facadeMap: workerData.facadeMap, ignoredSymbols });
     return { id: job.id, ...result };
@@ -286,26 +264,20 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
     // Fall back to the generic capture walk below.
   }
 
-  let langCtx = loadedLanguages.get(langKey);
-  if (!langCtx) {
-    try {
-      const def = langDefs.get(langKey);
-      const wasmPath = resolve(assetRoot, def.grammarWasm);
-      const wasmBuffer = await readFile(wasmPath);
-      const language = await Language.load(wasmBuffer);
-
-      const symbolsQuery = await readFile(resolve(assetRoot, def.queries.symbols), 'utf-8');
-      const referencesQuery = await readFile(resolve(assetRoot, def.queries.references), 'utf-8');
-
-      const parser = new Parser();
-      parser.setLanguage(language);
-      const compiledSymQuery = new Query(language, symbolsQuery);
-      const compiledRefQuery = new Query(language, referencesQuery);
-      langCtx = { language, symbolsQuery, referencesQuery, parser, compiledSymQuery, compiledRefQuery };
-      loadedLanguages.set(langKey, langCtx);
-    } catch {
-      return { ...empty, errors: [{ message: `Failed to load language for ${job.filePath}` }] };
-    }
+  // The generic capture walk, for a file its language parser failed on. It uses the language
+  // parsers' per-thread grammar, query and parser caches: nothing is loaded twice (M4-10).
+  let langCtx: { parser: any; compiledSymQuery: any; compiledRefQuery: any };
+  try {
+    const def = langDefs.get(langKey);
+    const language = await loadLanguage(def);
+    langCtx = {
+      parser: getPooledParser(language),
+      compiledSymQuery: compiledQuery(language, await loadQueryFile(def.queries.symbols)),
+      compiledRefQuery: compiledQuery(language, await loadQueryFile(def.queries.references)),
+    };
+    if (!langCtx.compiledSymQuery && !langCtx.compiledRefQuery) throw new Error('no query');
+  } catch {
+    return { ...empty, errors: [{ message: `Failed to load language for ${job.filePath}` }] };
   }
 
   try {
@@ -320,7 +292,7 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
 
     try {
       const symQuery = langCtx.compiledSymQuery;
-      const allSymCaptures = symQuery.captures(tree.rootNode);
+      const allSymCaptures = symQuery ? symQuery.captures(tree.rootNode) : [];
       const kindNodeIds = new Set<number>();
       const scopeByNodeId = new Map<number, string>();
 
@@ -434,7 +406,7 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
 
     try {
       const refQuery = langCtx.compiledRefQuery;
-      for (const capture of refQuery.captures(tree.rootNode)) {
+      for (const capture of refQuery ? refQuery.captures(tree.rootNode) : []) {
         const startLine = capture.node.startPosition.row + 1;
 
         if (capture.name.startsWith('ref.target_')) {
@@ -477,40 +449,19 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
   }
 }
 
-async function initLanguages(): Promise<void> {
-  // Pre-warm all language grammars sequentially before accepting any jobs.
-  // This avoids a race condition where concurrent async message handlers all see
-  // loadedLanguages.get(lang) === null and try to compile WASM simultaneously,
-  // saturating the libuv thread pool and causing a hang.
-  for (const [key, def] of langDefs) {
-    if (def.tier === 'static') continue;
-    try {
-      const wasmPath = resolve(assetRoot, def.grammarWasm);
-      const wasmBuffer = await readFile(wasmPath);
-      const language = await Language.load(wasmBuffer);
-      const symbolsQuery = await readFile(resolve(assetRoot, def.queries.symbols), 'utf-8');
-      const referencesQuery = await readFile(resolve(assetRoot, def.queries.references), 'utf-8');
-      const parser = new Parser();
-      parser.setLanguage(language);
-      const compiledSymQuery = new Query(language, symbolsQuery);
-      const compiledRefQuery = new Query(language, referencesQuery);
-      loadedLanguages.set(key, { language, symbolsQuery, referencesQuery, parser, compiledSymQuery, compiledRefQuery });
-    } catch {
-      // language unavailable — files of this type will return empty results
-    }
-  }
-}
-
 async function main() {
   langDefs = new Map(Object.entries(workerData.languages));
   if (workerData.ignoredSymbols) {
     scopedIgnoredSymbols = workerData.ignoredSymbols;
   }
 
-  await initParser();
-  await initLanguages();
 
-  parentPort!.on('message', async (job: ParseJob) => {
+  parentPort!.on('message', async (job: ParseJob | { type: 'stats' }) => {
+    if ('type' in job) {
+      parentPort!.postMessage({ type: 'stats', files: filesParsed, grammars: grammarLoadCounts() });
+      return;
+    }
+    filesParsed++;
     // A result that cannot be posted (a value structured clone rejects) or a parse that throws
     // hands this one file back to the main thread, instead of failing the worker and with it the
     // whole parallel scan (M0-06-R2).
