@@ -108,6 +108,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-02-R9** Sync follows go.mod module paths and composer.json PSR-4 autoload changes — BACKLOG, P2, 3h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8.
 - **M0-12-R10** Svelte templates: calls, event handlers and child components — BACKLOG, P2, 5h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-12-R8.
 - **M0-17-R6** Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings — BACKLOG, P2, 6h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8, M3-11-R1, M3-09-R1, M0-17-R5.
+- **M0-02-R10** An interrupted git sync loses the symbols of the files it started re-indexing — BACKLOG, P1, 4h; depends on M4-04.
 
 ## M1 — Laravel route correctness
 
@@ -181,7 +182,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-01** Recall/precision scoring in CI — DONE, P1, 5h; depends on M1-01, M2-02, M3-01, M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M4-02** postMessage / iframe message edges — DEFERRED, P3, 10h; depends on nothing.
 - **M4-03** Scanner: remove quadratic phases (name resolution, resume state, fileMap rebuilds) — DONE, P2, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
-- **M4-04** Scanner: bounded parallel directory walk and post-scan steps — BACKLOG, P3, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
+- **M4-04** Scanner: no redundant walk, and no post-scan when a sync changes nothing indexed — DONE, P3, 9h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M4-05** Build the dashboard only for release and serve, not on every install — DONE, P2, 4h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M4-06** 3D graph mode in the dashboard — DEFERRED, P3, 16h; depends on nothing.
 - **M4-07** Compiled scanner sidecar for very large codebases — DEFERRED, P3, 40h; depends on nothing.
@@ -192,8 +193,8 @@ Fixture scoring in CI; optional message edges.
 
 Declared layers, selectors and allow-rules over the MapX graph in every supported language, enforced in CI, explorable in CLI/MCP/dashboard.
 
-- **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — BACKLOG, P1, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6.
-- **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — BACKLOG, P1, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6.
+- **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — BACKLOG, P1, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6, M0-02-R10.
+- **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — BACKLOG, P1, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6, M0-02-R10.
 - **M5-03** Element view, core selectors and layer membership with selector trace — BACKLOG, P1, 10h; depends on M5-01, M5-02.
 - **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — BACKLOG, P1, 12h; depends on M5-03.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — BACKLOG, P1, 8h; depends on M5-04.

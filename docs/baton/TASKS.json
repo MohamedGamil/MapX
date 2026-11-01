@@ -9258,11 +9258,11 @@
     {
       "priority": "P3",
       "estimate": {
-        "min": 8,
-        "expected": 12,
-        "max": 16
+        "min": 6,
+        "expected": 9,
+        "max": 14
       },
-      "risk": "low",
+      "risk": "medium",
       "area": [
         "scanner",
         "performance"
@@ -9369,39 +9369,104 @@
       ],
       "outputs": [
         "scanner change",
-        "benchmark"
+        "tests/scan-redundancy.test.ts",
+        "reports/M4-04.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "benchmarks"
+        "tests/scan-redundancy.test.ts",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "The discovered file list is identical (sorted) before and after on MapX itself.",
-        "`npm run bench` discovery time on MapX itself is not slower; the measured numbers are recorded in the report."
+        "discoverFiles pathsOnly returns exactly the full walk's paths and languages in the same order on a fixture tree (nested/excluded folders, dot files, nested git repo, shebang script) without reading file content beyond shebang heads (tests/scan-redundancy.test.ts).",
+        "A git sync with only untracked non-scannable files (.gitignore, .idea/workspace.xml, dist/out.js) emits no parse or cluster progress and returns filesScanned 0 (test).",
+        "A sync with an untracked requirements.txt, an edited source file or a deleted indexed file still runs post-scan; after the noise sync edges equal scan --force (test).",
+        "Edges and symbols byte-identical before/after on the MapX self-copy and the 16,000-file workspace for a forced scan and after a sync sequence (dumps in the report).",
+        "Recorded: no-op sync with noise at 16,000 files (10.4 s before), no-op scan (10.9 s), forced scan and hash sync (3.5 s); none slower."
       ],
       "verificationCommands": [
-        "npx vitest run tests/scanner.test.ts",
-        "npm run bench:json"
+        "npx vitest run tests/scan-redundancy.test.ts tests/scanner.test.ts",
+        "npm run eval",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T09:53:02.989Z",
+      "completedAt": "2026-11-01T10:31:10.517Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M4-04.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/scan-redundancy.test.ts tests/scanner.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-04.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-04.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-04.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T09:53:02.636Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T09:53:02.989Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T10:31:09.553Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T10:31:10.517Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/scan-redundancy.test.ts tests/scanner.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-04.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-04.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-04.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
       "id": "M4-04",
-      "title": "Scanner: bounded parallel directory walk and post-scan steps",
-      "objective": "discoverFiles walks directories with bounded concurrency, and independent post-scan steps run concurrently (spec 10).",
+      "title": "Scanner: no redundant walk, and no post-scan when a sync changes nothing indexed",
+      "objective": "A git sync whose changes leave nothing to re-parse or remove finishes without parsing or post-scan; full and incremental scans no longer read and hash every file twice to list workspace paths.",
       "milestone": "M4",
-      "description": "discoverFiles walks directories with bounded concurrency, and independent post-scan steps run concurrently (spec 10)."
+      "description": "Re-scoped from measurement 2026-11-01 (iterations/M4-04.md): post-scan analysis is synchronous CPU work (concurrency cannot help) and the walk is ~6% of a scan, but every scan and sync pre-walks all files with full reads, and a git sync with only untracked noise (.gitignore) runs the 7 s post-scan at 16,000 files every time. Original objective (bounded parallel walk, concurrent post-scan steps) dropped with that evidence."
     },
     {
       "priority": "P2",
@@ -14600,6 +14665,10 @@
         {
           "id": "M0-17-R6",
           "type": "hard"
+        },
+        {
+          "id": "M0-02-R10",
+          "type": "hard"
         }
       ],
       "sources": [
@@ -14769,6 +14838,10 @@
         },
         {
           "id": "M0-17-R6",
+          "type": "hard"
+        },
+        {
+          "id": "M0-02-R10",
           "type": "hard"
         }
       ],
@@ -19495,6 +19568,64 @@
       "verificationCommands": [
         "npx vitest run tests/external-refs.test.ts",
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-02-R10",
+      "milestone": "M0",
+      "title": "An interrupted git sync loses the symbols of the files it started re-indexing",
+      "objective": "A git sync interrupted after it stored new blob hashes but before it wrote parse results leaves those files re-parsed by the next sync, so the index equals scan --force.",
+      "description": "Found by the M4-04 independent review (2026-11-01, reproduced on the pre-M4-04 scanner too): _scanIncrementalForRepo upserts the new git_blob_hash and deletes symbols/edges before parsing; on abort nothing is written, and the next sync skips the files because their blob matches. M4-04 made it worse: that next sync now also skips the post-scan analysis.",
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-04.md"
+      ],
+      "outputs": [
+        "fix",
+        "regression tests",
+        "reports/M0-02-R9.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/scan-redundancy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A git sync aborted between storing blob hashes and writing parse results (SIGINT, or abort() from onProgress) is followed by a sync whose symbols and edges equal scan --force (e2e).",
+        "The skip-by-blob path never skips a listed file whose stored state is incomplete (no symbols written since its blob was stored) (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/scan-redundancy.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
       "status": "BACKLOG",

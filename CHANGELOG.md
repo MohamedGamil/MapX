@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Changed
+- `mapx sync` in a git repo no longer reruns the whole post-scan analysis when git lists only files MapX never indexes or reads (an untracked `.gitignore`, `.idea/`, build output, logs): a 16,000-file project's no-op sync drops from 11 s to 2 s. Settings and `.mapx/frameworks.json` edits now rerun the analysis on the next sync. Scans no longer read every file twice (M4-04).
 - `npm install` / `npm ci` in a MapX checkout no longer bundles the web dashboard: `prepare` only compiles the CLI, `npm pack` / `npm publish` build the dashboard, and `mapx ui` run from source builds it when it is missing or older than `src/ui` (M4-05).
 - Scans of large projects no longer slow down quadratically when many files declare the same name (`get`, `render`, `handle`): a generated 16,000-file TypeScript project scans in 18 s instead of 70 s, with identical results, and an interrupted scan's resume state is written in constant-size records per batch (M4-03).
 - `mapx agents generate --providers continue` now writes Continue's documented layout, an MCP server block in `.continue/mcpServers/mapx.yaml` and `/mapx-impact`, `/mapx-callers`, `/mapx-context` and `/mapx-sync` prompts in `.continue/prompts/`, and removes the `.continue/mapx.yaml` that earlier versions wrote and Continue never loaded (M0-09-R4)

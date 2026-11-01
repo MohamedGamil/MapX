@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, stat, lstat, readdir, open } from 'node:fs/promises';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, relative, extname, join, basename, dirname, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
@@ -57,6 +57,13 @@ function foldsCase(language: string | null, kind: string | undefined): boolean {
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
+/**
+ * Files framework detection reads by name, whatever the scan filters say: most are in the default
+ * excludes (package.json, composer.json, go.mod), so the walk never indexes them (M4-04).
+ */
+const DETECTION_INPUT = /(^|\/)(package\.json|composer\.(json|lock)|pyproject\.toml|requirements[^/]*\.txt|Pipfile|go\.mod|Cargo\.toml|Gemfile|pom\.xml|build\.gradle(\.kts)?|pubspec\.yaml|Package\.swift|artisan|manage\.py|setup\.(py|cfg)|svelte\.config\.[cm]?[jt]s)$/;
+/** Bump when the post-scan analysis changes what it stores: the next sync then reruns it (M4-04). */
+const ANALYSIS_VERSION = 1;
 /** The last segment of a dotted name that is a file extension, not a member: `utils.ts` stays whole. */
 const COMMON_EXTENSIONS = new Set([
   'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt',
@@ -310,7 +317,7 @@ export class Scanner {
         if (!repo) continue;
         const workspaceRoot = this.config.getWorkspaceRoot();
         const repoRoot = resolve(workspaceRoot, repo.path);
-        const discovered = await this.discoverFiles(repoRoot, repo.name, true);
+        const discovered = await this.discoverFiles(repoRoot, repo.name, true, { pathsOnly: true });
         for (const f of discovered) {
           this.workspaceFileMap.set(f.relativePath, repo.name);
         }
@@ -629,7 +636,7 @@ export class Scanner {
         if (!repo) continue;
         const workspaceRoot = this.config.getWorkspaceRoot();
         const repoRoot = resolve(workspaceRoot, repo.path);
-        const discovered = await this.discoverFiles(repoRoot, repo.name, true);
+        const discovered = await this.discoverFiles(repoRoot, repo.name, true, { pathsOnly: true });
         for (const f of discovered) {
           this.workspaceFileMap.set(f.relativePath, repo.name);
         }
@@ -761,7 +768,7 @@ export class Scanner {
     // A package.json git does not list (untracked, then deleted) can still move Vue scopes (M3-08-R1).
     const facts = () => JSON.parse(this.store.getMeta('vue_registry:' + repo.name) ?? '{}');
     if (changes.length === 0 && pending.length === 0 && this.vueScopeMoves(repo.name, [], [], {}, facts(), true).size === 0
-      && this.configReferrers(repo.name, [], true).size === 0) {
+      && this.configReferrers(repo.name, [], true).size === 0 && !this.analysisInputsChanged(repo.name)) {
       await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
         filesScanned: 0,
@@ -775,6 +782,10 @@ export class Scanner {
     const toRemove: string[] = [];
     const toReindex: Array<{ path: string; fileInfo: FileInfo; contentHash: string; blobHash: string }> = [];
     const contents = new Map<string, string>();
+    // A listed file the analysis may read although no parser does: a manifest framework detection
+    // reads (package.json, go.mod, requirements.txt), a scannable file without a parser, or a removed
+    // file that was never indexed. The post-scan analysis then runs (M4-04).
+    let analysisInput = false;
 
     // A rename is listed by its new path; its old path leaves the index, and the files with edges
     // into it are re-parsed so references that now resolve to the new path find it (M0-02-R3).
@@ -791,6 +802,7 @@ export class Scanner {
     for (const change of changes) {
       const absolutePath = resolve(repoRoot, change.path);
       const relativePath = relative(workspaceRoot, absolutePath).replace(/\\/g, '/');
+      if (DETECTION_INPUT.test(relativePath)) analysisInput = true;
       if (!matcher(relativePath)) {
         toRemove.push(relativePath);
         continue;
@@ -798,10 +810,14 @@ export class Scanner {
       // A listed file that is gone is removed too: a staged-only file deleted from the working tree
       // is still listed as added by `git diff --cached` (M0-02-R5).
       if (change.status === 'removed' || !existsSync(absolutePath)) {
+        // A removed file that was never indexed may still be a detector input (go.mod).
+        if (this.store.getFile(relativePath)?.repo !== repo.name) analysisInput = true;
         toRemove.push(relativePath);
         continue;
       }
       const fileInfo = await this.getFileInfo(absolutePath, relativePath);
+      // Only a regular file: git lists an untracked nested repo or submodule as its folder.
+      if (!fileInfo && statSync(absolutePath).isFile()) analysisInput = true;
       if (fileInfo) {
         const bytes = await readFile(absolutePath);
         // Listed, but the indexed blob is still the content (a mode change, or a commit of what an
@@ -817,6 +833,7 @@ export class Scanner {
       }
     }
 
+    const removesIndexed = toRemove.some(p => this.store.getFile(p)?.repo === repo.name);
     this.store.inTransaction(() => this.removeFiles(repo.name, toRemove));
 
     // Unchanged files of this repo that had edges into a removed file now back (M0-02-R2), into
@@ -834,6 +851,24 @@ export class Scanner {
       const bytes = await readFile(absolutePath);
       const contentHash = createHash('md5').update(bytes.toString('utf-8')).digest('hex');
       toReindex.push({ path: r, fileInfo, contentHash, blobHash: gitBlobId(bytes) });
+    }
+
+    // Git listed only files the walk never indexes and the analysis never reads (an untracked
+    // .gitignore, .idea/, dist/, *.log), or files whose indexed content is unchanged: nothing to parse,
+    // and the analysis inputs are those of its last run. Finish as the no-change return does, without the post-scan analysis (M4-04).
+    if (toReindex.length === 0 && !removesIndexed && !analysisInput && !this.analysisInputsChanged(repo.name)) {
+      this.settleVueRegistry(repo.name);
+      const commitSha = getCurrentCommitSha(repoRoot);
+      if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
+      this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
+      await this.refreshHttpIfInputsChanged(repo, repoRoot);
+      return {
+        filesScanned: 0,
+        symbolsFound: 0,
+        edgesFound: 0,
+        durationMs: Date.now() - startTime,
+        languageBreakdown: {},
+      };
     }
 
     this.store.inTransaction(() => {
@@ -948,7 +983,7 @@ export class Scanner {
    * leaves out, unread, the indexed files whose size and mtime say they did not change.
    */
   private async discoverFiles(
-    repoRoot: string, repoName: string, silent = false, options: { from?: string[]; skipUnchanged?: boolean } = {},
+    repoRoot: string, repoName: string, silent = false, options: { from?: string[]; skipUnchanged?: boolean; pathsOnly?: boolean } = {},
   ): Promise<DiscoveredFile[]> {
     const files: DiscoveredFile[] = [];
     const workspaceRoot = this.config.getWorkspaceRoot();
@@ -1013,6 +1048,18 @@ export class Scanner {
           const langDef = getLanguageForFile(fullPath, this.config.getResolvedUserLanguages())
             ?? (entry.name.includes('.') ? null : shebangLanguage(fullPath));
           if (!langDef) continue;
+          // The files the walk indexes, unread: what scanFull and scanIncremental need for
+          // workspaceFileMap before each repo's own walk (M4-04). Only path and language are set.
+          if (options.pathsOnly) {
+            // The full walk skips a file it cannot read; so does this one (review 2026-11-01).
+            try {
+              accessSync(fullPath, fsConstants.R_OK);
+            } catch {
+              continue;
+            }
+            files.push({ absolutePath: fullPath, relativePath: relPath, language: langDef.name } as DiscoveredFile);
+            continue;
+          }
 
           try {
             if (options.skipUnchanged && trackedHashes.has(relPath) && this.unchangedSinceScan(relPath, await stat(fullPath))) continue;
@@ -3304,6 +3351,21 @@ export class Scanner {
    * .env* file of the repo (path + mtime). Changing either must refresh http-calls.json even when
    * no source file changed (M2-07).
    */
+  /**
+   * What the post-scan analysis reads besides the index: the settings (roles, architecture
+   * overrides, graph excludes), the framework override file and the analysis version. A sync that
+   * parses nothing still runs the analysis when this changed since the last run (M4-04).
+   */
+  private analysisInputsFingerprint(): string {
+    const frameworksPath = join(this.config.getWorkspaceRoot(), '.mapx', 'frameworks.json');
+    const frameworks = existsSync(frameworksPath) ? readFileSync(frameworksPath, 'utf-8') : null;
+    return createHash('md5').update(JSON.stringify([ANALYSIS_VERSION, this.config.settings, frameworks])).digest('hex');
+  }
+
+  private analysisInputsChanged(repoName: string): boolean {
+    return this.store.getMeta('analysis_inputs:' + repoName) !== this.analysisInputsFingerprint();
+  }
+
   private httpInputsFingerprint(repoRoot: string): string {
     const envFiles: string[] = [];
     for (const full of this.envFiles(repoRoot)) {
@@ -3545,6 +3607,9 @@ export class Scanner {
     // Clear framework detection cache after post-scan analysis
     this.cachedActiveDetectors.clear();
     this.cachedFrameworkScopes.clear();
+    // Recorded last, after the analysis wrote frameworks.json (its detections): an analysis that threw
+    // runs again on the next sync, and so does one whose inputs a user edits afterwards (M4-04).
+    this.store.setMeta('analysis_inputs:' + repo.name, this.analysisInputsFingerprint());
   }
 
   /**
