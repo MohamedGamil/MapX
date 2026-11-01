@@ -97,15 +97,15 @@ function renderToolCallEntry(data: any): HTMLElement {
   entry.className = 'log-entry';
 
   const timeStr = new Date(data.timestamp || Date.now()).toLocaleTimeString();
-  const durationStr = data.durationMs != null ? ` <span class="log-duration">${data.durationMs}ms</span>` : '';
+  const durationStr = data.durationMs != null ? ` <span class="log-duration">${escapeHtml(data.durationMs)}ms</span>` : '';
   const statusIcon = data.success === false ? '❌' : '✅';
 
   entry.innerHTML = `
-    <span class="log-time">[${timeStr}]</span>
+    <span class="log-time">[${escapeHtml(timeStr)}]</span>
     <span class="log-status">${statusIcon}</span>
-    <span class="log-name">${data.tool}</span>
-    <span class="log-input">(${JSON.stringify(data.input)})</span>${durationStr}
-    ${data.error ? `<div class="log-result" style="color: var(--danger);">Error: ${data.error}</div>` : ''}
+    <span class="log-name">${escapeHtml(data.tool)}</span>
+    <span class="log-input">(${escapeHtml(JSON.stringify(data.input))})</span>${durationStr}
+    ${data.error ? `<div class="log-result" style="color: var(--danger);">Error: ${escapeHtml(data.error)}</div>` : ''}
   `;
   return entry;
 }
@@ -1994,13 +1994,14 @@ async function loadGraph() {
       return rawGraphElements.filter(el => el.data && el.data.type === 'file');
     }
 
+    /** `text` as escaped HTML, with the first match of `query` wrapped in a highlight. */
     function highlightMatch(text: string, query: string): string {
-      if (!query) return text;
+      if (!query) return escapeHtml(text);
       const idx = text.toLowerCase().indexOf(query.toLowerCase());
-      if (idx === -1) return text;
-      return text.substring(0, idx) +
-        `<span class="ac-match">${text.substring(idx, idx + query.length)}</span>` +
-        text.substring(idx + query.length);
+      if (idx === -1) return escapeHtml(text);
+      return escapeHtml(text.substring(0, idx)) +
+        `<span class="ac-match">${escapeHtml(text.substring(idx, idx + query.length))}</span>` +
+        escapeHtml(text.substring(idx + query.length));
     }
 
     function showAutocomplete(query: string) {
@@ -2028,10 +2029,10 @@ async function loadGraph() {
         const fileName = id.split('/').pop() || id;
         const dirPath = id.includes('/') ? id.substring(0, id.lastIndexOf('/')) : '';
         const lang = el.data.language || '';
-        return `<div class="focus-autocomplete-item${i === 0 ? ' active' : ''}" data-file-id="${id}">
+        return `<div class="focus-autocomplete-item${i === 0 ? ' active' : ''}" data-file-id="${escapeHtml(id)}">
           <span class="ac-file-name">${highlightMatch(fileName, lowerQuery)}</span>
           <span class="ac-file-path">${dirPath ? highlightMatch(dirPath, lowerQuery) : ''}</span>
-          ${lang ? `<span class="ac-lang-badge">${lang}</span>` : ''}
+          ${lang ? `<span class="ac-lang-badge">${escapeHtml(lang)}</span>` : ''}
         </div>`;
       }).join('');
 
@@ -2229,10 +2230,10 @@ async function loadGraph() {
 
           html += `
             <li class="flow-item">
-              <span class="flow-current">${label}</span>
-              <button type="button" class="flow-clickable-edge" data-go-id="${edgeId}">${edgeType.toUpperCase()}</button>
+              <span class="flow-current">${escapeHtml(label)}</span>
+              <button type="button" class="flow-clickable-edge" data-go-id="${escapeHtml(edgeId)}">${escapeHtml(edgeType.toUpperCase())}</button>
               <span class="flow-arrow">&rarr;</span>
-              <button type="button" class="flow-clickable-node" data-go-id="${targetId}">${targetLabel}</button>
+              <button type="button" class="flow-clickable-node" data-go-id="${escapeHtml(targetId)}">${escapeHtml(targetLabel)}</button>
             </li>
           `;
         });
@@ -2262,11 +2263,11 @@ async function loadGraph() {
 
           html += `
             <li class="flow-item">
-              <button type="button" class="flow-clickable-node incoming-node" data-go-id="${sourceId}">${sourceLabel}</button>
+              <button type="button" class="flow-clickable-node incoming-node" data-go-id="${escapeHtml(sourceId)}">${escapeHtml(sourceLabel)}</button>
               <span class="flow-arrow">&rarr;</span>
-              <button type="button" class="flow-clickable-edge" data-go-id="${edgeId}">${edgeType.toUpperCase()}</button>
+              <button type="button" class="flow-clickable-edge" data-go-id="${escapeHtml(edgeId)}">${escapeHtml(edgeType.toUpperCase())}</button>
               <span class="flow-arrow">&rarr;</span>
-              <span class="flow-current">${label}</span>
+              <span class="flow-current">${escapeHtml(label)}</span>
             </li>
           `;
         });
@@ -2295,14 +2296,14 @@ async function loadGraph() {
           <div class="flows-title">Related Nodes</div>
           <div class="flow-group" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
             <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Source Node</div>
-            <button type="button" class="flow-clickable-node" data-go-id="${sourceId}">
-              ${sourceLabel}
+            <button type="button" class="flow-clickable-node" data-go-id="${escapeHtml(sourceId)}">
+              ${escapeHtml(sourceLabel)}
             </button>
           </div>
           <div class="flow-group" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
             <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Destination Node</div>
-            <button type="button" class="flow-clickable-node" data-go-id="${targetId}" style="background: color-mix(in srgb, var(--syntax-blue) 16%, transparent); color: var(--syntax-blue); border-color: color-mix(in srgb, var(--syntax-blue) 35%, transparent);">
-              ${targetLabel}
+            <button type="button" class="flow-clickable-node" data-go-id="${escapeHtml(targetId)}" style="background: color-mix(in srgb, var(--syntax-blue) 16%, transparent); color: var(--syntax-blue); border-color: color-mix(in srgb, var(--syntax-blue) 35%, transparent);">
+              ${escapeHtml(targetLabel)}
             </button>
           </div>
         </div>
@@ -2341,14 +2342,14 @@ async function loadGraph() {
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Path</span>
-                <span class="detail-stat-value">${data.fullPath || data.id.replace('dir:', '')}</span>
+                <span class="detail-stat-value">${escapeHtml(data.fullPath || data.id.replace('dir:', ''))}</span>
               </div>
             </div>
           ` + buildRelatedFlowsHTML(node);
         } else {
           const tags = customTags.get(data.id) || [];
           const tagsListHtml = tags.map(t =>
-            `<span class="tag-badge">${t}<button class="tag-badge-remove" data-node-id="${data.id}" data-tag="${t}" title="Remove tag">&times;</button></span>`
+            `<span class="tag-badge">${escapeHtml(t)}<button class="tag-badge-remove" data-node-id="${escapeHtml(data.id)}" data-tag="${escapeHtml(t)}" title="Remove tag">&times;</button></span>`
           ).join('');
 
           // Compute degree stats
@@ -2390,9 +2391,9 @@ async function loadGraph() {
                 <span class="detail-stat-label" style="color: var(--danger); font-weight: bold;">Smells & Health</span>
                   ${fileSmells.map((s: any) => `
                     <li style="margin-bottom: 4px;">
-                      <span class="smell-badge-mini ${s.severity.toLowerCase()}">${s.severity.toUpperCase()}</span>
-                      <strong>${s.type.toUpperCase()}</strong>: ${s.description}
-                      <div style="color: var(--text-muted); font-style: italic; margin-top: 2px; margin-left: 8px;">💡 Suggestion: ${s.suggestion}</div>
+                      <span class="smell-badge-mini ${escapeHtml(s.severity.toLowerCase())}">${escapeHtml(s.severity.toUpperCase())}</span>
+                      <strong>${escapeHtml(s.type.toUpperCase())}</strong>: ${escapeHtml(s.description)}
+                      <div style="color: var(--text-muted); font-style: italic; margin-top: 2px; margin-left: 8px;">💡 Suggestion: ${escapeHtml(s.suggestion)}</div>
                     </li>
                   `).join('')}
                 </ul>
@@ -2415,7 +2416,7 @@ async function loadGraph() {
             <div style="border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
               <span class="detail-stat-label">Smart Classification</span>
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                <span class="selection-badge" style="--badge: ${roleColor};">${fileRole.toUpperCase()}</span>
+                <span class="selection-badge" style="--badge: ${roleColor};">${escapeHtml(fileRole.toUpperCase())}</span>
                 <span style="color: var(--text-muted); font-size: 11px;">(conf: ${roleConf.toFixed(2)})</span>
               </div>
               <div id="classification-signals-container" style="color: var(--text-muted); font-size: 11px;">
@@ -2428,18 +2429,18 @@ async function loadGraph() {
             <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text-main); display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Path</span>
-                <span class="detail-stat-value">${data.id}</span>
+                <span class="detail-stat-value">${escapeHtml(data.id)}</span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Language</span>
-                <span class="detail-stat-value">${data.language ? data.language.toUpperCase() : 'UNKNOWN'}</span>
+                <span class="detail-stat-value">${escapeHtml(data.language ? data.language.toUpperCase() : 'UNKNOWN')}</span>
               </div>
 
               <!-- Stats Grid -->
               <div class="detail-stat-grid">
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">Lines</span>
-                  <span class="detail-stat-mini-value">${data.lines || '—'}</span>
+                  <span class="detail-stat-mini-value">${escapeHtml(data.lines || '—')}</span>
                 </div>
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">Size</span>
@@ -2447,11 +2448,11 @@ async function loadGraph() {
                 </div>
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">In / Out</span>
-                  <span class="detail-stat-mini-value" style="color: var(--syntax-green);">${inDeg} / ${outDeg}</span>
+                  <span class="detail-stat-mini-value" style="color: var(--syntax-green);">${escapeHtml(inDeg)} / ${escapeHtml(outDeg)}</span>
                 </div>
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">Connections</span>
-                  <span class="detail-stat-mini-value" style="color: var(--syntax-blue);">${totalDeg}</span>
+                  <span class="detail-stat-mini-value" style="color: var(--syntax-blue);">${escapeHtml(totalDeg)}</span>
                 </div>
                 ${symbolCount > 0 ? `
                 <div class="detail-stat-grid-item" style="display: none;"></div>
@@ -2462,7 +2463,7 @@ async function loadGraph() {
                 ${pagerank ? `
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">PageRank</span>
-                  <span class="detail-stat-mini-value" style="color: var(--syntax-purple);">${pagerank}</span>
+                  <span class="detail-stat-mini-value" style="color: var(--syntax-purple);">${escapeHtml(pagerank)}</span>
                 </div>` : ''}
               </div>
 
@@ -2476,7 +2477,7 @@ async function loadGraph() {
               ${clusterLabel ? `
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Cluster</span>
-                <span class="detail-stat-value" style="color: var(--syntax-cyan);">${clusterLabel}</span>
+                <span class="detail-stat-value" style="color: var(--syntax-cyan);">${escapeHtml(clusterLabel)}</span>
               </div>
               ` : ''}
 
@@ -2498,7 +2499,7 @@ async function loadGraph() {
 
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
-                <button class="btn btn-secondary btn-action-remove-node" data-node-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
+                <button class="btn btn-secondary btn-action-remove-node" data-node-id="${escapeHtml(data.id)}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
                   Remove Node from View
                 </button>
               </div>
@@ -2520,10 +2521,10 @@ async function loadGraph() {
                 <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: circle; color: var(--text-main);">
                   ${signals.map((s: any) => `
                     <li style="margin-bottom: 4px;">
-                      <strong>[${s.source}]</strong> 
-                      <span style="color: ${LAYER_COLORS[`layer:${s.role}`] || 'var(--text-main)'}; font-weight: 500;">${s.role}</span> 
+                      <strong>[${escapeHtml(s.source)}]</strong> 
+                      <span style="color: ${escapeHtml(LAYER_COLORS[`layer:${s.role}`] || 'var(--text-main)')}; font-weight: 500;">${escapeHtml(s.role)}</span> 
                       <span style="color: var(--text-muted); font-size: 10px;">(conf: ${s.confidence.toFixed(2)})</span>
-                      <div style="margin-top: 2px; color: var(--text-muted);">${s.reason}</div>
+                      <div style="margin-top: 2px; color: var(--text-muted);">${escapeHtml(s.reason)}</div>
                     </li>
                   `).join('')}
                 </ul>
@@ -2597,15 +2598,15 @@ async function loadGraph() {
             <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text-main); display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
                 <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge ID</span>
-                <span style="word-break: break-all; text-align: right;">${data.id}</span>
+                <span style="word-break: break-all; text-align: right;">${escapeHtml(data.id)}</span>
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
                 <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source</span>
-                <span style="word-break: break-all; text-align: right;">${data.source.replace('dir:', '')}</span>
+                <span style="word-break: break-all; text-align: right;">${escapeHtml(data.source.replace('dir:', ''))}</span>
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
                 <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Target</span>
-                <span style="word-break: break-all; text-align: right;">${data.target.replace('dir:', '')}</span>
+                <span style="word-break: break-all; text-align: right;">${escapeHtml(data.target.replace('dir:', ''))}</span>
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
                 <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge Type</span>
@@ -2613,12 +2614,12 @@ async function loadGraph() {
               </div>
               <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
                 <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Count</span>
-                <span style="color: var(--syntax-blue); font-weight: bold; text-align: right;">${data.count || 1} file-level edge(s)</span>
+                <span style="color: var(--syntax-blue); font-weight: bold; text-align: right;">${escapeHtml(data.count || 1)} file-level edge(s)</span>
               </div>
               
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
-                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
+                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${escapeHtml(data.id)}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
                   Remove Edge from View
                 </button>
               </div>
@@ -2629,30 +2630,30 @@ async function loadGraph() {
             <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text-main); display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Source</span>
-                <span class="detail-stat-value"><a href="#" data-go-id="${data.source}" style="color: var(--syntax-blue); text-decoration: none;">${data.source.split('/').pop()}</a></span>
+                <span class="detail-stat-value"><a href="#" data-go-id="${escapeHtml(data.source)}" style="color: var(--syntax-blue); text-decoration: none;">${escapeHtml(data.source.split('/').pop())}</a></span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Target</span>
-                <span class="detail-stat-value"><a href="#" data-go-id="${data.target}" style="color: var(--syntax-blue); text-decoration: none;">${data.target.split('/').pop()}</a></span>
+                <span class="detail-stat-value"><a href="#" data-go-id="${escapeHtml(data.target)}" style="color: var(--syntax-blue); text-decoration: none;">${escapeHtml(data.target.split('/').pop())}</a></span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Edge Type</span>
-                <span class="detail-stat-value"><span class="selection-badge" style="--badge: var(--syntax-purple);">${data.type.toUpperCase()}</span></span>
+                <span class="detail-stat-value"><span class="selection-badge" style="--badge: var(--syntax-purple);">${escapeHtml(data.type.toUpperCase())}</span></span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Verifiability</span>
-                <span class="detail-stat-value"><span class="verifiability-badge ${data.verifiability === 'verified' ? 'verified' : 'inferred'}">${data.verifiability || 'unknown'}</span></span>
+                <span class="detail-stat-value"><span class="verifiability-badge ${data.verifiability === 'verified' ? 'verified' : 'inferred'}">${escapeHtml(data.verifiability || 'unknown')}</span></span>
               </div>
               ${data.weight ? `
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Weight</span>
-                <span class="detail-stat-value">${data.weight}</span>
+                <span class="detail-stat-value">${escapeHtml(data.weight)}</span>
               </div>
               ` : ''}
               
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
-                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
+                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${escapeHtml(data.id)}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
                   Remove Edge from View
                 </button>
               </div>
@@ -2720,7 +2721,7 @@ async function loadSymbols(query: string = '') {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 30px; font-style: italic;">
-          No symbols found matching "${query || ''}"
+          No symbols found matching "${escapeHtml(query || '')}"
         </td>
       `;
       tbody.appendChild(tr);
@@ -2787,18 +2788,18 @@ async function loadSymbolDetails(name: string) {
     detailView.innerHTML = `
       <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text-main); display: flex; flex-direction: column; gap: 16px; width: 100%; height: 100%; min-height: 0;">
         <div style="border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 12px; flex-shrink: 0;">
-          <h3 style="margin: 0 0 6px 0; color: var(--syntax-yellow); font-size: 14px;">${data.symbol.name}</h3>
-          <span style="background: color-mix(in srgb, var(--syntax-yellow) 10%, transparent); color: var(--syntax-yellow); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${data.symbol.kind}</span>
+          <h3 style="margin: 0 0 6px 0; color: var(--syntax-yellow); font-size: 14px;">${escapeHtml(data.symbol.name)}</h3>
+          <span style="background: color-mix(in srgb, var(--syntax-yellow) 10%, transparent); color: var(--syntax-yellow); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${escapeHtml(data.symbol.kind)}</span>
         </div>
 
         <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: center; flex-shrink: 0;">
           <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">File</span>
-          <span class="involved-file-badge" role="button" tabindex="0" data-go-id="${data.symbol.file_path}" title="Click to view in Graph Explorer" style="margin: 0; word-break: break-all; text-align: right;">${data.symbol.file_path}</span>
+          <span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(data.symbol.file_path)}" title="Click to view in Graph Explorer" style="margin: 0; word-break: break-all; text-align: right;">${escapeHtml(data.symbol.file_path)}</span>
         </div>
 
         <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start; flex-shrink: 0;">
           <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Lines</span>
-          <span style="text-align: right;">${data.symbol.start_line}-${data.symbol.end_line}</span>
+          <span style="text-align: right;">${escapeHtml(data.symbol.start_line)}-${escapeHtml(data.symbol.end_line)}</span>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; flex-shrink: 0;">
@@ -2807,9 +2808,9 @@ async function loadSymbolDetails(name: string) {
             ${data.callers.map((c: any) => {
       const name = c.source_symbol;
       if (name && name !== '<top-level>') {
-        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: var(--syntax-blue); text-decoration: none; font-weight: 500;">${name}</a> <span style="color: var(--text-muted); font-size: 11px;">in ${c.source_file}</span></li>`;
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${escapeHtml(name)}" style="color: var(--syntax-blue); text-decoration: none; font-weight: 500;">${escapeHtml(name)}</a> <span style="color: var(--text-muted); font-size: 11px;">in ${escapeHtml(c.source_file)}</span></li>`;
       }
-      return `<li style="margin-bottom: 4px; color: var(--text-muted);"><span style="color: var(--text-muted);">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
+      return `<li style="margin-bottom: 4px; color: var(--text-muted);"><span style="color: var(--text-muted);">&lt;top-level&gt;</span> in ${escapeHtml(c.source_file)}</li>`;
     }).join('') || '<li style="color: var(--text-muted); list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
@@ -2820,9 +2821,9 @@ async function loadSymbolDetails(name: string) {
             ${data.callees.map((c: any) => {
       const name = c.target_symbol;
       if (name) {
-        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: var(--syntax-blue); text-decoration: none; font-weight: 500;">${name}</a> <span style="color: var(--text-muted); font-size: 11px;">in ${c.target_file}</span></li>`;
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${escapeHtml(name)}" style="color: var(--syntax-blue); text-decoration: none; font-weight: 500;">${escapeHtml(name)}</a> <span style="color: var(--text-muted); font-size: 11px;">in ${escapeHtml(c.target_file)}</span></li>`;
       }
-      return `<li style="margin-bottom: 4px; color: var(--text-muted);">in ${c.target_file}</li>`;
+      return `<li style="margin-bottom: 4px; color: var(--text-muted);">in ${escapeHtml(c.target_file)}</li>`;
     }).join('') || '<li style="color: var(--text-muted); list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
@@ -2863,10 +2864,10 @@ async function loadRoutes() {
           const tr = document.createElement('tr');
           const methodColor = getRouteMethodColor(r.method);
           tr.innerHTML = `
-            <td class="col-optional"><strong>${r.framework}</strong></td>
-            <td><span class="method-badge" style="--badge: ${methodColor};">${r.method}</span></td>
-            <td><code>${r.path}</code></td>
-            <td style="color:var(--syntax-blue);">${r.handlerSymbol || r.handlerFile}</td>
+            <td class="col-optional"><strong>${escapeHtml(r.framework)}</strong></td>
+            <td><span class="method-badge" style="--badge: ${methodColor};">${escapeHtml(r.method)}</span></td>
+            <td><code>${escapeHtml(r.path)}</code></td>
+            <td style="color:var(--syntax-blue);">${escapeHtml(r.handlerSymbol || r.handlerFile)}</td>
           `;
           routesTbody.appendChild(tr);
         });
@@ -2889,10 +2890,10 @@ async function loadRoutes() {
           const tr = document.createElement('tr');
           const hookColor = getHookTypeColor(h.hookType);
           tr.innerHTML = `
-            <td class="col-optional"><strong>${h.framework}</strong></td>
-            <td><span class="hook-badge" style="--badge: ${hookColor};">${h.hookType}</span></td>
-            <td><code>${h.hookName}</code></td>
-            <td style="color:var(--syntax-blue);">${h.handlerSymbol || h.handlerFile}</td>
+            <td class="col-optional"><strong>${escapeHtml(h.framework)}</strong></td>
+            <td><span class="hook-badge" style="--badge: ${hookColor};">${escapeHtml(h.hookType)}</span></td>
+            <td><code>${escapeHtml(h.hookName)}</code></td>
+            <td style="color:var(--syntax-blue);">${escapeHtml(h.handlerSymbol || h.handlerFile)}</td>
           `;
           hooksTbody.appendChild(tr);
         });
@@ -2997,7 +2998,7 @@ async function loadMetrics() {
         `).join('');
         gitStatusHTML = `
           <div>
-            <strong>Git Status:</strong> ⚠ Stale (${git.changesCount} changed files since last scan)
+            <strong>Git Status:</strong> ⚠ Stale (${escapeHtml(git.changesCount)} changed files since last scan)
             <ul style="padding-left: 20px; margin-top: 5px; max-height: 100px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
               ${changesList}
             </ul>
@@ -3007,7 +3008,7 @@ async function loadMetrics() {
 
       gitStorageDiv.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:10px;">
-          <div><strong>Database Size:</strong> ${dbSizeKB} KB</div>
+          <div><strong>Database Size:</strong> ${escapeHtml(dbSizeKB)} KB</div>
           ${gitStatusHTML}
         </div>
       `;
@@ -3062,7 +3063,7 @@ function setupContextBuilder() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:var(--danger);">Error: ${errData.error}</div>`;
+        if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:var(--danger);">Error: ${escapeHtml(errData.error)}</div>`;
         return;
       }
       const context = await res.json();
@@ -3070,16 +3071,16 @@ function setupContextBuilder() {
         resultsDiv.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:16px;">
             <h3>Context Analysis results</h3>
-            <div><strong>Token Budget Used:</strong> ${context.estimatedTokens || 0} tokens</div>
+            <div><strong>Token Budget Used:</strong> ${escapeHtml(context.estimatedTokens || 0)} tokens</div>
             <div>
               <strong>Key Context Files:</strong>
               <ul style="padding-left:20px; margin-top:5px; display: flex; flex-direction: column; gap: 4px;">
                 ${context.files && context.files.length > 0
             ? context.files.map((f: any) => `
                       <li>
-                        <code>${f.path || f}</code> 
+                        <code>${escapeHtml(f.path || f)}</code> 
                         <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
-                          (${f.language || 'unknown'} • ${f.lineCount || 0} lines)
+                          (${escapeHtml(f.language || 'unknown')} • ${escapeHtml(f.lineCount || 0)} lines)
                         </span>
                       </li>
                     `).join('')
@@ -3093,9 +3094,9 @@ function setupContextBuilder() {
                 ${context.symbols && context.symbols.length > 0
             ? context.symbols.map((s: any) => `
                       <li>
-                        <code>${s.name || s}</code> 
+                        <code>${escapeHtml(s.name || s)}</code> 
                         <span style="font-size: 0.85em; color: var(--text-muted); margin-left: 8px;">
-                          (${s.kind || 'unknown'} • <code>${s.filePath || ''}</code>)
+                          (${escapeHtml(s.kind || 'unknown')} • <code>${escapeHtml(s.filePath || '')}</code>)
                         </span>
                       </li>
                     `).join('')
@@ -3107,7 +3108,7 @@ function setupContextBuilder() {
         `;
       }
     } catch (err: any) {
-      if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:var(--danger);">Error: ${err.message}</div>`;
+      if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:var(--danger);">Error: ${escapeHtml(err.message)}</div>`;
     }
   });
 }
@@ -3588,23 +3589,23 @@ async function loadSmells() {
           if (Array.isArray(files) && files.length > 0) {
             involvedFilesStr = files.map((f: string) => {
               const name = f.split('/').pop() || f;
-              return `<span class="involved-file-badge" role="button" tabindex="0" data-go-id="${f}" title="Click to view in Graph Explorer">${name}</span>`;
+              return `<span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(f)}" title="Click to view in Graph Explorer">${escapeHtml(name)}</span>`;
             }).join('');
           }
         } catch (e) {
           const fallbackName = typeof smell.involved_files === 'string' ? smell.involved_files.split('/').pop() : 'file';
-          involvedFilesStr = `<span class="involved-file-badge" role="button" tabindex="0" data-go-id="${smell.involved_files}" title="Click to view in Graph Explorer">${fallbackName}</span>`;
+          involvedFilesStr = `<span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(smell.involved_files)}" title="Click to view in Graph Explorer">${escapeHtml(fallbackName)}</span>`;
         }
       }
       
       html += `
-        <div class="smell-item-card severity-${severity}">
+        <div class="smell-item-card severity-${escapeHtml(severity)}">
           <div class="smell-header">
-            <span class="smell-badge ${severity}">${severity}</span>
-            <span class="smell-title">${smell.type.toUpperCase()} SMELL</span>
+            <span class="smell-badge ${escapeHtml(severity)}">${escapeHtml(severity)}</span>
+            <span class="smell-title">${escapeHtml(smell.type.toUpperCase())} SMELL</span>
           </div>
-          <div class="smell-desc">${smell.description}</div>
-          ${smell.suggestion ? `<div class="smell-suggestion">💡 Suggestion: ${smell.suggestion}</div>` : ''}
+          <div class="smell-desc">${escapeHtml(smell.description)}</div>
+          ${smell.suggestion ? `<div class="smell-suggestion">💡 Suggestion: ${escapeHtml(smell.suggestion)}</div>` : ''}
           ${involvedFilesStr ? `<div class="smell-involved">📍 Involved: ${involvedFilesStr}</div>` : ''}
         </div>
       `;
@@ -3667,7 +3668,7 @@ function renderProfile(profile: any) {
   
   const renderPills = (items: string[]) => {
     if (!items || items.length === 0) return '<span class="profile-pill-empty">none</span>';
-    return items.map(item => `<span class="profile-pill">${item}</span>`).join('');
+    return items.map(item => `<span class="profile-pill">${escapeHtml(item)}</span>`).join('');
   };
 
   const renderYesNo = (val: boolean) => {
@@ -3678,7 +3679,7 @@ function renderProfile(profile: any) {
 
   const arch = profile.archetype || 'mixed';
   const conf = typeof profile.archetypeConfidence === 'number' ? profile.archetypeConfidence : 1.0;
-  const archBadge = `<span class="profile-pill-arch archetype-${arch}">${arch.toUpperCase()} <span style="opacity:0.6;font-size:9px;margin-left:4px;">${conf.toFixed(2)}</span></span>`;
+  const archBadge = `<span class="profile-pill-arch archetype-${escapeHtml(arch)}">${escapeHtml(arch.toUpperCase())} <span style="opacity:0.6;font-size:9px;margin-left:4px;">${conf.toFixed(2)}</span></span>`;
 
   container.innerHTML = `
     <div class="profile-detail-item">
@@ -3699,15 +3700,15 @@ function renderProfile(profile: any) {
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Has Backend</span>
-      <span class="profile-detail-value">${renderYesNo(profile.hasBackend)}</span>
+      <span class="profile-detail-value">${escapeHtml(renderYesNo(profile.hasBackend))}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Has Frontend</span>
-      <span class="profile-detail-value">${renderYesNo(profile.hasFrontend)}</span>
+      <span class="profile-detail-value">${escapeHtml(renderYesNo(profile.hasFrontend))}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Is Monorepo</span>
-      <span class="profile-detail-value">${renderYesNo(profile.isMonorepo)}</span>
+      <span class="profile-detail-value">${escapeHtml(renderYesNo(profile.isMonorepo))}</span>
     </div>
   `;
 }
@@ -3730,16 +3731,16 @@ function renderDSM(dsm: any) {
   // Headers
   html += '<thead><tr><th><span class="visually-hidden">Depends on</span></th>';
   for (let j = 0; j < names.length; j++) {
-    html += `<th title="${names[j]}">C${j + 1}</th>`;
+    html += `<th title="${escapeHtml(names[j])}">C${j + 1}</th>`;
   }
   html += '</tr></thead><tbody>';
   
   // Rows
   for (let i = 0; i < names.length; i++) {
-    html += `<tr><th class="dsm-row-hdr" title="${names[i]}">C${i + 1}: ${names[i]}</th>`;
+    html += `<tr><th class="dsm-row-hdr" title="${escapeHtml(names[i])}">C${i + 1}: ${escapeHtml(names[i])}</th>`;
     for (let j = 0; j < names.length; j++) {
       if (i === j) {
-        html += `<td class="dsm-cell dsm-diagonal" title="${names[i]} self-coupling">—</td>`;
+        html += `<td class="dsm-cell dsm-diagonal" title="${escapeHtml(names[i])} self-coupling">—</td>`;
       } else {
         const val = matrix[i][j] || 0;
         const domType = (dominantTypes[i] && dominantTypes[i][j]) || '';
@@ -3759,7 +3760,7 @@ function renderDSM(dsm: any) {
         }
         
         const cellTitle = `${names[i]} calls ${names[j]}: ${val} times${domType ? ` (dominant type: ${domType})` : ''}`;
-        html += `<td class="${cellClass}" ${bgStyle} title="${cellTitle}" data-src="${names[i]}" data-tgt="${names[j]}" data-val="${val}" data-type="${domType}">${textVal}</td>`;
+        html += `<td class="${cellClass}" ${bgStyle} title="${escapeHtml(cellTitle)}" data-src="${escapeHtml(names[i])}" data-tgt="${escapeHtml(names[j])}" data-val="${val}" data-type="${escapeHtml(domType)}">${textVal}</td>`;
       }
     }
     html += '</tr>';
@@ -3780,9 +3781,9 @@ function renderDSM(dsm: any) {
       const detailEl = document.getElementById('dsm-legend-detail');
       if (detailEl) {
         if (parseInt(val, 10) > 0) {
-          detailEl.innerHTML = `<strong>${src}</strong> depends on <strong>${tgt}</strong> (weight: <strong>${val}</strong>, primary: <em>${domType}</em>)`;
+          detailEl.innerHTML = `<strong>${escapeHtml(src)}</strong> depends on <strong>${escapeHtml(tgt)}</strong> (weight: <strong>${val}</strong>, primary: <em>${escapeHtml(domType)}</em>)`;
         } else {
-          detailEl.innerHTML = `No direct dependencies from <strong>${src}</strong> to <strong>${tgt}</strong>`;
+          detailEl.innerHTML = `No direct dependencies from <strong>${escapeHtml(src)}</strong> to <strong>${escapeHtml(tgt)}</strong>`;
         }
       }
     });

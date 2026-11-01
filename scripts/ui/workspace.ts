@@ -57,6 +57,24 @@ export function smokeWorkspace(root: string) {
   write(root, 'web/Orders.vue', "<script setup lang=\"ts\">\nimport axios from 'axios';\nasync function load() { return axios.get('/api/orders'); }\n</script>\n<template><button @click=\"load\">load</button></template>\n");
 }
 
+/** An HTML payload that sets `window.__xss` if the dashboard ever renders it as markup (M4-24). */
+export const XSS = '<img src=x onerror=window.__xss=1>';
+
+/**
+ * A workspace whose scanned values carry the XSS payload: a route path, a file name (also part of
+ * an import cycle, so smells name it), and a logged MCP tool call's name and input.
+ */
+export function xssWorkspace(root: string) {
+  generate(root, 30);
+  write(root, 'artisan', '#!/usr/bin/env php\n<?php\n');
+  write(root, 'composer.json', JSON.stringify({ require: { 'laravel/framework': '^11.0' } }));
+  write(root, 'routes/web.php', `<?php\nuse Illuminate\\Support\\Facades\\Route;\nuse App\\Http\\Controllers\\PageController;\n\nRoute::get('/x${XSS}', [PageController::class, 'show']);\n`);
+  write(root, 'app/Http/Controllers/PageController.php', '<?php\nnamespace App\\Http\\Controllers;\n\nclass PageController\n{\n    public function show() { return 1; }\n}\n');
+  const evil = `evil${XSS}`;
+  write(root, `src/${evil}.ts`, `import { loop } from './loop';\nexport function evilFn(n: number): number { return n > 0 ? loop(n - 1) : n; }\n`);
+  write(root, 'src/loop.ts', `import { evilFn } from './${evil}';\nexport function loop(n: number): number { return n > 0 ? evilFn(n - 1) : n; }\n`);
+}
+
 /** `mapx init` (no agent files, MCP configs or discovery) then `mapx scan`. */
 export function initAndScan(root: string, ...scanArgs: string[]) {
   cli(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover');
