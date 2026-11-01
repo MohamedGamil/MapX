@@ -7932,7 +7932,7 @@
       "milestone": "M4",
       "title": "Recall/precision scoring in CI",
       "objective": "CI runs the route, HTTP and Vue fixture scorers and fails on regression below recorded floors.",
-      "description": "CI runs the route, HTTP and Vue fixture scorers and fails on regression below recorded floors.",
+      "description": "CI runs the route, HTTP and Vue fixture scorers through npm run eval and fails on regression below the floors recorded in scripts/eval/floors.json, the single source the fixture tests also read. Spec: iterations/M4-01.md.",
       "priority": "P1",
       "estimate": {
         "min": 3,
@@ -8056,30 +8056,106 @@
         "docs/reports/2026-10-30-laravel-vue-coverage-findings.md (item 18)"
       ],
       "outputs": [
-        ".github/workflows/ci.yml job",
+        ".github/workflows/ci.yml Eval job",
         "scripts/eval/floors.json",
-        "npm run eval script"
+        "scripts/eval/run-eval.ts (npm run eval)",
+        "tests/eval-floors.test.ts",
+        "reports/M4-01.md"
       ],
       "affectedFiles": [
         ".github/workflows/ci.yml",
-        "scripts/eval"
+        "scripts/eval/floors.json",
+        "scripts/eval/run-eval.ts",
+        "package.json",
+        "tests/eval-floors.test.ts",
+        "tests/laravel-routes-fixture.test.ts",
+        "tests/http-pairing-fixture.test.ts",
+        "tests/vue-sfc.test.ts",
+        "docs/benchmarking.md",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "Lowering any floor-protected recall by breaking a detector makes `npm run eval` exit 1 (mutation check recorded)."
+        "On the current tree npm run eval exits 0 and prints, per scorer (routes, HTTP, edges), every floor-protected metric with its value and floor.",
+        "Lowering any floor-protected recall by breaking a detector makes npm run eval exit 1 naming the metric (mutation check recorded: a route-extraction break and a Vue template-handler break).",
+        "Floors live only in scripts/eval/floors.json; the routes, HTTP and Vue SFC fixture tests import their floor values from it (grep and passing tests in the report).",
+        "A floors file naming an unknown scorer, metric or pattern, or a ratio floor outside [0, 1], makes npm run eval exit 2 before scanning (tests/eval-floors.test.ts).",
+        "npm run eval --floors <file> with only HTTP floors min.callSiteRecall 1 and max.unlabelled 0 exits 1 reporting only unlabelled 1 > 0 (tests/eval-floors.test.ts).",
+        ".github/workflows/ci.yml has an Eval job (needs: lint) that installs and runs npm run eval (structural test of the job block in tests/eval-floors.test.ts; no YAML parser dependency is added)."
       ],
       "verificationCommands": [
-        "npm run eval"
+        "npm run eval",
+        "npx vitest run tests/eval-floors.test.ts tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts tests/vue-sfc.test.ts",
+        "npm run check"
       ],
-      "verificationPlan": "Run every registered command; each must exit 0. Lowering any floor-protected recall by breaking a detector makes `npm run eval` exit 1 (mutation check recorded).",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check the floors with a broken route detector and a broken Vue template pass.",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T00:16:18.183Z",
+      "completedAt": "2026-11-01T00:40:43.570Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M4-01.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-01.md"
+        },
+        {
+          "command": "npx vitest run tests/eval-floors.test.ts tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts tests/vue-sfc.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-01.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-01.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T00:16:17.820Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T00:16:18.183Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T00:40:42.948Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T00:40:43.570Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-01.md"
+            },
+            {
+              "command": "npx vitest run tests/eval-floors.test.ts tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts tests/vue-sfc.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-01.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-01.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

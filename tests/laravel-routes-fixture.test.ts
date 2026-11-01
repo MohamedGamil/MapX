@@ -2,19 +2,25 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { normUri, scanFixture, score, type Label, type ReportedRoute, type Score } from '../scripts/eval/score-routes.ts';
+import { FLOORS_FILE, readFloors } from '../scripts/eval/run-eval.ts';
 
-// M1-01: Laravel route fixture + scorer. FLOORS only ever rise: each M1 task that improves
-// extraction raises them, so a regression on any pattern fails here.
+// M1-01: Laravel route fixture + scorer. The totals floors are recorded in scripts/eval/floors.json
+// (M4-01), which `npm run eval` also checks in CI; floors only ever rise. Per pattern, every labelled
+// live or conditional route must be found.
 const FIXTURE = resolve(__dirname, 'fixtures/laravel-routes');
 const labels = (JSON.parse(readFileSync(resolve(FIXTURE, 'labels.json'), 'utf8')) as { labels: Label[] }).labels;
 
+const RECORDED = readFloors(FLOORS_FILE).routes!;
 const FLOORS = {
   // Raised by M1-02 … M1-09 (2026-10-30): every labelled route, handler and parameter name.
-  uriRecall: 1,
-  handlerRecall: 1,
-  precision: 1,
-  maxFalsePositives: 0,
-  strictParams: true,
+  uriRecall: RECORDED.min!.uriRecall!,
+  handlerRecall: RECORDED.min!.handlerRecall!,
+  attributeRecall: RECORDED.min!.attributeRecall!,
+  precision: RECORDED.min!.precision!,
+  maxFalsePositives: RECORDED.max!.falsePositives!,
+  flagged: RECORDED.min!.flagged!,
+  exactParams: RECORDED.min!.exactParams!,
+  strictParams: RECORDED.strictParams ?? false,
   patterns: Object.fromEntries(
     Object.entries(
       labels.reduce<Record<string, Label[]>>((acc, l) => ({ ...acc, [l.pattern]: [...(acc[l.pattern] ?? []), l] }), {}),
@@ -137,6 +143,9 @@ describe('route extraction on the fixture (real scan)', () => {
     expect(t.precision, result.unlabelledRoutes.join('\n')).toBeGreaterThanOrEqual(FLOORS.precision);
     expect(t.falsePositives).toBeLessThanOrEqual(FLOORS.maxFalsePositives);
     expect(t.exactParams).toBe(t.uriFound);
+    expect(t.exactParams).toBeGreaterThanOrEqual(FLOORS.exactParams);
+    expect(t.flagged).toBeGreaterThanOrEqual(FLOORS.flagged);
+    expect(t.attributeRecall, result.misses.join('\n')).toBeGreaterThanOrEqual(FLOORS.attributeRecall);
     expect(t.attributesFound, result.misses.join('\n')).toBe(t.attributesLabelled);
     expect(t.flagged, 'negatives and conditional mounts flagged').toBe(labels.filter((l) => l.expect !== 'live').length);
     for (const [name, floor] of Object.entries(FLOORS.patterns)) {

@@ -7,14 +7,15 @@ import {
   type EdgeLabel, type EdgeScore, type StoredEdge, type StoredSymbol,
 } from '../scripts/eval/score-edges.ts';
 import { findNestedManifestScopes } from '../src/frameworks/utils.ts';
+import { FLOORS_FILE, readFloors } from '../scripts/eval/run-eval.ts';
 import { SymfonyDetector } from '../src/frameworks/detectors/symfony.ts';
 import { VueRouterDetector } from '../src/frameworks/detectors/vue-router.ts';
 import { ignoredSymbolsForFile } from '../src/parsers/ignored-symbols.ts';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.ts';
 
 // M3-01: Vue SFC edge fixture + scorer (contract: docs/baton/iterations/M3-01.md, "Edge contract").
-// FLOORS only ever rise: each of M3-02 … M3-06 raises the patterns it implements (ideally to their
-// labelled count, see `labelledCount`) and lowers the false positives it removes.
+// The floors are recorded in scripts/eval/floors.json (M4-01), which `npm run eval` also checks in CI;
+// they only ever rise. History: M3-02 … M3-06 and M3-11 raised every pattern to its labelled count.
 const FIXTURE = resolve(__dirname, 'fixtures/vue-sfc');
 const expected = loadExpected(FIXTURE);
 const labels = expected.labels;
@@ -28,39 +29,24 @@ type Pattern = (typeof PATTERNS)[number];
 
 const labelledCount = (pattern: Pattern) => labels.filter((l) => l.pattern === pattern && l.expect !== 'absent').length;
 
+const RECORDED = readFloors(FLOORS_FILE).edges!;
+const patternBound = (pattern: Pattern, side: 'min' | 'max', metric: string) =>
+  RECORDED.patterns?.[pattern]?.[side]?.[metric] ?? RECORDED.patterns?.['*']?.[side]?.[metric];
+
 const FLOORS: {
-  /** Minimum found (edges + symbols) per pattern. Baseline 2026-10-31 (M3-01). */
+  /** Minimum found (edges + symbols) per pattern: its recall floor times its labelled count. */
   found: Record<Pattern, number>;
-  /** Maximum false positives (negatives that exist) per pattern; omitted = 0. */
+  /** Maximum false positives (negatives that exist) per pattern; unset = 0. composable: 1 (generic: formatter.format() inside format() resolves to itself). */
   falsePositives: Partial<Record<Pattern, number>>;
+  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02; 0.989 (90/91) after M3-05; 0.990 (100/101) after M3-06; 0.990 (104/105) after M3-11; 0.992 (117/118) recorded by M4-01. */
   minPrecision: number;
 } = {
-  found: {
-    'template-handler': labelledCount('template-handler'), // M3-02
-    'template-binding-call': labelledCount('template-binding-call'), // M3-02
-    'component-local': labelledCount('component-local'), // M3-02
-    'component-global': labelledCount('component-global'), // M3-02
-    'v-model-component': labelledCount('v-model-component'), // M3-02
-    'component-symbol': labelledCount('component-symbol'), // M3-02
-    'options-this-call': labelledCount('options-this-call'), // already works (same-file this.x())
-    'mixin-method': labelledCount('mixin-method'), // M3-03: through the component's own mixins array
-    'script-setup-macro': labelledCount('script-setup-macro'), // M3-04: defineProps / withDefaults / defineEmits metadata
-    'script-setup-call': labelledCount('script-setup-call'), // already works (local emit constant)
-    // M3-02: setup-level useX() calls owned by the component (rule 2) and {{ format() }} (rule 4). M3-04: useX()
-    // and the destructured persist / addReply resolve through the import, not by name (traps v2-101, v2-102, v3-101).
-    composable: labelledCount('composable'),
-    'vuex-map-helpers': labelledCount('vuex-map-helpers'), // M3-05: by namespace through the store root
-    'vuex-dispatch': labelledCount('vuex-dispatch'), // M3-05
-    pinia: labelledCount('pinia'), // M3-05: through the store's import
-    router: labelledCount('router'), // M3-06: rule 9 navigate edges
-    'router-record': labelledCount('router-record'), // M3-06: the vue-router detector's route edges reach the component
-    'router-module': labelledCount('router-module'), // M3-11: navigation in stores, guards and composables
-  },
-  falsePositives: {
-    composable: 1, // generic: formatter.format() inside format() resolves to itself
-  },
-  /** Baseline 0.625 (15/24, M3-01); 0.708 (17/24) after M3-03; 0.957 (66/69) after M3-02; 0.989 (90/91) after M3-05; 0.990 (100/101) after M3-06; 0.990 (104/105) after M3-11. */
-  minPrecision: 0.95,
+  found: Object.fromEntries(PATTERNS.map((p) => [p, Math.ceil((patternBound(p, 'min', 'recall') ?? 0) * labelledCount(p) - 1e-9)])) as Record<Pattern, number>,
+  falsePositives: Object.fromEntries(PATTERNS.flatMap((p) => {
+    const max = patternBound(p, 'max', 'falsePositives');
+    return max === undefined ? [] : [[p, max]];
+  })),
+  minPrecision: RECORDED.min!.precision!,
 };
 
 const ALLOWED_EDGE_TYPES = new Set(expected.scoredTypes ?? []);

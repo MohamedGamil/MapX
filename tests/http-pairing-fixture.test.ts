@@ -3,15 +3,17 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { normUrl, scanHttpFixture, scoreHttp, workspacePath, type HttpCallRecord, type HttpLabel, type HttpScore } from '../scripts/eval/score-http.ts';
 import { normUri, type Label } from '../scripts/eval/score-routes.ts';
+import { FLOORS_FILE, readFloors } from '../scripts/eval/run-eval.ts';
 
-// M2-02: Vue 2.7 / Vue 3 HTTP client fixture, labels and scorer (contract D008). FLOORS only ever
-// rise: M2-03 … M2-06 raise them as extraction, URL resolution and pairing land.
+// M2-02: Vue 2.7 / Vue 3 HTTP client fixture, labels and scorer (contract D008). The floors are
+// recorded in scripts/eval/floors.json (M4-01), which `npm run eval` also checks in CI; they only rise.
 const FIXTURE = resolve(__dirname, 'fixtures/vue-http');
 const labels = (JSON.parse(readFileSync(resolve(FIXTURE, 'labels.json'), 'utf8')) as { labels: HttpLabel[] }).labels;
 const routeLabels = (JSON.parse(readFileSync(resolve(__dirname, 'fixtures/laravel-routes/labels.json'), 'utf8')) as { labels: Label[] }).labels;
 
 // Raised by M2-03 (call sites), M2-04/M2-05 (URLs) and M2-06 (pairing).
-const FLOORS = { callSiteRecall: 1, urlRecall: 1, pairingRecall: 1, pairingPrecision: 1 };
+const { callSiteRecall, urlRecall, pairingRecall, pairingPrecision } = readFloors(FLOORS_FILE).http!.min!;
+const FLOORS = { callSiteRecall: callSiteRecall!, urlRecall: urlRecall!, pairingRecall: pairingRecall!, pairingPrecision: pairingPrecision! };
 
 describe('vue-http fixture labels', () => {
   it('covers every client pattern with at least 30 labels, including unmatched calls', () => {

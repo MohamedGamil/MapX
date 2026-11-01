@@ -36,3 +36,4 @@
 - D016, D017 and D018 ratified.
 - Added BACKLOG gap tasks from the remediation reports: M2-08 (P1, calls through the file's own imports), M0-02-R9 (sync follows go.mod and composer.json), M0-12-R10 (Svelte templates) and M0-17-R6 (heuristic follow-ups). Each depends hard on M4-01, M4-03, M4-04, M4-05 and M4-08; M5-01 and M5-02 depend hard on all four.
 - Epic M5-12 (24 h) decomposed into M5-19 (external_refs store, 6 h), M5-20 (npm, 6 h), M5-21 (Composer, 4 h), M5-22 (pip/Poetry/uv, 5 h), M5-23 (Go, 4 h) and M5-24 (selectors and reporting, 6 h), then CANCELLED. REQ-ARCH-008 and REQ-ARCH-014 retraced; the M5-01 spec's mentions updated.
+- M4-01 planned (spec `iterations/M4-01.md`; acceptance made falsifiable, files and commands registered) and DONE: `scripts/eval/floors.json` + `npm run eval` + CI `Eval` job; the fixture tests read the same floors. Independent review: 1 P1 (route liveness flags were not a floor) and P2s, all fixed.

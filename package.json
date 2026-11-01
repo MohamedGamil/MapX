@@ -95,6 +95,7 @@
     "workspaces:discover": "tsx src/main.ts workspaces discover",
     "workspaces:sync": "tsx src/main.ts workspaces sync",
     "bench": "tsx benchmarks/run.ts",
+    "eval": "tsx scripts/eval/run-eval.ts",
     "bench:json": "tsx benchmarks/run.ts --json",
     "test": "vitest run",
     "test:unit": "vitest run",

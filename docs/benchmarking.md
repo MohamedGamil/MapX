@@ -86,3 +86,28 @@ For best accuracy, run `mapx init && mapx scan` on the target project first — 
 | `benchmarks/run.ts` | CLI runner — collects data, runs scenarios, generates report |
 | `benchmarks/scenarios.ts` | 6 scenario definitions with baseline vs MapX token models |
 | `benchmarks/token-counter.ts` | Token estimation + pricing utilities |
+
+## Accuracy scoring (fixtures)
+
+Separately from token savings, MapX measures its own extraction accuracy on three labelled synthetic fixtures:
+
+| Scorer | Fixture | Measures |
+| --- | --- | --- |
+| `scripts/eval/score-routes.ts` | `tests/fixtures/laravel-routes` | Laravel route URI, handler and attribute recall, precision, false positives |
+| `scripts/eval/score-http.ts` | `tests/fixtures/vue-http` | HTTP call-site and URL recall, frontend → backend pairing recall and precision |
+| `scripts/eval/score-edges.ts` | `tests/fixtures/vue-sfc` | Vue SFC edge and symbol recall per pattern, precision, false positives on negatives |
+
+The floors each score must hold are recorded in `scripts/eval/floors.json`. The fixture tests read the same file. `npm run eval` runs all three scorers and checks every floor. CI runs it as the `Eval` job.
+
+```bash
+npm run eval                          # table per scorer; exit 1 when a floor is missed
+npm run eval -- --json                # machine-readable result
+npm run eval -- --floors my.json      # check another floors file
+```
+
+In `floors.json`:
+- `fixture` is the fixture directory, relative to the repository root.
+- `min` and `max` bound a scorer's totals.
+- `patterns` bounds each labelled pattern. `"*"` applies to every pattern, and a named pattern overrides it metric by metric.
+
+A floors file naming an unknown scorer, metric or pattern, or a recall or precision outside [0, 1], is rejected with exit 2 before anything is scanned. A scan that fails also exits 2, after the other scorers have reported. Floors only rise: when a change improves a score, raise its floor in the same change.
