@@ -19000,31 +19000,83 @@
         "docs/baton/reports/M0-02-R8.md"
       ],
       "outputs": [
-        "fix",
-        "regression tests",
+        "go.mod and composer.json signatures in the sync config tracking",
+        "tests/sync-manifests.test.ts",
         "reports/M0-02-R9.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "tests/legacy-globs.test.ts"
+        "tests/sync-manifests.test.ts",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "Changing the module path in go.mod re-resolves the Go files importing it, so sync equals scan --force (e2e).",
-        "Changing a composer.json `autoload.psr-4` mapping re-resolves the PHP files whose `use` statements it governs, so sync equals scan --force (e2e)."
+        "Changing the module path in go.mod re-resolves the Go files below it, so sync equals scan --force (e2e, tests/sync-manifests.test.ts).",
+        "Changing a composer.json autoload.psr-4 mapping re-resolves the PHP files below it, so sync equals scan --force (e2e).",
+        "A go.mod change re-parses no JS/PHP file and a composer.json change no Go/JS file; an index recorded before this task records the new signatures on its first sync without re-parsing (test)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/legacy-globs.test.ts"
+        "npx vitest run tests/sync-manifests.test.ts tests/legacy-globs.test.ts",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T12:22:01.315Z",
+      "completedAt": "2026-11-01T12:47:16.722Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R9.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/sync-manifests.test.ts tests/legacy-globs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R9.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R9.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T12:22:01.006Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T12:22:01.315Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T12:47:15.512Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T12:47:16.722Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/sync-manifests.test.ts tests/legacy-globs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R9.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R9.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

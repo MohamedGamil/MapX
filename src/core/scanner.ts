@@ -80,6 +80,13 @@ const readable = (path: string) => {
 };
 /** The scan time of a file whose re-indexing has not written its result yet (M0-02-R10). */
 const UNSCANNED = new Date(0).toISOString();
+/** Manifests whose content decides how a language's imports resolve, tracked by sync (M0-02-R9). */
+const MANIFEST_FAMILIES = [
+  { prefix: '\0go:', manifest: 'go.mod', source: /\.go$/ },
+  { prefix: '\0php:', manifest: 'composer.json', source: /\.php$/ },
+];
+/** A family key of the config signatures: a NUL-prefixed key, which no folder name can be (review 2026-11-01). */
+const isFamilyKey = (key: string) => key.startsWith('\0');
 /** Modules whose calls resolve through import bindings (M2-08). */
 const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
 
@@ -2994,14 +3001,18 @@ export class Scanner {
    * their relative `extends` / `references` reach) or bundler config added, removed or edited, or an
    * `__init__.py` added or removed (Python import roots, M0-12-R9). Folders up to the workspace root
    * count, as alias lookup walks that far. No scan parses those files, so the files they govern are re-parsed,
-   * as `scan --force` would resolve them (M0-02-R8). Signatures live in `meta js_configs:<repo>`.
+   * as `scan --force` would resolve them (M0-02-R8). Likewise Go files below a changed go.mod (the
+   * module path) and PHP files below a changed composer.json (PSR-4 roots) (M0-02-R9). Signatures
+   * live in `meta js_configs:<repo>`: folder keys for JS/TS/Python, NUL-prefixed `go:`/`php:` folder
+   * keys for the others, and `#families`, the families the record holds.
    */
   private configReferrers(repoName: string, deleted: string[] = [], dryRun = false): Set<string> {
     const key = 'js_configs:' + repoName;
     const gone = new Set(deleted);
-    const sources = this.store.getAllFiles(repoName).map(f => f.path as string)
-      .filter(p => !gone.has(p) && (JS_TS_FILE.test(p) || /\.(vue|svelte|py)$/.test(p)));
-    if (sources.length === 0) return new Set();
+    const indexed = this.store.getAllFiles(repoName).map(f => f.path as string).filter(p => !gone.has(p));
+    const sources = indexed.filter(p => JS_TS_FILE.test(p) || /\.(vue|svelte|py)$/.test(p));
+    const families = MANIFEST_FAMILIES.map(f => ({ ...f, sources: indexed.filter(p => f.source.test(p)) }));
+    if (sources.length === 0 && families.every(f => f.sources.length === 0)) return new Set();
     const workspaceRoot = this.config.getWorkspaceRoot();
     // Every folder above a source, up to the workspace root: alias lookup walks that far (review).
     const dirs = new Set<string>(['']);
@@ -3054,15 +3065,44 @@ export class Scanner {
       }
       if (any) signatures[dir] = hash.digest('hex');
     }
+    // go.mod / composer.json in every folder above a Go / PHP file (M0-02-R9).
+    for (const family of families) {
+      const above = new Set<string>(['']);
+      for (const p of family.sources) {
+        for (let dir = p; dir.includes('/');) {
+          dir = dir.slice(0, dir.lastIndexOf('/'));
+          if (above.has(dir)) break;
+          above.add(dir);
+        }
+      }
+      for (const dir of above) {
+        const abs = resolve(workspaceRoot, dir, family.manifest);
+        let manifest: Buffer | null = null;
+        try {
+          manifest = statSync(abs).isFile() ? readFileSync(abs) : null;
+        } catch { /* none here */ }
+        if (manifest) signatures[family.prefix + dir] = createHash('md5').update(manifest).digest('hex');
+      }
+    }
+    signatures['#families'] = MANIFEST_FAMILIES.map(f => f.prefix).join(',');
     let before: Record<string, string> | null = null;
     try { before = JSON.parse(this.store.getMeta(key) ?? 'null'); } catch { /* recorded below */ }
     if (!dryRun) this.store.setMeta(key, JSON.stringify(signatures));
     // No record yet: nothing to compare with.
     if (!before) return new Set();
-    const changed = [...new Set([...Object.keys(before), ...Object.keys(signatures)])].filter(d => before![d] !== signatures[d]);
+    // A family the record does not hold yet (an index from before it) is only recorded: nothing to compare.
+    const recorded = new Set((before['#families'] ?? '').split(','));
+    const changed = [...new Set([...Object.keys(before), ...Object.keys(signatures)])]
+      .filter(k => k !== '#families' && before![k] !== signatures[k]
+        && (!isFamilyKey(k) || MANIFEST_FAMILIES.some(f => k.startsWith(f.prefix) && recorded.has(f.prefix))));
     if (changed.length === 0) return new Set();
     const under = (p: string, dir: string) => dir === '' || p.startsWith(`${dir}/`);
-    return new Set(sources.filter(p => changed.some(dir => under(p, dir))));
+    const referrers = new Set(sources.filter(p => changed.some(dir => !isFamilyKey(dir) && under(p, dir))));
+    for (const family of families) {
+      const dirs = changed.filter(k => k.startsWith(family.prefix)).map(k => k.slice(family.prefix.length));
+      for (const p of family.sources) if (dirs.some(dir => under(p, dir))) referrers.add(p);
+    }
+    return referrers;
   }
 
   /**

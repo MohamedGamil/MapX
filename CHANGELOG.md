@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Fixed
+- `mapx sync` follows `go.mod` module-path and `composer.json` PSR-4 changes, re-resolving the Go or PHP files they govern, so sync equals a full scan. An edit made before upgrading and before the first sync on this version needs one `mapx scan --force` (M0-02-R9).
 - An interrupted `mapx sync` (Ctrl-C) no longer loses the symbols and edges of the files it had started re-indexing: the next sync re-parses them, and `mapx status` lists them meanwhile (M0-02-R10).
 - Calls to a name a file imports from a project module (JS/TS, Vue/Svelte scripts and Python: named, aliased, default, namespace, `require` and `from … import`, through re-exports and package `__init__.py`) now link that module's declaration instead of a same-named function elsewhere; `mapx sync` re-parses a changed module's importers so sync equals a full scan (M2-08).
 
