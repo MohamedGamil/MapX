@@ -97,6 +97,16 @@ function findUiDir(): string {
   return join(__dirname, 'ui');
 }
 
+/**
+ * A client on this machine, judged by the socket's address (never by a forwarded header, which the
+ * client writes). The dashboard's own user is not rate-limited: reloading the page, or the browser
+ * tests, must not get 429s from /api/graph (M4-17).
+ */
+export function isLoopback(address: string | undefined): boolean {
+  if (!address) return false;
+  return address === '::1' || address.startsWith('127.') || address.startsWith('::ffff:127.');
+}
+
 /** `Config.load` plus the duplicate-entry collapse the CLI and MCP loaders apply (M0-10-R4). */
 async function loadConfig(dir: string, store: Store): Promise<Config> {
   const config = await Config.load(dir);
@@ -173,7 +183,7 @@ export function startUiServer(opts: ServerOpts) {
 
     // Handle Rate Limiting for specific endpoints
     if (pathname === '/api/context' || pathname === '/api/graph' || pathname === '/api/graph/meta') {
-      if (isRateLimited(ip)) {
+      if (!isLoopback(req.socket.remoteAddress) && isRateLimited(ip)) {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Rate limit exceeded: max 10 requests per minute' }));
         return;

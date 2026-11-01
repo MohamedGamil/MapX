@@ -426,6 +426,14 @@ Options:
 - `--token` — Bearer token for authorization
 - `--no-open` — Do not open the dashboard in the browser automatically
 
+The dashboard:
+- **Themes:** light and dark. It follows the system setting until you pick one with the sun/moon button; your choice is kept in the browser.
+- **Narrow windows:** below 1200 px the sidebar shrinks to icons, and below 640 px it becomes a drawer behind the menu button.
+- **Keyboard:** every control can be reached with Tab and shows a focus ring. Arrow keys switch between Routes and Hooks, and Escape closes the drawer or the graph's details panel.
+- **Graph details:** the details panel opens when you select a node or edge.
+- **Clusters Map grouping:** the map groups files by architecture layer, or by directory when most files have no layer.
+- **Rate limit:** `/api/graph`, `/api/graph/meta` and `/api/context` are rate-limited to 10 requests a minute per client. Clients on the same machine are exempt, judged by the connection's address.
+
 ## `mapx workspaces`
 
 Manage multi-repository workspaces.

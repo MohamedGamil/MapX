@@ -3,6 +3,7 @@ import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
 import cola from 'cytoscape-cola';
 import elk from 'cytoscape-elk';
+import { DETAILS_PLACEHOLDER, initDetailsPanel, initNavDrawer, initTheme } from './chrome.js';
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
@@ -51,14 +52,32 @@ tabs.forEach(tab => {
 const subtabs = document.querySelectorAll('.tab-sub-btn');
 subtabs.forEach(sub => {
   sub.addEventListener('click', () => {
-    subtabs.forEach(s => s.classList.remove('active'));
+    subtabs.forEach(s => {
+      s.classList.remove('active');
+      s.setAttribute('aria-selected', 'false');
+      s.setAttribute('tabindex', '-1');
+    });
     sub.classList.add('active');
+    sub.setAttribute('aria-selected', 'true');
+    sub.removeAttribute('tabindex');
 
     const target = sub.getAttribute('data-subtab') || 'subtab-routes-list';
     document.querySelectorAll('.subtab-pane').forEach(p => p.classList.remove('active'));
 
     const targetPane = document.getElementById(target);
     if (targetPane) targetPane.classList.add('active');
+  });
+});
+
+// Arrow keys move between the sub-tabs (the WAI-ARIA tabs pattern: one Tab stop, arrows inside).
+subtabs.forEach((sub, i) => {
+  sub.addEventListener('keydown', (e: Event) => {
+    const key = (e as KeyboardEvent).key;
+    if (key !== 'ArrowLeft' && key !== 'ArrowRight') return;
+    e.preventDefault();
+    const next = subtabs[(i + (key === 'ArrowRight' ? 1 : subtabs.length - 1)) % subtabs.length] as HTMLElement;
+    next.click();
+    next.focus();
   });
 });
 
@@ -86,7 +105,7 @@ function renderToolCallEntry(data: any): HTMLElement {
     <span class="log-status">${statusIcon}</span>
     <span class="log-name">${data.tool}</span>
     <span class="log-input">(${JSON.stringify(data.input)})</span>${durationStr}
-    ${data.error ? `<div class="log-result" style="color: #ef4444;">Error: ${data.error}</div>` : ''}
+    ${data.error ? `<div class="log-result" style="color: var(--danger);">Error: ${data.error}</div>` : ''}
   `;
   return entry;
 }
@@ -204,7 +223,7 @@ async function loadStatus() {
       Object.keys(status.languages).forEach(lang => {
         const opt = document.createElement('option');
         opt.value = lang;
-        opt.textContent = lang.toUpperCase();
+        opt.textContent = languageName(lang);
         filterSelect.appendChild(opt);
       });
     }
@@ -284,6 +303,20 @@ const LAYER_COLORS: Record<string, string> = {
   'layer:scripts': '#2d3436',     // very dark gray
 };
 
+/** A layer's colour as a theme token, for HTML (the graph keeps LAYER_COLORS' fixed hues). */
+const LAYER_TOKENS: Record<string, string> = {
+  entry: '--syntax-red', config: '--text-muted', types: '--syntax-cyan', shared: '--text-main', test: '--syntax-green',
+  docs: '--text-muted', other: '--text-muted', api: '--syntax-blue', middleware: '--syntax-blue', service: '--syntax-purple',
+  data: '--syntax-yellow', integration: '--syntax-orange', auth: '--syntax-pink', pages: '--syntax-orange',
+  components: '--syntax-purple', state: '--syntax-green', hooks: '--syntax-blue', styles: '--syntax-yellow',
+  assets: '--syntax-cyan', cli: '--syntax-red', core: '--syntax-cyan', parsers: '--syntax-orange',
+  plugins: '--syntax-purple', utils: '--text-muted', ui: '--syntax-purple', exporters: '--syntax-pink',
+  agents: '--syntax-yellow', frameworks: '--syntax-green', scripts: '--text-muted',
+};
+function layerToken(role: string): string {
+  return `var(${LAYER_TOKENS[role] ?? '--syntax-orange'})`;
+}
+
 function saveCustomTags() {
   try {
     const obj: Record<string, string[]> = {};
@@ -317,34 +350,34 @@ function getAllUsedTags(): string[] {
 // Color mapping for HTTP route method badges
 function getRouteMethodColor(method: string): string {
   switch ((method || '').toUpperCase()) {
-    case 'GET': return '#10b981'; // emerald
-    case 'POST': return '#3b82f6'; // blue
-    case 'PUT': return '#f59e0b'; // amber
-    case 'PATCH': return '#14b8a6'; // teal
-    case 'DELETE': return '#ef4444'; // red
-    case 'HEAD': return '#6366f1'; // indigo
-    case 'OPTIONS': return '#8b5cf6'; // violet
-    case 'ANY': return '#a855f7'; // purple
-    case 'MATCH': return '#ec4899'; // pink
-    default: return '#64748b'; // slate
+    case 'GET': return 'var(--syntax-green)'; // emerald
+    case 'POST': return 'var(--syntax-blue)'; // blue
+    case 'PUT': return 'var(--syntax-yellow)'; // amber
+    case 'PATCH': return 'var(--syntax-cyan)'; // teal
+    case 'DELETE': return 'var(--danger)'; // red
+    case 'HEAD': return 'var(--syntax-blue)'; // indigo
+    case 'OPTIONS': return 'var(--syntax-purple)'; // violet
+    case 'ANY': return 'var(--syntax-purple)'; // purple
+    case 'MATCH': return 'var(--syntax-pink)'; // pink
+    default: return 'var(--text-muted)'; // slate
   }
 }
 
 // Color mapping for hook type badges
 function getHookTypeColor(hookType: string): string {
   const t = (hookType || '').toLowerCase();
-  if (t.includes('middleware')) return '#6366f1'; // indigo
-  if (t.includes('event') || t.includes('listener')) return '#06b6d4'; // cyan
-  if (t.includes('filter')) return '#f59e0b'; // amber
-  if (t.includes('action')) return '#f43f5e'; // rose
-  if (t.includes('lifecycle') || t.includes('init') || t.includes('boot') || t.includes('destroy')) return '#14b8a6'; // teal
-  if (t.includes('service_provider') || t.includes('provider')) return '#8b5cf6'; // violet
-  if (t.includes('guard')) return '#ef4444'; // red
-  if (t.includes('pipe')) return '#22d3ee'; // cyan-light
-  if (t.includes('interceptor')) return '#a855f7'; // purple
-  if (t.includes('resolver') || t.includes('query') || t.includes('mutation')) return '#3b82f6'; // blue
-  if (t.includes('subscriber') || t.includes('subscription')) return '#ec4899'; // pink
-  return '#64748b'; // slate fallback
+  if (t.includes('middleware')) return 'var(--syntax-blue)'; // indigo
+  if (t.includes('event') || t.includes('listener')) return 'var(--syntax-cyan)'; // cyan
+  if (t.includes('filter')) return 'var(--syntax-yellow)'; // amber
+  if (t.includes('action')) return 'var(--syntax-red)'; // rose
+  if (t.includes('lifecycle') || t.includes('init') || t.includes('boot') || t.includes('destroy')) return 'var(--syntax-cyan)'; // teal
+  if (t.includes('service_provider') || t.includes('provider')) return 'var(--syntax-purple)'; // violet
+  if (t.includes('guard')) return 'var(--danger)'; // red
+  if (t.includes('pipe')) return 'var(--syntax-cyan)'; // cyan-light
+  if (t.includes('interceptor')) return 'var(--syntax-purple)'; // purple
+  if (t.includes('resolver') || t.includes('query') || t.includes('mutation')) return 'var(--syntax-blue)'; // blue
+  if (t.includes('subscriber') || t.includes('subscription')) return 'var(--syntax-pink)'; // pink
+  return 'var(--text-muted)'; // slate fallback
 }
 
 // Centralized layout configuration resolver
@@ -1336,6 +1369,486 @@ function updateToolbarVisibility(mode: string) {
 }
 
 // Setup Cytoscape view and fetch graph
+/** The dashboard's font stack, for canvas text (cytoscape cannot read CSS variables). */
+const FONT_SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+
+/**
+ * A theme colour token's current value (M4-17), optionally at an alpha: cytoscape draws on a
+ * canvas and cannot use CSS variables, so its style is rebuilt from the tokens on a theme change.
+ */
+function t(token: string, alpha?: number): string {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim() || '#888888';
+  if (alpha === undefined) return value;
+  const hex = value.replace('#', '');
+  const full = hex.length === 3 ? [...hex].map((c) => c + c).join('') : hex;
+  const [r, g, b] = [0, 2, 4].map((k) => parseInt(full.slice(k, k + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** The graph's cytoscape style, from the current theme's tokens. */
+function graphStyle(): any[] {
+  return [
+    {
+      selector: 'node',
+      style: {
+        'label': 'data(label)',
+        'color': t('--text-main'),
+        'font-family': FONT_SANS,
+        'font-size': '11px',
+        'font-weight': '600',
+        // Labels too small to read at the current zoom are hidden, and come back on zooming in.
+        'min-zoomed-font-size': 7,
+        'background-color': t('--text-muted'),
+        'shape': 'ellipse',
+        'width': (node: any) => {
+          if (node.isParent && node.isParent()) return 'auto';
+          const deg = node.degree ? node.degree() : 0;
+          return (32 + Math.min(deg * 2, 48)) + 'px';
+        },
+        'height': (node: any) => {
+          if (node.isParent && node.isParent()) return 'auto';
+          const deg = node.degree ? node.degree() : 0;
+          return (32 + Math.min(deg * 2, 48)) + 'px';
+        },
+        'text-valign': 'top',
+        'text-margin-y': -6,
+        'z-index': 10,
+        'overlay-color': t('--syntax-blue'),
+        'overlay-opacity': 0.08,
+        'text-outline-color': t('--bg-card'),
+        'text-outline-width': '1px',
+        'transition-property': 'opacity, width, height, border-color, border-width, background-color',
+        'transition-duration': 0.2
+      } as any
+    },
+    {
+      selector: 'node[type="file"]',
+      style: {
+        'shape': 'ellipse',
+        'border-width': '1px',
+        'border-color': t('--bg-card')
+      }
+    },
+    {
+      selector: 'node[type="symbol"]',
+      style: {
+        'shape': 'ellipse',
+        'border-width': '1px',
+        'border-color': t('--bg-card')
+      }
+    },
+    {
+      selector: ':parent',
+      style: {
+        'background-color': t('--bg-card', 0.15),
+        'border-width': '1px',
+        'border-color': t('--border-strong'),
+        'border-style': 'dashed',
+        'label': 'data(label)',
+        'color': t('--text-main'),
+        'font-family': FONT_SANS,
+        'font-size': '12px',
+        'font-weight': 'bold',
+        'text-valign': 'top',
+        'text-halign': 'center',
+        'text-outline-width': '1px',
+        'text-outline-color': t('--bg-main'),
+        'padding': '20px'
+      }
+    },
+    { selector: 'node[language="php"]', style: { 'background-color': '#c678dd' } },
+    { selector: 'node[language="javascript"]', style: { 'background-color': '#e5c07b' } },
+    { selector: 'node[language="typescript"]', style: { 'background-color': '#61afef' } },
+    { selector: 'node[language="tsx"]', style: { 'background-color': '#61afef' } },
+    { selector: 'node[language="python"]', style: { 'background-color': '#56b6c2' } },
+    { selector: 'node[language="rust"]', style: { 'background-color': '#d19a66' } },
+    { selector: 'node[language="go"]', style: { 'background-color': '#56b6c2' } },
+    { selector: 'node[language="java"]', style: { 'background-color': '#c678dd' } },
+    { selector: 'node[language="c_sharp"]', style: { 'background-color': '#e06c75' } },
+    { selector: 'node[language="cpp"]', style: { 'background-color': '#e06c75' } },
+    { selector: 'node[language="c"]', style: { 'background-color': '#5c6370' } },
+    { selector: 'node[language="ruby"]', style: { 'background-color': '#e06c75' } },
+    { selector: 'node[language="swift"]', style: { 'background-color': '#d19a66' } },
+    { selector: 'node[language="kotlin"]', style: { 'background-color': '#c678dd' } },
+    { selector: 'node[language="vue"]', style: { 'background-color': '#98c379' } },
+    { selector: 'node[language="scala"]', style: { 'background-color': '#e06c75' } },
+    { selector: 'node[language="dart"]', style: { 'background-color': '#56b6c2' } },
+    {
+      selector: 'node[type="file"][?role]',
+      style: {
+        'background-color': (node: any) => {
+          const r = node.data('role');
+          return LAYER_COLORS[`layer:${r}`] || t('--text-muted');
+        }
+      }
+    },
+    {
+      selector: 'edge',
+      style: {
+        'width': 1,
+        'line-color': t('--border-base', 0.18),
+        'target-arrow-color': t('--border-base', 0.18),
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'overlay-color': t('--syntax-blue'),
+        'overlay-opacity': 0.05,
+        'z-index': 1,
+        'transition-property': 'opacity, width, line-color, target-arrow-color',
+        'transition-duration': 0.2
+      }
+    },
+    {
+      selector: 'edge[type="route"]',
+      style: {
+        'line-color': t('--syntax-green', 0.7),
+        'target-arrow-color': t('--syntax-green', 0.7)
+      }
+    },
+    {
+      selector: 'edge[source = target]',
+      style: {
+        // Self-edges should not use taxi/straight/segments.
+        'curve-style': 'bezier',
+
+        // Makes the self-loop visible instead of collapsed.
+        'loop-direction': '45deg',
+        'loop-sweep': '120deg',
+
+        // Gives the loop enough size to avoid invalid endpoints.
+        'control-point-step-size': 70,
+
+        'source-endpoint': 'outside-to-node',
+        'target-endpoint': 'outside-to-node',
+
+        'target-arrow-shape': 'triangle',
+      },
+    },
+    {
+      selector: 'edge[type="cluster-dependency"]',
+      style: {
+        'width': '2px',
+        'line-color': t('--syntax-blue'),
+        'target-arrow-color': t('--syntax-blue'),
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'label': 'data(label)',
+        'color': t('--syntax-blue'),
+        'font-family': FONT_SANS,
+        'font-size': '10px',
+        'font-weight': 'bold',
+        'text-background-color': t('--bg-card'),
+        'text-background-opacity': 0.95,
+        'text-background-padding': '3px',
+        'text-background-shape': 'roundrectangle'
+      }
+    },
+    {
+      selector: 'node:selected',
+      style: {
+        'border-width': '1.5px',
+        'border-color': t('--syntax-blue')
+      }
+    },
+    {
+      selector: '.dimmed',
+      style: {
+        'opacity': 0.15,
+        'text-opacity': 0.15
+      }
+    },
+    {
+      selector: '.highlighted-center',
+      style: {
+        'border-width': '2px',
+        'border-color': t('--syntax-blue'),
+        'overlay-opacity': 0.15,
+        'z-index': 9999,
+        'opacity': 1,
+        'text-opacity': 1
+      }
+    },
+    {
+      selector: '.highlighted-outgoing',
+      style: {
+        'line-color': t('--syntax-green'),
+        'target-arrow-color': t('--syntax-green'),
+        'width': 2,
+        'z-index': 9998,
+        'opacity': 1
+      }
+    },
+    {
+      selector: '.highlighted-outgoing-node',
+      style: {
+        'font-size': '11.5px',
+        'border-width': '1.8px',
+        'border-color': t('--syntax-green'),
+        'z-index': 9997,
+        'opacity': 1,
+        'text-opacity': 1
+      }
+    },
+    {
+      selector: '.highlighted-incoming',
+      style: {
+        'line-color': t('--syntax-purple'),
+        'target-arrow-color': t('--syntax-purple'),
+        'width': 2,
+        'z-index': 9998,
+        'opacity': 1
+      }
+    },
+    {
+      selector: '.highlighted-incoming-node',
+      style: {
+        'font-size': '11.5px',
+        'border-width': '1.8px',
+        'border-color': t('--syntax-purple'),
+        'z-index': 9997,
+        'opacity': 1,
+        'text-opacity': 1
+      }
+    },
+    {
+      selector: ':parent.highlighted-parent-active',
+      style: {
+        'border-color': t('--syntax-blue'),
+        'border-width': '1.5px',
+        'border-style': 'solid',
+        'background-color': t('--border-base', 0.55),
+        'color': t('--syntax-blue'),
+        'text-outline-color': t('--bg-main')
+      }
+    },
+    {
+      selector: ':parent.highlighted-parent-outgoing',
+      style: {
+        'border-color': t('--syntax-green'),
+        'border-width': '1.5px',
+        'border-style': 'solid',
+        'background-color': t('--border-base', 0.55),
+        'color': t('--syntax-green'),
+        'text-outline-color': t('--bg-main')
+      }
+    },
+    {
+      selector: ':parent.highlighted-parent-incoming',
+      style: {
+        'border-color': t('--syntax-purple'),
+        'border-width': '1.5px',
+        'border-style': 'solid',
+        'background-color': t('--border-base', 0.55),
+        'color': t('--syntax-purple'),
+        'text-outline-color': t('--bg-main')
+      }
+    },
+    {
+      selector: 'node[type="parent-folder"]',
+      style: {
+        'shape': 'round-rectangle',
+        'background-color': t('--border-strong'),
+        'border-width': '2px',
+        'border-color': t('--syntax-blue'),
+        'width': '60px',
+        'height': '40px',
+        'font-size': '10px',
+        'font-weight': 'bold',
+        'color': t('--text-main'),
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'text-outline-width': '0px',
+        'text-wrap': 'ellipsis',
+        'text-max-width': '100px',
+        'text-overflow-wrap': 'anywhere',
+        'z-index': 15
+      }
+    },
+    {
+      selector: 'edge[type="aggregated-dependency"]',
+      style: {
+        'width': (edge: any) => {
+          const cnt = edge.data('count') || 1;
+          return Math.min(1.5 + Math.log2(cnt), 7) + 'px';
+        },
+        'line-color': t('--syntax-blue', 0.45),
+        'target-arrow-color': t('--syntax-blue', 0.45),
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'label': 'data(label)',
+        'color': t('--text-main'),
+        'font-family': FONT_SANS,
+        'font-size': '9px',
+        'font-weight': 'bold',
+        'text-background-color': t('--bg-card'),
+        'text-background-opacity': 1,
+        'text-background-padding': '2px',
+        'text-background-shape': 'roundrectangle'
+      }
+    },
+    {
+      selector: 'node[?isSeed]',
+      style: {
+        'background-color': t('--syntax-green'),
+        'border-color': t('--syntax-yellow'),
+        'border-width': '3px',
+        'width': '46px',
+        'height': '46px',
+        'z-index': 9999
+      }
+    },
+    {
+      selector: 'node[type="cluster-group"]',
+      style: {
+        'shape': 'hexagon',
+        'background-color': t('--bg-card'),
+        'background-opacity': 0.85,
+        'border-width': '3px',
+        'border-color': t('--syntax-orange'),
+        'width': (node: any) => {
+          const fileCount = node.data('fileCount') || 1;
+          return (70 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
+        },
+        'height': (node: any) => {
+          const fileCount = node.data('fileCount') || 1;
+          return (70 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
+        },
+        'color': t('--text-white'),
+        'font-family': FONT_SANS,
+        'font-size': '14px',
+        'font-weight': 'bold',
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'text-outline-width': '2px',
+        'text-outline-color': t('--bg-main'),
+        'text-wrap': 'ellipsis',
+        'text-max-width': (node: any) => {
+          const fileCount = node.data('fileCount') || 1;
+          return (60 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
+        },
+        'text-overflow-wrap': 'anywhere',
+        'line-height': 1.25,
+        'z-index': 15,
+        'transition-property': 'background-color, border-color, border-width, width, height',
+        'transition-duration': 0.2
+      }
+    },
+    {
+      // Layer-colored cluster nodes: use the layerColor data property for border + glow
+      selector: 'node[type="cluster-group"][?layerColor]',
+      style: {
+        'border-color': (node: any) => node.data('layerColor') || t('--syntax-orange'),
+        'background-color': (node: any) => {
+          const c = node.data('layerColor') as string | null;
+          if (!c) return t('--bg-card');
+          // Darken the layer color to use as background fill
+          return c + '22'; // 13% opacity hex
+        },
+      }
+    },
+    {
+      selector: 'node[type="cluster-group"][?isFolderFallback]',
+      style: {
+        'shape': 'round-rectangle',
+        'border-style': 'dashed',
+        'border-color': t('--syntax-yellow'), // Folder yellow
+        'background-color': t('--success-surface'), // Toned-down dark background
+      }
+    },
+    {
+      selector: 'node[type="cluster-group"][?isOrphans]',
+      style: {
+        'shape': 'ellipse',
+        'border-style': 'dashed',
+        'border-color': t('--syntax-red'), // Crimson red
+        'background-color': t('--danger-surface'), // Toned-down dark red background
+      }
+    },
+    {
+      selector: 'node[type="cluster-group"][?isSingulars]',
+      style: {
+        'shape': 'ellipse',
+        'border-style': 'dashed',
+        'border-color': t('--syntax-green'), // Green
+        'background-color': t('--success-surface'), // Toned-down dark green background
+      }
+    },
+    {
+      selector: 'node[?isHub]',
+      style: {
+        'width': 52,
+        'height': 52,
+        'border-color': t('--danger'),
+        'border-width': 2.5,
+        'border-style': 'solid'
+      }
+    },
+    {
+      selector: 'edge[?isCycle]',
+      style: {
+        'line-color': t('--danger'),
+        'target-arrow-color': t('--danger'),
+        'width': 3,
+        'line-style': 'dashed'
+      }
+    },
+    {
+      selector: 'node[?isBoundaryNode]',
+      style: {
+        'border-style': 'dashed',
+        'border-width': '2.5px',
+        'border-color': t('--syntax-yellow'),
+        'opacity': 0.45,
+        'text-opacity': 0.6
+      }
+    },
+    {
+      selector: 'edge[type="cluster-edge"]',
+      style: {
+        'width': (edge: any) => {
+          const cnt = edge.data('count') || 1;
+          return Math.min(2 + Math.log2(cnt) * 1.5, 8) + 'px';
+        },
+        'line-color': t('--syntax-orange', 0.45),
+        'target-arrow-color': t('--syntax-orange', 0.45),
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        'label': 'data(label)',
+        'color': t('--text-main'),
+        'font-family': FONT_SANS,
+        'font-size': '10px',
+        'font-weight': 'bold',
+        'text-background-color': t('--bg-card'),
+        'text-background-opacity': 0.95,
+        'text-background-padding': '3px',
+        'text-background-shape': 'roundrectangle'
+      }
+    }
+  ];
+}
+
+/** The user picked a grouping: the adaptive default no longer applies. */
+let groupingChosen = false;
+
+/**
+ * The Clusters Map's default grouping adapts to the project (M4-17): grouping by architecture
+ * layer says little when most files have no layer (they all land in "Other"), so then the map
+ * groups by directory instead. A grouping the user picked is kept.
+ */
+function adaptGrouping() {
+  if (groupingChosen || groupingStrategy !== 'layer') return;
+  const layered = new Set<string>();
+  for (const m of rawClustersData.memberships ?? []) {
+    if (typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:') && m.clusterName !== 'layer:other') layered.add(m.filePath);
+  }
+  const files = rawGraphElements.filter((el) => el.data?.type === 'file');
+  if (files.length < 20) return;
+  const other = files.filter((el) => (!el.data.role || el.data.role === 'other') && !layered.has(el.data.id)).length;
+  if (other / files.length < 0.6) return;
+  groupingStrategy = 'directory';
+  const select = document.getElementById('select-grouping-strategy') as HTMLSelectElement | null;
+  if (select) select.value = 'directory';
+}
+
 async function loadGraph() {
   const overlay = document.getElementById('graph-loading-overlay');
   const overlayLabel = document.getElementById('graph-loading-label');
@@ -1364,6 +1877,7 @@ async function loadGraph() {
 
     // Load clusters mapping for Proximity Clusters Mode
     await loadClusters();
+    adaptGrouping();
 
     // Default mode is Proximity Clusters Map.
     currentGraphMode = 'proximity';
@@ -1416,441 +1930,7 @@ async function loadGraph() {
       container: container,
       elements: initialElements,
       wheelSensitivity: 1.33,
-      style: [
-        {
-          selector: 'node',
-          style: {
-            'label': 'data(label)',
-            'color': '#abb2bf',
-            'font-family': 'Outfit, sans-serif',
-            'font-size': '11px',
-            'font-weight': '600',
-            'background-color': '#5c6370',
-            'shape': 'ellipse',
-            'width': (node: any) => {
-              if (node.isParent && node.isParent()) return 'auto';
-              const deg = node.degree ? node.degree() : 0;
-              return (32 + Math.min(deg * 2, 48)) + 'px';
-            },
-            'height': (node: any) => {
-              if (node.isParent && node.isParent()) return 'auto';
-              const deg = node.degree ? node.degree() : 0;
-              return (32 + Math.min(deg * 2, 48)) + 'px';
-            },
-            'text-valign': 'top',
-            'text-margin-y': -6,
-            'z-index': 10,
-            'overlay-color': '#61afef',
-            'overlay-opacity': 0.08,
-            'text-outline-color': '#1e222b',
-            'text-outline-width': '1px',
-            'transition-property': 'opacity, width, height, border-color, border-width, background-color',
-            'transition-duration': 0.2
-          } as any
-        },
-        {
-          selector: 'node[type="file"]',
-          style: {
-            'shape': 'ellipse',
-            'border-width': '1px',
-            'border-color': '#282c34'
-          }
-        },
-        {
-          selector: 'node[type="symbol"]',
-          style: {
-            'shape': 'ellipse',
-            'border-width': '1px',
-            'border-color': '#282c34'
-          }
-        },
-        {
-          selector: ':parent',
-          style: {
-            'background-color': 'rgba(40, 44, 52, 0.15)',
-            'border-width': '1px',
-            'border-color': '#3e4452',
-            'border-style': 'dashed',
-            'label': 'data(label)',
-            'color': '#abb2bf',
-            'font-family': 'Outfit, sans-serif',
-            'font-size': '12px',
-            'font-weight': 'bold',
-            'text-valign': 'top',
-            'text-halign': 'center',
-            'text-outline-width': '1px',
-            'text-outline-color': '#14161a',
-            'padding': '20px'
-          }
-        },
-        { selector: 'node[language="php"]', style: { 'background-color': '#c678dd' } },
-        { selector: 'node[language="javascript"]', style: { 'background-color': '#e5c07b' } },
-        { selector: 'node[language="typescript"]', style: { 'background-color': '#61afef' } },
-        { selector: 'node[language="tsx"]', style: { 'background-color': '#61afef' } },
-        { selector: 'node[language="python"]', style: { 'background-color': '#56b6c2' } },
-        { selector: 'node[language="rust"]', style: { 'background-color': '#d19a66' } },
-        { selector: 'node[language="go"]', style: { 'background-color': '#56b6c2' } },
-        { selector: 'node[language="java"]', style: { 'background-color': '#c678dd' } },
-        { selector: 'node[language="c_sharp"]', style: { 'background-color': '#e06c75' } },
-        { selector: 'node[language="cpp"]', style: { 'background-color': '#e06c75' } },
-        { selector: 'node[language="c"]', style: { 'background-color': '#5c6370' } },
-        { selector: 'node[language="ruby"]', style: { 'background-color': '#e06c75' } },
-        { selector: 'node[language="swift"]', style: { 'background-color': '#d19a66' } },
-        { selector: 'node[language="kotlin"]', style: { 'background-color': '#c678dd' } },
-        { selector: 'node[language="vue"]', style: { 'background-color': '#98c379' } },
-        { selector: 'node[language="scala"]', style: { 'background-color': '#e06c75' } },
-        { selector: 'node[language="dart"]', style: { 'background-color': '#56b6c2' } },
-        {
-          selector: 'node[type="file"][?role]',
-          style: {
-            'background-color': (node: any) => {
-              const r = node.data('role');
-              return LAYER_COLORS[`layer:${r}`] || '#5c6370';
-            }
-          }
-        },
-        {
-          selector: 'edge',
-          style: {
-            'width': 1,
-            'line-color': 'rgba(92, 99, 112, 0.18)',
-            'target-arrow-color': 'rgba(92, 99, 112, 0.18)',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'overlay-color': '#61afef',
-            'overlay-opacity': 0.05,
-            'z-index': 1,
-            'transition-property': 'opacity, width, line-color, target-arrow-color',
-            'transition-duration': 0.2
-          }
-        },
-        {
-          selector: 'edge[type="route"]',
-          style: {
-            'line-color': 'rgba(152, 195, 121, 0.7)',
-            'target-arrow-color': 'rgba(152, 195, 121, 0.7)'
-          }
-        },
-        {
-          selector: 'edge[source = target]',
-          style: {
-            // Self-edges should not use taxi/straight/segments.
-            'curve-style': 'bezier',
-
-            // Makes the self-loop visible instead of collapsed.
-            'loop-direction': '45deg',
-            'loop-sweep': '120deg',
-
-            // Gives the loop enough size to avoid invalid endpoints.
-            'control-point-step-size': 70,
-
-            'source-endpoint': 'outside-to-node',
-            'target-endpoint': 'outside-to-node',
-
-            'target-arrow-shape': 'triangle',
-          },
-        },
-        {
-          selector: 'edge[type="cluster-dependency"]',
-          style: {
-            'width': '2px',
-            'line-color': '#61afef',
-            'target-arrow-color': '#61afef',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'label': 'data(label)',
-            'color': '#61afef',
-            'font-family': 'Outfit, sans-serif',
-            'font-size': '10px',
-            'font-weight': 'bold',
-            'text-background-color': '#1e222b',
-            'text-background-opacity': 0.95,
-            'text-background-padding': '3px',
-            'text-background-shape': 'roundrectangle'
-          }
-        },
-        {
-          selector: 'node:selected',
-          style: {
-            'border-width': '1.5px',
-            'border-color': '#61afef'
-          }
-        },
-        {
-          selector: '.dimmed',
-          style: {
-            'opacity': 0.15,
-            'text-opacity': 0.15
-          }
-        },
-        {
-          selector: '.highlighted-center',
-          style: {
-            'border-width': '2px',
-            'border-color': '#61afef',
-            'overlay-opacity': 0.15,
-            'z-index': 9999,
-            'opacity': 1,
-            'text-opacity': 1
-          }
-        },
-        {
-          selector: '.highlighted-outgoing',
-          style: {
-            'line-color': '#98c379',
-            'target-arrow-color': '#98c379',
-            'width': 2,
-            'z-index': 9998,
-            'opacity': 1
-          }
-        },
-        {
-          selector: '.highlighted-outgoing-node',
-          style: {
-            'font-size': '11.5px',
-            'border-width': '1.8px',
-            'border-color': '#98c379',
-            'z-index': 9997,
-            'opacity': 1,
-            'text-opacity': 1
-          }
-        },
-        {
-          selector: '.highlighted-incoming',
-          style: {
-            'line-color': '#c678dd',
-            'target-arrow-color': '#c678dd',
-            'width': 2,
-            'z-index': 9998,
-            'opacity': 1
-          }
-        },
-        {
-          selector: '.highlighted-incoming-node',
-          style: {
-            'font-size': '11.5px',
-            'border-width': '1.8px',
-            'border-color': '#c678dd',
-            'z-index': 9997,
-            'opacity': 1,
-            'text-opacity': 1
-          }
-        },
-        {
-          selector: ':parent.highlighted-parent-active',
-          style: {
-            'border-color': '#61afef',
-            'border-width': '1.5px',
-            'border-style': 'solid',
-            'background-color': 'rgba(74, 82, 99, 0.55)',
-            'color': '#61afef',
-            'text-outline-color': '#14161a'
-          }
-        },
-        {
-          selector: ':parent.highlighted-parent-outgoing',
-          style: {
-            'border-color': '#98c379',
-            'border-width': '1.5px',
-            'border-style': 'solid',
-            'background-color': 'rgba(74, 82, 99, 0.55)',
-            'color': '#98c379',
-            'text-outline-color': '#14161a'
-          }
-        },
-        {
-          selector: ':parent.highlighted-parent-incoming',
-          style: {
-            'border-color': '#c678dd',
-            'border-width': '1.5px',
-            'border-style': 'solid',
-            'background-color': 'rgba(74, 82, 99, 0.55)',
-            'color': '#c678dd',
-            'text-outline-color': '#14161a'
-          }
-        },
-        {
-          selector: 'node[type="parent-folder"]',
-          style: {
-            'shape': 'round-rectangle',
-            'background-color': '#2d3139',
-            'border-width': '2px',
-            'border-color': '#61afef',
-            'width': '60px',
-            'height': '40px',
-            'font-size': '10px',
-            'font-weight': 'bold',
-            'color': '#abb2bf',
-            'text-valign': 'center',
-            'text-halign': 'center',
-            'text-outline-width': '0px',
-            'text-wrap': 'ellipsis',
-            'text-max-width': '100px',
-            'text-overflow-wrap': 'anywhere',
-            'z-index': 15
-          }
-        },
-        {
-          selector: 'edge[type="aggregated-dependency"]',
-          style: {
-            'width': (edge: any) => {
-              const cnt = edge.data('count') || 1;
-              return Math.min(1.5 + Math.log2(cnt), 7) + 'px';
-            },
-            'line-color': 'rgba(97, 175, 239, 0.45)',
-            'target-arrow-color': 'rgba(97, 175, 239, 0.45)',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'label': 'data(label)',
-            'color': '#abb2bf',
-            'font-family': 'Outfit, sans-serif',
-            'font-size': '9px',
-            'font-weight': 'bold',
-            'text-background-color': '#1e222b',
-            'text-background-opacity': 1,
-            'text-background-padding': '2px',
-            'text-background-shape': 'roundrectangle'
-          }
-        },
-        {
-          selector: 'node[?isSeed]',
-          style: {
-            'background-color': '#98c379',
-            'border-color': '#e5c07b',
-            'border-width': '3px',
-            'width': '46px',
-            'height': '46px',
-            'z-index': 9999
-          }
-        },
-        {
-          selector: 'node[type="cluster-group"]',
-          style: {
-            'shape': 'hexagon',
-            'background-color': '#1e222b',
-            'background-opacity': 0.85,
-            'border-width': '3px',
-            'border-color': '#d19a66',
-            'width': (node: any) => {
-              const fileCount = node.data('fileCount') || 1;
-              return (70 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
-            },
-            'height': (node: any) => {
-              const fileCount = node.data('fileCount') || 1;
-              return (70 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
-            },
-            'color': '#ffffff',
-            'font-family': 'Outfit, sans-serif',
-            'font-size': '10.5px',
-            'font-weight': 'bold',
-            'text-valign': 'center',
-            'text-halign': 'center',
-            'text-outline-width': '2px',
-            'text-outline-color': '#14161a',
-            'text-wrap': 'ellipsis',
-            'text-max-width': (node: any) => {
-              const fileCount = node.data('fileCount') || 1;
-              return (60 + Math.min(Math.log2(fileCount) * 8, 40)) + 'px';
-            },
-            'text-overflow-wrap': 'anywhere',
-            'line-height': 1.25,
-            'z-index': 15,
-            'transition-property': 'background-color, border-color, border-width, width, height',
-            'transition-duration': 0.2
-          }
-        },
-        {
-          // Layer-colored cluster nodes: use the layerColor data property for border + glow
-          selector: 'node[type="cluster-group"][?layerColor]',
-          style: {
-            'border-color': (node: any) => node.data('layerColor') || '#d19a66',
-            'background-color': (node: any) => {
-              const c = node.data('layerColor') as string | null;
-              if (!c) return '#1e222b';
-              // Darken the layer color to use as background fill
-              return c + '22'; // 13% opacity hex
-            },
-          }
-        },
-        {
-          selector: 'node[type="cluster-group"][?isFolderFallback]',
-          style: {
-            'shape': 'round-rectangle',
-            'border-style': 'dashed',
-            'border-color': '#e5c07b', // Folder yellow
-            'background-color': '#232520', // Toned-down dark background
-          }
-        },
-        {
-          selector: 'node[type="cluster-group"][?isOrphans]',
-          style: {
-            'shape': 'ellipse',
-            'border-style': 'dashed',
-            'border-color': '#e06c75', // Crimson red
-            'background-color': '#251c1e', // Toned-down dark red background
-          }
-        },
-        {
-          selector: 'node[type="cluster-group"][?isSingulars]',
-          style: {
-            'shape': 'ellipse',
-            'border-style': 'dashed',
-            'border-color': '#98c379', // Green
-            'background-color': '#1a231b', // Toned-down dark green background
-          }
-        },
-        {
-          selector: 'node[?isHub]',
-          style: {
-            'width': 52,
-            'height': 52,
-            'border-color': '#ef4444',
-            'border-width': 2.5,
-            'border-style': 'solid'
-          }
-        },
-        {
-          selector: 'edge[?isCycle]',
-          style: {
-            'line-color': '#ef4444',
-            'target-arrow-color': '#ef4444',
-            'width': 3,
-            'line-style': 'dashed'
-          }
-        },
-        {
-          selector: 'node[?isBoundaryNode]',
-          style: {
-            'border-style': 'dashed',
-            'border-width': '2.5px',
-            'border-color': '#e5c07b',
-            'opacity': 0.45,
-            'text-opacity': 0.6
-          }
-        },
-        {
-          selector: 'edge[type="cluster-edge"]',
-          style: {
-            'width': (edge: any) => {
-              const cnt = edge.data('count') || 1;
-              return Math.min(2 + Math.log2(cnt) * 1.5, 8) + 'px';
-            },
-            'line-color': 'rgba(209, 154, 102, 0.45)',
-            'target-arrow-color': 'rgba(209, 154, 102, 0.45)',
-            'target-arrow-shape': 'triangle',
-            'curve-style': 'bezier',
-            'label': 'data(label)',
-            'color': '#abb2bf',
-            'font-family': 'Outfit, sans-serif',
-            'font-size': '10px',
-            'font-weight': 'bold',
-            'text-background-color': '#1e222b',
-            'text-background-opacity': 0.95,
-            'text-background-padding': '3px',
-            'text-background-shape': 'roundrectangle'
-          }
-        }
-      ],
+      style: graphStyle(),
       layout: { name: 'preset' }
     });
 
@@ -1886,6 +1966,7 @@ async function loadGraph() {
     // Grouping strategy change listener
     document.getElementById('select-grouping-strategy')?.addEventListener('change', (e) => {
       groupingStrategy = (e.target as HTMLSelectElement).value as any;
+      groupingChosen = true;
       updateGraphDisplay();
     });
 
@@ -2220,7 +2301,7 @@ async function loadGraph() {
           </div>
           <div class="flow-group" style="display: flex; flex-direction: column; align-items: flex-start; text-align: left;">
             <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">Destination Node</div>
-            <button type="button" class="flow-clickable-node" data-go-id="${targetId}" style="background: rgba(97, 175, 239, 0.16); color: #61afef; border-color: rgba(97, 175, 239, 0.35);">
+            <button type="button" class="flow-clickable-node" data-go-id="${targetId}" style="background: color-mix(in srgb, var(--syntax-blue) 16%, transparent); color: var(--syntax-blue); border-color: color-mix(in srgb, var(--syntax-blue) 35%, transparent);">
               ${targetLabel}
             </button>
           </div>
@@ -2253,10 +2334,10 @@ async function loadGraph() {
       if (details) {
         if (data.type === 'parent') {
           details.innerHTML = `
-            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+            <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text-main); display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Type</span>
-                <span class="detail-stat-value" style="color: #98c379; font-weight: bold;">DIRECTORY CLUSTER</span>
+                <span class="detail-stat-value" style="color: var(--syntax-green); font-weight: bold;">DIRECTORY CLUSTER</span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Path</span>
@@ -2305,13 +2386,13 @@ async function loadGraph() {
           let smellsHtml = '';
           if (fileSmells.length > 0) {
             smellsHtml = `
-              <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
-                <span class="detail-stat-label" style="color: #ef4444; font-weight: bold;">Smells & Health</span>
+              <div style="border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+                <span class="detail-stat-label" style="color: var(--danger); font-weight: bold;">Smells & Health</span>
                   ${fileSmells.map((s: any) => `
                     <li style="margin-bottom: 4px;">
                       <span class="smell-badge-mini ${s.severity.toLowerCase()}">${s.severity.toUpperCase()}</span>
                       <strong>${s.type.toUpperCase()}</strong>: ${s.description}
-                      <div style="color: #94a3b8; font-style: italic; margin-top: 2px; margin-left: 8px;">💡 Suggestion: ${s.suggestion}</div>
+                      <div style="color: var(--text-muted); font-style: italic; margin-top: 2px; margin-left: 8px;">💡 Suggestion: ${s.suggestion}</div>
                     </li>
                   `).join('')}
                 </ul>
@@ -2328,13 +2409,13 @@ async function loadGraph() {
 
           const fileRole = data.role || 'other';
           const roleConf = typeof data.roleConfidence === 'number' ? data.roleConfidence : (typeof data.role_confidence === 'number' ? data.role_confidence : 1.0);
-          const roleColor = LAYER_COLORS[`layer:${fileRole}`] || '#5c6370';
+          const roleColor = layerToken(fileRole);
 
           const classificationHtml = `
-            <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
               <span class="detail-stat-label">Smart Classification</span>
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                <span class="selection-badge" style="background: ${roleColor};">${fileRole.toUpperCase()}</span>
+                <span class="selection-badge" style="--badge: ${roleColor};">${fileRole.toUpperCase()}</span>
                 <span style="color: var(--text-muted); font-size: 11px;">(conf: ${roleConf.toFixed(2)})</span>
               </div>
               <div id="classification-signals-container" style="color: var(--text-muted); font-size: 11px;">
@@ -2344,7 +2425,7 @@ async function loadGraph() {
           `;
 
           details.innerHTML = `
-            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+            <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text-main); display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Path</span>
                 <span class="detail-stat-value">${data.id}</span>
@@ -2387,8 +2468,8 @@ async function loadGraph() {
 
               ${data.isBoundaryNode ? `
               <div class="detail-stat-row">
-                <span class="detail-stat-label" style="color: #d19a66;">Role</span>
-                <span class="detail-stat-value" style="color: #d19a66;">Boundary Node</span>
+                <span class="detail-stat-label" style="color: var(--syntax-orange);">Role</span>
+                <span class="detail-stat-value" style="color: var(--syntax-orange);">Boundary Node</span>
               </div>
               ` : ''}
 
@@ -2406,7 +2487,7 @@ async function loadGraph() {
               </div>
 
               <!-- Custom Tags Section -->
-              <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
                 <span class="detail-stat-label">Custom Tags</span>
                 <div style="margin-bottom: 4px; display: flex; flex-wrap: wrap;">${tagsListHtml || '<span style="color: var(--text-muted); font-style: italic; font-size: 10px;">No tags</span>'}</div>
                 <div style="display: flex; gap: 6px; position: relative;">
@@ -2417,7 +2498,7 @@ async function loadGraph() {
 
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
-                <button class="btn btn-secondary btn-action-remove-node" data-node-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
+                <button class="btn btn-secondary btn-action-remove-node" data-node-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
                   Remove Node from View
                 </button>
               </div>
@@ -2436,13 +2517,13 @@ async function loadGraph() {
                 return;
               }
               sigContainer.innerHTML = `
-                <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: circle; color: #abb2bf;">
+                <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: circle; color: var(--text-main);">
                   ${signals.map((s: any) => `
                     <li style="margin-bottom: 4px;">
                       <strong>[${s.source}]</strong> 
-                      <span style="color: ${LAYER_COLORS[`layer:${s.role}`] || '#cbd5e1'}; font-weight: 500;">${s.role}</span> 
+                      <span style="color: ${LAYER_COLORS[`layer:${s.role}`] || 'var(--text-main)'}; font-weight: 500;">${s.role}</span> 
                       <span style="color: var(--text-muted); font-size: 10px;">(conf: ${s.confidence.toFixed(2)})</span>
-                      <div style="margin-top: 2px; color: #94a3b8;">${s.reason}</div>
+                      <div style="margin-top: 2px; color: var(--text-muted);">${s.reason}</div>
                     </li>
                   `).join('')}
                 </ul>
@@ -2451,7 +2532,7 @@ async function loadGraph() {
             .catch(err => {
               console.error('Failed to fetch classification details:', err);
               const sigContainer = document.getElementById('classification-signals-container');
-              if (sigContainer) sigContainer.innerHTML = '<div style="color: #ef4444; padding-left: 4px;">Failed to load signals</div>';
+              if (sigContainer) sigContainer.innerHTML = '<div style="color: var(--danger); padding-left: 4px;">Failed to load signals</div>';
             });
         }
       }
@@ -2513,31 +2594,31 @@ async function loadGraph() {
       if (details) {
         if (data.type === 'cluster-dependency' || data.type === 'cluster-edge') {
           details.innerHTML = `
-            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge ID</span>
+            <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text-main); display: flex; flex-direction: column; gap: 10px; width: 100%;">
+              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
+                <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge ID</span>
                 <span style="word-break: break-all; text-align: right;">${data.id}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source</span>
+              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
+                <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source</span>
                 <span style="word-break: break-all; text-align: right;">${data.source.replace('dir:', '')}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Target</span>
+              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
+                <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Target</span>
                 <span style="word-break: break-all; text-align: right;">${data.target.replace('dir:', '')}</span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge Type</span>
-                <span style="text-align: right;"><span class="selection-badge" style="background:#2563eb;">CLUSTER DEPENDENCY</span></span>
+              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
+                <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Edge Type</span>
+                <span style="text-align: right;"><span class="selection-badge" style="--badge: var(--syntax-blue);">CLUSTER DEPENDENCY</span></span>
               </div>
-              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start;">
-                <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Count</span>
-                <span style="color: #61afef; font-weight: bold; text-align: right;">${data.count || 1} file-level edge(s)</span>
+              <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start;">
+                <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Count</span>
+                <span style="color: var(--syntax-blue); font-weight: bold; text-align: right;">${data.count || 1} file-level edge(s)</span>
               </div>
               
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
-                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
+                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
                   Remove Edge from View
                 </button>
               </div>
@@ -2545,7 +2626,7 @@ async function loadGraph() {
           ` + (data.type === 'cluster-dependency' ? buildRelatedNodesForEdgeHTML(edge) : '');
         } else {
           details.innerHTML = `
-            <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.5; color: #cbd5e1; display: flex; flex-direction: column; gap: 10px; width: 100%;">
+            <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.5; color: var(--text-main); display: flex; flex-direction: column; gap: 10px; width: 100%;">
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Source</span>
                 <span class="detail-stat-value"><a href="#" data-go-id="${data.source}" style="color: var(--syntax-blue); text-decoration: none;">${data.source.split('/').pop()}</a></span>
@@ -2556,7 +2637,7 @@ async function loadGraph() {
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Edge Type</span>
-                <span class="detail-stat-value"><span class="selection-badge" style="background:#8b5cf6;">${data.type.toUpperCase()}</span></span>
+                <span class="detail-stat-value"><span class="selection-badge" style="--badge: var(--syntax-purple);">${data.type.toUpperCase()}</span></span>
               </div>
               <div class="detail-stat-row">
                 <span class="detail-stat-label">Verifiability</span>
@@ -2571,7 +2652,7 @@ async function loadGraph() {
               
               <!-- Actions Section -->
               <div style="display: flex; flex-direction: column; gap: 6px; padding-top: 4px;">
-                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: rgba(239, 68, 68, 0.35); color: #ef4444; width: 100%; border-radius: 4px;">
+                <button class="btn btn-secondary btn-action-remove-edge" data-edge-id="${data.id}" style="padding: 6px 12px; font-size: 11px; border-color: color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); width: 100%; border-radius: 4px;">
                   Remove Edge from View
                 </button>
               </div>
@@ -2608,7 +2689,7 @@ async function loadGraph() {
         });
         const details = document.getElementById('details-content');
         if (details) {
-          details.innerHTML = 'Click a file node or dependency edge to view details.';
+          details.innerHTML = DETAILS_PLACEHOLDER;
         }
       }
     });
@@ -2650,9 +2731,9 @@ async function loadSymbols(query: string = '') {
     symbols.forEach((s: any) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="color:#60a5fa; font-weight:500;">${s.name}</td>
-        <td>${s.kind}</td>
-        <td style="color:#94a3b8; font-size:12px;">${s.file_path}</td>
+        <td><button type="button" class="link-btn">${escapeHtml(s.name)}</button></td>
+        <td class="col-optional">${escapeHtml(s.kind)}</td>
+        <td style="color:var(--text-muted); font-size:12px;">${escapeHtml(s.file_path)}</td>
       `;
       tr.dataset.symbolName = s.name;
       tr.addEventListener('click', () => {
@@ -2684,8 +2765,8 @@ function updateSymbolPagination(offset: number, count: number, total: number, pa
   }
 }
 
-function escapeHtml(str: string): string {
-  return str
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -2704,52 +2785,52 @@ async function loadSymbolDetails(name: string) {
     if (!detailView) return;
 
     detailView.innerHTML = `
-      <div style="font-family: 'JetBrains Mono', Monaco, Consolas, monospace; font-size: 12px; line-height: 1.6; color: #cbd5e1; display: flex; flex-direction: column; gap: 16px; width: 100%; height: 100%; min-height: 0;">
-        <div style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 12px; flex-shrink: 0;">
-          <h3 style="margin: 0 0 6px 0; color: #e5c07b; font-size: 14px;">${data.symbol.name}</h3>
-          <span style="background: rgba(229, 192, 123, 0.1); color: #e5c07b; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${data.symbol.kind}</span>
+      <div style="font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text-main); display: flex; flex-direction: column; gap: 16px; width: 100%; height: 100%; min-height: 0;">
+        <div style="border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 12px; flex-shrink: 0;">
+          <h3 style="margin: 0 0 6px 0; color: var(--syntax-yellow); font-size: 14px;">${data.symbol.name}</h3>
+          <span style="background: color-mix(in srgb, var(--syntax-yellow) 10%, transparent); color: var(--syntax-yellow); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; text-transform: uppercase;">${data.symbol.kind}</span>
         </div>
 
-        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: center; flex-shrink: 0;">
-          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">File</span>
-          <span class="involved-file-badge" data-go-id="${data.symbol.file_path}" title="Click to view in Graph Explorer" style="margin: 0; word-break: break-all; text-align: right;">${data.symbol.file_path}</span>
+        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: center; flex-shrink: 0;">
+          <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">File</span>
+          <span class="involved-file-badge" role="button" tabindex="0" data-go-id="${data.symbol.file_path}" title="Click to view in Graph Explorer" style="margin: 0; word-break: break-all; text-align: right;">${data.symbol.file_path}</span>
         </div>
 
-        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; align-items: start; flex-shrink: 0;">
-          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Lines</span>
+        <div style="display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; align-items: start; flex-shrink: 0;">
+          <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Lines</span>
           <span style="text-align: right;">${data.symbol.start_line}-${data.symbol.end_line}</span>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; flex-shrink: 0;">
-          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callers (${data.callers.length})</span>
-          <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
+        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; flex-shrink: 0;">
+          <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase;">Callers (${data.callers.length})</span>
+          <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: var(--text-main);">
             ${data.callers.map((c: any) => {
       const name = c.source_symbol;
       if (name && name !== '<top-level>') {
-        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.source_file}</span></li>`;
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: var(--syntax-blue); text-decoration: none; font-weight: 500;">${name}</a> <span style="color: var(--text-muted); font-size: 11px;">in ${c.source_file}</span></li>`;
       }
-      return `<li style="margin-bottom: 4px; color: #5c6370;"><span style="color: #5c6370;">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
-    }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
+      return `<li style="margin-bottom: 4px; color: var(--text-muted);"><span style="color: var(--text-muted);">&lt;top-level&gt;</span> in ${c.source_file}</li>`;
+    }).join('') || '<li style="color: var(--text-muted); list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px; flex-shrink: 0;">
-          <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase;">Callees (${data.callees.length})</span>
-          <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: #abb2bf;">
+        <div style="display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid color-mix(in srgb, var(--overlay) 8%, transparent); padding-bottom: 8px; flex-shrink: 0;">
+          <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase;">Callees (${data.callees.length})</span>
+          <ul style="padding-left: 16px; margin: 4px 0 0 0; list-style-type: square; color: var(--text-main);">
             ${data.callees.map((c: any) => {
       const name = c.target_symbol;
       if (name) {
-        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: #61afef; text-decoration: none; font-weight: 500;">${name}</a> <span style="color: #5c6370; font-size: 11px;">in ${c.target_file}</span></li>`;
+        return `<li style="margin-bottom: 4px;"><a href="#" class="symbol-link" data-symbol="${name}" style="color: var(--syntax-blue); text-decoration: none; font-weight: 500;">${name}</a> <span style="color: var(--text-muted); font-size: 11px;">in ${c.target_file}</span></li>`;
       }
-      return `<li style="margin-bottom: 4px; color: #5c6370;">in ${c.target_file}</li>`;
-    }).join('') || '<li style="color: #5c6370; list-style-type: none; margin-left: -16px;">None</li>'}
+      return `<li style="margin-bottom: 4px; color: var(--text-muted);">in ${c.target_file}</li>`;
+    }).join('') || '<li style="color: var(--text-muted); list-style-type: none; margin-left: -16px;">None</li>'}
           </ul>
         </div>
 
         ${data.sourceCode ? `
           <div style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0;">
-            <span style="color: #94a3b8; font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source Code</span>
-            <pre class="neat-scrollbar" style="background: #1e1e24; color: #abb2bf; padding: 12px; border-radius: 6px; overflow: auto; font-family: inherit; font-size: 11px; margin: 4px 0 0 0; border: 1px solid rgba(255, 255, 255, 0.05); line-height: 1.5; flex: 1; min-height: 0;">${escapeHtml(data.sourceCode)}</pre>
+            <span style="color: var(--text-muted); font-weight: bold; text-transform: uppercase; flex-shrink: 0;">Source Code</span>
+            <pre class="neat-scrollbar" style="background: var(--bg-panel); color: var(--text-main); padding: 12px; border-radius: 6px; overflow: auto; font-family: inherit; font-size: 11px; margin: 4px 0 0 0; border: 1px solid color-mix(in srgb, var(--overlay) 5%, transparent); line-height: 1.5; flex: 1; min-height: 0;">${escapeHtml(data.sourceCode)}</pre>
           </div>
         ` : ''}
       </div>
@@ -2782,10 +2863,10 @@ async function loadRoutes() {
           const tr = document.createElement('tr');
           const methodColor = getRouteMethodColor(r.method);
           tr.innerHTML = `
-            <td><strong>${r.framework}</strong></td>
-            <td><span class="method-badge" style="background:${methodColor};">${r.method}</span></td>
+            <td class="col-optional"><strong>${r.framework}</strong></td>
+            <td><span class="method-badge" style="--badge: ${methodColor};">${r.method}</span></td>
             <td><code>${r.path}</code></td>
-            <td style="color:#60a5fa;">${r.handlerSymbol || r.handlerFile}</td>
+            <td style="color:var(--syntax-blue);">${r.handlerSymbol || r.handlerFile}</td>
           `;
           routesTbody.appendChild(tr);
         });
@@ -2808,10 +2889,10 @@ async function loadRoutes() {
           const tr = document.createElement('tr');
           const hookColor = getHookTypeColor(h.hookType);
           tr.innerHTML = `
-            <td><strong>${h.framework}</strong></td>
-            <td><span class="hook-badge" style="background:${hookColor};">${h.hookType}</span></td>
+            <td class="col-optional"><strong>${h.framework}</strong></td>
+            <td><span class="hook-badge" style="--badge: ${hookColor};">${h.hookType}</span></td>
             <td><code>${h.hookName}</code></td>
-            <td style="color:#60a5fa;">${h.handlerSymbol || h.handlerFile}</td>
+            <td style="color:var(--syntax-blue);">${h.handlerSymbol || h.handlerFile}</td>
           `;
           hooksTbody.appendChild(tr);
         });
@@ -2823,6 +2904,36 @@ async function loadRoutes() {
 }
 
 // Fetch metrics & analytics
+/** Display names of MapX's language ids (the metrics breakdown and the language filter). */
+const LANGUAGE_NAMES: Record<string, string> = {
+  php: 'PHP', typescript: 'TypeScript', javascript: 'JavaScript', tsx: 'TSX', jsx: 'JSX', json: 'JSON',
+  css: 'CSS', scss: 'SCSS', less: 'Less', html: 'HTML', vue: 'Vue', svelte: 'Svelte', python: 'Python',
+  go: 'Go', rust: 'Rust', java: 'Java', kotlin: 'Kotlin', scala: 'Scala', swift: 'Swift', ruby: 'Ruby',
+  c: 'C', cpp: 'C++', c_sharp: 'C#', csharp: 'C#', dart: 'Dart', lua: 'Lua', bash: 'Bash', shell: 'Shell',
+  yaml: 'YAML', toml: 'TOML', xml: 'XML', markdown: 'Markdown', sql: 'SQL', blade: 'Blade', twig: 'Twig',
+  elixir: 'Elixir', haskell: 'Haskell', ocaml: 'OCaml', zig: 'Zig', dockerfile: 'Dockerfile', graphql: 'GraphQL',
+};
+function languageName(id: string): string {
+  return LANGUAGE_NAMES[id.toLowerCase()] ?? (id ? id[0]!.toUpperCase() + id.slice(1) : id);
+}
+
+/** A breakdown as horizontal bars, longest first as given (M4-17). */
+function barList(rows: Array<[string, number]>, unit: string, color = 'var(--accent)'): string {
+  const max = Math.max(1, ...rows.map(([, n]) => n));
+  return `<ul class="bar-list" style="--bar: ${color};">${rows.map(([label, n]) => `
+    <li class="bar-row" title="${escapeHtml(label)}: ${n} ${unit}">
+      <span class="bar-label">${escapeHtml(label)}</span>
+      <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width: ${Math.max(2, Math.round((n / max) * 100))}%;"></span></span>
+      <span class="bar-value">${n.toLocaleString()}</span>
+    </li>`).join('')}</ul>`;
+}
+
+/** A row of labelled figures. */
+function statTiles(tiles: Array<[string, string | number]>): string {
+  return `<div class="stat-grid">${tiles.map(([label, value]) => `
+    <div class="stat-tile"><div class="stat-tile-label">${escapeHtml(label)}</div><div class="stat-tile-value">${escapeHtml(typeof value === 'number' ? value.toLocaleString() : String(value))}</div></div>`).join('')}</div>`;
+}
+
 async function loadMetrics() {
   try {
     const res = await fetch('/api/metrics');
@@ -2831,64 +2942,42 @@ async function loadMetrics() {
 
     const summary = document.getElementById('metrics-summary');
     if (summary) {
-      summary.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          <div><strong>Total Codebase Volume:</strong> ${metrics.totalFiles || 0} files, ${metrics.totalSymbols || 0} symbols</div>
-          <div><strong>Acyclic Graph Metrics:</strong> Density: ${metrics.density || 0} | Transitivity: ${metrics.transitivity || 0}</div>
-        </div>
-      `;
+      summary.innerHTML = statTiles([
+        ['Files', metrics.totalFiles || 0],
+        ['Symbols', metrics.totalSymbols || 0],
+        ['Edges', metrics.totalEdges || 0],
+        ['Density', metrics.density || '0%'],
+        ['Transitivity', metrics.transitivity || 0],
+      ]);
     }
 
     const languagesDiv = document.getElementById('metrics-languages');
     if (languagesDiv && metrics.languages) {
-      const langs = Object.entries(metrics.languages).sort((a: any, b: any) => b[1] - a[1]);
-      if (langs.length > 0) {
-        languagesDiv.innerHTML = `
-          <ul style="padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
-            ${langs.map(([lang, cnt]) => `
-              <li><strong style="text-transform: capitalize;">${lang}:</strong> ${cnt} files</li>
-            `).join('')}
-          </ul>
-        `;
-      } else {
-        languagesDiv.innerHTML = '<div style="color: var(--text-muted);">No language files found.</div>';
-      }
+      const langs = Object.entries(metrics.languages as Record<string, number>).sort((x, y) => y[1] - x[1]);
+      languagesDiv.innerHTML = langs.length > 0
+        ? barList(langs.map(([lang, cnt]) => [languageName(lang), cnt]), 'files')
+        : '<div style="color: var(--text-muted);">No language files found.</div>';
     }
 
     const kindsDiv = document.getElementById('metrics-kinds');
     if (kindsDiv && metrics.symbolKinds) {
-      if (metrics.symbolKinds.length > 0) {
-        kindsDiv.innerHTML = `
-          <ul style="padding-left: 20px; display: flex; flex-direction: column; gap: 6px;">
-            ${metrics.symbolKinds.map((row: any) => `
-              <li><strong style="text-transform: capitalize;">${row.kind}:</strong> ${row.cnt}</li>
-            `).join('')}
-          </ul>
-        `;
-      } else {
-        kindsDiv.innerHTML = '<div style="color: var(--text-muted);">No symbols found.</div>';
-      }
+      kindsDiv.innerHTML = metrics.symbolKinds.length > 0
+        ? barList(metrics.symbolKinds.map((row: any) => [row.kind, row.cnt]), 'symbols', 'var(--syntax-purple)')
+        : '<div style="color: var(--text-muted);">No symbols found.</div>';
     }
 
     const edgesDiv = document.getElementById('metrics-edges');
     if (edgesDiv) {
-      const edgeTypesList = metrics.edgeTypes && metrics.edgeTypes.length > 0
-        ? metrics.edgeTypes.map((row: any) => `<li><strong>${row.edge_type}:</strong> ${row.cnt}</li>`).join('')
-        : '<li style="color: var(--text-muted); list-style-type: none;">None</li>';
-
+      const types = metrics.edgeTypes && metrics.edgeTypes.length > 0
+        ? barList(metrics.edgeTypes.map((row: any) => [row.edge_type, row.cnt]), 'edges', 'var(--syntax-green)')
+        : '<div style="color: var(--text-muted);">No edges.</div>';
       edgesDiv.innerHTML = `
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          <div><strong>Total Edges:</strong> ${metrics.totalEdges || 0}</div>
-          <div><strong>Relation Density:</strong> ${metrics.density || '0%'}</div>
-          <div><strong>Avg Edges/File:</strong> ${metrics.avgEdgesPerFile || 0}</div>
-          <div><strong>Verified Edges:</strong> ${metrics.verifiedEdges || 0} | <strong>Inferred Edges:</strong> ${metrics.inferredEdges || 0}</div>
-          <div style="margin-top: 5px;">
-            <strong>Edge Types Breakdown:</strong>
-            <ul style="padding-left: 20px; margin-top: 5px; display: flex; flex-direction: column; gap: 4px;">
-              ${edgeTypesList}
-            </ul>
-          </div>
-        </div>
+        ${statTiles([
+          ['Avg edges / file', metrics.avgEdgesPerFile || 0],
+          ['Verified', metrics.verifiedEdges || 0],
+          ['Inferred', metrics.inferredEdges || 0],
+        ])}
+        <div style="margin-top: var(--space-4);">${types}</div>
       `;
     }
 
@@ -2904,7 +2993,7 @@ async function loadMetrics() {
         gitStatusHTML = '<div><strong>Git Status:</strong> ✓ Index up-to-date (no changes since last scan)</div>';
       } else {
         const changesList = git.changes.map((c: any) => `
-          <li><span style="font-family: monospace;">[${c.status}]</span> ${c.path}</li>
+          <li><span style="font-family: var(--font-mono);">[${escapeHtml(c.status)}]</span> ${escapeHtml(c.path)}</li>
         `).join('');
         gitStatusHTML = `
           <div>
@@ -2928,7 +3017,7 @@ async function loadMetrics() {
     if (topFilesList) {
       if (metrics.topFiles && metrics.topFiles.length > 0) {
         topFilesList.innerHTML = metrics.topFiles.map((f: any) => `
-          <li>${f.path} (PageRank: ${(f.pagerank || 0).toFixed(4)})</li>
+          <li><code>${escapeHtml(f.path)}</code> <span style="color: var(--text-muted);">${(f.pagerank || 0).toFixed(4)}</span></li>
         `).join('');
       } else {
         topFilesList.innerHTML = '<li style="color: var(--text-muted); list-style-type: none;">No files available in metrics</li>';
@@ -2939,7 +3028,7 @@ async function loadMetrics() {
     if (topSymbolsList) {
       if (metrics.topSymbols && metrics.topSymbols.length > 0) {
         topSymbolsList.innerHTML = metrics.topSymbols.map((s: any) => `
-          <li>${s.name} (PageRank: ${(s.pagerank || 0).toFixed(4)})</li>
+          <li><code>${escapeHtml(s.name)}</code> <span style="color: var(--text-muted);">${(s.pagerank || 0).toFixed(4)}</span></li>
         `).join('');
       } else {
         topSymbolsList.innerHTML = '<li style="color: var(--text-muted); list-style-type: none;">No symbols available in metrics</li>';
@@ -2973,7 +3062,7 @@ function setupContextBuilder() {
       });
       if (!res.ok) {
         const errData = await res.json();
-        if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:#ef4444;">Error: ${errData.error}</div>`;
+        if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:var(--danger);">Error: ${errData.error}</div>`;
         return;
       }
       const context = await res.json();
@@ -3018,7 +3107,7 @@ function setupContextBuilder() {
         `;
       }
     } catch (err: any) {
-      if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:#ef4444;">Error: ${err.message}</div>`;
+      if (resultsDiv) resultsDiv.innerHTML = `<div class="details-placeholder" style="color:var(--danger);">Error: ${err.message}</div>`;
     }
   });
 }
@@ -3076,7 +3165,7 @@ function startPeriodicPolling() {
             Object.keys(status.languages).forEach(lang => {
               const opt = document.createElement('option');
               opt.value = lang;
-              opt.textContent = lang.toUpperCase();
+              opt.textContent = languageName(lang);
               filterSelect.appendChild(opt);
             });
             filterSelect.value = currentVal;
@@ -3097,6 +3186,20 @@ function startPeriodicPolling() {
 
 // Initialise everything
 document.addEventListener('DOMContentLoaded', () => {
+  // The frame (M4-17): theme, navigation drawer, details panel.
+  initTheme(() => { if (cyInstance) cyInstance.style(graphStyle()); });
+  initNavDrawer();
+  initDetailsPanel(
+    () => {
+      if (!cyInstance) return;
+      cyInstance.batch(() => {
+        cyInstance.elements().unselect();
+        cyInstance.elements().removeClass('dimmed highlighted-center highlighted-outgoing highlighted-outgoing-node highlighted-incoming highlighted-incoming-node highlighted-parent-active highlighted-parent-outgoing highlighted-parent-incoming');
+      });
+    },
+    () => setTimeout(() => cyInstance?.resize(), 0),
+  );
+
   // Helper to programmatically switch tabs
   const switchTab = (tabName: string) => {
     const tabBtn = document.querySelector(`.nav-item[data-tab="${tabName}"]`) as HTMLElement;
@@ -3104,6 +3207,16 @@ document.addEventListener('DOMContentLoaded', () => {
       tabBtn.click();
     }
   };
+
+  // Keyboard: Enter or Space on a file badge acts as a click (they are role="button" spans).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = (e.target as HTMLElement | null)?.closest?.('[role="button"][data-go-id]') as HTMLElement | null;
+    if (el) {
+      e.preventDefault();
+      el.click();
+    }
+  });
 
   // Global Click listener for Node/Edge navigation using [data-go-id]
   document.addEventListener('click', (e) => {
@@ -3248,7 +3361,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const resetBtn = document.getElementById('btn-reset-hidden');
         if (resetBtn) resetBtn.style.display = 'inline-flex';
         updateGraphDisplay();
-        if (detailsContent) detailsContent.innerHTML = 'Click a file node or dependency edge to view details.';
+        if (detailsContent) detailsContent.innerHTML = DETAILS_PLACEHOLDER;
       }
       return;
     }
@@ -3262,7 +3375,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const resetBtn = document.getElementById('btn-reset-hidden');
         if (resetBtn) resetBtn.style.display = 'inline-flex';
         updateGraphDisplay();
-        if (detailsContent) detailsContent.innerHTML = 'Click a file node or dependency edge to view details.';
+        if (detailsContent) detailsContent.innerHTML = DETAILS_PLACEHOLDER;
       }
       return;
     }
@@ -3355,8 +3468,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Reset grouping
     groupingStrategy = 'layer';
+    groupingChosen = false;
     const groupingSelect = document.getElementById('select-grouping-strategy') as HTMLSelectElement;
     if (groupingSelect) groupingSelect.value = 'layer';
+    adaptGrouping();
 
     // Reset language filter
     const langFilter = document.getElementById('filter-lang') as HTMLSelectElement;
@@ -3473,12 +3588,12 @@ async function loadSmells() {
           if (Array.isArray(files) && files.length > 0) {
             involvedFilesStr = files.map((f: string) => {
               const name = f.split('/').pop() || f;
-              return `<span class="involved-file-badge" data-go-id="${f}" title="Click to view in Graph Explorer">${name}</span>`;
+              return `<span class="involved-file-badge" role="button" tabindex="0" data-go-id="${f}" title="Click to view in Graph Explorer">${name}</span>`;
             }).join('');
           }
         } catch (e) {
           const fallbackName = typeof smell.involved_files === 'string' ? smell.involved_files.split('/').pop() : 'file';
-          involvedFilesStr = `<span class="involved-file-badge" data-go-id="${smell.involved_files}" title="Click to view in Graph Explorer">${fallbackName}</span>`;
+          involvedFilesStr = `<span class="involved-file-badge" role="button" tabindex="0" data-go-id="${smell.involved_files}" title="Click to view in Graph Explorer">${fallbackName}</span>`;
         }
       }
       
@@ -3505,13 +3620,13 @@ async function loadSmells() {
     let healthColor = 'var(--syntax-green)';
     if (healthScore >= 95) { healthGrade = 'A+'; }
     else if (healthScore >= 90) { healthGrade = 'A'; }
-    else if (healthScore >= 85) { healthGrade = 'A-'; healthColor = '#a3d685'; }
-    else if (healthScore >= 80) { healthGrade = 'B+'; healthColor = '#e5c07b'; }
-    else if (healthScore >= 75) { healthGrade = 'B'; healthColor = '#e5c07b'; }
-    else if (healthScore >= 70) { healthGrade = 'B-'; healthColor = '#e5c07b'; }
-    else if (healthScore >= 60) { healthGrade = 'C'; healthColor = '#d19a66'; }
-    else if (healthScore >= 50) { healthGrade = 'D'; healthColor = '#e06c75'; }
-    else { healthGrade = 'F'; healthColor = '#ef4444'; }
+    else if (healthScore >= 85) { healthGrade = 'A-'; healthColor = 'var(--syntax-green)'; }
+    else if (healthScore >= 80) { healthGrade = 'B+'; healthColor = 'var(--syntax-yellow)'; }
+    else if (healthScore >= 75) { healthGrade = 'B'; healthColor = 'var(--syntax-yellow)'; }
+    else if (healthScore >= 70) { healthGrade = 'B-'; healthColor = 'var(--syntax-yellow)'; }
+    else if (healthScore >= 60) { healthGrade = 'C'; healthColor = 'var(--syntax-orange)'; }
+    else if (healthScore >= 50) { healthGrade = 'D'; healthColor = 'var(--syntax-red)'; }
+    else { healthGrade = 'F'; healthColor = 'var(--danger)'; }
     
     const badge = document.getElementById('arch-health-badge');
     const score = document.getElementById('arch-health-score');
@@ -3613,7 +3728,7 @@ function renderDSM(dsm: any) {
   let html = '<table class="dsm-table">';
   
   // Headers
-  html += '<thead><tr><th></th>';
+  html += '<thead><tr><th><span class="visually-hidden">Depends on</span></th>';
   for (let j = 0; j < names.length; j++) {
     html += `<th title="${names[j]}">C${j + 1}</th>`;
   }
@@ -3635,8 +3750,9 @@ function renderDSM(dsm: any) {
         
         if (val > 0) {
           textVal = String(val);
-          const alpha = Math.min(0.15 + (val * 0.08), 0.9);
-          bgStyle = `style="background-color: rgba(97, 175, 239, ${alpha}); color: #fff; font-weight: bold;"`;
+          // Stronger coupling, stronger tint; capped so the count stays readable in both themes.
+          const pct = Math.round(Math.min(12 + val * 6, 45));
+          bgStyle = `style="background-color: color-mix(in srgb, var(--syntax-blue) ${pct}%, transparent); color: var(--text-white); font-weight: bold;"`;
         } else {
           cellClass += ' dsm-empty';
           textVal = '0';

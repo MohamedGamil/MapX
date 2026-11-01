@@ -165,7 +165,8 @@ Work order set by the owner:
    | --- | --- |
    | M4-16 | UX/UI audit: done (`fa31104`) |
    | M4-19 | Playwright harness: done, `npm run test:ui` |
-   | M4-17 | Design system, themes and accessibility |
+   | M4-17 | Design system, themes and accessibility: done |
+   | M4-24 | Escape scanned values in dashboard HTML (found in M4-17); blocks M4-20 |
    | M4-20 | Performance |
    | M4-21 | Multi-repo views |
    | M4-22 | Read-only config view |

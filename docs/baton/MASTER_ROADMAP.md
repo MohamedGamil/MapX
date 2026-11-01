@@ -200,9 +200,10 @@ Fixture scoring in CI; optional message edges.
 - **M4-15** Shared compiled grammar code across workers, after a risk evaluation — DONE, P1, 8h; depends on M4-14.
 - **M4-16** Dashboard UX/UI audit with a measured baseline — DONE, P1, 10h; depends on M4-15.
 - **M4-19** Browser test harness for the dashboard — DONE, P1, 10h; depends on M4-16.
-- **M4-17** Dashboard look and feel: design system, themes, responsive and accessible — BACKLOG, P1, 10h; depends on M4-16, M4-19, M0-32-R3.
+- **M4-17** Dashboard look and feel: design system, themes, responsive and accessible — DONE, P1, 10h; depends on M4-16, M4-19, M0-32-R3.
 - **M4-18** New MapX logo: dashboard, favicons, docs, and the mapx init banner — DONE, P2, 10h; depends on M4-16.
-- **M4-20** Dashboard performance on large workspaces — BACKLOG, P1, 10h; depends on M4-16, M4-19.
+- **M4-24** Escape scanned values in the dashboard HTML — READY, P1, 4h; depends on M4-17.
+- **M4-20** Dashboard performance on large workspaces — BLOCKED, P1, 10h; depends on M4-16, M4-19, M4-24.
 - **M4-21** Multi-repo workspaces in the dashboard — BACKLOG, P1, 10h; depends on M4-17.
 - **M4-22** Read-only config view in the dashboard — BACKLOG, P2, 10h; depends on M4-21.
 - **M4-23** Cross-repo HTTP communication view in the dashboard — BACKLOG, P1, 10h; depends on M4-21.

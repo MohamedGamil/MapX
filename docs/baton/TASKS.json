@@ -21426,16 +21426,75 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "BACKLOG",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T21:35:34.506Z",
+      "completedAt": "2026-11-01T21:35:35.230Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M4-17.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run test:ui",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-17.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-17.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-17.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T21:10:05.065Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T21:35:34.506Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T21:35:34.824Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T21:35:35.230Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run test:ui",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-17.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-17.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-17.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -21472,7 +21531,10 @@
         "tests/ui/",
         "scripts/ui/",
         "docs/",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "src/ui/chrome.ts",
+        "src/ui-server.ts",
+        "tests/ui-server.test.ts"
       ],
       "acceptanceCriteria": [
         "styles.css defines colours, type scale, spacing, radii and shadows as CSS custom properties, and no colour literal appears outside the token blocks (a check script, run by the UI tests).",
@@ -21628,6 +21690,76 @@
     {
       "priority": "P1",
       "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "dashboard",
+        "security"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-17.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
+      "status": "READY",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-01T21:35:35.628Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M4",
+      "id": "M4-24",
+      "title": "Escape scanned values in the dashboard HTML",
+      "objective": "Every value the dashboard writes into HTML from the index, scan results or the tool-call log is escaped, so a crafted name, path or route in a scanned repository cannot run script in the dashboard.",
+      "description": "Found during M4-17: templates in src/ui/main.ts interpolate route paths, handlers, hook names, symbol and file names, smell text, tool-call inputs and context files into innerHTML without escaping. A scanned repository controls these values; script in the dashboard origin can call every /api endpoint.",
+      "dependencies": [
+        {
+          "id": "M4-17",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "escaped templates",
+        "XSS fixture and browser test",
+        "reports/M4-24.md"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "tests/ui/",
+        "scripts/ui/workspace.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A fixture whose route path, handler, symbol name, file name and logged tool input each contain an HTML payload (<img src=x onerror=...>) is scanned and opened on every tab: no payload executes (a page-level flag stays unset) and each payload is shown as text (tests/ui/xss.spec.ts).",
+        "No template in src/ui/main.ts interpolates a value from /api data into innerHTML without escapeHtml or textContent; a check lists ${...} interpolations in innerHTML templates and each is escaped or a number (test).",
+        "Removing the escaping from one template makes the XSS test fail (mutation check in the report)."
+      ],
+      "verificationCommands": [
+        "npm run test:ui",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
         "min": 6,
         "expected": 10,
         "max": 16
@@ -21642,7 +21774,7 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "BACKLOG",
+      "status": "BLOCKED",
       "owner": "claude",
       "actualHours": null,
       "startedAt": null,
@@ -21650,7 +21782,20 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-01T21:10:05.356Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T21:35:21.887Z",
+          "from": "READY",
+          "to": "BLOCKED",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -21667,6 +21812,10 @@
         },
         {
           "id": "M4-19",
+          "type": "hard"
+        },
+        {
+          "id": "M4-24",
           "type": "hard"
         }
       ],

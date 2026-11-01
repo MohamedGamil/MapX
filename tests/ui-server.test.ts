@@ -4,7 +4,7 @@ import type { Server } from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { startUiServer } from '../src/ui-server.js';
+import { isLoopback, startUiServer } from '../src/ui-server.js';
 import { cleanup, init, mapx, workspace } from './helpers/e2e.js';
 
 // M0-39: dashboard server endpoints (/api/status, /api/graph, /api/explain, /api/tool-calls)
@@ -44,6 +44,20 @@ describe('UI server endpoints', () => {
     expect(page).toContain('src="assets/mapx-logo-128.png"');
     expect(page).toContain('href="assets/favicon-32.png"');
   }, 60000);
+
+  it('does not rate-limit a client on this machine, whatever it forwards (M4-17)', async () => {
+    // The limit is 10 a minute per client; the dashboard reloads and the browser tests make more.
+    for (let i = 0; i < 12; i++) {
+      const res = await fetch(base + '/api/graph', { headers: { Authorization: 'Bearer secret', 'X-Forwarded-For': '203.0.113.9' } });
+      expect(res.status, `request ${i + 1}`).toBe(200);
+      await res.arrayBuffer();
+    }
+  });
+
+  it('treats only loopback socket addresses as local (M4-17)', () => {
+    for (const a of ['127.0.0.1', '127.1.2.3', '::1', '::ffff:127.0.0.1']) expect(isLoopback(a), a).toBe(true);
+    for (const a of [undefined, '', '10.0.0.5', '192.168.1.2', '::ffff:10.0.0.5', '203.0.113.9', 'fe80::1']) expect(isLoopback(a), String(a)).toBe(false);
+  });
 
   it('rejects API calls without the token', async () => {
     expect((await get('/api/status', false)).status).toBe(401);
