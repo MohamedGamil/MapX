@@ -31,6 +31,14 @@ const TABS: Array<{ tab: string; shows: (page: Page) => Promise<void> }> = [
     },
   },
   {
+    tab: 'workspace',
+    shows: async (page) => {
+      await expect(page.locator('#table-repos tbody tr')).toHaveCount(1);
+      await expect(page.locator('#workspace-cross')).toContainText('No edges between repos');
+      await expect(page.locator('#repo-switcher')).toBeHidden(); // one repo: no switcher
+    },
+  },
+  {
     tab: 'symbols',
     shows: async (page) => {
       await expect(page.locator('#table-symbols tbody tr').first()).toBeVisible();

@@ -436,6 +436,16 @@ The dashboard:
 - **Loading:** only the default layout engine (fCoSE) loads with the page. ELK, Dagre and Cola load the first time you choose them.
 - **Large graphs:** an fCoSE layout of more than 600 elements runs in a background worker, so the page stays responsive. If the worker can't start, the layout runs on the page as before.
 - **Compression:** API responses over 1 KB, scripts and styles are sent compressed (brotli or gzip) when the browser accepts it.
+- **Workspaces:** in a workspace with several registered repos, the sidebar's repo switcher scopes every view to one repo, or shows all of them. The choice is kept in the URL (`?repo=web`). The **Workspace** tab lists each repo with its files, symbols, edges, cross-repo edges, last scan and git state, and the dependencies between repos. In the graph, edges into another repo are dashed.
+
+The dashboard's API takes the same `repo` query parameter. An unknown repo answers 404.
+
+| Endpoint | Without `repo` | `repo=<name>` | `repo=all` |
+| --- | --- | --- | --- |
+| `/api/graph`, `/api/symbols`, `/api/routes` | every repo | that repo | every repo |
+| `/api/clusters`, `/api/smells` | the primary repo | that repo | every repo |
+| `/api/profile`, `/api/dsm`, `/api/metrics` | the primary repo | that repo | 400: these are per repo |
+| `/api/repos` | every repo: counts, `lastScanned`, `git` (`isGit`, `head`, `changesSinceScan`), and the cross-repo pairs | — | — |
 
 ## `mapx workspaces`
 

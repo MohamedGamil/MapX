@@ -168,7 +168,7 @@ Work order set by the owner:
    | M4-17 | Design system, themes and accessibility: done |
    | M4-24 | Escape scanned values in dashboard HTML (found in M4-17): done |
    | M4-20 | Performance: done |
-   | M4-21 | Multi-repo views |
+   | M4-21 | Multi-repo views: done |
    | M4-22 | Read-only config view |
    | M4-23 | Cross-repo HTTP view |
    | M4-18 | New logo: done (`d246259`, D028); it does not block M5 |

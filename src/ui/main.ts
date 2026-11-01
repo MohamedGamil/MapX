@@ -41,6 +41,113 @@ function markGraph(state: 'loading' | 'layout' | 'ready' | 'empty' | 'error') {
   if (state === 'ready') performance.mark('mapx:graph-ready');
 }
 
+// ---- Workspace repos (M4-21) ----
+/** The repo every view is scoped to, or null for all repos; kept in the URL as ?repo=. */
+let currentRepo: string | null = new URLSearchParams(location.search).get('repo') || null;
+let workspaceRepos: any[] = [];
+let workspaceCross: any[] = [];
+let primaryRepo = '';
+
+/**
+ * An API path scoped to the current repo. `any`: graph, symbols, routes (every repo by default).
+ * `set`: clusters and smells (all repos when none is chosen). `single`: profile, DSM, metrics,
+ * which are per repo (the primary repo when none is chosen).
+ */
+function withRepo(path: string, kind: 'any' | 'set' | 'single'): string {
+  const repo = currentRepo ?? (kind === 'set' && workspaceRepos.length > 1 ? 'all' : null);
+  return repo ? `${path}${path.includes('?') ? '&' : '?'}repo=${encodeURIComponent(repo)}` : path;
+}
+
+/** The sidebar's figures for the chosen repo (the whole workspace otherwise, from /api/status). */
+function showRepoStats() {
+  const repo = currentRepo ? workspaceRepos.find((r) => r.name === currentRepo) : null;
+  if (!repo) return;
+  document.getElementById('repo-name')!.textContent = repo.name;
+  document.getElementById('stat-files')!.textContent = String(repo.files);
+  document.getElementById('stat-symbols')!.textContent = String(repo.symbols);
+  document.getElementById('stat-edges')!.textContent = String(repo.edges);
+}
+
+/** Per-repo views say which repo they show when the switcher is on "All repos". */
+function updateScopeNotes() {
+  const show = !currentRepo && workspaceRepos.length > 1;
+  document.querySelectorAll<HTMLElement>('[data-scope-note]').forEach((el) => {
+    el.hidden = !show;
+    el.textContent = show ? `Showing the primary repo, ${primaryRepo}. Choose a repo in the sidebar to see another.` : '';
+  });
+}
+
+function renderWorkspace() {
+  const tbody = document.querySelector('#table-repos tbody');
+  if (tbody) {
+    tbody.innerHTML = workspaceRepos.map((r) => `
+      <tr class="${r.name === currentRepo ? 'current-repo' : ''}">
+        <td><button type="button" class="link-btn" data-repo="${escapeHtml(r.name)}">${escapeHtml(r.name)}</button>${r.name === primaryRepo ? ' <span class="selection-badge" style="--badge: var(--syntax-blue);">primary</span>' : ''}</td>
+        <td class="col-optional"><code>${escapeHtml(r.path)}</code></td>
+        <td class="num">${escapeHtml(Number(r.files).toLocaleString())}</td>
+        <td class="num col-optional">${escapeHtml(Number(r.symbols).toLocaleString())}</td>
+        <td class="num col-optional">${escapeHtml(Number(r.edges).toLocaleString())}</td>
+        <td class="num">${escapeHtml(Number(r.crossRepoEdgeCount).toLocaleString())}</td>
+        <td class="col-optional">${escapeHtml(r.lastScanned ? new Date(r.lastScanned).toLocaleString() : 'never')}</td>
+        <td class="col-optional">${escapeHtml(!r.git?.isGit ? 'no git' : `${r.git.head ?? '?'}${r.git.changesSinceScan ? ` · ${r.git.changesSinceScan} changed since scan` : ' · up to date'}`)}</td>
+      </tr>`).join('');
+  }
+  const cross = document.getElementById('workspace-cross');
+  if (cross) {
+    cross.innerHTML = workspaceCross.length
+      ? workspaceCross.map((p) => `
+        <div class="cross-pair"><strong>${escapeHtml(p.from)}</strong><span class="arrow" aria-label="calls">→</span><strong>${escapeHtml(p.to)}</strong>
+          <span class="profile-pill">${escapeHtml(p.types.join(', '))}</span><span class="count">${escapeHtml(Number(p.count).toLocaleString())} edges</span></div>`).join('')
+      : '<div class="details-placeholder" style="margin-top: 0; text-align: left;">No edges between repos.</div>';
+  }
+}
+
+/** Loads the repo list: the switcher (more than one repo), the Workspace tab and the scope notes. */
+async function loadRepos() {
+  try {
+    const res = await fetch('/api/repos');
+    if (!res.ok) return;
+    const data = await res.json();
+    workspaceRepos = data.repos ?? [];
+    workspaceCross = data.crossRepo ?? [];
+    primaryRepo = data.primary ?? '';
+    if (currentRepo && !workspaceRepos.some((r) => r.name === currentRepo)) setRepo(null, false);
+    const switcher = document.getElementById('repo-switcher');
+    const select = document.getElementById('select-repo') as HTMLSelectElement | null;
+    if (switcher && select) {
+      switcher.hidden = workspaceRepos.length < 2;
+      select.innerHTML = `<option value="">All repos (${workspaceRepos.length})</option>` +
+        workspaceRepos.map((r) => `<option value="${escapeHtml(r.name)}">${escapeHtml(r.name)}</option>`).join('');
+      select.value = currentRepo ?? '';
+    }
+    renderWorkspace();
+    updateScopeNotes();
+    showRepoStats();
+  } catch (err) {
+    console.error('Failed to load repos:', err);
+  }
+}
+
+/** Scopes the dashboard to a repo (null: all), in the URL too, and reloads every view. */
+function setRepo(repo: string | null, reload = true) {
+  currentRepo = repo;
+  const url = new URL(location.href);
+  if (repo) url.searchParams.set('repo', repo); else url.searchParams.delete('repo');
+  history.replaceState(null, '', url);
+  const select = document.getElementById('select-repo') as HTMLSelectElement | null;
+  if (select) select.value = repo ?? '';
+  renderWorkspace();
+  updateScopeNotes();
+  if (!reload) return;
+  if (!repo) loadStatus(); else showRepoStats();
+  loadGraph();
+  symbolPage = 0;
+  loadSymbols(symbolSearchQuery);
+  loadRoutes();
+  loadMetrics();
+  if (architectureLoaded) loadArchitecture();
+}
+
 // Tab switcher logic
 const tabs = document.querySelectorAll('.nav-item');
 tabs.forEach(tab => {
@@ -233,6 +340,7 @@ async function loadStatus() {
     document.getElementById('stat-files')!.textContent = String(lastFileCount);
     document.getElementById('stat-symbols')!.textContent = String(lastSymbolCount);
     document.getElementById('stat-edges')!.textContent = String(lastEdgeCount);
+    showRepoStats();
 
     // Populate language filters in graph panel
     const filterSelect = document.getElementById('filter-lang') as HTMLSelectElement;
@@ -576,7 +684,7 @@ function getLayoutConfigForName(layoutName: string, elementCount?: number): any 
 
 async function loadClusters() {
   try {
-    const res = await fetch('/api/clusters');
+    const res = await fetch(withRepo('/api/clusters', 'set'));
     if (res.ok) {
       rawClustersData = await res.json();
     }
@@ -821,6 +929,12 @@ function buildProximityClusterElements(): any[] {
     });
   }
 
+  // Each file's layer cluster, looked up once instead of a scan of every membership per file.
+  const layerOf = new Map<string, string>();
+  for (const m of rawClustersData.memberships ?? []) {
+    if (typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:') && !layerOf.has(m.filePath)) layerOf.set(m.filePath, m.clusterName);
+  }
+
   fileNodes.forEach(node => {
     const fId = node.data.id;
     const deg = degreeMap.get(fId) || 0;
@@ -854,11 +968,7 @@ function buildProximityClusterElements(): any[] {
       if (fileRole) {
         fileToCluster.set(fId, `layer:${fileRole}`);
       } else {
-        const layerMembership = rawClustersData.memberships?.find(
-          (m: any) => m.filePath === fId && typeof m.clusterName === 'string' && m.clusterName.startsWith('layer:')
-        );
-        const layerClusterId = layerMembership ? layerMembership.clusterName : 'layer:other';
-        fileToCluster.set(fId, layerClusterId);
+        fileToCluster.set(fId, layerOf.get(fId) ?? 'layer:other');
       }
     } else if (groupingStrategy === 'language') {
       const lang = node.data.language || 'unknown';
@@ -2026,6 +2136,17 @@ function graphStyle(): any[] {
       }
     },
     {
+      // Edges into another registered repo (M4-21): dashed, in their own colour, above the rest.
+      selector: 'edge[?crossRepo]',
+      style: {
+        'line-color': t('--syntax-pink'),
+        'target-arrow-color': t('--syntax-pink'),
+        'line-style': 'dashed',
+        'width': 2.5,
+        'z-index': 30,
+      }
+    },
+    {
       selector: 'edge[?isCycle]',
       style: {
         'line-color': t('--danger'),
@@ -2106,7 +2227,7 @@ async function loadGraph() {
   showOverlay('Fetching graph data…');
   markGraph('loading');
   try {
-    const res = await fetch('/api/graph');
+    const res = await fetch(withRepo('/api/graph', 'any'));
     if (!res.ok) { hideOverlay(); markGraph('error'); return; }
     rawGraphElements = (await res.json()).filter((el: any) => {
       // Drop self-loop edges (source === target) — they are scanner artifacts
@@ -2950,7 +3071,7 @@ async function loadSymbols(query: string = '') {
   const PAGE_SIZE = 50;
   try {
     const offset = symbolPage * PAGE_SIZE;
-    const res = await fetch(`/api/symbols?q=${encodeURIComponent(query)}&limit=${PAGE_SIZE}&offset=${offset}`);
+    const res = await fetch(withRepo(`/api/symbols?q=${encodeURIComponent(query)}&limit=${PAGE_SIZE}&offset=${offset}`, 'any'));
     if (!res.ok) return;
     const data = await res.json();
     const symbols: any[] = data.results ?? [];
@@ -3087,7 +3208,7 @@ async function loadSymbolDetails(name: string) {
 // Fetch framework routes and hooks
 async function loadRoutes() {
   try {
-    const res = await fetch('/api/routes');
+    const res = await fetch(withRepo('/api/routes', 'any'));
     if (!res.ok) return;
     const data = await res.json();
 
@@ -3180,7 +3301,7 @@ function statTiles(tiles: Array<[string, string | number]>): string {
 
 async function loadMetrics() {
   try {
-    const res = await fetch('/api/metrics');
+    const res = await fetch(withRepo('/api/metrics', 'single'));
     if (!res.ok) return;
     const metrics = await res.json();
 
@@ -3401,6 +3522,7 @@ function startPeriodicPolling() {
           document.getElementById('stat-files')!.textContent = String(fileCount);
           document.getElementById('stat-symbols')!.textContent = String(symbolCount);
           document.getElementById('stat-edges')!.textContent = String(edgeCount);
+          loadRepos(); // counts changed: the repo list and the chosen repo's figures too
 
           const filterSelect = document.getElementById('filter-lang') as HTMLSelectElement;
           if (filterSelect && status.languages) {
@@ -3460,6 +3582,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el || el.empty()) return false;
     el.emit('tap');
     return true;
+  };
+
+  // Test hook (M4-21): an edge's data flags and drawn style, by its endpoints.
+  (window as any).__mapxEdge = (source: string, target: string) => {
+    const edge = cyInstance?.edges().filter((e: any) => e.source().id() === source && e.target().id() === target)[0];
+    return edge ? { crossRepo: !!edge.data('crossRepo'), lineStyle: edge.style('line-style'), color: edge.style('line-color') } : null;
   };
 
   // Test hook (M4-20 review): how many nodes and edges the graph draws.
@@ -3545,6 +3673,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   loadStatus();
+  loadRepos();
+  document.getElementById('select-repo')?.addEventListener('change', (e) => setRepo((e.target as HTMLSelectElement).value || null));
+  document.getElementById('table-repos')?.addEventListener('click', (e) => {
+    const button = (e.target as HTMLElement).closest('[data-repo]') as HTMLElement | null;
+    if (button) setRepo(button.dataset.repo ?? null);
+  });
   loadGraph();
   loadSymbols();
   loadRoutes();
@@ -3772,18 +3906,21 @@ document.addEventListener('DOMContentLoaded', () => {
 const cycleEdges = new Set<string>();
 const hubNodes = new Set<string>();
 
+let architectureLoaded = false;
+
 async function loadArchitecture() {
+  architectureLoaded = true;
   try {
     // 1. Fetch smells to populate annotations before drawing/re-drawing the graph
     await loadSmells();
     
     // 2. Fetch profile
-    const profileRes = await fetch('/api/profile');
+    const profileRes = await fetch(withRepo('/api/profile', 'single'));
     const profileData = profileRes.ok ? await profileRes.json() : null;
     renderProfile(profileData?.profile);
 
     // 3. Fetch DSM
-    const dsmRes = await fetch('/api/dsm');
+    const dsmRes = await fetch(withRepo('/api/dsm', 'single'));
     const dsmData = dsmRes.ok ? await dsmRes.json() : null;
     renderDSM(dsmData);
   } catch (err) {
@@ -3793,7 +3930,7 @@ async function loadArchitecture() {
 
 async function loadSmells() {
   try {
-    const res = await fetch('/api/smells');
+    const res = await fetch(withRepo('/api/smells', 'set'));
     if (!res.ok) return;
     const data = await res.json();
     

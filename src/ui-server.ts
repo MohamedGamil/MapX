@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 import { Config } from './core/config.js';
 import { Store } from './core/store.js';
-import { applyCollapsedRepos } from './core/workspace-summary.js';
+import { applyCollapsedRepos, crossRepoPairs, summarizeRepos } from './core/workspace-summary.js';
 import { indexableChanges } from './core/staleness.js';
 import { MapxGraph } from './core/graph.js';
 import { buildMetricsReport, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
@@ -115,6 +115,21 @@ export function isOwnLocalClient(req: IncomingMessage): boolean {
   if (!isLoopback(req.socket.remoteAddress)) return false;
   const origin = req.headers.origin;
   return !origin || origin === `http://${req.headers.host}`;
+}
+
+/**
+ * The `repo` query parameter of the dashboard API (M4-21). Endpoints over the whole index (graph,
+ * symbols, routes) default to every repo; per-repo analyses (clusters, smells, profile, DSM,
+ * metrics) default to the primary repo. `all` asks for every repo where that is defined.
+ */
+export type RepoScope = { all: true; name?: undefined } | { all: false; name: string };
+
+export function repoScope(param: string | null, config: Pick<Config, 'repos' | 'repo'>, fallback: 'all' | 'primary'): RepoScope | { error: string; status: number } {
+  const value = param?.trim() ?? '';
+  if (!value) return fallback === 'all' ? { all: true } : { all: false, name: config.repo.name };
+  if (value === 'all') return { all: true };
+  if (!config.repos.some((r) => r.name === value)) return { error: `Unknown repo: ${value}`, status: 404 };
+  return { all: false, name: value };
 }
 
 /** Bodies smaller than this go out as they are: compressing them saves little. */
@@ -239,8 +254,38 @@ export function startUiServer(opts: ServerOpts) {
       }
     }
 
+    const json = (status: number, body: unknown) => sendBody(req, res, status, 'application/json', Buffer.from(JSON.stringify(body)));
+    /** The request's repo scope, or null after answering an unknown repo or a refused `all`. */
+    const scopeOf = (config: Config, fallback: 'all' | 'primary', allowAll = true): RepoScope | null => {
+      const scope = repoScope(parsedUrl.searchParams.get('repo'), config, fallback);
+      if ('error' in scope) { json(scope.status, { error: scope.error }); return null; }
+      if (scope.all && !allowAll) { json(400, { error: 'This view is per repo: pass repo=<name>.' }); return null; }
+      return scope;
+    };
+
     try {
       // API endpoints
+      if (pathname === '/api/repos') {
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        try {
+          const config = await loadConfig(dir, store);
+          const repos = summarizeRepos(dir, config.repos, config.repo.name, store).map((r) => {
+            const root = resolve(dir, r.path);
+            const isGit = isGitRepo(root);
+            const lastCommit = store.getMeta('last_scan_commit:' + r.name) || undefined;
+            let changes: number | null = null;
+            try {
+              changes = isGit ? indexableChanges(store, dir, root, getChangedFiles(root, lastCommit), r.name).length : null;
+            } catch { /* git unavailable: unknown */ }
+            return { ...r, git: { isGit, head: r.head, changesSinceScan: changes } };
+          });
+          json(200, { primary: config.repo.name, repos, crossRepo: crossRepoPairs(store) });
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
       if (pathname === '/api/status') {
         const configPath = resolve(dir, '.mapx', 'config.json');
         if (!existsSync(configPath)) {
@@ -290,8 +335,11 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
+          const scope = scopeOf(await loadConfig(dir, store), 'all');
+          if (!scope) return;
           // --- Retrieve pre-computed PageRank scores directly from SQLite ---
-          const files = store.getAllFiles();
+          const files = store.getAllFiles(scope.name);
+          const fileSet = new Set(files.map((f) => f.path as string));
 
           // --- Symbol counts per file via SQL aggregate ---
           const symbolCountRows = store.raw.prepare(
@@ -317,7 +365,8 @@ export function startUiServer(opts: ServerOpts) {
                 symbolCount: symbolCountMap.get(fPath) || 0,
                 pagerank: (f.pagerank as number) || 0,
                 role: f.role,
-                roleConfidence: f.role_confidence
+                roleConfidence: f.role_confidence,
+                repo: f.repo,
               }
             });
           }
@@ -325,12 +374,16 @@ export function startUiServer(opts: ServerOpts) {
           // --- Retrieve and format grouped file-to-file edges directly from SQLite ---
           // Aggregating directly in SQLite avoids loading and looping over thousands of symbol-level edges in JS.
           const groupedEdges = store.raw.prepare(`
-            SELECT source_file, target_file, MAX(weight) as weight, COUNT(*) as count, edge_type, verifiability
+            SELECT source_file, target_file, MAX(weight) as weight, COUNT(*) as count, edge_type, verifiability,
+                   MAX(CASE WHEN target_repo IS NOT NULL AND target_repo != repo THEN 1 ELSE 0 END) AS cross_repo,
+                   MIN(repo) AS repo, MAX(target_repo) AS target_repo
             FROM edges
             GROUP BY source_file, target_file
-          `).all() as Array<{ source_file: string; target_file: string; weight: number; count: number; edge_type: string; verifiability: string }>;
+          `).all() as Array<{ source_file: string; target_file: string; weight: number; count: number; edge_type: string; verifiability: string; cross_repo: number; repo: string; target_repo: string | null }>;
 
           for (const e of groupedEdges) {
+            // One repo's graph: its own files and the edges between them (M4-21).
+            if (!scope.all && (!fileSet.has(e.source_file) || !fileSet.has(e.target_file))) continue;
             elements.push({
               data: {
                 id: `edge-${e.source_file}-${e.target_file}`,
@@ -340,6 +393,8 @@ export function startUiServer(opts: ServerOpts) {
                 verifiability: e.verifiability,
                 weight: e.weight,
                 count: e.count,
+                // Edges into another registered repo are drawn distinctly (M4-21).
+                ...(e.cross_repo ? { crossRepo: true, repo: e.repo, targetRepo: e.target_repo } : {}),
               }
             });
           }
@@ -372,12 +427,12 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await loadConfig(dir, store);
-          const repo = config.repo.name;
-          const clusters = store.getClusters(repo);
-          const memberships = store.getClusterMemberships(repo);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ clusters, memberships }));
+          const scope = scopeOf(await loadConfig(dir, store), 'primary');
+          if (!scope) return;
+          // The dashboard reads filePath and clusterName: the rows' snake_case names never matched,
+          // so community and layer grouping fell back to directories (found in M4-21).
+          const memberships = store.getClusterMemberships(scope.name).map((m) => ({ ...m, filePath: m['file_path'], clusterName: m['cluster_name'] }));
+          json(200, { clusters: store.getClusters(scope.name), memberships });
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }
@@ -388,12 +443,10 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await loadConfig(dir, store);
-          const repo = config.repo.name;
-          const profileStr = store.getMeta('codebase_profile:' + repo);
-          const profile = profileStr ? JSON.parse(profileStr) : null;
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ profile }));
+          const scope = scopeOf(await loadConfig(dir, store), 'primary', false);
+          if (!scope) return;
+          const profileStr = store.getMeta('codebase_profile:' + scope.name);
+          json(200, { repo: scope.name, profile: profileStr ? JSON.parse(profileStr) : null });
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }
@@ -405,10 +458,10 @@ export function startUiServer(opts: ServerOpts) {
         const store = new Store(dbPath);
         try {
           const config = await loadConfig(dir, store);
-          const repo = config.repo.name;
-          const smells = store.getArchSmells(repo);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ smells }));
+          const scope = scopeOf(config, 'primary');
+          if (!scope) return;
+          const smells = scope.all ? config.repos.flatMap((r) => store.getArchSmells(r.name)) : store.getArchSmells(scope.name);
+          json(200, { smells });
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }
@@ -419,11 +472,9 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
-          const config = await loadConfig(dir, store);
-          const repo = config.repo.name;
-          const dsm = calculateDSM(store, repo);
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(dsm));
+          const scope = scopeOf(await loadConfig(dir, store), 'primary', false);
+          if (!scope) return;
+          json(200, { repo: scope.name, ...calculateDSM(store, scope.name as string) });
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }
@@ -448,11 +499,13 @@ export function startUiServer(opts: ServerOpts) {
         const dbPath = resolve(dir, '.mapx', 'mapx.db');
         const store = new Store(dbPath);
         try {
+          const scope = scopeOf(await loadConfig(dir, store), 'all');
+          if (!scope) return;
           const term = parsedUrl.searchParams.get('q') || '';
           const limit = Math.min(Math.max(1, parseInt(parsedUrl.searchParams.get('limit') || '50', 10)), 200);
           const offset = Math.max(0, parseInt(parsedUrl.searchParams.get('offset') || '0', 10));
-          const results = store.searchSymbolsFiltered({ term, limit, offset });
-          const total = store.countSymbolsFiltered({ term });
+          const results = store.searchSymbolsFiltered({ term, limit, offset, repo: scope.name });
+          const total = store.countSymbolsFiltered({ term, repo: scope.name });
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ results, total, limit, offset }));
@@ -512,44 +565,53 @@ export function startUiServer(opts: ServerOpts) {
         const store = new Store(dbPath);
         try {
           const config = await loadConfig(dir, store);
+          const scope = scopeOf(config, 'primary', false);
+          if (!scope) return;
+          const repoName = scope.name as string;
+          const repoConfig = config.repos.find((r) => r.name === repoName) ?? config.repo;
 
-          const fileCount = store.getFileCount();
-          const symbolCount = store.getSymbolCount();
-          const edgeCount = store.getEdgeCount();
+          const fileCount = store.getFileCount(repoName);
+          const symbolCount = store.getSymbolCount(repoName);
+          const edgeCount = store.getEdgeCount(repoName);
 
           // D012 file rows, every file, with the PageRank the scan stored.
-          const storedRank = new Map(store.getAllFiles(config.repo.name).map(f => [f.path as string, Number(f.pagerank ?? 0)]));
-          const fileMetrics = buildMetricsReport(store, storedRank, { dir, repo: config.repo.name, top: 0 }).report.files;
-          const graphMetrics = calculateGraphMetrics(store, config.repo.name);
-          const topFiles = store.getTopFilesByPageRank(null, 10);
-          const topSymbols = store.getTopSymbolsByPageRank(null, 10);
+          const storedRank = new Map(store.getAllFiles(repoName).map(f => [f.path as string, Number(f.pagerank ?? 0)]));
+          const fileMetrics = buildMetricsReport(store, storedRank, { dir, repo: repoName, top: 0 }).report.files;
+          const graphMetrics = calculateGraphMetrics(store, repoName);
+          const topFiles = store.raw.prepare('SELECT path, pagerank, language FROM files WHERE repo = ? ORDER BY pagerank DESC LIMIT 10').all(repoName);
+          const topSymbols = (store.raw.prepare(`
+            SELECT s.name, s.kind, s.file_path, s.start_line, s.scope,
+                   (f.pagerank * (1 + (CASE WHEN s.scope IS NOT NULL THEN 2 ELSE 1 END) * 0.1)) AS pagerank
+            FROM symbols s JOIN files f ON s.file_path = f.path
+            WHERE s.repo = ? ORDER BY pagerank DESC LIMIT 10
+          `).all(repoName) as any[]).map((r) => ({ name: r.name, kind: r.kind, filePath: r.file_path, startLine: r.start_line, pagerank: r.pagerank, scope: r.scope }));
 
           // Get extra metrics matching CLI status
-          const verifiedEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified'").get() as any)?.cnt || 0;
-          const inferredEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'inferred'").get() as any)?.cnt || 0;
-          const languages = store.getLanguageBreakdown();
+          const verifiedEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'verified' AND repo = ?").get(repoName) as any)?.cnt || 0;
+          const inferredEdges = (store.raw.prepare("SELECT COUNT(*) as cnt FROM edges WHERE verifiability = 'inferred' AND repo = ?").get(repoName) as any)?.cnt || 0;
+          const languages = store.getLanguageBreakdown(repoName);
 
           const symbolKinds = store.raw.prepare(
-            'SELECT kind, COUNT(*) as cnt FROM symbols GROUP BY kind ORDER BY cnt DESC'
-          ).all() as Array<{ kind: string; cnt: number }>;
+            'SELECT kind, COUNT(*) as cnt FROM symbols WHERE repo = ? GROUP BY kind ORDER BY cnt DESC'
+          ).all(repoName) as Array<{ kind: string; cnt: number }>;
 
           const edgeTypes = store.raw.prepare(
-            'SELECT edge_type, COUNT(*) as cnt FROM edges GROUP BY edge_type ORDER BY cnt DESC'
-          ).all() as Array<{ edge_type: string; cnt: number }>;
+            'SELECT edge_type, COUNT(*) as cnt FROM edges WHERE repo = ? GROUP BY edge_type ORDER BY cnt DESC'
+          ).all(repoName) as Array<{ edge_type: string; cnt: number }>;
 
           let dbSize = 0;
           try {
             dbSize = statSync(dbPath).size;
           } catch {}
 
-          const repoRoot = resolve(dir, config.repo.path);
+          const repoRoot = resolve(dir, repoConfig.path);
           const isGit = isGitRepo(repoRoot);
-          const lastCommit = store.getMeta('last_scan_commit:' + config.repo.name) || store.getMeta('last_scan_commit');
+          const lastCommit = store.getMeta('last_scan_commit:' + repoName) || (repoName === config.repo.name ? store.getMeta('last_scan_commit') : null);
           // As `mapx status` (M0-11-R3).
-          const gitChanges = isGit ? indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), config.repo.name) : [];
+          const gitChanges = isGit ? indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), repoName) : [];
 
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
+          json(200, {
+            repo: repoName,
             totalFiles: fileCount,
             totalSymbols: symbolCount,
             totalEdges: edgeCount,
@@ -570,7 +632,7 @@ export function startUiServer(opts: ServerOpts) {
             fileMetrics,
             topFiles,
             topSymbols
-          }));
+          });
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }
@@ -637,13 +699,23 @@ export function startUiServer(opts: ServerOpts) {
       }
 
       if (pathname === '/api/routes') {
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        let config: Config;
+        try {
+          config = await loadConfig(dir, store);
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        const scope = scopeOf(config, 'all');
+        if (!scope) return;
         const routeRegistry = new RouteRegistry();
         await routeRegistry.load(dir);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          routes: routeRegistry.getRoutes(),
-          hooks: routeRegistry.getHooks()
-        }));
+        // Routes and hooks record the repo they were found in; older entries without one belong to the primary repo.
+        const inScope = (item: { metadata?: Record<string, unknown> }) => scope.all || ((item.metadata?.['repo'] as string | undefined) ?? config.repo.name) === scope.name;
+        json(200, {
+          routes: routeRegistry.getRoutes().filter(inScope),
+          hooks: routeRegistry.getHooks().filter(inScope),
+        });
         return;
       }
 

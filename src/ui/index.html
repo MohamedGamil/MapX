@@ -48,9 +48,22 @@
           <span class="indicator-dot online"></span>
           <span id="repo-name">Loading...</span>
         </div>
+        <!-- Repo switcher (M4-21): shown when the workspace registers more than one repo. -->
+        <div class="repo-switcher" id="repo-switcher" hidden>
+          <label for="select-repo" class="repo-switcher-label">Repo</label>
+          <select id="select-repo" class="form-select"></select>
+        </div>
       </div>
 
       <nav class="nav-menu" aria-label="Dashboard views">
+        <button class="nav-item" data-tab="workspace" type="button" aria-label="Workspace" title="Workspace">
+          <svg class="nav-svg-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span class="nav-label">Workspace</span>
+        </button>
         <button class="nav-item active" data-tab="graph" type="button" aria-label="Graph Explorer" title="Graph Explorer">
           <svg class="nav-svg-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="18" cy="5" r="3"></circle>
@@ -248,6 +261,35 @@
         </div>
       </section>
 
+      <!-- Tab: Workspace overview (M4-21) -->
+      <section id="tab-workspace" class="tab-pane">
+        <div class="panel-header">
+          <h2>Workspace</h2>
+          <p class="subtitle">Every registered repo, and how they depend on each other</p>
+        </div>
+        <div class="panel-body workspace-body">
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Repos">
+            <table class="data-table" id="table-repos">
+              <thead>
+                <tr>
+                  <th>Repo</th>
+                  <th class="col-optional">Path</th>
+                  <th class="num">Files</th>
+                  <th class="num col-optional">Symbols</th>
+                  <th class="num col-optional">Edges</th>
+                  <th class="num">Cross-repo</th>
+                  <th class="col-optional">Last scan</th>
+                  <th class="col-optional">Git</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <h3 class="section-title">Cross-repo dependencies</h3>
+          <div id="workspace-cross" class="workspace-cross"></div>
+        </div>
+      </section>
+
       <!-- Tab: Symbol Explorer -->
       <section id="tab-symbols" class="tab-pane">
         <div class="panel-header">
@@ -336,6 +378,7 @@
       <section id="tab-metrics" class="tab-pane">
         <div class="panel-header">
           <h2>Metrics & Analytics</h2>
+          <p class="scope-note" data-scope-note hidden></p>
         </div>
         <div class="panel-body grid-metrics">
           <div class="metric-card">
@@ -374,6 +417,7 @@
         <div class="panel-header">
           <h2>Architecture & Health Analysis</h2>
           <p class="subtitle">Smart Archetype Profile, Coupling metrics, and Smell detection</p>
+          <p class="scope-note" data-scope-note hidden></p>
         </div>
         <div class="panel-body grid-architecture">
           <div class="arch-card">
