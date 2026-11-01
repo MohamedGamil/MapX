@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@cca20f4bc1f6bff67f2b3250d43a2b3600ac6343 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
+Revision: develop@9aad1b7905316dcaada1b4637e14e0c8b75ab43a (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
 
 ## Baseline
-Last completed: M4-21 — Multi-repo workspaces in the dashboard.
-Evidence: `npx vitest run tests/ui-server-repos.test.ts` (exit 0) → docs/baton/reports/M4-21.md; `npm run test:ui` (exit 0) → docs/baton/reports/M4-21.md; `npm run check` (exit 0) → docs/baton/reports/M4-21.md.
+Last completed: M4-22 — Read-only config view in the dashboard.
+Evidence: `npx vitest run tests/ui-server-config.test.ts` (exit 0) → docs/baton/reports/M4-22.md; `npm run test:ui` (exit 0) → docs/baton/reports/M4-22.md; `npm run check` (exit 0) → docs/baton/reports/M4-22.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M4-23 — Cross-repo HTTP communication view in the dashboard. Prerequisites: M4-21. Read docs/baton/iterations/M4-23.md. Objective: Show how repos talk over HTTP: frontend call sites paired with backend routes and handlers, unmatched calls, and a repo-to-repo flow, as for majles's frontend and backend. Expected outputs: /api/http; HTTP tab and flow view; tests; reports/M4-23.md. Verify: `npx vitest run tests/ui-server.test.ts`; `npm run test:ui`; `npm run check`.
-Also eligible: M4-22.
+Also eligible: none.
 Active work: none. One active iteration per owner.
 
 ## Observe

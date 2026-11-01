@@ -447,6 +447,14 @@ The dashboard's API takes the same `repo` query parameter. An unknown repo answe
 | `/api/profile`, `/api/dsm`, `/api/metrics` | the primary repo | that repo | 400: these are per repo |
 | `/api/repos` | every repo: counts, `lastScanned`, `git` (`isGit`, `head`, `changesSinceScan`), and the cross-repo pairs | — | — |
 
+The **Configuration** tab shows the effective settings, read-only:
+- **Values and sources:** each known setting with its value and where it comes from: `default`, `user` (set in `.mapx/config.json`) or `env` (`MAPX_PARSE_WORKERS`).
+- **Pattern lists:** your own patterns are shown, and MapX's built-in ones are folded away.
+- **Repos and languages:** the configured repos (missing folders marked) and user languages.
+- **Warnings:** invalid values, unknown settings, repo folders that don't exist, and incomplete or shadowed user languages.
+
+Edit `.mapx/config.json`, or use `mapx workspaces` and `mapx lang`, to change them. `/api/config` serves the same report, and every method other than GET answers 405.
+
 ## `mapx workspaces`
 
 Manage multi-repository workspaces.

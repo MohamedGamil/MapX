@@ -22216,23 +22216,75 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T23:59:20.646Z",
+      "completedAt": "2026-11-01T23:59:21.357Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-22.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/ui-server-config.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-22.md"
+        },
+        {
+          "command": "npm run test:ui",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-22.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-22.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T23:50:06.046Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-01T23:59:20.646Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T23:59:21.004Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T23:59:21.357Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/ui-server-config.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-22.md"
+            },
+            {
+              "command": "npm run test:ui",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-22.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-22.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -22261,7 +22313,12 @@
         "tests/ui-server.test.ts",
         "tests/ui/",
         "docs/configuration.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "src/core/config-report.ts",
+        "src/core/config.ts",
+        "tests/ui-server-config.test.ts",
+        "scripts/ui/check-escaping.ts",
+        "docs/cli-reference.md"
       ],
       "acceptanceCriteria": [
         "/api/config returns the effective settings with each value's source (default or user), the repos and user languages, and validation warnings, such as an invalid parseWorkers or an unknown setting (tests/ui-server.test.ts).",
@@ -22269,7 +22326,7 @@
         "A Config tab renders the settings, sources and warnings (tests/ui)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/ui-server.test.ts",
+        "npx vitest run tests/ui-server-config.test.ts",
         "npm run test:ui",
         "npm run check"
       ]

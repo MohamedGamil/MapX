@@ -169,6 +169,8 @@ tabs.forEach(tab => {
       }, 50);
     } else if (currentTab === 'architecture') {
       loadArchitecture();
+    } else if (currentTab === 'config') {
+      loadConfigView();
     }
   });
 });
@@ -3905,6 +3907,66 @@ document.addEventListener('DOMContentLoaded', () => {
 // Architecture Tab Data Fetching and Rendering
 const cycleEdges = new Set<string>();
 const hubNodes = new Set<string>();
+
+// ---- Configuration (M4-22): read-only ----
+const SOURCE_BADGE: Record<string, string> = { default: 'var(--text-muted)', user: 'var(--syntax-blue)', env: 'var(--syntax-purple)' };
+
+function configValueHtml(setting: any): string {
+  if (Array.isArray(setting.entries)) {
+    if (!setting.entries.length) return '<span class="config-empty">none</span>';
+    const user = setting.entries.filter((e: any) => e.source === 'user');
+    const chips = (list: any[]) => list.map((e: any) => `<code class="config-chip${e.source === 'user' ? ' is-user' : ''}">${escapeHtml(e.value)}</code>`).join('');
+    // The user's own patterns stay visible; MapX's built-in ones fold away.
+    const builtIn = setting.entries.filter((e: any) => e.source === 'default');
+    return `${user.length ? `<div class="config-chips">${chips(user)}</div>` : ''}${builtIn.length ? `<details class="config-details"><summary>${escapeHtml(builtIn.length)} built-in pattern${builtIn.length === 1 ? '' : 's'}</summary><div class="config-chips">${chips(builtIn)}</div></details>` : ''}`;
+  }
+  const value = setting.value;
+  if (value !== null && typeof value === 'object') {
+    const text = JSON.stringify(value, null, 2);
+    return text === '{}' ? '<span class="config-empty">none</span>' : `<pre class="config-json">${escapeHtml(text)}</pre>`;
+  }
+  return `<code>${escapeHtml(JSON.stringify(value))}</code>`;
+}
+
+async function loadConfigView() {
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const config = await res.json();
+    const path = document.getElementById('config-path');
+    if (path) path.innerHTML = `Edit <code>${escapeHtml(config.path)}</code> to change them.`;
+    const warnings = document.getElementById('config-warnings');
+    if (warnings) {
+      warnings.innerHTML = config.warnings.length
+        ? `<div class="config-warnings" role="status"><strong>${escapeHtml(config.warnings.length)} warning${config.warnings.length === 1 ? '' : 's'}</strong><ul>${config.warnings.map((w: string) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`
+        : '<p class="config-ok">No problems found in the configuration.</p>';
+    }
+    const tbody = document.querySelector('#table-config tbody');
+    if (tbody) {
+      tbody.innerHTML = config.settings.map((s: any) => `
+        <tr data-setting="${escapeHtml(s.key)}">
+          <td><code>${escapeHtml(s.key)}</code><div class="config-desc">${escapeHtml(s.description)}</div></td>
+          <td>${configValueHtml(s)}</td>
+          <td><span class="selection-badge" style="--badge: ${escapeHtml(SOURCE_BADGE[s.source] ?? 'var(--text-muted)')};">${escapeHtml(s.source)}</span></td>
+        </tr>`).join('');
+    }
+    const repos = document.querySelector('#table-config-repos tbody');
+    if (repos) {
+      repos.innerHTML = config.repos.map((r: any) => `
+        <tr><td>${escapeHtml(r.name)}${r.primary ? ' <span class="selection-badge" style="--badge: var(--syntax-blue);">primary</span>' : ''}</td>
+        <td><code>${escapeHtml(r.path)}</code>${r.exists ? '' : ' <span class="selection-badge" style="--badge: var(--danger);">missing</span>'}</td>
+        <td class="col-optional">${escapeHtml(r.framework ?? '')}</td></tr>`).join('');
+    }
+    const languages = document.getElementById('config-languages');
+    if (languages) {
+      languages.innerHTML = config.languages.length
+        ? `<ul class="config-languages">${config.languages.map((l: any) => `<li><strong>${escapeHtml(l.name)}</strong> <span class="config-desc">${escapeHtml(l.extensions.join(', ') || 'no extensions')} · ${escapeHtml(l.grammarWasm || 'no grammar')}</span></li>`).join('')}</ul>`
+        : '<p class="config-empty">None. Built-in languages need no configuration; add others with <code>mapx lang install</code>.</p>';
+    }
+  } catch (err) {
+    console.error('Failed to load the configuration:', err);
+  }
+}
 
 let architectureLoaded = false;
 

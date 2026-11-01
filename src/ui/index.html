@@ -122,6 +122,15 @@
           </svg>
           <span class="nav-label">Metrics</span>
         </button>
+        <button class="nav-item" data-tab="config" type="button" aria-label="Configuration" title="Configuration">
+          <svg class="nav-svg-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line>
+            <line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line>
+            <line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>
+          </svg>
+          <span class="nav-label">Configuration</span>
+        </button>
         <button class="nav-item" data-tab="tool-log" type="button" aria-label="Tool Call Log" title="Tool Call Log">
           <svg class="nav-svg-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="4 17 10 11 4 5"></polyline>
@@ -479,6 +488,32 @@
           <div id="context-results" class="context-results-container">
             <div class="details-placeholder">Describe a task above and build context.</div>
           </div>
+        </div>
+      </section>
+
+      <!-- Tab: Configuration, read-only (M4-22, D027) -->
+      <section id="tab-config" class="tab-pane">
+        <div class="panel-header">
+          <h2>Configuration</h2>
+          <p class="subtitle">The effective settings, read-only. <span id="config-path"></span></p>
+        </div>
+        <div class="panel-body config-body">
+          <div id="config-warnings"></div>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Settings">
+            <table class="data-table" id="table-config">
+              <thead><tr><th>Setting</th><th>Value</th><th>Source</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <h3 class="section-title">Repos</h3>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Configured repos">
+            <table class="data-table" id="table-config-repos">
+              <thead><tr><th>Name</th><th>Path</th><th class="col-optional">Framework</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <h3 class="section-title">User languages</h3>
+          <div id="config-languages"></div>
         </div>
       </section>
 

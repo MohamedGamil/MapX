@@ -78,6 +78,15 @@ const TABS: Array<{ tab: string; shows: (page: Page) => Promise<void> }> = [
     },
   },
   {
+    tab: 'config',
+    shows: async (page) => {
+      await expect(page.locator('#table-config tbody tr[data-setting="parseWorkers"]')).toContainText('auto');
+      await expect(page.locator('#table-config tbody tr[data-setting="maxTokenBudget"]')).toContainText('default');
+      await expect(page.locator('#config-warnings')).toContainText('No problems found');
+      await expect(page.locator('#table-config-repos tbody tr')).toHaveCount(1);
+    },
+  },
+  {
     tab: 'tool-log',
     shows: async (page) => {
       await expect(page.locator('#tool-log-container .log-entry')).toHaveCount(1);

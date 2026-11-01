@@ -19,6 +19,11 @@ export const LARAVEL_DEFAULT_EXCLUDES = [
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { canonicalPath } from './workspace-manager.js';
 
+/** Excludes `mapx init` adds for a PHP project (composer.json or .php files at the root). */
+export const PHP_INIT_EXCLUDES = ['**/migrations/**', '**/seeds/**', '**/storage/**'];
+/** Excludes `mapx init` adds for a JavaScript/TypeScript project. */
+export const JS_INIT_EXCLUDES = ['**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '**/*.test.tsx', '**/*.spec.tsx'];
+
 export interface CollapsedRepo {
   dropped: RepoConfig;
   kept: RepoConfig;
@@ -42,7 +47,7 @@ function collapseDuplicateRepos(config: MapxConfig, workspaceRoot: string): Coll
   return collapsed;
 }
 
-const DEFAULT_CONFIG: MapxConfig = {
+export const DEFAULT_CONFIG: MapxConfig = {
   version: '1.0.0',
   repos: [],
   languages: {},
@@ -205,10 +210,10 @@ export class Config {
       }
 
       if (isPHP) {
-        defaultExclude.push('**/migrations/**', '**/seeds/**', '**/storage/**');
+        defaultExclude.push(...PHP_INIT_EXCLUDES);
       }
       if (isJSTS) {
-        defaultExclude.push('**/dist/**', '**/__tests__/**', '**/*.test.ts', '**/*.spec.ts', '**/*.test.tsx', '**/*.spec.tsx');
+        defaultExclude.push(...JS_INIT_EXCLUDES);
       }
     }
 

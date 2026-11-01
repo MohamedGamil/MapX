@@ -6,6 +6,7 @@ import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib';
 import { Config } from './core/config.js';
+import { describeConfig } from './core/config-report.js';
 import { Store } from './core/store.js';
 import { applyCollapsedRepos, crossRepoPairs, summarizeRepos } from './core/workspace-summary.js';
 import { indexableChanges } from './core/staleness.js';
@@ -265,6 +266,22 @@ export function startUiServer(opts: ServerOpts) {
 
     try {
       // API endpoints
+      // The effective configuration, read-only (M4-22, D027): no method writes it.
+      if (pathname === '/api/config') {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, HEAD');
+          json(405, { error: 'The configuration is read-only here: edit .mapx/config.json, or use mapx workspaces and mapx lang.' });
+          return;
+        }
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        try {
+          json(200, describeConfig(dir, await loadConfig(dir, store)));
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
       if (pathname === '/api/repos') {
         const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
         try {
