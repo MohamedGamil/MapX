@@ -46,3 +46,4 @@
 - M0-02-R10 DONE: both sync paths write file hashes only after the parse result; git sync re-parses null-hash files and drops unreadable ones. Review P2s fixed.
 - M0-02-R9 DONE: sync tracks go.mod and composer.json signatures per folder (NUL-prefixed family keys, per-family marker). Review P2s fixed.
 - M0-12-R10 DONE: Svelte template references with Vue resolution hints; render branch accepts .svelte and follows barrels (also Vue). Review P1 (escaped quote) and P2s fixed.
+- M0-17-R6 DONE: four heuristic follow-ups (codeOnly for vanished names, router shadowing/return types, Laravel module @, export/call-gated binding promotion). Review P1 (export default) and P2s fixed. All D019 gap tasks done.

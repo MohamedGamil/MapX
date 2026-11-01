@@ -200,7 +200,8 @@ describe('Svelte script discovery and bindings (review)', () => {
   it('lists only instance-script export lets as props, and keeps runes out of call targets', () => {
     const component = query<{ metadata: string }>(root, "SELECT metadata FROM symbols WHERE file_path = 'src/Mod.svelte' AND name = 'Mod'")[0]!;
     expect(JSON.parse(component.metadata).props).toEqual(['own']);
-    expect(symbols('src/Mod.svelte').filter((s) => ['count', 'total'].includes(s.name)).map((s) => s.kind)).toEqual(['variable', 'variable']);
+    // Values, never call targets (a const rune stays a constant since M0-17-R6 narrowed the promotion).
+    for (const s of symbols('src/Mod.svelte').filter((s) => ['count', 'total'].includes(s.name))) expect(['variable', 'constant']).toContain(s.kind);
     expect(edges('src/stats.ts')).toEqual([]);
   });
 });

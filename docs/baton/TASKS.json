@@ -19299,31 +19299,92 @@
         "src/parsers/languages/vue-navigation.ts",
         "src/core/js-aliases.ts",
         "src/parsers/generic-wasm-parser.ts",
-        "tests/legacy-globs.test.ts",
-        "tests/vue-navigation.test.ts",
-        "tests/legacy-imports.test.ts",
-        "tests/legacy-language-accuracy.test.ts"
+        "tests/heuristic-followups.test.ts",
+        "tests/legacy-language-accuracy.test.ts",
+        "tests/svelte.test.ts",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
         "A function renamed while its old name stays in a comment or string of the file drops its callers' edges on sync, as scan --force (e2e).",
-        "A shadowed `next` / `push` (parameter, local, template v-for or v-slot) gives no navigate edge, and a nested function's return with an object, literal-union or function return type is not the guard's (test).",
+        "A shadowed `next` / `push` (parameter, local, template v-for or v-slot) gives no navigate edge, and a nested function's return with an object, literal-union or function return type is not the guard's (tests/heuristic-followups.test.ts).",
         "A Laravel module folder (Modules/*) whose own bundler config declares no `@` alias takes the enclosing Laravel app's `@` (test).",
-        "A module-level binding to a call stays a `function` symbol only when the workspace calls it by name; `const app = createApp(App); app.mount()` gives a value (test)."
+        "A module-level binding to a call stays a function symbol only when it is exported (export, export default, export =, module.exports, exports.x) or the file calls it by name (Python: also public names); const app = createApp(App); app.mount() gives a value (tests/heuristic-followups.test.ts)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/legacy-globs.test.ts tests/vue-navigation.test.ts tests/legacy-imports.test.ts tests/legacy-language-accuracy.test.ts"
+        "npx vitest run tests/heuristic-followups.test.ts tests/vue-navigation.test.ts tests/legacy-imports.test.ts tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts",
+        "npm run eval",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T13:09:25.946Z",
+      "completedAt": "2026-11-01T13:37:26.787Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M0-17-R6.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/heuristic-followups.test.ts tests/vue-navigation.test.ts tests/legacy-imports.test.ts tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-17-R6.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-17-R6.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-17-R6.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T13:09:25.280Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:09:25.946Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:37:26.502Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T13:37:26.787Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/heuristic-followups.test.ts tests/vue-navigation.test.ts tests/legacy-imports.test.ts tests/legacy-language-accuracy.test.ts tests/legacy-verifiability.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-17-R6.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-17-R6.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-17-R6.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."

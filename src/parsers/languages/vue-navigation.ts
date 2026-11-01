@@ -194,7 +194,11 @@ function routerCalls(code: string, outer?: RouterBindings): { index: number; tar
     ...(functions.length ? [String.raw`(?<![\w$.])(?<!\.\s*)(?<!function\s+)(?:${functions.join('|')})\s*\(`] : []),
   ].join('|'), 'g');
   const calls: { index: number; target: NavTarget }[] = [];
+  // A destructured `push` a function rebinds (a parameter, a local) is not the router's (M0-17-R6).
+  const shadow = new Map([...own.functions, ...(outer?.functions ?? [])].map((f) => [f, shadowedRanges(masked, f, 0, masked.length)]));
   for (const m of masked.matchAll(call)) {
+    const fn = /^[A-Za-z_$][\w$]*/.exec(m[0])?.[0];
+    if (fn && shadow.get(fn)?.some((r) => r.start < m.index! && m.index! < r.end)) continue;
     const target = callTarget(code, masked, m.index! + m[0].length - 1);
     if (target) calls.push({ index: m.index!, target });
   }
@@ -288,6 +292,110 @@ function guardsAt(masked: string, at: number): FunctionRange[] {
   return named ? [named] : [];
 }
 
+/**
+ * The `)` closing the parameters when `masked[from..j]` ends with a return type annotation
+ * (`): Type`), else -1. Walks back over balanced brackets, angle brackets and string literals, and
+ * stops at a `;`, an `=` that is no arrow, or 200 characters (M0-17-R6).
+ */
+function returnTypeParen(masked: string, j: number, from: number): number {
+  // `try {`, `else {`, `finally {`, `do {` open statements, never a typed function's body.
+  if (/(?:^|[^\w$])(?:try|else|finally|do)$/.test(masked.slice(Math.max(from, j - 8), j + 1))) return -1;
+  let depth = 0;
+  for (let i = j; i >= from && i > j - 200; i--) {
+    const c = masked[i]!;
+    // A statement boundary in code without semicolons: `ok ? a() : b()` on an earlier line is no type.
+    if (depth === 0 && c === '\n') return -1;
+    if (c === '>' && masked[i - 1] === '=') { i--; continue; }
+    if (c === ')' || c === ']' || c === '}' || c === '>') depth++;
+    else if (c === '(' || c === '[' || c === '{' || c === '<') { if (--depth < 0) return -1; }
+    else if (depth === 0 && (c === ';' || c === '=')) return -1;
+    else if (depth === 0 && c === ':' && i < j) {
+      let k = i - 1;
+      while (k >= from && /\s/.test(masked[k]!)) k--;
+      return masked[k] === ')' ? k : -1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Where `name` means something else than in `[from, to)`'s own scope: the bodies of the functions
+ * and arrows nested in it that take a parameter `name` (also a method's or a `catch`'s), and the
+ * blocks declaring `const` / `let` / `var` / `function name` (M0-17-R6).
+ */
+function shadowedRanges(masked: string, name: string, from: number, to: number): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  const word = new RegExp(String.raw`(?<![\w$])${escapeRe(name)}(?![\w$])`);
+  const params = /(?<![\w$])([A-Za-z_$][\w$]*)\s*=>|\(([^()]*)\)\s*(?::[^={;]*)?(=>|\{)/g;
+  params.lastIndex = from;
+  for (let m = params.exec(masked); m && m.index < to; m = params.exec(masked)) {
+    const list = m[1] ?? m[2]!;
+    // Only a binding position rebinds: `{ push: p }` binds p; a default value or a type does not.
+    if (!word.test(list) || !boundNames(list).includes(name)) continue;
+    if (m[3] === '{') {
+      // `if (push) {` is a condition, not parameters.
+      if (/(?:^|[^\w$])(?:if|for|while|switch|with)\s*$/.test(masked.slice(Math.max(0, m.index - 10), m.index))) continue;
+    }
+    const after = m.index + m[0].length;
+    const open = m[3] === '{' ? after - 1 : /^\s*\{/.test(masked.slice(after)) ? masked.indexOf('{', after) : -1;
+    if (open >= 0) {
+      const close = matchBracket(masked, open);
+      if (close > open) ranges.push({ start: open, end: close });
+    } else {
+      ranges.push({ start: after, end: expressionEnd(masked, after) });
+    }
+  }
+  const declared = new RegExp(String.raw`\b(?:const|let|var|function)\s+${escapeRe(name)}(?![\w$])`, 'g');
+  declared.lastIndex = from;
+  for (let m = declared.exec(masked); m && m.index < to; m = declared.exec(masked)) {
+    // A `for (const x of …)` header binds x in the loop's body only.
+    const head = /\bfor\s*(?:await\s*)?\(\s*$/.exec(masked.slice(Math.max(from, m.index - 16), m.index));
+    if (head) {
+      const close = matchBracket(masked, m.index - head[0].length + head[0].lastIndexOf('('));
+      const open = close > 0 ? masked.indexOf('{', close) : -1;
+      if (open > 0 && /^\s*$/.test(masked.slice(close + 1, open))) {
+        const end = matchBracket(masked, open);
+        if (end > open) ranges.push({ start: close, end });
+      }
+      continue;
+    }
+    // The innermost block around the declaration.
+    let depth = 0;
+    for (let i = m.index; i >= from; i--) {
+      if (masked[i] === '}') depth++;
+      else if (masked[i] === '{' && depth-- === 0) {
+        const close = matchBracket(masked, i);
+        if (close > i) ranges.push({ start: i, end: close });
+        break;
+      }
+    }
+  }
+  return ranges;
+}
+
+/**
+ * The names a parameter list binds: each top-level part without its default value and type, and
+ * the binding targets of a destructuring (`{ a, b: c }` binds a and c; `[d, ...e]` d and e).
+ */
+function boundNames(list: string): string[] {
+  const names: string[] = [];
+  const walk = (part: string) => {
+    const p = part.trim().replace(/^\.\.\./, '');
+    if (p.startsWith('{') || p.startsWith('[')) {
+      const inner = p.slice(1, matchBracket(p, 0) > 0 ? matchBracket(p, 0) : undefined);
+      for (const item of topLevelParts(inner, 0, inner.length).map((r) => inner.slice(r.start, r.end))) {
+        const colon = p.startsWith('{') ? item.search(/:(?![^{[]*[}\]])/) : -1;
+        walk(colon >= 0 ? item.slice(colon + 1) : item);
+      }
+      return;
+    }
+    const id = /^([A-Za-z_$][\w$]*)/.exec(p)?.[1];
+    if (id) names.push(id);
+  };
+  for (const r of topLevelParts(list, 0, list.length)) walk(list.slice(r.start, r.end).replace(/\s*[=:][\s\S]*$/, (m) => (/^\s*:/.test(m) && /^\s*[{[]/.test(list.slice(r.start, r.end)) ? m : '')));
+  return names;
+}
+
 /** `{ … }` bodies of the functions nested in `[from, to)` (arrows, `function`, methods). */
 function nestedBodies(masked: string, from: number, to: number): { start: number; end: number }[] {
   const bodies: { start: number; end: number }[] = [];
@@ -295,9 +403,10 @@ function nestedBodies(masked: string, from: number, to: number): { start: number
     if (masked[i] !== '{') continue;
     let j = i - 1;
     while (j >= from && /\s/.test(masked[j]!)) j--;
-    // A return type (`function f(): Target {`) stands between the parameters and the body.
-    const typed = /\)\s*:\s*[\w$.<>[\]|, ]+$/.exec(masked.slice(Math.max(from, j - 80), j + 1));
-    if (typed) j -= typed[0].length - 1;
+    // A return type (`function f(): Target {`, also `{ name: string }`, `'a' | 'b'`, `() => void`)
+    // stands between the parameters and the body (M0-17-R6).
+    const typed = returnTypeParen(masked, j, from);
+    if (typed >= 0) j = typed;
     let fn = masked[j] === '>' && masked[j - 1] === '=';
     if (!fn && masked[j] === ')') {
       let depth = 0;
@@ -353,8 +462,11 @@ function guardRedirects(code: string, masked: string, receivers: Set<string>): {
     const nextName = next && /^\s*([A-Za-z_$][\w$]*)/.exec(masked.slice(next.start, next.end))?.[1];
     if (nextName) {
       const call = new RegExp(String.raw`(?<![\w$.])${escapeRe(nextName)}\s*\(`, 'g');
+      // A `next` a nested function rebinds is not the guard's (M0-17-R6).
+      const shadowed = shadowedRanges(masked, nextName, body.start + 1, body.end);
       call.lastIndex = body.start;
       for (let m = call.exec(masked); m && m.index < body.end; m = call.exec(masked)) {
+        if (shadowed.some((r) => r.start < m!.index && m!.index < r.end)) continue;
         const target = callTarget(code, masked, m.index + m[0].length - 1);
         if (target) out.push({ index: m.index, target });
       }
@@ -434,6 +546,12 @@ export function navigationReferences(source: string): ExtractedReference[] {
   if (!range) return refs;
   for (const node of templateNodes(masked, range.start, range.end)) {
     const expressions: { code: string; at: number }[] = [];
+    // A v-for / v-slot name hides the <script setup> binding of the same name (M0-17-R6).
+    const locals = 'interpolation' in node ? node.locals : node.tag.locals;
+    const visible: RouterBindings = {
+      receivers: new Set([...setup.receivers].filter((r) => !locals.has(r))),
+      functions: new Set([...setup.functions].filter((f) => !locals.has(f))),
+    };
     if ('interpolation' in node) expressions.push({ code: node.interpolation, at: node.offset });
     else {
       const link = node.tag.name === 'router-link' || node.tag.name === 'RouterLink';
@@ -450,7 +568,7 @@ export function navigationReferences(source: string): ExtractedReference[] {
     }
     for (const { code, at } of expressions) {
       if (!code.includes('$router') && !templateNames.some((n) => code.includes(n))) continue;
-      for (const { index, target } of routerCalls(code, setup)) refs.push(navigateRef(target, lineAt(source, at + index)));
+      for (const { index, target } of routerCalls(code, visible)) refs.push(navigateRef(target, lineAt(source, at + index)));
     }
   }
   return refs;

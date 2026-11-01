@@ -85,6 +85,53 @@ function insideFunctionOrBlock(node: any): boolean {
 const CALLABLE_VALUES = new Set(['call_expression', 'identifier', 'member_expression', 'call', 'attribute', 'lambda']);
 const TRANSPARENT_VALUES = new Set(['parenthesized_expression', 'as_expression', 'satisfies_expression', 'non_null_expression']);
 
+/**
+ * Whether a module-level binding to a call, a name or a member is meant to be called (M0-17-R6): the
+ * file calls it by name, or it is exported for other modules to (`export const`, `export { … }`,
+ * `module.exports` / `exports.x`; in Python, any public name). `const app = createApp(App)` used
+ * as `app.mount()` stays a value.
+ */
+function usedAsFunction(node: any, source: string): boolean {
+  const python = node.type === 'expression_statement';
+  const name: string | undefined = python
+    ? node.namedChildren[0]?.childForFieldName('left')?.text
+    : node.childForFieldName('name')?.text;
+  if (!name || !/^[A-Za-z_$][\w$]*$/.test(name)) return true;
+  if (python && !name.startsWith('_')) return true;
+  const facts = sourceFacts(source);
+  if (facts.called.has(name)) return true;
+  if (python) return false;
+  for (let p = node.parent; p; p = p.parent) if (p.type === 'export_statement') return true;
+  return facts.exported.has(name);
+}
+
+/**
+ * Per source text (the last one parsed): the names it calls (`f(`, `f?.(`, `f.call(` / `.apply(` /
+ * `.bind(`) and those it exports by name (`export { a, b as c }`, `export default a`, `export = a`,
+ * `module.exports`, `exports.a` / `exports.default`) (M0-17-R6, review 2026-11-01).
+ */
+let factsFor: { source: string; called: Set<string>; exported: Set<string> } | null = null;
+function sourceFacts(source: string): { called: Set<string>; exported: Set<string> } {
+  if (factsFor?.source === source) return factsFor;
+  const called = new Set<string>();
+  for (const m of source.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)\s*(?:\?\.\s*)?(?:\(|\.\s*(?:call|apply|bind)\s*\()/g)) called.add(m[1]!);
+  const exported = new Set<string>();
+  for (const m of source.matchAll(/\bexport\s*\{([^}]*)\}/g)) {
+    for (const part of m[1]!.split(',')) {
+      const local = /^\s*(?:type\s+)?([A-Za-z_$][\w$]*)/.exec(part)?.[1];
+      if (local) exported.add(local);
+    }
+  }
+  for (const m of source.matchAll(/\bexport\s+default\s+([A-Za-z_$][\w$]*)\s*[;\n]|\bexport\s*=\s*([A-Za-z_$][\w$]*)|\bexports\.(?:default|[A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)|\bexports\.([A-Za-z_$][\w$]*)\b/g)) {
+    exported.add((m[1] ?? m[2] ?? m[3] ?? m[4])!);
+  }
+  for (const m of source.matchAll(/\bmodule\.exports\b([^;]*)/g)) {
+    for (const w of m[1]!.matchAll(/(?<![\w$.])([A-Za-z_$][\w$]*)(?![\w$])/g)) exported.add(w[1]!);
+  }
+  factsFor = { source, called, exported };
+  return factsFor;
+}
+
 /** The value of a JS/TS declarator or a module-level Python assignment, unwrapped; null otherwise. */
 function bindingValue(node: any): any {
   let value = node.type === 'variable_declarator' ? node.childForFieldName('value')
@@ -229,7 +276,7 @@ export class GenericWasmParser implements LanguageParser {
             // variable (M0-17-R5). Not in a Vue SFC: there `const total = computed(…)` is a reactive
             // value, and value declarations own no references (vue-template.ts, rule 2).
             if ((kind === 'constant' || kind === 'variable') && !filePath.endsWith('.vue')
-              && CALLABLE_VALUES.has(bindingValue(capture.node)?.type)) kind = 'function';
+              && CALLABLE_VALUES.has(bindingValue(capture.node)?.type) && usedAsFunction(capture.node, source)) kind = 'function';
             // A `const f = () => …` inside a function, method or block is a local binding, like a
             // local constant, not a module function (M0-17-R3, M0-17-R5).
             if (baseKind === 'function' && capture.node.type === 'variable_declarator' && insideFunctionOrBlock(capture.node)) continue;

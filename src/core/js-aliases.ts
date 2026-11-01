@@ -70,19 +70,25 @@ export function jsAliasTargets(target: string, sourcePath: string, ctx: AliasCon
     return aliases;
   };
   let compiler: AliasRule[] | null = null;
-  let bundler: AliasRule[] | null = null;
+  const bundlers: AliasRule[][] = [];
   let compilerDone = false;
   let bundlerDone = false;
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
     const aliases = at(dir);
     if (!compilerDone && aliases.compiler) [compiler, compilerDone] = [aliases.compiler, true];
     // The build that bundles the file: a package without its own build (a workspace package of a
-    // single-build monorepo) takes an enclosing app's aliases (review 2026-10-31).
-    if (!bundlerDone && aliases.root === 'app') [bundler, bundlerDone] = [aliases.bundler, true];
+    // single-build monorepo) takes an enclosing app's aliases (review 2026-10-31). A Laravel module
+    // (`Modules/<Name>`) with its own bundler config also sees the enclosing app's aliases its own
+    // config does not declare, as its build extends the root's (M0-17-R6).
+    if (!bundlerDone && aliases.root === 'app') {
+      bundlers.push(aliases.bundler ?? []);
+      const app = LARAVEL_MODULE.test(dir) ? dirOf(dirOf(dir)) : null;
+      bundlerDone = app === null || ctx.readText(app ? `${app}/artisan` : 'artisan') === null;
+    }
     if (aliases.root === 'app') compilerDone = true;
     if ((compilerDone && bundlerDone) || !dir) break;
   }
-  const hit = (compiler && match(compiler, target)) ?? (bundler && match(bundler, target));
+  const hit = (compiler && match(compiler, target)) ?? bundlers.reduce<string[] | null>((found, rules) => found ?? match(rules, target), null);
   if (hit) return hit;
   if (!target.startsWith('@/')) return [];
   const rest = target.slice(2);
@@ -103,6 +109,9 @@ export function jsAliasTargets(target: string, sourcePath: string, ctx: AliasCon
   out.push(`src/${rest}`);
   return [...new Set(out)];
 }
+
+/** A Laravel module folder (nwidart/laravel-modules): `Modules/Blog`, under an app holding `artisan`. */
+const LARAVEL_MODULE = /(?:^|\/)Modules\/[^/]+$/;
 
 /** TypeScript's matching: an exact pattern wins, else the wildcard pattern with the longest prefix. */
 function match(rules: AliasRule[], target: string): string[] | null {

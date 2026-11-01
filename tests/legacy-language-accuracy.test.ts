@@ -430,8 +430,9 @@ describe('language extraction accuracy: callable bindings, deep qualifiers, bloc
       'let flag = true;',
       'function f() { const inner = make(); return inner; }',
     ].join('\n');
-    const expected = ['constant:inst', 'constant:list', 'constant:name', 'constant:options', 'constant:size',
-      'function:dispatch', 'function:f', 'function:fetchUser', 'function:later', 'function:typed', 'function:useAppSelector', 'variable:flag'];
+    // M0-17-R6: a binding neither exported nor called by name in the file (`typed`, `later`) stays a value.
+    const expected = ['constant:inst', 'constant:list', 'constant:name', 'constant:options', 'constant:size', 'constant:typed',
+      'function:dispatch', 'function:f', 'function:fetchUser', 'function:useAppSelector', 'variable:flag', 'variable:later'];
     expect((await parse('a.ts', src)).symbols.sort()).toEqual(expected);
     expect((await parse('a.js', src.replace(' as any', ''))).symbols.sort()).toEqual(expected);
     const py = await parse('a.py', [

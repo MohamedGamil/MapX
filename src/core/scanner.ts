@@ -89,6 +89,21 @@ const MANIFEST_FAMILIES = [
 const isFamilyKey = (key: string) => key.startsWith('\0');
 /** Component files a template render edge may target: Vue and Svelte (M0-12-R10). */
 const COMPONENT_FILE = /\.(vue|svelte)$/;
+/**
+ * A file's code without comments and string literals, for "is this name still in the file" checks
+ * (M0-17-R6): `#` comments and docstrings for Python / Ruby / shell, `//` and `/* *\/` otherwise, and
+ * `<!-- -->` in markup. Offsets are not kept.
+ */
+function codeOnly(path: string, text: string): string {
+  // Data and markup files declare names in strings and prose (JSON keys, headings): kept as they are.
+  if (/\.(json|jsonc|ya?ml|toml|md|mdx|markdown|xml|html?|css|scss|less)$/i.test(path)) return text;
+  const hash = /\.(py|pyi|rb|sh|bash|zsh|fish)$/.test(path) || !/\.[^/]+$/.test(path);
+  let code = text.replace(/<!--[\s\S]*?-->/g, ' ');
+  if (hash) code = code.replace(/("""|''')[\s\S]*?\1/g, ' ').replace(/#.*$/gm, ' ');
+  else code = code.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\\])\/\/.*$/gm, '$1 ');
+  return code.replace(/`(?:\\[\s\S]|[^\\`])*`|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, ' ');
+}
+
 /** Modules whose calls resolve through import bindings (M2-08). */
 const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
 
@@ -3143,7 +3158,9 @@ export class Scanner {
       if (f.content === undefined) continue;
       const component = /\.(vue|svelte)$/.test(f.path) ? vueComponentName(f.path) : null;
       const names = [...new Set(this.store.getSymbolsForFile(f.path).map(sym => sym.name as string))].filter(n => n !== component);
-      const gone = new Set(names.filter(n => !wordIn(f.content!, n)));
+      // Judged on the code: a name left only in a comment or a string is gone (M0-17-R6).
+      const code = codeOnly(f.path, f.content);
+      const gone = new Set(names.filter(n => !wordIn(code, n)));
       if (gone.size === 0) continue;
       for (const e of this.store.getReverseEdges(f.path)) {
         if (e.source_file === f.path || typeof e.target_symbol !== 'string') continue;

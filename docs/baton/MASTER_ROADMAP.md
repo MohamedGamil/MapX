@@ -107,7 +107,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-02-R8** Sync re-links referrers of renamed or removed symbols, and re-resolves after manifest changes — DONE, P2, 5h; depends on M0-02-R7, M0-17-R4.
 - **M0-02-R9** Sync follows go.mod module paths and composer.json PSR-4 autoload changes — DONE, P2, 3h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8.
 - **M0-12-R10** Svelte templates: calls, event handlers and child components — DONE, P2, 5h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-12-R8.
-- **M0-17-R6** Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings — BACKLOG, P2, 6h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8, M3-11-R1, M3-09-R1, M0-17-R5.
+- **M0-17-R6** Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings — DONE, P2, 6h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8, M3-11-R1, M3-09-R1, M0-17-R5.
 - **M0-02-R10** An interrupted sync loses the symbols of the files it started re-indexing — DONE, P1, 4h; depends on M4-04.
 
 ## M1 — Laravel route correctness
