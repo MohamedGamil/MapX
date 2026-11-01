@@ -176,3 +176,14 @@ The owner chose to document this rather than detect pacote's internal environmen
 - registry installs (the documented method) are unaffected;
 - `npm run build:ui` adds the dashboard to other installs, as `docs/getting-started.md` says;
 - the UI server prints that hint when it starts without a bundle.
+
+## D021 — Version 0.3.6, built and installed locally (owner, 2026-11-01)
+
+The owner asked for the version to be bumped to 0.3.6 (D007: owner-initiated), synced, built and installed from the local build:
+- `VERSION`, `package.json`, `scripts/templates/VERSION` and the root entry of `package-lock.json` are at 0.3.6. Only those lockfile lines changed: npm 11.6.2's `npm i` would also have dropped the `libc` fields a newer npm wrote.
+- The `CHANGELOG.md` Unreleased entries moved to `[0.3.6] — 2026-11-01`.
+- `npm run build:wasm`, `npm run build:npm` and `scripts/check-package.ts` pass. `npm pack` produced `mgamil-mapx-0.3.6.tgz` (4.58 MB), with the dashboard, the grammars and `VERSION` 0.3.6.
+- `npm run build:linux` produced a binary that reports `0.3.6`.
+- The tarball is installed globally with nvm's npm (`mapx --version` gives 0.3.6), not from npmjs.
+
+Nothing was published, tagged or pushed; `G-RELEASE` stays with the owner. The generated agent instruction files keep their `mapx v0.3.5` stamp until `mapx agents` next rewrites them.

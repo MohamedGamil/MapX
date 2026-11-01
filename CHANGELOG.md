@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.6] — 2026-11-01
+
 ### Changed
 - `mapx sync` in a git repo no longer reruns the whole post-scan analysis when git lists only files MapX never indexes or reads (an untracked `.gitignore`, `.idea/`, build output, logs): a 16,000-file project's no-op sync drops from 11 s to 2 s. Settings and `.mapx/frameworks.json` edits now rerun the analysis on the next sync. Scans no longer read every file twice (M4-04).
 - `npm install` / `npm ci` in a MapX checkout no longer bundles the web dashboard: `prepare` only compiles the CLI, `npm pack` / `npm publish` build the dashboard, and `mapx ui` run from source builds it when it is missing or older than `src/ui` (M4-05).
@@ -770,7 +772,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/MohamedGamil/mapx/compare/v0.3.5...v0.3.6
 [0.3.4]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/MohamedGamil/mapx/compare/v0.3.1...v0.3.2
