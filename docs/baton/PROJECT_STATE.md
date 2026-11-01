@@ -1,6 +1,6 @@
 # MapX project state
 
-Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). M4-01 is done (uncommitted). Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). M4-01 is done (`a4bd752`) and M4-03 is done. Plan baseline: `develop@7e5aa19` (0.3.5). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
@@ -10,7 +10,7 @@ Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D
 | M1 Laravel route correctness | M1-07-R2, M1-03-R2 DONE | Routes scorer: 145 labels, URI/handler/attribute recall 1, precision 1, 0 FP. M1-99 (release) DEFERRED (D007) |
 | M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2 DONE; M2-08 BACKLOG (D019) | HTTP scorer: 48 labels, every metric 1.0 |
 | M3 Vue SFC semantics | All remediation DONE (M3-08-R1, M3-09-R1, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1) | Edge scorer: 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives: v3-039) |
-| M4 Measurement and DX | M4-09, M4-01 DONE | `npm run eval` checks the three scorers against `scripts/eval/floors.json` in a CI `Eval` job (M4-01). Next (D019): M4-03, M4-08, M4-05, M4-04. M4-02, M4-06 and M4-07 deferred |
+| M4 Measurement and DX | M4-09, M4-01, M4-03 DONE | `npm run eval` checks the three scorers against `scripts/eval/floors.json` in a CI `Eval` job (M4-01). Name resolution is linear on shared names: a generated 16,000-file scan takes 18 s instead of 70 s, with identical edges (M4-03). Next (D019): M4-08, M4-05, M4-04. M4-02, M4-06 and M4-07 deferred |
 | M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
 
 Live list: `npm run plan:scan`.
@@ -148,7 +148,7 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 ## Next
 
 Work order set by the owner (D019):
-1. All remaining M4 tasks: M4-03, M4-08, M4-05, M4-04 (M4-01 done).
+1. All remaining M4 tasks: M4-08, M4-05, M4-04 (M4-01 and M4-03 done). M4-04 should also remove the second `discoverFiles` walk in `scanFull` (M4-03 report).
 2. The gap tasks: M2-08 (P1), M0-02-R9, M0-12-R10, M0-17-R6.
 3. M5, starting with M5-01 and M5-02.
 
@@ -169,8 +169,8 @@ The import review's finding "Laravel route edges lose middlewares" was wrong and
 
 ## Latest validation
 
-2026-11-01, after M4-01 (uncommitted on `develop@ccfbad5`):
-- **`npm run check`:** exit 0 (plan valid with 186 tasks, changelog coverage 131 entries, typecheck, 97 test files with 1783 passed and 1 skipped, skill tests).
+2026-11-01, after M4-03 (uncommitted on `develop@a4bd752`):
+- **`npm run check`:** exit 0 (plan valid with 186 tasks, changelog coverage 132 entries, typecheck, 98 test files with 1789 passed and 1 skipped, skill tests).
 - **`npm run eval`:** exit 0. Routes, HTTP and edges all hold their floors; edges precision 0.9915 against a floor of 0.99.
 
 Earlier:

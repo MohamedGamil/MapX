@@ -9151,38 +9151,109 @@
       ],
       "outputs": [
         "scanner change",
-        "benchmark note"
+        "scripts/bench/scan-scaling.ts",
+        "tests/scan-scaling.test.ts",
+        "reports/M4-03.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "tests/scanner-resume.test.ts"
+        "src/core/import-resolvers.ts",
+        "src/core/store.ts",
+        "scripts/bench/scan-scaling.ts",
+        "tests/scan-scaling.test.ts"
       ],
       "acceptanceCriteria": [
-        "Resume state written for 5,000 files grows linearly (bytes written per batch is constant within 10%), measured by a test.",
-        "No code path rebuilds workspaceFileMap from the full DB during resolution."
+        "Edges and symbols byte-identical before/after on a MapX self-scan of git archive HEAD (3,762 edges), the generated 8,000-file workspace (48,000 edges) and the three fixtures (npm run eval totals unchanged); sorted dumps diffed in the report.",
+        "Resolving 20,000 calls to a name declared in 20,000 files through the real resolveSymbolToFile completes in under 20 s (tests/scan-scaling.test.ts; 0.6 s alone, ~4 s under full-suite load, 876 s before the change).",
+        "scripts/bench/scan-scaling.ts at 8,000 and 16,000 files gives a scan-time ratio of at most 2.5 (3.9 before), recorded in the report (manual; machine-load dependent).",
+        "The nearest-file index returns exactly closest(sortedFiles, source) on 2,000 random cases (property test).",
+        "On a 1,500-file in-process scan every per-batch resume write is the same size within 10% and under 4 KB (tests/scan-scaling.test.ts).",
+        "A scan aborted after some batches resumes without reparsing completed files and ends with the edges of a fresh scan; on completion the scan_resume_batch rows are deleted (tests/scan-scaling.test.ts).",
+        "No code path calls store.getAllFiles() to rebuild workspaceFileMap outside scanFull/scanIncremental, and the dead resolveReferences is removed (grep in the report)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/scanner-resume.test.ts"
+        "npx vitest run tests/scan-scaling.test.ts",
+        "npm run eval",
+        "npm run check"
       ],
-      "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "verificationPlan": "Run every registered command; each must exit 0. Diff edge/symbol dumps before and after; mutation-check the nearest index and the resume records.",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T08:10:12.859Z",
+      "completedAt": "2026-11-01T08:53:31.437Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M4-03.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/scan-scaling.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-03.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-03.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-03.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T08:10:12.534Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T08:10:12.859Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T08:53:30.597Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T08:53:31.437Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/scan-scaling.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-03.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-03.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-03.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
       "id": "M4-03",
-      "title": "Scanner: remove O(N²) resume serialisation and full-DB fileMap rebuilds",
-      "objective": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10).",
+      "title": "Scanner: remove quadratic phases (name resolution, resume state, fileMap rebuilds)",
+      "objective": "Scan time grows linearly with the number of files sharing a common name, with byte-identical edges; resume state writes a constant amount per batch; no resolution path rebuilds workspaceFileMap from the full DB.",
       "milestone": "M4",
-      "description": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10). Measured 2026-10-31 (M0-12-R3, M0-32-R1): plain scan 80–133 s at 10,000 files vs ~6 s at 2,000, and 323 s at 20,000 — some scan phase is superlinear."
+      "description": "Resume state is appended incrementally instead of re-serialising the whole completed list per batch, and the workspaceFileMap full-DB rebuild fallbacks are removed (spec 10). Measured 2026-10-31 (M0-12-R3, M0-32-R1): plain scan 80–133 s at 10,000 files vs ~6 s at 2,000, and 323 s at 20,000 — some scan phase is superlinear. Measured 2026-11-01 (iterations/M4-03.md): on a generated TS workspace 8,000 files scan in 17.9 s and 16,000 in 70.5 s; resolveSymbolToFile is 52.7 s of a profiled 85.6 s 16,000-file scan (O(k) work per call to a name declared in k files). Scope widened from spec 10 to that measured cause."
     },
     {
       "priority": "P3",

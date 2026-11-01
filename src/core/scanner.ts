@@ -25,7 +25,7 @@ import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isSc
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, urlHost } from '../frameworks/http/pairing.js';
-import { closest, importResolverFor, type ImportHit } from './import-resolvers.js';
+import { closest, importResolverFor, nearestIndex, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -57,17 +57,43 @@ function foldsCase(language: string | null, kind: string | undefined): boolean {
 
 const DEFAULT_CONCURRENCY = Math.min(cpus().length || 4, 8);
 
+/** The last segment of a dotted name that is a file extension, not a member: `utils.ts` stays whole. */
+const COMMON_EXTENSIONS = new Set([
+  'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt',
+  'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb',
+  'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md',
+]);
+/** What resolveSymbolToFile finds for a name in one resolution phase, before the caller is known (M4-03). */
+interface NameCandidates {
+  /** Index entries of the name, case-matched and language-compatible. */
+  compatible: SymbolIndexEntry[];
+  /** Files declaring the name in its exact case. */
+  sameFile: Set<string>;
+  /** Candidate files, sorted: the exact-case ones, else all compatible. */
+  files: string[];
+  /** `closest(files, ·)`, built on first use. */
+  nearest?: (sourcePath: string) => string;
+}
 /** JS/TS modules: where Vue global registrations (M3-02) and route tables (M3-06) live. */
 const JS_TS_FILE = /\.[cm]?[jt]sx?$/;
 /** What a JS/TS module contributes to Vue resolution, as kept in `meta vue_registry:<repo>` (M3-08). */
 type VueModuleFacts = GlobalRegistrations & { routes?: StoredRoute[] };
 
+/**
+ * Resume state of an interrupted scan: `scan_resume_state:<repo>` holds the files completed when the
+ * scan started, and each resolved batch appends `scan_resume_batch:<k>:<repo>` with its own files
+ * and counts, so a batch writes a constant amount (M4-03).
+ */
 interface ScanResumeState {
   totalFiles: number;
   completedFiles: string[];
   totalSymbols: number;
   totalEdges: number;
 }
+type ScanResumeBatch = Omit<ScanResumeState, 'totalFiles'>;
+const resumeBatchKey = (repoName: string, k: number) => `scan_resume_batch:${k}:${repoName}`;
+/** Files per resolved batch, and so per resume batch record. */
+const RESUME_BATCH_SIZE = 100;
 
 interface FileInfo {
   absolutePath: string;
@@ -123,6 +149,9 @@ export class Scanner {
   private cachedActiveDetectors = new Map<string, any[]>();
   private cachedFrameworkScopes = new Map<string, Map<string, string[]>>();
   private symbolIndex: Map<string, SymbolIndexEntry[]> | null = null;
+  /** resolveSymbolToFile per name, source language and callableOnly, for the index `nameCandidatesFor` (M4-03). */
+  private nameCandidates = new Map<string, NameCandidates | null>();
+  private nameCandidatesFor: Map<string, SymbolIndexEntry[]> | null = null;
   private parallel: boolean;
 
   constructor(
@@ -149,19 +178,81 @@ export class Scanner {
   private loadResumeState(repoName: string): ScanResumeState | null {
     const data = this.store.getMeta(`scan_resume_state:${repoName}`);
     if (!data) return null;
+    let state: ScanResumeState;
     try {
-      return JSON.parse(data);
+      state = JSON.parse(data);
     } catch {
       return null;
     }
+    const completedFiles = [...(state.completedFiles ?? [])];
+    for (const batch of this.resumeBatches(repoName, state)) {
+      completedFiles.push(...(batch.completedFiles ?? []));
+      state.totalSymbols = (state.totalSymbols ?? 0) + (batch.totalSymbols ?? 0);
+      state.totalEdges = (state.totalEdges ?? 0) + (batch.totalEdges ?? 0);
+    }
+    return { ...state, completedFiles };
   }
 
+  /** The most batch records a scan of the header's file count can write. */
+  private static resumeBatchLimit(state: Partial<ScanResumeState> | null): number {
+    return state && Number.isFinite(state.totalFiles) ? Math.ceil(state.totalFiles! / RESUME_BATCH_SIZE) : 0;
+  }
+
+  /** The batch records in order, up to the first missing or unreadable one. */
+  private resumeBatches(repoName: string, state: ScanResumeState): ScanResumeBatch[] {
+    const batches: ScanResumeBatch[] = [];
+    for (let k = 0; k < Scanner.resumeBatchLimit(state); k++) {
+      const data = this.store.getMeta(resumeBatchKey(repoName, k));
+      if (!data) break;
+      try {
+        batches.push(JSON.parse(data));
+      } catch {
+        break;
+      }
+    }
+    return batches;
+  }
+
+  /** Starts a scan's resume state: the files already complete, and no batch records yet. */
   private saveResumeState(repoName: string, state: ScanResumeState): void {
-    this.store.setMeta(`scan_resume_state:${repoName}`, JSON.stringify(state));
+    this.store.inTransaction(() => {
+      this.clearResumeBatches(repoName);
+      this.store.setMeta(`scan_resume_state:${repoName}`, JSON.stringify(state));
+    });
+  }
+
+  private saveResumeBatch(repoName: string, k: number, batch: ScanResumeBatch): void {
+    this.store.setMeta(resumeBatchKey(repoName, k), JSON.stringify(batch));
+  }
+
+  /**
+   * Deletes every batch record the current header allows, gaps included. Callers clear in the same
+   * transaction as the header write, so an interrupted clear leaves the old state whole (review 2026-11-01).
+   */
+  private clearResumeBatches(repoName: string): void {
+    let header: ScanResumeState | null = null;
+    try {
+      header = JSON.parse(this.store.getMeta(`scan_resume_state:${repoName}`) || 'null');
+    } catch {
+      header = null;
+    }
+    for (let k = 0; k < Scanner.resumeBatchLimit(header); k++) {
+      if (this.store.getMeta(resumeBatchKey(repoName, k))) this.store.deleteMeta(resumeBatchKey(repoName, k));
+    }
   }
 
   private clearResumeState(repoName: string): void {
-    this.store.setMeta(`scan_resume_state:${repoName}`, '');
+    this.store.inTransaction(() => {
+      this.clearResumeBatches(repoName);
+      this.store.setMeta(`scan_resume_state:${repoName}`, '');
+    });
+  }
+
+  /** Drops the symbol index of a finished phase, and what was memoised from it (M4-03). */
+  private releaseSymbolIndex(): void {
+    this.symbolIndex = null;
+    this.nameCandidates.clear();
+    this.nameCandidatesFor = null;
   }
 
   private getLockPath(): string {
@@ -438,16 +529,11 @@ export class Scanner {
         parseResults
       );
 
-      const fileMap = this.workspaceFileMap.size > 0 ? this.workspaceFileMap : (() => {
-        const allTrackedFiles = this.store.getAllFiles();
-        const map = new Map<string, string>();
-        for (const f of allTrackedFiles) map.set(f.path as string, f.repo as string);
-        for (const f of toParse) map.set(f.relativePath, repo.name);
-        return map;
-      })();
+      // scanFull and scanIncremental fill workspaceFileMap with every indexed and discovered file.
+      const fileMap = this.workspaceFileMap;
 
-      const BATCH_SIZE = 100;
-      for (let batchStart = 0; batchStart < toParse.length && !this.aborted; batchStart += BATCH_SIZE) {
+      const BATCH_SIZE = RESUME_BATCH_SIZE;
+      for (let batchStart = 0, k = 0; batchStart < toParse.length && !this.aborted; batchStart += BATCH_SIZE, k++) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, toParse.length);
 
         this.store.inTransaction(() => {
@@ -456,11 +542,14 @@ export class Scanner {
           }
         });
 
+        const batch: ScanResumeBatch = { completedFiles: [], totalSymbols: 0, totalEdges: 0 };
         for (let i = batchStart; i < batchEnd; i++) {
-          totalSymbols += parseResults[i].symbols.length;
-          totalEdges += parseResults[i].references.length;
-          completed.add(toParse[i].relativePath);
+          batch.totalSymbols += parseResults[i].symbols.length;
+          batch.totalEdges += parseResults[i].references.length;
+          batch.completedFiles.push(toParse[i].relativePath);
         }
+        totalSymbols += batch.totalSymbols;
+        totalEdges += batch.totalEdges;
 
         this.onProgress?.({
           phase: 'resolve',
@@ -469,12 +558,7 @@ export class Scanner {
           file: toParse[batchEnd - 1].relativePath,
         });
 
-        this.saveResumeState(repo.name, {
-          totalFiles: discovered.length,
-          completedFiles: [...completed],
-          totalSymbols,
-          totalEdges,
-        });
+        this.saveResumeBatch(repo.name, k, batch);
       }
       if (!this.aborted) {
         const candidatePaths = new Set(movedCandidates.map(f => f.relativePath));
@@ -503,10 +587,10 @@ export class Scanner {
       try {
         await this.runPostScanAnalysis(repo, repoRoot);
       } finally {
-        this.symbolIndex = null;
+        this.releaseSymbolIndex();
       }
     } else {
-      this.symbolIndex = null;
+      this.releaseSymbolIndex();
     }
 
     const totalParsed = unchangedFiles.length + (toParse.length > 0 ? toParse.length : 0);
@@ -844,10 +928,10 @@ export class Scanner {
       try {
         await this.runPostScanAnalysis(repo, repoRoot);
       } finally {
-        this.symbolIndex = null;
+        this.releaseSymbolIndex();
       }
     } else {
-      this.symbolIndex = null;
+      this.releaseSymbolIndex();
     }
 
     return {
@@ -1314,11 +1398,6 @@ export class Scanner {
   }
 
   private writeParseResult(relativePath: string, result: ParseResult, repoName: string): void {
-    if (this.workspaceFileMap.size === 0) {
-      for (const f of this.store.getAllFiles()) {
-        this.workspaceFileMap.set(f.path as string, f.repo as string);
-      }
-    }
     this.store.inTransaction(() => {
       this.writeParseResultWithMap(relativePath, result, repoName, this.workspaceFileMap);
     });
@@ -1361,24 +1440,6 @@ export class Scanner {
       this.graph.addDependencyEdge(edge);
       this.store.insertEdge(edge);
     }
-  }
-
-  private resolveReferences(refs: ExtractedReference[], sourcePath: string, repoName: string): GraphEdge[] {
-    if (this.workspaceFileMap.size === 0) {
-      for (const f of this.store.getAllFiles()) {
-        this.workspaceFileMap.set(f.path as string, f.repo as string);
-      }
-    }
-    const dbSymbols = this.store.getSymbolsForFile(sourcePath);
-    const symbols = dbSymbols.map((s: any) => ({
-      name: s.name,
-      kind: s.kind,
-      scope: s.scope,
-      startLine: s.start_line,
-      endLine: s.end_line,
-      metadata: s.metadata ? JSON.parse(s.metadata) : {}
-    }));
-    return this.resolveReferencesWithMap(refs, sourcePath, repoName, this.workspaceFileMap, symbols);
   }
 
   private resolveReferencesWithMap(
@@ -2264,59 +2325,65 @@ export class Scanner {
 
     // Use pre-built symbol index for O(1) lookup when available
     if (this.symbolIndex) {
-      // The lowercased key holds every case variant of a name.
-      const lookup = (name: string) => named(name, this.symbolIndex!.get(name.toLowerCase()) ?? []);
-      let key = symbolName;
-      let indexed = lookup(key);
-      if (!indexed.length) {
-        if (symbolName.includes('\\')) {
-          const parts = symbolName.split('\\');
-          key = parts[parts.length - 1];
-          indexed = lookup(key);
-        } else if (symbolName.includes('.')) {
-          const parts = symbolName.split('.');
-          const last = parts[parts.length - 1];
-          const commonExtensions = new Set([
-            'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
-            'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
-            'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
-          ]);
-          if (!commonExtensions.has(last.toLowerCase())) {
-            key = last;
+      // The name-only part is computed once per name, source language and callableOnly in a
+      // resolution phase; a call then pays only for its own file (M4-03).
+      if (this.nameCandidatesFor !== this.symbolIndex) {
+        this.nameCandidates.clear();
+        this.nameCandidatesFor = this.symbolIndex;
+      }
+      const cacheKey = `${symbolName}\0${sourceLang}\0${callableOnly ? 1 : 0}`;
+      let found = this.nameCandidates.get(cacheKey);
+      if (found === undefined) {
+        found = null;
+        // The lowercased key holds every case variant of a name.
+        const lookup = (name: string) => named(name, this.symbolIndex!.get(name.toLowerCase()) ?? []);
+        let key = symbolName;
+        let indexed = lookup(key);
+        if (!indexed.length) {
+          if (symbolName.includes('\\')) {
+            const parts = symbolName.split('\\');
+            key = parts[parts.length - 1];
             indexed = lookup(key);
+          } else if (symbolName.includes('.')) {
+            const parts = symbolName.split('.');
+            const last = parts[parts.length - 1];
+            if (!COMMON_EXTENSIONS.has(last.toLowerCase())) {
+              key = last;
+              indexed = lookup(key);
+            }
           }
         }
-      }
-      if (indexed.length > 0) {
-        const compatible = filterMatches(indexed);
+        const compatible = indexed.length > 0 ? filterMatches(indexed) : [];
         if (compatible.length > 0) {
-          const shortName = symbolName.includes('\\') 
-            ? symbolName.split('\\').pop()! 
-            : (symbolName.includes('.') ? symbolName.split('.').pop()! : symbolName);
-          // A namespaced name (App\Models\Role) is the class declared in that namespace or nothing:
-          // never another namespace's Role, nor an app file for an Illuminate\… name (M0-04-R1, M0-04-R2).
-          // Of several (two apps in one repo), the one nearest the caller (review 2026-10-31).
-          if (sourceLang === 'php' && symbolName.includes('\\')) {
-            const namespace = symbolName.replace(/^\\/, '').split('\\').slice(0, -1).join('\\').toLowerCase();
-            const declared = [...new Set(compatible.filter(m => m.name.toLowerCase() === shortName.toLowerCase()
-              && (TYPE_KINDS.has(m.kind ?? '') || m.kind === 'function')
-              && this.phpNamespaces.get(m.file)?.toLowerCase() === namespace).map(m => m.file as string))].sort();
-            if (!declared.length) return null;
-            return declared.includes(sourcePath ?? '') ? sourcePath! : closest(declared, sourcePath ?? '');
-          }
-          if (sourcePath) {
-            const sameFile = compatible.find(m => m.file === sourcePath && m.name === key);
-            if (sameFile) return sameFile.file;
-          }
           // An exact-case declaration first, else a PHP or Pascal one in another case. Of several
           // files, the one nearest the caller, then by path: never the index order, which differs
           // between a fresh scan and a sync that re-parsed some files (M0-02-R7).
           const exact = compatible.filter(m => m.name === key);
-          const files = [...new Set((exact.length ? exact : compatible).map(m => m.file as string))].sort();
-          return closest(files, sourcePath ?? '');
+          found = {
+            compatible,
+            sameFile: new Set(exact.map(m => m.file as string)),
+            files: [...new Set((exact.length ? exact : compatible).map(m => m.file as string))].sort(),
+          };
         }
+        this.nameCandidates.set(cacheKey, found);
       }
-      return null; // O(1) short-circuit: if not in symbolIndex, it's a third-party/external symbol not in this workspace.
+      if (!found) return null; // O(1) short-circuit: if not in symbolIndex, it's a third-party/external symbol not in this workspace.
+      // A namespaced name (App\Models\Role) is the class declared in that namespace or nothing:
+      // never another namespace's Role, nor an app file for an Illuminate\… name (M0-04-R1, M0-04-R2).
+      // Of several (two apps in one repo), the one nearest the caller (review 2026-10-31). Computed
+      // per call from the memoised candidates.
+      if (sourceLang === 'php' && symbolName.includes('\\')) {
+        const shortName = symbolName.split('\\').pop()!;
+        const namespace = symbolName.replace(/^\\/, '').split('\\').slice(0, -1).join('\\').toLowerCase();
+        const declared = [...new Set(found.compatible.filter(m => m.name.toLowerCase() === shortName.toLowerCase()
+          && (TYPE_KINDS.has(m.kind ?? '') || m.kind === 'function')
+          && this.phpNamespaces.get(m.file)?.toLowerCase() === namespace).map(m => m.file as string))].sort();
+        if (!declared.length) return null;
+        return declared.includes(sourcePath ?? '') ? sourcePath! : closest(declared, sourcePath ?? '');
+      }
+      if (sourcePath && found.sameFile.has(sourcePath)) return sourcePath;
+      if (found.files.length <= 16) return closest(found.files, sourcePath ?? '');
+      return (found.nearest ??= nearestIndex(found.files))(sourcePath ?? '');
     }
 
     // The store's search is a case-insensitive substring match: keep only declarations of the name.
@@ -2347,12 +2414,7 @@ export class Scanner {
     } else if (symbolName.includes('.')) {
       const parts = symbolName.split('.');
       const last = parts[parts.length - 1];
-      const commonExtensions = new Set([
-        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
-        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
-        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
-      ]);
-      if (!commonExtensions.has(last.toLowerCase())) {
+      if (!COMMON_EXTENSIONS.has(last.toLowerCase())) {
         const shortName = last;
         matches = named(shortName, filterMatches(this.store.searchSymbols(shortName)));
         if (matches.length > 0) {
@@ -3642,10 +3704,10 @@ export class Scanner {
       try {
         await this.runPostScanAnalysis(repo, repoRoot);
       } finally {
-        this.symbolIndex = null;
+        this.releaseSymbolIndex();
       }
     } else {
-      this.symbolIndex = null;
+      this.releaseSymbolIndex();
     }
 
     return {

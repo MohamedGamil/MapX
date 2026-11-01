@@ -302,6 +302,10 @@ export class Store {
     ).run(key, value);
   }
 
+  deleteMeta(key: string): void {
+    this.backend.prepare('DELETE FROM meta WHERE key = ?').run(key);
+  }
+
   getMeta(key: string): string | null {
     const row = this.backend.prepare('SELECT value FROM meta WHERE key = ?').get(key);
     return row ? (row.value as string) : null;

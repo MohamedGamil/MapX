@@ -112,6 +112,35 @@ export function closest(hits: string[], sourcePath: string): string {
   return best;
 }
 
+/**
+ * `closest(hits, ·)` for many source paths: the first hit under each leading directory prefix.
+ * The deepest prefix of the source that any hit shares holds the hits with the most shared leading
+ * directories, and its first hit is the one `closest` keeps (M4-03).
+ */
+export function nearestIndex(hits: string[]): (sourcePath: string) => string {
+  const first = new Map<string, string>();
+  for (const h of hits) {
+    const segs = h.split('/');
+    let prefix = '';
+    for (let i = 0; i < segs.length - 1; i++) {
+      prefix += `${segs[i]}/`;
+      if (!first.has(prefix)) first.set(prefix, h);
+    }
+  }
+  return (sourcePath) => {
+    const segs = sourcePath.split('/');
+    let best = hits[0]!;
+    let prefix = '';
+    for (let i = 0; i < segs.length - 1; i++) {
+      prefix += `${segs[i]}/`;
+      const hit = first.get(prefix);
+      if (hit === undefined) break;
+      best = hit;
+    }
+    return best;
+  };
+}
+
 /** Rust: `crate::a::B`, `self::x`, `super::y` → src/a.rs or src/a/mod.rs (longest module prefix). */
 export function resolveRustImport(target: string, sourcePath: string, ctx: ImportContext): string | null {
   const segs = target.replace(/[{}*].*$/, '').split('::').filter(Boolean);

@@ -527,7 +527,6 @@ describe('Scanner Coverage Boost', () => {
     expect(indexMerged.get('newfunca')![0].file).toBe('a.ts');
 
     // 2. resolveReferencesWithMap coverage (including spans and scopes resolution)
-    // resolveReferences fallback when workspaceFileMap is empty (lines 986-988)
     const fileMap = new Map<string, string>([
       ['a.ts', 'repo1']
     ]);
@@ -543,19 +542,16 @@ describe('Scanner Coverage Boost', () => {
     scanner['resolveImportPath'] = () => 'c.ts';
     scanner['resolveSymbolToFile'] = () => 'd.ts';
 
-    // Clear workspaceFileMap so it initializes from getAllFiles
-    const mockStoreForRefs = createMockStore({
-      getAllFiles: () => [{ path: 'a.ts', repo: 'repo1' }],
-      getSymbolsForFile: () => [
-        { name: 'myOuterSym', kind: 'function', start_line: 1, end_line: 10, scope: 'MyClass', metadata: '{}' }
-      ]
-    });
+    // The resolution path the scanner uses: the file's own symbols and the workspace file map (M4-03
+    // removed resolveReferences, which rebuilt the map from the store).
+    const mockStoreForRefs = createMockStore();
     const scannerForRefs = new Scanner(mockStoreForRefs, mockConfig, graph);
     scannerForRefs['resolveRequirePath'] = () => 'b.ts';
     scannerForRefs['resolveImportPath'] = () => 'c.ts';
     scannerForRefs['resolveSymbolToFile'] = () => 'd.ts';
 
-    const resolved = scannerForRefs['resolveReferences'](refs as unknown as ExtractedReference[], 'a.ts', 'repo1');
+    const resolved = scannerForRefs['resolveReferencesWithMap'](refs as unknown as ExtractedReference[], 'a.ts', 'repo1', new Map([['a.ts', 'repo1']]),
+      [{ name: 'myOuterSym', kind: 'function', startLine: 1, endLine: 10, scope: 'MyClass', metadata: {} }]);
     expect(resolved).toHaveLength(3); // console skipped, others resolved
     expect(resolved[0].sourceSymbol).toBe('MyClass::myOuterSym');
 
