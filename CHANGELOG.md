@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.7] — 2026-11-01
+
 ### Added
 - Svelte templates are read: `{expr}` calls, block headers, attribute values, event handlers (`on:click={save}`, `onclick={save}`) and `use:` / transition directives link to the component's own or imported functions, and component tags (`<Child />`, `<ui.Button />`, `<svelte:component this={X}>`) give render edges, through barrels too. Each-block, `let:`, `{@const}` and snippet names are never resolved; `{@html}`, comments and `<style>` are ignored (M0-12-R10).
 
@@ -781,7 +783,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.7...HEAD
+[0.3.7]: https://github.com/MohamedGamil/mapx/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/MohamedGamil/mapx/compare/v0.3.5...v0.3.6
 [0.3.4]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/MohamedGamil/mapx/compare/v0.3.2...v0.3.3

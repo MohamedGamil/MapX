@@ -187,3 +187,13 @@ The owner asked for the version to be bumped to 0.3.6 (D007: owner-initiated), s
 - The tarball is installed globally with nvm's npm (`mapx --version` gives 0.3.6), not from npmjs.
 
 Nothing was published, tagged or pushed; `G-RELEASE` stays with the owner. The generated agent instruction files keep their `mapx v0.3.5` stamp until `mapx agents` next rewrites them.
+
+## D022 — Version 0.3.7, built and installed locally; v0.3.6 tagged (owner, 2026-11-01)
+
+The owner asked for these steps (D007: owner-initiated):
+- **Tag.** `v0.3.6` is an annotated tag on the 0.3.6 bump commit `e1d5da0`, like the existing `v0.3.5`. It is local; nothing was pushed.
+- **Bump.** The version is 0.3.7: `VERSION`, `package.json`, `scripts/templates/VERSION` and the lockfile's root entry, with only those lines changed. The Unreleased changelog entries moved to `[0.3.7] — 2026-11-01`: M2-08, M0-02-R10, M0-02-R9, M0-12-R10 and M0-17-R6.
+- **Build.** `build:wasm`, `build:npm` and `check-package` pass. `npm pack` gives `mgamil-mapx-0.3.7.tgz` (4.59 MB), and the Linux binary reports `0.3.7`.
+- **Install.** The tarball is installed globally with nvm's npm. `mapx --version` gives 0.3.7, and a smoke scan links a Svelte template handler.
+
+Nothing was published. No `v0.3.7` tag was requested, so none was made.

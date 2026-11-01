@@ -1,6 +1,6 @@
 # MapX project state
 
-Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). All remaining M4 tasks are done: M4-01 (`a4bd752`), M4-03 (`1391d31`), M4-08 (`ac26e66`), M4-05 (`e4fc861`, D020) and M4-04. Plan baseline: `develop@7e5aa19` (0.3.5). Version 0.3.6, built and installed locally, not published (D021). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). All remaining M4 tasks are done: M4-01 (`a4bd752`), M4-03 (`1391d31`), M4-08 (`ac26e66`), M4-05 (`e4fc861`, D020) and M4-04. Plan baseline: `develop@7e5aa19` (0.3.5). Version 0.3.7, built and installed locally, not published (D022); v0.3.6 tagged locally at `e1d5da0`. BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
@@ -190,6 +190,7 @@ Earlier:
 - **D006:** the dashboard bundle target is re-baselined to a 720 KiB gzipped ceiling, enforced by `scripts/check-package.ts` and CI. M0-15-R2 is DONE.
 - **D007:** releases are owner-initiated. M1-99 is DEFERRED and the gate is now `G-RELEASE` (`ownerInitiated`). Agents don't request it; work accumulates under CHANGELOG `[Unreleased]`.
 
+- **D022 (2026-11-01):** version 0.3.7 built and installed locally; annotated tag v0.3.6 at its bump commit (local, not pushed).
 - **D021 (2026-11-01):** version 0.3.6 (owner request): synced, built (npm tarball and linux binary), installed globally from the local tarball; not published.
 - **D020 (2026-11-01):** git, `npm link` and `file:` installs need `npm run build:ui` for the dashboard; documented, not detected.
 - **D019 (2026-11-01):** D016–D018 ratified; gap tasks registered; order M4 → gap tasks → M5; M5-12 decomposed into M5-19 … M5-24.
