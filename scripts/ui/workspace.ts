@@ -75,6 +75,34 @@ export function xssWorkspace(root: string) {
   write(root, 'src/loop.ts', `import { evilFn } from './${evil}';\nexport function loop(n: number): number { return n > 0 ? evilFn(n - 1) : n; }\n`);
 }
 
+/**
+ * Three registered repos (M4-21, M4-23): the primary repo's own sources, `web` (a Vue/TypeScript
+ * frontend calling the backend with axios) and `api` (a Laravel backend). Both are their own git
+ * checkouts. Every name is synthetic.
+ */
+export function multiRepoWorkspace(root: string) {
+  write(root, 'src/main.ts', "import { boot } from './boot';\nexport function main() { return boot(); }\n");
+  write(root, 'src/boot.ts', 'export function boot() { return 1; }\n');
+  write(root, 'web/package.json', JSON.stringify({ name: 'web', dependencies: { vue: '^3.4.0', axios: '^1.7.0' } }));
+  write(root, 'web/src/api/orders.ts', "import axios from 'axios';\n\nexport function listOrders() { return axios.get('/api/orders'); }\nexport function createOrder(body: unknown) { return axios.post('/api/orders', body); }\nexport function showOrder(id: number) { return axios.get(`/api/orders/${id}`); }\nexport function missing() { return axios.get('/api/nowhere'); }\n");
+  write(root, 'web/src/components/Orders.vue', "<script setup lang=\"ts\">\nimport { listOrders } from '../api/orders';\nfunction load() { return listOrders(); }\n</script>\n<template><button @click=\"load\">load</button></template>\n");
+  write(root, 'web/src/main.ts', "import { listOrders } from './api/orders';\nexport function start() { return listOrders(); }\n");
+  write(root, 'api/artisan', '#!/usr/bin/env php\n<?php\n');
+  write(root, 'api/composer.json', JSON.stringify({ require: { 'laravel/framework': '^11.0' }, autoload: { 'psr-4': { 'App\\': 'app/' } } }));
+  write(root, 'api/routes/api.php', "<?php\nuse Illuminate\\Support\\Facades\\Route;\nuse App\\Http\\Controllers\\OrderController;\n\nRoute::get('/orders', [OrderController::class, 'index']);\nRoute::post('/orders', [OrderController::class, 'store']);\nRoute::get('/orders/{order}', [OrderController::class, 'show']);\nRoute::delete('/orders/{order}', [OrderController::class, 'destroy']);\n");
+  write(root, 'api/app/Http/Controllers/OrderController.php', '<?php\nnamespace App\\Http\\Controllers;\n\nuse App\\Services\\OrderService;\n\nclass OrderController\n{\n    public function __construct(private OrderService $orders) {}\n    public function index() { return $this->orders->all(); }\n    public function store() { return $this->orders->create(); }\n    public function show(int $order) { return $this->orders->find($order); }\n    public function destroy(int $order) { return $this->orders->find($order); }\n}\n');
+  write(root, 'api/app/Services/OrderService.php', '<?php\nnamespace App\\Services;\n\nclass OrderService\n{\n    public function all() { return []; }\n    public function create() { return []; }\n    public function find(int $id) { return $id; }\n}\n');
+  for (const repo of ['web', 'api']) execFileSync('git', ['init', '-q', join(root, repo)]);
+}
+
+/** Initializes `root` with the `web` and `api` repos registered, then scans every repo. */
+export function initAndScanMultiRepo(root: string) {
+  cli(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover');
+  cli(root, 'workspaces', 'add', 'web');
+  cli(root, 'workspaces', 'add', 'api');
+  cli(root, 'scan');
+}
+
 /** `mapx init` (no agent files, MCP configs or discovery) then `mapx scan`. */
 export function initAndScan(root: string, ...scanArgs: string[]) {
   cli(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover');

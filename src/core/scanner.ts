@@ -3818,6 +3818,8 @@ export class Scanner {
         targetSymbol: r.route!.handlerSymbol ?? null,
         edgeType: 'http',
         repo: repoOf.get(r.file)!,
+        // A call into another registered repo is a cross-repo edge (M2-06-R3).
+        targetRepo: repoOf.get(r.route!.handlerFile) !== repoOf.get(r.file) ? repoOf.get(r.route!.handlerFile) : undefined,
         weight: 1.0,
         verifiability: 'inferred',
         metadata: { httpVerb: r.method, uri: r.url, route: r.route!.path, line: r.line, confidence: r.route!.confidence },

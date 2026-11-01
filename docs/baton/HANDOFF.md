@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@15c89db4dffc33a5e48b7f4f37851c444bf4e2c4 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
+Revision: develop@97cfa56287e0fa32f94438244066d0a76c122773 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
 
 ## Baseline
-Last completed: M4-20 — Dashboard performance on large workspaces.
-Evidence: `npm run test:ui` (exit 0) → docs/baton/reports/M4-20.md; `npx tsx scripts/check-package.ts` (exit 0) → docs/baton/reports/M4-20.md; `npm run check` (exit 0) → docs/baton/reports/M4-20.md.
+Last completed: M2-06-R3 — HTTP edges into another repo record their target repo.
+Evidence: `npx vitest run tests/http-cross-repo.test.ts tests/http-pairing.test.ts tests/http-followups.test.ts` (exit 0) → docs/baton/reports/M2-06-R3.md; `npm run eval` (exit 0) → docs/baton/reports/M2-06-R3.md; `npm run check` (exit 0) → docs/baton/reports/M2-06-R3.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect

@@ -33,7 +33,7 @@ Remaining effort min/expected/max: **163 / 220 / 310h**. Capacity: 1 engineer(s)
 - M5-22 (BACKLOG): M5-19; M5-01
 - M5-23 (BACKLOG): M5-19; M5-01
 - M5-24 (BACKLOG): M5-20; M5-21; M5-22; M5-23; M5-04
-- M4-21 (BACKLOG): prerequisites satisfied
+- M4-21 (READY): prerequisites satisfied
 - M4-22 (BACKLOG): M4-21
 - M4-23 (BACKLOG): M4-21
 

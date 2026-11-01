@@ -155,6 +155,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06-R2** HTTP pairing honours Route::domain — DONE, P2, 2h; depends on M2-06-R1.
 - **M2-04-R3** HTTP URL follow-ups: shadowed baseURL constants, nested dotenv defaults — DONE, P2, 2h; depends on M2-04-R2.
 - **M2-08** Calls resolve through the file's own imports before name lookup — DONE, P1, 8h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-17-R4, M0-02-R7.
+- **M2-06-R3** HTTP edges into another repo record their target repo — DONE, P1, 2h; depends on M2-06.
 
 ## M3 — Vue SFC semantics
 
@@ -204,7 +205,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-18** New MapX logo: dashboard, favicons, docs, and the mapx init banner — DONE, P2, 10h; depends on M4-16.
 - **M4-24** Escape scanned values in the dashboard HTML — DONE, P1, 4h; depends on M4-17.
 - **M4-20** Dashboard performance on large workspaces — DONE, P1, 10h; depends on M4-16, M4-19, M4-24.
-- **M4-21** Multi-repo workspaces in the dashboard — BACKLOG, P1, 10h; depends on M4-17.
+- **M4-21** Multi-repo workspaces in the dashboard — READY, P1, 10h; depends on M4-17.
 - **M4-22** Read-only config view in the dashboard — BACKLOG, P2, 10h; depends on M4-21.
 - **M4-23** Cross-repo HTTP communication view in the dashboard — BACKLOG, P1, 10h; depends on M4-21.
 

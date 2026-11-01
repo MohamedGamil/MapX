@@ -21949,6 +21949,129 @@
     {
       "priority": "P1",
       "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "http",
+        "workspaces"
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-21.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check the new test.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-01T23:06:40.108Z",
+      "completedAt": "2026-11-01T23:06:40.954Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M2-06-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-cross-repo.test.ts tests/http-pairing.test.ts tests/http-followups.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R3.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R3.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R3.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T23:06:39.729Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T23:06:40.108Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T23:06:40.535Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T23:06:40.954Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-cross-repo.test.ts tests/http-pairing.test.ts tests/http-followups.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R3.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R3.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R3.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "milestone": "M2",
+      "id": "M2-06-R3",
+      "title": "HTTP edges into another repo record their target repo",
+      "objective": "An http edge from a call site in one registered repo to a route handler in another is stored as a cross-repo edge (target_repo), so status --all, deps --cross-repo and the dashboard count it.",
+      "description": "Found during M4-21: pairHttpCalls stored every http edge with target_repo null, though it knows the repo of each file.",
+      "dependencies": [
+        {
+          "id": "M2-06",
+          "type": "hard"
+        }
+      ],
+      "outputs": [
+        "targetRepo on http edges",
+        "tests/http-cross-repo.test.ts",
+        "reports/M2-06-R3.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/http-cross-repo.test.ts",
+        "scripts/ui/workspace.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "On a fixture with a web repo calling an api repo (axios to Laravel routes), every paired http edge has repo web and target_repo api (tests/http-cross-repo.test.ts).",
+        "mapx deps <caller> --cross-repo lists the handler in the api repo (same test).",
+        "Removing the target repo from the edge builder makes the test fail (mutation check)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-cross-repo.test.ts tests/http-pairing.test.ts tests/http-followups.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "priority": "P1",
+      "estimate": {
         "min": 6,
         "expected": 10,
         "max": 16
@@ -21963,7 +22086,7 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "claude",
       "actualHours": null,
       "startedAt": null,
@@ -21971,7 +22094,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-01T22:53:15.275Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
