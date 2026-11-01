@@ -3,8 +3,10 @@
 // fixture as backend/ and each Vue app as frontend-<app>/, runs the real CLI (init + scan) and
 // reads .mapx/http-calls.json.
 //   npx tsx scripts/eval/score-http.ts <vue-http-fixture> [--json] [--min-recall R] [--min-precision P]
-// Exit code 1 when a threshold is missed; 2 on usage or scan errors.
+// Exit code 1 when a threshold is missed; 2 on usage or scan errors (unknown, repeated or
+// malformed options are usage errors, M4-08).
 import { execFileSync } from 'node:child_process';
+import { parseScorerArgs } from './args.ts';
 import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -166,22 +168,36 @@ export function scanHttpFixture(fixture: string, { config = true }: { config?: b
   }
 }
 
+/** The command line, strictly (M4-08): unknown, repeated or malformed options throw. */
+export function parseHttpArgs(args: string[]) {
+  const parsed = parseScorerArgs(args, {
+    booleans: ['json'],
+    thresholds: { 'min-recall': 'ratio', 'min-precision': 'ratio' },
+    requiredFile: 'labels.json',
+  });
+  return {
+    fixture: parsed.fixture,
+    json: parsed.flags.has('json'),
+    minRecall: parsed.thresholds['min-recall'] ?? null,
+    minPrecision: parsed.thresholds['min-precision'] ?? null,
+  };
+}
+
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 function main() {
-  const args = process.argv.slice(2);
-  const opt = (name: string) => {
-    const i = args.indexOf(`--${name}`);
-    return i >= 0 ? Number(args[i + 1]) : null;
-  };
-  const fixture = args.find((a, i) => !a.startsWith('--') && !/^--(min|max)/.test(args[i - 1] ?? ''));
-  if (!fixture) {
+  let opts: ReturnType<typeof parseHttpArgs>;
+  try {
+    opts = parseHttpArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
     console.error('Usage: score-http.ts <fixture-dir> [--json] [--min-recall R] [--min-precision P]');
     process.exit(2);
   }
+  const { fixture } = opts;
   const labels = (JSON.parse(readFileSync(join(fixture, 'labels.json'), 'utf8')) as { labels: HttpLabel[] }).labels;
   const result = scoreHttp(labels, scanHttpFixture(resolve(fixture)));
   const t = result.totals;
-  if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
+  if (opts.json) console.log(JSON.stringify(result, null, 2));
   else {
     console.log('pattern              labelled  found  url  paired  unmatched  wrong');
     for (const [name, p] of Object.entries(result.patterns))
@@ -190,9 +206,8 @@ function main() {
     for (const m of result.misses) console.log(`  miss: ${m}`);
   }
   const failures: string[] = [];
-  const minRecall = opt('min-recall');
+  const { minRecall, minPrecision } = opts;
   if (minRecall !== null && t.pairingRecall < minRecall) failures.push(`pairing recall below ${minRecall}`);
-  const minPrecision = opt('min-precision');
   if (minPrecision !== null && t.pairingPrecision < minPrecision) failures.push(`pairing precision below ${minPrecision}`);
   for (const f of failures) console.error(`FAIL ${f}`);
   process.exitCode = failures.length ? 1 : 0;

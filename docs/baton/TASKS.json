@@ -15990,32 +15990,87 @@
         "docs/baton/reports/M3-01.md"
       ],
       "outputs": [
-        "fix",
-        "regression tests",
+        "scripts/eval/args.ts",
+        "strict parsers in score-routes.ts and score-http.ts",
+        "tests",
         "reports/M4-08.md"
       ],
       "affectedFiles": [
+        "scripts/eval/args.ts",
         "scripts/eval/score-routes.ts",
         "scripts/eval/score-http.ts",
         "tests/laravel-routes-fixture.test.ts",
         "tests/http-pairing-fixture.test.ts"
       ],
       "acceptanceCriteria": [
-        "Unknown flags, `--x=v` forms, repeats and out-of-range thresholds exit 2 with a message in both scorers, as score-edges.ts does (tests)."
+        "parseRoutesArgs and parseHttpArgs throw a message naming the flag for an unknown flag, --x=v, a repeated flag, a missing value, a non-number, a ratio outside [0, 1], a non-integer or negative --max-fp (routes), two positional arguments and a missing fixture (unit tests in both fixture test files).",
+        "Valid command lines parse to the expected fixture, flags and numbers (same tests).",
+        "score-routes.ts and score-http.ts exit 2 with the message before scanning on --min-recal 1 (spawned CLI, under 5 s).",
+        "npm run eval and the fixture floors still pass."
       ],
       "verificationCommands": [
-        "npx vitest run tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts"
+        "npx vitest run tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T08:54:28.685Z",
+      "completedAt": "2026-11-01T09:09:53.686Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M4-08.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-08.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-08.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T08:54:27.516Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T08:54:28.685Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T09:09:51.870Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T09:09:53.686Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-08.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-08.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

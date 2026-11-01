@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@a4bd752337b5d0e59ffac445c10c2a16b3fdd22c (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
+Revision: develop@1391d3160ffa0158dcd33f50807cdfc191334673 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
 
 ## Baseline
-Last completed: M4-03 — Scanner: remove quadratic phases (name resolution, resume state, fileMap rebuilds).
-Evidence: `npx vitest run tests/scan-scaling.test.ts` (exit 0) → docs/baton/reports/M4-03.md; `npm run eval` (exit 0) → docs/baton/reports/M4-03.md; `npm run check` (exit 0) → docs/baton/reports/M4-03.md.
+Last completed: M4-08 — Strict flag handling in score-routes and score-http.
+Evidence: `npx vitest run tests/laravel-routes-fixture.test.ts tests/http-pairing-fixture.test.ts` (exit 0) → docs/baton/reports/M4-08.md; `npm run check` (exit 0) → docs/baton/reports/M4-08.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M4-04 — Scanner: bounded parallel directory walk and post-scan steps. Prerequisites: M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9. Read docs/baton/iterations/M4-04.md. Objective: discoverFiles walks directories with bounded concurrency, and independent post-scan steps run concurrently (spec 10). Expected outputs: scanner change; benchmark. Verify: `npx vitest run tests/scanner.test.ts`; `npm run bench:json`.
-Also eligible: M4-05, M4-08.
+Also eligible: M4-05.
 Active work: none. One active iteration per owner.
 
 ## Observe

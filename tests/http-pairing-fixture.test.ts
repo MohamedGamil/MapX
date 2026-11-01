@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { normUrl, scanHttpFixture, scoreHttp, workspacePath, type HttpCallRecord, type HttpLabel, type HttpScore } from '../scripts/eval/score-http.ts';
+import { execFileSync } from 'node:child_process';
+import { normUrl, parseHttpArgs, scanHttpFixture, scoreHttp, workspacePath, type HttpCallRecord, type HttpLabel, type HttpScore } from '../scripts/eval/score-http.ts';
 import { normUri, type Label } from '../scripts/eval/score-routes.ts';
 import { FLOORS_FILE, readFloors } from '../scripts/eval/run-eval.ts';
 
@@ -133,4 +134,52 @@ describe('http pairing on the fixture (real scan)', () => {
   it('builds the workspace from the shared Laravel fixture', () => {
     expect(existsSync(resolve(__dirname, 'fixtures/laravel-routes/routes/api.php'))).toBe(true);
   });
+});
+
+// M4-08: malformed command lines are usage errors (exit 2) before any scan.
+const runScorer = (...args: string[]) => {
+  try {
+    execFileSync(process.execPath, [resolve(__dirname, '../node_modules/tsx/dist/cli.mjs'), resolve(__dirname, '../scripts/eval/score-http.ts'), ...args],
+      { encoding: 'utf8', stdio: 'pipe', timeout: 60000 });
+    return { code: 0, stderr: '' };
+  } catch (err) {
+    const e = err as { status: number; stderr: string };
+    return { code: e.status, stderr: e.stderr };
+  }
+};
+
+describe('score-http.ts command line (M4-08)', () => {
+  it('parses valid command lines', () => {
+    expect(parseHttpArgs([FIXTURE])).toEqual({ fixture: FIXTURE, json: false, minRecall: null, minPrecision: null });
+    expect(parseHttpArgs(['--min-precision', '0.5', FIXTURE, '--json', '--min-recall', '1'])).toEqual({ fixture: FIXTURE, json: true, minRecall: 1, minPrecision: 0.5 });
+  });
+
+  it('rejects unknown, repeated and malformed options', () => {
+    const bad = (args: string[]) => () => parseHttpArgs(args);
+    expect(bad([FIXTURE, '--min-recal', '1'])).toThrow('unknown option --min-recal');
+    expect(bad([FIXTURE, '--min-recall=1'])).toThrow('unknown option --min-recall=1');
+    expect(bad([FIXTURE, '--max-fp', '0'])).toThrow('unknown option --max-fp'); // routes only
+    expect(bad([FIXTURE, '--strict-params'])).toThrow('unknown option --strict-params');
+    expect(bad([FIXTURE, '--json', '--json'])).toThrow('--json given twice');
+    expect(bad([FIXTURE, '--min-precision', '1', '--min-precision', '1'])).toThrow('--min-precision given twice');
+    expect(bad([FIXTURE, '--min-recall'])).toThrow('--min-recall needs a value');
+    expect(bad([FIXTURE, '--min-recall', 'abc'])).toThrow('--min-recall abc: not a number');
+    expect(bad([FIXTURE, '--min-recall', '1.5'])).toThrow('expected a number in [0, 1]');
+    expect(bad([FIXTURE, 'other'])).toThrow('unexpected argument other');
+    expect(bad([])).toThrow('missing <fixture-dir>');
+    expect(bad(['/no/such/fixture'])).toThrow('/no/such/fixture: no labels.json');
+    expect(bad([FIXTURE, '--__proto__', '1'])).toThrow('unknown option --__proto__');
+  });
+
+  it('exits 2 with the message before scanning', () => {
+    const started = Date.now();
+    const r = runScorer(FIXTURE, '--min-recall', 'abc');
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain('--min-recall abc: not a number');
+    expect(Date.now() - started).toBeLessThan(5000);
+    // A missing fixture with a bad flag: code that read labels or scanned first would crash instead.
+    const missing = runScorer('/no/such/fixture', '--min-recall', 'abc');
+    expect(missing.code).toBe(2);
+    expect(missing.stderr).toContain('--min-recall abc: not a number');
+  }, 60000);
 });

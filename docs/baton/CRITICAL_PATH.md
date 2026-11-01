@@ -6,7 +6,7 @@ Remaining longest dependency path: **82h** (full-plan path: 208h).
 
 M4-04 → M2-08 → M5-01 → M5-03 → M5-04 → M5-05 → M5-08 → M5-16 → M5-98
 
-Remaining effort min/expected/max: **170 / 230 / 321h**. Capacity: 1 engineer(s) × 20 h/week → **11.5 weeks**, conditional finish **2027-01-21** (as of 2026-11-02).
+Remaining effort min/expected/max: **169 / 228 / 318h**. Capacity: 1 engineer(s) × 20 h/week → **11.4 weeks**, conditional finish **2027-01-20** (as of 2026-11-02).
 
 ## Open items and blockers
 - M4-04 (BACKLOG): prerequisites satisfied
@@ -29,11 +29,10 @@ Remaining effort min/expected/max: **170 / 230 / 321h**. Capacity: 1 engineer(s)
 - M5-17 (BACKLOG): M5-04; M5-06
 - M5-18 (BACKLOG): M5-05; M5-06; M5-07
 - M5-98 (BACKLOG): M5-04; M5-06; M5-11; M5-16
-- M4-08 (BACKLOG): prerequisites satisfied
-- M2-08 (BACKLOG): M4-04; M4-05; M4-08
-- M0-02-R9 (BACKLOG): M4-04; M4-05; M4-08
-- M0-12-R10 (BACKLOG): M4-04; M4-05; M4-08
-- M0-17-R6 (BACKLOG): M4-04; M4-05; M4-08
+- M2-08 (BACKLOG): M4-04; M4-05
+- M0-02-R9 (BACKLOG): M4-04; M4-05
+- M0-12-R10 (BACKLOG): M4-04; M4-05
+- M0-17-R6 (BACKLOG): M4-04; M4-05
 - M5-19 (BACKLOG): M5-03; M5-01
 - M5-20 (BACKLOG): M5-19; M5-01
 - M5-21 (BACKLOG): M5-19; M5-01
@@ -46,7 +45,6 @@ Remaining effort min/expected/max: **170 / 230 / 321h**. Capacity: 1 engineer(s)
 |---|---:|---:|---:|---:|---:|
 | M4-04 | 0 | 12 | 0 | 12 | 0 |
 | M4-05 | 0 | 4 | 8 | 12 | 8 |
-| M4-08 | 0 | 2 | 10 | 12 | 10 |
 | M2-08 | 12 | 20 | 12 | 20 | 0 |
 | M0-02-R9 | 12 | 15 | 17 | 20 | 5 |
 | M0-12-R10 | 12 | 17 | 15 | 20 | 3 |

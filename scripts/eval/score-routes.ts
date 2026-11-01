@@ -3,8 +3,10 @@
 //   npx tsx scripts/eval/score-routes.ts <fixture-dir> [--json] [--min-recall R] [--max-fp N]
 //     [--min-precision P] [--strict-params]
 // --min-recall applies to URI, handler and labelled-attribute (name, domain, dynamic) recall.
-// Exit code 1 when a threshold is missed; 2 on usage or scan errors.
+// Exit code 1 when a threshold is missed; 2 on usage or scan errors (unknown, repeated or
+// malformed options are usage errors, M4-08).
 import { execFileSync } from 'node:child_process';
+import { parseScorerArgs } from './args.ts';
 import { cpSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -181,22 +183,39 @@ export function scanFixture(fixture: string): ReportedRoute[] {
   }
 }
 
+/** The command line, strictly (M4-08): unknown, repeated or malformed options throw. */
+export function parseRoutesArgs(args: string[]) {
+  const parsed = parseScorerArgs(args, {
+    booleans: ['json', 'strict-params'],
+    requiredFile: 'labels.json',
+    thresholds: { 'min-recall': 'ratio', 'min-precision': 'ratio', 'max-fp': 'count' },
+  });
+  const t = parsed.thresholds;
+  return {
+    fixture: parsed.fixture,
+    json: parsed.flags.has('json'),
+    strictParams: parsed.flags.has('strict-params'),
+    minRecall: t['min-recall'] ?? null,
+    minPrecision: t['min-precision'] ?? null,
+    maxFp: t['max-fp'] ?? null,
+  };
+}
+
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 function main() {
-  const args = process.argv.slice(2);
-  const opt = (name: string) => {
-    const i = args.indexOf(`--${name}`);
-    return i >= 0 ? Number(args[i + 1]) : null;
-  };
-  const fixture = args.find((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--min') && !args[i - 1]?.startsWith('--max'));
-  if (!fixture) {
+  let opts: ReturnType<typeof parseRoutesArgs>;
+  try {
+    opts = parseRoutesArgs(process.argv.slice(2));
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : err);
     console.error('Usage: score-routes.ts <fixture-dir> [--json] [--min-recall R] [--max-fp N] [--min-precision P] [--strict-params]');
     process.exit(2);
   }
+  const { fixture } = opts;
   const labels = (JSON.parse(readFileSync(join(fixture, 'labels.json'), 'utf8')) as { labels: Label[] }).labels;
-  const result = score(labels, scanFixture(resolve(fixture)), args.includes('--strict-params'));
+  const result = score(labels, scanFixture(resolve(fixture)), opts.strictParams);
   const t = result.totals;
-  if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));
+  if (opts.json) console.log(JSON.stringify(result, null, 2));
   else {
     console.log('pattern            labelled  uri  handler  exact-params  flagged  FP  attributes');
     for (const [name, p] of Object.entries(result.patterns))
@@ -206,12 +225,10 @@ function main() {
     for (const u of result.unlabelledRoutes) console.log(`  unlabelled: ${u}`);
   }
   const failures: string[] = [];
-  const minRecall = opt('min-recall');
+  const { minRecall, maxFp, minPrecision } = opts;
   if (minRecall !== null && (t.uriRecall < minRecall || t.handlerRecall < minRecall || t.attributeRecall < minRecall))
     failures.push(`recall below ${minRecall}`);
-  const maxFp = opt('max-fp');
   if (maxFp !== null && t.falsePositives > maxFp) failures.push(`false positives ${t.falsePositives} > ${maxFp}`);
-  const minPrecision = opt('min-precision');
   if (minPrecision !== null && t.precision < minPrecision) failures.push(`precision below ${minPrecision}`);
   for (const f of failures) console.error(`FAIL ${f}`);
   process.exitCode = failures.length ? 1 : 0;

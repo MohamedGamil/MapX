@@ -185,7 +185,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-05** Build the dashboard only for release and serve, not on every install — BACKLOG, P2, 4h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M4-06** 3D graph mode in the dashboard — DEFERRED, P3, 16h; depends on nothing.
 - **M4-07** Compiled scanner sidecar for very large codebases — DEFERRED, P3, 40h; depends on nothing.
-- **M4-08** Strict flag handling in score-routes and score-http — BACKLOG, P3, 2h; depends on M3-01, M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
+- **M4-08** Strict flag handling in score-routes and score-http — DONE, P3, 2h; depends on M3-01, M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9.
 - **M4-09** Tests never write to or delete files in the repository checkout — DONE, P2, 2h; depends on nothing.
 
 ## M5 — Architecture rules (Deptrac-inspired)
