@@ -64,6 +64,18 @@ test('no scanned value runs as script, and each payload shows as text', async ({
   await page.fill('#focus-search-input', 'onerror');
   await expect(page.locator('#focus-autocomplete')).toContainText(`evil${XSS}.ts`);
 
+  // The graph's details panel for each payload file (review 2026-11-02).
+  await page.selectOption('#select-graph-mode', 'full');
+  await graphReady(page);
+  for (const id of [`src/evil${XSS}.ts`, `src/quote"><img src=x onerror=window.__xss=1>.ts`]) {
+    expect(await page.evaluate((i) => window.__mapxSelect(i), id)).toBe(true);
+    await expect(page.locator('#details-content')).toContainText(id.split('/').pop()!);
+  }
+
+  // Metrics lists files by PageRank: the payload files rank highly in this small fixture.
+  await open(page, 'metrics');
+  await expect(page.locator('#top-files-list')).toContainText('onerror');
+
   await page.waitForTimeout(500); // an injected <img> fails to load asynchronously
   expect(await fired(page)).toBe(false);
 });

@@ -11,6 +11,7 @@ import { browserMissing, graphReady, servedWorkspace, watchErrors } from './harn
 declare const window: any;
 declare const document: any;
 declare function requestAnimationFrame(cb: () => void): number;
+declare class MutationObserver { constructor(cb: () => void); observe(t: any, o: any): void; }
 declare class PerformanceObserver { constructor(cb: (l: any) => void); observe(o: any): void; }
 
 test.skip(!!browserMissing(), browserMissing() ?? '');
@@ -77,5 +78,37 @@ test('without the layout worker, the graph is laid out on the main thread', asyn
   await page.selectOption('#select-graph-mode', 'full');
   await page.waitForFunction(() => document.body.dataset.graph === 'ready', null, { timeout: 120_000, polling: 50 });
   expect(await page.evaluate(() => document.body.dataset.layoutMs)).toBeUndefined(); // the worker never answered
+  expect(errors).toEqual([]);
+});
+
+test('choosing another layout while the worker lays out keeps the graph (review 2026-11-02)', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.goto(served.url);
+  await graphReady(page);
+  await page.selectOption('#select-graph-mode', 'full');
+  await expect(page.locator('body')).toHaveAttribute('data-graph', 'layout');
+  await page.selectOption('#select-layout', 'grid'); // before the worker answers
+  await page.waitForFunction(() => document.body.dataset.graph === 'ready', null, { timeout: 120_000, polling: 50 });
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__mapxStats().nodes)).toBe(2000);
+  expect(errors).toEqual([]);
+});
+
+test('a layout engine that arrives late does not override a newer choice (review 2026-11-02)', async ({ page }) => {
+  const errors = watchErrors(page);
+  await page.route('**/chunks/cytoscape-dagre-*.js', async (route) => { await new Promise((r) => setTimeout(r, 2500)); await route.continue(); });
+  await page.goto(served.url);
+  await graphReady(page);
+  await page.evaluate(() => {
+    window.__states = [];
+    new MutationObserver(() => window.__states.push(document.body.dataset.graph)).observe(document.body, { attributes: true, attributeFilter: ['data-graph'] });
+  });
+  await page.selectOption('#select-layout', 'dagre');
+  await page.selectOption('#select-layout', 'grid');
+  await page.waitForTimeout(4000); // the dagre chunk arrives meanwhile
+  const states: string[] = await page.evaluate(() => window.__states);
+  expect(states.at(-1)).toBe('ready');
+  expect(states.filter((s) => s === 'ready')).toHaveLength(1); // only grid's layout finished; dagre never ran
+  await expect(page.locator('#select-layout')).toHaveValue('grid');
   expect(errors).toEqual([]);
 });

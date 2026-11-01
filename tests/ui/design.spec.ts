@@ -334,3 +334,15 @@ test('the focus mode controls are reached with Tab and show a focus ring (review
   expect(noRing).toEqual([]);
   await context.close();
 });
+
+test('an open drawer stops trapping focus once the window is wide (review 2026-11-02)', async ({ browser }) => {
+  const { context, page } = await open(browser, { width: 390, height: 844 });
+  await page.click('#btn-nav-open');
+  await expect(page.locator('#sidebar')).toBeVisible();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator('.app-layout')).not.toHaveClass(/nav-open/);
+  await page.focus('#select-layout');
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('select-graph-mode');
+  await context.close();
+});

@@ -72,6 +72,8 @@ describe('dashboard responses are compressed (M4-20)', () => {
     expect(pickEncoding('gzip')).toBe('gzip');
     expect(pickEncoding('br;q=0, gzip')).toBe('gzip');
     expect(pickEncoding('identity')).toBeNull();
+    expect(pickEncoding('*')).toBe('gzip');
+    expect(pickEncoding('gzip;q=0, *')).toBeNull(); // an explicit refusal wins over the wildcard
     expect(pickEncoding(undefined)).toBeNull();
   });
 });

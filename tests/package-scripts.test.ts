@@ -58,6 +58,8 @@ describe('uiBundleStale', () => {
     at(join(root, 'dist/ui/main.js'), 2000);
     expect(uiBundleStale(root)).toBe(true); // index.html missing
     at(join(root, 'dist/ui/index.html'), 2000);
+    expect(uiBundleStale(root)).toBe(true); // layout-worker.js missing (M4-20)
+    at(join(root, 'dist/ui/layout-worker.js'), 2000);
     expect(uiBundleStale(root)).toBe(false);
     utimesSync(join(root, 'package-lock.json'), 3000, 3000);
     expect(uiBundleStale(root)).toBe(true); // dependencies changed
@@ -74,6 +76,7 @@ describe('uiBundleStale', () => {
 
     at(join(root, 'dist/ui/main.js'), 2000);
     at(join(root, 'dist/ui/index.html'), 2000);
+    at(join(root, 'dist/ui/layout-worker.js'), 2000);
     expect(uiBundleStale(root)).toBe(false);
 
     utimesSync(join(root, 'src/ui/views/graph.ts'), 3000, 3000);

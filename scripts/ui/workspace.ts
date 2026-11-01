@@ -70,6 +70,8 @@ export function xssWorkspace(root: string) {
   write(root, 'composer.json', JSON.stringify({ require: { 'laravel/framework': '^11.0' } }));
   write(root, 'routes/web.php', `<?php\nuse Illuminate\\Support\\Facades\\Route;\nuse App\\Http\\Controllers\\PageController;\n\nRoute::get('/x${XSS}', [PageController::class, 'show']);\n`);
   write(root, 'app/Http/Controllers/PageController.php', '<?php\nnamespace App\\Http\\Controllers;\n\nclass PageController\n{\n    public function show() { return 1; }\n}\n');
+  // A name that also breaks out of a quoted attribute (data-go-id="…").
+  write(root, `src/quote"><img src=x onerror=window.__xss=1>.ts`, `import { loop } from './loop';\nexport function quoteFn(n: number): number { return loop(n); }\n`);
   const evil = `evil${XSS}`;
   write(root, `src/${evil}.ts`, `import { loop } from './loop';\nexport function evilFn(n: number): number { return n > 0 ? loop(n - 1) : n; }\n`);
   write(root, 'src/loop.ts', `import { evilFn } from './${evil}';\nexport function loop(n: number): number { return n > 0 ? evilFn(n - 1) : n; }\n`);

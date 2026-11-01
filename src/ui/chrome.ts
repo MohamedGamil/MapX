@@ -46,7 +46,9 @@ export function initNavDrawer() {
   const backdrop = document.getElementById('nav-backdrop');
   const title = document.getElementById('mobile-title');
   const sidebar = document.getElementById('sidebar');
-  const isOpen = () => !!layout?.classList.contains('nav-open');
+  // The drawer exists below 640 px only: at wider widths a leftover open state must not trap focus.
+  const drawerMedia = window.matchMedia?.('(max-width: 639px)');
+  const isOpen = () => !!layout?.classList.contains('nav-open') && (drawerMedia ? drawerMedia.matches : true);
   const setOpen = (value: boolean) => {
     layout?.classList.toggle('nav-open', value);
     open?.setAttribute('aria-expanded', String(value));
@@ -62,6 +64,7 @@ export function initNavDrawer() {
     }
   };
   open?.addEventListener('click', () => setOpen(!isOpen()));
+  drawerMedia?.addEventListener?.('change', (e) => { if (!e.matches && layout?.classList.contains('nav-open')) setOpen(false); });
   backdrop?.addEventListener('click', () => setOpen(false));
   document.addEventListener('keydown', (e) => {
     if (!isOpen()) return;

@@ -56,6 +56,7 @@ tabs.forEach(tab => {
 
     currentTab = target;
     if (currentTab === 'graph') {
+      if (cyInstance) cyInstance.resize(); // now, before any control on the tab runs a layout
       setTimeout(() => {
         if (cyInstance) cyInstance.resize();
       }, 50);
@@ -1046,9 +1047,14 @@ function buildGraphElementsForMode(): any[] {
 function updateGraphDisplay() {
   if (!cyInstance) return;
 
+  // A new view supersedes any layout still pending, and the elements an older pre-layout held.
+  pendingWorkerLayout = null;
+  pendingPrelayoutAdd = null;
+  layoutTicket++;
   const newElements = buildGraphElementsForMode();
   const elementCount = newElements.length;
   const replaceElements = () => cyInstance.batch(() => {
+    cyInstance.elements().stop(true, true); // a superseded animated layout's queued moves
     cyInstance.elements().remove();
     cyInstance.add(newElements);
   });
@@ -1122,6 +1128,7 @@ function prelayoutInWorker(elements: any[], config: any, replaceElements: () => 
     activeLayout = null;
   }
   const started = startWorkerLayout(nodes, edges, config, (positions) => {
+    pendingPrelayoutAdd = null;
     for (const el of elements) {
       const p = el.data && !el.data.source ? positions[el.data.id] : undefined;
       if (p) el.position = p;
@@ -1129,10 +1136,12 @@ function prelayoutInWorker(elements: any[], config: any, replaceElements: () => 
     replaceElements();
     finishWorkerLayout(config);
   }, () => {
+    pendingPrelayoutAdd = null;
     replaceElements();
     runLayoutOnMainThread(config);
   });
   if (!started) return false;
+  pendingPrelayoutAdd = replaceElements;
   cyInstance.elements().remove(); // the old view goes; the canvas shows the layout notice
   markGraph('layout');
   return true;
@@ -1142,6 +1151,12 @@ function prelayoutInWorker(elements: any[], config: any, replaceElements: () => 
 const WORKER_LAYOUT_MIN = 600;
 let layoutWorker: Worker | null | undefined;
 let layoutSeq = 0;
+/** Adds the elements a worker pre-layout is holding back; set while one is pending. */
+let pendingPrelayoutAdd: (() => void) | null = null;
+/** Bumped by every layout request, so a late lazy engine does not override a newer choice. */
+let layoutTicket = 0;
+/** A worker that has not answered in this long is treated as failed (M4-20 review). */
+const WORKER_LAYOUT_TIMEOUT_MS = 60_000;
 type Positions = Record<string, { x: number; y: number }>;
 type WorkerNode = { id: string; parent?: string; w: number; h: number; x: number; y: number };
 let pendingWorkerLayout: { seq: number; onPositions: (p: Positions) => void; onFail: () => void } | null = null;
@@ -1218,6 +1233,14 @@ function startWorkerLayout(nodes: WorkerNode[], edges: Array<{ id: string; sourc
   }
   const seq = ++layoutSeq;
   pendingWorkerLayout = { seq, onPositions, onFail };
+  setTimeout(() => {
+    if (pendingWorkerLayout?.seq !== seq) return;
+    console.warn('Layout worker did not answer; laying out on the main thread.');
+    layoutWorker?.terminate();
+    layoutWorker = undefined; // a fresh worker next time
+    pendingWorkerLayout = null;
+    if (cyInstance) onFail();
+  }, WORKER_LAYOUT_TIMEOUT_MS);
   layoutWorker.postMessage({ seq, nodes, edges, options: serializableOptions(config) });
   performance.mark('mapx:layout-posted');
   return true;
@@ -1261,12 +1284,26 @@ function runLayout(layoutConfig: any) {
     }
   }
   pendingWorkerLayout = null; // a newer layout supersedes one still in the worker
+  // End the animations a stopped layout left queued: re-added elements with the same ids could
+  // otherwise keep the new layout from ever finishing (found by the M4-24 XSS test).
+  cyInstance.elements().stop(true, true);
+  cyInstance.stop(true, true); // and the viewport's (a layout's fit is an animation too)
+  // Elements still waiting for a superseded pre-layout are drawn now, for this layout to place.
+  if (pendingPrelayoutAdd) {
+    const add = pendingPrelayoutAdd;
+    pendingPrelayoutAdd = null;
+    add();
+  }
+  const ticket = ++layoutTicket;
+  // The canvas may have been hidden (another tab) since cytoscape last measured it: a layout that
+  // fits a zero-sized viewport never finishes its animation (found by the M4-24 XSS test).
+  cyInstance.resize();
 
-  // A layout engine loaded on demand: run once it has arrived.
+  // A layout engine loaded on demand: run once it has arrived, unless a newer layout was asked for.
   const loading = ensureLayout(layoutConfig.name);
   if (loading) {
     markGraph('layout');
-    loading.then(() => { if (cyInstance) runLayout(layoutConfig); }).catch((err) => {
+    loading.then(() => { if (cyInstance && ticket === layoutTicket) runLayout(layoutConfig); }).catch((err) => {
       console.error(`Failed to load the ${layoutConfig.name} layout:`, err);
       markGraph('error');
     });
@@ -1325,9 +1362,20 @@ function runLayout(layoutConfig: any) {
     }
   }
 
-  activeLayout = cyInstance.layout(layoutConfig);
-  activeLayout.one('layoutstop', () => markGraph('ready'));
-  activeLayout.run();
+  const layout = cyInstance.layout(layoutConfig);
+  activeLayout = layout;
+  layout.one('layoutstop', () => markGraph('ready'));
+  layout.run();
+  if (layoutConfig.animate) {
+    // Watchdog: cytoscape can leave a node's animation stalled when a layout is replaced mid-
+    // animation (switching view twice quickly), and the layout then never stops. Past its
+    // duration, stalled animations jump to their end and the graph is ready (found by M4-24's test).
+    setTimeout(() => {
+      if (activeLayout !== layout || document.body.dataset.graph !== 'layout' || !cyInstance) return;
+      cyInstance.elements().stop(true, true);
+      setTimeout(() => { if (activeLayout === layout && document.body.dataset.graph === 'layout') markGraph('ready'); }, 100);
+    }, (layoutConfig.animationDuration ?? 500) + 1500);
+  }
 }
 
 function buildGraphElements(rawElements: any[], useClusters: boolean): any[] {
@@ -3413,6 +3461,9 @@ document.addEventListener('DOMContentLoaded', () => {
     el.emit('tap');
     return true;
   };
+
+  // Test hook (M4-20 review): how many nodes and edges the graph draws.
+  (window as any).__mapxStats = () => (cyInstance ? { nodes: cyInstance.nodes().length, edges: cyInstance.edges().length } : null);
 
   // Keyboard: Enter or Space on a file badge acts as a click (they are role="button" spans).
   document.addEventListener('keydown', (e) => {

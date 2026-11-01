@@ -34,7 +34,7 @@ interface ServerOpts {
  * installs no longer build it).
  */
 export function uiBundleStale(root: string): boolean {
-  const outputs = ['main.js', 'index.html'].map((f) => join(root, 'dist/ui', f));
+  const outputs = ['main.js', 'index.html', 'layout-worker.js'].map((f) => join(root, 'dist/ui', f));
   if (!outputs.every((f) => existsSync(f))) return true;
   const built = Math.min(...outputs.map((f) => statSync(f).mtimeMs));
   const newer = (path: string): boolean => {
@@ -126,9 +126,12 @@ const COMPRESS_MIN_BYTES = 1024;
  */
 export function pickEncoding(acceptEncoding: string | string[] | undefined): 'br' | 'gzip' | null {
   const header = Array.isArray(acceptEncoding) ? acceptEncoding.join(',') : acceptEncoding ?? '';
-  const accepted = new Set(header.split(',').map((part) => part.trim().toLowerCase()).filter((part) => !/;\s*q=0(\.0+)?\s*$/.test(part)).map((part) => part.split(';')[0]!.trim()));
+  const parts = header.split(',').map((part) => part.trim().toLowerCase()).filter(Boolean);
+  const name = (part: string) => part.split(';')[0]!.trim();
+  const refused = new Set(parts.filter((part) => /;\s*q=0(\.0+)?\s*$/.test(part)).map(name));
+  const accepted = new Set(parts.map(name).filter((n) => !refused.has(n)));
   if (accepted.has('br')) return 'br';
-  if (accepted.has('gzip') || accepted.has('*')) return 'gzip';
+  if (accepted.has('gzip') || (accepted.has('*') && !refused.has('gzip'))) return 'gzip';
   return null;
 }
 
