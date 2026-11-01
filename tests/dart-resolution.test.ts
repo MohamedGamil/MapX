@@ -100,6 +100,7 @@ const createMockStore = (overrides?: any) => ({
   deleteFile: vi.fn(),
   deleteSymbolsForFile: vi.fn(),
   deleteEdgesForFile: vi.fn(),
+  getImporters: vi.fn().mockReturnValue([]),
   insertSymbol: vi.fn(),
   insertEdge: vi.fn(),
   updateFileMetadata: vi.fn(),

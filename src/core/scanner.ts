@@ -70,6 +70,23 @@ const COMMON_EXTENSIONS = new Set([
   'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb',
   'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md',
 ]);
+/** Modules whose calls resolve through import bindings (M2-08). */
+const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
+
+/**
+ * Source text without comments (and Python docstrings), for the import and re-export scans: a
+ * commented-out `import` binds nothing (M2-08). `//` after a colon (a URL) is kept.
+ */
+function stripComments(text: string, python: boolean): string {
+  if (python) return text.replace(/("""|''')[\s\S]*?\1/g, '').replace(/#.*$/gm, '');
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
+}
+
+/** A name a file binds by import to a project module: `imported` is the export, null for the module itself (M2-08). */
+interface ImportBinding {
+  file: string;
+  imported: string | null;
+}
 /** What resolveSymbolToFile finds for a name in one resolution phase, before the caller is known (M4-03). */
 interface NameCandidates {
   /** Index entries of the name, case-matched and language-compatible. */
@@ -159,6 +176,16 @@ export class Scanner {
   /** resolveSymbolToFile per name, source language and callableOnly, for the index `nameCandidatesFor` (M4-03). */
   private nameCandidates = new Map<string, NameCandidates | null>();
   private nameCandidatesFor: Map<string, SymbolIndexEntry[]> | null = null;
+  /** Per file, the names it binds by import to project modules, for one resolution phase (M2-08). */
+  private importBindingsCache = new Map<string, Map<string, ImportBinding>>();
+  /** findExport per file and name, for one resolution phase; null while being searched (M2-08). */
+  private exportCache = new Map<string, { file: string; symbol: string } | false | null>();
+  /** Source lines per file, for one resolution phase (Python call receivers, M2-08). */
+  private lineCache = new Map<string, string[]>();
+  /** Per symbols list, the names it declares (outside classes' methods), for the shadowing check (M2-08). */
+  private declaredNames = new WeakMap<object, Set<string>>();
+  /** Per called name, the patterns that find its receiver on a Python line (M2-08). */
+  private callPatterns = new Map<string, { attribute: RegExp; bare: RegExp }>();
   private parallel: boolean;
 
   constructor(
@@ -428,6 +455,7 @@ export class Scanner {
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, newFiles.map(f => f.relativePath)),
+        ...this.importerReferrers([...newFiles, ...changedFiles].map(f => f.relativePath)),
         ...this.movedReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.removedSymbolReferrers(repo.name, changedFiles.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.vanishedNameReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
@@ -841,7 +869,7 @@ export class Scanner {
     // holds (M0-02-R4), and those using a Vue tag whose global registration changed (M3-08).
     const reindexed = new Set(toReindex.map(r => r.path));
     const listedTexts = [...contents].map(([path, content]) => ({ path, content }));
-    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove)];
+    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove), ...this.importerReferrers(listedTexts.map(t => t.path))];
     const vueUsers = this.vueRegistryReferrers(repo.name, listedTexts, toRemove);
     for (const r of new Set([...pending, ...this.ownReferrers(repo.name, [...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers, ...moved, ...vueUsers])])) {
       if (reindexed.has(r) || toRemove.includes(r) || this.store.getFile(r)?.repo !== repo.name) continue;
@@ -1526,7 +1554,7 @@ export class Scanner {
       }
       // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
       // named by the module/namespace rather than the raw statement (M0-12-R4).
-      let targets: { file: string; symbol: string; verifiability?: 'verified' | 'inferred'; metadata?: Record<string, unknown> }[];
+      let targets: { file: string; symbol: string; verifiability?: 'verified' | 'inferred'; metadata?: Record<string, unknown> }[] | undefined;
       let vueHit: { file: string; symbol: string } | null | undefined;
 
       if (navigate) {
@@ -1558,9 +1586,17 @@ export class Scanner {
         } else {
           // Calls and instantiations skip value symbols (constants, variables) (M0-17-R2).
           const callable = ref.referenceType === 'call' || ref.referenceType === 'instantiation';
-          targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable);
+          // A name the file imports from a project module is that module's declaration (M2-08).
+          const viaImport = callable ? this.resolveImportedCall(ref, sourcePath, sourceLanguage, isJsOrTs, fileMap, symbols) : null;
+          if (viaImport !== null) {
+            // false: the import binds a value (`export const options = {…}`), which no call reaches (M0-17-R2).
+            targets = viaImport ? [viaImport] : [];
+            targetFile = null;
+          } else {
+            targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable);
+          }
         }
-        targets = targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
+        targets ??= targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
       }
 
       for (const { file: targetFile, symbol: targetSymbol, verifiability, metadata: targetMetadata } of targets) {
@@ -1609,6 +1645,225 @@ export class Scanner {
     }
 
     return edges;
+  }
+
+  /**
+   * The files importing a changed JS/TS/Python module, and the importers of each barrel among them
+   * (a module that re-exports, or a package __init__.py), up to five levels: their calls resolve
+   * through what the module declares or re-exports, so sync re-parses them (M2-08).
+   */
+  private importerReferrers(paths: string[]): Set<string> {
+    const importers = new Set<string>();
+    let level = paths.filter(p => MODULE_FILE.test(p));
+    for (let depth = 0; depth < 5 && level.length; depth++) {
+      const next: string[] = [];
+      for (const p of level) {
+        for (const importer of this.store.getImporters(p)) {
+          if (importers.has(importer) || paths.includes(importer)) continue;
+          importers.add(importer);
+          if (this.isBarrel(importer)) next.push(importer);
+        }
+      }
+      level = next;
+    }
+    return importers;
+  }
+
+  /** A module whose exports include another module's: `export … from`, or a package __init__.py. */
+  private isBarrel(path: string): boolean {
+    if (path.endsWith('__init__.py')) return true;
+    return /\bexport\s*(?:\*|\{[^}]*\})\s*from\b/.test(stripComments(this.readWorkspaceText(path) ?? '', false));
+  }
+
+  /**
+   * A call or instantiation of a name the file binds by import to a project module: the declaration
+   * in that module, through re-exports (M2-08). JS/TS: a bare name's named or default binding, or a
+   * receiver's namespace binding (`ns.f()`). Python: the dotted receiver on the call's line when it
+   * is a module binding (`utils.f()`, `pkg.mod.f()`), else a bare name's `from m import` binding.
+   * False when the binding is a value symbol (a literal constant), which no call reaches (M0-17-R2).
+   * Null when the name is not bound, or its declaration is not found: name lookup then applies.
+   */
+  private resolveImportedCall(
+    ref: ExtractedReference, sourcePath: string, language: string | null, isJsOrTs: boolean, fileMap: Map<string, string>,
+    symbols?: Array<{ name: string; kind: string; startLine: number; endLine: number }>,
+  ): { file: string; symbol: string } | false | null {
+    const python = language === 'python';
+    if (!isJsOrTs && !python) return null;
+    const bindings = this.importBindings(sourcePath, python, fileMap);
+    if (!bindings.size) return null;
+    const name = ref.targetName;
+    let receiver = ref.metadata?.receiver as string | undefined;
+    // The file declares the name where the call sees it (a later top-level def, a function nested in
+    // the caller's enclosing function): the declaration shadows the import, and name lookup picks the
+    // file's own (review 2026-11-01).
+    if (!receiver && symbols) {
+      let declared = this.declaredNames.get(symbols);
+      if (!declared) this.declaredNames.set(symbols, (declared = new Set(symbols.filter(d => d.kind !== 'method').map(d => d.name))));
+      if (declared.has(name) && symbols.some(d => d.name === name && d.kind !== 'method' && this.visibleAt(d, ref.startLine, symbols))) return null;
+    }
+    if (python && !receiver) {
+      let lines = this.lineCache.get(sourcePath);
+      if (!lines) this.lineCache.set(sourcePath, (lines = (this.readWorkspaceText(sourcePath) ?? '').split('\n')));
+      const line = lines[ref.startLine - 1] ?? '';
+      if (!line.includes(name)) return null;
+      let patterns = this.callPatterns.get(name);
+      if (!patterns) {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        patterns = { attribute: new RegExp(`([A-Za-z_][\\w.]*)\\.${escaped}\\s*\\(`), bare: new RegExp(`(^|[^\\w.])${escaped}\\s*\\(`) };
+        this.callPatterns.set(name, patterns);
+      }
+      const attribute = patterns.attribute.exec(line)?.[1];
+      const bare = patterns.bare.test(line);
+      // Both forms on one line (`utils.create(create())`): which reference is which is unknown.
+      if ((attribute && bare) || (!attribute && !bare)) return null;
+      receiver = attribute;
+    }
+    if (receiver) {
+      const module = bindings.get(receiver);
+      return module && module.imported === null ? this.findExport(module.file, name, fileMap) : null;
+    }
+    const binding = bindings.get(name);
+    if (!binding || binding.imported === null) return null;
+    const exported = binding.imported === 'default' && !python ? this.defaultExportName(binding.file) : binding.imported;
+    return exported ? this.findExport(binding.file, exported, fileMap) : null;
+  }
+
+  /** A declaration is visible at a line: anywhere at module level, else within its enclosing symbol. */
+  private visibleAt(
+    decl: { startLine: number; endLine: number }, line: number, symbols: Array<{ startLine: number; endLine: number; kind: string }>,
+  ): boolean {
+    let enclosing: { startLine: number; endLine: number } | null = null;
+    for (const s of symbols) {
+      if (s === decl || s.kind === 'class' || s.startLine > decl.startLine || s.endLine < decl.endLine) continue;
+      if (s.startLine === decl.startLine && s.endLine === decl.endLine) continue;
+      if (!enclosing || s.endLine - s.startLine < enclosing.endLine - enclosing.startLine) enclosing = s;
+    }
+    return !enclosing || (enclosing.startLine <= line && line <= enclosing.endLine);
+  }
+
+  /**
+   * The top-level declaration of `name` in `file`, or in the module it re-exports it from (M2-08).
+   * False when it is a value symbol a call cannot reach (a JS/TS/Python constant or variable).
+   */
+  private findExport(file: string, name: string, fileMap: Map<string, string>, depth = 0): { file: string; symbol: string } | false | null {
+    // Memoised per phase, and a module seen on the current path ends it: a barrel graph (`export *`
+    // fan-out, cycles) is walked once per name (review 2026-11-01).
+    const key = `${file}\0${name}`;
+    if (this.exportCache.has(key)) return this.exportCache.get(key)!;
+    this.exportCache.set(key, null);
+    const found = this.findExportUncached(file, name, fileMap, depth);
+    this.exportCache.set(key, found);
+    return found;
+  }
+
+  private findExportUncached(file: string, name: string, fileMap: Map<string, string>, depth: number): { file: string; symbol: string } | false | null {
+    const declared = (this.symbolIndex?.get(name.toLowerCase()) ?? []).filter(e => e.file === file && e.name === name && !e.scope);
+    if (declared.length) {
+      const value = (e: SymbolIndexEntry) => (e.kind === 'constant' || e.kind === 'variable') && VALUE_SYMBOL_LANGUAGES.has(this.languageOf(file) ?? '');
+      return declared.every(value) ? false : { file, symbol: name };
+    }
+    if (depth >= 5) return null;
+    const python = file.endsWith('.py');
+    // A name the file imports and passes on: `from .impl import x` in a package's __init__.py, or
+    // `import { x } from './a'; export { x }`.
+    const bound = this.importBindings(file, python, fileMap).get(name);
+    const text = stripComments(this.readWorkspaceText(file) ?? '', python);
+    if (python) return bound?.imported ? this.findExport(bound.file, bound.imported, fileMap, depth + 1) : null;
+    let hit: { file: string; symbol: string } | false | null;
+    for (const m of text.matchAll(/\bexport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+      for (const part of m[1]!.split(',')) {
+        const [orig, alias] = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/);
+        if ((alias ?? orig) !== name || !orig) continue;
+        const target = this.resolveImportPath(m[2]!, file, fileMap);
+        return target ? this.findExport(target, orig === 'default' ? this.defaultExportName(target) ?? orig : orig, fileMap, depth + 1) : null;
+      }
+    }
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (bound?.imported && new RegExp(`\\bexport\\s*\\{[^}]*(?<![\\w$])${escapedName}(?![\\w$])[^}]*\\}(?!\\s*from)`).test(text)) {
+      return this.findExport(bound.file, bound.imported, fileMap, depth + 1);
+    }
+    for (const m of text.matchAll(/\bexport\s*\*\s*from\s*['"]([^'"]+)['"]/g)) {
+      const target = this.resolveImportPath(m[1]!, file, fileMap);
+      hit = target ? this.findExport(target, name, fileMap, depth + 1) : null;
+      if (hit !== null) return hit;
+    }
+    return null;
+  }
+
+  /** The declared name of a JS/TS module's default export (`export default function build`). */
+  private defaultExportName(file: string): string | null {
+    const text = this.readWorkspaceText(file) ?? '';
+    const m = /\bexport\s+default\s+(?:async\s+)?(?:function\s*\*?\s*|class\s+)?([A-Za-z_$][\w$]*)/.exec(text);
+    return m && !['function', 'class', 'async'].includes(m[1]!) ? m[1]! : null;
+  }
+
+  /** The names a file binds by import to project modules, keyed by local name or dotted module path (M2-08). */
+  private importBindings(file: string, python: boolean, fileMap: Map<string, string>): Map<string, ImportBinding> {
+    const cached = this.importBindingsCache.get(file);
+    if (cached) return cached;
+    const bindings = new Map<string, ImportBinding>();
+    this.importBindingsCache.set(file, bindings);
+    const text = stripComments(this.readWorkspaceText(file) ?? '', python);
+    if (python) {
+      const resolver = importResolverFor('python');
+      if (!resolver) return bindings;
+      const moduleFile = (module: string) => this.resolveModuleImport(resolver, module, file, fileMap, () => new Set())[0]?.file ?? null;
+      // Joined continuation lines: `from m import (\n a,\n b)`.
+      const source = text.replace(/\(\s*([^)]*?)\s*\)/g, (m, inner: string) => (m.includes('\n') ? `(${inner.replace(/\s*\n\s*/g, ' ')})` : m));
+      for (const line of source.split('\n')) {
+        const from = /^\s*from\s+([\w.]+)\s+import\s+\(?([^)#]+)\)?/.exec(line);
+        if (from) {
+          const module = from[1]!;
+          for (const part of from[2]!.split(',')) {
+            const [imported, alias] = part.trim().split(/\s+as\s+/);
+            if (!imported || imported === '*' || !/^\w+$/.test(imported)) continue;
+            const sub = moduleFile(module.endsWith('.') ? module + imported : `${module}.${imported}`);
+            if (sub && (sub.endsWith(`/${imported}.py`) || sub === `${imported}.py` || sub.endsWith(`/${imported}/__init__.py`))) {
+              bindings.set(alias ?? imported, { file: sub, imported: null });
+              continue;
+            }
+            const target = moduleFile(module);
+            if (target) bindings.set(alias ?? imported, { file: target, imported });
+          }
+          continue;
+        }
+        const imp = /^\s*import\s+([^#]+)/.exec(line);
+        if (!imp) continue;
+        for (const part of imp[1]!.split(',')) {
+          const [module, alias] = part.trim().split(/\s+as\s+/);
+          if (!module || !/^[\w.]+$/.test(module)) continue;
+          const target = moduleFile(module);
+          if (target) bindings.set(alias ?? module, { file: target, imported: null });
+        }
+      }
+      return bindings;
+    }
+    const bind = (specifier: string, entries: [string, string | null][]) => {
+      const target = this.resolveImportPath(specifier, file, fileMap);
+      if (!target || !fileMap.has(target)) return;
+      for (const [local, imported] of entries) bindings.set(local, { file: target, imported });
+    };
+    const named = (clause: string, renameSeparator: RegExp): [string, string][] => clause.split(',').flatMap((part) => {
+      const [imported, local] = part.trim().replace(/^type\s+/, '').split(renameSeparator);
+      const name = (local ?? imported)?.trim();
+      return imported && name && /^[\w$]+$/.test(imported.trim()) && /^[\w$]+$/.test(name) ? [[name, imported.trim()] as [string, string]] : [];
+    });
+    for (const m of text.matchAll(/\bimport\s+(?!type\s)([^'"`;]+?)\s+from\s*['"]([^'"]+)['"]/g)) {
+      const clause = m[1]!;
+      const entries: [string, string | null][] = [];
+      const braces = /\{([^}]*)\}/.exec(clause);
+      if (braces) entries.push(...named(braces[1]!, /\s+as\s+/));
+      const rest = clause.replace(/\{[^}]*\}/, '');
+      const star = /\*\s*as\s+([\w$]+)/.exec(rest);
+      if (star) entries.push([star[1]!, null]);
+      const def = /^\s*([\w$]+)/.exec(rest.replace(/\*\s*as\s+[\w$]+/, ''));
+      if (def) entries.push([def[1]!, 'default']);
+      bind(m[2]!, entries);
+    }
+    for (const m of text.matchAll(/\b(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+      bind(m[2]!, m[1]!.startsWith('{') ? named(m[1]!.slice(1, -1), /\s*:\s*/) : [[m[1]!, null]]);
+    }
+    return bindings;
   }
 
   /**
@@ -3201,6 +3456,9 @@ export class Scanner {
     // may have changed since the last one (long-lived scanners: watch, MCP).
     this.importFiles = null;
     this.importTextCache.clear();
+    this.importBindingsCache.clear();
+    this.exportCache.clear();
+    this.lineCache.clear();
     this.languageCache.clear();
     this.phpNamespaces.clear();
     this.vueGlobals.clear();
@@ -3656,6 +3914,7 @@ export class Scanner {
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath)),
+        ...this.importerReferrers(changedTexts.map(t => t.path)),
         ...this.movedReferrers(repo.name, changedTexts),
         ...this.removedSymbolReferrers(repo.name, changedTexts),
         ...this.vanishedNameReferrers(repo.name, changedTexts),

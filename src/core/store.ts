@@ -363,6 +363,12 @@ export class Store {
   }
 
   /** Other files with an edge into `filePath`. */
+  /** Files with an import or require edge into the file (M2-08). */
+  getImporters(filePath: string): string[] {
+    return this.backend.prepare("SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND source_file != ? AND edge_type IN ('import', 'require')")
+      .all(filePath, filePath).map(r => r.source_file as string);
+  }
+
   getReferrers(filePath: string): string[] {
     return this.backend.prepare('SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND source_file != ?')
       .all(filePath, filePath).map(r => r.source_file as string);

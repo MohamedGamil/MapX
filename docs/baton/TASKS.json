@@ -18854,36 +18854,100 @@
         "docs/baton/reports/M3-11-R1.md"
       ],
       "outputs": [
-        "fix",
-        "regression tests",
+        "import-bound call resolution",
+        "tests/import-bound-calls.test.ts",
         "reports/M2-08.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "src/core/import-resolvers.ts",
-        "tests/legacy-language-accuracy.test.ts",
-        "tests/legacy-imports.test.ts"
+        "src/core/store.ts",
+        "tests/import-bound-calls.test.ts",
+        "tests/scanner.test.ts",
+        "tests/scanner-coverage.test.ts",
+        "tests/scanner-hash-incremental.test.ts",
+        "tests/dart-resolution.test.ts",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "JS/TS (and .vue/.svelte scripts): `import { create } from './utils'; create()` and `import { create as make } from './utils'; make()` link `utils#create` when another, nearer or alphabetically earlier file also declares `create`; a re-export (`export { create } from './impl'`) is followed (e2e).",
-        "Python: `from utils import create; create()` and `import utils; utils.create()` link `utils.py#create` over a same-named function elsewhere (e2e).",
-        "Unimported names keep name resolution; the edges, routes and HTTP scorers do not drop; MapX self-scan call-edge changes are listed and justified in the report."
+        "JS/TS and .vue/.svelte scripts (e2e): with a same-named create in the caller's own folder, import { create } / { create as make } / * as u / default import / require destructuring and namespaces link the imported module's declaration; re-exports (export { x } from, export *) are followed (tests/import-bound-calls.test.ts).",
+        "Python (e2e): with app/aaa.py#create also declared, from utils import create [as c] and import utils; utils.create() link app/utils.py#create; from pkg import mod; mod.thing() links pkg/mod.py; a name re-exported by pkg/__init__.py links its defining module.",
+        "Unimported names keep name lookup (test); npm run eval floors hold; MapX self-scan call-edge changes are listed and justified in the report."
       ],
       "verificationCommands": [
-        "npx vitest run tests/legacy-language-accuracy.test.ts tests/legacy-imports.test.ts",
-        "npx tsx scripts/eval/score-edges.ts tests/fixtures/vue-sfc --json"
+        "npx vitest run tests/import-bound-calls.test.ts tests/legacy-language-accuracy.test.ts tests/legacy-imports.test.ts",
+        "npm run eval",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T11:18:53.908Z",
+      "completedAt": "2026-11-01T11:56:24.636Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M2-08.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-calls.test.ts tests/legacy-language-accuracy.test.ts tests/legacy-imports.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T11:18:53.304Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T11:18:53.908Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T11:56:24.342Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T11:56:24.636Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-calls.test.ts tests/legacy-language-accuracy.test.ts tests/legacy-imports.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
@@ -19143,7 +19207,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."

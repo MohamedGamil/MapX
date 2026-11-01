@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Fixed
+- Calls to a name a file imports from a project module (JS/TS, Vue/Svelte scripts and Python: named, aliased, default, namespace, `require` and `from … import`, through re-exports and package `__init__.py`) now link that module's declaration instead of a same-named function elsewhere; `mapx sync` re-parses a changed module's importers so sync equals a full scan (M2-08).
+
 ## [0.3.6] — 2026-11-01
 
 ### Changed

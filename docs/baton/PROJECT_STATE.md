@@ -8,7 +8,7 @@ Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D
 | --- | --- | --- |
 | M0 Delivered baseline and remediation | Remediation of the 2db08bd review DONE | P1 M0-02-R6, M0-02-R7, M0-04-R6, M0-10-R4 and P2 M0-09-R5, M0-11-R3, M0-12-R7/R8/R9, M0-17-R4/R5, M0-20-R3, M0-02-R8 DONE |
 | M1 Laravel route correctness | M1-07-R2, M1-03-R2 DONE | Routes scorer: 145 labels, URI/handler/attribute recall 1, precision 1, 0 FP. M1-99 (release) DEFERRED (D007) |
-| M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2 DONE; M2-08 BACKLOG (D019) | HTTP scorer: 48 labels, every metric 1.0 |
+| M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2, M2-08 DONE | HTTP scorer: 48 labels, every metric 1.0 |
 | M3 Vue SFC semantics | All remediation DONE (M3-08-R1, M3-09-R1, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1) | Edge scorer: 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives: v3-039) |
 | M4 Measurement and DX | M4-09, M4-01, M4-03, M4-08, M4-05, M4-04 DONE | `npm run eval` checks the three scorers against `scripts/eval/floors.json` in a CI `Eval` job (M4-01). Name resolution is linear on shared names: a generated 16,000-file scan takes 18 s instead of 70 s, with identical edges (M4-03). The routes and HTTP scorers reject malformed options (M4-08). Installs no longer bundle the dashboard; pack/publish and `mapx ui` from source do (M4-05, D020). A git sync that changes nothing indexed skips the post-scan analysis: 11 s → 2 s at 16,000 files (M4-04). M4-02, M4-06 and M4-07 deferred. M4-02, M4-06 and M4-07 deferred |
 | M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
@@ -149,7 +149,7 @@ All 18 remediation tasks are DONE. Each has a report in `reports/<ID>.md` with a
 
 Work order set by the owner (D019):
 1. M4: done (M4-02, M4-06 and M4-07 stay deferred). M4-04 should also remove the second `discoverFiles` walk in `scanFull` (M4-03 report).
-2. The gap tasks: M2-08 (P1), M0-02-R9, M0-12-R10, M0-17-R6, plus M0-02-R10 (P1, from the M4-04 review: an interrupted git sync loses symbols).
+2. The gap tasks: M0-02-R10 (P1, from the M4-04 review: an interrupted sync loses symbols), M0-02-R9, M0-12-R10, M0-17-R6. M2-08 done (calls resolve through the file's imports).
 3. M5, starting with M5-01 and M5-02.
 
 No owner decision is pending. The remediation is committed in `8be5cdb`.
