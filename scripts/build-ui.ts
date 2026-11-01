@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 async function main() {
   if (process.env.MAPX_NO_UI === '1') {
-    console.log('MAPX_NO_UI is set. Skipping UI client build.');
+    console.error('MAPX_NO_UI is set. Skipping UI client build.');
     return;
   }
 
@@ -17,7 +17,8 @@ async function main() {
   // Drop a map left over from an earlier opt-in build.
   rmSync(resolve(distDir, 'main.js.map'), { force: true });
 
-  console.log('Bundling Mapx Web Dashboard client...');
+  // Progress goes to stderr: npm prints lifecycle output on stdout, as part of `npm pack --json`.
+  console.error('Bundling Mapx Web Dashboard client...');
 
   // Copy static HTML and CSS
   copyFileSync(resolve(srcDir, 'index.html'), resolve(distDir, 'index.html'));
@@ -39,7 +40,7 @@ async function main() {
     }
   });
 
-  console.log('Mapx Web Dashboard client build completed.');
+  console.error('Mapx Web Dashboard client build completed.');
 }
 
 main().catch(err => {

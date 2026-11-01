@@ -70,9 +70,16 @@ jobs:
       - name: Run tests with coverage
         run: npx vitest run --coverage
 
-      # npm ci already ran `prepare` (build:npm), so dist/ is current.
+      # Installs no longer build the dashboard (M4-05): build the package as a release would.
+      - name: Build npm package
+        run: npm run build:npm
+
       - name: Check package contents and dashboard size
         run: npx tsx scripts/check-package.ts
+
+      # npm pack runs prepack (the dashboard) then prepare (tsup): the tarball must still hold it (M4-05).
+      - name: Pack with lifecycle scripts keeps the dashboard
+        run: rm -rf dist/ui && npm pack --dry-run --json | node scripts/check-pack-ui.mjs
 
       - name: Upload coverage report
         if: always()

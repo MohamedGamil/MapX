@@ -198,8 +198,16 @@ make build-linux       # or build-mac-arm, build-win
 # Cross-compile for all platforms
 make build-all
 
-# Build npm package
+# Build npm package (tsup + dashboard; `npm pack` / `npm publish` build the dashboard too)
 npm run build:npm
+
+# Dashboard only (installs no longer build it; `mapx ui` from source builds it when stale)
+npm run build:ui
+```
+
+The registry package (`npm install -g @mgamil/mapx`) ships the dashboard. Installing from git (`npm install github:…`), with `npm link` or from a `file:` path runs only `prepare`, which compiles the CLI. Run `npm run build:ui` in the MapX folder to add the dashboard (D020).
+
+```bash
 
 # Package + installers
 make package-all

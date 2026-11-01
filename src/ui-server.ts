@@ -1,5 +1,7 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { readFileSync, existsSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync, watch } from 'node:fs';
+import { readFileSync, existsSync, statSync, watchFile, unwatchFile, openSync, readSync, closeSync, watch, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { resolve, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGzip } from 'node:zlib';
@@ -23,6 +25,44 @@ interface ServerOpts {
   host: string;
   token?: string;
   dir: string;
+  /** Build a stale dashboard bundle first when running from source (the CLI sets it; M4-05). */
+  devBuild?: boolean;
+}
+
+/**
+ * The dashboard bundle of a source checkout needs building: a file it is made of is missing, or a
+ * file under `src/ui/`, the build script or the lockfile (its dependencies) is newer (M4-05:
+ * installs no longer build it).
+ */
+export function uiBundleStale(root: string): boolean {
+  const outputs = ['main.js', 'index.html'].map((f) => join(root, 'dist/ui', f));
+  if (!outputs.every((f) => existsSync(f))) return true;
+  const built = Math.min(...outputs.map((f) => statSync(f).mtimeMs));
+  const newer = (path: string): boolean => {
+    if (!existsSync(path)) return false;
+    const stat = statSync(path);
+    if (!stat.isDirectory()) return stat.mtimeMs > built;
+    return readdirSync(path).some((name) => newer(join(path, name)));
+  };
+  return ['src/ui', 'scripts/build-ui.ts', 'package-lock.json'].some((p) => newer(join(root, p)));
+}
+
+/**
+ * Running from source (`tsx src/main.ts ui`): build the dashboard first when it is stale. A failed
+ * build is reported and the server starts anyway, so `serve --ui` keeps its MCP server.
+ */
+function ensureDevBundle(): void {
+  if (!__filename.endsWith('.ts')) return; // an installed package or a binary ships its bundle
+  if (process.env.MAPX_NO_UI === '1') return;
+  const root = resolve(__dirname, '..');
+  if (!uiBundleStale(root)) return;
+  console.error('Building the dashboard…');
+  try {
+    const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
+    execFileSync(process.execPath, [tsxCli, join(root, 'scripts/build-ui.ts')], { cwd: root, stdio: ['ignore', 'ignore', 'inherit'] });
+  } catch (err) {
+    console.error(`Dashboard build failed (${err instanceof Error ? err.message.split('\n')[0] : err}); run npm run build:ui.`);
+  }
 }
 
 function findUiDir(): string {
@@ -66,7 +106,10 @@ async function loadConfig(dir: string, store: Store): Promise<Config> {
 
 export function startUiServer(opts: ServerOpts) {
   const { port, host, token, dir } = opts;
+  if (opts.devBuild) ensureDevBundle();
   const uiDir = findUiDir();
+  // Git, `npm link` and `file:` installs run only `prepare`, which no longer builds the dashboard (D020).
+  if (!existsSync(join(uiDir, 'main.js'))) console.error(`Dashboard bundle not found in ${uiDir}; run npm run build:ui in the MapX folder.`);
 
   // Simple in-memory rate-limiter: IP -> timestamp[]
   const rateLimitMap = new Map<string, number[]>();

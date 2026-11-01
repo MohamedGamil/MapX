@@ -167,3 +167,12 @@ The owner answered four questions after the remediation was committed (`8be5cdb`
   - M5-24: package, builtin and ambient selectors, with uncovered and vendor-confinement reporting.
 
   REQ-ARCH-008 now traces to M5-19 and REQ-ARCH-014 to M5-19 … M5-24.
+
+## D020 — Dashboard bundle for git, link and file installs (owner, 2026-11-01)
+
+M4-05 moved the dashboard build out of `prepare`: installs in a checkout no longer bundle it, while `npm pack` / `npm publish` (`prepack`), the release binaries and `mapx ui` from source do. Independent review found that npm runs only `prepare` for a git dependency's install, `npm link` and `file:` installs, so those get no dashboard.
+
+The owner chose to document this rather than detect pacote's internal environment or build once per clone:
+- registry installs (the documented method) are unaffected;
+- `npm run build:ui` adds the dashboard to other installs, as `docs/getting-started.md` says;
+- the UI server prints that hint when it starts without a bundle.

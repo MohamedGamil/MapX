@@ -2021,7 +2021,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         const uiPort = parseInt(opts.uiPort as string, 10) || 45124;
         const uiHost = (opts.uiHost as string) || '127.0.0.1';
         const uiToken = opts.uiToken as string | undefined;
-        startUiServer({ port: uiPort, host: uiHost, token: uiToken, dir: defaultDir });
+        startUiServer({ port: uiPort, host: uiHost, token: uiToken, dir: defaultDir, devBuild: true });
       }
 
       await startMcpServer(defaultDir, {
@@ -2047,7 +2047,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const token = opts.token as string | undefined;
 
       const { startUiServer } = await import('./ui-server.js');
-      startUiServer({ port, host, token, dir });
+      startUiServer({ port, host, token, dir, devBuild: true });
 
       const url = `http://${host}:${port}`;
       console.log(`Mapx Web Dashboard started at ${url}`);

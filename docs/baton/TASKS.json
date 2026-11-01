@@ -9515,30 +9515,118 @@
         "docs/baton/reports/M0-30.md"
       ],
       "outputs": [
-        "package.json scripts"
+        "package.json scripts (prepare tsup only, prepack builds the UI, build:ui)",
+        "dev-mode on-demand UI build",
+        "CI test job builds before the package check",
+        "tests/package-scripts.test.ts",
+        "reports/M4-05.md"
       ],
       "affectedFiles": [
         "package.json",
+        "tsup.config.ts",
         "scripts/build-ui.ts",
-        ".github/workflows/publish-npm.yml"
+        "src/ui-server.ts",
+        "src/cli.ts",
+        ".github/workflows/ci.yml",
+        "tests/package-scripts.test.ts",
+        "CHANGELOG.md",
+        "docs/getting-started.md",
+        "scripts/check-pack-ui.mjs",
+        "tests/cli-coverage.test.ts",
+        "docs/baton/DECISIONS.md"
       ],
       "acceptanceCriteria": [
-        "`npm ci` does not run scripts/build-ui.ts; the publish workflow still produces dist/ui/main.js (checked by scripts/check-package.ts)."
+        "In a clean clone, npm run prepare (what npm ci runs) produces dist/main.js and no dist/ui/ (measured); no install lifecycle script references build-ui or build:ui (tests/package-scripts.test.ts).",
+        "npm pack --dry-run in a clean clone lists dist/ui/main.js built by prepack, and scripts/check-package.ts passes (measured); CI packs with lifecycle scripts from a tree without dist/ui and fails unless the tarball holds the dashboard (scripts/check-pack-ui.mjs); git, link and file installs are documented as needing npm run build:ui (D020).",
+        "uiBundleStale(root) is true when dist/ui/main.js is missing or older than any src/ui file and false otherwise (unit test); mapx ui run from source with no dist/ui builds it and serves main.js with HTTP 200 (measured).",
+        "publish-npm.yml still runs npm run build:npm; npm run build:npm then scripts/check-package.ts exits 0.",
+        "The CI test job runs npm run build:npm before the package check (test)."
       ],
       "verificationCommands": [
+        "npx vitest run tests/package-scripts.test.ts",
         "npm run build:npm",
-        "npx tsx scripts/check-package.ts"
+        "npx tsx scripts/check-package.ts",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-01T09:11:39.409Z",
+      "completedAt": "2026-11-01T09:46:04.222Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M4-05.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/package-scripts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-05.md"
+        },
+        {
+          "command": "npm run build:npm",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-05.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-05.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-05.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-01T09:11:37.592Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T09:11:39.409Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T09:46:03.923Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-01T09:46:04.222Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/package-scripts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-05.md"
+            },
+            {
+              "command": "npm run build:npm",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-05.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-05.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-05.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

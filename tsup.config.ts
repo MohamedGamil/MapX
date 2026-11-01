@@ -7,7 +7,8 @@ export default defineConfig({
   format: ['esm'],
   outDir: 'dist',
   bundle: false,
-  clean: true,
+  // Keep the dashboard bundle (scripts/build-ui.ts): `npm pack` builds it in prepack, before prepare runs tsup (M4-05).
+  clean: ['!ui/**'],
   dts: true,
   onSuccess: async () => {
     const mainJsPath = join(process.cwd(), 'dist', 'main.js');

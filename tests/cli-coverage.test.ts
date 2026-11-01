@@ -351,6 +351,10 @@ describe('CLI Additional Coverage Boost', () => {
 
     // 5. ui subcommand configurations
     await runCLI(['ui', '--port', '4002', '--host', '127.0.0.1', '--token', 'def', '--no-open']);
+
+    // M4-05: both commands ask for the development build of a stale dashboard.
+    const { startUiServer } = await import('../src/ui-server.js');
+    expect(vi.mocked(startUiServer).mock.calls.map(([o]) => [o.port, o.devBuild])).toEqual(expect.arrayContaining([[4001, true], [4002, true]]));
   });
 
   it('covers scan and update command error paths and SIGINT', async () => {
