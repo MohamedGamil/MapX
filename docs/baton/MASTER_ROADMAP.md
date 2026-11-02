@@ -215,7 +215,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 
 - **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — DONE, P1, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6, M0-02-R10, M4-10, M4-11, M4-13, M4-12, M4-14, M4-15, M4-16, M4-19, M4-17, M4-20, M4-21, M4-22, M4-23.
 - **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — DONE, P1, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6, M0-02-R10, M4-10, M4-11, M4-13, M4-12, M4-14, M4-15, M4-16, M4-19, M4-17, M4-20, M4-21, M4-22, M4-23.
-- **M5-03** Element view, core selectors and layer membership with selector trace — BACKLOG, P1, 10h; depends on M5-01, M5-02.
+- **M5-03** Element view, core selectors and layer membership with selector trace — DONE, P1, 10h; depends on M5-01, M5-02.
 - **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — BACKLOG, P1, 12h; depends on M5-03.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — BACKLOG, P1, 8h; depends on M5-04.
 - **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — BACKLOG, P1, 7h; depends on M5-05.

@@ -15088,16 +15088,65 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-02T01:50:09.623Z",
+      "completedAt": "2026-11-02T01:58:58.135Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
-      "criticalPath": true,
+      "artifacts": [
+        "docs/baton/reports/M5-03.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-selectors.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-03.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-03.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-02T01:50:09.281Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T01:50:09.623Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T01:58:57.698Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T01:58:58.135Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-selectors.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-03.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-03.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -15142,15 +15191,18 @@
         "src/arch/elements.ts",
         "src/arch/selectors/**",
         "src/arch/membership.ts",
-        "tests/arch-selectors.test.ts"
+        "tests/arch-selectors.test.ts",
+        "docs/architecture-rules.md"
       ],
       "acceptanceCriteria": [
-        "Every listed selector has unit tests in at least PHP, TS and Python fixture files, including negative cases.",
-        "qualifiedName normalisation documented and tested for the 22 languages (path-based fallback where no namespace exists).",
-        "Membership for the fixture is computed once per scan/config pair (cache hit verified by test)."
+        "Every listed selector has unit tests on the PHP, TS and Python fixture apps (tests/fixtures/arch-rules), each with negative cases (tests/arch-selectors.test.ts).",
+        "qualifiedName normalisation is documented and tested for every built-in language, with the path-based fallback where there is no namespace (the same test, table-driven over the registry).",
+        "Membership for the fixture is computed once per scan and configuration pair: a second call returns the cached result (a counter shows one computation); a changed configuration or a new scan recomputes it (test).",
+        "On the fixture apps, every element layers equal the layers the M5-01 rows imply for it, including the multi-layer OrderId and the empty Reporting (test)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/arch-selectors.test.ts"
+        "npx vitest run tests/arch-selectors.test.ts",
+        "npm run check"
       ],
       "description": "Element abstraction over stored files and symbols with per-language qualifiedName normalisation; selectors path, name(+kind), layer, all/any/not, role, cluster, repo, workspacePackage, language, framework; membership memoised per (scan, config hash) and recording which selector matched."
     },

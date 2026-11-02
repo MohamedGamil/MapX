@@ -16,7 +16,7 @@ Found on the way and fixed:
 - M0-32-R3;
 - the post-acceptance defects that three independent reviews found (see each report).
 
-`npm run test:ui` (42 browser tests) runs in CI's `UI` job. Next: M5-01 and M5-02, which are promotable. Version 0.3.8, tagged `v0.3.8`, and installed as the Linux binary in `~/.local/bin` (D029); nothing is published or pushed.
+`npm run test:ui` (42 browser tests) runs in CI's `UI` job. M5 has started: M5-02 (configuration loader and schema), M5-01 (fixture and scorer, 0.0 baseline) and M5-03 (element view, selectors, membership) are done; next are M5-04 (rule evaluator) and M5-10. Version 0.3.8, tagged `v0.3.8`, and installed as the Linux binary in `~/.local/bin` (D029); nothing is published or pushed.
 
 Earlier: Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). All remaining M4 tasks are done: M4-01 (`a4bd752`), M4-03 (`1391d31`), M4-08 (`ac26e66`), M4-05 (`e4fc861`, D020) and M4-04. Plan baseline: `develop@7e5aa19` (0.3.5). Version 0.3.7, tagged `v0.3.7` at `8914c5b` and installed as the Linux binary in `~/.local/bin` with the project's installer (D023); v0.3.6 tagged at `e1d5da0`. Not published or pushed. Owner testing of the installed binary found two defects, fixed on `develop` after `v0.3.7`: M0-10-R5 (scan/sync cover every registered repo by default, D024) and M0-06-R2 (the binary parses on worker threads; prototype-key lookups in the PHP, Vuex and Laravel code). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 

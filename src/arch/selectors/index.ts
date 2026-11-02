@@ -1,0 +1,135 @@
+// Layer selectors (M5-03; docs/research/deptrac AR-04). Each is a pure function of an element and
+// the element view, and says which part of the selector decided the match (the trace that
+// `explain` shows). Symbol-level selectors (`name`, `kind`) never match a file element; file-level
+// ones (`path`, `repo`, `language`, `role`, `cluster`, `workspacePackage`, `framework`) judge a
+// symbol by its file. Selectors that need data later tasks add never match here and are reported.
+import picomatch from 'picomatch';
+import type { Selector } from '../schema.js';
+import type { Element, ElementView } from '../elements.js';
+
+/** Selector keys this version cannot evaluate yet, with the task that adds them. */
+export const UNSUPPORTED_SELECTORS: Record<string, string> = {
+  extends: 'M5-09', implements: 'M5-09', inherits: 'M5-09', mixes: 'M5-09', inheritanceDepth: 'M5-09',
+  decorator: 'M5-10', docTag: 'M5-10', member: 'M5-09',
+  package: 'M5-20', builtin: 'M5-21', ambient: 'M5-22',
+};
+
+export interface SelectorContext {
+  view: ElementView;
+  /** Whether `element` is in layer `name` (for `layer` selectors; membership guards against cycles). */
+  inLayer(element: Element, name: string): boolean;
+}
+
+export interface SelectorMatch {
+  matched: boolean;
+  /** Where in the selector the decision was made, e.g. `all[1].path`; set when matched. */
+  path?: string;
+}
+
+const patterns = new Map<string, (s: string) => boolean>();
+
+/** `/body/flags` is a regex; anything else a glob (picomatch, dotfiles included). */
+export function globOrRegex(pattern: string): (s: string) => boolean {
+  const key = `g:${pattern}`;
+  let fn = patterns.get(key);
+  if (!fn) {
+    const m = /^\/(.*)\/([a-z]*)$/s.exec(pattern);
+    if (m) {
+      const re = new RegExp(m[1]!, m[2]);
+      fn = (s) => re.test(s);
+    } else {
+      const glob = picomatch(pattern, { dot: true });
+      fn = (s) => glob(s);
+    }
+    patterns.set(key, fn);
+  }
+  return fn;
+}
+
+/** A regex, case-insensitive unless written `/body/flags` (AR-04). */
+export function regex(pattern: string): (s: string) => boolean {
+  const key = `r:${pattern}`;
+  let fn = patterns.get(key);
+  if (!fn) {
+    const m = /^\/(.*)\/([a-z]*)$/s.exec(pattern);
+    const re = m ? new RegExp(m[1]!, m[2]) : new RegExp(pattern, 'i');
+    fn = (s) => re.test(s);
+    patterns.set(key, fn);
+  }
+  return fn;
+}
+
+/** Exact (case-insensitive) unless the value is a glob. */
+function nameOrGlob(pattern: string): (s: string) => boolean {
+  if (/[*?[\]{}]/.test(pattern)) {
+    const key = `n:${pattern}`;
+    let fn = patterns.get(key);
+    if (!fn) {
+      const glob = picomatch(pattern, { nocase: true, dot: true });
+      fn = (s) => glob(s);
+      patterns.set(key, fn);
+    }
+    return fn;
+  }
+  const lower = pattern.toLowerCase();
+  return (s) => s.toLowerCase() === lower;
+}
+
+const LANGUAGE_ALIASES: Record<string, string> = { ts: 'typescript', js: 'javascript', py: 'python', 'c#': 'c-sharp', csharp: 'c-sharp', 'c++': 'cpp', kt: 'kotlin', rb: 'ruby', rs: 'rust', golang: 'go' };
+export const normaliseLanguage = (l: string) => LANGUAGE_ALIASES[l.toLowerCase()] ?? l.toLowerCase();
+
+/** Does `selector` match `element`? */
+export function matchSelector(selector: Selector, element: Element, ctx: SelectorContext): SelectorMatch {
+  const file = element.file;
+  const yes = (path: string): SelectorMatch => ({ matched: true, path });
+  const no: SelectorMatch = { matched: false };
+  if (selector.all) {
+    if (!selector.all.length) return no;
+    for (const s of selector.all) if (!matchSelector(s, element, ctx).matched) return no;
+    return yes('all');
+  }
+  if (selector.any) {
+    for (let i = 0; i < selector.any.length; i++) {
+      const m = matchSelector(selector.any[i]!, element, ctx);
+      if (m.matched) return yes(`any[${i}].${m.path}`);
+    }
+    return no;
+  }
+  if (selector.not) return matchSelector(selector.not, element, ctx).matched ? no : yes('not');
+  if (selector.path !== undefined) return globOrRegex(selector.path)(file.path) ? yes('path') : no;
+  if (selector.name !== undefined) {
+    if (element.kind !== 'symbol') return no;
+    if (selector.kind && !selector.kind.includes(element.symbolKind as never)) return no;
+    return regex(selector.name)(element.qualifiedName) ? yes('name') : no;
+  }
+  if (selector.repo !== undefined) return nameOrGlob(selector.repo)(file.repo) ? yes('repo') : no;
+  if (selector.language !== undefined) return normaliseLanguage(file.language) === normaliseLanguage(selector.language) ? yes('language') : no;
+  if (selector.role !== undefined) {
+    if (!file.role || file.role.toLowerCase() !== selector.role.toLowerCase()) return no;
+    return file.roleConfidence >= (selector.confidence ?? 0) ? yes('role') : no;
+  }
+  if (selector.cluster !== undefined) {
+    const test = nameOrGlob(selector.cluster);
+    return file.clusters.some(test) ? yes('cluster') : no;
+  }
+  if (selector.workspacePackage !== undefined) {
+    const name = ctx.view.workspacePackage(file.path);
+    return name !== null && nameOrGlob(selector.workspacePackage)(name) ? yes('workspacePackage') : no;
+  }
+  if (selector.framework !== undefined) return file.frameworkParts.has(selector.framework) ? yes('framework') : no;
+  if (selector.layer !== undefined) return ctx.inLayer(element, selector.layer) ? yes('layer') : no;
+  return no; // a selector this version cannot evaluate (UNSUPPORTED_SELECTORS)
+}
+
+/** The selector keys in `selector` (nested ones included) that this version cannot evaluate. */
+export function unsupportedKeys(selector: Selector): string[] {
+  const out: string[] = [];
+  const visit = (s: Selector) => {
+    for (const key of Object.keys(s)) if (key in UNSUPPORTED_SELECTORS) out.push(key);
+    s.all?.forEach(visit);
+    s.any?.forEach(visit);
+    if (s.not) visit(s.not);
+  };
+  visit(selector);
+  return out;
+}
