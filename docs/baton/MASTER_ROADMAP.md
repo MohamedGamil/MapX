@@ -166,8 +166,8 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06-R4** Route domains are workspace hosts for HTTP pairing — DONE, P2, 2h; depends on M2-06-R2.
 - **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
 - **M2-09** JS/TS member-assigned functions are symbols — IN_PROGRESS, P2, 4h; depends on M2-08.
-- **M2-10** Lua method calls with `:` and `self` give call edges — IN_PROGRESS, P2, 3h; depends on M4-27.
-- **M2-11** Lua locals and self fields are not module constants — BACKLOG, P2, 2h; depends on M2-10.
+- **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.
+- **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
 
 ## M3 — Vue SFC semantics
 
@@ -239,7 +239,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-03** Element view, core selectors and layer membership with selector trace — DONE, P1, 10h; depends on M5-01, M5-02.
 - **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — DONE, P1, 12h; depends on M5-03, M5-03-R1, M5-25.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — DONE, P1, 8h; depends on M5-04.
-- **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — BACKLOG, P1, 7h; depends on M5-05.
+- **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — IN_PROGRESS, P1, 7h; depends on M5-05.
 - **M5-07** CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit — BACKLOG, P2, 6h; depends on M5-05.
 - **M5-08** Introspection: arch layers --why, which, unassigned, deps, unused, changed, allowed — BACKLOG, P2, 10h; depends on M5-04, M5-05.
 - **M5-09** Hierarchy and member selectors (transitive ancestry, depth, members) — BACKLOG, P2, 8h; depends on M5-03, M5-03-R1.
@@ -253,7 +253,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — BACKLOG, P2, 12h; depends on M5-04, M5-06.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — BACKLOG, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
-- **M5-19** External references store: capture unresolved out-of-workspace references — BACKLOG, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
+- **M5-19** External references store: capture unresolved out-of-workspace references — IN_PROGRESS, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — BACKLOG, P2, 6h; depends on M5-19, M5-01.
 - **M5-21** External references: Composer package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — BACKLOG, P2, 5h; depends on M5-19, M5-01.

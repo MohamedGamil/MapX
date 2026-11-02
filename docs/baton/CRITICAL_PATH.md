@@ -6,10 +6,10 @@ Remaining longest dependency path: **26h** (full-plan path: 214h).
 
 M5-10 → M5-11 → M5-98
 
-Remaining effort min/expected/max: **113 / 158 / 223h**. Capacity: 1 engineer(s) × 20 h/week → **7.9 weeks**, conditional finish **2026-12-27** (as of 2026-11-02).
+Remaining effort min/expected/max: **111 / 153 / 215h**. Capacity: 1 engineer(s) × 20 h/week → **7.7 weeks**, conditional finish **2026-12-25** (as of 2026-11-02).
 
 ## Open items and blockers
-- M5-06 (BACKLOG): prerequisites satisfied
+- M5-06 (IN_PROGRESS): prerequisites satisfied
 - M5-07 (BACKLOG): prerequisites satisfied
 - M5-08 (BACKLOG): prerequisites satisfied
 - M5-09 (BACKLOG): prerequisites satisfied
@@ -22,7 +22,7 @@ Remaining effort min/expected/max: **113 / 158 / 223h**. Capacity: 1 engineer(s)
 - M5-17 (BACKLOG): M5-06
 - M5-18 (BACKLOG): M5-06; M5-07
 - M5-98 (BACKLOG): M5-06; M5-11; M5-16
-- M5-19 (BACKLOG): prerequisites satisfied
+- M5-19 (IN_PROGRESS): prerequisites satisfied
 - M5-20 (BACKLOG): M5-19
 - M5-21 (BACKLOG): M5-19
 - M5-22 (BACKLOG): M5-19
@@ -32,8 +32,6 @@ Remaining effort min/expected/max: **113 / 158 / 223h**. Capacity: 1 engineer(s)
 - M4-24-R1 (IN_PROGRESS): prerequisites satisfied
 - M3-05-R3 (BACKLOG): prerequisites satisfied
 - M2-09 (IN_PROGRESS): prerequisites satisfied
-- M2-10 (IN_PROGRESS): prerequisites satisfied
-- M2-11 (BACKLOG): M2-10
 - M5-25-R2 (BACKLOG): prerequisites satisfied
 
 ## Remaining CPM timings (hours)
@@ -62,6 +60,4 @@ Remaining effort min/expected/max: **113 / 158 / 223h**. Capacity: 1 engineer(s)
 | M4-24-R1 | 0 | 2 | 24 | 26 | 24 |
 | M3-05-R3 | 0 | 3 | 23 | 26 | 23 |
 | M2-09 | 0 | 4 | 22 | 26 | 22 |
-| M2-10 | 0 | 3 | 21 | 24 | 21 |
-| M2-11 | 3 | 5 | 24 | 26 | 21 |
 | M5-25-R2 | 0 | 2 | 24 | 26 | 24 |

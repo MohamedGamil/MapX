@@ -4248,9 +4248,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 21,
-        "latestFinish": 21,
-        "slack": 21
+        "latestStart": 26,
+        "latestFinish": 26,
+        "slack": 26
       },
       {
         "id": "M3-05-R3",
@@ -4275,27 +4275,27 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 21,
-        "latestFinish": 21,
-        "slack": 21
+        "latestStart": 26,
+        "latestFinish": 26,
+        "slack": 26
       },
       {
         "id": "M2-10",
-        "duration": 3,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 3,
-        "latestStart": 21,
-        "latestFinish": 24,
-        "slack": 21
+        "earliestFinish": 0,
+        "latestStart": 26,
+        "latestFinish": 26,
+        "slack": 26
       },
       {
         "id": "M2-11",
-        "duration": 2,
-        "earliestStart": 3,
-        "earliestFinish": 5,
-        "latestStart": 24,
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 26,
         "latestFinish": 26,
-        "slack": 21
+        "slack": 26
       },
       {
         "id": "M5-25-R2",
@@ -4307,13 +4307,13 @@
         "slack": 24
       }
     ],
-    "totalEffort": 158
+    "totalEffort": 153
   },
   "resourceSchedule": {
-    "hours": 158,
-    "weeks": 7.9,
+    "hours": 153,
+    "weeks": 7.65,
     "forecastAsOf": "2026-11-02",
-    "conditionalDate": "2026-12-27",
+    "conditionalDate": "2026-12-25",
     "assignments": [
       {
         "id": "M0-01",
@@ -5723,19 +5723,19 @@
         "id": "M2-10",
         "worker": 0,
         "start": 151,
-        "finish": 154
+        "finish": 151
       },
       {
         "id": "M2-11",
         "worker": 0,
-        "start": 154,
-        "finish": 156
+        "start": 151,
+        "finish": 151
       },
       {
         "id": "M5-25-R2",
         "worker": 0,
-        "start": 156,
-        "finish": 158
+        "start": 151,
+        "finish": 153
       }
     ]
   }
