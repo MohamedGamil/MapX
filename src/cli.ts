@@ -34,12 +34,13 @@ import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
 import { ConfigError, formatValidation, loadArchitectureConfig, validateArchitectureConfig } from './arch/config.js';
-import type { ArchitectureConfig } from './arch/schema.js';
+import { EDGE_TYPES, type ArchitectureConfig } from './arch/schema.js';
 import { configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
 import { baselineLocation, displayPath, loadCompareReport, renderBaseline } from './arch/baseline.js';
 import { renderJson } from './arch/reporters/json.js';
 import { renderTable } from './arch/reporters/table.js';
+import { changedLayers, changedSince, IntrospectError, isAllowed, layerDependencies, layerMembers, layerSummaries, openArchitecture, unassignedElements, unusedAllowances, whichLayers, type ArchContext } from './arch/introspect.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
 
@@ -2590,6 +2591,166 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       process.exitCode = report.valid ? EXIT.ok : EXIT.config;
     });
 
+  // Introspection (M5-08; AR-13a–g, docs/architecture-rules.md#introspection): questions about the
+  // configuration answered from the index. Each prints text or `--format json` (the object
+  // src/arch/introspect.ts returns) and exits by AR-17: 3 for configuration and usage errors (an
+  // unknown layer, an element no query resolves), 4 for a missing or stale index; `unassigned`
+  // exits 2 when anything is unassigned and `allowed` 1 when the dependency would be an error.
+  const archQuestion = (
+    name: string, description: string,
+    answer: (ctx: ArchContext, args: unknown[], opts: Record<string, unknown>) => { json: unknown; text: string; exit?: number },
+    options: { allowStale?: boolean; configure?: (cmd: Command) => void } = {},
+  ) => {
+    const cmd = archCmd.command(name).description(description)
+      .option('-d, --dir <path>', 'Target directory')
+      .option('--view <name>', 'Use the view .mapx/architecture/<name>.jsonc')
+      .option('--format <format>', 'Output format: text or json', 'text')
+      .option('--json', 'Same as --format json');
+    if (!options.allowStale) cmd.option('--sync', 'Sync the index first when files changed since the last scan');
+    options.configure?.(cmd);
+    cmd.exitOverride((err) => { process.exit(err.exitCode === 0 ? 0 : EXIT.config); });
+    cmd.action(async function (this: Command) {
+      const opts = this.opts();
+      // `arch` has its own --dir, which takes the option when it precedes any unknown one.
+      const dir = resolveDir({ dir: opts.dir ?? archCmd.opts().dir }, program.opts());
+      const format = opts.json ? 'json' : String(opts.format);
+      if (!['text', 'json'].includes(format)) {
+        console.error(`Error: --format must be text or json, not "${format}"`);
+        process.exitCode = EXIT.config;
+        return;
+      }
+      const fail = (message: string, extra: Record<string, unknown> = {}) => {
+        if (format === 'json') console.log(JSON.stringify({ error: message, ...extra }, null, 2));
+        else console.error(`Error: ${message}`);
+        process.exitCode = EXIT.config;
+      };
+      try {
+        // Every failure prints `{ "error": … }` on stdout in JSON, whatever its exit code.
+        const problems: string[] = [];
+        const context = await openCurrentIndex(dir, { sync: !!opts.sync, command: `mapx arch ${name}`, allowStale: options.allowStale, problems });
+        if (!context) {
+          if (format === 'json') console.log(JSON.stringify({ error: problems.join(' ') }, null, 2));
+          return;
+        }
+        const view = opts.view as string | undefined;
+        let ctx: ArchContext | null;
+        try {
+          ctx = openArchitecture(dir, context.store, { view, repoPaths: Object.fromEntries(context.config.repos.map((r) => [r.name, r.path])) });
+        } catch (err) {
+          if (!(err instanceof ConfigError)) throw err;
+          if (format === 'json') console.log(JSON.stringify({ error: 'Invalid architecture configuration', issues: err.issues }, null, 2));
+          else console.error(err.message);
+          process.exitCode = EXIT.config;
+          return;
+        }
+        if (!ctx) {
+          fail(view ? `No view "${view}" in ${dir}: .mapx/architecture/${view}.jsonc does not exist.` : `No architecture configuration in ${dir}: create .mapx/architecture.jsonc (see docs/architecture-rules.md).`);
+          return;
+        }
+        if (ctx.policy.errors.length) {
+          fail(`Invalid architecture configuration: ${ctx.policy.errors.join('; ')}`);
+          return;
+        }
+        const out = answer(ctx, this.processedArgs, opts);
+        if (format === 'json') console.log(JSON.stringify(out.json, null, 2));
+        else process.stdout.write(out.text.endsWith('\n') ? out.text : `${out.text}\n`);
+        process.exitCode = out.exit ?? EXIT.ok;
+      } catch (err) {
+        if (err instanceof IntrospectError) { fail(err.message, err.candidates.length ? { candidates: err.candidates } : {}); return; }
+        const message = `mapx arch ${name} failed: ${err instanceof Error ? err.message : String(err)}`;
+        if (format === 'json') console.log(JSON.stringify({ error: message }, null, 2));
+        console.error(message);
+        process.exitCode = EXIT.index;
+      }
+    });
+    return cmd;
+  };
+  const refText = (r: { element: string; kind: string; symbolKind?: string }) => `${(r.symbolKind ?? r.kind).padEnd(9)} ${r.element}`;
+
+  archQuestion('layers', 'Layers and their sizes; with a layer, its members (files and top-level symbols), --why naming the matching selector (AR-13a)', (ctx, [layer], opts) => {
+    if (layer === undefined) {
+      const s = layerSummaries(ctx);
+      const w = Math.max(5, ...s.layers.map((l) => l.name.length));
+      return {
+        json: s,
+        text: [`${'Layer'.padEnd(w)}  Elements  Files`, ...s.layers.map((l) => `${l.name.padEnd(w)}  ${String(l.elements).padStart(8)}  ${String(l.files).padStart(5)}${l.overlay ? '  (overlay)' : ''}`)].join('\n'),
+      };
+    }
+    const m = layerMembers(ctx, String(layer), { why: !!opts.why, nested: !!opts.nested });
+    const lines = [`${m.name}${m.overlay ? ' (overlay)' : ''}: ${m.files} file(s), ${m.elements} element(s)`];
+    for (const e of m.members) lines.push(`  ${refText(e)}${e.selector ? `  ← ${e.selector}${e.via !== 'self' ? ` via ${e.via}` : ''}` : ''}`);
+    if (!m.members.length) lines.push('  (no members)');
+    return { json: m, text: lines.join('\n') };
+  }, { configure: (c) => c.argument('[layer]', 'A layer name').option('--why', 'Name the selector that put each member in the layer').option('--nested', 'List members of types too (methods, properties)') });
+
+  archQuestion('which', 'The layers an element (file, qualified name or symbol name) is in, and the selector trace (AR-13b)', (ctx, [query]) => {
+    const r = whichLayers(ctx, String(query));
+    const lines: string[] = [];
+    for (const m of r.matches) {
+      lines.push(`${m.element} (${m.symbolKind ?? m.kind}, ${m.file})`);
+      if (!m.trace.length) lines.push('  in no layer');
+      for (const t of m.trace) lines.push(`  ${t.layer}  ← ${t.selector}${t.via !== 'self' ? ` via ${t.via}` : ''}`);
+      if (m.private.length) lines.push(`  private to ${m.private.join(', ')}`);
+    }
+    return { json: r, text: lines.join('\n') };
+  }, { configure: (c) => c.argument('<element>', 'A file path, qualified name, scoped name (Order::run) or top-level symbol name') });
+
+  archQuestion('unassigned', 'Files and top-level symbols in no layer; exit 2 when there are any (AR-13c)', (ctx, _args, opts) => {
+    const r = unassignedElements(ctx, { kind: opts.kind as string | undefined, path: opts.path as string | undefined, nested: !!opts.nested });
+    const text = r.total ? [...r.elements.map((e) => `  ${refText(e)}`), `${r.total} unassigned element(s).`].join('\n') : 'Every element is in a layer.';
+    return { json: r, text, exit: r.total ? EXIT.uncovered : EXIT.ok };
+  }, { configure: (c) => c.option('--kind <kind>', 'Only file, symbol, or a symbol kind (class, function, …)').option('--path <path>', 'Only under this path prefix, or matching this glob').option('--nested', 'List members of types too') });
+
+  archQuestion('deps', 'The stored edges from one layer to another (or to every other), with file:line, edge type, verifiability and decision (AR-13d)', (ctx, [from, to]) => {
+    const r = layerDependencies(ctx, String(from), to === undefined ? undefined : String(to));
+    const mark = { allowed: '✔', violation: '✖', uncovered: '?' } as const;
+    const lines = r.dependencies.map((d) => `${mark[d.kind]} ${d.source.file}${d.source.line !== undefined ? `:${d.source.line}` : ''}  ${d.source.element} → ${d.target.element} (${d.edgeType}, ${d.verifiability}) [${d.targetLayers.join(', ') || 'no layer'}]${d.kind === 'violation' ? `  ${d.rule} [${d.severity}]` : ''}`);
+    lines.push(`${r.from} → ${r.to ?? 'any layer'}: ${r.dependencies.length} edge(s): ${r.counts.allowed} allowed, ${r.counts.violation} violating, ${r.counts.uncovered} uncovered.`);
+    return { json: r, text: lines.join('\n') };
+  }, { configure: (c) => c.argument('<from>', 'Source layer').argument('[to]', 'Target layer (default: every other layer, and none)') });
+
+  archQuestion('unused', 'Allowances used at most --limit times (default 0: unused), with their use counts (AR-13e)', (ctx, _args, opts) => {
+    const limit = Number(opts.limit);
+    if (!Number.isInteger(limit) || limit < 0) throw new IntrospectError(`--limit must be a whole number, not "${String(opts.limit)}"`);
+    const r = unusedAllowances(ctx, { limit });
+    const lines = r.allowances.map((a) => `  ${a.from} → ${a.to}  (${a.rule}${a.types ? `; ${a.types.join(', ')}` : ''}${a.severity === 'warn' ? '; advisory' : ''})  uses: ${a.uses}`);
+    lines.push(`${r.allowances.length} of ${r.total} allowance(s) used at most ${limit} time(s).`);
+    return { json: r, text: lines.join('\n') };
+  }, { configure: (c) => c.option('--limit <n>', 'Report allowances used at most n times', '0') });
+
+  archQuestion('changed', 'The layers some files touch (or the files changed since a git ref), and with --with-dependents the layers that depend on them; reads the index as it is (AR-13f)', (ctx, [files], opts) => {
+    const list = [...((files as string[] | undefined) ?? [])];
+    if (opts.since !== undefined) list.push(...changedSince(ctx.dir, String(opts.since), ctx.repoPaths));
+    else if (!list.length) throw new IntrospectError('give the changed files, or --since <ref>');
+    const r = changedLayers(ctx, list, { withDependents: !!opts.withDependents });
+    const lines = r.files.map((f) => `  ${f.file}  ${!f.indexed ? '(not indexed)' : !f.inScope ? '(outside the scope)' : f.layers.join(', ') || '(no layer)'}`);
+    lines.push(`Layers: ${r.layers.join(', ') || 'none'}`);
+    if (r.dependents) {
+      lines.push('Dependents:');
+      for (const d of r.dependents) lines.push(`  ${d.layer}: ${d.files.join(', ')}`);
+      if (r.unassignedDependents!.length) lines.push(`  (no layer): ${r.unassignedDependents!.join(', ')}`);
+      if (!r.dependents.length && !r.unassignedDependents!.length) lines.push('  none');
+    }
+    return { json: r, text: lines.join('\n') };
+  }, {
+    allowStale: true,
+    configure: (c) => c.argument('[files...]', 'Workspace-relative paths').option('--since <ref>', 'Add the files changed since this git ref (committed, staged, unstaged and untracked)').option('--with-dependents', 'Also the layers of the files that depend on them'),
+  });
+
+  archQuestion('allowed', 'Would a dependency from <from> to <to> (layers, files or symbols) be allowed? Decision, rule and reason; exit 1 when it would be an error (AR-13g)', (ctx, [from, to], opts) => {
+    const type = opts.type as string | undefined;
+    if (type !== undefined && !(EDGE_TYPES as readonly string[]).includes(type)) throw new IntrospectError(`--type "${type}" is not an edge type (${EDGE_TYPES.join(', ')})`);
+    const r = isAllowed(ctx, String(from), String(to), { edgeType: type });
+    const head = r.allowed ? `✔ allowed${r.rule === 'allowed' ? '' : ` (${r.rule})`}` : `✖ not allowed (${r.rule}, ${r.severity})`;
+    const lines = [`${head}: ${r.reason}`];
+    // Every decision when there are several (edge types, source layers), the observed ones marked.
+    if (r.decisions.length > 1) {
+      for (const d of r.decisions) lines.push(`  ${d.allowed ? '✔' : '✖'} ${d.edgeType ?? ''}${d.sourceLayer ? ` [${d.sourceLayer}]` : ''} ${d.rule} (${d.severity})${d.observed ? `, in the index (${d.verifiability})` : ''}`);
+    }
+    if (!r.allowed && r.from.layers.length) lines.push(`${r.from.layers.join(', ')} may depend on: ${r.allowedLayers.join(', ') || 'no other layer'}`);
+    return { json: r, text: lines.join('\n'), exit: r.exitCode ? EXIT.violations : EXIT.ok };
+  }, { configure: (c) => c.argument('<from>', 'Source layer, file or symbol').argument('<to>', 'Target layer, file or symbol').option('--type <edgeType>', 'Decide for this edge type only (default: the types the index has between the two, else every type in scope)') });
+
   // Architecture rules (M5-05; docs/architecture-rules.md, AR-16, AR-17): evaluate
   // .mapx/architecture.jsonc on the index, print the findings, exit with the AR-17 code.
   program
@@ -2658,44 +2819,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       try {
         // 4 first (AR-17: the lowest-level problem wins): no index, a repo never scanned, or files
         // changed since the last scan (unless --sync brings the index up to date).
-        if (!existsSync(resolve(dir, '.mapx', 'config.json')) || !existsSync(resolve(dir, '.mapx', 'mapx.db'))) {
-          console.error(`No MapX index in ${dir}: run \`mapx init\` and \`mapx scan\` first.`);
-          process.exitCode = EXIT.index;
-          return;
-        }
-        const { config, store, graph } = await loadContext(dir);
-        // An index file exists as soon as any command opens it: only a finished scan of every
-        // registered repo counts (review of M5-05: an unscanned index passed as clean).
-        const unscanned = config.repos.filter((r) => !store.getMeta(`last_scan_time:${r.name}`)).map((r) => r.name);
-        if (unscanned.length) {
-          console.error(`The index has no completed scan of ${unscanned.join(', ')}: run \`mapx scan\` first.`);
-          process.exitCode = EXIT.index;
-          return;
-        }
-        // A walk of the workspace: new files count in a non-git workspace and in nested repos too.
-        const stale = findStaleFiles(store, dir);
-        // An index an older extractor built is stale too: its edges may predate a fix (M5-26).
-        const outdated = outdatedRepos(store, config.repos.map((r) => r.name));
-        if (staleCount(stale) > 0 || outdated.length) {
-          if (!opts.sync) {
-            if (staleCount(stale) > 0) {
-              const names = staleNames(stale, 5);
-              console.error(`The index is stale: ${staleCount(stale)} file(s) changed since the last scan (${names.join(', ')}${staleCount(stale) > names.length ? ', …' : ''}). Run \`mapx update\`, or \`mapx check --sync\`.`);
-            }
-            if (outdated.length) console.error(`The index of ${outdated.join(', ')} was built by an older MapX: run \`mapx scan\`, or \`mapx check --sync\`, to rebuild it.`);
-            process.exitCode = EXIT.index;
-            return;
-          }
-          // The sync re-parses every file of an outdated repo. One it could not rebuild (a missing
-          // folder, an interrupted sync) is still outdated: the gate holds (review of M5-26).
-          await new Scanner(store, config, graph).scanIncremental();
-          const still = outdatedRepos(store, config.repos.map((r) => r.name));
-          if (still.length) {
-            console.error(`The index of ${still.join(', ')} was built by an older MapX and the sync could not rebuild it: run \`mapx scan\`.`);
-            process.exitCode = EXIT.index;
-            return;
-          }
-        }
+        const context = await openCurrentIndex(dir, { sync: !!opts.sync, command: 'mapx check' });
+        if (!context) return;
+        const { config, store } = context;
 
         // 3: no configuration, or one that cannot be used.
         const view = (opts.view as string | undefined) ?? undefined;
@@ -3585,6 +3711,58 @@ export async function loadContext(dir: string): Promise<{
   }
 
   return { config, store, graph };
+}
+
+/**
+ * The index gate of `mapx check` and the `mapx arch` introspection subcommands (AR-17, exit 4): an
+ * index exists, every registered repo has a completed scan, no file changed since it (unless `sync`
+ * brings the index up to date first, or `allowStale`), and no older MapX built it. Prints why and
+ * sets exit 4, returning null, when the index cannot be used; `problems` collects the messages
+ * for a caller that also reports them in JSON.
+ */
+async function openCurrentIndex(dir: string, options: { sync?: boolean; command: string; allowStale?: boolean; problems?: string[] }): Promise<Awaited<ReturnType<typeof loadContext>> | null> {
+  const report = (message: string) => { console.error(message); options.problems?.push(message); };
+  if (!existsSync(resolve(dir, '.mapx', 'config.json')) || !existsSync(resolve(dir, '.mapx', 'mapx.db'))) {
+    report(`No MapX index in ${dir}: run \`mapx init\` and \`mapx scan\` first.`);
+    process.exitCode = EXIT.index;
+    return null;
+  }
+  const context = await loadContext(dir);
+  const { config, store, graph } = context;
+  // An index file exists as soon as any command opens it: only a finished scan of every
+  // registered repo counts (review of M5-05: an unscanned index passed as clean).
+  const unscanned = config.repos.filter((r) => !store.getMeta(`last_scan_time:${r.name}`)).map((r) => r.name);
+  if (unscanned.length) {
+    report(`The index has no completed scan of ${unscanned.join(', ')}: run \`mapx scan\` first.`);
+    process.exitCode = EXIT.index;
+    return null;
+  }
+  // A walk of the workspace: new files count in a non-git workspace and in nested repos too.
+  const stale = options.allowStale ? null : findStaleFiles(store, dir);
+  // An index an older extractor built is stale too: its edges may predate a fix (M5-26).
+  const outdated = outdatedRepos(store, config.repos.map((r) => r.name));
+  const staleFiles = stale ? staleCount(stale) : 0;
+  if (staleFiles > 0 || outdated.length) {
+    if (!options.sync) {
+      if (staleFiles > 0) {
+        const names = staleNames(stale!, 5);
+        report(`The index is stale: ${staleFiles} file(s) changed since the last scan (${names.join(', ')}${staleFiles > names.length ? ', …' : ''}). Run \`mapx update\`, or \`${options.command} --sync\`.`);
+      }
+      if (outdated.length) report(`The index of ${outdated.join(', ')} was built by an older MapX: run \`mapx scan\`${options.allowStale ? '' : `, or \`${options.command} --sync\`,`} to rebuild it.`);
+      process.exitCode = EXIT.index;
+      return null;
+    }
+    // The sync re-parses every file of an outdated repo. One it could not rebuild (a missing
+    // folder, an interrupted sync) is still outdated: the gate holds (review of M5-26).
+    await new Scanner(store, config, graph).scanIncremental();
+    const still = outdatedRepos(store, config.repos.map((r) => r.name));
+    if (still.length) {
+      report(`The index of ${still.join(', ')} was built by an older MapX and the sync could not rebuild it: run \`mapx scan\`.`);
+      process.exitCode = EXIT.index;
+      return null;
+    }
+  }
+  return context;
 }
 
 export function getStaleFilesCount(store: Store, dir: string): number {

@@ -10,8 +10,9 @@ What exists so far:
 - **`mapx check`** (M5-05): the table and JSON reporters, and the exit contract. See [cli-reference.md](cli-reference.md#mapx-check).
 - **`mapx arch validate-config`** and the MCP tool `mapx_arch_validate_config` (M5-02-R1): validate the configuration alone, without an index.
 - **Baselines and the `--compare` ratchet** (M5-06): see [Baselines and the ratchet](#baselines-and-the-ratchet). These are CLI only for now: `mapx check` has no MCP tool yet (M5-14).
+- **Introspection** (M5-08): `mapx arch layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed`. See [Introspection](#introspection). They are CLI only until M5-14.
 
-CI reporters, introspection commands and `@internal` markers come in M5-07 to M5-11.
+CI reporters and `@internal` markers come in M5-07 to M5-11.
 
 ## The configuration document
 
@@ -294,3 +295,81 @@ mapx check --compare /tmp/base.json
 - **Like with like:** the report records its `selection`. A base report of another view, or one narrowed by a `--layer` or `--rule` that the head does not share, is refused (exit 3). Its missing findings would look new, or one view's findings would excuse another's. A narrower head against a whole base is fine.
 
 `--since <git-ref>`, which would scan the ref itself, is deferred (REQ-ARCH-021).
+
+## Introspection
+
+The `mapx arch` subcommands answer questions about the configuration from the index (AR-13, Deptrac's `debug:*` commands). Their options and exit codes are in [cli-reference.md](cli-reference.md#mapx-arch-introspection-subcommands). With `--format json` each prints the object the matching function of `src/arch/introspect.ts` returns, which the MCP tools will share (M5-14).
+
+- **Elements.** An element is `{ element, kind, symbolKind?, file }`: `element` is a symbol's qualified name or a file's path, and `kind` is `file` or `symbol`.
+- **Errors.** Every failure prints `{ "error": "…" }` on stdout in JSON, whatever its exit code. An ambiguous name or an unknown layer adds `candidates`, and an invalid configuration adds `issues: [{ file, pointer, message }]`.
+- **Scope.** `scope.include` and `scope.exclude` apply as in `mapx check`. An element outside them takes part in no evaluated edge.
+
+| Subcommand | Question | JSON |
+| --- | --- | --- |
+| `layers` | Which layers are there, and how big? | `{ layers: [{ name, overlay, elements, files }] }`, counted as `mapx check` counts them: every element, and the files among them |
+| `layers <layer> [--why]` | Which elements are in this layer? | `{ name, overlay, elements, files, total, members: [element] }`. See below |
+| `which <element>` | Which layers is this element in, and why? | `{ query, matches: [{ …element, layers, private, trace: [{ layer, selector, via }], inScope }] }`. See below |
+| `unassigned` | What is in no layer? | `{ total, elements: [element] }`. See below. **Exit 2** when `total` is not 0 |
+| `deps <from> [to]` | Which concrete edges go from one layer to another? | `{ from, to, counts: { allowed, violation, uncovered }, dependencies: [{ source: { …element, line }, target, targetLayers, edgeType, verifiability, kind, rule?, severity, violatedLayers? }] }`. See below |
+| `unused [--limit N]` | Which allowances are used at most N times (default 0)? | `{ limit, total, allowances: [{ from, to, rule, types, severity, uses }] }`. See below |
+| `changed [files…] [--since <ref>] [--with-dependents]` | Which layers do these files touch, and which layers depend on them? | `{ files: [{ file, indexed, inScope, layers }], layers, dependents?: [{ layer, files }], unassignedDependents? }`. See below |
+| `allowed <from> <to> [--type T]` | Would a dependency from `from` to `to` pass `mapx check`? | Described below. **Exit 1** when `mapx check` would fail on it |
+
+- **`layers <layer>`:**
+  - Members are files and top-level symbols; `--nested` adds every symbol.
+  - `--why` adds `selector`, the position that matched (`selectors[0].all`), and `via`: `self`, or the top-level symbol that put a file in the layer.
+- **`which`:**
+  - `layers` includes overlays, and `private` lists the layers the element is private to.
+  - A name that matches several elements lists them all.
+- **`unassigned`:**
+  - It lists elements in no non-overlay layer that a dependency can involve, within the scope's paths. These are symbols (top-level ones, unless `--nested`) and files that declare a symbol or are an end of an evaluated edge. So the files `mapx init` writes (AGENTS.md and the like), JSON configs and other files nothing depends on are not listed, as `mapx check` never reports them uncovered.
+  - `--kind` takes `file`, `symbol` or a symbol kind, and `--path` a path prefix or a glob.
+  - An unknown kind, or a path that matches no indexed file, is a usage error (exit 3), so a typo cannot pass the gate.
+- **`deps`:**
+  - There is one entry per stored edge, at the finest element the edge names (a method, or a file for an import), with the decision `mapx check` makes before any baseline.
+  - Without `to`, it lists every decided edge of `from`, uncovered ones included.
+  - An edge counts for each other layer of its target, as in the report's `layerEdges`. An edge into an element in both Domain and Shared is a Domain → Shared edge, so `deps L L` lists nothing.
+- **`unused`:**
+  - `total` counts every allowance of the expanded policy, after `+`, `*` and `!`.
+  - `rule` says how the pair is granted: `explicit`, `+L` (brought by that `+`) or `*`.
+  - `types` is null when the allowance covers every type in scope, and `severity` is `warn` for an advisory allowance.
+  - `uses` counts the stored edges the allowance decides: allowed ones, and the warnings an advisory allowance reports. A private-layer violation does not use the allowance of its layer.
+- **`changed`:**
+  - Paths are workspace-relative. The index is read as it is, never re-scanned, so a file it does not have is `indexed: false`.
+  - Only in-scope files contribute to `layers`.
+  - `--since <ref>` adds the files git reports changed since the ref: committed, staged, unstaged and untracked, both paths of a rename, `.mapx/` excluded. Git is asked in the workspace folder and in every registered repo inside it that has the ref, so a workspace whose root is no repository works through its repos. It is an error only when no repo has the ref.
+  - A dependent is another file with an edge `mapx check` evaluates into one of the files.
+
+### `allowed`
+
+`allowed` is the agent pre-flight check. Its answer is what `mapx check` reports for the same pair, in severity and exit code: both decide through the same function (`decideEdge`). Each end is a layer name or an element.
+
+- **Observed dependencies.** When the index already connects the two elements, their stored edges are decided as they are, with their types and verifiability, so `policy.inferred` applies. Without `--type`, every type they have is decided. A file stands for everything it declares, and a top-level symbol for its members, as findings name them.
+- **Hypothetical dependencies.** Otherwise the dependency is hypothetical and verified, over `--type`, or without one over every type in `scope.types`.
+- **Decisions.** There is one decision per edge type and source layer (AR-12: every layer of the source is checked).
+- **The answer** is the strictest decision: by severity (error, warn, info), then a violation before anything else. One error-level decision makes it exit 1, even when another source layer or edge type is only advisory.
+
+```
+{ from, to, edgeType, allowed, rule, severity, reason, exitCode,
+  decisions: [{ edgeType, observed, verifiability, sourceLayer, allowed, rule, severity, via?, violatedLayers?, reason }],
+  allowedTypes, allowedLayers }
+```
+
+- **`from`, `to`:** `{ query, kind: layer|file|symbol, element?, file?, layers, overlays, private, inScope }`.
+- **`allowed`:** no decision is a violation, of any severity. **`exitCode`:** 1 when a decision is an error-level violation, as `mapx check` exits.
+- **`rule`:** one of the following.
+  - `allowed` (with `via`: `explicit`, `+L` or `*`).
+  - `same-layer`.
+  - `uncovered`: the target is in no layer. It is allowed, with severity `warn`.
+  - `overlay`: the target is an overlay layer that the source layer does not deny.
+  - `disallowed-layer` or `private-layer`: a violation, with severity `error`. It is `warn` for an advisory allowance, or for an inferred edge under `policy.inferred: "warn"`.
+  - `unassigned-source`: the source is in no layer, so no rule applies.
+  - `out-of-scope`: an end outside the scope's paths, or a `--type` outside `scope.types`.
+- **`decisions[]`:**
+  - `edgeType`, `verifiability` and `sourceLayer` are null only for an answer that involves no edge type (`unassigned-source`, or an end out of scope).
+  - `observed` is true when the decision is on edges the index has.
+- **`allowedTypes`:** the edge types decided without any violation.
+- **`allowedLayers`:** the layers every source layer may depend on, through full (non-advisory) allowances for `--type`. These are the alternatives.
+- **No baseline.** No baseline applies: a baselined violation is still reported.
+- **Elements must be in the index.** A file that does not exist yet cannot be named, so name its layer instead.
+

@@ -179,10 +179,8 @@ export interface Evaluation {
 export function evaluateEdges(store: Store, config: ArchitectureConfig, membership: LayerMembership, policy: ExpandedPolicy): Evaluation {
   const view = membership.view;
   const resolve = endResolver(view);
-  const types = new Set<string>(config.scope.types);
-  const include = config.scope.include.map(globOrRegex);
-  const exclude = config.scope.exclude.map(globOrRegex);
-  const inScopePath = (p: string) => (!include.length || include.some((m) => m(p))) && !exclude.some((m) => m(p));
+  const scope = edgeScope(config);
+  const inScopePath = scope.path;
   const overlays = new Set(config.layers.filter((l) => l.overlay).map((l) => l.name));
   const packages = new Map<string, string[]>();
   const packageFiles = (dir: string, ns: string): string[] => {
@@ -198,11 +196,10 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
   const rows = store.raw.prepare('SELECT source_file, target_file, source_symbol, target_symbol, edge_type, verifiability, metadata FROM edges ORDER BY id').all() as unknown as EdgeRow[];
   const out: Dependency[] = [];
   const endFiles = new Set<string>();
-  const inferredSeverity = (v: Dependency['verifiability']): FindingSeverity => (v === 'inferred' && config.policy.inferred === 'warn' ? 'warn' : 'error');
   for (const r of rows) {
-    if (!types.has(r.edge_type)) continue;
+    if (!scope.types.has(r.edge_type)) continue;
     const verifiability = r.verifiability === 'inferred' ? 'inferred' : 'verified';
-    if (verifiability === 'inferred' && config.policy.inferred === 'ignore') continue;
+    if (!scope.verifiability(verifiability)) continue;
     if (!inScopePath(r.source_file) || !inScopePath(r.target_file)) continue;
     const source = resolve(r.source_file, r.source_symbol);
     const target = resolve(r.target_file, r.target_symbol);
@@ -226,38 +223,96 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
     try { const m = r.metadata ? JSON.parse(r.metadata) : null; const at = m?.startLine ?? m?.line; if (typeof at === 'number') line = at; } catch { /* no line */ }
     const base = { source, target, targetLayers, edgeType: r.edge_type, verifiability: verifiability as Dependency['verifiability'], line, ...(targetPackage ? { targetPackage } : {}) };
     // Overlays the target is in (Deprecated, Vendor …): they only ever matter as denied targets.
-    const targetOverlays = membership.of(target).filter((l) => overlays.has(l));
-    for (const sourceLayer of sourceLayers) {
-      // An overlay the source layer denies (`"*": ["!Deprecated"]`), whatever the target's other
-      // layers, the source layer's own included (review of M5-04: overlay denies had no effect).
-      const deniedOverlays = targetOverlays.filter((l) => policy.denied.get(sourceLayer)?.has(l));
-      if (deniedOverlays.length) {
-        out.push({ ...base, kind: 'violation', rule: 'disallowed-layer', severity: inferredSeverity(verifiability), sourceLayer, violatedLayers: deniedOverlays });
-        continue;
-      }
-      if (!targetLayers.length) {
-        out.push({ ...base, kind: 'uncovered', rule: 'uncovered', severity: 'warn', sourceLayer });
-        continue;
-      }
-      // AR-08: same layer only when every target layer is the source layer; otherwise each other
-      // target layer must be allowed (review of M5-04).
-      const others = targetLayers.filter((t) => t !== sourceLayer);
-      if (!others.length) continue;
-      const refused = others.map((t) => ({ t, d: decide(policy, sourceLayer, t, r.edge_type) })).filter((x) => !x.d.allowed);
-      if (refused.length) {
-        const advisory = refused.every((x) => !x.d.allowed && x.d.advisory && !x.d.denied);
-        const severity: FindingSeverity = advisory ? 'warn' : inferredSeverity(verifiability);
-        out.push({ ...base, kind: 'violation', rule: 'disallowed-layer', severity, sourceLayer, violatedLayers: refused.map((x) => x.t) });
-        continue;
-      }
-      // AR-07: private parts of another layer are reachable only from that layer.
-      const privateTo = membership.privateIn(target).filter((l) => l !== sourceLayer);
-      if (privateTo.length) {
-        out.push({ ...base, kind: 'violation', rule: 'private-layer', severity: inferredSeverity(verifiability), sourceLayer, violatedLayers: privateTo });
-        continue;
-      }
-      out.push({ ...base, kind: 'allowed', severity: 'info', sourceLayer });
+    const targetSide: TargetLayers = { layers: targetLayers, overlays: membership.of(target).filter((l) => overlays.has(l)), privateIn: membership.privateIn(target) };
+    for (const d of decideEdge(config, policy, sourceLayers, targetSide, r.edge_type, verifiability)) {
+      if (d.kind === 'same-layer') continue;
+      out.push({ ...base, kind: d.kind, ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, sourceLayer: d.sourceLayer, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}) });
     }
   }
   return { dependencies: out, endFiles };
+}
+
+/** What a configuration evaluates (AR-06, AR-08 step 1): edge types, paths and inferred edges. */
+export interface EdgeScope {
+  types: Set<string>;
+  /** `scope.include` and `scope.exclude` admit this workspace-relative path. */
+  path(p: string): boolean;
+  /** An edge of this verifiability is evaluated (inferred ones are not under `policy.inferred: "ignore"`). */
+  verifiability(v: 'verified' | 'inferred'): boolean;
+}
+
+export function edgeScope(config: Pick<ArchitectureConfig, 'scope' | 'policy'>): EdgeScope {
+  const include = config.scope.include.map(globOrRegex);
+  const exclude = config.scope.exclude.map(globOrRegex);
+  return {
+    types: new Set<string>(config.scope.types),
+    path: (p) => (!include.length || include.some((m) => m(p))) && !exclude.some((m) => m(p)),
+    verifiability: (v) => v === 'verified' || config.policy.inferred !== 'ignore',
+  };
+}
+
+/** One source layer's decision on an edge, with the severity `mapx check` reports it at. */
+export interface EdgeDecision extends LayerDecision { sourceLayer: string; severity: FindingSeverity }
+
+/**
+ * The AR-08 decision on an edge of `type` for every source layer, with its severity: uncovered is
+ * `warn`, allowed and same-layer `info`, a violation `warn` when only an advisory allowance covers
+ * it or the edge is inferred under `policy.inferred: "warn"`, otherwise `error`. The evaluator and
+ * `mapx arch allowed` both decide through here, so they cannot disagree.
+ */
+export function decideEdge(config: Pick<ArchitectureConfig, 'policy'>, policy: ExpandedPolicy, sourceLayers: string[], target: TargetLayers, type: string, verifiability: 'verified' | 'inferred'): EdgeDecision[] {
+  return sourceLayers.map((sourceLayer) => {
+    const d = decideLayers(policy, sourceLayer, target, type);
+    const severity: FindingSeverity = d.kind === 'uncovered' ? 'warn'
+      : d.kind === 'allowed' || d.kind === 'same-layer' ? 'info'
+        : d.advisory ? 'warn'
+          : verifiability === 'inferred' && config.policy.inferred === 'warn' ? 'warn' : 'error';
+    return { ...d, sourceLayer, severity };
+  });
+}
+
+/** The layers of a dependency's target, as the AR-08 chain needs them. */
+export interface TargetLayers {
+  /** Non-overlay layers (for a package, those of its files). */
+  layers: string[];
+  /** Overlay layers the target is in. */
+  overlays: string[];
+  /** Layers whose `private` selectors match the target (AR-07); none for a whole layer. */
+  privateIn: string[];
+}
+
+/** What AR-08 decides for one source layer (steps 3.1 to 3.6); severity is the caller's. */
+export interface LayerDecision {
+  kind: 'violation' | 'uncovered' | 'allowed' | 'same-layer';
+  rule?: 'disallowed-layer' | 'private-layer' | 'uncovered';
+  /** For a violation: the target layers the source layer may not depend on. */
+  violatedLayers?: string[];
+  /** A disallowed-layer violation every refused layer of which only an advisory grant covers. */
+  advisory?: boolean;
+}
+
+/**
+ * The AR-08 chain for one source layer and edge type: a denied overlay, uncovered, same layer,
+ * disallowed layer, private layer, allowed. The evaluator and `mapx arch allowed` share it, so a
+ * pre-flight answer is what `mapx check` would report.
+ */
+export function decideLayers(policy: ExpandedPolicy, sourceLayer: string, target: TargetLayers, type: string): LayerDecision {
+  // An overlay the source layer denies (`"*": ["!Deprecated"]`), whatever the target's other
+  // layers, the source layer's own included (review of M5-04: overlay denies had no effect).
+  const deniedOverlays = target.overlays.filter((l) => policy.denied.get(sourceLayer)?.has(l));
+  if (deniedOverlays.length) return { kind: 'violation', rule: 'disallowed-layer', violatedLayers: deniedOverlays, advisory: false };
+  if (!target.layers.length) return { kind: 'uncovered', rule: 'uncovered' };
+  // AR-08: same layer only when every target layer is the source layer; otherwise each other
+  // target layer must be allowed (review of M5-04).
+  const others = target.layers.filter((t) => t !== sourceLayer);
+  if (!others.length) return { kind: 'same-layer' };
+  const refused = others.map((t) => ({ t, d: decide(policy, sourceLayer, t, type) })).filter((x) => !x.d.allowed);
+  if (refused.length) {
+    const advisory = refused.every((x) => !x.d.allowed && x.d.advisory && !x.d.denied);
+    return { kind: 'violation', rule: 'disallowed-layer', violatedLayers: refused.map((x) => x.t), advisory };
+  }
+  // AR-07: private parts of another layer are reachable only from that layer.
+  const privateTo = target.privateIn.filter((l) => l !== sourceLayer);
+  if (privateTo.length) return { kind: 'violation', rule: 'private-layer', violatedLayers: privateTo, advisory: false };
+  return { kind: 'allowed' };
 }

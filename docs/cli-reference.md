@@ -800,6 +800,8 @@ Generate a comprehensive architecture and design quality report, with sections f
 mapx arch [path] [--dir /path] [--smells] [--dsm] [--violations] [--json]
 ```
 
+The subcommands `validate-config`, `layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed` work with the architecture rules configuration; they are described below.
+
 Options:
 - `--smells` — Show only detected architectural smells
 - `--dsm` — Show only the cluster dependency matrix (DSM)
@@ -832,6 +834,55 @@ $ mapx arch validate-config
 .mapx/architecture.jsonc#/layers/0/selectors/0/paht: unknown selector key "paht"; expected one of path, name, …
 .mapx/architecture.jsonc#/rules/Http/0: unknown layer "Servce"
 2 problems in .mapx/architecture.jsonc.
+```
+
+### `mapx arch` introspection subcommands
+
+Questions about the architecture configuration, answered from the index without a whole check (Deptrac's `debug:*` commands). See [architecture-rules.md](architecture-rules.md#introspection) for what each answers and the JSON it prints.
+
+```bash
+mapx arch layers [layer] [--why] [--nested]          # layers and sizes; a layer's members
+mapx arch which <element>                            # the layers of a file or symbol, and why
+mapx arch unassigned [--kind <kind>] [--path <path>] [--nested]
+mapx arch deps <from> [to]                           # concrete edges from one layer to another
+mapx arch unused [--limit <n>]                       # allowances used at most n times (default 0)
+mapx arch changed [files...] [--since <ref>] [--with-dependents]
+mapx arch allowed <from> <to> [--type <edgeType>]    # would mapx check pass this dependency?
+```
+
+Every subcommand takes:
+- `-d, --dir <path>`: the workspace (`mapx arch` takes no path argument before a subcommand name; a directory named like a subcommand needs `--dir`).
+- `--view <name>`: use `.mapx/architecture/<name>.jsonc`.
+- `--format text|json` (default `text`), or `--json`.
+- `--sync`: when files changed since the last scan, sync the index first (not on `changed`).
+
+Elements (`which`, `allowed`) are named by an indexed file path, a qualified name (`App\Domain\Order`, `src/domain/Order.ts#Order`), a scoped name (`Order::run`, `Order.run`), or a bare symbol name, top-level symbols first. A name that matches several elements is an error that lists them (`candidates` in JSON). `allowed` also takes layer names.
+
+Exit codes follow `mapx check`:
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Answered |
+| 1 | `allowed`: `mapx check` would report an error-level violation for the dependency (in any edge type or source layer) |
+| 2 | `unassigned`: at least one element is in no layer |
+| 3 | No configuration or no such `--view`, an invalid configuration, or a usage error: an unknown option or layer, an element no query resolves or several match, an unknown `unassigned --kind` or a `--path` that matches no indexed file, a bad `--limit`, `--type`, or a `--since` ref no repo has |
+| 4 | No index, a repo never scanned, a stale index (run `mapx update` or pass `--sync`; `changed` reads a stale index as it is), an index an older MapX built, or an internal error |
+
+With `--format json`, every failure prints `{ "error": "…" }` on stdout, with `candidates` for an ambiguous name or an unknown layer and `issues` for an invalid configuration.
+
+Examples:
+```bash
+$ mapx arch which OrderId
+src/domain/ids/OrderId.ts#OrderId (class, src/domain/ids/OrderId.ts)
+  Domain  ← selectors[0].all
+  Shared  ← selectors[1].path
+$ mapx arch allowed OrderController Order
+✖ not allowed (disallowed-layer, error): Controller may not depend on Domain over import: no rule allows it
+  ✖ import [Controller] disallowed-layer (error), in the index (verified)
+  ✖ instantiation [Controller] disallowed-layer (error), in the index (verified)
+Controller may depend on: Application
+$ mapx arch changed --since origin/main --with-dependents --json   # selective CI
+$ mapx arch unassigned --kind class                                # coverage gate: exit 2 if any
 ```
 
 ## `mapx check`
