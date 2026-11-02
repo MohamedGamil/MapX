@@ -116,6 +116,16 @@ describe('git sync without analysis inputs (real scans, in process)', () => {
     expect(edgesOf(store)).toEqual(edgesOf(fresh));
   }, 120000);
 
+  // M0-10-R6: the count is the files re-indexed, not every path git listed (as the hash sync reports).
+  it('reports the files it re-indexed, not the noise git listed', async () => {
+    const store = new Store(':memory:');
+    await (await scanner(store)).scanFull();
+    const noise = Object.fromEntries([...Array(10)].map((_, i) => [`.idea/f${i}.xml`, '<x/>\n']));
+    write(root, { '.gitignore': '.mapx/\n', ...noise, 'src/c.ts': "import { a } from './a';\nexport function c() { return a(); }\nexport function c2() { return 2; }\n" });
+    const { result } = await syncPhases(store);
+    expect(result.filesScanned).toBe(1);
+  }, 120000);
+
   it('skips the analysis for an untracked nested git repo, which git lists as a folder (review 2026-11-01)', async () => {
     const store = new Store(':memory:');
     await (await scanner(store)).scanFull();

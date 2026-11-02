@@ -15210,15 +15210,28 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-c0",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T13:20:00.122Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T13:19:59.771Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:20:00.122Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
@@ -23462,15 +23475,64 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-02T13:19:54.677Z",
+      "completedAt": "2026-11-02T13:33:49.753Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-10-R6.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/workspace-default-scope.test.ts tests/scan-redundancy.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-10-R6.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-10-R6.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-02T13:19:54.347Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:19:54.677Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:33:49.356Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:33:49.753Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/workspace-default-scope.test.ts tests/scan-redundancy.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-10-R6.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-10-R6.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

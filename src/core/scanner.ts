@@ -403,10 +403,14 @@ export class Scanner {
     const names = !repoNames || repoNames.length === 0 || repoNames.includes('all')
       ? this.config.repos.map(r => r.name)
       : repoNames;
+    // A name no repo is registered under is an error, not a silent "0 files" (M0-10-R6).
+    const unknown = names.filter(name => !this.config.repos.some(r => r.name === name));
+    if (unknown.length > 0) {
+      throw new Error(`Unknown repo "${unknown[0]}". Registered repos: ${this.config.repos.map(r => r.name).join(', ') || 'none'}.`);
+    }
     const workspaceRoot = this.config.getWorkspaceRoot();
     return names.filter((name) => {
-      const repo = this.config.repos.find(r => r.name === name);
-      if (!repo) return true;
+      const repo = this.config.repos.find(r => r.name === name)!;
       const root = resolve(workspaceRoot, repo.path);
       if (existsSync(root)) return true;
       console.warn(`[mapx] Skipped repo ${name}: its folder ${root} does not exist. Its index is kept; \`mapx workspaces remove ${name}\` drops it.`);
@@ -1113,7 +1117,8 @@ export class Scanner {
     }
 
     return {
-      filesScanned: changes.length,
+      // The files re-indexed, as the hash sync reports, not every path git listed (M0-10-R6).
+      filesScanned: toReindex.length,
       symbolsFound: totalSymbols,
       edgesFound: totalEdges,
       durationMs: Date.now() - startTime,

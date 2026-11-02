@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer } from '../src/mcp.js';
-import { cleanup, init, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, mapxResult, mapxWithStderr, query, workspace } from './helpers/e2e.js';
 
 // M0-10-R5: a workspace registering a root repo and nested git repos (backend/, frontend/) is
 // scanned and synced whole when neither --repo nor --all is given, from the CLI and from MCP.
@@ -94,6 +94,32 @@ describe('scan and sync with no repo named cover every registered repo (real CLI
       expect(rows(root).files.filter((f: any) => f.repo === 'frontend')).toEqual(frontendBefore);
     } finally {
       renameSync(join(root, '..', `${root.split('/').pop()}-frontend-away`), join(root, 'frontend'));
+    }
+  }, 120000);
+
+  // M0-10-R6: a name no repo is registered under is an error, not a silent "0 files".
+  it('scan and sync --repo with an unknown name fail, listing the registered repos', () => {
+    mapx(root, 'scan');
+    for (const cmd of ['scan', 'sync']) {
+      const r = mapxResult(root, cmd, '--repo', 'nope');
+      expect(r.status, cmd).toBe(1);
+      expect(r.stderr, cmd).toMatch(/Unknown repo "nope"\. Registered repos: .*backend.*frontend/);
+      expect(r.stderr, cmd).not.toMatch(/\n\s+at /);
+    }
+  }, 120000);
+
+  it('the MCP mapx_scan and mapx_sync tools report an unknown repo name', async () => {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    try {
+      for (const name of ['mapx_scan', 'mapx_sync']) {
+        const res = await client.callTool({ name, arguments: { dir: root, repo: 'nope' } }) as { content: Array<{ text: string }> };
+        expect(res.content[0]!.text, name).toMatch(/failed: Unknown repo "nope"\. Registered repos: .*backend.*frontend/);
+      }
+    } finally {
+      await client.close();
     }
   }, 120000);
 
