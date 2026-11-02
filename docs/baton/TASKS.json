@@ -24501,14 +24501,32 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M2-06-R4",
       "actualHours": null,
       "startedAt": "2026-11-02T17:52:21.302Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T19:07:11.391Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-06-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/http-pairing.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R4.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R4.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-06-R4.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T17:52:20.977Z",
@@ -24521,6 +24539,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T19:07:09.606Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T19:07:11.391Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/http-pairing.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R4.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R4.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-06-R4.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -25327,14 +25373,27 @@
         "docs/baton/reports/M4-24-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M4-26",
       "actualHours": null,
       "startedAt": "2026-11-02T17:52:21.928Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T18:59:10.472Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-26.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/store-extended.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-26.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-26.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T17:52:21.617Z",
@@ -25347,6 +25406,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T18:59:10.071Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T18:59:10.472Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/store-extended.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-26.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-26.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -25499,6 +25581,191 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/js-member-assign.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-26",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-26.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude-ff",
+      "actualHours": null,
+      "startedAt": "2026-11-02T18:59:11.291Z",
+      "completedAt": "2026-11-02T19:17:35.579Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M4-27.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/grammar-health.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-27.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-27.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-27.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-02T18:59:10.894Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T18:59:11.291Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T19:17:34.923Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T19:17:35.579Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/grammar-health.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-27.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-27.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-27.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-27",
+      "title": "Lua files parse correctly after the first one in a process",
+      "objective": "Every .lua file of a scan parses without errors and yields its references, on the main thread and in workers, whatever was parsed before; every bundled grammar parses a sample repeatedly without new errors (a grammar health test).",
+      "description": "Found while closing M4-26 (2026-11-02): wasm/tree-sitter-lua.wasm (ABI 13) parses only the first Lua source of a process correctly; every later parse, even with a fresh Parser or a freshly loaded Language, has ERROR nodes (`local M = {}` reads as an unterminated string) and no references. Cause: the grammar external scanner allocates its state with malloc and ignores a zero-length deserialize, so state leaks between parses. Scans lose Lua call edges whenever more than one Lua file, or a Lua file after another parse, is parsed in one process. Also observed: wasm/tree-sitter-vue.wasm throws \"resolved is not a function\" on `{{ }}` (unused by VueParser).",
+      "outputs": [
+        "wasm/tree-sitter-lua.wasm",
+        "scripts/build-wasm.ts",
+        "tests/grammar-health.test.ts",
+        "reports/M4-27.md"
+      ],
+      "affectedFiles": [
+        "wasm/tree-sitter-lua.wasm",
+        "scripts/build-wasm.ts",
+        "tests/grammar-health.test.ts",
+        "CHANGELOG.md",
+        "src/core/extractor-version.ts"
+      ],
+      "acceptanceCriteria": [
+        "Parsing the same Lua sample 3 times, and two different Lua files, in one process gives no ERROR nodes and the M.foo -> M.bar call each time (tests/grammar-health.test.ts).",
+        "Every bundled grammar parses its sample 3 times in one process, after all grammars are loaded, with identical trees; a grammar that throws is listed and either fixed or excluded with a reason (test).",
+        "A real scan of two Lua files gives each its call edges (e2e)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/grammar-health.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-27",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-27.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-10",
+      "title": "Lua method calls with `:` and `self` give call edges",
+      "objective": "`obj:method()` and `self:other()` in Lua give call references, so method calls link like `M.foo()` does; `.luau` type syntax is reported as a known limitation or parsed.",
+      "description": "Found by the M4-27 review (2026-11-02, pre-existing): `self:other()` and `acct:withdraw()` produce no call edges (queries/lua/references.scm captures only `(call (variable))`); `.luau` files use the Lua grammar, so `type X = ...` gives an ERROR node.",
+      "outputs": [
+        "queries/lua/references.scm",
+        "tests/grammar-health.test.ts",
+        "reports/M2-10.md"
+      ],
+      "affectedFiles": [
+        "queries/lua/**",
+        "tests/lua-calls.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "`function Account:withdraw(n) self:log(n) end` and `acct:withdraw(1)` give call edges to `log` and `withdraw` (e2e test).",
+        "`npm run eval` holds every floor."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/lua-calls.test.ts",
         "npm run eval",
         "npm run check"
       ]

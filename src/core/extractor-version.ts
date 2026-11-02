@@ -7,8 +7,10 @@ import type { Store } from './store.js';
  * - 1: M5-25 (Go cross-package literals), M2-08-R1 (import-bound calls through barrels).
  * - 2: M0-12-R11 (Svelte template scopes), M1-07-R3 (Laravel route-file arrays), M3-05-R2 (Pinia and
  *   Vuex members), M2-08-R2 (recorded unresolved imports).
+ * - 3: M4-27 (every Lua file parses, not only the first of a process), M2-04-R4 (axios client
+ *   scopes), M2-06-R4 (route-domain hosts).
  */
-export const EXTRACTOR_VERSION = 2;
+export const EXTRACTOR_VERSION = 3;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

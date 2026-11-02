@@ -163,9 +163,10 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06-R3** HTTP edges into another repo record their target repo — DONE, P1, 2h; depends on M2-06.
 - **M2-08-R1** Import-bound calls: export-from barrels in sync, and no fallback past a project import — DONE, P2, 4h; depends on M2-08.
 - **M2-04-R4** Same-named axios clients in one file keep their own baseURL scope — DONE, P2, 2h; depends on M2-04-R3.
-- **M2-06-R4** Route domains are workspace hosts for HTTP pairing — IN_PROGRESS, P2, 2h; depends on M2-06-R2.
+- **M2-06-R4** Route domains are workspace hosts for HTTP pairing — DONE, P2, 2h; depends on M2-06-R2.
 - **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
 - **M2-09** JS/TS member-assigned functions are symbols — BACKLOG, P2, 4h; depends on M2-08.
+- **M2-10** Lua method calls with `:` and `self` give call edges — BACKLOG, P2, 3h; depends on M4-27.
 
 ## M3 — Vue SFC semantics
 
@@ -225,7 +226,8 @@ Fixture scoring in CI; optional message edges.
 - **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — IN_PROGRESS, P2, 2h; depends on M4-24.
 - **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
-- **M4-26** A symbol whose name contains a dot opens by its exact name — IN_PROGRESS, P2, 2h; depends on M4-24.
+- **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
+- **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 
