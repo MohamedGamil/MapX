@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- The index now records references to packages, modules and classes outside the workspace (npm, Composer, pip and Go) in a new `external_refs` view, kept equal to a forced scan on every sync and without changing edges or metrics. The extractor version is now 9 (M5-19).
 - Scans now record each symbol's decorators, attributes or annotations and its doc tags for PHP, TypeScript, JavaScript, Python, Java, Kotlin and C#, and architecture layers can select symbols with `decorator` and `docTag` (M5-10).
 - `mapx check` gains baselines (`--generate-baseline`, `--baseline`, Deptrac-style `skip_violations`; stale entries exit 3) and the `--compare <base-report.json>` ratchet, which fails only on violations new since the base revision (M5-06).
 - `mapx arch validate-config` and the MCP tool `mapx_arch_validate_config` validate `.mapx/architecture.jsonc` (or a view) without an index, listing every problem with its JSON pointer (exit 3). The loader now accepts a UTF-8 BOM, reports `extends` to a directory, views outside `.mapx/architecture/`, symlink loops and permission errors as configuration errors, and substitutes `%parameters%` in every selector key, with `%%` for a literal `%` and parameters inside parameter values (M5-02-R1).

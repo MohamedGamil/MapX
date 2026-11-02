@@ -6,13 +6,13 @@ Remaining longest dependency path: **20h** (full-plan path: 214h).
 
 M5-08 → M5-16 → M5-98
 
-Remaining effort min/expected/max: **93 / 129 / 181h**. Capacity: 1 engineer(s) × 20 h/week → **6.5 weeks**, conditional finish **2026-12-17** (as of 2026-11-02).
+Remaining effort min/expected/max: **89 / 123 / 172h**. Capacity: 1 engineer(s) × 20 h/week → **6.2 weeks**, conditional finish **2026-12-15** (as of 2026-11-02).
 
 ## Open items and blockers
 - M5-07 (IN_PROGRESS): prerequisites satisfied
 - M5-08 (IN_PROGRESS): prerequisites satisfied
 - M5-09 (BACKLOG): prerequisites satisfied
-- M5-11 (BACKLOG): prerequisites satisfied
+- M5-11 (IN_PROGRESS): prerequisites satisfied
 - M5-13 (BACKLOG): prerequisites satisfied
 - M5-14 (BACKLOG): M5-08
 - M5-15 (BACKLOG): M5-13
@@ -20,11 +20,10 @@ Remaining effort min/expected/max: **93 / 129 / 181h**. Capacity: 1 engineer(s) 
 - M5-17 (BACKLOG): prerequisites satisfied
 - M5-18 (BACKLOG): M5-07
 - M5-98 (BACKLOG): M5-11; M5-16
-- M5-19 (IN_PROGRESS): prerequisites satisfied
-- M5-20 (BACKLOG): M5-19
-- M5-21 (BACKLOG): M5-19
-- M5-22 (BACKLOG): M5-19
-- M5-23 (BACKLOG): M5-19
+- M5-20 (BACKLOG): prerequisites satisfied
+- M5-21 (BACKLOG): prerequisites satisfied
+- M5-22 (BACKLOG): prerequisites satisfied
+- M5-23 (BACKLOG): prerequisites satisfied
 - M5-24 (BACKLOG): M5-20; M5-21; M5-22; M5-23
 - M4-13-R1 (BACKLOG): prerequisites satisfied
 - M4-24-R1 (IN_PROGRESS): prerequisites satisfied
@@ -46,12 +45,11 @@ Remaining effort min/expected/max: **93 / 129 / 181h**. Capacity: 1 engineer(s) 
 | M5-17 | 0 | 12 | 8 | 20 | 8 |
 | M5-18 | 6 | 12 | 14 | 20 | 8 |
 | M5-98 | 18 | 20 | 18 | 20 | 0 |
-| M5-19 | 0 | 6 | 2 | 8 | 2 |
-| M5-20 | 6 | 12 | 8 | 14 | 2 |
-| M5-21 | 6 | 10 | 10 | 14 | 4 |
-| M5-22 | 6 | 11 | 9 | 14 | 3 |
-| M5-23 | 6 | 10 | 10 | 14 | 4 |
-| M5-24 | 12 | 18 | 14 | 20 | 2 |
+| M5-20 | 0 | 6 | 8 | 14 | 8 |
+| M5-21 | 0 | 4 | 10 | 14 | 10 |
+| M5-22 | 0 | 5 | 9 | 14 | 9 |
+| M5-23 | 0 | 4 | 10 | 14 | 10 |
+| M5-24 | 6 | 12 | 14 | 20 | 8 |
 | M4-13-R1 | 0 | 2 | 18 | 20 | 18 |
 | M4-24-R1 | 0 | 2 | 18 | 20 | 18 |
 | M3-05-R3 | 0 | 3 | 17 | 20 | 17 |
