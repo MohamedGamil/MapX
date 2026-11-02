@@ -115,8 +115,9 @@ const KNOWN: Record<string, Known> = {
 
 /** The effective configuration of the workspace at `dir`, with sources and warnings. */
 export function describeConfig(dir: string, config: Config, env: NodeJS.ProcessEnv = process.env): ConfigReport {
-  const settings = config.settings as Record<string, unknown>;
   const warnings: string[] = [];
+  const settings = (config.settings ?? {}) as Record<string, unknown>;
+  if (!isPlainObject(config.settings)) warnings.push('settings: missing from config.json; MapX uses its defaults');
   const reports: SettingReport[] = [];
 
   for (const [key, known] of Object.entries(KNOWN)) {
@@ -128,16 +129,23 @@ export function describeConfig(dir: string, config: Config, env: NodeJS.ProcessE
       if (problem) warnings.push(`settings.${key}: ${problem} (found ${JSON.stringify(value)})`);
     }
     if (key === 'parseWorkers' && env['MAPX_PARSE_WORKERS']) {
-      source = 'env';
       const envValue = env['MAPX_PARSE_WORKERS'];
-      if (known.check(envValue)) warnings.push(`MAPX_PARSE_WORKERS: expected "auto" or a whole number ≥ 0 (found ${JSON.stringify(envValue)})`);
-      reports.push({ key, description: `${known.description}. Set by MAPX_PARSE_WORKERS`, value: envValue, source, default: known.default });
-      continue;
+      // An invalid value is ignored by the worker pool, which then uses the configured one.
+      if (known.check(envValue)) {
+        warnings.push(`MAPX_PARSE_WORKERS: expected "auto" or a whole number ≥ 0 (found ${JSON.stringify(envValue)}); ignored`);
+      } else {
+        reports.push({ key, description: `${known.description}. Set by MAPX_PARSE_WORKERS`, value: envValue, source: 'env', default: known.default });
+        continue;
+      }
     }
     const report: SettingReport = { key, description: known.description, value, source, default: known.default };
     if (known.builtIn && isStringList(value)) {
       report.entries = value.map((pattern) => ({ value: pattern, source: known.builtIn!.has(pattern) ? 'default' : 'user' }));
-      if (report.entries.some((e) => e.source === 'user')) report.source = 'user';
+      // Compared as sets: init dedupes and orders the defaults its own way. User-set means a pattern
+      // MapX never writes, or a default pattern taken out.
+      const has = new Set(value);
+      const removedDefault = Array.isArray(known.default) && (known.default as string[]).some((p) => !has.has(p));
+      report.source = report.entries.some((e) => e.source === 'user') || removedDefault ? 'user' : 'default';
     }
     reports.push(report);
   }

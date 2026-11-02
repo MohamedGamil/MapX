@@ -154,7 +154,7 @@ async function tabThrough(page: Page, presses: number) {
       if (!el || el === document.body) return null;
       const s = getComputedStyle(el);
       const ring = (s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) >= 2) || (s.boxShadow && s.boxShadow !== 'none');
-      const key = el.dataset?.tab ?? (el.id || `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}:${(el.textContent ?? '').trim().slice(0, 30)}`);
+      const key = el.dataset?.tab ?? (el.id || el.getAttribute('aria-label') || `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}:${(el.textContent ?? '').trim().slice(0, 30)}`);
       return { key, ring };
     });
     if (!info || reached.has(info.key)) continue;
@@ -181,7 +181,7 @@ test('every control of every view is reached with Tab and shows a focus ring', a
     // Every visible, enabled control of the view (inactive sub-tabs are reached with arrow keys).
     const expected: string[] = await page.evaluate(() => [...document.querySelectorAll('.tab-pane.active :is(a[href], button, input, select, textarea, [tabindex="0"], [data-go-id])')]
       .filter((e: any) => !e.disabled && e.offsetParent !== null && e.getAttribute('tabindex') !== '-1')
-      .map((el: any) => el.id || `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}:${(el.textContent ?? '').trim().slice(0, 30)}`));
+      .map((el: any) => el.id || el.getAttribute('aria-label') || `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}:${(el.textContent ?? '').trim().slice(0, 30)}`));
     const result = await tabThrough(page, expected.length + 12);
     for (const k of expected) if (!result.reached.has(k)) missing.push(`${tab}: ${k}`);
     noRing.push(...result.noRing.map((k) => `${tab}: ${k}`));

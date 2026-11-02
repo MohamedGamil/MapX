@@ -79,3 +79,17 @@ test('the graph marks the http edges between repos', async ({ page }) => {
   const edge = await page.evaluate(() => window.__mapxEdge('web/src/api/orders.ts', 'api/app/Http/Controllers/OrderController.php'));
   expect(edge).toMatchObject({ type: 'http', crossRepo: true, lineStyle: 'dashed' });
 });
+
+test('the no-route pair filters, and a flow link works from the keyboard (review 2026-11-02)', async ({ page }) => {
+  await openHttp(page);
+  const options = await page.locator('#http-filter-pair option').evaluateAll((os) => os.map((o) => (o as any).value));
+  const noRoute = options.find((v: string) => v.startsWith('web→') && v !== 'web→api')!;
+  await page.selectOption('#http-filter-pair', noRoute);
+  await expect(page.locator('#table-http tbody tr')).toHaveCount(1);
+  await expect(page.locator('#table-http tbody')).toContainText('/api/nowhere');
+  await page.selectOption('#http-filter-pair', '');
+  await page.focus('#http-flow .flow-link.is-none');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#http-filter-pair')).toHaveValue(noRoute);
+  await expect(page.locator('#table-http tbody tr')).toHaveCount(1);
+});

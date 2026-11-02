@@ -1,6 +1,24 @@
 # MapX project state
 
-Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). All remaining M4 tasks are done: M4-01 (`a4bd752`), M4-03 (`1391d31`), M4-08 (`ac26e66`), M4-05 (`e4fc861`, D020) and M4-04. Plan baseline: `develop@7e5aa19` (0.3.5). Version 0.3.7, tagged `v0.3.7` at `8914c5b` and installed as the Linux binary in `~/.local/bin` with the project's installer (D023); v0.3.6 tagged at `e1d5da0`. Not published or pushed. Owner testing of the installed binary found two defects, fixed on `develop` after `v0.3.7`: M0-10-R5 (scan/sync cover every registered repo by default, D024) and M0-06-R2 (the binary parses on worker threads; prototype-key lookups in the PHP, Vuex and Laravel code). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
+Updated 2026-11-02: every M4 task is done. The worker-pool tasks M4-10 to M4-15 (D025, D026), and the dashboard tasks M4-16 to M4-24 (D027, D028):
+- M4-16: audit;
+- M4-18: logo;
+- M4-19: Playwright harness;
+- M4-17: design system, themes, responsive and accessible;
+- M4-24: escaping scanned values;
+- M4-20: lazy engines, worker layout, compression;
+- M4-21: multi-repo views;
+- M4-22: read-only config;
+- M4-23: cross-repo HTTP view.
+
+Found on the way and fixed:
+- M2-06-R3: http edges between repos record their target repo;
+- M0-32-R3;
+- the post-acceptance defects that three independent reviews found (see each report).
+
+`npm run test:ui` (42 browser tests) runs in CI's `UI` job. Next: M5-01 and M5-02, which are promotable. Nothing is published or pushed; version 0.3.7.
+
+Earlier: Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D015–D018, committed in `8be5cdb`) and the owner Q&A that followed (D019, `ccfbad5`). All remaining M4 tasks are done: M4-01 (`a4bd752`), M4-03 (`1391d31`), M4-08 (`ac26e66`), M4-05 (`e4fc861`, D020) and M4-04. Plan baseline: `develop@7e5aa19` (0.3.5). Version 0.3.7, tagged `v0.3.7` at `8914c5b` and installed as the Linux binary in `~/.local/bin` with the project's installer (D023); v0.3.6 tagged at `e1d5da0`. Not published or pushed. Owner testing of the installed binary found two defects, fixed on `develop` after `v0.3.7`: M0-10-R5 (scan/sync cover every registered repo by default, D024) and M0-06-R2 (the binary parses on worker threads; prototype-key lookups in the PHP, Vuex and Laravel code). BATON was adopted in `8903afe`. Session 6 work is committed on `develop`, one commit per task (`9a09b37` … `3c24c1d`).
 
 ## Milestones
 
@@ -10,7 +28,7 @@ Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2db08bd` (D
 | M1 Laravel route correctness | M1-07-R2, M1-03-R2 DONE | Routes scorer: 145 labels, URI/handler/attribute recall 1, precision 1, 0 FP. M1-99 (release) DEFERRED (D007) |
 | M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2, M2-08 DONE | HTTP scorer: 48 labels, every metric 1.0 |
 | M3 Vue SFC semantics | All remediation DONE (M3-08-R1, M3-09-R1, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1) | Edge scorer: 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives: v3-039) |
-| M4 Measurement and DX | M4-09, M4-01, M4-03, M4-08, M4-05, M4-04 DONE | `npm run eval` checks the three scorers against `scripts/eval/floors.json` in a CI `Eval` job (M4-01). Name resolution is linear on shared names: a generated 16,000-file scan takes 18 s instead of 70 s, with identical edges (M4-03). The routes and HTTP scorers reject malformed options (M4-08). Installs no longer bundle the dashboard; pack/publish and `mapx ui` from source do (M4-05, D020). A git sync that changes nothing indexed skips the post-scan analysis: 11 s → 2 s at 16,000 files (M4-04). M4-02, M4-06 and M4-07 deferred. M4-02, M4-06 and M4-07 deferred |
+| M4 Measurement and DX | All DONE (M4-09, M4-01, M4-03, M4-08, M4-05, M4-04; worker pool M4-10–M4-15; dashboard M4-16–M4-24) | `npm run eval` checks the three scorers against `scripts/eval/floors.json` in a CI `Eval` job (M4-01). Name resolution is linear on shared names: a generated 16,000-file scan takes 18 s instead of 70 s, with identical edges (M4-03). The routes and HTTP scorers reject malformed options (M4-08). Installs no longer bundle the dashboard; pack/publish and `mapx ui` from source do (M4-05, D020). A git sync that changes nothing indexed skips the post-scan analysis: 11 s → 2 s at 16,000 files (M4-04). M4-02, M4-06 and M4-07 deferred. M4-02, M4-06 and M4-07 deferred |
 | M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
 
 Live list: `npm run plan:scan`.
@@ -159,7 +177,7 @@ Work order set by the owner:
    | M4-14 | Batching |
    | M4-15 | Evaluated; no tree-sitter patch (D026) |
 
-2. **M4 dashboard (D027), in order:**
+2. **M4 dashboard (D027), in order (all done):**
 
    | Task | Work |
    | --- | --- |

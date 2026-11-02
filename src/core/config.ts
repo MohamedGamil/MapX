@@ -105,7 +105,6 @@ export const DEFAULT_CONFIG: MapxConfig = {
       'Cargo.lock',
       'bun.lock',
       'AndroidManifest.xml',
-      'AndroidManifest.xml',
       '**/*.log',
       '**/*.lock',
       '**/*.tmp',
@@ -153,6 +152,20 @@ export class Config {
     // another spelling): keep the first entry and save, so the folder is not indexed twice (M0-10-R3).
     loaded.collapsed = collapseDuplicateRepos(config, workspaceRoot);
     if (loaded.collapsed.length) await loaded.save();
+    return loaded;
+  }
+
+  /**
+   * Reads the configuration without changing anything (M4-22: the dashboard's config view is
+   * read-only): no default file is created, duplicate repo entries are reported in
+   * `collapsedRepos` but not saved away. Null when there is no config.json; throws on invalid JSON.
+   */
+  static async read(workspaceRoot: string): Promise<Config | null> {
+    const configPath = join(workspaceRoot, '.mapx', 'config.json');
+    if (!existsSync(configPath)) return null;
+    const config = JSON.parse(await readFile(configPath, 'utf-8')) as MapxConfig;
+    const loaded = new Config(configPath, config);
+    loaded.collapsed = collapseDuplicateRepos(config, workspaceRoot);
     return loaded;
   }
 

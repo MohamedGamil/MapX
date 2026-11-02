@@ -2331,7 +2331,9 @@ body[data-graph="layout"] #cy::after {
 .http-flow .flow-link.is-none path { stroke: color-mix(in srgb, var(--danger) 60%, transparent); stroke-dasharray: 6 4; }
 .http-flow .flow-link text { fill: var(--text-main); font-size: 12px; }
 .http-flow .flow-link { cursor: pointer; }
-.http-flow .flow-link:hover path { stroke: var(--syntax-pink); }
+.http-flow .flow-link:hover path, .http-flow .flow-link:focus-visible path { stroke: var(--syntax-pink); }
+.http-flow .flow-link:focus-visible { outline: none; }
+.http-flow .flow-link:focus-visible text { font-weight: var(--fw-bold); text-decoration: underline; }
 .http-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
 .http-filters label { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--fs-sm); min-width: 0; max-width: 100%; }
 .http-filters .form-select { padding: var(--space-1) var(--space-2); min-width: 0; max-width: 100%; flex: 1 1 auto; text-overflow: ellipsis; }

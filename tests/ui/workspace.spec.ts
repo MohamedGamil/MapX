@@ -40,6 +40,8 @@ test('the switcher lists all repos, scopes every view, and is kept in the URL', 
 
   await page.selectOption('#select-repo', 'web');
   await expect(page).toHaveURL(/\?repo=web$/);
+  await graphReady(page); // the switch reloads the graph, in the view chosen (Full Codebase)
+  expect(await page.evaluate(() => window.__mapxStats().nodes)).toBe(3);
   await expect(page.locator('#stat-files')).toHaveText('3');
   expect(await fullGraphFiles(page)).toBe(3);
 
@@ -94,4 +96,36 @@ test('cross-repo edges are drawn distinctly', async ({ page }) => {
   expect(cross).toMatchObject({ crossRepo: true, lineStyle: 'dashed' });
   expect(local).toMatchObject({ crossRepo: false, lineStyle: 'solid' });
   expect(cross.color).not.toBe(local.color);
+});
+
+test('an unknown repo in the URL falls back to all repos, and every view loads (review 2026-11-02)', async ({ page }) => {
+  await page.goto(`${served.url}?repo=nope`);
+  await expect(page.locator('#select-repo')).toHaveValue('');
+  await expect(page).not.toHaveURL(/repo=/);
+  await graphReady(page);
+  expect(await fullGraphFiles(page)).toBe(9);
+  await page.click('.nav-item[data-tab="symbols"]');
+  await expect(page.locator('#table-symbols tbody tr').first()).toBeVisible();
+});
+
+test('a response for a repo switched away from is dropped (review 2026-11-02)', async ({ page }) => {
+  await page.goto(served.url);
+  await graphReady(page);
+  await page.click('.nav-item[data-tab="graph"]');
+  await page.selectOption('#select-graph-mode', 'full');
+  await graphReady(page);
+  // web's answers arrive late; api is chosen meanwhile.
+  await page.route(/\/api\/(graph|metrics|symbols)\?.*repo=web/, async (route) => { await new Promise((r) => setTimeout(r, 2500)); await route.continue(); });
+  await page.selectOption('#select-repo', 'web');
+  await page.selectOption('#select-repo', 'api');
+  await page.waitForTimeout(3500);
+  await page.selectOption('#select-graph-mode', 'full');
+  await graphReady(page);
+  expect(await page.evaluate(() => window.__mapxStats().nodes)).toBe(4);
+  await page.click('.nav-item[data-tab="metrics"]');
+  await expect(page.locator('#metrics-summary .stat-tile-value').first()).toHaveText('4');
+  await page.click('.nav-item[data-tab="symbols"]');
+  const files = await page.locator('#table-symbols tbody td:last-child').allTextContents();
+  expect(files.length).toBeGreaterThan(0);
+  expect(files.every((f) => f.startsWith('api/'))).toBe(true);
 });

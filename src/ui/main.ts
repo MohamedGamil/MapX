@@ -111,7 +111,9 @@ async function loadRepos() {
     workspaceRepos = data.repos ?? [];
     workspaceCross = data.crossRepo ?? [];
     primaryRepo = data.primary ?? '';
-    if (currentRepo && !workspaceRepos.some((r) => r.name === currentRepo)) setRepo(null, false);
+    // A repo from the URL that does not exist (mistyped, or removed since): show all repos, and
+    // reload the views that asked for it before the list arrived.
+    if (currentRepo && !workspaceRepos.some((r) => r.name === currentRepo)) setRepo(null);
     const switcher = document.getElementById('repo-switcher');
     const select = document.getElementById('select-repo') as HTMLSelectElement | null;
     if (switcher && select) {
@@ -128,9 +130,18 @@ async function loadRepos() {
   }
 }
 
+/**
+ * Bumped on each repo switch: a loader that started for an earlier repo drops its response when it
+ * arrives after a newer choice (review 2026-11-02).
+ */
+let repoGeneration = 0;
+
 /** Scopes the dashboard to a repo (null: all), in the URL too, and reloads every view. */
 function setRepo(repo: string | null, reload = true) {
+  repoGeneration++;
   currentRepo = repo;
+  activeClusterId = null; // another repo's clusters
+  focusSeedNode = null;
   const url = new URL(location.href);
   if (repo) url.searchParams.set('repo', repo); else url.searchParams.delete('repo');
   history.replaceState(null, '', url);
@@ -688,10 +699,12 @@ function getLayoutConfigForName(layoutName: string, elementCount?: number): any 
 }
 
 async function loadClusters() {
+  const gen = repoGeneration;
   try {
     const res = await fetch(withRepo('/api/clusters', 'set'));
     if (res.ok) {
       rawClustersData = await res.json();
+      if (gen !== repoGeneration) return; // a newer repo choice is loading
     }
   } catch (err) {
     console.error('Failed to load clusters:', err);
@@ -929,7 +942,8 @@ function buildProximityClusterElements(): any[] {
   if (rawClustersData && rawClustersData.memberships) {
     rawClustersData.memberships.forEach((m: any) => {
       if (typeof m.clusterName === 'string' && m.clusterName.startsWith('community_')) {
-        communityMap.set(m.filePath, m.clusterName);
+        // Each repo numbers its own communities: key them by repo, so community_1 of two repos stays two groups.
+        communityMap.set(m.filePath, m.repo ? `${m.clusterName}@${m.repo}` : m.clusterName);
       }
     });
   }
@@ -1052,8 +1066,10 @@ function buildProximityClusterElements(): any[] {
           const dirPath = commId.replace('unassigned:', '');
           label = `Folder: ${dirPath === 'root' ? 'root' : dirPath} (${cnt} files)`;
         } else {
-          const commObj = rawClustersData.clusters?.find(c => c.name === commId);
-          label = `${commObj ? commObj.label : commId} (${cnt} files)`;
+          const [commName, commRepo] = commId.split('@');
+          const commObj = rawClustersData.clusters?.find(c => c.name === commName && (!commRepo || c.repo === commRepo));
+          const repoSuffix = commRepo && workspaceRepos.length > 1 ? ` · ${commRepo}` : '';
+          label = `${commObj ? commObj.label : commName}${repoSuffix} (${cnt} files)`;
         }
       } else if (clustId.startsWith('dir:')) {
         label = `${clustId.replace('dir:', '')} (${cnt} files)`;
@@ -2232,9 +2248,13 @@ async function loadGraph() {
   showOverlay('Fetching graph data…');
   markGraph('loading');
   try {
+    const gen = repoGeneration;
     const res = await fetch(withRepo('/api/graph', 'any'));
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
     if (!res.ok) { hideOverlay(); markGraph('error'); return; }
-    rawGraphElements = (await res.json()).filter((el: any) => {
+    const parsed = await res.json();
+    if (gen !== repoGeneration) return;
+    rawGraphElements = parsed.filter((el: any) => {
       // Drop self-loop edges (source === target) — they are scanner artifacts
       // and produce an "invalid endpoints" warning in cytoscape
       if (el.data && el.data.source && el.data.target && el.data.source === el.data.target) return false;
@@ -2246,12 +2266,13 @@ async function loadGraph() {
 
     // Load clusters mapping for Proximity Clusters Mode
     await loadClusters();
+    if (gen !== repoGeneration) return;
     adaptGrouping();
 
-    // Default mode is Proximity Clusters Map.
-    currentGraphMode = 'proximity';
+    // The view stays what the user chose (Clusters Map at first): a reload (a repo switch, a new
+    // scan) used to reset it, overriding a choice made while the graph was loading (M4-21 review).
     const modeSelect = document.getElementById('select-graph-mode') as HTMLSelectElement;
-    if (modeSelect) modeSelect.value = 'proximity';
+    if (modeSelect) modeSelect.value = currentGraphMode;
 
     const focusSearchContainer = document.getElementById('focus-search-container');
     if (focusSearchContainer) {
@@ -3073,12 +3094,14 @@ async function loadGraph() {
 
 // Fetch symbols
 async function loadSymbols(query: string = '') {
+  const gen = repoGeneration;
   const PAGE_SIZE = 50;
   try {
     const offset = symbolPage * PAGE_SIZE;
     const res = await fetch(withRepo(`/api/symbols?q=${encodeURIComponent(query)}&limit=${PAGE_SIZE}&offset=${offset}`, 'any'));
     if (!res.ok) return;
     const data = await res.json();
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
     const symbols: any[] = data.results ?? [];
     const total: number = data.total ?? symbols.length;
 
@@ -3212,10 +3235,12 @@ async function loadSymbolDetails(name: string) {
 
 // Fetch framework routes and hooks
 async function loadRoutes() {
+  const gen = repoGeneration;
   try {
     const res = await fetch(withRepo('/api/routes', 'any'));
     if (!res.ok) return;
     const data = await res.json();
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
 
     const routesTbody = document.querySelector('#table-routes tbody');
     if (routesTbody) {
@@ -3305,10 +3330,12 @@ function statTiles(tiles: Array<[string, string | number]>): string {
 }
 
 async function loadMetrics() {
+  const gen = repoGeneration;
   try {
     const res = await fetch(withRepo('/api/metrics', 'single'));
     if (!res.ok) return;
     const metrics = await res.json();
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
 
     const summary = document.getElementById('metrics-summary');
     if (summary) {
@@ -3689,12 +3716,19 @@ document.addEventListener('DOMContentLoaded', () => {
     renderHttpDetail();
     (document.querySelector(`#table-http [data-call="${httpSelected}"]`) as HTMLElement | null)?.focus();
   });
-  document.getElementById('http-flow')?.addEventListener('click', (e) => {
-    const link = (e.target as Element).closest('[data-pair]') as HTMLElement | null;
+  const filterByFlowLink = (target: EventTarget | null) => {
+    const link = (target as Element | null)?.closest?.('[data-pair]') as HTMLElement | null;
     const select = document.getElementById('http-filter-pair') as HTMLSelectElement | null;
     if (link && select) {
       select.value = link.dataset.pair ?? '';
       renderHttpTable();
+    }
+  };
+  document.getElementById('http-flow')?.addEventListener('click', (e) => filterByFlowLink(e.target));
+  document.getElementById('http-flow')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      filterByFlowLink(e.target);
     }
   });
   document.getElementById('table-repos')?.addEventListener('click', (e) => {
@@ -3932,7 +3966,8 @@ const hubNodes = new Set<string>();
 let httpData: { total: number; matched: number; pairs: any[]; unmatched: any[] } | null = null;
 let httpCalls: any[] = [];
 let httpSelected = -1;
-const NO_ROUTE = '\u0000none';
+/** The pair key of unmatched calls: printable, since NUL in an attribute becomes U+FFFD (review 2026-11-02). */
+const NO_ROUTE = '(no route)';
 
 /** A number for markup: whatever it is given, the result is digits (M4-23, the escaping check). */
 function num(value: unknown): string {
@@ -3977,14 +4012,14 @@ function renderHttpFlow() {
     const x2 = W - boxW - 8;
     const width = 2 + Math.round((l.count / max) * 14);
     const mid = (x1 + x2) / 2;
-    return `<g class="flow-link${l.unmatched ? ' is-none' : ''}" data-pair="${escapeHtml(`${l.from}→${l.to}`)}">
+    return `<g class="flow-link${l.unmatched ? ' is-none' : ''}" data-pair="${escapeHtml(`${l.from}→${l.to}`)}" tabindex="0" role="button" aria-label="${escapeHtml(`Show the calls from ${name(l.from)} to ${name(l.to)}: ${l.count}`)}">
       <path d="M${num(x1)},${num(y1)} C${num(mid)},${num(y1)} ${num(mid)},${num(y2)} ${num(x2)},${num(y2)}" stroke-width="${num(width)}"></path>
       <text x="${num(mid)}" y="${(y1 + y2) / 2 - 6}" text-anchor="middle">${escapeHtml(l.count)}</text>
       <title>${escapeHtml(`${name(l.from)} → ${name(l.to)}: ${l.count} call${l.count === 1 ? '' : 's'}`)}</title>
     </g>`;
   }).join('');
   const summary = links.map((l) => `${name(l.from)} to ${name(l.to)}: ${l.count}`).join('; ');
-  el.innerHTML = `<svg viewBox="0 0 ${num(W)} ${num(h)}" role="img" aria-label="${escapeHtml(`HTTP calls between repos. ${summary}`)}" preserveAspectRatio="xMidYMid meet">
+  el.innerHTML = `<svg viewBox="0 0 ${num(W)} ${num(h)}" role="group" aria-label="${escapeHtml(`HTTP calls between repos. ${summary}`)}" preserveAspectRatio="xMidYMid meet">
     ${pathsHtml}
     ${left.map((r, i) => boxHtml(r, 0, y(i, left.length), 'Calling repo')).join('')}
     ${right.map((r, i) => boxHtml(r, W - boxW, y(i, right.length), 'Serving repo')).join('')}
@@ -4039,10 +4074,12 @@ function renderHttpDetail() {
 }
 
 async function loadHttp() {
+  const gen = repoGeneration;
   try {
     const res = await fetch(withRepo('/api/http', 'any'));
     if (!res.ok) return;
     httpData = await res.json();
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
     httpCalls = [...httpData!.pairs.flatMap((p) => p.calls), ...httpData!.unmatched.flatMap((u) => u.calls)];
     httpSelected = -1;
     const summary = document.getElementById('http-summary');
@@ -4136,6 +4173,7 @@ async function loadConfigView() {
 let architectureLoaded = false;
 
 async function loadArchitecture() {
+  const gen = repoGeneration;
   architectureLoaded = true;
   try {
     // 1. Fetch smells to populate annotations before drawing/re-drawing the graph
@@ -4144,11 +4182,13 @@ async function loadArchitecture() {
     // 2. Fetch profile
     const profileRes = await fetch(withRepo('/api/profile', 'single'));
     const profileData = profileRes.ok ? await profileRes.json() : null;
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
     renderProfile(profileData?.profile);
 
     // 3. Fetch DSM
     const dsmRes = await fetch(withRepo('/api/dsm', 'single'));
     const dsmData = dsmRes.ok ? await dsmRes.json() : null;
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
     renderDSM(dsmData);
   } catch (err) {
     console.error('Failed to load architecture data:', err);
@@ -4156,10 +4196,12 @@ async function loadArchitecture() {
 }
 
 async function loadSmells() {
+  const gen = repoGeneration;
   try {
     const res = await fetch(withRepo('/api/smells', 'set'));
     if (!res.ok) return;
     const data = await res.json();
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
     
     cycleEdges.clear();
     hubNodes.clear();

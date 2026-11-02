@@ -274,12 +274,19 @@ export function startUiServer(opts: ServerOpts) {
           json(405, { error: 'The configuration is read-only here: edit .mapx/config.json, or use mapx workspaces and mapx lang.' });
           return;
         }
-        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        // Config.read: no default file created, no duplicate entry saved away, no store opened.
+        let config: Config | null;
         try {
-          json(200, describeConfig(dir, await loadConfig(dir, store)));
-        } finally {
-          try { store.close(); } catch { /* ignore close errors */ }
+          config = await Config.read(dir);
+        } catch (err) {
+          json(422, { error: `.mapx/config.json is not valid JSON: ${err instanceof Error ? err.message : err}` });
+          return;
         }
+        if (!config) {
+          json(404, { error: 'MapX is not initialized here: no .mapx/config.json.' });
+          return;
+        }
+        json(200, describeConfig(dir, config));
         return;
       }
 

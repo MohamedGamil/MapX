@@ -7,6 +7,7 @@ import { startUiServer } from '../src/ui-server.js';
 import { describeConfig } from '../src/core/config-report.js';
 import { Config } from '../src/core/config.js';
 import { cleanup, init, workspace } from './helpers/e2e.js';
+import { existsSync } from 'node:fs';
 
 // M4-22: the dashboard's read-only view of the effective configuration.
 describe('/api/config', () => {
@@ -81,6 +82,62 @@ describe('/api/config', () => {
     const report = describeConfig(root, await Config.load(root), { MAPX_PARSE_WORKERS: '3' });
     expect(report.settings.find((s) => s.key === 'parseWorkers')).toMatchObject({ value: '3', source: 'env' });
     const bad = describeConfig(root, await Config.load(root), { MAPX_PARSE_WORKERS: 'x' });
-    expect(bad.warnings).toContain('MAPX_PARSE_WORKERS: expected "auto" or a whole number ≥ 0 (found "x")');
+    expect(bad.warnings).toContain('MAPX_PARSE_WORKERS: expected "auto" or a whole number ≥ 0 (found "x"); ignored');
+    // The pool ignores an invalid value and uses the configured one: so does the report.
+    expect(bad.settings.find((s) => s.key === 'parseWorkers')).toMatchObject({ value: 'lots', source: 'user' });
+  });
+});
+
+// Review 2026-11-02 of M4-22.
+describe('/api/config review fixes', () => {
+  let root: string;
+  let server: Server;
+  let base: string;
+  beforeAll(async () => {
+    // A JavaScript project: init adds its extra excludes (JS_INIT_EXCLUDES) to the defaults.
+    root = workspace({ 'package.json': '{"name":"fixture"}', 'src/a.ts': 'export const a = 1;\n', 'web/x.ts': 'export const x = 1;\n' });
+    init(root);
+    server = startUiServer({ port: 0, host: '127.0.0.1', dir: root }) as unknown as Server;
+    await new Promise<void>((r) => (server.listening ? r() : server.once('listening', () => r())));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }, 60_000);
+  afterAll(async () => {
+    await new Promise((r) => server.close(r));
+    cleanup(root);
+  });
+  const path = () => join(root, '.mapx/config.json');
+  const get = async () => (await fetch(`${base}/api/config`)).json() as Promise<any>;
+
+  it('reports a fresh init\'s settings as defaults', async () => {
+    const body = await get();
+    for (const s of body.settings) expect(s.source, s.key).toBe('default');
+    expect(body.settings.find((s: any) => s.key === 'excludePatterns').entries).toContainEqual({ value: '**/__tests__/**', source: 'default' });
+    expect(body.warnings).toEqual([]);
+  });
+
+  it('never writes: a duplicate repo entry is reported, not saved away', async () => {
+    const config = JSON.parse(readFileSync(path(), 'utf8'));
+    config.repos.push({ name: 'web', path: 'web' }, { name: 'web-dup', path: './web' });
+    writeFileSync(path(), JSON.stringify(config, null, 2));
+    const before = readFileSync(path(), 'utf8');
+    for (let i = 0; i < 2; i++) {
+      const body = await get();
+      expect(body.warnings).toContain('repos: "web-dup" names the same folder as "web" and is ignored');
+    }
+    expect(readFileSync(path(), 'utf8')).toBe(before);
+  });
+
+  it('answers a config without settings with a warning, and invalid JSON with 422; never creates one', async () => {
+    writeFileSync(path(), JSON.stringify({ version: '1.0.0', repos: [{ name: 'main', path: '.' }], languages: {} }));
+    const body = await get();
+    expect(body.warnings).toContain('settings: missing from config.json; MapX uses its defaults');
+    writeFileSync(path(), '{ not json');
+    const res = await fetch(`${base}/api/config`);
+    expect(res.status).toBe(422);
+    expect((await res.json() as any).error).toMatch(/not valid JSON/);
+    const { rmSync } = await import('node:fs');
+    rmSync(path());
+    expect((await fetch(`${base}/api/config`)).status).toBe(404);
+    expect(existsSync(path())).toBe(false);
   });
 });

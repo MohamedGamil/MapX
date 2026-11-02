@@ -1,6 +1,6 @@
 # MapX BATON handoff
 
-Revision: develop@3553837c2d693fb5800aa63b66988f931ee53f54 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
+Revision: develop@bf534eeb1a473d25dc0988df66330d3224269d15 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
 
 ## Baseline
 Last completed: M4-23 — Cross-repo HTTP communication view in the dashboard.
