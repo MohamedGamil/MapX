@@ -15352,15 +15352,28 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-c0",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T13:51:14.189Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T13:51:13.782Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:51:14.189Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
@@ -15400,7 +15413,14 @@
       "affectedFiles": [
         "src/cli.ts",
         "src/arch/reporters/**",
-        "tests/arch-cli.test.ts"
+        "tests/arch-cli.test.ts",
+        "src/arch/check.ts",
+        "schemas/arch-report.schema.json",
+        "docs/cli-reference.md",
+        "docs/architecture-rules.md",
+        "CHANGELOG.md",
+        "scripts/eval/score-arch.ts",
+        "tests/arch-fixture.test.ts"
       ],
       "acceptanceCriteria": [
         "Each exit code 0–4 is produced by a fixture case in tests/arch-cli.test.ts using the built binary.",
@@ -15408,8 +15428,8 @@
         "Without an architecture config, `mapx check` exits 3 with a hint to run `mapx arch init`."
       ],
       "verificationCommands": [
-        "npm run build",
-        "npx vitest run tests/arch-cli.test.ts"
+        "npx vitest run tests/arch-cli.test.ts",
+        "npm run check"
       ],
       "description": "Register `mapx check` with --view, --format table|json, --output, --report-uncovered, --fail-on-uncovered, --report-skipped, --fail-on warn, --layer, --rule, --sync; exit codes 0–4 as AR-17."
     },
@@ -23455,18 +23475,23 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner decision: may sync re-parse every importer of a barrel when a module behind it changes (correct, costly in barrel-heavy repos), or only when the module`s exported names change"
+      ],
       "sources": [
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "BLOCKED",
       "owner": "claude-ff",
       "actualHours": null,
       "startedAt": "2026-11-02T13:36:51.551Z",
       "completedAt": null,
       "commits": [],
-      "artifacts": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R1.md",
+        "docs/baton/reports/M2-08-R1/attempt-1.patch"
+      ],
       "evidence": [],
       "history": [
         {
@@ -23480,6 +23505,12 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T14:04:18.772Z",
+          "from": "IN_PROGRESS",
+          "to": "BLOCKED",
+          "evidence": []
         }
       ],
       "criticalPath": false,
@@ -23489,7 +23520,7 @@
       "id": "M2-08-R1",
       "title": "Import-bound calls: export-from barrels in sync, and no fallback past a project import",
       "objective": "Sync re-links importers of export-from barrels like scan --force, and a call whose name is imported from a project module never links another file's same-named symbol.",
-      "description": "Review 2026-11-02 (M2-08 DEFECTIVE): export { x } from and export * from emit no import edge, so importerReferrers never reaches a barrel's importers (sync != force). When the imported project module does not declare the name, resolution falls back to name lookup and links an unrelated module, contradicting the objective; tests/import-bound-calls.test.ts asserts that fallback (main.ts -> helpers.ts#ghost).",
+      "description": "Review 2026-11-02 (M2-08 DEFECTIVE): export { x } from and export * from emit no import edge, so importerReferrers never reaches a barrel's importers (sync != force). When the imported project module does not declare the name, resolution falls back to name lookup and links an unrelated module, contradicting the objective; tests/import-bound-calls.test.ts asserts that fallback (main.ts -> helpers.ts#ghost). Attempt 1 (2026-11-02) reverted after an independent review reproduced two P1 regressions (comment stripping not string- or regex-aware; commented-out default exports) and a 300x sync re-parse on body-only edits behind an export-star barrel; see docs/baton/reports/M2-08-R1.md and attempt-1.patch.",
       "outputs": [
         "src/core/scanner.ts",
         "tests/import-bound-calls.test.ts",

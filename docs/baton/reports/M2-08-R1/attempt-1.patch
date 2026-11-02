@@ -1,0 +1,187 @@
+diff --git a/queries/javascript/references.scm b/queries/javascript/references.scm
+index cfeda6c..8cfa797 100644
+--- a/queries/javascript/references.scm
++++ b/queries/javascript/references.scm
+@@ -3,6 +3,10 @@
+ (import_statement
+   source: (string) @ref.target_import) @ref.type_import
+ 
++; `export { x } from './m'` and `export * from './m'`: a barrel depends on the modules it re-exports (M2-08-R1).
++(export_statement
++  source: (string) @ref.target_import) @ref.type_import
++
+ (class_declaration
+   (class_heritage
+     (identifier) @ref.target_extends)) @ref.type_extends
+diff --git a/queries/typescript/references-tsx.scm b/queries/typescript/references-tsx.scm
+index a56b8c8..7bdc25d 100644
+--- a/queries/typescript/references-tsx.scm
++++ b/queries/typescript/references-tsx.scm
+@@ -3,6 +3,10 @@
+ (import_statement
+   source: (string) @ref.target_import) @ref.type_import
+ 
++; `export { x } from './m'` and `export * from './m'`: a barrel depends on the modules it re-exports (M2-08-R1).
++(export_statement
++  source: (string) @ref.target_import) @ref.type_import
++
+ (import_clause
+   (named_imports
+     (import_specifier
+diff --git a/queries/typescript/references.scm b/queries/typescript/references.scm
+index 4590c34..473ded8 100644
+--- a/queries/typescript/references.scm
++++ b/queries/typescript/references.scm
+@@ -3,6 +3,10 @@
+ (import_statement
+   source: (string) @ref.target_import) @ref.type_import
+ 
++; `export { x } from './m'` and `export * from './m'`: a barrel depends on the modules it re-exports (M2-08-R1).
++(export_statement
++  source: (string) @ref.target_import) @ref.type_import
++
+ (import_clause
+   (named_imports
+     (import_specifier
+diff --git a/src/core/scanner.ts b/src/core/scanner.ts
+index dfe5b33..d8fc681 100644
+--- a/src/core/scanner.ts
++++ b/src/core/scanner.ts
+@@ -213,6 +213,15 @@ export interface WorkerStats {
+ 
+ const STATIC_LANGUAGES = new Set(Object.values(getBuiltinLanguages()).filter(l => l.tier === 'static').map(l => l.name));
+ 
++/**
++ * Where an imported name is declared: the declaration; false for a value symbol no call reaches;
++ * 'absent' when the module certainly neither declares nor re-exports it (M2-08-R1); null when unknown.
++ */
++type ExportLookup = { file: string; symbol: string } | false | 'absent' | null;
++
++/** A name certainly absent from the imported project module gets no edge, not a name lookup (M2-08-R1). */
++const orNoEdge = (found: ExportLookup): { file: string; symbol: string } | false | null => (found === 'absent' ? false : found);
++
+ export class Scanner {
+   private store: Store;
+   private config: Config;
+@@ -233,7 +242,7 @@ export class Scanner {
+   /** Per file, the names it binds by import to project modules, for one resolution phase (M2-08). */
+   private importBindingsCache = new Map<string, Map<string, ImportBinding>>();
+   /** findExport per file and name, for one resolution phase; null while being searched (M2-08). */
+-  private exportCache = new Map<string, { file: string; symbol: string } | false | null>();
++  private exportCache = new Map<string, ExportLookup>();
+   /** Source lines per file, for one resolution phase (Python call receivers, M2-08). */
+   private lineCache = new Map<string, string[]>();
+   /** Per symbols list, the names it declares (outside classes' methods), for the shadowing check (M2-08). */
+@@ -1779,12 +1788,12 @@ export class Scanner {
+     }
+     if (receiver) {
+       const module = bindings.get(receiver);
+-      return module && module.imported === null ? this.findExport(module.file, name, fileMap) : null;
++      return module && module.imported === null ? orNoEdge(this.findExport(module.file, name, fileMap)) : null;
+     }
+     const binding = bindings.get(name);
+     if (!binding || binding.imported === null) return null;
+     const exported = binding.imported === 'default' && !python ? this.defaultExportName(binding.file) : binding.imported;
+-    return exported ? this.findExport(binding.file, exported, fileMap) : null;
++    return exported ? orNoEdge(this.findExport(binding.file, exported, fileMap)) : null;
+   }
+ 
+   /** A declaration is visible at a line: anywhere at module level, else within its enclosing symbol. */
+@@ -1804,7 +1813,7 @@ export class Scanner {
+    * The top-level declaration of `name` in `file`, or in the module it re-exports it from (M2-08).
+    * False when it is a value symbol a call cannot reach (a JS/TS/Python constant or variable).
+    */
+-  private findExport(file: string, name: string, fileMap: Map<string, string>, depth = 0): { file: string; symbol: string } | false | null {
++  private findExport(file: string, name: string, fileMap: Map<string, string>, depth = 0): ExportLookup {
+     // Memoised per phase, and a module seen on the current path ends it: a barrel graph (`export *`
+     // fan-out, cycles) is walked once per name (review 2026-11-01).
+     const key = `${file}\0${name}`;
+@@ -1815,7 +1824,7 @@ export class Scanner {
+     return found;
+   }
+ 
+-  private findExportUncached(file: string, name: string, fileMap: Map<string, string>, depth: number): { file: string; symbol: string } | false | null {
++  private findExportUncached(file: string, name: string, fileMap: Map<string, string>, depth: number): ExportLookup {
+     const declared = (this.symbolIndex?.get(name.toLowerCase()) ?? []).filter(e => e.file === file && e.name === name && !e.scope);
+     if (declared.length) {
+       const value = (e: SymbolIndexEntry) => (e.kind === 'constant' || e.kind === 'variable') && VALUE_SYMBOL_LANGUAGES.has(this.languageOf(file) ?? '');
+@@ -1828,7 +1837,7 @@ export class Scanner {
+     const bound = this.importBindings(file, python, fileMap).get(name);
+     const text = stripComments(this.readWorkspaceText(file) ?? '', python);
+     if (python) return bound?.imported ? this.findExport(bound.file, bound.imported, fileMap, depth + 1) : null;
+-    let hit: { file: string; symbol: string } | false | null;
++    let hit: ExportLookup;
+     for (const m of text.matchAll(/\bexport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
+       for (const part of m[1]!.split(',')) {
+         const [orig, alias] = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/);
+@@ -1841,12 +1850,17 @@ export class Scanner {
+     if (bound?.imported && new RegExp(`\\bexport\\s*\\{[^}]*(?<![\\w$])${escapedName}(?![\\w$])[^}]*\\}(?!\\s*from)`).test(text)) {
+       return this.findExport(bound.file, bound.imported, fileMap, depth + 1);
+     }
++    // Absent: the name occurs nowhere in the module, which has no CommonJS or `export =` exports,
++    // and every `export *` target is a project module where it is absent too (M2-08-R1).
++    let absent = !new RegExp(`(?<![\\w$])${escapedName}(?![\\w$])`).test(text) && !/\bmodule\.exports\b|\bexports\.|\bexport\s*=/.test(text);
+     for (const m of text.matchAll(/\bexport\s*\*\s*from\s*['"]([^'"]+)['"]/g)) {
+       const target = this.resolveImportPath(m[1]!, file, fileMap);
+       hit = target ? this.findExport(target, name, fileMap, depth + 1) : null;
++      if (hit === 'absent') continue;
+       if (hit !== null) return hit;
++      absent = false;
+     }
+-    return null;
++    return absent ? 'absent' : null;
+   }
+ 
+   /** The declared name of a JS/TS module's default export (`export default function build`). */
+diff --git a/tests/import-bound-calls.test.ts b/tests/import-bound-calls.test.ts
+index d9fc55e..d246da5 100644
+--- a/tests/import-bound-calls.test.ts
++++ b/tests/import-bound-calls.test.ts
+@@ -201,8 +201,10 @@ def caller():
+     expect(from('literal')).toEqual([]);
+   });
+ 
+-  it('falls back to name lookup when the imported module does not declare the name', () => {
+-    expect(callsFrom(root, 'src/app/main.ts')('missing')).toEqual(['src/app/helpers.ts#ghost']);
++  // M2-08-R1: a name imported from a project module that neither declares nor re-exports it links
++  // nothing, never another file's same-named symbol (review 2026-11-02).
++  it('gives no edge when the imported project module does not declare the name', () => {
++    expect(callsFrom(root, 'src/app/main.ts')('missing')).toEqual([]);
+   });
+ 
+   it('lets a declaration in the file shadow the import', () => {
+@@ -236,10 +238,15 @@ describe('sync follows changes to imported modules and barrels (review 2026-11-0
+   beforeEach(() => {
+     root = workspace({
+       'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+-      'src/app/helpers.ts': 'export function create() { return 0; }\n',
++      'src/app/helpers.ts': 'export function create() { return 0; }\nexport function run() { return 0; }\nexport function starred() { return 0; }\n',
+       'src/lib/impl.ts': 'export function shout() { return 1; }\n',
++      // M2-08-R1: modules behind an `export … from` and an `export *` barrel (review 2026-11-02).
++      'src/lib/base.ts': 'export function other2() { return 0; }\n',
++      'src/lib/star.ts': "export * from './starimpl';\n",
++      'src/lib/starimpl.ts': 'export function other3() { return 0; }\n',
++      'src/app/barrels.ts': "import { run } from '../lib';\nimport { starred } from '../lib/star';\nexport function runIt() { return run(); }\nexport function starIt() { return starred(); }\n",
+       'src/lib/impl2.ts': 'export function shout() { return 2; }\n',
+-      'src/lib/index.ts': "export { shout } from './impl';\n",
++      'src/lib/index.ts': "export { shout } from './impl';\nexport { run } from './base';\n",
+       'src/lib/utils.ts': 'export function other() { return 0; }\n',
+       'src/app/main.ts': "import { shout } from '../lib';\nimport { create } from '../lib/utils';\nexport function go() { return shout(); }\nexport function make() { return create(); }\n",
+     });
+@@ -257,10 +264,14 @@ describe('sync follows changes to imported modules and barrels (review 2026-11-0
+   it.each([
+     ['a barrel re-exporting from another module', (r: string) => writeFileSync(join(r, 'src/lib/index.ts'), "export { shout } from './impl2';\n"), 'src/lib/impl2.ts#shout', 'go'],
+     ['an imported module gaining the imported name', (r: string) => writeFileSync(join(r, 'src/lib/utils.ts'), 'export function other() { return 0; }\nexport function create() { return 1; }\n'), 'src/lib/utils.ts#create', 'make'],
+-  ])('re-parses the importers after %s, so sync equals scan --force', (_name, change, expected, symbol) => {
++    ['the module behind an export-from barrel gaining the name', (r: string) => writeFileSync(join(r, 'src/lib/base.ts'), 'export function other2() { return 0; }\nexport function run() { return 1; }\n'), 'src/lib/base.ts#run', 'runIt', 'src/app/barrels.ts'],
++    ['the module behind an export-star barrel gaining the name', (r: string) => writeFileSync(join(r, 'src/lib/starimpl.ts'), 'export function other3() { return 0; }\nexport function starred() { return 1; }\n'), 'src/lib/starimpl.ts#starred', 'starIt', 'src/app/barrels.ts'],
++  ])('re-parses the importers after %s, so sync equals scan --force', (_name, change, expected, symbol, file = 'src/app/main.ts') => {
++    // Before the change the imported name is declared nowhere behind the import: no edge (M2-08-R1).
++    if (symbol === 'runIt' || symbol === 'starIt' || symbol === 'make') expect(callsFrom(root, file)(symbol)).toEqual([]);
+     change(root);
+     mapx(root, 'sync', '.');
+-    expect(callsFrom(root, 'src/app/main.ts')(symbol)).toEqual([expected]);
++    expect(callsFrom(root, file)(symbol)).toEqual([expected]);
+     const synced = all();
+     mapx(root, 'scan', '.', '--force');
+     expect(synced).toEqual(all());
