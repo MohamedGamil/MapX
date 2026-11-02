@@ -19,6 +19,16 @@ export interface ExtractedSymbol {
   metadata: Record<string, unknown>;
 }
 
+/**
+ * A decorator, attribute or annotation of a symbol, in `metadata.decorators` (M5-10): the name
+ * without its sigil or arguments (PHP: resolved to the class's FQN), and the raw text between its
+ * parentheses, or null without an argument list. `written` is the name as the source spells it, when
+ * resolution changed it (PHP `#[ORM\Entity]` → name `Doctrine\ORM\Mapping\Entity`, written `ORM\Entity`).
+ */
+export interface SymbolDecorator { name: string; args: string | null; written?: string }
+/** A doc-block tag of a symbol, in `metadata.docTags` (M5-10): `@deprecated` and its text. */
+export interface SymbolDocTag { tag: string; value: string }
+
 export type SymbolKind =
   | 'class'
   | 'method'

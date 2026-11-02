@@ -291,17 +291,17 @@
         "decorator": {
           "type": "string",
           "minLength": 1,
-          "description": "Carries this decorator, attribute or annotation (name or suffix)."
+          "description": "A symbol carrying this decorator, attribute or annotation: the value equals its stored name (PHP: the fully qualified name, or the name as written) or is a suffix of it on a namespace boundary (\\ or .), case-insensitively. Outside PHP, where names are stored as written, a qualified value also matches the stored name it ends in (System.Obsolete matches [Obsolete]). A leading @, \\ or #[ is ignored, and in C# X and XAttribute match each other. /regex/flags is a regex on the stored name. Never matches a file."
         },
         "docTag": {
           "type": "string",
           "minLength": 1,
-          "description": "Its doc block has this tag, e.g. @deprecated."
+          "description": "A symbol whose doc block (PHPDoc, JSDoc/TSDoc, Javadoc/KDoc, C# XML doc, Python docstring) has this tag, e.g. @deprecated. The @ is optional and case is ignored; in Python a @deprecated decorator counts too. Never matches a file."
         },
         "value": {
           "type": "string",
           "minLength": 1,
-          "description": "With docTag: the tag value matches this regex."
+          "description": "With docTag: one value of the tag matches this regex (case-insensitive unless written /…/flags)."
         },
         "member": {
           "type": "string",

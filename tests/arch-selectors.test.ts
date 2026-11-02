@@ -187,9 +187,9 @@ describe('layer membership on the fixture apps', () => {
   });
 
   it('reports selectors later tasks evaluate, and they match nothing', () => {
-    const m = computeMembership(apps['ts']!.view, { layers: [{ name: 'Old', overlay: true, selectors: [{ docTag: '@deprecated' }, { any: [{ extends: 'Base' }] }] }] });
+    const m = computeMembership(apps['ts']!.view, { layers: [{ name: 'Old', overlay: true, selectors: [{ member: 'run' }, { any: [{ extends: 'Base' }] }] }] });
     expect(m.unsupported).toEqual([
-      { layer: 'Old', selector: 'selectors[0]', key: 'docTag', task: 'M5-10' },
+      { layer: 'Old', selector: 'selectors[0]', key: 'member', task: 'M5-09' },
       { layer: 'Old', selector: 'selectors[1]', key: 'extends', task: 'M5-09' },
     ]);
     expect(m.members('Old')).toEqual([]);
@@ -426,7 +426,7 @@ describe('M5-03-R1: not over a symbol-level selector (AR-01 file membership)', (
     expect(m.of(file)).toEqual([]);
     expect(m.of(fileEl('php', 'app/Domain/Order.php'))).toEqual(['Domain']);
     // Selectors a later task evaluates are inapplicable too: their negation selects nothing.
-    expect(matchSelector({ not: { docTag: '@deprecated' } }, file, ctx).matched).toBe(false);
+    expect(matchSelector({ not: { member: 'run' } }, file, ctx).matched).toBe(false);
     // On a symbol, not(name) is an ordinary negation.
     expect(matchSelector({ not: { name: 'Controller$' } }, el('php', 'App\\Domain\\Order'), ctx).matched).toBe(true);
   });

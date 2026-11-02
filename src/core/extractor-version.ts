@@ -16,8 +16,10 @@ import type { Store } from './store.js';
  * - 6: M2-10 (Lua `obj:m()` and `self:m()` method calls; global `function f()` symbols; no locals or
  *   `self.x` fields as constants, M2-11).
  * - 7: M2-09 (JS/TS member-assigned functions are symbols).
+ * - 8: M5-10 (decorators, attributes and doc tags in symbol metadata: PHP, TS/JS, Python, Java,
+ *   Kotlin, C#).
  */
-export const EXTRACTOR_VERSION = 7;
+export const EXTRACTOR_VERSION = 8;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

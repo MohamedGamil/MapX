@@ -4,6 +4,7 @@ import type { LanguageDefinition } from '../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from './wasm-parser.js';
 import { COMMON_FRAMEWORK_METHODS, JS_BUILTIN_METHODS, JS_BUILTIN_RECEIVERS } from './common-methods.js';
 import { LuaScopes, luaCallTarget } from './languages/lua.js';
+import { symbolAnnotations } from './annotations.js';
 
 /** `import a.b.C` → [a.b.C]; `import a.b.{C, D => E}` → [a.b.C, a.b.D]; `import a.b._` → [a.b._]. */
 function scalaImportTargets(node: any): string[] {
@@ -557,9 +558,13 @@ export class GenericWasmParser implements LanguageParser {
               signature,
               startLine,
               endLine,
-              // The namespace of each C# and Scala declaration, for its qualified name (M5-03-R2).
-              metadata: kind !== 'namespace' && (this.languageName === 'c-sharp' || this.languageName === 'scala')
-                ? { namespace: declaredNamespace(capture.node) } : this.symbolMetadata(capture.node),
+              // The namespace of each C# and Scala declaration, for its qualified name (M5-03-R2);
+              // decorators and doc tags (M5-10).
+              metadata: {
+                ...(kind !== 'namespace' && (this.languageName === 'c-sharp' || this.languageName === 'scala')
+                  ? { namespace: declaredNamespace(capture.node) } : this.symbolMetadata(capture.node)),
+                ...symbolAnnotations(this.languageName, capture.node),
+              },
             });
           }
         }

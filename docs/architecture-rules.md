@@ -105,20 +105,59 @@ A selector object has exactly one primary key, plus the modifiers that refine it
 | `cluster` | a MapX cluster the file is in, by name or glob | the file |
 | `workspacePackage` | the name in the nearest `package.json`, `composer.json`, `pyproject.toml`, `go.mod` or `Cargo.toml`, by name or glob | the file |
 | `framework` | a framework part read from stored edges: `route-handler` (target of a `route` or `http` edge), `middleware`, `model` (source of a `relation` edge), `job` and `event` (targets of `dispatch`), `listener` (target of `notify`), `resolver`, `component` (target of `render`), `http-client` (source of `http`) | the file |
+| `decorator` | a decorator, attribute or annotation of the symbol, by name or trailing segments, or `/regex/flags` (see below) | symbols only |
+| `docTag` (+ `value`) | a doc-block tag of the symbol, such as `@deprecated`, optionally with a value matching a regex (see below) | symbols only |
 | `layer` | membership in another layer | the element |
 | `all`, `any`, `not` | composition | |
 
-**Symbol-level selectors on files.** A `name` selector does not apply to a file. It is not a match, and neither is `not` of it, so `{ "all": [{ "path": "app/**" }, { "not": { "name": "Controller$" } }] }` never puts a file in a layer by itself. The file joins the layer only through a top-level symbol that is in it (see Membership). `all`, `any` and `not` use three-valued logic. `all` is inapplicable when no branch fails and one is inapplicable. `any` is inapplicable when no branch matches and one is inapplicable. So `{ "not": { "any": [{ "name": "Controller$" }, { "path": "app/Legacy/**" }] } }` does not select a file either.
+**Symbol-level selectors on files.** A `name`, `decorator` or `docTag` selector does not apply to a file. It is not a match, and neither is `not` of it, so `{ "all": [{ "path": "app/**" }, { "not": { "name": "Controller$" } }] }` never puts a file in a layer by itself. The file joins the layer only through a top-level symbol that is in it (see Membership). `all`, `any` and `not` use three-valued logic. `all` is inapplicable when no branch fails and one is inapplicable. `any` is inapplicable when no branch matches and one is inapplicable. So `{ "not": { "any": [{ "name": "Controller$" }, { "path": "app/Legacy/**" }] } }` does not select a file either.
 
 Not evaluated yet: these never match, `not` of them never matches either, and membership lists them as unsupported.
 
 | Selectors | Task that adds them |
 | --- | --- |
 | `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member` | M5-09 |
-| `decorator`, `docTag` | M5-10 |
 | `package` | M5-24 (attribution M5-20 … M5-23) |
 | `builtin` | M5-24 |
 | `ambient` | M5-24 |
+
+### Decorators and doc tags
+
+A scan stores each symbol's decorators, attributes or annotations, and its doc-block tags, for PHP, TypeScript, JavaScript (with Vue and Svelte script blocks), Python, Java, Kotlin and C#. Other languages store none yet, so these selectors never match their symbols.
+
+| Language | Decorators | Doc tags |
+| --- | --- | --- |
+| PHP | `#[Attr]`, `#[Attr(…)]`, several per group. The name is resolved like a class name, through `use` and the namespace (`#[ORM\Entity]` → `Doctrine\ORM\Mapping\Entity`), and the name as written is kept too when it differs (`ORM\Entity`, an alias) | PHPDoc `/** … */` block tags, Doctrine-style `@Route(…)` included |
+| TypeScript, JavaScript | `@dec`, `@dec(…)`, `@a.b` on classes (before or after `export`), methods, fields and accessors | JSDoc/TSDoc block tags; a function's overload signatures give theirs to the implementation |
+| Python | `@dec`, `@dec(…)`, `@app.route(…)` on `def` and `class` | docstring directives (`.. deprecated:: 2.0`) and `@tag` lines |
+| Java, Kotlin | `@Ann`, `@Ann(…)`, `@a.b.Ann`, each of Kotlin's `@[A B]` | Javadoc and KDoc block tags |
+| C# | `[Attr]`, `[Attr(…)]`, several per list; not `[return: …]`, `[param: …]`, `[field: …]` and other targets that name something else | XML doc `///` elements, as `@remarks`, `@param` and so on; `<summary>` is the description and `<code>` a sample, neither a tag |
+
+A block tag starts a line of the doc comment (after the leading `*`), so an inline `{@link X}` is not a tag. Its value runs to the next tag. Decorator names keep their qualifier as written (`app.route`, `System.Obsolete`), except in PHP, where they are fully qualified. Parameter decorators are not stored. Comments between decorators, or between the doc comment and the declaration (`// eslint-disable-next-line`), are passed over; code is not.
+
+**Code samples are never tags.** These are text:
+- lines in a ```` ``` ```` fence, a `<pre>…</pre>` block or a multi-line `{@code …}`;
+- everything after `@example`, which is that tag's value to the end of the comment (so put `@example` last);
+- C# `<code>`;
+- in a Python docstring, a literal block (the lines indented under a paragraph ending in `::`) and doctest examples (from `>>>` to the next blank line).
+
+**A doc comment attaches to the next declaration, even across blank lines,** as TypeScript and Javadoc tooling do. A file-header block (`/** @license MIT */` or `/** @internal */` at the top of a file) therefore becomes the first declaration's tags. Keep `@internal` and similar markers out of file headers, or the first class of the file is marked.
+
+- **`decorator`.** A plain value matches a stored decorator, ignoring case, when:
+  - it equals the decorator's name, or is a suffix of it on a namespace boundary (`\` or `.`). `Entity` and `Mapping\Entity` match `Doctrine\ORM\Mapping\Entity`; `tity` does not.
+  - in PHP, the same holds for the name as written. `ORM\Entity` (with `use Doctrine\ORM\Mapping as ORM`) matches, and so does an alias such as `Baz` in `use Foo\Bar as Baz`.
+  - outside PHP, where names are stored as written, the stored name is such a suffix of the value. `System.Obsolete` matches `[Obsolete]`, and `javax.persistence.Entity` matches `@Entity`. These languages cannot tell two libraries' `@Entity` apart.
+
+  A leading `@`, `\` or `#[` in the value is ignored. In C#, `X` and `XAttribute` match each other, so `Obsolete` matches `[System.ObsoleteAttribute]`. A value written `/…/flags` is a regex on the stored name and on the name as written.
+- **`docTag`, with optional `value`.** The symbol has the tag; the `@` is optional and case is ignored. With `value`, one occurrence of the tag has a value matching the regex (case-insensitive unless written `/…/flags`). In Python a `@deprecated` decorator (`@deprecated`, `@typing_extensions.deprecated("…")`) counts as the `@deprecated` tag, with its arguments as the value.
+- **Overloads.** Overloads that are symbols (Java, C#, TS class methods) share one element, which carries the decorators and tags of them all. TS function overload signatures are not symbols, so their doc tags are stored on the implementation.
+
+```jsonc
+{ "name": "Controllers", "selectors": [{ "decorator": "Controller" }] },
+{ "name": "Entities",    "selectors": [{ "decorator": "Doctrine\\ORM\\Mapping\\Entity" }] },
+{ "name": "Deprecated",  "selectors": [{ "docTag": "@deprecated" }], "overlay": true },
+{ "name": "BillingAPI",  "selectors": [{ "docTag": "@internal", "value": "^billing" }] }
+```
 
 ## Membership
 

@@ -4,6 +4,7 @@ import type { LanguageDefinition } from '../../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from '../wasm-parser.js';
 import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
 import { GenericWasmParser } from '../generic-wasm-parser.js';
+import { symbolAnnotations } from '../annotations.js';
 
 export const LARAVEL_FACADE_MAP: Record<string, string> = {
   App:           'Illuminate\\Foundation\\Application',
@@ -62,6 +63,8 @@ export class PhpParser extends GenericWasmParser {
       );
 
       let currentClass: string | null = null;
+      // Each symbol's declaration node, for its attributes and PHPDoc tags once `use` is read (M5-10).
+      const declarations: Array<[ExtractedSymbol, any]> = [];
 
       for (const [captureName, captures] of symCaptures) {
         if (captureName.startsWith('symbol.kind_')) {
@@ -87,7 +90,7 @@ export class PhpParser extends GenericWasmParser {
               signature = this.extractSignature(source, parentNode, name, kind, startLine);
             }
 
-            symbols.push({
+            const symbol: ExtractedSymbol = {
               name,
               kind,
               scope: kind === 'method' || kind === 'property' || kind === 'constant'
@@ -97,7 +100,9 @@ export class PhpParser extends GenericWasmParser {
               startLine,
               endLine,
               metadata: {},
-            });
+            };
+            symbols.push(symbol);
+            declarations.push([symbol, capture.node]);
           }
         }
       }
@@ -181,6 +186,9 @@ export class PhpParser extends GenericWasmParser {
         if (['self', 'static', 'parent'].includes(name.toLowerCase())) return name;
         return currentNamespace ? `${currentNamespace}\\${name}` : name;
       };
+
+      // Attributes, named like classes, and PHPDoc tags (M5-10).
+      for (const [symbol, node] of declarations) Object.assign(symbol.metadata, symbolAnnotations('php', node, resolveToFqn));
 
       // Process standard captures (extends, implements, calls, instantiations)
       for (const [captureName, captures] of refCaptures) {

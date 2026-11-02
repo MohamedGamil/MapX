@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import type { Store } from '../core/store.js';
 import type { FRAMEWORK_PARTS } from './schema.js';
+import type { SymbolDecorator, SymbolDocTag } from '../types.js';
 
 export type FrameworkPart = typeof FRAMEWORK_PARTS[number];
 
@@ -33,6 +34,9 @@ export interface Element {
   scope?: string | null;
   /** A symbol declared at file level (not inside a class or function). */
   topLevel: boolean;
+  /** A symbol's decorators, attributes or annotations, and doc tags, as parsed (M5-10); absent when none. */
+  decorators?: SymbolDecorator[];
+  docTags?: SymbolDocTag[];
 }
 
 export interface ElementView {
@@ -211,6 +215,20 @@ export function scanStamp(store: Store): string {
   return [times, count('files'), count('symbols'), count('edges')].join(':');
 }
 
+/** The decorators and doc tags a symbol row's metadata holds (M5-10). */
+function annotationsOf(s: SymbolRow): { decorators?: SymbolDecorator[]; docTags?: SymbolDocTag[] } {
+  if (!s.metadata || !(s.metadata.includes('"decorators"') || s.metadata.includes('"docTags"'))) return {};
+  try {
+    const m = JSON.parse(s.metadata) as { decorators?: unknown; docTags?: unknown };
+    return {
+      ...(Array.isArray(m.decorators) && m.decorators.length ? { decorators: m.decorators as SymbolDecorator[] } : {}),
+      ...(Array.isArray(m.docTags) && m.docTags.length ? { docTags: m.docTags as SymbolDocTag[] } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export function buildElementView(store: Store, dir: string, repoPaths: Record<string, string> = {}): ElementView {
   const db = store.raw;
   const fileRows = db.prepare('SELECT path, repo, language, namespace, role, role_confidence FROM files').all() as Array<{ path: string; repo: string; language: string; namespace: string | null; role: string | null; role_confidence: number | null }>;
@@ -302,7 +320,13 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
   const byId = new Map<string, Element>();
   const byFile = new Map<string, Element[]>();
   const add = (e: Element) => {
-    if (byId.has(e.id)) return;
+    const known = byId.get(e.id);
+    if (known) {
+      // Overloads share one element: it carries all their decorators and doc tags (M5-10).
+      if (e.decorators) known.decorators = [...(known.decorators ?? []), ...e.decorators];
+      if (e.docTags) known.docTags = [...(known.docTags ?? []), ...e.docTags];
+      return;
+    }
     byId.set(e.id, e);
     elements.push(e);
     const list = byFile.get(e.file.path) ?? [];
@@ -375,7 +399,7 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
       const topLevel = scoped
         ? (!parent || namespaceLike(parent)) && !(scope && !(s.kind in CONTAINER_RANK) && !scopedToNamespace)
         : !s.scope;
-      add({ id: `symbol:${file.path}#${qn}#${s.kind}`, kind: 'symbol', qualifiedName: qn, file, name: s.name, symbolKind: s.kind, scope: s.scope, topLevel });
+      add({ id: `symbol:${file.path}#${qn}#${s.kind}`, kind: 'symbol', qualifiedName: qn, file, name: s.name, symbolKind: s.kind, scope: s.scope, topLevel, ...annotationsOf(s) });
     }
   }
 

@@ -1,16 +1,19 @@
 // Layer selectors (M5-03; docs/research/deptrac AR-04). Each is a pure function of an element and
 // the element view, and says which part of the selector decided the match (the trace that
-// `explain` shows). Symbol-level selectors (`name`, `kind`) never match a file element; file-level
+// `explain` shows). Symbol-level selectors (`name`, `kind`, `decorator`, `docTag`) never match a file element; file-level
 // ones (`path`, `repo`, `language`, `role`, `cluster`, `workspacePackage`, `framework`) judge a
 // symbol by its file. Selectors that need data later tasks add never match here and are reported.
-import picomatch from 'picomatch';
 import type { Selector } from '../schema.js';
 import type { Element, ElementView } from '../elements.js';
+import { globOrRegex, nameOrGlob, regex } from './patterns.js';
+import { hasDecorator } from './decorator.js';
+import { hasDocTag } from './doc-tag.js';
+
+export { globOrRegex, regex } from './patterns.js';
 
 /** Selector keys this version cannot evaluate yet, with the task that adds them. */
 export const UNSUPPORTED_SELECTORS: Record<string, string> = {
-  extends: 'M5-09', implements: 'M5-09', inherits: 'M5-09', mixes: 'M5-09', inheritanceDepth: 'M5-09',
-  decorator: 'M5-10', docTag: 'M5-10', member: 'M5-09',
+  extends: 'M5-09', implements: 'M5-09', inherits: 'M5-09', mixes: 'M5-09', inheritanceDepth: 'M5-09', member: 'M5-09',
   package: 'M5-24', builtin: 'M5-24', ambient: 'M5-24',
 };
 
@@ -32,55 +35,6 @@ export interface SelectorMatch {
    * matches and one is inapplicable.
    */
   inapplicable?: boolean;
-}
-
-const patterns = new Map<string, (s: string) => boolean>();
-
-/** `/body/flags` is a regex; anything else a glob (picomatch, dotfiles included). */
-export function globOrRegex(pattern: string): (s: string) => boolean {
-  const key = `g:${pattern}`;
-  let fn = patterns.get(key);
-  if (!fn) {
-    const m = /^\/(.*)\/([a-z]*)$/s.exec(pattern);
-    if (m) {
-      const re = new RegExp(m[1]!, m[2]);
-      fn = (s) => re.test(s);
-    } else {
-      const glob = picomatch(pattern, { dot: true });
-      fn = (s) => glob(s);
-    }
-    patterns.set(key, fn);
-  }
-  return fn;
-}
-
-/** A regex, case-insensitive unless written `/body/flags` (AR-04). */
-export function regex(pattern: string): (s: string) => boolean {
-  const key = `r:${pattern}`;
-  let fn = patterns.get(key);
-  if (!fn) {
-    const m = /^\/(.*)\/([a-z]*)$/s.exec(pattern);
-    const re = m ? new RegExp(m[1]!, m[2]) : new RegExp(pattern, 'i');
-    fn = (s) => re.test(s);
-    patterns.set(key, fn);
-  }
-  return fn;
-}
-
-/** Exact (case-insensitive) unless the value is a glob. */
-function nameOrGlob(pattern: string): (s: string) => boolean {
-  if (/[*?[\]{}]/.test(pattern)) {
-    const key = `n:${pattern}`;
-    let fn = patterns.get(key);
-    if (!fn) {
-      const glob = picomatch(pattern, { nocase: true, dot: true });
-      fn = (s) => glob(s);
-      patterns.set(key, fn);
-    }
-    return fn;
-  }
-  const lower = pattern.toLowerCase();
-  return (s) => s.toLowerCase() === lower;
 }
 
 const LANGUAGE_ALIASES: Record<string, string> = { ts: 'typescript', js: 'javascript', py: 'python', 'c#': 'c-sharp', csharp: 'c-sharp', 'c++': 'cpp', kt: 'kotlin', rb: 'ruby', rs: 'rust', golang: 'go' };
@@ -130,6 +84,15 @@ export function matchSelector(selector: Selector, element: Element, ctx: Selecto
     if (element.kind !== 'symbol') return inapplicable;
     if (selector.kind && !selector.kind.includes(element.symbolKind as never)) return no;
     return regex(selector.name)(element.qualifiedName) ? yes('name') : no;
+  }
+  // Decorators, attributes and annotations, and doc tags, as the parsers store them (M5-10).
+  if (selector.decorator !== undefined) {
+    if (element.kind !== 'symbol') return inapplicable;
+    return hasDecorator(element, selector.decorator) ? yes('decorator') : no;
+  }
+  if (selector.docTag !== undefined) {
+    if (element.kind !== 'symbol') return inapplicable;
+    return hasDocTag(element, selector.docTag, selector.value === undefined ? undefined : regex(selector.value)) ? yes('docTag') : no;
   }
   if (selector.repo !== undefined) return nameOrGlob(selector.repo)(file.repo) ? yes('repo') : no;
   if (selector.language !== undefined) return languageMatches(file.language, selector.language) ? yes('language') : no;
