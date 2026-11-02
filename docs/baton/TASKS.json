@@ -23382,14 +23382,27 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-02-R1",
       "actualHours": null,
       "startedAt": "2026-11-02T16:03:50.047Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T17:51:24.864Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-02-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-config.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-02-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-02-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T16:03:48.224Z",
@@ -23402,6 +23415,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:51:24.578Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:51:24.864Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-config.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-02-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-02-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -23983,14 +24019,27 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M0-12-R11",
       "actualHours": null,
       "startedAt": "2026-11-02T16:03:48.827Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T17:25:30.264Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-12-R11.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/svelte.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R11.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-12-R11.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T16:03:46.989Z",
@@ -24003,6 +24052,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:25:29.846Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:25:30.264Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/svelte.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R11.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-12-R11.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -24056,14 +24128,32 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M3-05-R2",
       "actualHours": null,
       "startedAt": "2026-11-02T16:03:49.140Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T17:38:00.659Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-05-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-stores.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-05-R2.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-05-R2.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-05-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T16:03:47.294Z",
@@ -24076,6 +24166,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:38:00.323Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:38:00.659Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-stores.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-05-R2.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-05-R2.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-05-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -24200,14 +24318,32 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M1-07-R3",
       "actualHours": null,
       "startedAt": "2026-11-02T16:03:49.440Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T17:32:23.519Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M1-07-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-mounts.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07-R3.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07-R3.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M1-07-R3.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T16:03:47.620Z",
@@ -24220,6 +24356,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:32:23.177Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:32:23.519Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-mounts.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07-R3.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07-R3.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M1-07-R3.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -24647,15 +24811,28 @@
         "docs/baton/reports/M2-08-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T17:16:32.897Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T17:16:30.373Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:16:32.897Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -25058,6 +25235,68 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/store-extended.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M3",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-05-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-05-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-05-R3",
+      "title": "Store-library gate follows package.json changes and monorepo roots",
+      "objective": "Adding or removing pinia or vuex in a package.json makes sync re-parse the JS/TS modules it governs, as scan --force would; a store library declared at a monorepo root counts for its packages.",
+      "description": "Limitations of M3-05-R2 (2026-11-02): the Pinia/Vuex widening is gated on the nearest package.json with dependencies, read at parse time. Editing that package.json re-parses nothing (sync differs from scan --force), and a library hoisted to the workspace root is not seen.",
+      "outputs": [
+        "src/parsers/languages/vue-stores.ts",
+        "src/core/scanner.ts",
+        "tests/vue-stores.test.ts",
+        "reports/M3-05-R3.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue-stores.ts",
+        "src/core/scanner.ts",
+        "tests/vue-stores.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Adding pinia to package.json and syncing gives the same edges as scan --force for a module using a project store hook (test, git and hash sync).",
+        "A package whose root package.json declares pinia (workspaces) gets the Pinia handling (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-stores.test.ts",
         "npm run check"
       ]
     }

@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- `mapx arch validate-config` and the MCP tool `mapx_arch_validate_config` validate `.mapx/architecture.jsonc` (or a view) without an index, listing every problem with its JSON pointer (exit 3). The loader now accepts a UTF-8 BOM, reports `extends` to a directory, views outside `.mapx/architecture/`, symlink loops and permission errors as configuration errors, and substitutes `%parameters%` in every selector key, with `%%` for a literal `%` and parameters inside parameter values (M5-02-R1).
 - An index built by an older MapX is stale: `mapx check` exits 4, the commands warn, and the next `mapx scan` or `mapx update` re-parses every file once. The index records the extractor version that built it (M5-26).
 - `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).
 - `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
@@ -56,6 +57,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - `mapx sync` follows `export … from` and `export *` barrels, re-parsing a barrel's importers only when a module behind it gains, loses or renames an export, or is deleted; an edit inside a function body re-parses none;
   - a `/*` inside a string or regex literal no longer hides a module's re-exports, and a commented-out `export default` names nothing;
   - `./utils` resolves to `utils.ts` before `utils/index.ts`, as Node and TypeScript do.
+- Laravel `->group([fileA, fileB])` and `Route::group($attributes, [files])` mount each listed route file, including spread and closure elements, and a route prefix bound by `foreach`, reassigned under a condition or reassigned later in a loop is reported as `{dynamic}` instead of one possibly wrong value (M1-07-R3).
+- In packages that use Pinia or Vuex, Pinia stores with any hook name now link from plain JS/TS modules that import only the hook, and Vuex arrow-function members in an imported object (`actions: userActions`) get symbols and edges whatever the file is called (M3-05-R2).
+- Svelte template-local names (each aliases, `{:then}`/`{:catch}` values, `let:`, `{@const}`, snippets) now hide references only inside their block, and quoted event handlers such as `on:click="{save}"` link (M0-12-R11).
 - A full scan killed after it indexed files, but before it wrote their parse results, no longer leaves changed files with stale symbols or loses the edges of a restored file's referrers. A file edited while a scan or sync parses it is reported stale afterwards (M0-02-R12).
 - The test suite no longer appends to the checkout's `.mapx/tool-calls.jsonl`: `tests/mcp-coverage.test.ts` runs from a temporary folder, and `scripts/baton/check-test-cwd.mjs` now compares every tracked, untracked and ignored file (with its content) and runs the whole suite by default (M4-09-R1).
 - The npm package no longer picks up release builds: `make package-*` writes binaries, tarballs and installers to `dist/release/`, which `npm pack` included (185 MB instead of 4.7 MB); `scripts/check-package.ts` now fails if any are packed (M5-02).

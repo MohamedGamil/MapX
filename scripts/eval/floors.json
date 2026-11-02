@@ -3,7 +3,7 @@
   "routes": {
     "fixture": "tests/fixtures/laravel-routes",
     "strictParams": true,
-    "min": { "uriRecall": 1, "handlerRecall": 1, "attributeRecall": 1, "precision": 1, "flagged": 35, "exactParams": 112 },
+    "min": { "uriRecall": 1, "handlerRecall": 1, "attributeRecall": 1, "precision": 1, "flagged": 36, "exactParams": 122 },
     "max": { "falsePositives": 0 }
   },
   "http": {
