@@ -25,6 +25,15 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `score-arch.ts` no longer lets a duplicate finding on another edge type, reported first, hide the one that matches a labelled row (M5-01, review 2026-11-02).
 - The architecture fixture configurations under `tests/fixtures/**/.mapx/` are no longer gitignored, so a fresh clone passes the arch tests; a test fails when any file under `tests/` is ignored (M5-01, M5-02, review 2026-11-02).
 - Completion of M4-09 is disputed: `tests/mcp-coverage.test.ts` still appends to the checkout's `.mapx/tool-calls.jsonl`; remediation is M4-09-R1 (review 2026-11-02).
+- Architecture qualified names match the documented form on real scans (M5-03-R1):
+  - nested and `a::b` C++ namespaces (`acme::domain::Order::run`);
+  - Ruby module nesting and `class Billing::Receipt`;
+  - Elixir functions under their module;
+  - the full Dart `library` name;
+  - Python packages and Rust crates in subfolders, which start at their `pyproject.toml` or `Cargo.toml`.
+
+  The C++, Ruby and Dart symbol queries now store these declarations, and a function in a Scala `object` is a method of it (M5-03-R1).
+- `not` over a symbol-level selector no longer puts every file in a layer, and `language: typescript` also matches `.tsx` files (M5-03-R1).
 - The test suite no longer appends to the checkout's `.mapx/tool-calls.jsonl`: `tests/mcp-coverage.test.ts` runs from a temporary folder, and `scripts/baton/check-test-cwd.mjs` now compares every tracked, untracked and ignored file (with its content) and runs the whole suite by default (M4-09-R1).
 - The npm package no longer picks up release builds: `make package-*` writes binaries, tarballs and installers to `dist/release/`, which `npm pack` included (185 MB instead of 4.7 MB); `scripts/check-package.ts` now fails if any are packed (M5-02).
 

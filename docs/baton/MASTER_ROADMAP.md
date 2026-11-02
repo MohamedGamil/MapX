@@ -113,7 +113,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-10-R5** scan and sync with no repo named cover every registered repo — DONE, P1, 4h; depends on M0-10-R4.
 - **M0-06-R2** The compiled binary parses on worker threads — DONE, P1, 4h; depends on M0-06-R1.
 - **M0-32-R3** Architecture tab data: cycle smells name the real cycle; the profile ignores graph-excluded frameworks — DONE, P1, 4h; depends on M0-32-R2.
-- **M0-02-R11** A sync killed before its upserts commit keeps restored files — BACKLOG, P2, 3h; depends on M0-02-R10.
+- **M0-02-R11** A sync killed before its upserts commit keeps restored files — IN_PROGRESS, P2, 3h; depends on M0-02-R10.
 - **M0-10-R6** Unknown --repo is an error; git sync counts indexed files — BACKLOG, P2, 2h; depends on M0-10-R5.
 - **M0-12-R11** Svelte template names scoped per block; quoted handlers — BACKLOG, P2, 2h; depends on M0-12-R10.
 
@@ -216,7 +216,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-21** Multi-repo workspaces in the dashboard — DONE, P1, 10h; depends on M4-17.
 - **M4-22** Read-only config view in the dashboard — DONE, P2, 10h; depends on M4-21.
 - **M4-23** Cross-repo HTTP communication view in the dashboard — DONE, P1, 10h; depends on M4-21.
-- **M4-09-R1** The whole test suite leaves the checkout untouched (COMPLETION DISPUTED for M4-09) — READY, P1, 2h; depends on M4-09.
+- **M4-09-R1** The whole test suite leaves the checkout untouched (COMPLETION DISPUTED for M4-09) — DONE, P1, 2h; depends on M4-09.
 - **M4-13-R1** Parse pool sizing honours CPU affinity; the worker bench exercises workers — BACKLOG, P2, 2h; depends on M4-13.
 - **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — BACKLOG, P2, 2h; depends on M4-24.
 - **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
@@ -250,7 +250,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — BACKLOG, P2, 5h; depends on M5-19, M5-01.
 - **M5-23** External references: Go modules package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — BACKLOG, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
-- **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — BACKLOG, P1, 9h; depends on M5-03.
+- **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.
 - **M5-02-R1** arch validate-config (CLI and MCP) and loader robustness — BACKLOG, P2, 4h; depends on M5-05.
 - **M5-02-R2** The architecture config is committable in user projects and in MapX itself — CANCELLED, P1, 3h; depends on M5-02.
 

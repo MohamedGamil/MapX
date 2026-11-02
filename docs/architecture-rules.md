@@ -58,15 +58,17 @@ Selectors match **elements**: every indexed file, and every symbol in it (classe
 | Java, Kotlin, Scala | `com.acme.domain.Order.run` | the `package` declaration |
 | C# | `Acme.Domain.Order.run` | the `namespace` declaration |
 | Dart | `acme.domain.Order.run` | the library name |
-| C++ | `acme::domain::Order::run` | the `namespace` |
+| C++ | `acme::domain::Order::run` | the enclosing `namespace` blocks, nested or `a::b` |
 | Go | `example.com/shop/domain.Order.Run` | `go.mod`'s module plus the package directory |
-| Python | `app.domain.order.Order.run` | the module path; `src/` and `__init__` are dropped |
-| Rust | `crate::domain::order::Order::run` | the module path; `lib.rs`, `main.rs` and `mod.rs` name their directory |
-| Ruby | `Billing::Invoice` | module nesting |
-| Elixir | `Billing.Invoice` | module names |
+| Python | `app.domain.order.Order.run` | the module path from the package root (the nearest `pyproject.toml`, `setup.py` or `setup.cfg`, else the repo); `src/` and `__init__` are dropped |
+| Rust | `crate::domain::order::Order::run` | the module path from the crate root (the nearest `Cargo.toml`); `lib.rs`, `main.rs` and `mod.rs` name their directory |
+| Ruby | `Billing::Core::Invoice::pay` | module and class nesting, including compact `class Billing::Receipt` |
+| Elixir | `Billing.Invoice.pay` | the enclosing `defmodule` |
 | JavaScript, TypeScript, TSX, Vue, Svelte, Swift, C, Lua, Zig, Bash, Fish, Pascal, Markdown, HTML, CSS, JSON, YAML | `src/domain/Order.ts#Order.run` | the workspace-relative path |
 
 A namespace language whose file declares no namespace (a PHP file with only functions, say) falls back to the path form. Kotlin's package is not captured yet, so Kotlin uses the path form.
+
+In C++, Ruby and Elixir the nesting comes from the line ranges of the enclosing namespace, module and class symbols. A file in those languages can declare several namespaces, so the file's own qualified name is its path.
 
 ## Selectors
 
@@ -77,7 +79,7 @@ A selector object has exactly one primary key, plus the modifiers that refine it
 | `path` | a glob (picomatch, dotfiles included) or `/regex/flags` on the workspace-relative path | the file |
 | `name` (+ `kind`) | a regex on the qualified name: case-insensitive unless written `/…/flags`, optionally only these symbol kinds | symbols only |
 | `repo` | a registered repo, by name or glob | the file |
-| `language` | the file's language; `ts`, `js`, `py`, `c#` and the like are accepted | the file |
+| `language` | the file's language; `ts`, `js`, `py`, `c#` and the like are accepted, and `typescript` also matches `.tsx` files (`tsx` matches only those) | the file |
 | `role` (+ `confidence`) | the MapX role of the file, optionally at a minimum classifier confidence | the file |
 | `cluster` | a MapX cluster the file is in, by name or glob | the file |
 | `workspacePackage` | the name in the nearest `package.json`, `composer.json`, `pyproject.toml`, `go.mod` or `Cargo.toml`, by name or glob | the file |
@@ -85,7 +87,9 @@ A selector object has exactly one primary key, plus the modifiers that refine it
 | `layer` | membership in another layer | the element |
 | `all`, `any`, `not` | composition | |
 
-Not evaluated yet: these never match, and membership lists them as unsupported.
+**Symbol-level selectors on files.** A `name` selector does not apply to a file. It is not a match, and neither is `not` of it, so `{ "all": [{ "path": "app/**" }, { "not": { "name": "Controller$" } }] }` never puts a file in a layer by itself. The file joins the layer only through a top-level symbol that is in it (see Membership). `all`, `any` and `not` use three-valued logic. `all` is inapplicable when no branch fails and one is inapplicable. `any` is inapplicable when no branch matches and one is inapplicable. So `{ "not": { "any": [{ "name": "Controller$" }, { "path": "app/Legacy/**" }] } }` does not select a file either.
+
+Not evaluated yet: these never match, `not` of them never matches either, and membership lists them as unsupported.
 
 | Selectors | Task that adds them |
 | --- | --- |
@@ -98,9 +102,10 @@ Not evaluated yet: these never match, and membership lists them as unsupported.
 ## Membership
 
 - **Symbols.** A symbol is in the layers whose selectors match it. File-level selectors (`path`, `repo` and the like) judge a symbol by its file, so a `path` layer covers every symbol under its directory.
-- **Files.** A file is in the layers whose selectors match the file, plus the layers of its top-level symbols. A `name` layer can therefore single out one class of a multi-class file, and still claim the file for dependencies that only name the file.
+- **Files (AR-01).** A file is in the layers whose selectors match the file, plus the layers of its top-level symbols. A `name` layer can therefore single out one class of a multi-class file, and still claim the file for dependencies that only name the file. With `Controller` as `{ "name": "Controller$" }` and `Domain` as everything under `app/` except names ending in `Controller`, `app/Controller/OrderController.php` is in Controller only and `app/Domain/Order.php` is in Domain through `App\Domain\Order`.
+- **Top-level symbols** are those declared at file level: not inside a type, and not a member. A declaration directly inside a C++ namespace or a Ruby module is still top-level. An Elixir module is a type, so its functions are members, while a nested `defmodule` is top-level.
 - **No flow between symbols.** One symbol's layer never passes to another symbol.
 - **Several layers.** An element in more than one non-overlay layer will get a `multi-layer` warning. A non-overlay layer that matches nothing will get an `empty-layer` warning.
-- **Private parts.** A layer's `private` selectors mark the elements only that layer may reach.
+- **Private parts.** A layer's `private` selectors mark the elements only that layer may reach. A file is private to a layer when its `private` selectors match the file or one of its top-level symbols.
 - **Explanations.** Membership records why an element is in a layer: the selector position (`selectors[0].name`), and for a file the top-level symbol that put it there.
 - **Caching.** Membership is computed once per scan and configuration.

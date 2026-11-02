@@ -24,6 +24,14 @@ export interface SelectorMatch {
   matched: boolean;
   /** Where in the selector the decision was made, e.g. `all[1].path`; set when matched. */
   path?: string;
+  /**
+   * The selector does not apply to this element (a symbol-level selector such as `name` on a
+   * file). It is not a match, and `not` of it is not a match either: `{not: {name: …}}` never
+   * puts a file in a layer (AR-01; review 2026-11-02). `all`, `any` and `not` follow three-valued
+   * logic: `all` is inapplicable when no branch fails and one is inapplicable, `any` when no branch
+   * matches and one is inapplicable.
+   */
+  inapplicable?: boolean;
 }
 
 const patterns = new Map<string, (s: string) => boolean>();
@@ -78,32 +86,53 @@ function nameOrGlob(pattern: string): (s: string) => boolean {
 const LANGUAGE_ALIASES: Record<string, string> = { ts: 'typescript', js: 'javascript', py: 'python', 'c#': 'c-sharp', csharp: 'c-sharp', 'c++': 'cpp', kt: 'kotlin', rb: 'ruby', rs: 'rust', golang: 'go' };
 export const normaliseLanguage = (l: string) => LANGUAGE_ALIASES[l.toLowerCase()] ?? l.toLowerCase();
 
+/** `typescript` (or `ts`) covers `.tsx` files, which MapX indexes as language `tsx`; `tsx` matches only them. */
+function languageMatches(fileLanguage: string, wanted: string): boolean {
+  const have = normaliseLanguage(fileLanguage);
+  const want = normaliseLanguage(wanted);
+  return have === want || (want === 'typescript' && have === 'tsx');
+}
+
 /** Does `selector` match `element`? */
 export function matchSelector(selector: Selector, element: Element, ctx: SelectorContext): SelectorMatch {
   const file = element.file;
   const yes = (path: string): SelectorMatch => ({ matched: true, path });
   const no: SelectorMatch = { matched: false };
+  const inapplicable: SelectorMatch = { matched: false, inapplicable: true };
   if (selector.all) {
     if (!selector.all.length) return no;
-    for (const s of selector.all) if (!matchSelector(s, element, ctx).matched) return no;
-    return yes('all');
+    let na = false;
+    for (const s of selector.all) {
+      const m = matchSelector(s, element, ctx);
+      if (m.matched) continue;
+      if (!m.inapplicable) return no;
+      na = true;
+    }
+    return na ? inapplicable : yes('all');
   }
+  // Three-valued (Kleene) logic: `any` matches when a branch matches; otherwise it is inapplicable
+  // when any branch is, so `not` of it does not match either (review of M5-03-R1).
   if (selector.any) {
+    let na = false;
     for (let i = 0; i < selector.any.length; i++) {
       const m = matchSelector(selector.any[i]!, element, ctx);
       if (m.matched) return yes(`any[${i}].${m.path}`);
+      if (m.inapplicable) na = true;
     }
-    return no;
+    return na ? inapplicable : no;
   }
-  if (selector.not) return matchSelector(selector.not, element, ctx).matched ? no : yes('not');
+  if (selector.not) {
+    const m = matchSelector(selector.not, element, ctx);
+    return m.inapplicable ? inapplicable : m.matched ? no : yes('not');
+  }
   if (selector.path !== undefined) return globOrRegex(selector.path)(file.path) ? yes('path') : no;
   if (selector.name !== undefined) {
-    if (element.kind !== 'symbol') return no;
+    if (element.kind !== 'symbol') return inapplicable;
     if (selector.kind && !selector.kind.includes(element.symbolKind as never)) return no;
     return regex(selector.name)(element.qualifiedName) ? yes('name') : no;
   }
   if (selector.repo !== undefined) return nameOrGlob(selector.repo)(file.repo) ? yes('repo') : no;
-  if (selector.language !== undefined) return normaliseLanguage(file.language) === normaliseLanguage(selector.language) ? yes('language') : no;
+  if (selector.language !== undefined) return languageMatches(file.language, selector.language) ? yes('language') : no;
   if (selector.role !== undefined) {
     if (!file.role || file.role.toLowerCase() !== selector.role.toLowerCase()) return no;
     return file.roleConfidence >= (selector.confidence ?? 0) ? yes('role') : no;
@@ -118,7 +147,8 @@ export function matchSelector(selector: Selector, element: Element, ctx: Selecto
   }
   if (selector.framework !== undefined) return file.frameworkParts.has(selector.framework) ? yes('framework') : no;
   if (selector.layer !== undefined) return ctx.inLayer(element, selector.layer) ? yes('layer') : no;
-  return no; // a selector this version cannot evaluate (UNSUPPORTED_SELECTORS)
+  // A selector this version cannot evaluate (UNSUPPORTED_SELECTORS): no match, and no match under `not`.
+  return inapplicable;
 }
 
 /** The selector keys in `selector` (nested ones included) that this version cannot evaluate. */

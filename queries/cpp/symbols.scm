@@ -12,6 +12,10 @@
 (namespace_definition
   name: (namespace_identifier) @symbol.name) @symbol.kind_namespace
 
+; C++17 nested namespace definitions: `namespace acme::infra { … }` (M5-03-R1)
+(namespace_definition
+  name: (nested_namespace_specifier) @symbol.name) @symbol.kind_namespace
+
 ; Enum definitions
 (enum_specifier
   name: (type_identifier) @symbol.name) @symbol.kind_enum

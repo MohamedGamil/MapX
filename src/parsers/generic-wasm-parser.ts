@@ -354,6 +354,7 @@ export class GenericWasmParser implements LanguageParser {
               while (curr) {
                 if (
                   curr.type === 'class_definition' ||
+                  curr.type === 'object_definition' || // Scala `object Util { def x … }` (M5-03-R1)
                   curr.type === 'class_declaration' ||
                   curr.type === 'class_specifier' ||
                   curr.type === 'struct_specifier' ||

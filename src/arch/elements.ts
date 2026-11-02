@@ -62,7 +62,7 @@ export const QUALIFIED_NAME_RULES: Record<string, { style: 'namespace' | 'python
   scala: { style: 'namespace', sep: '.' },
   'c-sharp': { style: 'namespace', sep: '.' },
   dart: { style: 'namespace', sep: '.' },
-  cpp: { style: 'namespace', sep: '::' },
+  cpp: { style: 'scoped', sep: '::' },
   python: { style: 'python' },
   go: { style: 'go' },
   rust: { style: 'rust' },
@@ -82,8 +82,13 @@ export interface QualifiedNameInput {
   /** For symbols: name, enclosing scope. A file has neither. */
   name?: string;
   scope?: string | null;
-  /** The repo's path inside the workspace, so module paths start at the repo (Python, Rust). */
+  /** Where module paths start (Python, Rust): the package or crate root, else the repo's path. */
   repoPath?: string;
+  /**
+   * `scoped` languages (C++, Ruby, Elixir): the qualified name of the enclosing namespace, module
+   * or type, found from the symbols' line ranges, since those parsers store no namespace.
+   */
+  parent?: { qualifiedName: string; name: string } | null;
 }
 
 /** The module a Python file is: `app/services/foo.py` → `app.services.foo` (`src/` and `__init__` dropped). */
@@ -123,8 +128,13 @@ export function qualifiedName(language: string, input: QualifiedNameInput): stri
       return join(ns ?? posix.dirname(path), '.');
     case 'rust':
       return join(ns ?? rustModule(path, input.repoPath), '::');
-    case 'scoped':
-      return name === undefined ? path : scope ? `${scope}${rule.sep}${name}` : name;
+    case 'scoped': {
+      if (name === undefined) return path; // a file can declare several namespaces or modules
+      const parent = input.parent ?? null;
+      // The stored scope is the owner when the parser knows it (`void Order::run()` inside
+      // `namespace acme::domain`, `class Billing::Receipt`); it repeats the parent otherwise.
+      return [parent?.qualifiedName, scope && scope !== parent?.name ? scope : null, name].filter(Boolean).join(rule.sep);
+    }
     default:
       return name === undefined ? path : `${path}#${scope ? `${scope}.` : ''}${name}`;
   }
@@ -147,7 +157,44 @@ const FRAMEWORK_EDGES: Array<{ type: string; end: 'source' | 'target'; part: Fra
 ];
 
 /** Languages whose files declare their namespace as a `namespace` symbol (package, namespace clause). */
-const NAMESPACE_SYMBOL_LANGUAGES = new Set(['java', 'kotlin', 'scala', 'c-sharp', 'dart', 'cpp']);
+const NAMESPACE_SYMBOL_LANGUAGES = new Set(['java', 'kotlin', 'scala', 'c-sharp', 'dart']);
+
+/** Symbols that enclose others in `scoped` languages, outermost rank first (ties on equal line ranges). */
+const CONTAINER_RANK: Record<string, number> = { namespace: 0, module: 1, class: 2, struct: 2, interface: 2, trait: 2, enum: 2 };
+/** Containers that act as namespaces: a symbol directly inside one is still declared at file level. */
+const NAMESPACE_LIKE = new Set(['namespace', 'module']);
+const RANK_TYPE = 2;
+
+interface SymbolRow { file_path: string; name: string; kind: string; scope: string | null; start_line: number | null; end_line: number | null }
+
+/**
+ * The innermost container of each symbol of one file, from line ranges: a container encloses a
+ * symbol when its range covers the symbol's and is larger, or equal with an outer rank. On one
+ * line, a type encloses only a symbol the parser scoped to it: `namespace a { class A {}; void f() {} }`
+ * keeps `f` out of `A`.
+ */
+function enclosingContainers(rows: SymbolRow[]): Map<SymbolRow, SymbolRow | null> {
+  const containers = rows.filter((r) => r.kind in CONTAINER_RANK && r.start_line != null && r.end_line != null);
+  const out = new Map<SymbolRow, SymbolRow | null>();
+  for (const s of rows) {
+    let best: SymbolRow | null = null;
+    if (s.start_line != null && s.end_line != null) {
+      for (const c of containers) {
+        if (c === s || c.start_line! > s.start_line || c.end_line! < s.end_line) continue;
+        const span = c.end_line! - c.start_line!;
+        const own = s.end_line - s.start_line;
+        const rankS = CONTAINER_RANK[s.kind] ?? 3;
+        if (span === own && CONTAINER_RANK[c.kind]! >= rankS) continue;
+        if (span === 0 && CONTAINER_RANK[c.kind]! >= RANK_TYPE && s.scope !== c.name) continue;
+        if (!best) { best = c; continue; }
+        const bestSpan = best.end_line! - best.start_line!;
+        if (span < bestSpan || (span === bestSpan && CONTAINER_RANK[c.kind]! > CONTAINER_RANK[best.kind]!)) best = c;
+      }
+    }
+    out.set(s, best);
+  }
+  return out;
+}
 
 /** The view of the index in `store`; `dir` is the workspace root (for go.mod and manifests). */
 /**
@@ -168,7 +215,7 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
   const db = store.raw;
   const fileRows = db.prepare('SELECT path, repo, language, namespace, role, role_confidence FROM files').all() as Array<{ path: string; repo: string; language: string; namespace: string | null; role: string | null; role_confidence: number | null }>;
   const clusterRows = db.prepare('SELECT file_path, cluster_name FROM cluster_membership').all() as Array<{ file_path: string; cluster_name: string }>;
-  const symbolRows = db.prepare('SELECT file_path, name, kind, scope FROM symbols ORDER BY file_path, start_line').all() as Array<{ file_path: string; name: string; kind: string; scope: string | null }>;
+  const symbolRows = db.prepare('SELECT file_path, name, kind, scope, start_line, end_line FROM symbols ORDER BY file_path, start_line').all() as unknown as SymbolRow[];
   const clusters = new Map<string, string[]>();
   for (const r of clusterRows) {
     const list = clusters.get(r.file_path) ?? [];
@@ -208,6 +255,30 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
     }
   };
 
+  // The nearest directory holding one of `markers` (a package or crate root), cached per directory.
+  const markerDirs = new Map<string, string | null>();
+  const nearestWith = (path: string, markers: string[]): string | null => {
+    let d = posix.dirname(path);
+    const seen: string[] = [];
+    let found: string | null = null;
+    for (;;) {
+      const key = `${markers.join(',')}\u0000${d}`;
+      if (markerDirs.has(key)) { found = markerDirs.get(key)!; break; }
+      seen.push(key);
+      if (markers.some((m) => existsSync(join(dir, d, m)))) { found = d; break; }
+      if (d === '.' || d === '' || d === '/') break;
+      d = posix.dirname(d);
+    }
+    for (const k of seen) markerDirs.set(k, found);
+    return found;
+  };
+  /** Where a Python or Rust file's module path starts: its package or crate root, else its repo. */
+  const moduleRoot = (file: FileInfo): string | undefined => {
+    const markers = file.language === 'python' ? ['pyproject.toml', 'setup.py', 'setup.cfg'] : file.language === 'rust' ? ['Cargo.toml'] : null;
+    if (!markers) return repoPaths[file.repo];
+    return nearestWith(file.path, markers) ?? repoPaths[file.repo];
+  };
+
   const files = new Map<string, FileInfo>();
   for (const f of fileRows) {
     let namespace: string | null = null;
@@ -238,15 +309,63 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
     list.push(e);
     byFile.set(e.file.path, list);
   };
+  const roots = new Map<string, string | undefined>();
   for (const file of files.values()) {
-    const repoPath = repoPaths[file.repo];
+    const repoPath = moduleRoot(file);
+    roots.set(file.path, repoPath);
     add({ id: `file:${file.path}`, kind: 'file', qualifiedName: qualifiedName(file.language, { path: file.path, namespace: file.namespace, repoPath }), file, topLevel: false });
   }
+  const rowsByFile = new Map<string, SymbolRow[]>();
   for (const s of symbolRows) {
-    const file = files.get(s.file_path);
-    if (!file || s.kind === 'namespace') continue; // a package clause names the file's namespace, not an element
-    const qn = qualifiedName(file.language, { path: file.path, namespace: file.namespace, name: s.name, scope: s.scope, repoPath: repoPaths[file.repo] });
-    add({ id: `symbol:${file.path}#${qn}#${s.kind}`, kind: 'symbol', qualifiedName: qn, file, name: s.name, symbolKind: s.kind, scope: s.scope, topLevel: !s.scope });
+    const list = rowsByFile.get(s.file_path) ?? [];
+    list.push(s);
+    rowsByFile.set(s.file_path, list);
+  }
+  for (const [path, rows] of rowsByFile) {
+    const file = files.get(path);
+    if (!file) continue;
+    const scoped = QUALIFIED_NAME_RULES[file.language]?.style === 'scoped';
+    const parents = scoped ? enclosingContainers(rows) : null;
+    const qns = new Map<SymbolRow, string>();
+    // Ruby `class ::Top::Thing` is scoped to `::Top`: the leading `::` names the root, not a module.
+    const scopeOf = (s: SymbolRow) => (scoped && s.scope ? s.scope.replace(/^::/, '') : s.scope);
+    const typesByName = new Map<string, SymbolRow[]>();
+    if (scoped) for (const r of rows) if ((CONTAINER_RANK[r.kind] ?? -1) >= RANK_TYPE) typesByName.set(r.name, [...(typesByName.get(r.name) ?? []), r]);
+    const qnOf = (s: SymbolRow, depth = 0): string => {
+      let qn = qns.get(s);
+      if (qn !== undefined) return qn;
+      let parent = depth < 64 ? parents?.get(s) ?? null : null;
+      const scope = scopeOf(s);
+      // An out-of-line member (`void acme::Outer::g() {}`, stored as scope `Outer`): when the file
+      // declares that type, the member is named under the type's own qualified name.
+      if (scoped && scope && scope !== parent?.name && depth < 64) {
+        const owners = (typesByName.get(scope) ?? []).filter((o) => o !== s);
+        if (owners.length === 1) parent = owners[0]!;
+      }
+      qn = qualifiedName(file.language, {
+        path, namespace: file.namespace, name: s.name, scope, repoPath: roots.get(path),
+        parent: parent ? { qualifiedName: qnOf(parent, depth + 1), name: parent.name } : null,
+      });
+      qns.set(s, qn);
+      return qn;
+    };
+    for (const s of rows) {
+      if (s.kind === 'namespace') continue; // a package clause or namespace names a scope, not an element
+      const qn = qnOf(s);
+      const parent = parents?.get(s) ?? null;
+      const scope = scopeOf(s);
+      // Declared at file level: not inside a type, and not a member the parser scoped to a type. A
+      // type's scope can be a namespace qualifier (Ruby `class Billing::Receipt`), and a declaration
+      // directly in a namespace or module is scoped to it (C++ `namespace d { using Id = long; }`).
+      // An Elixir module is a type, not a namespace: its functions are members, but a nested
+      // `defmodule` is a module of its own.
+      const namespaceLike = (c: SymbolRow) => NAMESPACE_LIKE.has(c.kind) && !(file.language === 'elixir' && s.kind !== 'module');
+      const scopedToNamespace = !!parent && namespaceLike(parent) && parent.name === scope;
+      const topLevel = scoped
+        ? (!parent || namespaceLike(parent)) && !(scope && !(s.kind in CONTAINER_RANK) && !scopedToNamespace)
+        : !s.scope;
+      add({ id: `symbol:${file.path}#${qn}#${s.kind}`, kind: 'symbol', qualifiedName: qn, file, name: s.name, symbolKind: s.kind, scope: s.scope, topLevel });
+    }
   }
 
   const manifests = new Map<string, string | null>();

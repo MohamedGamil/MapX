@@ -22892,14 +22892,27 @@
         "docs/research/deptrac/02-abstract-feature-model.md#AR-03"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-c0",
       "actualHours": null,
       "startedAt": "2026-11-02T12:28:04.696Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T13:03:44.203Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-03-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-selectors.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-03-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-03-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T12:28:03.414Z",
@@ -22912,9 +22925,32 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:03:43.015Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:03:44.203Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-selectors.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-03-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-03-R1.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -22936,7 +22972,10 @@
         "tests/arch-selectors.test.ts",
         "tests/fixtures/arch-rules/**",
         "docs/architecture-rules.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "queries/cpp/**",
+        "queries/ruby/**",
+        "queries/dart/**"
       ],
       "acceptanceCriteria": [
         "A real-scan test per namespace or module language (at least PHP, Java, C#, C++ nested namespaces, Ruby nested modules, Elixir defmodule, Dart library, Rust crate in a subfolder, Python package in a subfolder, Go, Scala, Kotlin fallback) asserts the stored-symbol qualified name equals the documented one.",
@@ -23114,15 +23153,28 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T12:44:05.225Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T12:44:04.553Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T12:44:05.225Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

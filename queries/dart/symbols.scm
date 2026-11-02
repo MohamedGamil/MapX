@@ -44,6 +44,6 @@
   (identifier) @symbol.name) @symbol.kind_constant
 
 ; ─── Library / Namespace ──────────────────────────────────────────────────────
+; The whole dotted name: `library acme.domain;` is `acme.domain` (M5-03-R1).
 (library_name
-  (dotted_identifier_list
-    (identifier) @symbol.name)) @symbol.kind_namespace
+  (dotted_identifier_list) @symbol.name) @symbol.kind_namespace
