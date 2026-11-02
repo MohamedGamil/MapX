@@ -33,6 +33,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - Python packages and Rust crates in subfolders, which start at their `pyproject.toml` or `Cargo.toml`.
 
   The C++, Ruby and Dart symbol queries now store these declarations, and a function in a Scala `object` is a method of it (M5-03-R1).
+- Go: a composite literal of a type from another project package (`domain.Order{}`, also through an aliased import) is an instantiation edge to that type; standard-library and third-party types make none (M5-25).
 - `not` over a symbol-level selector no longer puts every file in a layer, and `language: typescript` also matches `.tsx` files (M5-03-R1).
 - A sync killed before its re-indexed files were written no longer loses a restored file, the edges into it, another repo's queued referrers, a changed tsconfig alias, or the record of a reverted edit: those records are consumed in the same transaction as the files (M0-02-R11).
 - The test suite no longer appends to the checkout's `.mapx/tool-calls.jsonl`: `tests/mcp-coverage.test.ts` runs from a temporary folder, and `scripts/baton/check-test-cwd.mjs` now compares every tracked, untracked and ignored file (with its content) and runs the whole suite by default (M4-09-R1).

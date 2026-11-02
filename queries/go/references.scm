@@ -16,6 +16,11 @@
 (composite_literal
   type: (type_identifier) @ref.target_instantiation) @ref.type_instantiation
 
+; Package-qualified composite literal: `domain.Order{...}`. The parser records the imported package,
+; and the scanner resolves the type in that project package only (M5-25).
+(composite_literal
+  type: (qualified_type name: (type_identifier) @ref.target_instantiation)) @ref.type_instantiation
+
 ; Interface embedding: `interface { Reader; io.Writer }` (M0-17-R1). A single-type element only,
 ; so constraint unions such as `int | float64` are not taken for embedded interfaces.
 (interface_type

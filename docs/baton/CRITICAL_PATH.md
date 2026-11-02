@@ -6,7 +6,7 @@ Remaining longest dependency path: **40h** (full-plan path: 214h).
 
 M5-04 → M5-05 → M5-08 → M5-16 → M5-98
 
-Remaining effort min/expected/max: **135 / 187 / 269h**. Capacity: 1 engineer(s) × 20 h/week → **9.3 weeks**, conditional finish **2027-01-06** (as of 2026-11-02).
+Remaining effort min/expected/max: **135 / 188 / 270h**. Capacity: 1 engineer(s) × 20 h/week → **9.4 weeks**, conditional finish **2027-01-06** (as of 2026-11-02).
 
 ## Open items and blockers
 - M5-04 (BACKLOG): prerequisites satisfied
@@ -31,7 +31,6 @@ Remaining effort min/expected/max: **135 / 187 / 269h**. Capacity: 1 engineer(s)
 - M5-23 (BACKLOG): M5-19
 - M5-24 (BACKLOG): M5-20; M5-21; M5-22; M5-23; M5-04
 - M5-02-R1 (BACKLOG): M5-05
-- M0-02-R11 (IN_PROGRESS): prerequisites satisfied
 - M2-08-R1 (BACKLOG): prerequisites satisfied
 - M0-10-R6 (BACKLOG): prerequisites satisfied
 - M4-13-R1 (BACKLOG): prerequisites satisfied
@@ -41,6 +40,7 @@ Remaining effort min/expected/max: **135 / 187 / 269h**. Capacity: 1 engineer(s)
 - M1-07-R3 (BACKLOG): prerequisites satisfied
 - M2-06-R4 (BACKLOG): prerequisites satisfied
 - M4-24-R1 (BACKLOG): prerequisites satisfied
+- M0-02-R12 (BACKLOG): prerequisites satisfied
 
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
@@ -67,7 +67,6 @@ Remaining effort min/expected/max: **135 / 187 / 269h**. Capacity: 1 engineer(s)
 | M5-22 | 6 | 11 | 29 | 34 | 23 |
 | M5-23 | 6 | 10 | 30 | 34 | 24 |
 | M5-24 | 12 | 18 | 34 | 40 | 22 |
-| M0-02-R11 | 0 | 3 | 37 | 40 | 37 |
 | M2-08-R1 | 0 | 4 | 36 | 40 | 36 |
 | M0-10-R6 | 0 | 2 | 38 | 40 | 38 |
 | M4-13-R1 | 0 | 2 | 38 | 40 | 38 |
@@ -77,3 +76,4 @@ Remaining effort min/expected/max: **135 / 187 / 269h**. Capacity: 1 engineer(s)
 | M1-07-R3 | 0 | 2 | 38 | 40 | 38 |
 | M2-06-R4 | 0 | 2 | 38 | 40 | 38 |
 | M4-24-R1 | 0 | 2 | 38 | 40 | 38 |
+| M0-02-R12 | 0 | 4 | 36 | 40 | 36 |

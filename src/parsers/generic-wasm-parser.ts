@@ -458,9 +458,10 @@ export class GenericWasmParser implements LanguageParser {
               && !filePath.endsWith('.vue') && capture.node.type === 'identifier'
               && CALL_NODES.has(capture.node.parent?.type ?? '') && boundLocally(capture.node, targetName)) continue;
 
-            // Go `struct { log.Logger }`: the embedded type lives in the imported package, which the
-            // scanner resolves; a library package (null when no import matches) links nothing (M0-17-R5).
-            const goPackage = this.languageName === 'go' && referenceType === 'extends' && capture.node.parent?.type === 'qualified_type'
+            // Go `struct { log.Logger }` and `domain.Order{}`: the type lives in the imported package,
+            // which the scanner resolves; a library package (null when no import matches) links
+            // nothing (M0-17-R5, M5-25).
+            const goPackage = this.languageName === 'go' && (referenceType === 'extends' || referenceType === 'instantiation') && capture.node.parent?.type === 'qualified_type'
               ? { goPackage: goImportPath(capture.node.parent) } : null;
 
             references.push({
@@ -472,7 +473,7 @@ export class GenericWasmParser implements LanguageParser {
               // The receiver of a member call (`obj`, `this`, `super`, `a.b`), for the scanner to tell a
               // library object and never take the call for a global function (M0-17-R4).
               ...(referenceType === 'call' && receiver ? { metadata: { receiver: receiver.type === 'identifier' ? receiver.text : `<${receiver.type}>` } } : {}),
-              // The import path of a package-qualified Go embedded type (an extends, never a call) (M0-17-R5).
+              // The import path of a package-qualified Go type, embedded or instantiated (never a call) (M0-17-R5, M5-25).
               ...(goPackage ? { metadata: goPackage } : {}),
             });
             }

@@ -20142,14 +20142,32 @@
         "docs/research/deptrac/02-abstract-feature-model.md#AR-02"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check the new test against the query and the parser change.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-c0",
       "actualHours": null,
       "startedAt": "2026-11-02T13:07:19.466Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T13:19:26.520Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-25.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T13:07:18.380Z",
@@ -20162,6 +20180,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:19:26.154Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:19:26.520Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
