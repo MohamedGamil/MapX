@@ -170,7 +170,7 @@ Work order set by the owner:
    | M4-20 | Performance: done |
    | M4-21 | Multi-repo views: done |
    | M4-22 | Read-only config view: done |
-   | M4-23 | Cross-repo HTTP view |
+   | M4-23 | Cross-repo HTTP view: done |
    | M4-18 | New logo: done (`d246259`, D028); it does not block M5 |
 
 3. **M5**, starting with M5-01 and M5-02. They hard-depend on the D025 and D027 tasks, except M4-18.

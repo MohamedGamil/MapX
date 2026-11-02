@@ -22348,23 +22348,75 @@
         "docs/baton/DECISIONS.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects. UI changes are checked in a real browser (Playwright) on fixture workspaces with no real or private code.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-02T00:19:42.454Z",
+      "completedAt": "2026-11-02T00:19:43.038Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-23.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/ui-server-http.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-23.md"
+        },
+        {
+          "command": "npm run test:ui",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-23.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-23.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-01T23:50:06.380Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T00:19:42.454Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T00:19:42.746Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T00:19:43.038Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/ui-server-http.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-23.md"
+            },
+            {
+              "command": "npm run test:ui",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-23.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-23.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -22394,7 +22446,10 @@
         "tests/ui/",
         "tests/fixtures/",
         "docs/",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "tests/ui-server-http.test.ts",
+        "scripts/ui/check-escaping.ts",
+        "docs/cli-reference.md"
       ],
       "acceptanceCriteria": [
         "/api/http returns the client call sites (file, line, method, URL, client), their matched route and handler (file, symbol, repo), and unmatched calls, per repo pair; on a synthetic two-repo fixture (Vue/axios frontend, Laravel backend) the pairs and unmatched calls equal mapx routes --clients --json and --unmatched (tests/ui-server.test.ts).",
@@ -22402,7 +22457,7 @@
         "The graph view marks http edges between repos (tests/ui)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/ui-server.test.ts",
+        "npx vitest run tests/ui-server-http.test.ts",
         "npm run test:ui",
         "npm run check"
       ]

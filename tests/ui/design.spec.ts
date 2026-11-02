@@ -17,7 +17,7 @@ declare function getComputedStyle(el: any): any;
 test.skip(!!browserMissing(), browserMissing() ?? '');
 
 const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
-const TABS = ['graph', 'workspace', 'symbols', 'routes', 'architecture', 'context', 'metrics', 'config', 'tool-log'];
+const TABS = ['graph', 'workspace', 'symbols', 'routes', 'http', 'architecture', 'context', 'metrics', 'config', 'tool-log'];
 const WIDTHS = [{ width: 1440, height: 900 }, { width: 1024, height: 768 }, { width: 390, height: 844 }];
 
 let served: Awaited<ReturnType<typeof servedWorkspace>>;

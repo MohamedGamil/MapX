@@ -90,6 +90,13 @@
           </svg>
           <span class="nav-label">Routes & Hooks</span>
         </button>
+        <button class="nav-item" data-tab="http" type="button" aria-label="HTTP Calls" title="HTTP Calls">
+          <svg class="nav-svg-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="17 1 21 5 17 9"></polyline><path d="M3 11V9a4 4 0 0 1 4-4h14"></path>
+            <polyline points="7 23 3 19 7 15"></polyline><path d="M21 13v2a4 4 0 0 1-4 4H3"></path>
+          </svg>
+          <span class="nav-label">HTTP Calls</span>
+        </button>
         <button class="nav-item" data-tab="architecture" type="button" aria-label="Architecture & Health" title="Architecture & Health">
           <svg class="nav-svg-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="7" height="9"></rect>
@@ -417,6 +424,40 @@
           <div class="metric-card">
             <h3>Top Symbols (PageRank)</h3>
             <ol id="top-symbols-list"></ol>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: HTTP calls between repos (M4-23) -->
+      <section id="tab-http" class="tab-pane">
+        <div class="panel-header">
+          <h2>HTTP Calls</h2>
+          <p class="subtitle">Frontend call sites, the backend routes and handlers they reach, and the calls that reach none</p>
+        </div>
+        <div class="panel-body http-body">
+          <div id="http-summary"></div>
+          <figure class="http-flow-figure">
+            <div id="http-flow" class="http-flow"></div>
+            <figcaption class="config-desc">Calls from each repo to the repos whose routes serve them; the width follows the number of calls.</figcaption>
+          </figure>
+          <div class="http-filters" role="group" aria-label="Filter calls">
+            <label>Method <select id="http-filter-method" class="form-select"></select></label>
+            <label>Repos <select id="http-filter-pair" class="form-select"></select></label>
+            <label>Status <select id="http-filter-status" class="form-select">
+              <option value="">All</option><option value="matched">Matched</option><option value="unmatched">Unmatched</option>
+            </select></label>
+            <span id="http-count" class="config-desc" aria-live="polite"></span>
+          </div>
+          <div class="http-split">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="HTTP calls">
+              <table class="data-table" id="table-http">
+                <thead><tr><th>Call</th><th class="col-optional">Caller</th><th>Handler</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div id="http-detail" class="http-detail" role="region" aria-label="Selected call">
+              <div class="details-placeholder">Select a call to see both ends.</div>
+            </div>
           </div>
         </div>
       </section>

@@ -146,6 +146,7 @@ function setRepo(repo: string | null, reload = true) {
   loadRoutes();
   loadMetrics();
   if (architectureLoaded) loadArchitecture();
+  if (httpData) loadHttp();
 }
 
 // Tab switcher logic
@@ -171,6 +172,8 @@ tabs.forEach(tab => {
       loadArchitecture();
     } else if (currentTab === 'config') {
       loadConfigView();
+    } else if (currentTab === 'http') {
+      loadHttp();
     }
   });
 });
@@ -3589,7 +3592,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Test hook (M4-21): an edge's data flags and drawn style, by its endpoints.
   (window as any).__mapxEdge = (source: string, target: string) => {
     const edge = cyInstance?.edges().filter((e: any) => e.source().id() === source && e.target().id() === target)[0];
-    return edge ? { crossRepo: !!edge.data('crossRepo'), lineStyle: edge.style('line-style'), color: edge.style('line-color') } : null;
+    return edge ? { type: edge.data('type'), crossRepo: !!edge.data('crossRepo'), lineStyle: edge.style('line-style'), color: edge.style('line-color') } : null;
   };
 
   // Test hook (M4-20 review): how many nodes and edges the graph draws.
@@ -3677,6 +3680,23 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStatus();
   loadRepos();
   document.getElementById('select-repo')?.addEventListener('change', (e) => setRepo((e.target as HTMLSelectElement).value || null));
+  for (const id of ['http-filter-method', 'http-filter-pair', 'http-filter-status']) document.getElementById(id)?.addEventListener('change', renderHttpTable);
+  document.getElementById('table-http')?.addEventListener('click', (e) => {
+    const button = (e.target as HTMLElement).closest('[data-call]') as HTMLElement | null;
+    if (!button) return;
+    httpSelected = Number(button.dataset.call);
+    renderHttpTable();
+    renderHttpDetail();
+    (document.querySelector(`#table-http [data-call="${httpSelected}"]`) as HTMLElement | null)?.focus();
+  });
+  document.getElementById('http-flow')?.addEventListener('click', (e) => {
+    const link = (e.target as Element).closest('[data-pair]') as HTMLElement | null;
+    const select = document.getElementById('http-filter-pair') as HTMLSelectElement | null;
+    if (link && select) {
+      select.value = link.dataset.pair ?? '';
+      renderHttpTable();
+    }
+  });
   document.getElementById('table-repos')?.addEventListener('click', (e) => {
     const button = (e.target as HTMLElement).closest('[data-repo]') as HTMLElement | null;
     if (button) setRepo(button.dataset.repo ?? null);
@@ -3907,6 +3927,151 @@ document.addEventListener('DOMContentLoaded', () => {
 // Architecture Tab Data Fetching and Rendering
 const cycleEdges = new Set<string>();
 const hubNodes = new Set<string>();
+
+// ---- HTTP calls between repos (M4-23) ----
+let httpData: { total: number; matched: number; pairs: any[]; unmatched: any[] } | null = null;
+let httpCalls: any[] = [];
+let httpSelected = -1;
+const NO_ROUTE = '\u0000none';
+
+/** A number for markup: whatever it is given, the result is digits (M4-23, the escaping check). */
+function num(value: unknown): string {
+  return String(Number(value));
+}
+
+function httpPairKey(call: any): string {
+  return `${call.callerRepo}→${call.route ? call.handlerRepo : NO_ROUTE}`;
+}
+
+/** The repo-to-repo flow: callers on the left, handler repos (and "No route") on the right. */
+function renderHttpFlow() {
+  const el = document.getElementById('http-flow');
+  if (!el || !httpData) return;
+  const links = [
+    ...httpData.pairs.map((p) => ({ from: p.from, to: p.to, count: p.count, unmatched: false })),
+    ...httpData.unmatched.map((u) => ({ from: u.repo, to: NO_ROUTE, count: u.count, unmatched: true })),
+  ];
+  if (!links.length) {
+    el.innerHTML = '<div class="details-placeholder" style="margin-top: 0;">No frontend HTTP calls found.</div>';
+    return;
+  }
+  const left = [...new Set(links.map((l) => l.from))];
+  const right = [...new Set(links.map((l) => l.to))].sort((a, b) => (a === NO_ROUTE ? 1 : b === NO_ROUTE ? -1 : a.localeCompare(b)));
+  const rowH = 64;
+  const h = Math.max(left.length, right.length) * rowH + 16;
+  const W = 640;
+  const boxW = 170;
+  const y = (i: number, n: number) => 8 + (h - 16) * (i + 0.5) / n;
+  const max = Math.max(...links.map((l) => l.count));
+  const name = (r: string) => (r === NO_ROUTE ? 'No route' : r);
+  const boxHtml = (r: string, x: number, cy: number, side: string) => `
+    <g class="flow-node${r === NO_ROUTE ? ' is-none' : ''}" transform="translate(${num(x)}, ${cy - 18})">
+      <rect width="${num(boxW)}" height="36" rx="8"></rect>
+      <text x="${boxW / 2}" y="23" text-anchor="middle">${escapeHtml(name(r).length > 22 ? name(r).slice(0, 21) + '…' : name(r))}</text>
+      <title>${escapeHtml(`${side}: ${name(r)}`)}</title>
+    </g>`;
+  const pathsHtml = links.map((l) => {
+    const y1 = y(left.indexOf(l.from), left.length);
+    const y2 = y(right.indexOf(l.to), right.length);
+    const x1 = boxW + 8;
+    const x2 = W - boxW - 8;
+    const width = 2 + Math.round((l.count / max) * 14);
+    const mid = (x1 + x2) / 2;
+    return `<g class="flow-link${l.unmatched ? ' is-none' : ''}" data-pair="${escapeHtml(`${l.from}→${l.to}`)}">
+      <path d="M${num(x1)},${num(y1)} C${num(mid)},${num(y1)} ${num(mid)},${num(y2)} ${num(x2)},${num(y2)}" stroke-width="${num(width)}"></path>
+      <text x="${num(mid)}" y="${(y1 + y2) / 2 - 6}" text-anchor="middle">${escapeHtml(l.count)}</text>
+      <title>${escapeHtml(`${name(l.from)} → ${name(l.to)}: ${l.count} call${l.count === 1 ? '' : 's'}`)}</title>
+    </g>`;
+  }).join('');
+  const summary = links.map((l) => `${name(l.from)} to ${name(l.to)}: ${l.count}`).join('; ');
+  el.innerHTML = `<svg viewBox="0 0 ${num(W)} ${num(h)}" role="img" aria-label="${escapeHtml(`HTTP calls between repos. ${summary}`)}" preserveAspectRatio="xMidYMid meet">
+    ${pathsHtml}
+    ${left.map((r, i) => boxHtml(r, 0, y(i, left.length), 'Calling repo')).join('')}
+    ${right.map((r, i) => boxHtml(r, W - boxW, y(i, right.length), 'Serving repo')).join('')}
+  </svg>`;
+}
+
+function renderHttpTable() {
+  const method = (document.getElementById('http-filter-method') as HTMLSelectElement | null)?.value ?? '';
+  const pair = (document.getElementById('http-filter-pair') as HTMLSelectElement | null)?.value ?? '';
+  const status = (document.getElementById('http-filter-status') as HTMLSelectElement | null)?.value ?? '';
+  const rows = httpCalls.map((c, i) => ({ c, i })).filter(({ c }) =>
+    (!method || c.method.toUpperCase() === method) &&
+    (!pair || httpPairKey(c) === pair) &&
+    (!status || (status === 'matched' ? !!c.route : !c.route)));
+  const tbody = document.querySelector('#table-http tbody');
+  if (tbody) {
+    tbody.innerHTML = rows.length ? rows.map(({ c, i }) => `
+      <tr class="${i === httpSelected ? 'selected-symbol-row' : ''}">
+        <td><button type="button" class="link-btn" data-call="${escapeHtml(i)}"><span class="method-badge" style="--badge: ${escapeHtml(getRouteMethodColor(c.method.toUpperCase()))};">${escapeHtml(c.method.toUpperCase())}</span> <code>${escapeHtml(c.url ?? c.rawUrl)}</code></button></td>
+        <td class="col-optional"><code>${escapeHtml(c.file)}:${escapeHtml(c.line)}</code></td>
+        <td>${c.route ? `<code>${escapeHtml(c.route.handlerSymbol ?? c.route.handlerFile)}</code>` : '<span class="selection-badge" style="--badge: var(--danger);">no route</span>'}</td>
+      </tr>`).join('') : '<tr><td colspan="3" class="config-empty">No calls match the filters.</td></tr>';
+  }
+  const count = document.getElementById('http-count');
+  if (count) count.textContent = `${rows.length} of ${httpCalls.length} calls`;
+}
+
+function renderHttpDetail() {
+  const el = document.getElementById('http-detail');
+  const c = httpCalls[httpSelected];
+  if (!el) return;
+  if (!c) {
+    el.innerHTML = '<div class="details-placeholder">Select a call to see both ends.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <h3 class="section-title" style="margin-top: 0;">${escapeHtml(c.method.toUpperCase())} <code>${escapeHtml(c.url ?? c.rawUrl)}</code></h3>
+    <div class="http-end">
+      <div class="detail-stat-label">Caller, in ${escapeHtml(c.callerRepo)}</div>
+      <div><span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(c.file)}" title="Show in the graph">${escapeHtml(c.file)}:${escapeHtml(c.line)}</span></div>
+      ${c.callerCode ? `<pre class="config-json">${escapeHtml(c.callerCode)}</pre>` : ''}
+      <div class="config-desc">${escapeHtml(c.client?.kind ?? '')} client <code>${escapeHtml(c.client?.name ?? '')}</code></div>
+    </div>
+    <div class="http-end">
+      <div class="detail-stat-label">${c.route ? `Handler, in ${escapeHtml(c.handlerRepo)}` : 'Handler'}</div>
+      ${c.route ? `
+        <div><code>${escapeHtml(c.route.method)} ${escapeHtml(c.route.path)}</code> <span class="profile-pill">${escapeHtml(c.route.confidence)}</span></div>
+        <div><code>${escapeHtml(c.route.handlerSymbol ?? '')}</code></div>
+        <div><span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(c.route.handlerFile)}" title="Show in the graph">${escapeHtml(c.route.handlerFile)}${c.handlerLine ? `:${escapeHtml(c.handlerLine)}` : ''}</span></div>`
+        : '<div class="config-empty">No live route serves this call.</div>'}
+    </div>`;
+}
+
+async function loadHttp() {
+  try {
+    const res = await fetch(withRepo('/api/http', 'any'));
+    if (!res.ok) return;
+    httpData = await res.json();
+    httpCalls = [...httpData!.pairs.flatMap((p) => p.calls), ...httpData!.unmatched.flatMap((u) => u.calls)];
+    httpSelected = -1;
+    const summary = document.getElementById('http-summary');
+    if (summary) summary.innerHTML = statTiles([
+      ['Calls', httpData!.total],
+      ['Matched', httpData!.matched],
+      ['Unmatched', httpData!.total - httpData!.matched],
+      ['Repo pairs', httpData!.pairs.length],
+    ]);
+    const methodSelect = document.getElementById('http-filter-method') as HTMLSelectElement | null;
+    if (methodSelect) {
+      const methods = [...new Set(httpCalls.map((c) => c.method.toUpperCase()))].sort();
+      methodSelect.innerHTML = '<option value="">All</option>' + methods.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+    }
+    const pairSelect = document.getElementById('http-filter-pair') as HTMLSelectElement | null;
+    if (pairSelect) {
+      const pairs = [
+        ...httpData!.pairs.map((p) => [`${p.from}→${p.to}`, `${p.from} → ${p.to} (${p.count})`]),
+        ...httpData!.unmatched.map((u) => [`${u.repo}→${NO_ROUTE}`, `${u.repo} → no route (${u.count})`]),
+      ];
+      pairSelect.innerHTML = '<option value="">All</option>' + pairs.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('');
+    }
+    renderHttpFlow();
+    renderHttpTable();
+    renderHttpDetail();
+  } catch (err) {
+    console.error('Failed to load HTTP calls:', err);
+  }
+}
 
 // ---- Configuration (M4-22): read-only ----
 const SOURCE_BADGE: Record<string, string> = { default: 'var(--text-muted)', user: 'var(--syntax-blue)', env: 'var(--syntax-purple)' };

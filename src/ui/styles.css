@@ -2320,3 +2320,24 @@ body[data-graph="layout"] #cy::after {
 .config-warnings ul { margin: var(--space-2) 0 0; padding-left: var(--space-5); }
 .config-ok { color: var(--success); margin-bottom: var(--space-4); }
 .config-languages { margin: 0; padding-left: var(--space-5); }
+
+/* HTTP calls between repos (M4-23) */
+.http-flow-figure { margin: var(--space-4) 0; }
+.http-flow svg { width: 100%; max-width: 760px; height: auto; display: block; }
+.http-flow .flow-node rect { fill: var(--bg-panel); stroke: var(--border-strong); stroke-width: 1.5; }
+.http-flow .flow-node text { fill: var(--text-white); font-size: 13px; font-weight: 600; }
+.http-flow .flow-node.is-none rect { stroke: var(--danger); }
+.http-flow .flow-link path { fill: none; stroke: color-mix(in srgb, var(--syntax-pink) 70%, transparent); }
+.http-flow .flow-link.is-none path { stroke: color-mix(in srgb, var(--danger) 60%, transparent); stroke-dasharray: 6 4; }
+.http-flow .flow-link text { fill: var(--text-main); font-size: 12px; }
+.http-flow .flow-link { cursor: pointer; }
+.http-flow .flow-link:hover path { stroke: var(--syntax-pink); }
+.http-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.http-filters label { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--fs-sm); min-width: 0; max-width: 100%; }
+.http-filters .form-select { padding: var(--space-1) var(--space-2); min-width: 0; max-width: 100%; flex: 1 1 auto; text-overflow: ellipsis; }
+@media (max-width: 639px) { .http-filters label { flex: 1 1 100%; } }
+.http-split { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-4); align-items: start; }
+.http-detail { border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: var(--space-4); background: var(--bg-panel); min-width: 0; }
+.http-end { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) 0; border-top: 1px solid var(--border-base); }
+.http-end code { overflow-wrap: anywhere; }
+@media (max-width: 1199px) { .http-split { grid-template-columns: minmax(0, 1fr); } }

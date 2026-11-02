@@ -34,7 +34,8 @@ test('the switcher lists all repos, scopes every view, and is kept in the URL', 
   await page.goto(served.url);
   await graphReady(page);
   await expect(page.locator('#repo-switcher')).toBeVisible();
-  expect(await page.locator('#select-repo option').allTextContents()).toEqual(['All repos (3)', primary, 'web', 'api']);
+  // /api/repos (git state per repo) may answer after the graph: wait for the options.
+  await expect(page.locator('#select-repo option')).toHaveText(['All repos (3)', primary, 'web', 'api']);
   expect(await fullGraphFiles(page)).toBe(9); // 2 + 3 + 4 files
 
   await page.selectOption('#select-repo', 'web');

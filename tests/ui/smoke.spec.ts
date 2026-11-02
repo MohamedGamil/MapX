@@ -53,6 +53,14 @@ const TABS: Array<{ tab: string; shows: (page: Page) => Promise<void> }> = [
     },
   },
   {
+    tab: 'http',
+    shows: async (page) => {
+      await expect(page.locator('#table-http tbody tr')).toHaveCount(1);
+      await expect(page.locator('#table-http tbody')).toContainText('/api/orders');
+      await expect(page.locator('#http-flow svg')).toBeVisible();
+    },
+  },
+  {
     tab: 'architecture',
     shows: async (page) => {
       await expect(page.locator('#arch-profile-details')).not.toContainText('Loading');

@@ -14,6 +14,7 @@ import { MapxGraph } from './core/graph.js';
 import { buildMetricsReport, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
+import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { UiEventBus, getToolCallsLogPath } from './ui-events.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 
@@ -276,6 +277,66 @@ export function startUiServer(opts: ServerOpts) {
         const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
         try {
           json(200, describeConfig(dir, await loadConfig(dir, store)));
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      // Cross-repo HTTP (M4-23): every frontend call site (the records `mapx routes --clients --json`
+      // prints), with the repos of the caller and of the handler it reaches, grouped per repo pair,
+      // plus the unmatched calls per repo, the caller's line of code and the handler's line.
+      if (pathname === '/api/http') {
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        try {
+          const config = await loadConfig(dir, store);
+          const scope = scopeOf(config, 'all');
+          if (!scope) return;
+          const repoOfFile = new Map(store.raw.prepare('SELECT path, repo FROM files').all().map((f: any) => [f.path as string, f.repo as string]));
+          // Files the index does not hold (an excluded caller): the repo whose folder contains them.
+          const byDepth = [...config.repos].sort((a, b) => b.path.length - a.path.length);
+          const repoOf = (file: string) => repoOfFile.get(file)
+            ?? byDepth.find((r) => r.path !== '.' && (file === r.path || file.startsWith(r.path.replace(/\/$/, '') + '/')))?.name
+            ?? config.repo.name;
+          const lineOf = (file: string, line: number): string | null => {
+            try {
+              const abs = resolve(dir, file);
+              if (!abs.startsWith(resolve(dir) + '/') || !repoOfFile.has(file)) return null; // indexed files only
+              return readFileSync(abs, 'utf8').split('\n')[line - 1]?.trim().slice(0, 240) ?? null;
+            } catch {
+              return null;
+            }
+          };
+          const handlerLine = store.raw.prepare('SELECT start_line FROM symbols WHERE file_path = ? AND name = ? ORDER BY start_line LIMIT 1');
+          const calls = (await loadClientCalls(dir)).map((call) => {
+            const callerRepo = repoOf(call.file);
+            const handlerRepo = call.route ? repoOf(call.route.handlerFile) : null;
+            const method = call.route?.handlerSymbol?.split(/@|::|\./).pop();
+            const handlerAt = call.route && method ? (handlerLine.get(call.route.handlerFile, method) as { start_line: number } | undefined)?.start_line ?? null : null;
+            return { ...call, callerRepo, handlerRepo, callerCode: lineOf(call.file, call.line), handlerLine: handlerAt };
+          }).filter((c) => scope.all || c.callerRepo === scope.name || c.handlerRepo === scope.name);
+          const pairs = new Map<string, { from: string; to: string; count: number; calls: typeof calls }>();
+          const unmatched = new Map<string, { repo: string; count: number; calls: typeof calls }>();
+          for (const c of calls) {
+            if (c.route) {
+              const key = `${c.callerRepo}\u0000${c.handlerRepo}`;
+              const pair = pairs.get(key) ?? { from: c.callerRepo, to: c.handlerRepo as string, count: 0, calls: [] };
+              pair.count++;
+              pair.calls.push(c);
+              pairs.set(key, pair);
+            } else {
+              const group = unmatched.get(c.callerRepo) ?? { repo: c.callerRepo, count: 0, calls: [] };
+              group.count++;
+              group.calls.push(c);
+              unmatched.set(c.callerRepo, group);
+            }
+          }
+          json(200, {
+            total: calls.length,
+            matched: calls.filter((c) => c.route).length,
+            pairs: [...pairs.values()].sort((a, b) => b.count - a.count || a.from.localeCompare(b.from) || a.to.localeCompare(b.to)),
+            unmatched: [...unmatched.values()].sort((a, b) => b.count - a.count || a.repo.localeCompare(b.repo)),
+          });
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }

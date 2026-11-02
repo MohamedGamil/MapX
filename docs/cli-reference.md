@@ -447,6 +447,13 @@ The dashboard's API takes the same `repo` query parameter. An unknown repo answe
 | `/api/profile`, `/api/dsm`, `/api/metrics` | the primary repo | that repo | 400: these are per repo |
 | `/api/repos` | every repo: counts, `lastScanned`, `git` (`isGit`, `head`, `changesSinceScan`), and the cross-repo pairs | — | — |
 
+The **HTTP Calls** tab shows how the repos talk over HTTP:
+- **Flow diagram:** from each calling repo to the repos whose routes serve its calls, and to "No route" for calls that reach none. Link widths follow the number of calls.
+- **Calls table:** every frontend call site, filterable by method, repo pair, and matched or unmatched.
+- **Selecting a call** shows both ends: the caller's file, line and code, and the route, handler and its file and line. Each end opens the graph at that file.
+
+`/api/http` serves the same records as `mapx routes --clients --json`, adding `callerRepo`, `handlerRepo`, `callerCode` and `handlerLine`. It groups them in `pairs` (`from`, `to`, `count`, `calls`) and `unmatched` (`repo`, `count`, `calls`), and takes `repo=` (calls whose caller or handler is in that repo). In the graph, HTTP edges between repos are drawn dashed, like every cross-repo edge.
+
 The **Configuration** tab shows the effective settings, read-only:
 - **Values and sources:** each known setting with its value and where it comes from: `default`, `user` (set in `.mapx/config.json`) or `env` (`MAPX_PARSE_WORKERS`).
 - **Pattern lists:** your own patterns are shown, and MapX's built-in ones are folded away.
