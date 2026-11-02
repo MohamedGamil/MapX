@@ -45,6 +45,15 @@ const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 's
 
 /** Symbol index entry: a declaration by name, with its file, scope and kind. */
 type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string };
+
+/** Names a Lua file declares `local` at its top level (column 0): `local M = {}`, `local A, B = …` (M2-10). */
+function luaTopLevelLocals(text: string): Set<string> {
+  const names = new Set<string>();
+  for (const m of text.matchAll(/^local\s+(?!function\b)([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)/gm)) {
+    for (const n of m[1]!.split(',')) names.add(n.trim());
+  }
+  return names;
+}
 const NAMESPACE_KINDS = new Set(['namespace']);
 const TYPE_KINDS = new Set(['class', 'struct', 'interface', 'enum', 'record', 'trait']);
 /** Sources whose imports may use JS/TS path aliases (M3-09). */
@@ -248,6 +257,8 @@ export class Scanner {
   /** resolveSymbolToFile per name, source language and callableOnly, for the index `nameCandidatesFor` (M4-03). */
   private nameCandidates = new Map<string, NameCandidates | null>();
   private nameCandidatesFor: Map<string, SymbolIndexEntry[]> | null = null;
+  /** Per Lua file, the names it declares `local` at its top level, for one resolution phase (M2-10). */
+  private luaLocalsCache = new Map<string, Set<string>>();
   /** Per file, the names it binds by import to project modules, for one resolution phase (M2-08). */
   private importBindingsCache = new Map<string, Map<string, ImportBinding>>();
   /** findExport per file and name, for one resolution phase; null while being searched (M2-08). */
@@ -1703,6 +1714,9 @@ export class Scanner {
         // package, never a homonym elsewhere; a standard-library or third-party package links nothing
         // (M0-17-R5, M5-25-R1).
         targets = this.resolveGoQualifiedType(ref, resolver, sourcePath, fileMap, usedNames);
+      } else if (sourceLanguage === 'lua' && ref.referenceType === 'call' && ref.targetName.includes(':')) {
+        // Lua `obj:m()`: the method of the receiver's table, never a homonym in another table (M2-10).
+        targets = this.resolveLuaMethodCall(ref, sourcePath, repoName, fileMap);
       } else if ((ref.vueThis || ref.vueStore) && (vueHit = ref.vueStore
         ? resolveStoreTarget(ref.targetName, ref.vueStore, this.vueResolveContext(sourcePath, fileMap))
         : resolveThisMember(ref.targetName, ref.vueThis!, this.vueResolveContext(sourcePath, fileMap))) !== undefined) {
@@ -1759,7 +1773,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, luaTable: _luaTable, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -2933,6 +2947,50 @@ export class Scanner {
     return [];
   }
 
+  /**
+   * A Lua method call `T:m` (M2-10), its table named by the parser (src/parsers/languages/lua.ts),
+   * links `function T:m` or `function T.m(self)` by where T lives:
+   * - `local` (`local T = {}`): in this file only, never a homonym `local T` of another file or repo;
+   * - `global`: in this file, else the nearest file of this repo that does not declare T local;
+   * - `require` (`local T = require(…)`): by exact name (`T:m`, else `T.m`), as before M2-10.
+   * A receiver whose table the file does not tell (a parameter, a string, `io.open()`) has no
+   * scope and links nothing, even when a method of that name exists.
+   */
+  private resolveLuaMethodCall(ref: ExtractedReference, sourcePath: string, repoName: string, fileMap: Map<string, string>): { file: string; symbol: string }[] {
+    const scope = ref.metadata?.luaTable;
+    const name = ref.targetName;
+    const cut = name.lastIndexOf(':');
+    const table = name.slice(0, cut);
+    const names = [name, `${table}.${name.slice(cut + 1)}`];
+    if (scope === 'require') {
+      for (const n of names) {
+        const file = this.resolveSymbolToFile(n, fileMap, sourcePath, true);
+        if (file) return [{ file, symbol: n }];
+      }
+      return [];
+    }
+    if (scope !== 'local' && scope !== 'global') return [];
+    const declared = names.flatMap(n => (this.symbolIndex
+      ? (this.symbolIndex.get(n.toLowerCase()) ?? []).map(e => ({ name: e.name, file: e.file, kind: e.kind }))
+      : this.store.searchSymbols(n).map(m => ({ name: m.name as string, file: m.file_path as string, kind: m.kind as string })))
+      .filter(e => e.name === n && e.kind === 'function'));
+    const inFile = declared.find(e => e.file === sourcePath);
+    if (inFile || scope === 'local') return inFile ? [{ file: sourcePath, symbol: inFile.name }] : [];
+    const root = table.split('.')[0]!;
+    const files = [...new Set(declared.map(e => e.file))]
+      .filter(f => fileMap.get(f) === repoName && this.languageOf(f) === 'lua' && !this.luaLocals(f).has(root))
+      .sort();
+    if (!files.length) return [];
+    const file = closest(files, sourcePath);
+    return [{ file, symbol: declared.find(e => e.file === file)!.name }];
+  }
+
+  private luaLocals(path: string): Set<string> {
+    let names = this.luaLocalsCache.get(path);
+    if (!names) this.luaLocalsCache.set(path, (names = luaTopLevelLocals(this.readWorkspaceText(path) ?? '')));
+    return names;
+  }
+
   private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string, callableOnly = false): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
 
@@ -3884,6 +3942,7 @@ export class Scanner {
     this.importBindingsCache.clear();
     this.exportCache.clear();
     this.lineCache.clear();
+    this.luaLocalsCache.clear();
     this.jsCache.clear();
     this.languageCache.clear();
     this.phpNamespaces.clear();

@@ -3,6 +3,7 @@ import type { ParseResult, ExtractedSymbol, ExtractedReference, SymbolKind } fro
 import type { LanguageDefinition } from '../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from './wasm-parser.js';
 import { COMMON_FRAMEWORK_METHODS, JS_BUILTIN_METHODS, JS_BUILTIN_RECEIVERS } from './common-methods.js';
+import { LuaScopes, luaCallTarget } from './languages/lua.js';
 
 /** `import a.b.C` → [a.b.C]; `import a.b.{C, D => E}` → [a.b.C, a.b.D]; `import a.b._` → [a.b._]. */
 function scalaImportTargets(node: any): string[] {
@@ -564,6 +565,10 @@ export class GenericWasmParser implements LanguageParser {
         }
       }
 
+      // Lua scopes, for the receivers of method calls, computed on the first one (M2-10).
+      let luaScopes: LuaScopes | undefined;
+      const luaScopesOf = () => (luaScopes ??= new LuaScopes());
+
       for (const [captureName, captures] of refCaptures) {
         if (captureName.startsWith('ref.target_')) {
           const refType = captureName.replace('ref.target_', '');
@@ -581,7 +586,9 @@ export class GenericWasmParser implements LanguageParser {
             if (!targetText || typeof targetText !== 'string') continue;
             const csharpBase = csharpBaseType(capture.node);
             // A C# generic base `List<int>` names the type List (M0-17-R2).
-            const targetName = csharpBase ? targetText.replace(/<[\s\S]*$/, '').trim() : this.cleanTarget(targetText, refType);
+            // Lua `self:log()` in `function Account:m()` targets Account:log (M2-10).
+            const luaTarget = this.languageName === 'lua' && refType === 'call' ? luaCallTarget(capture.node, luaScopesOf) : null;
+            const targetName = luaTarget?.targetName ?? (csharpBase ? targetText.replace(/<[\s\S]*$/, '').trim() : this.cleanTarget(targetText, refType));
             if (!targetName || typeof targetName !== 'string') continue;
 
             if (refType === 'render') {
@@ -633,6 +640,8 @@ export class GenericWasmParser implements LanguageParser {
               ...(referenceType === 'call' && receiver ? { metadata: { receiver: receiver.type === 'identifier' ? receiver.text : `<${receiver.type}>` } } : {}),
               // The import path of a package-qualified Go type or call (M0-17-R5, M5-25, M5-25-R1).
               ...(goPackage ? { metadata: goPackage } : {}),
+              // Where the table of a Lua `T:m()` call lives, for the scanner (M2-10).
+              ...(luaTarget && 'luaTable' in luaTarget ? { metadata: { luaTable: luaTarget.luaTable } } : {}),
             });
             }
           }

@@ -13,8 +13,10 @@ import type { Store } from './store.js';
  *   local `replace` modules).
  * - 5: M5-03-R2 (C++ `.h` headers parsed as C++; calls in a one-line function sourced from it; the
  *   namespace of each C# and Scala declaration).
+ * - 6: M2-10 (Lua `obj:m()` and `self:m()` method calls; global `function f()` symbols; no locals or
+ *   `self.x` fields as constants, M2-11).
  */
-export const EXTRACTOR_VERSION = 5;
+export const EXTRACTOR_VERSION = 6;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 
