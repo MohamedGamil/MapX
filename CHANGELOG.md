@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.8] — 2026-11-02
+
 ### Added
 - **The dashboard shows how repos talk over HTTP.** An HTTP Calls tab draws the calls from each frontend repo to the backend repos that serve them (and to "no route"), weighted by count; lists every call site with method, repo-pair and matched/unmatched filters; and shows both ends of a selected call: the caller's file, line and code, and the route, handler, file and line. `/api/http` serves the records `mapx routes --clients --json` prints, grouped per repo pair (M4-23).
 - **The dashboard shows the effective configuration, read-only.** A Configuration tab lists each setting with its value and source (default, user or `MAPX_PARSE_WORKERS`), your own exclude patterns beside the folded built-in ones, the repos (missing folders marked) and user languages, and warns about invalid values, unknown settings, missing repo folders and incomplete user languages. `/api/config` serves it; write methods answer 405 (M4-22).
@@ -811,7 +813,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.7...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.8...HEAD
+[0.3.8]: https://github.com/MohamedGamil/mapx/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/MohamedGamil/mapx/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/MohamedGamil/mapx/compare/v0.3.5...v0.3.6
 [0.3.4]: https://github.com/MohamedGamil/mapx/compare/v0.3.3...v0.3.4

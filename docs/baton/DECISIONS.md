@@ -284,3 +284,18 @@ The owner supplied the logo symbol `mapx-logo.png` (1024×1024, transparent back
 - **The text art:** printed in `#ff02fe` as the header of `mapx init`, before its other output.
 
 The source files live in `assets/brand/`. M4-18 no longer waits for M4-17's redesign, which builds on the logo instead.
+
+## D029 — Version 0.3.8: tagged, packaged and installed for the user (owner, 2026-11-02)
+
+The owner asked for:
+- the version bumped to 0.3.8;
+- a `v0.3.8` tag after the commit;
+- the Linux binary packaged and installed for the user, as for v0.3.7 (D023).
+
+The release holds everything since v0.3.7:
+- scan and sync of every registered repo (M0-10-R5, D024), and parallel parsing in the binary (M0-06-R2);
+- the parse worker pool (M4-10 to M4-15, D025, D026);
+- the dashboard work (M4-16 to M4-24, D027, D028);
+- cross-repo HTTP edges (M2-06-R3) and the analysis fixes (M0-32-R3).
+
+The changelog's Unreleased entries moved to `[0.3.8] — 2026-11-02`. The tag is local; nothing is published or pushed. M5 follows.
