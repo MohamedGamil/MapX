@@ -4059,9 +4059,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 23,
-        "latestFinish": 23,
-        "slack": 23
+        "latestStart": 26,
+        "latestFinish": 26,
+        "slack": 26
       },
       {
         "id": "M0-10-R6",
@@ -4155,12 +4155,12 @@
       },
       {
         "id": "M2-08-R2",
-        "duration": 3,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 3,
-        "latestStart": 23,
+        "earliestFinish": 0,
+        "latestStart": 26,
         "latestFinish": 26,
-        "slack": 23
+        "slack": 26
       },
       {
         "id": "M5-25-R1",
@@ -4217,13 +4217,13 @@
         "slack": 23
       }
     ],
-    "totalEffort": 167
+    "totalEffort": 164
   },
   "resourceSchedule": {
-    "hours": 167,
-    "weeks": 8.35,
+    "hours": 164,
+    "weeks": 8.2,
     "forecastAsOf": "2026-11-02",
-    "conditionalDate": "2026-12-30",
+    "conditionalDate": "2026-12-29",
     "assignments": [
       {
         "id": "M0-01",
@@ -5579,43 +5579,43 @@
         "id": "M2-08-R2",
         "worker": 0,
         "start": 148,
-        "finish": 151
+        "finish": 148
       },
       {
         "id": "M5-25-R1",
         "worker": 0,
-        "start": 151,
-        "finish": 155
+        "start": 148,
+        "finish": 152
       },
       {
         "id": "M5-03-R2",
         "worker": 0,
-        "start": 155,
-        "finish": 159
+        "start": 152,
+        "finish": 156
       },
       {
         "id": "M5-05-R1",
         "worker": 0,
-        "start": 159,
-        "finish": 162
+        "start": 156,
+        "finish": 159
       },
       {
         "id": "M4-09-R2",
         "worker": 0,
-        "start": 162,
-        "finish": 162
+        "start": 159,
+        "finish": 159
       },
       {
         "id": "M4-26",
         "worker": 0,
-        "start": 162,
-        "finish": 164
+        "start": 159,
+        "finish": 161
       },
       {
         "id": "M3-05-R3",
         "worker": 0,
-        "start": 164,
-        "finish": 167
+        "start": 161,
+        "finish": 164
       }
     ]
   }

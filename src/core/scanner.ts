@@ -107,6 +107,14 @@ function codeOnly(path: string, text: string): string {
   return code.replace(/`(?:\\[\s\S]|[^\\`])*`|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, ' ');
 }
 
+/** A module path without its extension, as imports name it: `src/app/m.ts` → `src/app/m` (M2-08-R2). */
+const moduleKey = (path: string) => path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '').replace(/\.(?:[cm]?[jt]sx?|vue|svelte)$/, '');
+/** Files a JS/TS import can name (M2-08-R2). */
+const JS_MODULE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/;
+const MODULE_EXTENSIONS = ['js', 'ts', 'tsx', 'jsx', 'mjs', 'cjs', 'mts', 'cts', 'vue', 'svelte'];
+/** Imports of assets, which no module satisfies: not recorded (M2-08-R2 review). */
+const ASSET_IMPORT = /\.(?:css|scss|sass|less|styl|svg|png|jpe?g|gif|webp|avif|ico|bmp|json|html?|md|txt|woff2?|ttf|otf|eot|mp[34]|wav|webm|wasm|graphql|gql)$/i;
+
 /** Modules whose calls resolve through import bindings (M2-08). */
 const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
 
@@ -246,6 +254,12 @@ export class Scanner {
   private exportCache = new Map<string, ExportLookup>();
   /** Source lines per file, for one resolution phase (Python call receivers, M2-08). */
   private lineCache = new Map<string, string[]>();
+  /**
+   * While a file's references resolve: the module paths (extension stripped) its relative or alias
+   * imports named but no indexed file satisfied. Kept in `files.metadata.unresolvedImports`, so a
+   * sync adding such a module re-parses the file (M2-08-R2).
+   */
+  private unresolvedImports = new Map<string, Set<string>>();
   /** JS/TS module text without comments, and its export skeleton, for one resolution phase (M2-08-R1). */
   private jsCache = new Map<string, JsText & { skeleton?: string }>();
   /** Per symbols list, the names it declares (outside classes' methods), for the shadowing check (M2-08). */
@@ -566,6 +580,7 @@ export class Scanner {
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, newFiles.map(f => f.relativePath)),
+        ...this.newModuleReferrers(newFiles.map(f => f.relativePath)),
         ...this.importerReferrers([...newFiles, ...changedFiles].map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.movedReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.removedSymbolReferrers(repo.name, changedFiles.map(f => ({ path: f.relativePath, content: f.content }))),
@@ -1013,7 +1028,7 @@ export class Scanner {
     // holds (M0-02-R4), and those using a Vue tag whose global registration changed (M3-08).
     const reindexed = new Set(toReindex.map(r => r.path));
     const listedTexts = [...contents].map(([path, content]) => ({ path, content }));
-    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove), ...this.importerReferrers(listedTexts)];
+    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove), ...this.importerReferrers(listedTexts), ...this.newModuleReferrers(listedTexts.map(t => t.path))];
     const vueUsers = this.vueRegistryReferrers(repo.name, listedTexts, toRemove);
     // Taken again: removeFiles queued the importers of the removed modules (M2-08-R1).
     const queued = toRemove.length ? this.takePendingReferrers(repo.name) : [];
@@ -1604,11 +1619,15 @@ export class Scanner {
 
     this.store.deleteEdgesForFile(relativePath);
 
+    this.unresolvedImports.set(relativePath, new Set());
     const resolvedRefs = this.resolveReferencesWithMap(result.references, relativePath, repoName, fileMap, result.symbols);
     for (const edge of resolvedRefs) {
       this.graph.addDependencyEdge(edge);
       this.store.insertEdge(edge);
     }
+    const unresolved = this.unresolvedImports.get(relativePath)!;
+    this.unresolvedImports.delete(relativePath);
+    if (unresolved.size) this.store.updateFileMetadata(relativePath, { unresolvedImports: [...unresolved].sort() });
   }
 
   private resolveReferencesWithMap(
@@ -2670,12 +2689,61 @@ export class Scanner {
     const bases = !target.startsWith('.') && JS_MODULE_SOURCE.test(sourcePath)
       ? jsAliasTargets(target, sourcePath, this.aliasContext(fileMap))
       : [];
+    const aliased = bases.length > 0;
     bases.push(target.startsWith('.') ? join(dir, target) : target);
     for (const base of bases) {
       const hit = this.probeModule(base, fileMap);
       if (hit) return hit;
     }
+    // A project module that is not there (yet): recorded for the file being resolved (M2-08-R2).
+    const pending = this.unresolvedImports.get(sourcePath);
+    if (pending && (aliased || target.startsWith('.')) && !ASSET_IMPORT.test(target)) {
+      for (const base of aliased ? bases.slice(0, -1) : bases) pending.add(moduleKey(base));
+    }
     return null;
+  }
+
+  /**
+   * Indexed files whose resolution a new module changes (M2-08-R2):
+   * - those that recorded its path as an unresolved import (for an `index` file, its folder's too);
+   * - the importers of an indexed module of the same path it now takes precedence over: another
+   *   extension earlier in the probe order, or the folder index a file beats;
+   * - and, through barrels among them, their importers (review 2026-11-02).
+   */
+  private newModuleReferrers(paths: string[]): Set<string> {
+    const referrers = new Set<string>();
+    const added = paths.filter(p => JS_MODULE_FILE.test(p) && !this.store.getFile(p));
+    if (!added.length) return referrers;
+    // Every record, read once per call (review: one table scan per new file was too costly).
+    const recorded = new Map<string, string[]>();
+    for (const file of this.store.filesWithMetadataText('"unresolvedImports"')) {
+      let keys: string[] | undefined;
+      try { keys = JSON.parse(String(file.metadata)).unresolvedImports; } catch { keys = undefined; }
+      for (const k of keys ?? []) recorded.set(k, [...(recorded.get(k) ?? []), String(file.path)]);
+    }
+    for (const path of added) {
+      const key = moduleKey(path);
+      const folder = /\/index$/.test(key) ? key.slice(0, -'/index'.length) : null;
+      for (const k of folder ? [key, folder] : [key]) for (const file of recorded.get(k) ?? []) referrers.add(file);
+      // Indexed modules of the same path the new one may now win over.
+      const shadowed = [...MODULE_EXTENSIONS.map(ext => `${key}.${ext}`), ...(folder ? [] : MODULE_EXTENSIONS.map(ext => `${key}/index.${ext}`))];
+      for (const other of shadowed) if (other !== path) for (const importer of this.store.getImporters(other)) referrers.add(importer);
+    }
+    // A barrel among them passes the change on to its importers.
+    let level = [...referrers].filter(r => this.isBarrel(r));
+    for (let depth = 0; depth < 5 && level.length; depth++) {
+      const next: string[] = [];
+      for (const barrel of level) {
+        for (const importer of this.store.getImporters(barrel)) {
+          if (referrers.has(importer)) continue;
+          referrers.add(importer);
+          if (this.isBarrel(importer)) next.push(importer);
+        }
+      }
+      level = next;
+    }
+    for (const p of paths) referrers.delete(p);
+    return referrers;
   }
 
   /** The indexed file a JS-style module path names: itself, its .ts twin, an index file or an extension. */
@@ -4220,6 +4288,7 @@ export class Scanner {
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath)),
+        ...this.newModuleReferrers(discovered.filter(f => f.isNew).map(f => f.relativePath)),
         ...this.importerReferrers(changedTexts),
         ...this.movedReferrers(repo.name, changedTexts),
         ...this.removedSymbolReferrers(repo.name, changedTexts),

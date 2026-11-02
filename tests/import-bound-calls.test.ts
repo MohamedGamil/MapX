@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M2-08: a call of a name the file imports from a project module links that module's declaration
@@ -472,5 +472,94 @@ describe.each([['git', true], ['hash', false]])('barrel importers in %s sync fol
     // The barrel's star target is gone: unknown, so name lookup applies, as in scan --force.
     expect(callsFrom(root, 'src/app/a.ts')('a1')).toEqual(['src/app/helpers.ts#leafFn']);
     equalsForce();
+  }, 120000);
+});
+
+// M2-08-R2: a module sync adds can change what an existing import resolves to: one the import named
+// but nothing satisfied, or a file that takes precedence over a folder index of the same name.
+describe.each([['git', true], ['hash', false]])('%s sync re-links imports a new module satisfies (M2-08-R2)', (_mode, useGit) => {
+  let root: string;
+  beforeEach(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+      // Name lookup's pick while the import does not resolve.
+      'src/app/helpers.ts': 'export function run() { return 0; }\n',
+      'src/app/f.ts': "import { run } from '../lib/missing';\nexport function f1() { return run(); }\n",
+      'src/app/g.ts': "import { run } from '../lib/utils';\nexport function g1() { return run(); }\n",
+      'src/lib/utils/index.ts': 'export function run() { return 4; }\n',
+      // Review 2026-11-02: through barrels, extension precedence, a folder index, an alias.
+      'src/app/barrel.ts': "export { run } from '../lib/later';\nexport * from '../lib/utils';\n",
+      'src/app/viaBarrel.ts': "import { run } from './barrel';\nexport function v1() { return run(); }\n",
+      'src/lib/m.ts': 'export function run() { return 5; }\n',
+      'src/app/ext.ts': "import { run } from '../lib/m.js';\nexport function e1() { return run(); }\n",
+      'src/app/folder.ts': "import { run } from '../lib/pkg';\nexport function p1() { return run(); }\n",
+      'tsconfig.json': JSON.stringify({ compilerOptions: { baseUrl: '.', paths: { '@/*': ['src/*'] } } }),
+      'src/app/alias.ts': "import { run } from '@/lib/aliased';\nexport function a1() { return run(); }\n",
+    });
+    if (useGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    }
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterEach(() => cleanup(root));
+
+  const all = () => query<Edge>(root, `SELECT source_file, source_symbol, target_file, target_symbol FROM edges
+    WHERE edge_type IN ('call', 'instantiation') ORDER BY 1, 2, 3, 4`);
+  const sync = () => /Updated (\d+) files/.exec(mapx(root, 'sync', '.'))?.[1];
+  const equalsForce = () => {
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(synced).toEqual(all());
+  };
+
+  it('re-parses the importer of a module that did not exist', () => {
+    expect(callsFrom(root, 'src/app/f.ts')('f1')).toEqual(['src/app/helpers.ts#run']);
+    writeFileSync(join(root, 'src/lib/missing.ts'), 'export function run() { return 1; }\n');
+    expect(sync()).toBe('2');
+    expect(callsFrom(root, 'src/app/f.ts')('f1')).toEqual(['src/lib/missing.ts#run']);
+    equalsForce();
+  }, 120000);
+
+  it('re-parses the importers of a folder index a new file of the same name takes precedence over', () => {
+    expect(callsFrom(root, 'src/app/g.ts')('g1')).toEqual(['src/lib/utils/index.ts#run']);
+    writeFileSync(join(root, 'src/lib/utils.ts'), 'export function run() { return 3; }\n');
+    sync();
+    expect(callsFrom(root, 'src/app/g.ts')('g1')).toEqual(['src/lib/utils.ts#run']);
+    equalsForce();
+  }, 120000);
+
+  it.each([
+    ['through an export-from barrel', 'src/lib/later.ts', 'src/app/viaBarrel.ts', 'v1', 'src/lib/later.ts#run'],
+    ['for an extension earlier in the probe order', 'src/lib/m.js', 'src/app/ext.ts', 'e1', 'src/lib/m.js#run'],
+    ['for a new folder index', 'src/lib/pkg/index.ts', 'src/app/folder.ts', 'p1', 'src/lib/pkg/index.ts#run'],
+    ['for an alias import', 'src/lib/aliased.ts', 'src/app/alias.ts', 'a1', 'src/lib/aliased.ts#run'],
+  ])('re-links %s', (_name, added, file, symbol, expected) => {
+    mkdirSync(dirname(join(root, added)), { recursive: true });
+    writeFileSync(join(root, added), 'export function run() { return 9; }\n');
+    sync();
+    expect(callsFrom(root, file)(symbol)).toEqual([expected]);
+    equalsForce();
+  }, 120000);
+
+  it('re-links through a barrel when a file takes precedence over the folder index it re-exports', () => {
+    expect(callsFrom(root, 'src/app/viaBarrel.ts')('v1')).not.toEqual(['src/lib/utils.ts#run']);
+    writeFileSync(join(root, 'src/lib/utils.ts'), 'export function run() { return 3; }\nexport function other() { return 0; }\n');
+    sync();
+    equalsForce();
+  }, 120000);
+
+  it('re-links in a plain scan too', () => {
+    writeFileSync(join(root, 'src/lib/missing.ts'), 'export function run() { return 1; }\n');
+    mapx(root, 'scan', '.');
+    expect(callsFrom(root, 'src/app/f.ts')('f1')).toEqual(['src/lib/missing.ts#run']);
+    equalsForce();
+  }, 120000);
+
+  it('re-parses no other file for a new module no import names', () => {
+    writeFileSync(join(root, 'src/lib/other.ts'), 'export function other() { return 1; }\n');
+    expect(sync()).toBe('1');
   }, 120000);
 });

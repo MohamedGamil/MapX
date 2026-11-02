@@ -162,9 +162,9 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-08** Calls resolve through the file's own imports before name lookup — DONE, P1, 8h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-17-R4, M0-02-R7.
 - **M2-06-R3** HTTP edges into another repo record their target repo — DONE, P1, 2h; depends on M2-06.
 - **M2-08-R1** Import-bound calls: export-from barrels in sync, and no fallback past a project import — DONE, P2, 4h; depends on M2-08.
-- **M2-04-R4** Same-named axios clients in one file keep their own baseURL scope — BACKLOG, P2, 2h; depends on M2-04-R3.
-- **M2-06-R4** Route domains are workspace hosts for HTTP pairing — BACKLOG, P2, 2h; depends on M2-06-R2.
-- **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — IN_PROGRESS, P2, 3h; depends on M2-08-R1.
+- **M2-04-R4** Same-named axios clients in one file keep their own baseURL scope — IN_PROGRESS, P2, 2h; depends on M2-04-R3.
+- **M2-06-R4** Route domains are workspace hosts for HTTP pairing — IN_PROGRESS, P2, 2h; depends on M2-06-R2.
+- **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
 
 ## M3 — Vue SFC semantics
 
@@ -224,7 +224,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — IN_PROGRESS, P2, 2h; depends on M4-24.
 - **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
-- **M4-26** A symbol whose name contains a dot opens by its exact name — BACKLOG, P2, 2h; depends on M4-24.
+- **M4-26** A symbol whose name contains a dot opens by its exact name — IN_PROGRESS, P2, 2h; depends on M4-24.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 
@@ -262,5 +262,5 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-02-R2** The architecture config is committable in user projects and in MapX itself — CANCELLED, P1, 3h; depends on M5-02.
 - **M5-25-R1** Go package-qualified calls, and generic, slice and map literals of imported types — BACKLOG, P2, 4h; depends on M5-25.
 - **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — BACKLOG, P2, 4h; depends on M5-03-R1.
-- **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — BACKLOG, P2, 3h; depends on M5-05.
+- **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — IN_PROGRESS, P2, 3h; depends on M5-05.
 

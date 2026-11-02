@@ -122,6 +122,8 @@ describe('Scanner module', () => {
     deleteSymbolsForFile: vi.fn(),
     deleteEdgesForFile: vi.fn(),
     getImporters: vi.fn().mockReturnValue([]),
+    getFile: vi.fn().mockReturnValue(undefined),
+    filesWithMetadataText: vi.fn().mockReturnValue([]),
     setFileHashes: vi.fn(),
     insertSymbol: vi.fn(),
     insertEdge: vi.fn(),

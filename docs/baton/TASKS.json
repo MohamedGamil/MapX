@@ -24250,15 +24250,28 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M2-04-R4",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T17:52:20.662Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T17:52:20.344Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:52:20.662Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -24442,15 +24455,28 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M2-06-R4",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T17:52:21.302Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T17:52:20.977Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:52:21.302Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -24811,14 +24837,27 @@
         "docs/baton/reports/M2-08-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff",
       "actualHours": null,
       "startedAt": "2026-11-02T17:16:32.897Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T18:06:01.500Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R2.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T17:16:30.373Z",
@@ -24831,6 +24870,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T18:06:00.118Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T18:06:01.500Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R2.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -24849,7 +24911,11 @@
       "affectedFiles": [
         "src/core/scanner.ts",
         "tests/import-bound-calls.test.ts",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "src/core/store.ts",
+        "src/core/extractor-version.ts",
+        "tests/scanner.test.ts",
+        "tests/scanner-hash-incremental.test.ts"
       ],
       "acceptanceCriteria": [
         "A file importing a missing ./m, then m.ts added with the imported name: after sync the call links m.ts, and call edges equal scan --force, in git and hash sync (tests/import-bound-calls.test.ts).",
@@ -25016,15 +25082,28 @@
         "docs/baton/reports/M5-05.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-05-R1",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T17:52:22.559Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T17:52:22.249Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:52:22.559Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -25202,15 +25281,28 @@
         "docs/baton/reports/M4-24-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M4-26",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T17:52:21.928Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T17:52:21.617Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:52:21.928Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

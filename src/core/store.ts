@@ -380,6 +380,12 @@ export class Store {
       .all(filePath, filePath).map(r => r.source_file as string);
   }
 
+  /** Files whose metadata JSON contains `text` (a pre-filter; callers parse to confirm) (M2-08-R2). */
+  filesWithMetadataText(text: string): Array<{ path: unknown; metadata: unknown }> {
+    return this.backend.prepare("SELECT path, metadata FROM files WHERE metadata LIKE ? ESCAPE '\\'")
+      .all(`%${text.replace(/[\\%_]/g, (c) => '\\' + c)}%`) as Array<{ path: unknown; metadata: unknown }>;
+  }
+
   getReferrers(filePath: string): string[] {
     return this.backend.prepare('SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND source_file != ?')
       .all(filePath, filePath).map(r => r.source_file as string);
