@@ -1,0 +1,6 @@
+// A view (AR-14): bounded contexts, sharing the layers of the main document.
+{
+  "extends": "../architecture.jsonc",
+  "layers": [{ "name": "SharedKernel", "selectors": [{ "path": "src/kernel/**" }] }],
+  "rules": { "*": ["SharedKernel"] }
+}

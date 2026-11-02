@@ -510,6 +510,12 @@ describe('qualified Go embedding and class expressions end to end', () => {
       'go/svc/own.go': 'package svc\n\nimport "example.com/g/internal/mylog"\n\ntype Own struct {\n\t*mylog.Logger\n}\n',
       'go/svc/alias.go': 'package svc\n\nimport (\n\t"fmt"\n\tml "example.com/g/internal/mylog"\n)\n\ntype Aliased struct {\n\tml.Logger\n}\n\nvar _ = fmt.Sprint\n',
       'go/svc/base.go': 'package svc\n\ntype Base struct{}\n\ntype WithBase struct {\n\tBase\n}\n',
+      // Review 2026-11-02: the package name is not the last path element (`/v1`, a renamed package).
+      'go/api/v1/service.go': 'package v1\n\ntype UnimplementedFooServer struct{}\n',
+      'go/internal/db/db.go': 'package database\n\ntype Store struct{}\n',
+      'go/server/server.go': 'package server\n\nimport (\n\t"example.com/g/api/v1"\n\t"example.com/g/internal/db"\n)\n\ntype Server struct {\n\tv1.UnimplementedFooServer\n}\n\ntype Repo struct {\n\t*database.Store\n}\n',
+      // Two unaliased candidates both declare Logger, and neither is named `zz`: no guess, no edge.
+      'go/server/amb.go': 'package server\n\nimport (\n\t"example.com/g/internal/mylog"\n\t"example.com/g/other"\n)\n\ntype Amb struct {\n\tzz.Logger\n}\n\nvar _ = mylog.Logger{}\nvar _ = other.Logger{}\n',
       'ts/klass.ts': 'export const Klass = class { run() { return 1; } };\n',
       'ts/make.ts': "import { Klass } from './klass';\nexport function make() { return new Klass(); }\n",
     });
@@ -518,8 +524,10 @@ describe('qualified Go embedding and class expressions end to end', () => {
   }, 120000);
   afterAll(() => cleanup(root));
 
-  it('Go: `log.Logger` and a third-party Logger give no extends edge; a project package does', () => {
+  it('Go: `log.Logger` and a third-party Logger give no extends edge; a project package does, whatever its package name', () => {
     expect(edges('extends', 'go/%')).toEqual([
+      { source_file: 'go/server/server.go', source_symbol: 'Repo', target_symbol: 'Store', target_file: 'go/internal/db/db.go' },
+      { source_file: 'go/server/server.go', source_symbol: 'Server', target_symbol: 'UnimplementedFooServer', target_file: 'go/api/v1/service.go' },
       { source_file: 'go/svc/alias.go', source_symbol: 'Aliased', target_symbol: 'Logger', target_file: 'go/internal/mylog/logger.go' },
       { source_file: 'go/svc/base.go', source_symbol: 'WithBase', target_symbol: 'Base', target_file: 'go/svc/base.go' },
       { source_file: 'go/svc/own.go', source_symbol: 'Own', target_symbol: 'Logger', target_file: 'go/internal/mylog/logger.go' },

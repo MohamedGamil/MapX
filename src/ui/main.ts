@@ -4362,15 +4362,15 @@ function renderProfile(profile: any) {
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Has Backend</span>
-      <span class="profile-detail-value">${escapeHtml(renderYesNo(profile.hasBackend))}</span>
+      <span class="profile-detail-value">${renderYesNo(profile.hasBackend)}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Has Frontend</span>
-      <span class="profile-detail-value">${escapeHtml(renderYesNo(profile.hasFrontend))}</span>
+      <span class="profile-detail-value">${renderYesNo(profile.hasFrontend)}</span>
     </div>
     <div class="profile-detail-item">
       <span class="profile-detail-label">Is Monorepo</span>
-      <span class="profile-detail-value">${escapeHtml(renderYesNo(profile.isMonorepo))}</span>
+      <span class="profile-detail-value">${renderYesNo(profile.isMonorepo)}</span>
     </div>
   `;
 }

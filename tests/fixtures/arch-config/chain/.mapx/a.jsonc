@@ -1,0 +1,10 @@
+// The root of a three-document chain: a.jsonc ← b.jsonc ← architecture.jsonc.
+{
+  "parameters": { "App": "Acme" },
+  "policy": { "inferred": "ignore" },
+  "layers": [
+    { "name": "Domain", "selectors": [{ "name": "^%App%\\\\Domain\\\\" }] },
+    { "name": "Shared", "selectors": [{ "path": "lib/shared/**" }] }
+  ],
+  "rules": { "Domain": ["Shared"] }
+}

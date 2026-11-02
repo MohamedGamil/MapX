@@ -89,34 +89,39 @@ export function rowMatches(row: ExpectedRow, f: ReportedFinding, kind = row.kind
 /**
  * Findings that describe the same dependency (kind, rule, both ends) count once, whatever edge
  * types carry it: an import and a call between the same two classes are one finding to score.
+ * A row matches a group when any of its findings matches, so a duplicate on another edge type,
+ * reported first, cannot hide the one that carries the labelled edge type (review 2026-11-02).
  */
-function dedupe(findings: ReportedFinding[]): ReportedFinding[] {
-  const seen = new Map<string, ReportedFinding>();
+function group(findings: ReportedFinding[]): ReportedFinding[][] {
+  const groups = new Map<string, ReportedFinding[]>();
   for (const f of findings) {
     const key = JSON.stringify([f.kind, f.rule ?? '', f.source?.file ?? '', f.source?.element ?? '', f.target?.file ?? '', f.target?.element ?? '', f.layer ?? f.source?.layer ?? '']);
-    if (!seen.has(key)) seen.set(key, f);
+    const g = groups.get(key);
+    if (g) g.push(f);
+    else groups.set(key, [f]);
   }
-  return [...seen.values()];
+  return [...groups.values()];
 }
 
 /** One app: per-kind recall and precision of `report` against its labelled rows. */
 export function scoreApp(app: string, rows: ExpectedRow[], report: ArchReport | null): AppScore {
-  const findings = dedupe(report?.findings ?? []);
+  const groups = group(report?.findings ?? []);
   const kinds = Object.fromEntries(SCORED_KINDS.map((k) => [k, { expected: 0, reported: 0, matched: 0, recall: 0, precision: null as number | null }])) as Record<ScoredKind, KindScore>;
   const negativeHits: string[] = [];
   const misses: string[] = [];
-  const used = new Set<ReportedFinding>();
+  const used = new Set<ReportedFinding[]>();
   for (const row of rows) {
     if (row.kind === 'allowed' || row.kind === 'none') continue;
     const k = kinds[row.kind];
     k.expected++;
-    const hit = findings.find((f) => !used.has(f) && rowMatches(row, f));
+    const hit = groups.find((g) => !used.has(g) && g.some((f) => rowMatches(row, f)));
     if (hit) { used.add(hit); k.matched++; } else misses.push(row.id);
   }
-  for (const f of findings) {
+  for (const g of groups) {
+    const f = g[0]!;
     if (!(SCORED_KINDS as readonly string[]).includes(f.kind)) continue;
     kinds[f.kind as ScoredKind].reported++;
-    if (used.has(f)) continue;
+    if (used.has(g)) continue;
     // A finding on a negative row: the dependency is allowed (or same-layer), whatever the rule says.
     const negative = rows.find((r) => (r.kind === 'allowed' || r.kind === 'none') && endMatches(r.from, f.source) && endMatches(r.to, f.target));
     if (negative) negativeHits.push(negative.id);

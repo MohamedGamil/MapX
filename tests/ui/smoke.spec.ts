@@ -65,6 +65,9 @@ const TABS: Array<{ tab: string; shows: (page: Page) => Promise<void> }> = [
     shows: async (page) => {
       await expect(page.locator('#arch-profile-details')).not.toContainText('Loading');
       await expect(page.locator('#arch-profile-details')).toContainText(/laravel/i);
+      // Yes/No pills render as elements, not as escaped markup (review 2026-11-02, M4-24).
+      await expect(page.locator('#arch-profile-details .profile-pill-bool')).toHaveCount(3);
+      await expect(page.locator('#arch-profile-details')).not.toContainText('<span');
       await expect(page.locator('#arch-dsm-matrix table.dsm-table')).toBeVisible();
       await expect(page.locator('#arch-smells-list')).not.toContainText('Loading');
     },

@@ -9,7 +9,7 @@
 import { createHash } from 'node:crypto';
 import type { Store } from '../core/store.js';
 import type { ArchitectureConfig, Layer, Selector } from './schema.js';
-import { buildElementView, type Element, type ElementView } from './elements.js';
+import { buildElementView, scanStamp, type Element, type ElementView } from './elements.js';
 import { matchSelector, unsupportedKeys, UNSUPPORTED_SELECTORS, type SelectorContext } from './selectors/index.js';
 
 export interface TraceEntry {
@@ -153,12 +153,6 @@ export function configHash(config: Pick<ArchitectureConfig, 'layers'>): string {
 const views = new Map<string, { stamp: string; view: ElementView }>();
 const cache = new Map<string, LayerMembership>();
 const CACHE_LIMIT = 8;
-
-/** A cheap fingerprint of the scan an index holds, without building the view. */
-function scanStamp(store: Store): string {
-  const count = (table: string) => (store.raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
-  return [store.getMeta('last_scan_time') ?? '', count('files'), count('symbols'), count('edges')].join(':');
-}
 
 /**
  * The membership for the index in `store` and `config`, computed once per (scan, configuration):

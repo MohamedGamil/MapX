@@ -15241,6 +15241,10 @@
         {
           "id": "M5-03",
           "type": "hard"
+        },
+        {
+          "id": "M5-03-R1",
+          "type": "hard"
         }
       ],
       "sources": [
@@ -15563,6 +15567,10 @@
       "dependencies": [
         {
           "id": "M5-03",
+          "type": "hard"
+        },
+        {
+          "id": "M5-03-R1",
           "type": "hard"
         }
       ],
@@ -15911,6 +15919,10 @@
         },
         {
           "id": "M5-08",
+          "type": "hard"
+        },
+        {
+          "id": "M5-02-R1",
           "type": "hard"
         }
       ],
@@ -19681,6 +19693,10 @@
         {
           "id": "M4-03",
           "type": "interface"
+        },
+        {
+          "id": "M5-03-R1",
+          "type": "hard"
         }
       ],
       "optionalDependencies": [],
@@ -22732,6 +22748,911 @@
       "objective": "The cyclic-dependency smell reports the multi-file cycle it found, not a file's self-loop, and the codebase profile lists only frameworks found outside graph-excluded folders.",
       "description": "Found 2026-11-01 by the dashboard audit (M4-16, docs/research/dashboard-ux-audit.md finding 6): smells read js-aliases.ts -> js-aliases.ts because detectCycles keeps self edges, and the profile listed Laravel and vue-router found only under tests/fixtures (graph-excluded) next to Has Backend: NO.",
       "milestone": "M0"
+    },
+    {
+      "milestone": "M4",
+      "priority": "P1",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-09",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "READY",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-09-R1",
+      "title": "The whole test suite leaves the checkout untouched (COMPLETION DISPUTED for M4-09)",
+      "objective": "npx vitest run in a checkout holding .mapx/config.json and .mapx/mapx.db changes no file of the checkout, and the check script would notice if it did.",
+      "description": "Review 2026-11-02: tests/mcp-coverage.test.ts calls MCP tools with dir \".\" and its node:fs mock does not cover appendFileSync, so UiEventBus appends to <checkout>/.mapx/tool-calls.jsonl (reproduced; the checkout file was appended during the review baseline run). scripts/baton/check-test-cwd.mjs hashes .mapx/ and lists top-level names only, so it misses edits to existing top-level files and new nested files. M4-09 AC1 (\"after npx vitest run\") is unmet; its evidence covered two test files.",
+      "outputs": [
+        "tests/mcp-coverage.test.ts runs from a temp dir",
+        "scripts/baton/check-test-cwd.mjs compares git status --porcelain --ignored and hashes .mapx/",
+        "reports/M4-09-R1.md"
+      ],
+      "affectedFiles": [
+        "tests/mcp-coverage.test.ts",
+        "scripts/baton/check-test-cwd.mjs",
+        "tests/**/*.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "node scripts/baton/check-test-cwd.mjs over the whole vitest suite exits 0 in a checkout holding .mapx/config.json and .mapx/mapx.db (sentinels).",
+        "The check fails (mutation) when a test edits an existing top-level file, creates a nested file, or appends to .mapx/tool-calls.jsonl."
+      ],
+      "verificationCommands": [
+        "node scripts/baton/check-test-cwd.mjs",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P1",
+      "estimate": {
+        "min": 6,
+        "expected": 9,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-01",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-03"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-03-R1",
+      "title": "Qualified names from real scans for every built-in language; not over symbol-level selectors",
+      "objective": "Element qualified names match the documented form on a real scan for every built-in language, and a not over a symbol-level selector does not pull files into a layer.",
+      "description": "Review 2026-11-02 (M5-03 DEFECTIVE). Real scans give acme::Order for nested C++ namespaces (first namespace symbol only), Invoice for Ruby module Billing; class Invoice, pay without its Elixir module, domain.Order for Dart library acme.domain, crate::rs::src::... for a Rust crate in a subfolder, and Python in a subfolder ignores its package root (no caller passes repoPaths). The qualified-name test feeds hand-made inputs to qualifiedName() and never checks what parsers store. Also: {all:[{path},{not:{name}}]} puts every file in the layer because name never matches a file; the file-private-via-symbol branch in membership.ts has no test (mutation survived); language typescript does not match .tsx.",
+      "outputs": [
+        "src/arch/elements.ts",
+        "src/arch/selectors/index.ts",
+        "src/arch/membership.ts",
+        "tests/arch-selectors.test.ts",
+        "docs/architecture-rules.md",
+        "reports/M5-03-R1.md"
+      ],
+      "affectedFiles": [
+        "src/arch/**",
+        "src/parsers/**",
+        "tests/arch-selectors.test.ts",
+        "tests/fixtures/arch-rules/**",
+        "docs/architecture-rules.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A real-scan test per namespace or module language (at least PHP, Java, C#, C++ nested namespaces, Ruby nested modules, Elixir defmodule, Dart library, Rust crate in a subfolder, Python package in a subfolder, Go, Scala, Kotlin fallback) asserts the stored-symbol qualified name equals the documented one.",
+        "A file is not made a member of a layer by not(symbol-level selector); the AR-01 file-membership rule is documented and tested on the PHP fixture (Controller vs Domain).",
+        "File-level private membership through a top-level symbol has a test that fails when the branch is removed.",
+        "language: typescript (and ts) matches .ts and .tsx files."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-selectors.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-02-R1",
+      "title": "arch validate-config (CLI and MCP) and loader robustness",
+      "objective": "The validate-config surface M5-02 promised in its title has an owner and ships, and the loader reports instead of crashing on odd inputs.",
+      "description": "Review 2026-11-02: M5-02 deferred arch validate-config to M5-05/M5-08, but neither mentions it (docs/research/deptrac/03-mapx-gap-and-integration.md:109). Loader: a UTF-8 BOM is rejected as invalid JSONC; extends pointing at a directory throws EISDIR instead of ConfigError; view \"../../outside\" loads outside .mapx/architecture/; %param% in repo, cluster, workspacePackage, role or language is neither substituted nor reported; removing %param% substitution in path survives the tests.",
+      "outputs": [
+        "src/cli.ts (arch validate-config)",
+        "src/mcp.ts (tool or mapx_arch_check mode)",
+        "src/arch/config.ts",
+        "tests/arch-config.test.ts",
+        "reports/M5-02-R1.md"
+      ],
+      "affectedFiles": [
+        "src/arch/config.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "tests/arch-config.test.ts",
+        "tests/fixtures/arch-config/**",
+        "docs/architecture-rules.md",
+        "docs/cli-reference.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "mapx arch validate-config and its MCP equivalent print every config error with its JSON pointer and exit non-zero (test, CLI and MCP).",
+        "BOM-prefixed files load; extends to a directory and view paths leaving .mapx/architecture/ are ConfigErrors (tests).",
+        "An unresolved %param% in any selector key is reported; path substitution has a test that fails without it."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-config.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P1",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-02",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "CANCELLED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-02T10:59:45.104Z",
+          "from": "BACKLOG",
+          "to": "CANCELLED",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-02-R2",
+      "title": "The architecture config is committable in user projects and in MapX itself",
+      "objective": ".mapx/architecture.jsonc and its baseline can be committed in a project set up by mapx init, and in MapX (M5-18 dogfood).",
+      "description": "Review 2026-11-02: mapx init writes .mapx/ to the project .gitignore (src/cli.ts:414-424) and MapX ignores .mapx/ itself, so the config M5 reads cannot be committed (the M5 fixture configs were never committed for this reason; fixed for tests/fixtures by the review). Open question in docs/research/deptrac/README.md:36: keep the config in .mapx/ with negated ignores, or move it. Needs an owner decision before implementation. Cancelled by D030: the owner allows the config to be ignored.",
+      "outputs": [
+        "src/cli.ts (init ignore rules)",
+        ".gitignore",
+        "docs/architecture-rules.md",
+        "tests/cli-init-gitignore.test.ts",
+        "reports/M5-02-R2.md"
+      ],
+      "affectedFiles": [
+        "src/cli.ts",
+        ".gitignore",
+        "docs/architecture-rules.md",
+        "docs/getting-started.md",
+        "tests/**",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "After mapx init in a git repo, git check-ignore reports .mapx/mapx.db ignored and .mapx/architecture.jsonc and .mapx/architecture.baseline.json not ignored (test), or the decided location is not ignored.",
+        "An existing .gitignore with .mapx/ is migrated or the user is told how (test).",
+        "MapX's own .gitignore lets M5-18 commit its config."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/cli-init-gitignore.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M0",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R10",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-02-R11",
+      "title": "A sync killed before its upserts commit keeps restored files",
+      "objective": "A sync killed after it consumed removed-file and pending-referrer records but before the null-hash upserts commit leaves the next sync equal to scan --force.",
+      "description": "Review 2026-11-02 (M0-02-R10 DEFECTIVE, outside its literal AC): takeReferrers / takePendingReferrers delete removed_files:/removed_names:/pending meta in autocommit setMeta before the upsert transaction; a kill in between loses a restored file at HEAD permanently (git) or its referrers' edges (hash).",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/sync-interrupt.test.ts",
+        "reports/M0-02-R11.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/store.ts",
+        "tests/sync-interrupt.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Git and hash: a sync that throws inside the upsert of a restored file is followed by syncs whose files, symbols and edges equal scan --force (tests)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/sync-interrupt.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-08-R1",
+      "title": "Import-bound calls: export-from barrels in sync, and no fallback past a project import",
+      "objective": "Sync re-links importers of export-from barrels like scan --force, and a call whose name is imported from a project module never links another file's same-named symbol.",
+      "description": "Review 2026-11-02 (M2-08 DEFECTIVE): export { x } from and export * from emit no import edge, so importerReferrers never reaches a barrel's importers (sync != force). When the imported project module does not declare the name, resolution falls back to name lookup and links an unrelated module, contradicting the objective; tests/import-bound-calls.test.ts asserts that fallback (main.ts -> helpers.ts#ghost).",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-calls.test.ts",
+        "reports/M2-08-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/**",
+        "tests/import-bound-calls.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A module behind export-from and export-star barrels gains the called symbol; a sync equals scan --force (test).",
+        "A name imported from a project module that does not declare it gives no call edge to another file (test replaces the fallback assertion)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-calls.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M0",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-10-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-10-R6",
+      "title": "Unknown --repo is an error; git sync counts indexed files",
+      "objective": "mapx scan/sync --repo with an unregistered name (CLI and MCP) fails with a message, and git sync reports the files it indexed, as hash sync does.",
+      "description": "Review 2026-11-02: reposToScan returns true for an unknown repo name, so --repo nope exits 0 with 0 files. Git sync returns filesScanned = changes.length, counting noise files (one edit plus ten untracked .idea/.log files prints \"Updated 12 files\").",
+      "outputs": [
+        "src/core/scanner.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "tests/workspace-default-scope.test.ts",
+        "reports/M0-10-R6.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "tests/workspace-default-scope.test.ts",
+        "tests/scan-redundancy.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "--repo nope fails with the registered names listed, CLI and MCP (tests).",
+        "Git sync filesScanned equals the files re-indexed (test with untracked noise)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/workspace-default-scope.test.ts tests/scan-redundancy.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-13",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-13-R1",
+      "title": "Parse pool sizing honours CPU affinity; the worker bench exercises workers",
+      "objective": "The pool caps workers by available parallelism (affinity, cgroups), and scripts/bench/workers.ts fails when no worker ran.",
+      "description": "Review 2026-11-02 (M4-13 DEFECTIVE): sizing uses os.cpus().length (16 under taskset -c 0, where availableParallelism() is 1); pinned to one CPU, auto started 4 workers and was ~1.7x slower than --no-parallel. Since M4-13 the default bench sizes to 0 workers yet prints \"index: identical\" and exits 0, so it no longer verifies M4-11..M4-15 parity.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "src/core/worker-pool.ts",
+        "scripts/bench/workers.ts",
+        "tests/worker-pool.test.ts",
+        "reports/M4-13-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/worker-pool.ts",
+        "scripts/bench/workers.ts",
+        "tests/worker-pool.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Pool size uses os.availableParallelism() (test with a stubbed value of 1 gives main-thread parsing).",
+        "The bench forces workers by default (or with --auto reports the size) and exits 1 when no worker-stats line appears."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts",
+        "npx tsx scripts/bench/workers.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M0",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-12-R10",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M0-12-R11",
+      "title": "Svelte template names scoped per block; quoted handlers",
+      "objective": "Svelte template-local names hide references only inside their block, as in .vue templates, and quoted event handlers link.",
+      "description": "Review 2026-11-02 (M0-12-R10 DEFECTIVE): locals is one set per file, so {#each items as close} hides <button on:click={close}> outside the block; on:click=\"{quoted}\" gives no edge.",
+      "outputs": [
+        "src/parsers/languages/svelte.ts",
+        "tests/svelte.test.ts",
+        "reports/M0-12-R11.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/svelte.ts",
+        "tests/svelte.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "each/await/snippet/let:/@const names hide references only inside their block (tests, including one before and one outside the block).",
+        "on:click=\"{handler}\" links like on:click={handler} (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/svelte.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M3",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-05-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M3-05-R2",
+      "title": "Pinia hooks of any name in plain modules; Vuex arrow members in imported objects",
+      "objective": "Store calls link from TS/JS modules that import only a store hook, and Vuex arrow-function members in an imported object get symbols whatever the file name.",
+      "description": "Review 2026-11-02 (M3-05-R1 DEFECTIVE): the store pass skips a module importing only useWish (not use...Store, no vue/pinia import); arrow members of an object imported as actions: userActions link only when the file is named actions.js.",
+      "outputs": [
+        "src/parsers/languages/vue-stores.ts",
+        "tests/vue-stores.test.ts",
+        "tests/fixtures/vue-sfc (labels)",
+        "reports/M3-05-R2.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/vue-stores.ts",
+        "tests/vue-stores.test.ts",
+        "tests/fixtures/vue-sfc/**",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A composable importing only useWish links w.add and wish.clear (test).",
+        "mapActions to an arrow member in userActions.js links (test); the edges scorer does not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-stores.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-04-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-04-R4",
+      "title": "Same-named axios clients in one file keep their own baseURL scope",
+      "objective": "Each call uses the baseURL of the client binding in its own scope; a parameter shadowing the constant gives no value.",
+      "description": "Review 2026-11-02 (M2-04-R3 DEFECTIVE, regression): with const api = axios.create({ baseURL: BASE }) in two functions, every api.get takes the first client's baseURL evaluated in the first function's scope (/local/a, /local/b, /local/c instead of /local/a, /top/b, unresolved); the base commit gave /top for two().",
+      "outputs": [
+        "src/frameworks/http/client-calls.ts",
+        "src/core/scanner.ts",
+        "tests/http-url-resolution.test.ts",
+        "reports/M2-04-R4.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/http/client-calls.ts",
+        "src/core/scanner.ts",
+        "tests/http-url-resolution.test.ts",
+        "tests/fixtures/vue-http/**",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "The two-function plus parameter case gives /local/a, /top/b and an unresolved c (test).",
+        "The HTTP scorer holds its floors."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-url-resolution.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M1",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M1-07-R2",
+          "type": "hard"
+        },
+        {
+          "id": "M1-03-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M1-07-R3",
+      "title": "Laravel route files mounted as arrays; loop and conditional prefix variables",
+      "objective": "group([file, file]) mounts each file; a foreach-bound or conditionally assigned prefix variable is dynamic, not a wrong literal.",
+      "description": "Review 2026-11-02: Route::prefix(..)->group([base_path(a), base_path(b)]) (Arr::wrap) is skipped, so those routes are reported unreachable (RouteServiceProvider and route files). foreach ([..] as $k) and if-block reassignments give a definite wrong prefix.",
+      "outputs": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts",
+        "tests/fixtures/laravel-routes (labels)",
+        "reports/M1-07-R3.md"
+      ],
+      "affectedFiles": [
+        "src/frameworks/detectors/laravel.ts",
+        "src/frameworks/detectors/laravel-mounts.ts",
+        "tests/laravel-mounts.test.ts",
+        "tests/fixtures/laravel-routes/**",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "An array of route files under group() mounts each; an unevaluable element is recorded unresolved (tests).",
+        "foreach-bound and conditionally reassigned prefixes are {dynamic} (tests); the routes scorer holds 0 FP."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-mounts.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-06-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-06-R4",
+      "title": "Route domains are workspace hosts for HTTP pairing",
+      "objective": "A literal Route::domain host pairs absolute-URL calls to it without a .env naming that host.",
+      "description": "Review 2026-11-02: workspaceHosts() ignores literal route domains, so axios.get(\"https://api.example.com/api/users\") stays unmatched unless a .env names the host (the scorer fixture adds VITE_OPS_URL for L48).",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/http-pairing.test.ts",
+        "reports/M2-06-R4.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/frameworks/http/pairing.ts",
+        "tests/http-pairing.test.ts",
+        "tests/fixtures/vue-http/**",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A call to a literal route domain pairs with no .env (test); {dynamic} domains do not become hosts."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/http-pairing.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-24",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-24-R1",
+      "title": "Escaping check without blind spots; XSS spec covers every tab",
+      "objective": "scripts/ui/check-escaping.ts flags HTML built by concatenation and trusts values, not names; the XSS browser spec opens the Workspace, HTTP and Config tabs and covers handler and symbol names.",
+      "description": "Review 2026-11-02 (M4-24 DEFECTIVE): innerHTML built with + and templates assigned to TRUSTED_NAMES/NUMERIC_NAMES (durationStr, val, count...) pass the check unexamined (mutations m2/m3 not flagged); xss.spec.ts never opens the three tabs added after M4-24 and has no handler or symbol-name payload. The over-escaped profile pills were fixed in the review.",
+      "outputs": [
+        "scripts/ui/check-escaping.ts",
+        "tests/ui-escaping.test.ts",
+        "tests/ui/xss.spec.ts",
+        "reports/M4-24-R1.md"
+      ],
+      "affectedFiles": [
+        "scripts/ui/check-escaping.ts",
+        "tests/ui-escaping.test.ts",
+        "tests/ui/xss.spec.ts",
+        "tests/ui/harness.ts",
+        "src/ui/main.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Concatenated innerHTML/insertAdjacentHTML and an unescaped value assigned to a trusted name are flagged (unit tests).",
+        "xss.spec.ts opens every tab, including Workspace, HTTP and Config, with payloads in handler and symbol names, repo names and config values."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-escaping.test.ts",
+        "npm run test:ui",
+        "npm run check"
+      ]
     }
   ]
 }

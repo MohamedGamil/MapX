@@ -172,3 +172,22 @@ test('integrity checks flag dependency, gate and evidence violations', () => {
   assert.ok(issues.includes('D: DONE without evidence') === false);
   assert.ok(!issues.some((i) => i.startsWith('A:')), 'well-evidenced task is clean');
 });
+
+test('a trailing /** in affectedFiles claims every file under that folder', () => {
+  const r = repo();
+  const plan = JSON.parse(readFileSync(join(r.dir, 'docs/baton/TASKS.json'), 'utf8'));
+  plan.tasks.find((t) => t.id === 'C').affectedFiles = ['src/glob/**'];
+  r.write('docs/baton/TASKS.json', JSON.stringify(plan));
+  r.git('add', '-A');
+  r.git('commit', '-qm', 'glob claim');
+  r.write('src/glob/deep/x.ts', 'x\n');
+  r.write('src/globby.ts', 'y\n');
+  r.git('add', '-A');
+  r.git('commit', '-qm', 'files');
+  const s = r.scope('--commit', 'HEAD');
+  assert.deepEqual(
+    s.files.find((f) => f.path === 'src/glob/deep/x.ts')?.tasks,
+    ['C'],
+  );
+  assert.deepEqual(s.unmappedFiles, ['A src/globby.ts']);
+});

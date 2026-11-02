@@ -1,0 +1,70 @@
+// M5-01 fixture: two repos. The frontend may reach the backend only over HTTP, and only its PublicApi.
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "scope": {
+    "types": [
+      "import",
+      "call",
+      "instantiation",
+      "http"
+    ]
+  },
+  "layers": [
+    {
+      "name": "Frontend",
+      "selectors": [
+        {
+          "repo": "frontend"
+        }
+      ]
+    },
+    {
+      "name": "PublicApi",
+      "selectors": [
+        {
+          "all": [
+            {
+              "repo": "backend"
+            },
+            {
+              "path": "backend/app/Http/Controllers/Api/**"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Backend",
+      "selectors": [
+        {
+          "all": [
+            {
+              "repo": "backend"
+            },
+            {
+              "not": {
+                "layer": "PublicApi"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Frontend": [
+      {
+        "allow": [
+          "PublicApi"
+        ],
+        "types": [
+          "http"
+        ]
+      }
+    ],
+    "PublicApi": [
+      "Backend"
+    ],
+    "Backend": []
+  }
+}

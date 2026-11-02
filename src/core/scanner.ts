@@ -2471,16 +2471,25 @@ export class Scanner {
     fileMap: Map<string, string>,
     referencedNames: () => Set<string>,
   ): { file: string; symbol: string }[] {
-    const importPath = ref.metadata?.goPackage;
-    if (!resolver || typeof importPath !== 'string') return [];
-    const hit = this.resolveModuleImport(resolver, importPath, sourcePath, fileMap, referencedNames)[0];
-    if (!hit) return [];
+    const goPackage = ref.metadata?.goPackage;
+    if (!resolver) return [];
+    // A string is the import that names the qualifier; an array holds unaliased candidates whose
+    // package name could not be told from the path: exactly one of them must declare the type.
+    const exact = typeof goPackage === 'string';
+    const paths = exact ? [goPackage] : Array.isArray(goPackage) ? goPackage.filter((p): p is string => typeof p === 'string') : [];
+    if (!paths.length) return [];
     const entries: { name: string; file: string; kind?: string }[] = this.symbolIndex?.get(ref.targetName.toLowerCase())
       ?? this.store.searchSymbols(ref.targetName).map((m: any) => ({ name: m.name, file: m.file_path, kind: m.kind }));
-    const files = [...new Set(entries
-      .filter(e => e.name === ref.targetName && TYPE_KINDS.has(e.kind ?? '') && dirname(e.file) === dirname(hit.file))
-      .map(e => e.file))].sort();
-    return files.length ? [{ file: files[0]!, symbol: ref.targetName }] : [];
+    const found: string[][] = [];
+    for (const importPath of paths) {
+      const hit = this.resolveModuleImport(resolver, importPath, sourcePath, fileMap, referencedNames)[0];
+      if (!hit) continue;
+      const files = [...new Set(entries
+        .filter(e => e.name === ref.targetName && TYPE_KINDS.has(e.kind ?? '') && dirname(e.file) === dirname(hit.file))
+        .map(e => e.file))].sort();
+      if (files.length) found.push(files);
+    }
+    return found.length === 1 ? [{ file: found[0]![0]!, symbol: ref.targetName }] : [];
   }
 
   /** Languages whose imports name modules, packages or namespaces (Java, Rust, Go, Python, Ruby, C#, PHP). */

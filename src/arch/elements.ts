@@ -150,6 +150,20 @@ const FRAMEWORK_EDGES: Array<{ type: string; end: 'source' | 'target'; part: Fra
 const NAMESPACE_SYMBOL_LANGUAGES = new Set(['java', 'kotlin', 'scala', 'c-sharp', 'dart', 'cpp']);
 
 /** The view of the index in `store`; `dir` is the workspace root (for go.mod and manifests). */
+/**
+ * A cheap fingerprint of the scan an index holds. Every scan and sync writes
+ * `last_scan_time:<repo>`, so a sync that keeps every count still changes it
+ * (review 2026-11-02: the bare `last_scan_time` key is never written).
+ */
+export function scanStamp(store: Store): string {
+  const db = store.raw;
+  const times = (db.prepare("SELECT key, value FROM meta WHERE key LIKE 'last_scan_time%' ORDER BY key").all() as { key: string; value: string }[])
+    .map((r) => `${r.key}=${r.value}`)
+    .join(',');
+  const count = (table: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
+  return [times, count('files'), count('symbols'), count('edges')].join(':');
+}
+
 export function buildElementView(store: Store, dir: string, repoPaths: Record<string, string> = {}): ElementView {
   const db = store.raw;
   const fileRows = db.prepare('SELECT path, repo, language, namespace, role, role_confidence FROM files').all() as Array<{ path: string; repo: string; language: string; namespace: string | null; role: string | null; role_confidence: number | null }>;
@@ -268,12 +282,7 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
     return found;
   };
 
-  const stamp = [
-    store.getMeta('last_scan_time') ?? '',
-    fileRows.length,
-    symbolRows.length,
-    (db.prepare('SELECT COUNT(*) AS n FROM edges').get() as { n: number }).n,
-  ].join(':');
+  const stamp = scanStamp(store);
 
   return { elements, files, byId, ofFile: (p) => byFile.get(p) ?? [], workspacePackage, scanStamp: stamp };
 }

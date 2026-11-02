@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/@mgamil/mapx/schemas/architecture.schema.json",
+  "extends": ["./architecture.base.jsonc", "mapx:preset/laravel"],   // Deptrac 'imports' plus built-in presets
+  "parameters": { "App": "App" },                                     // %App% substitution
+  "scope": { "types": ["import", "extends", "implements", "call", "instantiation", "param_type", "return_type"],
+             "exclude": ["tests/**", "database/migrations/**"] },
+  "policy": { "inferred": "warn", "inheritDependencies": false, "uncovered": { "externals": true, "builtins": false } },
+  "visibility": { "internalTags": ["@internal", "@mapx-internal"], "nativeMarkers": false },
+  "layers": [
+    { "name": "Http",       "selectors": [{ "path": "app/Http/**" }], "group": "Entry" },
+    { "name": "Domain",     "selectors": [{ "name": "^%App%\\\\Domain\\\\", "kind": ["class", "interface", "enum"] }] },
+    { "name": "Infra",      "selectors": [{ "path": "app/Infrastructure/**" }],
+                            "private":   [{ "package": "doctrine/*" }] },               // only Infra may touch Doctrine
+    { "name": "Models",     "selectors": [{ "extends": "Illuminate\\Database\\Eloquent\\Model" }] },
+    { "name": "Deprecated", "overlay": true, "selectors": [{ "docTag": "@deprecated" }] },
+    { "name": "Vendor",     "overlay": true, "selectors": [{ "package": "*", "dev": false }] },
+    { "name": "DevOnly",    "overlay": true, "selectors": [{ "package": "*", "dev": true }] },
+    { "name": "Frontend",   "selectors": [{ "repo": "web" }] },
+    { "name": "PublicApi",  "selectors": [{ "all": [{ "repo": "api" }, { "framework": "route-handler" }] }] }
+  ],
+  "rules": {
+    "Http":     ["Domain", "+Infra", "Models"],
+    "Infra":    ["Domain", "Vendor"],
+    "Domain":   [],
+    "Frontend": [{ "allow": ["PublicApi"], "types": ["http"] }],     // cross-repo, via MapX http edges
+    "*":        ["!Deprecated", "!DevOnly"]                          // nobody may use deprecated or dev-only code
+  },
+  "baseline": ".mapx/architecture.baseline.json",
+  "report": { "groups": { "Entry": ["Http"] }, "hidden": ["Vendor"] }
+}

@@ -160,7 +160,8 @@ function loadPlan() {
 
 /** Which tasks claim a file: affected paths, artifacts, evidence, iteration spec or report. */
 function owners(plan, path) {
-  const rel = (p) => relative(root, resolve(root, p));
+  // A trailing `/**` (or `/*`) claims the folder; plain prefix matching handles the rest.
+  const rel = (p) => relative(root, resolve(root, p.replace(/\/\*\*?$/, '')));
   const under = (file, prefix) => file === prefix || file.startsWith(prefix.replace(/\/?$/, '/'));
   const specDir = relative(root, batonDir);
   return plan.tasks

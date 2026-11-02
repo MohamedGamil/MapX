@@ -191,9 +191,12 @@ function boundLocally(node: any, name: string): boolean {
 /**
  * Go `struct { log.Logger }`: the import path of the package qualifying an embedded type, by
  * import alias or package name (the last path element without a `.vN`, `vN` or `go-` decoration).
- * Null when no import of the file matches (M0-17-R5).
+ * When no import matches by name, the unaliased imports are returned as candidates: a package's
+ * name need not be its last path element (`api/v1` declaring `package v1`, `internal/db` declaring
+ * `package database`); the scanner keeps the one project package that declares the type
+ * (review 2026-11-02). Null when there is no candidate (M0-17-R5).
  */
-function goImportPath(qualifiedType: any): string | null {
+function goImportPath(qualifiedType: any): string | string[] | null {
   const qualifier = qualifiedType.childForFieldName('package')?.text;
   let root = qualifiedType;
   while (root.parent) root = root.parent;
@@ -205,6 +208,7 @@ function goImportPath(qualifiedType: any): string | null {
     }
   };
   collect(root);
+  const candidates: string[] = [];
   for (const spec of specs) {
     const path = String(spec.childForFieldName('path')?.text ?? '').replace(/^["`]|["`]$/g, '');
     const alias = spec.childForFieldName('name')?.text;
@@ -212,8 +216,9 @@ function goImportPath(qualifiedType: any): string | null {
     const last = /^v\d+$/.test(parts[parts.length - 1] ?? '') && parts.length > 1 ? parts[parts.length - 2] : parts[parts.length - 1];
     const name = (last ?? '').replace(/\.v\d+$/, '').replace(/^go-/, '').replace(/-go$/, '');
     if ((alias ?? name) === qualifier) return path;
+    if (!alias && path) candidates.push(path);
   }
-  return null;
+  return candidates.length ? candidates : null;
 }
 
 export class GenericWasmParser implements LanguageParser {

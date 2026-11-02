@@ -1,0 +1,78 @@
+// M5-01 fixture: Python. Layers by path and by module name.
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    {
+      "name": "Controller",
+      "selectors": [
+        {
+          "path": "app/controller/**"
+        }
+      ]
+    },
+    {
+      "name": "Application",
+      "selectors": [
+        {
+          "name": "^app\\.application\\."
+        }
+      ],
+      "private": [
+        {
+          "name": "^app\\.application\\.internal\\."
+        }
+      ]
+    },
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "path": "app/domain/**"
+        }
+      ]
+    },
+    {
+      "name": "Shared",
+      "selectors": [
+        {
+          "path": "app/shared/**"
+        },
+        {
+          "path": "app/domain/ids/**"
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "selectors": [
+        {
+          "path": "app/infrastructure/**"
+        }
+      ]
+    },
+    {
+      "name": "Reporting",
+      "selectors": [
+        {
+          "path": "app/reporting/**"
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Controller": [
+      "Application"
+    ],
+    "Application": [
+      "+Domain"
+    ],
+    "Domain": [
+      "Shared"
+    ],
+    "Infrastructure": [
+      "Domain",
+      "Shared"
+    ],
+    "Shared": []
+  }
+}

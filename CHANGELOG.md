@@ -11,7 +11,16 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ### Added
 - `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
 
+- An architecture-rules fixture set (PHP, TypeScript, Python, Go and a two-repo workspace, with labelled violations, skips, uncovered and baseline rows) and `scripts/eval/score-arch.ts`, which scores a report per kind; the baseline is 0.0 until `mapx check` exists (M5-01).
+- The architecture element view and core selectors (`path`, `name`, `layer`, `all`/`any`/`not`, `role`, `cluster`, `repo`, `workspacePackage`, `language`, `framework`) with layer membership that records which selector matched, computed once per scan and configuration (M5-03).
+
 ### Fixed
+- Go: a struct embedding `v1.UnimplementedFooServer` or `database.Store` links again when the package name is not the import path's last element (`api/v1`, a package named differently from its folder); when two imported project packages could both be meant, no edge is made (M0-17-R5, review 2026-11-02).
+- Dashboard: the Architecture profile shows its Yes/No pills again instead of their HTML as text (M4-24, review 2026-11-02).
+- Architecture layer membership is recomputed after every scan and sync; a sync that kept the numbers of files, symbols and edges served the previous membership (M5-03, review 2026-11-02).
+- `score-arch.ts` no longer lets a duplicate finding on another edge type, reported first, hide the one that matches a labelled row (M5-01, review 2026-11-02).
+- The architecture fixture configurations under `tests/fixtures/**/.mapx/` are no longer gitignored, so a fresh clone passes the arch tests; a test fails when any file under `tests/` is ignored (M5-01, M5-02, review 2026-11-02).
+- Completion of M4-09 is disputed: `tests/mcp-coverage.test.ts` still appends to the checkout's `.mapx/tool-calls.jsonl`; remediation is M4-09-R1 (review 2026-11-02).
 - The npm package no longer picks up release builds: `make package-*` writes binaries, tarballs and installers to `dist/release/`, which `npm pack` included (185 MB instead of 4.7 MB); `scripts/check-package.ts` now fails if any are packed (M5-02).
 
 ## [0.3.8] — 2026-11-02

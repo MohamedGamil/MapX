@@ -91,9 +91,9 @@ Not evaluated yet: these never match, and membership lists them as unsupported.
 | --- | --- |
 | `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member` | M5-09 |
 | `decorator`, `docTag` | M5-10 |
-| `package` | M5-20 |
-| `builtin` | M5-21 |
-| `ambient` | M5-22 |
+| `package` | M5-24 (attribution M5-20 … M5-23) |
+| `builtin` | M5-24 |
+| `ambient` | M5-24 |
 
 ## Membership
 

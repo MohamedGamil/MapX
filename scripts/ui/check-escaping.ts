@@ -15,7 +15,7 @@ import { resolve } from 'node:path';
 import ts from 'typescript';
 
 /** Helpers that return escaped HTML or a constant the code chose (their own templates are checked too). */
-const SAFE_CALLS = new Set(['escapeHtml', 'num', 'boxHtml', 'highlightMatch', 'renderPills', 'configValueHtml', 'chips', 'barList', 'statTiles', 'layerToken', 'getRouteMethodColor', 'getHookTypeColor']);
+const SAFE_CALLS = new Set(['escapeHtml', 'renderYesNo', 'num', 'boxHtml', 'highlightMatch', 'renderPills', 'configValueHtml', 'chips', 'barList', 'statTiles', 'layerToken', 'getRouteMethodColor', 'getHookTypeColor']);
 const NUMERIC_NAMES = new Set(['i', 'j', 'n', 'pct', 'alpha', 'total', 'offset', 'count', 'cnt', 'deg', 'depth', 'pageSize', 'start', 'end', 'healthScore', 'val', 'textVal', 'fileCount', 'lineCount', 'symbolCount', 'inDegree', 'outDegree']);
 const TRUSTED_NAMES = new Set(['methodColor', 'hookColor', 'roleColor', 'color', 'bgStyle', 'cellClass', 'statusIcon', 'durationStr', 'severityClass', 'badgeClass', 'chevron', 'DETAILS_PLACEHOLDER', 'unit']);
 

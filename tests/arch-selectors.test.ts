@@ -210,6 +210,11 @@ describe('layer membership on the fixture apps', () => {
     expect(after).not.toBe(first);
     expect(membershipComputations()).toBe(before + 3);
     expect(after.view.elements.some((e) => e.qualifiedName === 'app.domain.money.Cents')).toBe(true);
+    // A sync that keeps every count (review 2026-11-02): still a new scan, so computed again.
+    appendFileSync(join(a.root, 'app/domain/money.py'), '\n# a comment changes no count\n');
+    cli(a.root, 'sync');
+    expect(getMembership(a.store, a.root, a.config, key)).not.toBe(after);
+    expect(membershipComputations()).toBe(before + 4);
   }, 120_000);
 });
 

@@ -1,0 +1,1 @@
+{ "extends": "./other.jsonc", "layers": [{ "name": "A", "selectors": [{ "path": "a/**" }] }] }

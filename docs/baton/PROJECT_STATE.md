@@ -1,6 +1,12 @@
 # MapX project state
 
-Updated 2026-11-02: every M4 task is done. The worker-pool tasks M4-10 to M4-15 (D025, D026), and the dashboard tasks M4-16 to M4-24 (D027, D028):
+Reviewed 2026-11-02 (`reviews/REVIEW-2026-11-02-b2558df592cf.md`, range `24902da..b2558df`, 57 DONE items, six independent reviewers). Fixed in the review, each with a regression test that failed first:
+- P0: the M5 fixture configs under `tests/fixtures/**/.mapx/` were gitignored and never committed (a fresh clone failed 12 arch tests); `.gitignore` negations and `tests/fixtures-tracked.test.ts`. They are committed with the review.
+- P1: Go embedding regression (M0-17-R5); dashboard profile pills shown as HTML text (M4-24); stale arch membership after a count-preserving sync (M5-03); `score-arch.ts` duplicate dropping (M5-01).
+
+M4-09 is COMPLETION DISPUTED (M4-09-R1, P1, READY). Registered 14 remediation tasks: P1 M4-09-R1, M5-03-R1 (blocks M5-04, M5-09, M5-19), and M5-02-R2, cancelled by D030 (the owner allows the architecture config to be gitignored); P2 M5-02-R1, M0-02-R11, M2-08-R1, M0-10-R6, M4-13-R1, M0-12-R11, M3-05-R2, M2-04-R4, M1-07-R3, M2-06-R4, M4-24-R1.
+
+Earlier: Updated 2026-11-02: every M4 task is done. The worker-pool tasks M4-10 to M4-15 (D025, D026), and the dashboard tasks M4-16 to M4-24 (D027, D028):
 - M4-16: audit;
 - M4-18: logo;
 - M4-19: Playwright harness;
@@ -29,7 +35,7 @@ Earlier: Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2d
 | M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2, M2-08 DONE | HTTP scorer: 48 labels, every metric 1.0 |
 | M3 Vue SFC semantics | All remediation DONE (M3-08-R1, M3-09-R1, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1) | Edge scorer: 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives: v3-039) |
 | M4 Measurement and DX | All DONE (M4-09, M4-01, M4-03, M4-08, M4-05, M4-04; worker pool M4-10–M4-15; dashboard M4-16–M4-24) | `npm run eval` checks the three scorers against `scripts/eval/floors.json` in a CI `Eval` job (M4-01). Name resolution is linear on shared names: a generated 16,000-file scan takes 18 s instead of 70 s, with identical edges (M4-03). The routes and HTTP scorers reject malformed options (M4-08). Installs no longer bundle the dashboard; pack/publish and `mapx ui` from source do (M4-05, D020). A git sync that changes nothing indexed skips the post-scan analysis: 11 s → 2 s at 16,000 files (M4-04). M4-02, M4-06 and M4-07 deferred. M4-02, M4-06 and M4-07 deferred |
-| M5 Architecture rules (Deptrac-inspired) | 0 of 19 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
+| M5 Architecture rules (Deptrac-inspired) | 3 of 27 DONE (M5-01, M5-02, M5-03), 2 cancelled (M5-12, M5-02-R2 by D030); remediation M5-03-R1 and M5-02-R1 registered by the 2026-11-02 review | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
 
 Live list: `npm run plan:scan`.
 
@@ -251,4 +257,4 @@ Resolved in session 6 (D014): Continue writes its documented layout (M0-09-R4, a
 ## Known gaps
 
 - R01: the legacy iterations were audited (M0-41) and remediated; the 2026-10-31 review found further defects outside the fixtures (see above).
-- R06: dashboard UI behaviour has no automated tests.
+- R06 (closed by M4-19): dashboard UI behaviour has browser tests, `npm run test:ui` (45). The 2,000-file graph budget passes alone (median 4,875 ms against 4,992 ms on 2026-11-02) but fails under heavy machine load.

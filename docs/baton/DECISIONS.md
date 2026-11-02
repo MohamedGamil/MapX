@@ -312,3 +312,7 @@ The changelog's Unreleased entries moved to `[0.3.8] — 2026-11-02`. The tag is
   - a 400-file scan on 4 worker threads;
   - `mapx ui` serves the page, `main.js`, `layout-worker.js`, a lazy chunk, the logo, `/api/repos`, `/api/config` and `/api/http`, and `/api/graph` compressed (brotli 11 KB against 212 KB);
   - `mapx serve` answers MCP `initialize` with version 0.3.8.
+
+## D030 — The architecture config may stay gitignored (owner, 2026-11-02)
+
+Answers the decision left open by `reviews/REVIEW-2026-11-02-b2558df592cf.md` (M5-02-R2). The owner ruled that `.mapx/architecture.jsonc` and its baseline may be ignored like the rest of `.mapx/`: `mapx init` keeps writing `.mapx/` to `.gitignore`, and the config does not move. M5-02-R2 is cancelled and is no longer a dependency of M5-18. Test fixtures are different: their configs must be committed, which the review's `.gitignore` negations under `tests/fixtures/**/.mapx/` and `tests/fixtures-tracked.test.ts` ensure. M5-18's CI step needs MapX's own config in the repository, so M5-18 adds it explicitly (a negation in MapX's `.gitignore` or `git add -f`).

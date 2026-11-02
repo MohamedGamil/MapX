@@ -124,6 +124,17 @@ describe('the scorer', () => {
     }
   });
 
+  it('a duplicate on another edge type, reported first, does not hide the matching finding (review 2026-11-02)', () => {
+    const positives = php.filter((r) => r.kind !== 'allowed' && r.kind !== 'none');
+    const other = (t?: string) => (t === 'import' ? 'call' : 'import');
+    const findings = positives.flatMap((r) => [...(r.edgeType ? [asFinding(r, { edgeType: other(r.edgeType) })] : []), asFinding(r)]);
+    const score = combine([scoreApp('php', php, { findings })]);
+    for (const [kind, k] of Object.entries(score.kinds)) {
+      expect(k.recall, kind).toBe(1);
+      if (k.expected) expect(k.precision, kind).toBe(1);
+    }
+  });
+
   it('matches element names across languages by their last segment', () => {
     for (const element of ['App\\Domain\\Order', 'app.domain.order.Order', 'src/domain/Order.ts#Order', 'example.com/shop/domain.Order', 'Order']) {
       expect(elementMatches(element, 'Order'), element).toBe(true);

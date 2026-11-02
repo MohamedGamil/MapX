@@ -11,7 +11,7 @@ import type { Element, ElementView } from '../elements.js';
 export const UNSUPPORTED_SELECTORS: Record<string, string> = {
   extends: 'M5-09', implements: 'M5-09', inherits: 'M5-09', mixes: 'M5-09', inheritanceDepth: 'M5-09',
   decorator: 'M5-10', docTag: 'M5-10', member: 'M5-09',
-  package: 'M5-20', builtin: 'M5-21', ambient: 'M5-22',
+  package: 'M5-24', builtin: 'M5-24', ambient: 'M5-24',
 };
 
 export interface SelectorContext {

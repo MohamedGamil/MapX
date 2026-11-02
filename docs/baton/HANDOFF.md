@@ -1,6 +1,6 @@
 # MapX BATON handoff
 
-Revision: develop@6d9f8e2c3f476499e57ac8680391c9e150eb33b8 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
+Revision: develop@b2558df592cf083524960d072c727f9a6681989f (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
 
 ## Baseline
 Last completed: M5-03 — Element view, core selectors and layer membership with selector trace.
@@ -11,14 +11,14 @@ Actual engineering effort is unknown unless recorded in TASKS.json.
 Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.md. Legacy design notes live in specs/features/ (referenced from each task's `sources`); TASKS.json and docs/baton/iterations/ supersede specs/ITERATIONS.md.
 
 ## Task
-Next READY: M5-04 — Policy expansion and rule evaluator (handler chain, findings, fingerprints). Prerequisites: M5-03. Read docs/baton/iterations/M5-04.md. Objective: Allow-set expansion (`+`, `*`, `!`), per-rule severity and edge-type scope, verifiability policy, the AR-08 chain (scope → uncovered → same-layer → disallowed-layer → internal-element → private-layer → allowed), multi-layer and empty-layer warnings, ArchReport aggregation with layerEdges, stable fingerprints. Expected outputs: src/arch/policy.ts; src/arch/evaluate.ts; src/arch/report.ts; tests/arch-evaluate.test.ts. Verify: `npx vitest run tests/arch-evaluate.test.ts`; `npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json`.
-Also eligible: M5-10, M5-19, M5-09.
+Next READY: M5-03-R1 — Qualified names from real scans for every built-in language; not over symbol-level selectors. Prerequisites: M5-03. Read docs/baton/iterations/M5-03-R1.md. Objective: Element qualified names match the documented form on a real scan for every built-in language, and a not over a symbol-level selector does not pull files into a layer. Expected outputs: src/arch/elements.ts; src/arch/selectors/index.ts; src/arch/membership.ts; tests/arch-selectors.test.ts; docs/architecture-rules.md; reports/M5-03-R1.md. Verify: `npx vitest run tests/arch-selectors.test.ts`; `npm run check`.
+Also eligible: M4-09-R1, M5-10, M0-02-R11, M0-10-R6, M0-12-R11.
 Active work: none. One active iteration per owner.
 
 ## Observe
 Run `npm run plan:validate`, inspect `git status`, then `npm run check`. Never rely on this packet alone; read docs/baton/reports/ for executed evidence and limitations.
 
 ## Next
-Remaining critical path: M5-04 → M5-05 → M5-08 → M5-16 → M5-98 (40h). Recompute with `npm run plan:report` after every completion.
+Remaining critical path: M5-03-R1 → M5-04 → M5-05 → M5-08 → M5-16 → M5-98 (49h). Recompute with `npm run plan:report` after every completion.
 Pending gates: none; request approval only with reviewable evidence. Owner-initiated (never request): G-RELEASE.
 External blockers: none.

@@ -48,3 +48,10 @@ scratch/
 .continue/
 
 .mapx/
+# Fixture architecture configs live in .mapx/ and must be committed (M5-01/M5-02);
+# anything a scan writes there (mapx.db, caches) stays ignored.
+!tests/fixtures/**/.mapx/
+tests/fixtures/**/.mapx/*
+!tests/fixtures/**/.mapx/*.jsonc
+!tests/fixtures/**/.mapx/architecture.baseline.json
+!tests/fixtures/**/.mapx/architecture/
