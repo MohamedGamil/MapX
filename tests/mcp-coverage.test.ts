@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { resolve } from 'path';
 import { tmpdir } from 'node:os';
 
@@ -173,6 +173,25 @@ vi.mock('../src/core/store.js', () => {
 // Import mcp after mocks are set up
 import { startMcpServer, getStaleFilesCount, getStaleFileNames, getMcpStalenessWarning, buildServer } from '../src/mcp.js';
 import type { Store } from '../src/core/store.js';
+
+// M4-09-R1: the tools are called with `dir: '.'`, and the MCP server logs each call to
+// `<dir>/.mapx/tool-calls.jsonl` (UiEventBus), so these tests run from a temporary folder, never
+// from the checkout (review 2026-11-02: the log was appended to the developer's own `.mapx/`).
+const checkoutCwd = process.cwd();
+let tmpCwd = '';
+beforeAll(async () => {
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  tmpCwd = fs.mkdtempSync(`${tmpdir()}/mapx-mcp-coverage-`);
+  process.chdir(tmpCwd);
+  // The indexed file the store mocks list (`src/main.ts`) exists, as it did in the checkout.
+  fs.mkdirSync('src');
+  fs.writeFileSync('src/main.ts', 'export {};\n');
+});
+afterAll(async () => {
+  process.chdir(checkoutCwd);
+  const fs = await vi.importActual<typeof import('node:fs')>('node:fs');
+  fs.rmSync(tmpCwd, { recursive: true, force: true });
+});
 
 describe('MCP Server Coverage Boost', () => {
   beforeEach(() => {

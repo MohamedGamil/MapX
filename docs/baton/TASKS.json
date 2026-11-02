@@ -22773,15 +22773,68 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-02T12:27:43.644Z",
+      "completedAt": "2026-11-02T12:42:04.405Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M4-09-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/check-test-cwd.test.ts tests/mcp-coverage.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09-R1.md"
+        },
+        {
+          "command": "node scripts/baton/check-test-cwd.mjs",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-02T12:27:43.644Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T12:42:03.525Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T12:42:04.405Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/check-test-cwd.test.ts tests/mcp-coverage.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09-R1.md"
+            },
+            {
+              "command": "node scripts/baton/check-test-cwd.mjs",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09-R1.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -22792,19 +22845,23 @@
       "description": "Review 2026-11-02: tests/mcp-coverage.test.ts calls MCP tools with dir \".\" and its node:fs mock does not cover appendFileSync, so UiEventBus appends to <checkout>/.mapx/tool-calls.jsonl (reproduced; the checkout file was appended during the review baseline run). scripts/baton/check-test-cwd.mjs hashes .mapx/ and lists top-level names only, so it misses edits to existing top-level files and new nested files. M4-09 AC1 (\"after npx vitest run\") is unmet; its evidence covered two test files.",
       "outputs": [
         "tests/mcp-coverage.test.ts runs from a temp dir",
-        "scripts/baton/check-test-cwd.mjs compares git status --porcelain --ignored and hashes .mapx/",
+        "scripts/baton/check-test-cwd.mjs snapshots git status --ignored and hashes",
+        "tests/check-test-cwd.test.ts",
         "reports/M4-09-R1.md"
       ],
       "affectedFiles": [
         "tests/mcp-coverage.test.ts",
         "scripts/baton/check-test-cwd.mjs",
-        "tests/**/*.test.ts"
+        "tests/check-test-cwd.test.ts",
+        "tests/**/*.test.ts",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "node scripts/baton/check-test-cwd.mjs over the whole vitest suite exits 0 in a checkout holding .mapx/config.json and .mapx/mapx.db (sentinels).",
-        "The check fails (mutation) when a test edits an existing top-level file, creates a nested file, or appends to .mapx/tool-calls.jsonl."
+        "node scripts/baton/check-test-cwd.mjs over the whole vitest suite exits 0 in a clean clone holding sentinel .mapx/config.json and .mapx/mapx.db.",
+        "The check exits 1 naming the path when the command edits an existing top-level tracked file, creates a nested file, appends to .mapx/tool-calls.jsonl, or edits an already-modified file (tests/check-test-cwd.test.ts)."
       ],
       "verificationCommands": [
+        "npx vitest run tests/check-test-cwd.test.ts tests/mcp-coverage.test.ts",
         "node scripts/baton/check-test-cwd.mjs",
         "npm run check"
       ]
@@ -22835,15 +22892,28 @@
         "docs/research/deptrac/02-abstract-feature-model.md#AR-03"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-c0",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T12:28:04.696Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T12:28:03.414Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T12:28:04.696Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
