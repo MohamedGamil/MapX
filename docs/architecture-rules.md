@@ -67,8 +67,8 @@ Selectors match **elements**: every indexed file, and every symbol in it (classe
 | Language | Qualified name of `Order.run` | From |
 | --- | --- | --- |
 | PHP | `App\Domain\Order::run` | the file's `namespace` |
-| Java, Kotlin, Scala | `com.acme.domain.Order.run` | the `package` declaration |
-| C# | `Acme.Domain.Order.run` | the `namespace` declaration |
+| Java, Kotlin, Scala | `com.acme.domain.Order.run` | the `package` declaration (Scala: also nested and chained packages) |
+| C# | `Acme.Domain.Order.run` | the enclosing `namespace` blocks (a file can hold several), or the file-scoped `namespace` |
 | Dart | `acme.domain.Order.run` | the library name |
 | C++ | `acme::domain::Order::run` | the enclosing `namespace` blocks, nested or `a::b` |
 | Go | `example.com/shop/domain.Order.Run` | `go.mod`'s module plus the package directory |
@@ -81,6 +81,14 @@ Selectors match **elements**: every indexed file, and every symbol in it (classe
 A namespace language whose file declares no namespace (a PHP file with only functions, say) falls back to the path form. Kotlin's package is not captured yet, so Kotlin uses the path form.
 
 In C++, Ruby and Elixir the nesting comes from the line ranges of the enclosing namespace, module and class symbols. A file in those languages can declare several namespaces, so the file's own qualified name is its path.
+
+**`.h` headers** are C unless the header itself is plainly C++. That means C++-only syntax outside every preprocessor conditional: `namespace X {`, a `class X {` or `class X :` declaration, `template <`, an access label such as `public:`, `using namespace`, or `extern "C++"`. Comments and strings don't count, and neither does anything inside `#if`, `#ifdef`, `#ifndef`, `#elif` or `#else` (for example, `#ifdef __cplusplus` glue). An include guard around the whole file is not a conditional. A C header keeps the path form.
+
+**C# and Scala** take each declaration's namespace from the syntax tree:
+- A file with namespace blocks `A` and `B` gives `A.X` and `B.Y`, even when the blocks share one line.
+- `package a { package b { class X } }` gives `a.b.X`, and chained `package com.acme` then `package domain` give `com.acme.domain.Order`.
+- A C# type outside every block is in the global namespace, so it uses the path form.
+- The file's own qualified name is its first namespace.
 
 ## Selectors
 

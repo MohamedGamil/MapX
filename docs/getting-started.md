@@ -137,7 +137,7 @@ The content is wrapped in markers:
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, constants, namespaces, records, delegates |
 | Ruby | `.rb` | classes, modules, methods, constants, properties (attr_*) |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros, unions |
-| C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
+| C++ | `.cpp`, `.hpp`, `.cc`; `.h` headers that use C++-only syntax outside preprocessor conditionals (`namespace`, `class`, `template`, …) | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties, extensions |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties, enum entries |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals, vars, packages |

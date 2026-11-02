@@ -57,6 +57,38 @@ function csharpQualifiedNamespace(node: any, name: string): string {
   return name;
 }
 
+/** A C# namespace or Scala package clause, and the body its declarations sit in when it has one. */
+function namespaceName(node: any): string | null {
+  if (node.type === 'namespace_declaration' || node.type === 'file_scoped_namespace_declaration') return node.childForFieldName('name')?.text ?? null;
+  if (node.type === 'package_clause') return node.namedChildren.find((c: any) => c.type === 'package_identifier')?.text ?? null;
+  return null;
+}
+
+/**
+ * The namespace a C# or Scala declaration is in, from the syntax tree (M5-03-R2): the file-level
+ * clauses (`namespace X;`, `package a`), then each enclosing block (`namespace A { … }`,
+ * `package b { … }`), joined with dots. '' for a declaration outside every one, in the global
+ * namespace. Line ranges cannot tell this for blocks on one line, nested Scala packages or a type
+ * after the blocks.
+ */
+function declaredNamespace(node: any): string {
+  const blocks: string[] = [];
+  let root = node;
+  for (let p = node.parent; p; p = p.parent) {
+    const name = namespaceName(p);
+    if (name) blocks.unshift(name);
+    root = p;
+  }
+  const clauses: string[] = [];
+  for (const c of root.namedChildren) {
+    const name = c.type === 'file_scoped_namespace_declaration' || (c.type === 'package_clause' && !c.namedChildren.some((b: any) => b.type === 'template_body'))
+      ? namespaceName(c) : null;
+    // Clauses before the declaration; one that encloses it is an ancestor, already in `blocks`.
+    if (name && c.endIndex <= node.startIndex) clauses.push(name);
+  }
+  return [...clauses, ...blocks].join('.');
+}
+
 const JS_FUNCTION_NODES = new Set([
   'function_declaration', 'function_expression', 'function', 'arrow_function', 'method_definition',
   'generator_function_declaration', 'generator_function', 'class_static_block',
@@ -361,6 +393,22 @@ export class GenericWasmParser implements LanguageParser {
 
       let currentScope: string | null = null;
       const seenNodeIds = new Set<number>();
+      // Each stored symbol by its node, labelled as the scanner names a source symbol (M5-03-R2).
+      const symbolByNodeId = new Map<number, { kind: SymbolKind; label: string; oneLine: boolean }>();
+      /**
+       * The function or method a reference sits in when that function is on one line: there the
+       * scanner's line ranges cannot tell it from a same-line namespace or type
+       * (`namespace a::b { void use() { f(); } }`), so the syntax tree decides. Null otherwise, and
+       * in a Vue SFC, whose own rule gives references their owner (vue-template.ts, rule 2).
+       */
+      const oneLineSource = (node: any): string | null => {
+        if (filePath.endsWith('.vue')) return null;
+        for (let p = node.parent; p; p = p.parent) {
+          const sym = symbolByNodeId.get(p.id);
+          if (sym) return sym.oneLine && (sym.kind === 'function' || sym.kind === 'method') ? sym.label : null;
+        }
+        return null;
+      };
 
       for (const [captureName, captures] of symCaptures) {
         if (captureName.startsWith('symbol.kind_')) {
@@ -500,6 +548,7 @@ export class GenericWasmParser implements LanguageParser {
               continue;
             }
 
+            symbolByNodeId.set(capture.node.id, { kind, label: resolvedScope ? `${resolvedScope}::${name}` : name, oneLine: startLine === endLine });
             symbols.push({
               name,
               kind,
@@ -507,7 +556,9 @@ export class GenericWasmParser implements LanguageParser {
               signature,
               startLine,
               endLine,
-              metadata: {},
+              // The namespace of each C# and Scala declaration, for its qualified name (M5-03-R2).
+              metadata: kind !== 'namespace' && (this.languageName === 'c-sharp' || this.languageName === 'scala')
+                ? { namespace: declaredNamespace(capture.node) } : {},
             });
           }
         }
@@ -572,7 +623,7 @@ export class GenericWasmParser implements LanguageParser {
               : referenceType === 'call' && goParent?.type === 'selector_expression' ? goSelectorCall(goParent) : null;
 
             references.push({
-              sourceSymbol: null,
+              sourceSymbol: oneLineSource(capture.node),
               targetName,
               referenceType,
               startLine,

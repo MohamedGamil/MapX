@@ -9,7 +9,7 @@ import { loadArchitectureConfig } from '../src/arch/config.js';
 import { buildElementView, qualifiedName, QUALIFIED_NAME_RULES, type Element, type ElementView } from '../src/arch/elements.js';
 import { matchSelector } from '../src/arch/selectors/index.js';
 import { computeMembership, getMembership, membershipComputations } from '../src/arch/membership.js';
-import { getBuiltinLanguages } from '../src/languages/registry.js';
+import { getBuiltinLanguages, isCppHeader } from '../src/languages/registry.js';
 import type { ArchitectureConfig, Selector } from '../src/arch/schema.js';
 
 // M5-03: the element view, the core selectors and layer membership, on the M5-01 fixture apps.
@@ -429,5 +429,114 @@ describe('M5-03-R1: not over a symbol-level selector (AR-01 file membership)', (
     expect(matchSelector({ not: { docTag: '@deprecated' } }, file, ctx).matched).toBe(false);
     // On a symbol, not(name) is an ordinary negation.
     expect(matchSelector({ not: { name: 'Controller$' } }, el('php', 'App\\Domain\\Order'), ctx).matched).toBe(true);
+  });
+});
+
+describe('M5-03-R2: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces', () => {
+  let root = '';
+  let view: ElementView;
+  let store: Store;
+  // A guarded C header whose C++ glue sits in conditionals; the review of M5-03-R2 found its
+  // `&& !defined(…)` test taken as C++. Identical content in the unit test below.
+  const C_HEADER = '#ifndef BUF_H\n#define BUF_H\n#include <stddef.h>\n#ifdef __cplusplus\nextern "C" {\n#endif\n'
+    + 'typedef struct buf { char *data; size_t len; } buf_t;\nint buf_init(buf_t *b, size_t n);\n'
+    + 'static inline size_t buf_len(const buf_t *b) { return buf_size(b); }\n#define BUF_EMPTY { 0, 0 }\n'
+    + '#ifdef __cplusplus\n}\n#endif\n#if defined(__cplusplus) && !defined(BUF_NO_CXX)\n'
+    + 'template <typename T> inline int buf_push(buf_t *b, const T &v) { return buf_append(b, &v, sizeof v); }\n#endif\n#endif\n';
+  const FILES: Record<string, string> = {
+    // A C++ header inside an include guard: parsed as C, it gave no symbols at all.
+    'inc/order.h': '#ifndef ACME_ORDER_H\n#define ACME_ORDER_H\nnamespace acme {\nclass Order {\npublic:\n  void run();\n};\n}\n#endif\n',
+    'c/buf.h': C_HEADER,
+    'c/buf.c': '#include "buf.h"\nsize_t buf_size(const buf_t *b) { return b->len; }\nint buf_append(buf_t *b, const void *p, size_t n) { return 0; }\n',
+    // Several namespace blocks, a nested one, blocks on one line, and a type in the global namespace.
+    'cs/Two.cs': 'namespace A {\n  public class X { public void Run() {} }\n}\nnamespace B {\n  public class Y { public void Go() {} }\n  namespace C { public class Z {} }\n}\n',
+    'cs/OneLine.cs': 'namespace O { class OA {} } namespace O2 { class OB {} }\n',
+    'cs/Global.cs': 'namespace A {\n  class X2 {}\n}\nnamespace B {\n  class Y2 {}\n}\nclass G { void M() {} }\n',
+    'cs/FileScoped.cs': 'namespace FS;\npublic class F1 { public void M() {} }\n',
+    // Nested Scala package blocks, and chained package clauses.
+    'scala/N.scala': 'package a {\n  package b {\n    class X\n  }\n  class Y\n}\n',
+    'scala/Chained.scala': 'package com.acme\npackage domain\nclass Order\n',
+    // One-line namespaces: the call's source symbol is the function, not the namespace or type.
+    'cpp/line.cpp': 'namespace a::b { void f() {} void use() { f(); } }\nnamespace k { class K { void m() { f(); } }; }\n',
+  };
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'mapx-arch-qn2-'));
+    for (const [path, content] of Object.entries(FILES)) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+    cli(root, 'init', root, '--no-agents', '--no-suggestions', '--no-mcp-configs', '--no-discover');
+    cli(root, 'scan');
+    store = new Store(join(root, '.mapx/mapx.db'));
+    view = buildElementView(store, root);
+  }, 120_000);
+  afterAll(() => { store?.close(); rmSync(root, { recursive: true, force: true }); });
+
+  const names = (prefix: string) => view.elements.filter((e) => e.kind === 'symbol' && e.file.path.startsWith(prefix)).map((e) => e.qualifiedName).sort();
+  const calls = (file: string) => (store.raw.prepare("SELECT source_symbol, target_file, target_symbol FROM edges WHERE edge_type = 'call' AND source_file = ? ORDER BY source_symbol")
+    .all(file) as Array<{ source_symbol: string; target_file: string; target_symbol: string }>).map((e) => `${e.source_symbol} -> ${e.target_file}#${e.target_symbol}`);
+
+  it('a .h header with a C++ class in namespace acme gives acme::Order', () => {
+    expect(view.files.get('inc/order.h')!.language).toBe('cpp');
+    expect(names('inc/')).toEqual(['acme::Order']);
+  });
+
+  it('a guarded C header with C++ glue in conditionals stays C, with its symbols and call edges', () => {
+    expect(view.files.get('c/buf.h')!.language).toBe('c');
+    expect(names('c/buf.h')).toEqual(['c/buf.h#BUF_EMPTY', 'c/buf.h#BUF_H', 'c/buf.h#buf', 'c/buf.h#buf_len', 'c/buf.h#buf_push', 'c/buf.h#buf_t']);
+    expect(calls('c/buf.h')).toEqual(['buf_len -> c/buf.c#buf_size', 'buf_push -> c/buf.c#buf_append']);
+  });
+
+  it('a C# symbol takes its own namespace block: A.X and B.Y, blocks on one line, the global namespace', () => {
+    expect(names('cs/Two.cs')).toEqual(['A.X', 'A.X.Run', 'B.C.Z', 'B.Y', 'B.Y.Go']);
+    expect(names('cs/OneLine.cs')).toEqual(['O.OA', 'O2.OB']);
+    // A type outside every block is in the global namespace: the path form.
+    expect(names('cs/Global.cs')).toEqual(['A.X2', 'B.Y2', 'cs/Global.cs#G', 'cs/Global.cs#G.M']);
+    expect(names('cs/FileScoped.cs')).toEqual(['FS.F1', 'FS.F1.M']);
+  });
+
+  it('Scala package blocks nest, and chained package clauses join', () => {
+    expect(names('scala/N.scala')).toEqual(['a.Y', 'a.b.X']);
+    expect(names('scala/Chained.scala')).toEqual(['com.acme.domain.Order']);
+  });
+
+  it('a one-line namespace a::b { void use() { f(); } } gives the call edge from use', () => {
+    expect(calls('cpp/line.cpp')).toEqual(['K::m -> cpp/line.cpp#f', 'use -> cpp/line.cpp#f']);
+  });
+
+  it('a header is C++ only for C++-only syntax outside every conditional (an include guard is not one)', () => {
+    const guarded = (body: string) => `#ifndef H_\n#define H_\n${body}\n#endif\n`;
+    for (const cpp of ['namespace a { int x; }', 'namespace a\n{', 'class EXPORT A : public B {', 'class A final {', 'class A\n{',
+      'template <typename T> T id(T);', 'using namespace std;', 'extern "C++" {', 'public:']) {
+      expect(isCppHeader(cpp), cpp).toBe(true);
+      expect(isCppHeader(guarded(cpp)), `guarded ${cpp}`).toBe(true);
+    }
+    for (const c of [
+      C_HEADER,
+      // The review's cases: tests mixing __cplusplus with other macros, continued #if lines, #elif, #if 0.
+      '#if defined(__cplusplus) && !defined(LIB_NO_CXX)\ntemplate <class T> T id(T);\n#endif\nint f(void);\n',
+      '#if defined(__cplusplus) && !defined(CINTERFACE)\n    IFoo : public IUnknown\n    {\n    public:\n    };\n#else\ntypedef struct IFooVtbl { int x; } IFooVtbl;\n#endif\n',
+      '#if defined(FOO) && \\\n    defined(__cplusplus)\ntemplate <class T> T id(T);\n#endif\nint f(void);\n',
+      '#if 0\nclass Example {};\n#endif\nint f(void);\n',
+      '#if defined(_MSC_VER)\nint a;\n#elif defined(__cplusplus)\nnamespace x {}\n#endif\n',
+      '#ifndef __cplusplus\nint a;\n#else\nclass A {};\n#endif\n',
+      // `namespace` and `class` as C identifiers, C++ words in comments and strings.
+      'static inline void set(struct node *n, const char *namespace) {\n  n->ns =\n  namespace = 0;\n}\n',
+      'int f(int class);\nint\nclass = 3;\n', 'class A;', '// class A {', '// a line comment continued \\\nclass A {','/* example:\nnamespace a {\n*/', 'const char *s = "\\nclass A {";',
+      '#define MSG "hello \\\nclass X {"', 'struct point { int x; };', '#include <vector>', 'int x = 1; [[gnu::unused]] int y;',
+      // Not a whole-file guard: its content is conditional.
+      '#ifndef H_\n#define H_\nclass A {};\n#endif\nint after;',
+    ]) {
+      expect(isCppHeader(c), c).toBe(false);
+    }
+  });
+
+  it('decides a header in time linear in its size', () => {
+    const start = performance.now();
+    for (const text of ['\n'.repeat(65_000) + 'int x;', ' '.repeat(65_000) + 'int x;', `class ${'a '.repeat(30_000)}\n`, '#if X\n'.repeat(20_000) + '#endif\n'.repeat(20_000)]) {
+      expect(isCppHeader(text)).toBe(false);
+    }
+    expect(performance.now() - start).toBeLessThan(1_000);
   });
 });

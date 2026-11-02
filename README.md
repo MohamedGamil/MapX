@@ -382,7 +382,7 @@ See [docs/programmatic-usage.md](docs/programmatic-usage.md) for a detailed prog
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, namespaces, records |
 | Ruby | `.rb`, `.rake`, `.gemspec`, `Rakefile`, `Gemfile` | classes, modules, methods, constants, properties |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros |
-| C++ | `.cpp`, `.hpp`, `.cc` | classes, structs, functions, namespaces, enums, templates |
+| C++ | `.cpp`, `.hpp`, `.cc`; `.h` headers that use C++-only syntax outside preprocessor conditionals (`namespace`, `class`, `template`, …) | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals |

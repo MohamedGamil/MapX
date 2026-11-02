@@ -11,8 +11,10 @@ import type { Store } from './store.js';
  *   scopes), M2-06-R4 (route-domain hosts).
  * - 4: M5-25-R1 (Go package-qualified calls; generic, slice, array and map literals; go.work and
  *   local `replace` modules).
+ * - 5: M5-03-R2 (C++ `.h` headers parsed as C++; calls in a one-line function sourced from it; the
+ *   namespace of each C# and Scala declaration).
  */
-export const EXTRACTOR_VERSION = 4;
+export const EXTRACTOR_VERSION = 5;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

@@ -15,7 +15,7 @@ import { RoleClassifier } from './role-classifier.js';
 import { ArchitectureAnalyzer } from './architecture-analyzer.js';
 import { calculateClusterMetrics } from './metrics.js';
 import { getParserForFile } from '../parsers/parser-registry.js';
-import { getLanguageForFile, areLanguagesCompatible } from '../languages/registry.js';
+import { getLanguageForFile, areLanguagesCompatible, isCppHeader } from '../languages/registry.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { getGitBlobHashes, getChangedFiles, getCurrentCommitSha, getIgnoredEntries, gitBlobId, isGitRepo, type GitFileStatus } from './git-tracker.js';
 import type { ScanResult, GraphEdge, ParseResult, ExtractedReference, ExtractedSymbol, ProgressCallback, RepoConfig, ScanContext, RouteBinding, HookBinding } from '../types.js';
@@ -1262,6 +1262,7 @@ export class Scanner {
             const stats = await stat(fullPath);
             const lines = content.split('\n').length;
             const contentHash = createHash('md5').update(content).digest('hex');
+            const language = this.headerLanguage(relPath, langDef.name, content, contentHash);
             const storedHash = trackedHashes.get(relPath);
             const isNew = !storedHash;
             const contentChanged = !!storedHash && storedHash !== contentHash;
@@ -1269,7 +1270,7 @@ export class Scanner {
             files.push({
               absolutePath: fullPath,
               relativePath: relPath,
-              language: langDef.name,
+              language,
               sizeBytes: stats.size,
               lines,
               contentHash,
@@ -1345,6 +1346,22 @@ export class Scanner {
       if (f.isNew || f.contentChanged) changed.push({ path: relative(repoRoot, f.absolutePath).replace(/\\/g, '/'), status: 'modified' });
     }
     return changed;
+  }
+
+  /** Per `path\0content hash`, whether a `.h` header is C++, decided once per run (M5-03-R2). */
+  private cppHeaders = new Map<string, boolean>();
+
+  /**
+   * The language of a file whose content the scan read: a `.h` header the extension calls C is C++
+   * when its own text is (`isCppHeader`, M5-03-R2). Only read files reach this, so an unchanged
+   * file skipped by a rescan is never read for it.
+   */
+  private headerLanguage(relPath: string, language: string, content: string, contentHash?: string): string {
+    if (language !== 'c' || !relPath.toLowerCase().endsWith('.h')) return language;
+    const key = `${relPath}\0${contentHash ?? createHash('md5').update(content).digest('hex')}`;
+    let cpp = this.cppHeaders.get(key);
+    if (cpp === undefined) this.cppHeaders.set(key, (cpp = isCppHeader(content)));
+    return cpp ? 'cpp' : language;
   }
 
   /** The language of a file as the walk decides it: by extension, else an extensionless script's shebang. */
@@ -2570,12 +2587,16 @@ export class Scanner {
   /** Per repo: the Vue registrations and route records to store once this scan's parse completes (M3-08). */
   private pendingVueRegistry = new Map<string, Record<string, VueModuleFacts>>();
 
-  /** Language of an indexed path: its extension or file name, else what discovery stored (shebang scripts). */
+  /**
+   * Language of an indexed path: its extension or file name, else what discovery stored (shebang
+   * scripts). For a `.h` header, what discovery stored wins: its content decides C or C++ (M5-03-R2).
+   */
   private languageOf(path: string): string | null {
     let lang = this.languageCache.get(path);
     if (lang === undefined) {
-      lang = getLanguageForFile(path, this.config.getResolvedUserLanguages())?.name
-        ?? ((this.store.getFile(path)?.language as string | undefined) || null);
+      const byPath = getLanguageForFile(path, this.config.getResolvedUserLanguages())?.name;
+      const stored = () => (this.store.getFile(path)?.language as string | undefined) || null;
+      lang = (byPath === 'c' && path.toLowerCase().endsWith('.h') ? stored() : null) ?? byPath ?? stored();
       this.languageCache.set(path, lang);
     }
     return lang;
@@ -3545,7 +3566,7 @@ export class Scanner {
 
       return {
         absolutePath,
-        language: langDef.name,
+        language: this.headerLanguage(relativePath, langDef.name, content),
         sizeBytes: stats.size,
         lines: content.split('\n').length,
       };

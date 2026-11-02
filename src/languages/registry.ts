@@ -536,6 +536,103 @@ export function languageFromShebang(firstLine: string): LanguageDefinition | nul
   return null;
 }
 
+/**
+ * The logical lines of a C or C++ header (M5-03-R2): `\`-continued lines joined, comments and
+ * string and character literals dropped (`"C++"` kept for `extern "C++"`), each line trimmed, blank
+ * lines left out. One pass, linear in the text.
+ */
+function headerLines(text: string): string[] {
+  let code = '';
+  let from = 0;
+  let i = 0;
+  const n = text.length;
+  const cut = (to: number, insert: string, next: number) => { code += text.slice(from, to) + insert; from = i = next; };
+  while (i < n) {
+    const c = text[i];
+    if (c === '\\' && text[i + 1] === '\n') cut(i, '', i + 2);
+    else if (c === '\\' && text[i + 1] === '\r' && text[i + 2] === '\n') cut(i, '', i + 3);
+    else if (c === '/' && text[i + 1] === '/') {
+      let j = i + 2;
+      while (j < n && text[j] !== '\n') j += text[j] === '\\' && text[j + 1] === '\n' ? 2 : 1;
+      cut(i, '', j);
+    } else if (c === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      cut(i, ' ', end < 0 ? n : end + 2);
+    } else if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < n && text[j] !== c && text[j] !== '\n') j += text[j] === '\\' ? 2 : 1;
+      // An unterminated literal ends at its line (`it's` in a stray text line).
+      cut(i, c === '"' && text.slice(i + 1, j) === 'C++' ? '"C++"' : c + c, text[j] === c ? j + 1 : j);
+    } else i++;
+  }
+  code += text.slice(from);
+  const lines: string[] = [];
+  for (const line of code.split('\n')) {
+    const t = line.trim();
+    if (t) lines.push(t);
+  }
+  return lines;
+}
+
+/** `template <`, an access label, `using namespace`, `extern "C++"`, on a trimmed line. */
+const CPP_LINE = /^(?:template\s*<|(?:public|protected|private)\s*:(?!:)|using\s+namespace\b|extern\s*"C\+\+")/;
+const NAMESPACE_DECL = /^namespace(?:\s+[A-Za-z_][\w:]*)?\s*([\s\S]*)$/;
+const CLASS_DECL = /^class\s+[A-Za-z_]\w*(?:\s+[A-Za-z_]\w*)*\s*([\s\S]*)$/;
+
+/** C++-only syntax on a trimmed logical line; `next` is the line after it, for a body opened there. */
+function cppLine(line: string, next: string | undefined): boolean {
+  if (CPP_LINE.test(line)) return true;
+  // `namespace acme {`, `class API Order : public Base {`: a declaration with a body. Not `class A;`,
+  // nor a C variable named `namespace` or `class`.
+  const decl = line.startsWith('namespace') ? NAMESPACE_DECL.exec(line) : line.startsWith('class') ? CLASS_DECL.exec(line) : null;
+  if (!decl) return false;
+  const rest = decl[1]!;
+  if (rest.startsWith('{') || (!rest && next?.startsWith('{'))) return true;
+  return line.startsWith('class') && rest.startsWith(':') && !rest.startsWith('::');
+}
+
+/** The preprocessor directive of a logical line (`if`, `ifdef`, `endif`, …), or null. */
+const directiveOf = (line: string) => (line.startsWith('#') ? /^#\s*(\w*)/.exec(line)![1]! : null);
+
+/**
+ * Whether a `.h` header is C++ (M5-03-R2). Conservative, so a C header never turns into C++: the
+ * header must use C++-only syntax outside every preprocessor conditional. That syntax is
+ * `namespace X {`, a `class X {` or `class X :` declaration, `template <`, an access label,
+ * `using namespace` or `extern "C++"`. Comments and literals do not count. An include guard that
+ * wraps the whole file is not a conditional. Anything inside `#if`, `#ifdef`, `#ifndef`, `#elif`
+ * or `#else` never counts, whatever it tests (`__cplusplus`, `0`, a feature macro). The rule reads
+ * only the file's own text, so a header's language does not depend on its neighbours.
+ */
+export function isCppHeader(text: string): boolean {
+  const lines = headerLines(text);
+  // An include guard: `#ifndef G` / `#if !defined(G)`, then `#define G`, closed by the last line.
+  let first = 0;
+  while (directiveOf(lines[first] ?? '') === 'pragma') first++;
+  const guard = /^#\s*(?:ifndef\s+(\w+)$|if\s+!\s*defined\s*\(?\s*(\w+)\s*\)?$)/.exec(lines[first] ?? '');
+  let base = 0;
+  if (guard && new RegExp(`^#\\s*define\\s+${guard[1] ?? guard[2]}(?:\\s|$)`).test(lines[first + 1] ?? '')) {
+    let depth = 0;
+    for (let k = first; k < lines.length; k++) {
+      const d = directiveOf(lines[k]!);
+      if (d === 'if' || d === 'ifdef' || d === 'ifndef') depth++;
+      else if (depth === 1 && (d === 'else' || d === 'elif')) break;
+      else if (d === 'endif' && --depth === 0) {
+        if (k === lines.length - 1) base = 1;
+        break;
+      }
+    }
+  }
+  let depth = 0;
+  for (let k = 0; k < lines.length; k++) {
+    const line = lines[k]!;
+    const d = directiveOf(line);
+    if (d === 'if' || d === 'ifdef' || d === 'ifndef') depth++;
+    else if (d === 'endif') depth--;
+    else if (d === null && depth <= base && cppLine(line, lines[k + 1])) return true;
+  }
+  return false;
+}
+
 export function getLanguageByName(name: string, userLanguages: Record<string, LanguageDefinition> = {}): LanguageDefinition | null {
   return ({ ...BUILTIN_LANGUAGES, ...userLanguages } as Record<string, LanguageDefinition>)[name] ?? null;
 }

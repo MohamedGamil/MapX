@@ -165,7 +165,7 @@ const CONTAINER_RANK: Record<string, number> = { namespace: 0, module: 1, class:
 const NAMESPACE_LIKE = new Set(['namespace', 'module']);
 const RANK_TYPE = 2;
 
-interface SymbolRow { file_path: string; name: string; kind: string; scope: string | null; start_line: number | null; end_line: number | null }
+interface SymbolRow { file_path: string; name: string; kind: string; scope: string | null; start_line: number | null; end_line: number | null; metadata?: string | null }
 
 /**
  * The innermost container of each symbol of one file, from line ranges: a container encloses a
@@ -215,7 +215,7 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
   const db = store.raw;
   const fileRows = db.prepare('SELECT path, repo, language, namespace, role, role_confidence FROM files').all() as Array<{ path: string; repo: string; language: string; namespace: string | null; role: string | null; role_confidence: number | null }>;
   const clusterRows = db.prepare('SELECT file_path, cluster_name FROM cluster_membership').all() as Array<{ file_path: string; cluster_name: string }>;
-  const symbolRows = db.prepare('SELECT file_path, name, kind, scope, start_line, end_line FROM symbols ORDER BY file_path, start_line').all() as unknown as SymbolRow[];
+  const symbolRows = db.prepare('SELECT file_path, name, kind, scope, start_line, end_line, metadata FROM symbols ORDER BY file_path, start_line').all() as unknown as SymbolRow[];
   const clusters = new Map<string, string[]>();
   for (const r of clusterRows) {
     const list = clusters.get(r.file_path) ?? [];
@@ -326,6 +326,17 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
     if (!file) continue;
     const scoped = QUALIFIED_NAME_RULES[file.language]?.style === 'scoped';
     const parents = scoped ? enclosingContainers(rows) : null;
+    // C# and Scala store each declaration's own namespace (blocks, nested packages, the global
+    // namespace as ''); other rows, and indexes from before M5-03-R2, take the file's (M5-03-R2).
+    const namespaceOf = (s: SymbolRow): string | null => {
+      if (!s.metadata || !s.metadata.includes('"namespace"')) return file.namespace;
+      try {
+        const ns = (JSON.parse(s.metadata) as { namespace?: unknown }).namespace;
+        return typeof ns === 'string' ? ns || null : file.namespace;
+      } catch {
+        return file.namespace;
+      }
+    };
     const qns = new Map<SymbolRow, string>();
     // Ruby `class ::Top::Thing` is scoped to `::Top`: the leading `::` names the root, not a module.
     const scopeOf = (s: SymbolRow) => (scoped && s.scope ? s.scope.replace(/^::/, '') : s.scope);
@@ -343,7 +354,7 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
         if (owners.length === 1) parent = owners[0]!;
       }
       qn = qualifiedName(file.language, {
-        path, namespace: file.namespace, name: s.name, scope, repoPath: roots.get(path),
+        path, namespace: namespaceOf(s), name: s.name, scope, repoPath: roots.get(path),
         parent: parent ? { qualifiedName: qnOf(parent, depth + 1), name: parent.name } : null,
       });
       qns.set(s, qn);
