@@ -138,6 +138,7 @@ Outputs:
 - **Graph metrics**: graph density, average edges per file, top 5 most-connected files, PageRank top symbols
 - **Storage**: database path and size
 - **Git changes**: added/modified/removed/renamed files since last scan
+- **Other changes** (**Changes** in a workspace that is not a git repository): the stale files git does not list, such as a new file in a nested repo or in a non-git workspace. They are found as the [staleness warning](#staleness-warning) finds them.
 - **Index recommendations**: stale index detection with upgrade suggestions
 
 ## `mapx query <term>`
@@ -274,7 +275,9 @@ Files that import the symbol's file without calling it are listed as `LOW` (`sym
 
 ## Staleness warning
 
-Commands that read the index warn `Graph index may be stale` when indexed files changed content, were deleted, or new untracked files appeared. A new untracked file counts only if a scan would index it: the same rules apply as for the scan walk. These are the repo's include and exclude patterns from its last scan (including Laravel's default excludes), skipped directories such as `node_modules`, `vendor`, `build` and `coverage`, dot-prefixed files and directories, and a known language.
+Commands that read the index warn `Graph index may be stale` when indexed files changed content, were deleted, or new files appeared. A new file counts only if a scan would index it: the same rules apply as for the scan walk. These are the repo's include and exclude patterns from its last scan (including Laravel's default excludes), skipped directories such as `node_modules`, `vendor`, `build` and `coverage`, dot-prefixed files and directories, unregistered nested git repositories, and a known language.
+
+New files are found by walking the workspace with those rules, not by asking git. So a new file counts in a workspace that is not a git repository, in a nested repo, and in a registered repo below a folder the scan otherwise skips (such as `.wt/api`). A file in a gitignored folder counts too, because the scan does not read `.gitignore` and indexes it. A file the scan cannot read does not count. `mapx status`, `mapx check`, this warning and the MCP tools' warning all find new files this way. Each command, and each MCP tool call, walks the workspace once, and a file is tested by name before any pattern, so a folder of thousands of images costs little more than listing it.
 
 The index records the version of the extractor that built it. An index an older MapX built (one from before a fix that changes what a scan extracts) is stale too: the commands warn `was built by an older MapX`, `mapx check` exits 4, and the next `mapx scan` or `mapx update` re-parses every file of that repo once (M5-26).
 

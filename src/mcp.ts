@@ -27,7 +27,7 @@ import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
-import { findStaleFiles, indexableChanges, staleCount, staleNames } from './core/staleness.js';
+import { findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
 import { outdatedIndexWarning } from './core/extractor-version.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { formatLanguageInfo, formatLanguageList, installLanguage, uninstallLanguage } from './languages/installer.js';
@@ -982,19 +982,25 @@ EXAMPLE:
         const topSymbols = ctx.store.getTopSymbolsByPageRank(ctx.graph, 5);
 
         const repoRoot = resolve(dir, ctx.config.repo.path);
+        // As `mapx status`: one walk, then the git changes plus the stale files git does not list,
+        // such as a new file in a non-git workspace or in a nested repo (M5-05-R1).
+        const stale = findStaleFiles(ctx.store, dir);
         let isStale = false;
         let gitInfo = '';
         if (isGitRepo(repoRoot)) {
-          // As `mapx status`: only changes a scan would index or that touch an indexed file (M0-11-R3).
-          const changes = indexableChanges(ctx.store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), ctx.config.repo.name);
-          if (changes.length === 0) {
+          // Only changes a scan would index or that touch an indexed file (M0-11-R3).
+          const changes = indexableChanges(ctx.store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), ctx.config.repo.name, stale);
+          const count = changes.length + unlistedStale(stale, dir, repoRoot, changes).length;
+          if (count === 0) {
             gitInfo = 'No changes since last scan  (✓ index is current)';
           } else {
             isStale = true;
-            gitInfo = `${changes.length} changed files  (⚠ stale)`;
+            gitInfo = `${count} changed files  (⚠ stale)`;
           }
         } else {
-          gitInfo = 'Not a git repository  (✓ index is current)';
+          const count = unlistedStale(stale, dir, repoRoot).length;
+          isStale = count > 0;
+          gitInfo = count ? `Not a git repository; ${count} changed files since last scan  (⚠ stale)` : 'Not a git repository  (✓ index is current)';
         }
 
         const recommendations = isStale
@@ -2741,13 +2747,15 @@ export function getMcpStalenessWarning(store: Store, dir: string): string {
 }
 
 function getMcpStalenessWarningForFiles(store: Store, dir: string): string {
-  const staleCount = getStaleFilesCount(store, dir);
-  if (staleCount > 0) {
-    const staleFiles = getStaleFileNames(store, dir);
+  // One report, so one walk of the workspace, per tool call (M5-05-R1).
+  const report = findStaleFiles(store, dir);
+  const count = staleCount(report);
+  if (count > 0) {
+    const staleFiles = staleNames(report);
     const fileList = staleFiles.length > 0
-      ? `\nChanged: ${staleFiles.join(', ')}${staleCount > staleFiles.length ? ` (and ${staleCount - staleFiles.length} more)` : ''}`
+      ? `\nChanged: ${staleFiles.join(', ')}${count > staleFiles.length ? ` (and ${count - staleFiles.length} more)` : ''}`
       : '';
-    return `⚠️  Index is stale (${staleCount} file${staleCount !== 1 ? 's' : ''} changed since last scan). Run mapx_sync to update.${fileList}\n\n`;
+    return `⚠️  Index is stale (${count} file${count !== 1 ? 's' : ''} changed since last scan). Run mapx_sync to update.${fileList}\n\n`;
   }
   return '';
 }

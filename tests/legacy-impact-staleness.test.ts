@@ -1,12 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer } from '../src/mcp.js';
-import { cleanup, init, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
+import { Store } from '../src/core/store.js';
+import { findStaleFiles } from '../src/core/staleness.js';
+import { cleanup, init, mapx, mapxEnv, mapxWithStderr, query, workspace } from './helpers/e2e.js';
+
+const COUNT_WALKS = pathToFileURL(resolve(__dirname, 'fixtures/staleness/count-walks.mjs')).href;
 
 // M0-11-R1: impact risk without the try/catch downgrade (D010), import-only dependants, callee
 // locations, staleness for new/identical files, and the JS globals blacklist on every extension.
@@ -226,6 +231,216 @@ describe('staleness follows the scanner file rules', () => {
     writeFileSync(join(root, 'app/Models/Post.php'), '<?php\nnamespace App\\Models;\nclass Post {}\n');
     expect(staleLines(root)).toContain('app/Models/Post.php (new)');
   }, 60000);
+});
+
+// M5-05-R1: only `mapx check` walked the workspace for new files; status and the CLI and MCP
+// warnings asked git, which lists nothing in a non-git workspace and only a folder for a nested repo.
+describe('new files outside a single git repo are stale for status and the warnings', () => {
+  const roots: string[] = [];
+  afterAll(() => roots.forEach(cleanup));
+  const warnings = (root: string) => mapxWithStderr(root, 'query', 'zzz', '-d', root).stderr;
+  /** The MCP staleness warning, as prepended to a mapx_query result, and the mapx_status text. */
+  const viaMcp = async (root: string) => {
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    try {
+      const text = async (name: string, args: Record<string, unknown>) =>
+        ((await client.callTool({ name, arguments: { dir: root, ...args } })) as { content: Array<{ text: string }> }).content[0].text;
+      return { query: await text('mapx_query', { term: 'a' }), status: await text('mapx_status', {}) };
+    } finally {
+      await client.close();
+    }
+  };
+  /** How many times one CLI run walks the workspace (lists its root with file types). */
+  const walks = (root: string, ...args: string[]) => {
+    const out = join(root, '..', `${basename(root)}-walks.txt`);
+    rmSync(out, { force: true });
+    mapxEnv(root, { NODE_OPTIONS: `--import=${COUNT_WALKS}`, MAPX_TEST_COUNT_WALKS: root, MAPX_TEST_COUNT_WALKS_OUT: out }, ...args);
+    const n = Number(readFileSync(out, 'utf8').trim());
+    rmSync(out, { force: true });
+    return n;
+  };
+
+  it('a non-git workspace: nothing stale after a scan; a new file is, for status, the CLI and MCP warnings, and status walks once', async () => {
+    const root = workspace({ 'src/a.ts': 'export const a = 1;\n' });
+    roots.push(root);
+    init(root);
+    mapx(root, 'scan', root);
+    expect(existsSync(join(root, '.git'))).toBe(false);
+    const clean = mapx(root, 'status', '-d', root);
+    expect(clean).toContain('✓ Index is up to date.');
+    expect(clean).not.toContain('⚠');
+    expect(warnings(root)).not.toMatch(/stale/);
+    const quiet = await viaMcp(root);
+    expect(quiet.query).not.toContain('Index is stale');
+    expect(quiet.status).toContain('Not a git repository  (✓ index is current)');
+    expect(walks(root, 'status', '-d', root)).toBe(1);
+
+    writeFileSync(join(root, 'src/b.ts'), 'export const b = 2;\n');
+    const status = mapx(root, 'status', '-d', root);
+    expect(status).toMatch(/── Changes since last scan[\s\S]*\+ src\/b\.ts/);
+    expect(status).toContain('⚠ Index is stale.');
+    expect(warnings(root)).toContain('Changed: src/b.ts (new)');
+    const { countWalks } = (await import(COUNT_WALKS)) as { countWalks: (root: string) => { count: () => number; restore: () => void } };
+    const counter = countWalks(root);
+    let mcp: Awaited<ReturnType<typeof viaMcp>>;
+    try {
+      mcp = await viaMcp(root);
+      expect(counter.count()).toBe(2); // one walk per tool call: mapx_query and mapx_status
+    } finally {
+      counter.restore();
+    }
+    expect(mcp.query).toContain('Changed: src/b.ts (new)');
+    expect(mcp.status).toContain('1 changed files since last scan  (⚠ stale)');
+    expect(walks(root, 'status', '-d', root)).toBe(1);
+    expect(walks(root, 'query', 'zzz', '-d', root)).toBe(1);
+
+    // M5-26 still warns first, beside the new file.
+    const db = new Database(join(root, '.mapx', 'mapx.db'));
+    db.prepare("DELETE FROM meta WHERE key LIKE 'extractor_version:%'").run();
+    db.close();
+    expect(warnings(root)).toMatch(/built by an older MapX[\s\S]*Changed: src\/b\.ts \(new\)/);
+    expect((await viaMcp(root)).query).toMatch(/built by an older MapX[\s\S]*Changed: src\/b\.ts \(new\)/);
+  }, 120000);
+
+  it('a nested repo: its new file is stale for status, status --all, the CLI and MCP warnings; an unregistered nested git repo is not', async () => {
+    const root = workspace({ 'src/a.ts': 'export const a = 1;\n', '.gitignore': '.mapx/\n', 'web/src/w.ts': 'export const w = 1;\n', 'lib/src/l.ts': 'export const l = 1;\n' }, ['.', 'web', 'lib']);
+    roots.push(root);
+    git(root, 'add', 'src', '.gitignore');
+    git(root, 'commit', '-qm', 'init');
+    init(root);
+    mapx(root, 'workspaces', 'add', 'web');
+    mapx(root, 'scan', root);
+    expect(mapx(root, 'status', '-d', root)).toContain('✓ Index is up to date.');
+    expect(warnings(root)).not.toMatch(/stale/);
+    // `lib` is a git repository no one registered: the scan walk skips it, so its files are never new.
+    writeFileSync(join(root, 'lib/src/m.ts'), 'export const m = 1;\n');
+    expect(mapx(root, 'status', '-d', root)).toContain('✓ Index is up to date.');
+    expect(warnings(root)).not.toMatch(/stale/);
+    expect((await viaMcp(root)).query).not.toContain('Index is stale');
+
+    writeFileSync(join(root, 'web/src/b.ts'), 'export const b = 2;\n');
+    const status = mapx(root, 'status', '-d', root);
+    expect(status).toContain('No changes since last scan'); // the root repo's git changes
+    expect(status).toMatch(/── Other changes since last scan[\s\S]*\+ web\/src\/b\.ts/);
+    expect(status).toContain('⚠ Index is stale.');
+    expect(status).not.toContain('lib/src/m.ts');
+    const all = mapx(root, 'status', '-d', root, '--all');
+    expect(all).toMatch(/web .*1 file\b/);
+    expect(all).not.toMatch(/web .*clean/);
+    expect(warnings(root)).toContain('Changed: web/src/b.ts (new)');
+    const mcp = await viaMcp(root);
+    expect(mcp.query).toContain('Changed: web/src/b.ts (new)');
+    expect(mcp.query).not.toContain('lib/src/m.ts');
+    expect(mcp.status).toContain('1 changed files  (⚠ stale)');
+    expect(walks(root, 'status', '-d', root)).toBe(1);
+  }, 120000);
+
+  // Review of M5-05-R1 (P1-B): the walk did not enter a pruned folder of the root repo (`.wt`,
+  // `coverage`) that holds a registered repo, which the scan walks from its own root.
+  it.each([['a git', true], ['a non-git', false]])('a registered repo under a pruned folder, in %s root: its new file is stale, and sync clears it', async (_, withGit) => {
+    const root = workspace({
+      'src/a.ts': 'export const a = 1;\n', '.gitignore': '.mapx/\n',
+      '.wt/api/src/p.ts': 'export const p = 1;\n', 'coverage/web/src/w.ts': 'export const w = 1;\n',
+    }, [...(withGit ? ['.'] : []), '.wt/api', 'coverage/web']);
+    roots.push(root);
+    if (withGit) {
+      git(root, 'add', 'src', '.gitignore');
+      git(root, 'commit', '-qm', 'init');
+    }
+    init(root);
+    mapx(root, 'workspaces', 'add', '.wt/api');
+    mapx(root, 'workspaces', 'add', 'coverage/web');
+    mapx(root, 'scan', root);
+    expect(query<{ path: string }>(root, 'SELECT path FROM files ORDER BY path').map(r => r.path)).toEqual(['.wt/api/src/p.ts', 'coverage/web/src/w.ts', 'src/a.ts']);
+    expect(warnings(root)).not.toMatch(/stale/);
+    expect(mapx(root, 'status', '-d', root)).toContain('✓ Index is up to date.');
+
+    writeFileSync(join(root, '.wt/api/src/q.ts'), 'export const q = 1;\n');
+    writeFileSync(join(root, 'coverage/web/src/v.ts'), 'export const v = 1;\n');
+    expect(warnings(root)).toContain('Changed: .wt/api/src/q.ts (new), coverage/web/src/v.ts (new)');
+    const status = mapx(root, 'status', '-d', root);
+    expect(status).toMatch(/\+ \.wt\/api\/src\/q\.ts\n\s+\+ coverage\/web\/src\/v\.ts/);
+    expect(status).toContain('⚠ Index is stale.');
+    const mcp = await viaMcp(root);
+    expect(mcp.query).toContain('Changed: .wt/api/src/q.ts (new), coverage/web/src/v.ts (new)');
+    expect(mcp.status).toContain('2 changed files');
+    mapx(root, 'sync', root);
+    expect(warnings(root)).not.toMatch(/stale/);
+  }, 120000);
+
+  // The scan walk does not read .gitignore, so it indexes a new file in a gitignored folder.
+  it('a new gitignored file a scan would index is stale, and sync clears it', () => {
+    const root = workspace({ 'src/a.ts': 'export const a = 1;\n', '.gitignore': '.mapx/\ngen/\n' }, ['.']);
+    roots.push(root);
+    git(root, 'add', '.');
+    git(root, 'commit', '-qm', 'init');
+    init(root);
+    mapx(root, 'scan', root);
+    mkdirSync(join(root, 'gen'));
+    writeFileSync(join(root, 'gen/g.ts'), 'export const g = 1;\n');
+    expect(warnings(root)).toContain('Changed: gen/g.ts (new)');
+    expect(mapx(root, 'status', '-d', root)).toMatch(/── Other changes since last scan[\s\S]*\+ gen\/g\.ts/);
+    mapx(root, 'sync', root);
+    expect(query(root, "SELECT path FROM files WHERE path = 'gen/g.ts'")).toHaveLength(1);
+    expect(warnings(root)).not.toMatch(/stale/);
+  }, 60000);
+
+  // Review of M5-05-R1 (P2-C): scan and sync skip a file they cannot read, so it was stale forever.
+  it.skipIf(process.getuid?.() === 0)('an unreadable new file is not stale: a scan skips it', () => {
+    const root = workspace({ 'src/a.ts': 'export const a = 1;\n' });
+    roots.push(root);
+    init(root);
+    mapx(root, 'scan', root);
+    const secret = join(root, 'src/secret.ts');
+    writeFileSync(secret, 'export const s = 1;\n');
+    chmodSync(secret, 0o000);
+    try {
+      expect(warnings(root)).not.toMatch(/stale/);
+      mapx(root, 'sync', root);
+      expect(query(root, "SELECT path FROM files WHERE path = 'src/secret.ts'")).toEqual([]);
+      expect(mapx(root, 'status', '-d', root)).toContain('✓ Index is up to date.');
+    } finally {
+      chmodSync(secret, 0o644);
+    }
+  }, 60000);
+
+  // Review of M5-05-R1 (P1-A): every file the index did not hold rebuilt the matcher and re-tested its
+  // folders (100–170 µs each), so 100,000 ignored images made every command take 10 s. A perf guard
+  // with a generous bound: the walk stays within a few directory listings of the same tree.
+  it('thousands of files a scan never indexes cost about a directory listing', () => {
+    const root = workspace({ 'src/a.ts': 'export const a = 1;\n' });
+    roots.push(root);
+    for (let d = 0; d < 60; d++) {
+      mkdirSync(join(root, `uploads/${d}`), { recursive: true });
+      for (let f = 0; f < 500; f++) writeFileSync(join(root, `uploads/${d}/${f}.jpg`), '');
+    }
+    init(root);
+    mapx(root, 'scan', root);
+    const store = new Store(join(root, '.mapx', 'mapx.db'));
+    try {
+      const list = (dir: string): number => readdirSync(dir, { withFileTypes: true })
+        .reduce((n, e) => n + (e.isDirectory() ? list(join(dir, e.name)) : 1), 0);
+      const median = (fn: () => unknown) => {
+        const ms: number[] = [];
+        for (let i = 0; i < 5; i++) {
+          const t = performance.now();
+          fn();
+          ms.push(performance.now() - t);
+        }
+        return ms.sort((a, b) => a - b)[2];
+      };
+      expect(list(root)).toBeGreaterThanOrEqual(30000);
+      expect(findStaleFiles(store, root)).toEqual({ changed: [], deleted: [], added: [] });
+      const listing = median(() => list(root));
+      const walk = median(() => findStaleFiles(store, root));
+      expect(walk).toBeLessThan(listing * 5 + 300);
+    } finally {
+      store.close();
+    }
+  }, 120000);
 });
 
 // M0-11-R2: callees took the first same-named declaration in the file and fell back to the call site.

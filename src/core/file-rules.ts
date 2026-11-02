@@ -139,14 +139,17 @@ export function isScannableDir(relDir: string, excludes: string[], repoPath = ''
  * no ignored or dot-prefixed segment, no pruned ancestor directory, and the include/exclude
  * matcher accepts it. The language check is separate (it may need to read the file). `repoPath` is
  * the repo's workspace-relative folder ('' at the root): as in the walk, which starts there, the
- * segment and directory rules apply below it only.
+ * segment and directory rules apply below it only. A caller testing many paths passes `matcher`,
+ * `buildMatcher(excludes, includes)` built once (M5-05-R1 review).
  */
-export function isScannablePath(rel: string, excludes: string[], includes: string[], repoPath = ''): boolean {
+export function isScannablePath(
+  rel: string, excludes: string[], includes: string[], repoPath = '', matcher?: (rel: string) => boolean,
+): boolean {
   const segments = rel.split('/');
   const start = repoPath ? repoPath.split('/').filter(Boolean).length : 0;
   if (segments.slice(start).some(s => DEFAULT_IGNORE.has(s) || s.startsWith('.'))) return false;
   for (let i = start + 1; i < segments.length; i++) {
     if (isExcludedDir(segments.slice(0, i).join('/'), excludes)) return false;
   }
-  return buildMatcher(excludes, includes)(rel);
+  return (matcher ?? buildMatcher(excludes, includes))(rel);
 }

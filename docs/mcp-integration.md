@@ -420,7 +420,7 @@ List detected code clusters/modules.
 - `dir` (string, optional): Target project directory
 
 #### `mapx_status`
-Check scan status, language breakdown, PageRank rankings, and index recommendations.
+Check scan status, language breakdown, PageRank rankings, and index recommendations. The changed-file count is the git changes plus the stale files git does not list, such as a new file in a nested repo or in a workspace that is not a git repository; the other tools' `Index is stale` warning names them too (see [Staleness warning](cli-reference.md#staleness-warning)).
 - `dir` (string, optional): Target project directory
 
 #### `mapx_metrics`

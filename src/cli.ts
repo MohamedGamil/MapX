@@ -21,8 +21,8 @@ import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
-import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
-import { findStaleFiles, indexableChanges, staleCount, staleNames } from './core/staleness.js';
+import { getChangedFiles, isGitRepo, type GitFileStatus } from './core/git-tracker.js';
+import { findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
 import { outdatedIndexWarning, outdatedRepos } from './core/extractor-version.js';
 import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
@@ -739,7 +739,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const repo = repoOf.get(f) ?? config.repo.name;
           changed.set(repo, (changed.get(repo) ?? 0) + 1);
         }
-        changed.set(config.repo.name, (changed.get(config.repo.name) ?? 0) + stale.added.length);
+        // A new file belongs to the innermost registered repo whose folder holds it (M5-05-R1).
+        const prefixes = config.repos
+          .map(r => ({ name: r.name, prefix: !r.path || r.path === '.' ? '' : `${r.path.replace(/^\.\//, '').replace(/\/+$/, '')}/` }))
+          .sort((a, b) => b.prefix.length - a.prefix.length);
+        for (const f of stale.added) {
+          const repo = prefixes.find(p => f.startsWith(p.prefix))?.name ?? config.repo.name;
+          changed.set(repo, (changed.get(repo) ?? 0) + 1);
+        }
         const summaries = summarizeRepos(dir, config.repos, config.repo.name, store);
         const n = (v: number) => v.toLocaleString('en-US');
         const rows = summaries.map(r => {
@@ -887,30 +894,44 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // ── Git changes ────────────────────────────────────────────────────
       const repoRoot = resolve(dir, config.repo.path);
       let isStale = false;
-      if (!isGitRepo(repoRoot)) {
+      const printChanges = (changes: Array<{ path: string; status: string }>) => {
+        const byStatus: Record<string, number> = { added: 0, modified: 0, removed: 0, renamed: 0, unchanged: 0 };
+        for (const c of changes) byStatus[c.status] = (byStatus[c.status] || 0) + 1;
+        const summary = Object.entries(byStatus)
+          .filter(([, n]) => n > 0)
+          .map(([s, n]) => `${n} ${s}`)
+          .join(', ');
+        console.log(`  ${changes.length} changed files  (${summary})  (⚠ stale)`);
+        const icon: Record<string, string> = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' };
+        for (const change of changes) {
+          console.log(`    ${icon[change.status]} ${change.path}`);
+        }
+      };
+      // One walk for the whole status (M5-05-R1): the new files git cannot list, in a workspace that
+      // is not a git repository or in a nested repo, come from it.
+      const stale = findStaleFiles(store, dir);
+      const git = isGitRepo(repoRoot);
+      let gitChanges: GitFileStatus[] = [];
+      if (!git) {
         console.log('\n── Git ──────────────────────────────────────────────');
         console.log('  Not a git repository');
       } else {
         // Only the changes a scan would index, or that touch an indexed file: git also lists dotfiles,
         // excluded and non-source files (M0-11-R3).
-        const changes = indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), config.repo.name);
+        gitChanges = indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), config.repo.name, stale);
         console.log('\n── Git changes since last scan ──────────────────────');
-        if (changes.length === 0) {
+        if (gitChanges.length === 0) {
           console.log('  No changes since last scan  (✓ index is current)');
         } else {
           isStale = true;
-          const byStatus = { added: 0, modified: 0, removed: 0, renamed: 0, unchanged: 0 };
-          for (const c of changes) byStatus[c.status] = (byStatus[c.status] || 0) + 1;
-          const summary = (Object.entries(byStatus) as Array<[string, number]>)
-            .filter(([, n]) => n > 0)
-            .map(([s, n]) => `${n} ${s}`)
-            .join(', ');
-          console.log(`  ${changes.length} changed files  (${summary})  (⚠ stale)`);
-          const icon = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' };
-          for (const change of changes) {
-            console.log(`    ${icon[change.status]} ${change.path}`);
-          }
+          printChanges(gitChanges);
         }
+      }
+      const others = unlistedStale(stale, dir, repoRoot, gitChanges);
+      if (others.length) {
+        isStale = true;
+        console.log(git ? '\n── Other changes since last scan ────────────────────' : '\n── Changes since last scan ──────────────────────────');
+        printChanges(others);
       }
 
       console.log('\n── Recommendations ──────────────────────────────────');
@@ -2635,8 +2656,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           process.exitCode = EXIT.index;
           return;
         }
-        // A walk, not only git: new files count in a non-git workspace and in nested repos too.
-        const stale = findStaleFiles(store, dir, { walk: true });
+        // A walk of the workspace: new files count in a non-git workspace and in nested repos too.
+        const stale = findStaleFiles(store, dir);
         // An index an older extractor built is stale too: its edges may predate a fix (M5-26).
         const outdated = outdatedRepos(store, config.repos.map((r) => r.name));
         if (staleCount(stale) > 0 || outdated.length) {
