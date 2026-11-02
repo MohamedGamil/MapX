@@ -165,7 +165,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-04-R4** Same-named axios clients in one file keep their own baseURL scope — DONE, P2, 2h; depends on M2-04-R3.
 - **M2-06-R4** Route domains are workspace hosts for HTTP pairing — DONE, P2, 2h; depends on M2-06-R2.
 - **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
-- **M2-09** JS/TS member-assigned functions are symbols — IN_PROGRESS, P2, 4h; depends on M2-08.
+- **M2-09** JS/TS member-assigned functions are symbols — DONE, P2, 4h; depends on M2-08.
 - **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.
 - **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
 
