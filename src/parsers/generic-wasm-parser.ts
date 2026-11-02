@@ -189,16 +189,16 @@ function boundLocally(node: any, name: string): boolean {
 }
 
 /**
- * Go `struct { log.Logger }`: the import path of the package qualifying an embedded type, by
+ * Go `struct { log.Logger }`: the import path of the package qualifying an embedded type (or named
+ * by `qualifier`: `domain.NewOrder()`, M5-25-R1), by
  * import alias or package name (the last path element without a `.vN`, `vN` or `go-` decoration).
  * When no import matches by name, the unaliased imports are returned as candidates: a package's
  * name need not be its last path element (`api/v1` declaring `package v1`, `internal/db` declaring
  * `package database`); the scanner keeps the one project package that declares the type
  * (review 2026-11-02). Null when there is no candidate (M0-17-R5).
  */
-function goImportPath(qualifiedType: any): string | string[] | null {
-  const qualifier = qualifiedType.childForFieldName('package')?.text;
-  let root = qualifiedType;
+function goImportPath(node: any, qualifier = node.childForFieldName('package')?.text): string | string[] | null {
+  let root = node;
   while (root.parent) root = root.parent;
   const specs: any[] = [];
   const collect = (n: any) => {
@@ -219,6 +219,106 @@ function goImportPath(qualifiedType: any): string | string[] | null {
     if (!alias && path) candidates.push(path);
   }
   return candidates.length ? candidates : null;
+}
+
+/** Names a Go parameter list, var or const declaration, short declaration, range or for clause declares. */
+function goDeclaredNames(n: any): string[] {
+  switch (n?.type) {
+    case 'parameter_declaration': case 'variadic_parameter_declaration': case 'var_spec': case 'const_spec': case 'type_parameter_declaration':
+      return n.childrenForFieldName('name').map((c: any) => c.text);
+    case 'parameter_list': case 'var_declaration': case 'const_declaration': case 'var_spec_list':
+      return n.namedChildren.flatMap(goDeclaredNames);
+    case 'short_var_declaration': case 'range_clause':
+      return (n.childForFieldName('left')?.namedChildren ?? []).filter((c: any) => c.type === 'identifier').map((c: any) => c.text);
+    case 'for_clause': return goDeclaredNames(n.childForFieldName('initializer'));
+    default: return [];
+  }
+}
+
+/**
+ * True when `name` at `node` is a Go local: a parameter, receiver or named result of an enclosing
+ * function, method or function literal, or a variable declared before it in an enclosing block or
+ * statement header (`x := …`, `var x`, `for _, x := range`, `if x := …;`, `switch x := v.(type)`).
+ * `user := user.New()` still calls the package: the variable's scope starts after its declaration
+ * (M5-25-R1, review).
+ */
+function goBoundLocally(node: any, name: string): boolean {
+  for (let curr = node.parent; curr && curr.type !== 'source_file'; curr = curr.parent) {
+    if (curr.type === 'function_declaration' || curr.type === 'method_declaration' || curr.type === 'func_literal') {
+      if (['receiver', 'parameters', 'result'].some((f) => goDeclaredNames(curr.childForFieldName(f)).includes(name))) return true;
+      if (curr.type !== 'func_literal') return false;
+    }
+    if (curr.type === 'type_switch_statement' && (curr.childForFieldName('alias')?.namedChildren ?? []).some((c: any) => c.text === name)) return true;
+    for (const s of curr.namedChildren) {
+      if (s.endIndex <= node.startIndex && goDeclaredNames(s).includes(name)) return true;
+    }
+  }
+  return false;
+}
+
+/** True when `name` at `node` is a type parameter of the enclosing generic function, type or method receiver (M5-25-R1, review). */
+function goTypeParameter(node: any, name: string): boolean {
+  for (let curr = node.parent; curr; curr = curr.parent) {
+    const list = curr.type === 'function_declaration' || curr.type === 'type_spec' ? curr.childForFieldName('type_parameters') : null;
+    if (list?.namedChildren.some((d: any) => goDeclaredNames(d).includes(name))) return true;
+    if (curr.type === 'method_declaration') {
+      // `func (p *Pair[K, V]) M()`: the receiver type's arguments name the type parameters.
+      let type = curr.childForFieldName('receiver')?.namedChildren[0]?.childForFieldName('type');
+      if (type?.type === 'pointer_type') type = type.namedChildren[0];
+      const args = type?.type === 'generic_type' ? type.childForFieldName('type_arguments') : null;
+      return !!args?.descendantsOfType('type_identifier').some((t: any) => t.text === name);
+    }
+  }
+  return false;
+}
+
+const GO_PREDECLARED_TYPES = new Set(['any', 'bool', 'byte', 'comparable', 'complex64', 'complex128', 'error', 'float32', 'float64',
+  'int', 'int8', 'int16', 'int32', 'int64', 'rune', 'string', 'uint', 'uint8', 'uint16', 'uint32', 'uint64', 'uintptr']);
+
+/**
+ * The type a Go composite literal instantiates, from its type node: `Box[int]`, `[]*domain.Item`,
+ * `[N]Item`, `map[K][]domain.Item` and `map[K]*Box[int]` name their (map: value) element type
+ * (M5-25-R1). The name node of a type (inside its `qualified_type` when qualified), or null for a
+ * predeclared type, a type parameter or a type literal (`[]struct{…}`, `[]func()`).
+ */
+function goLiteralElement(type: any): any {
+  for (let n = type; n; ) {
+    switch (n.type) {
+      case 'generic_type': n = n.childForFieldName('type'); break;
+      case 'slice_type': case 'array_type': case 'implicit_length_array_type': n = n.childForFieldName('element'); break;
+      case 'map_type': n = n.childForFieldName('value'); break;
+      case 'pointer_type': case 'parenthesized_type': n = n.namedChildren[0]; break;
+      case 'qualified_type': return n.childForFieldName('name');
+      case 'type_identifier':
+        if (n.parent?.type === 'qualified_type') return n;
+        return GO_PREDECLARED_TYPES.has(n.text) || goTypeParameter(n, n.text) ? null : n;
+      default: return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Go `pkg.F()` and `pkg.T{}.M()`: the package (and, on a literal, the type) a selector call reaches
+ * (M5-25-R1). An identifier qualifier counts only when an import of the file is named by it and no
+ * local (parameter, variable) shadows it, so a method call on a variable stays a by-name call.
+ */
+function goSelectorCall(selector: any): { goPackage: string | string[] | null; goType?: string } | null {
+  let operand = selector.childForFieldName('operand');
+  if (operand?.type === 'identifier') {
+    const path = goImportPath(selector, operand.text);
+    return typeof path === 'string' && !goBoundLocally(operand, operand.text) ? { goPackage: path } : null;
+  }
+  // `(&pkg.T{}).M()`
+  while (operand?.type === 'parenthesized_expression' || (operand?.type === 'unary_expression' && operand.childForFieldName('operator')?.text === '&')) {
+    operand = operand.type === 'parenthesized_expression' ? operand.namedChild(0) : operand.childForFieldName('operand');
+  }
+  // `pkg.T{}` or `pkg.Pair[K, V]{}`
+  let type = operand?.type === 'composite_literal' ? operand.childForFieldName('type') : null;
+  if (type?.type === 'generic_type') type = type.childForFieldName('type');
+  return type?.type === 'qualified_type'
+    ? { goPackage: goImportPath(type), goType: type.childForFieldName('name')?.text }
+    : null;
 }
 
 export class GenericWasmParser implements LanguageParser {
@@ -416,7 +516,12 @@ export class GenericWasmParser implements LanguageParser {
       for (const [captureName, captures] of refCaptures) {
         if (captureName.startsWith('ref.target_')) {
           const refType = captureName.replace('ref.target_', '');
-          for (const capture of captures) {
+          for (const rawCapture of captures) {
+            // Go `[]domain.Item{}`, `map[K]*Box[int]{}`: the element type the literal names; none for
+            // a predeclared type or a type parameter (M5-25-R1).
+            const goElement = this.languageName === 'go' && refType === 'instantiation' ? goLiteralElement(rawCapture.node) : undefined;
+            if (goElement === null) continue;
+            const capture = goElement ? { node: goElement } : rawCapture;
             // Scala `import a.b.{C, D => E}` is one node naming several targets (M0-17-R1).
             const targetTexts = capture.node.type === 'import_declaration' && refType === 'import'
               ? scalaImportTargets(capture.node)
@@ -458,11 +563,13 @@ export class GenericWasmParser implements LanguageParser {
               && !filePath.endsWith('.vue') && capture.node.type === 'identifier'
               && CALL_NODES.has(capture.node.parent?.type ?? '') && boundLocally(capture.node, targetName)) continue;
 
-            // Go `struct { log.Logger }` and `domain.Order{}`: the type lives in the imported package,
-            // which the scanner resolves; a library package (null when no import matches) links
-            // nothing (M0-17-R5, M5-25).
-            const goPackage = this.languageName === 'go' && (referenceType === 'extends' || referenceType === 'instantiation') && capture.node.parent?.type === 'qualified_type'
-              ? { goPackage: goImportPath(capture.node.parent) } : null;
+            // Go `struct { log.Logger }`, `domain.Order{}`, `domain.NewOrder()` and `domain.Order{}.Run()`:
+            // the declaration lives in the imported package, which the scanner resolves; a library
+            // package (null when no import matches) links nothing (M0-17-R5, M5-25, M5-25-R1).
+            const goParent = this.languageName === 'go' ? capture.node.parent : null;
+            const goPackage = (referenceType === 'extends' || referenceType === 'instantiation') && goParent?.type === 'qualified_type'
+              ? { goPackage: goImportPath(goParent) }
+              : referenceType === 'call' && goParent?.type === 'selector_expression' ? goSelectorCall(goParent) : null;
 
             references.push({
               sourceSymbol: null,
@@ -473,7 +580,7 @@ export class GenericWasmParser implements LanguageParser {
               // The receiver of a member call (`obj`, `this`, `super`, `a.b`), for the scanner to tell a
               // library object and never take the call for a global function (M0-17-R4).
               ...(referenceType === 'call' && receiver ? { metadata: { receiver: receiver.type === 'identifier' ? receiver.text : `<${receiver.type}>` } } : {}),
-              // The import path of a package-qualified Go type, embedded or instantiated (never a call) (M0-17-R5, M5-25).
+              // The import path of a package-qualified Go type or call (M0-17-R5, M5-25, M5-25-R1).
               ...(goPackage ? { metadata: goPackage } : {}),
             });
             }

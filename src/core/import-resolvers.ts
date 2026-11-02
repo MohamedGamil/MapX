@@ -183,20 +183,87 @@ export function resolveRustImport(target: string, sourcePath: string, ctx: Impor
   return null;
 }
 
-/** Go: module import path → a non-test .go file of that package directory (go.mod gives the module path). */
+// The module path may be quoted: `module "example.com/m"` (or a raw string in backquotes).
+const goModulePath = (gomod: string | null | undefined) => gomod?.match(/^module\s+["`]?([^\s"`]+)/m)?.[1];
+
+/** `replace M [v] => ./dir` directives of a go.mod or go.work naming a local directory: [module, dir] (M5-25-R1). */
+function goLocalReplaces(text: string, dir: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (const line of text.replace(/\/\/.*$/gm, '').split('\n')) {
+    const m = line.match(/^\s*(?:replace\s+)?([^\s()]+)(?:\s+v\S+)?\s*=>\s*(\.\.?(?:\/\S*)?)\s*$/);
+    if (m) out.push([m[1]!, join(dir, m[2]!)]);
+  }
+  return out;
+}
+
+/** The modules of the nearest go.work above `sourcePath` (local replaces, then `use` directories): [module, dir] (M5-25-R1). */
+function goWorkModules(sourcePath: string, ctx: ImportContext): [string, string][] {
+  for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
+    const work = ctx.readText(join(dir, 'go.work'));
+    if (work !== null) {
+      const text = work.replace(/\/\/.*$/gm, '');
+      const uses = [...text.matchAll(/^use\s*\(([^)]*)\)/gm)].flatMap((m) => m[1]!.split(/\s+/))
+        .concat([...text.matchAll(/^use\s+([^\s(]+)/gm)].map((m) => m[1]!))
+        .map((u) => u.replace(/^["`]|["`]$/g, '')).filter(Boolean);
+      const modules: [string, string][] = [];
+      for (const use of uses) {
+        const moduleDir = join(dir, use);
+        // Nothing outside the workspace is read.
+        if (moduleDir === '..' || moduleDir.startsWith('../')) continue;
+        const module = goModulePath(ctx.readText(join(moduleDir, 'go.mod')));
+        if (module) modules.push([module, moduleDir]);
+      }
+      return [...goLocalReplaces(text, dir), ...modules];
+    }
+    if (!dir) return [];
+  }
+}
+
+/**
+ * Go: module import path → a non-test .go file of that package directory. The module path comes
+ * from the go.mod above the importer; a go.mod `replace` with a local directory and the modules of
+ * a go.work reach the other modules of a multi-module workspace (M5-25-R1).
+ */
 export function resolveGoImport(target: string, sourcePath: string, ctx: ImportContext): string | null {
   const path = target.replace(/^"|"$/g, '');
+  // undefined: the import is not in that module.
+  const inModule = (module: string, dir: string) => (path === module || path.startsWith(`${module}/`))
+    ? indexOf(ctx).goByDir.get(join(dir, path.slice(module.length + 1)))?.[0] ?? null
+    : undefined;
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
     const gomod = ctx.readText(join(dir, 'go.mod'));
-    // The module path may be quoted: `module "example.com/m"` (or a raw string in backquotes).
-    const module = gomod?.match(/^module\s+["`]?([^\s"`]+)/m)?.[1];
+    const module = goModulePath(gomod);
     // A nested module may import its parent module's packages: keep walking up until a go.mod's
-    // module path prefixes the import.
-    if (module && (path === module || path.startsWith(`${module}/`))) {
-      const pkgDir = join(dir, path.slice(module.length + 1));
-      return indexOf(ctx).goByDir.get(pkgDir)?.[0] ?? null;
+    // module path, or one of its local replaces, prefixes the import.
+    if (module) {
+      const hit = inModule(module, dir);
+      if (hit !== undefined) return hit;
+      for (const [replaced, local] of goLocalReplaces(gomod!, dir)) {
+        const viaReplace = inModule(replaced, local);
+        if (viaReplace !== undefined) return viaReplace;
+      }
     }
-    if (!dir) return null;
+    if (!dir) break;
+  }
+  for (const [module, dir] of goWorkModules(sourcePath, ctx)) {
+    const hit = inModule(module, dir);
+    if (hit !== undefined) return hit;
+  }
+  return null;
+}
+
+/**
+ * True when a Go import that resolves to no project package is known to be outside the project: a
+ * standard-library path (no dot in its first element, `C` included), or any path once a go.mod or
+ * go.work at or above the importer's folder is in the workspace. Otherwise (no go.mod, or the
+ * workspace root below it) the import may name the project's own package (M5-25-R1).
+ */
+export function goImportOutsideProject(target: string, sourcePath: string, readText: (path: string) => string | null): boolean {
+  const path = target.replace(/^"|"$/g, '');
+  if (!path.split('/')[0]!.includes('.')) return true;
+  for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
+    if (readText(join(dir, 'go.mod')) !== null || readText(join(dir, 'go.work')) !== null) return true;
+    if (!dir) return false;
   }
 }
 

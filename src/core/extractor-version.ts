@@ -9,8 +9,10 @@ import type { Store } from './store.js';
  *   Vuex members), M2-08-R2 (recorded unresolved imports).
  * - 3: M4-27 (every Lua file parses, not only the first of a process), M2-04-R4 (axios client
  *   scopes), M2-06-R4 (route-domain hosts).
+ * - 4: M5-25-R1 (Go package-qualified calls; generic, slice, array and map literals; go.work and
+ *   local `replace` modules).
  */
-export const EXTRACTOR_VERSION = 3;
+export const EXTRACTOR_VERSION = 4;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

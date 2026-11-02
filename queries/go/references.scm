@@ -21,6 +21,12 @@
 (composite_literal
   type: (qualified_type name: (type_identifier) @ref.target_instantiation)) @ref.type_instantiation
 
+; Generic, slice, array and map literals: `Box[int]{}`, `[]*domain.Item{{}}`, `[2]Item{}`,
+; `map[K][]domain.Item{}`. The parser takes the (map: value) element type the literal names, and
+; skips predeclared types and type parameters (M5-25-R1).
+(composite_literal
+  type: [(generic_type) (slice_type) (array_type) (implicit_length_array_type) (map_type)] @ref.target_instantiation) @ref.type_instantiation
+
 ; Interface embedding: `interface { Reader; io.Writer }` (M0-17-R1). A single-type element only,
 ; so constraint unions such as `int | float64` are not taken for embedded interfaces.
 (interface_type

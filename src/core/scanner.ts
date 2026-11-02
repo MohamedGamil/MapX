@@ -26,7 +26,7 @@ import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isSc
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, routeDomainHosts, urlHost } from '../frameworks/http/pairing.js';
-import { closest, importResolverFor, nearestIndex, type ImportHit } from './import-resolvers.js';
+import { closest, goImportOutsideProject, importResolverFor, nearestIndex, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -1682,8 +1682,9 @@ export class Scanner {
         // A PHP function call: the first candidate declared as a function in its namespace (M0-04-R5).
         targets = this.resolvePhpFunction(ref.phpFunction, sourcePath);
       } else if (sourceLanguage === 'go' && ref.metadata && 'goPackage' in ref.metadata) {
-        // Go `struct { log.Logger }`: the type in the imported project package, never a homonym
-        // elsewhere; a standard-library or third-party package links nothing (M0-17-R5).
+        // Go `struct { log.Logger }`, `domain.NewOrder()`: the declaration in the imported project
+        // package, never a homonym elsewhere; a standard-library or third-party package links nothing
+        // (M0-17-R5, M5-25-R1).
         targets = this.resolveGoQualifiedType(ref, resolver, sourcePath, fileMap, usedNames);
       } else if ((ref.vueThis || ref.vueStore) && (vueHit = ref.vueStore
         ? resolveStoreTarget(ref.targetName, ref.vueStore, this.vueResolveContext(sourcePath, fileMap))
@@ -1741,7 +1742,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -2581,8 +2582,12 @@ export class Scanner {
   }
 
   /**
-   * Go `pkg.Type` embedded in a struct or interface: the type declared in the directory of the
-   * imported package when the import resolves to a project package, else nothing (M0-17-R5).
+   * Go `pkg.Type` embedded in a struct or interface, or instantiated: the type declared in the
+   * directory of the imported package when the import resolves to a project package, else nothing
+   * (M0-17-R5, M5-25). `pkg.F()` reaches the function (or the type it converts to) there, and
+   * `pkg.T{}.M()` the method of T there, or one T promotes from a type it embeds in that package
+   * (M5-25-R1). An import that resolves to no package and may be the project's own (no go.mod
+   * tells) falls back to the declaration by name outside the calling package (review).
    */
   private resolveGoQualifiedType(
     ref: ExtractedReference,
@@ -2592,24 +2597,86 @@ export class Scanner {
     referencedNames: () => Set<string>,
   ): { file: string; symbol: string }[] {
     const goPackage = ref.metadata?.goPackage;
+    const goType = typeof ref.metadata?.goType === 'string' ? ref.metadata.goType : null;
     if (!resolver) return [];
     // A string is the import that names the qualifier; an array holds unaliased candidates whose
     // package name could not be told from the path: exactly one of them must declare the type.
     const exact = typeof goPackage === 'string';
     const paths = exact ? [goPackage] : Array.isArray(goPackage) ? goPackage.filter((p): p is string => typeof p === 'string') : [];
     if (!paths.length) return [];
-    const entries: { name: string; file: string; kind?: string }[] = this.symbolIndex?.get(ref.targetName.toLowerCase())
-      ?? this.store.searchSymbols(ref.targetName).map((m: any) => ({ name: m.name, file: m.file_path, kind: m.kind }));
+    const declared = (name: string): { name: string; file: string; kind?: string; scope?: string | null }[] => this.symbolIndex?.get(name.toLowerCase())
+      ?? this.store.searchSymbols(name).map((m: any) => ({ name: m.name, file: m.file_path, kind: m.kind, scope: m.scope }));
+    const entries = declared(ref.targetName);
+    const typeIn = (name: string, dir: string) => declared(name).filter(e => e.name === name && TYPE_KINDS.has(e.kind ?? '') && dirname(e.file) === dir);
+    // The files of `dir` declaring what the reference names: a method of the literal's type (or of
+    // a type it embeds there); else a package-level type, or for a call any package-level
+    // declaration (a function, a function variable, a type it converts to: `domain.ID(s)`).
+    const inDir = (dir: string): string[] => {
+      const declaring = (scope: string | null) => [...new Set(entries
+        .filter(e => e.name === ref.targetName && dirname(e.file) === dir && (scope
+          ? e.kind === 'method' && e.scope === scope
+          : !e.scope && (ref.referenceType === 'call' ? e.kind !== 'namespace' : TYPE_KINDS.has(e.kind ?? ''))))
+        .map(e => e.file))].sort();
+      if (!goType) return declaring(null);
+      // Breadth first through the types embedded in the same package (`type Order struct{ Logger }`).
+      const seen = new Set<string>();
+      let level = typeIn(goType, dir).length ? [goType] : [];
+      for (let depth = 0; level.length && depth < 4; depth++) {
+        const next: string[] = [];
+        for (const type of level) {
+          if (seen.has(type)) continue;
+          seen.add(type);
+          const files = declaring(type);
+          if (files.length) return files;
+          for (const decl of typeIn(type, dir)) next.push(...this.goEmbeddedTypes(decl.file, type).filter(t => typeIn(t, dir).length));
+        }
+        level = next;
+      }
+      return [];
+    };
     const found: string[][] = [];
+    // Import paths that resolve to no package yet may be the project's own (no go.mod tells).
+    const unknown: string[] = [];
     for (const importPath of paths) {
       const hit = this.resolveModuleImport(resolver, importPath, sourcePath, fileMap, referencedNames)[0];
-      if (!hit) continue;
-      const files = [...new Set(entries
-        .filter(e => e.name === ref.targetName && TYPE_KINDS.has(e.kind ?? '') && dirname(e.file) === dirname(hit.file))
-        .map(e => e.file))].sort();
+      if (!hit) {
+        if (!goImportOutsideProject(importPath, sourcePath, (p) => this.readWorkspaceText(p))) unknown.push(importPath);
+        continue;
+      }
+      const files = inDir(dirname(hit.file));
       if (files.length) found.push(files);
     }
-    return found.length === 1 ? [{ file: found[0]![0]!, symbol: ref.targetName }] : [];
+    if (found.length === 1) return [{ file: found[0]![0]!, symbol: ref.targetName }];
+    if (found.length || !unknown.length) return [];
+    // By name, as before go.mod resolution, but never in the calling package (a qualified name is
+    // another package's): the one folder that declares it, else the one whose path ends the import
+    // path (`example.com/shop/domain` → `domain/`).
+    const byDir = [...new Set(entries.map(e => dirname(e.file)))]
+      .filter(dir => dir !== dirname(sourcePath))
+      .map(dir => ({ dir, files: inDir(dir) }))
+      .filter(d => d.files.length);
+    const suffix = byDir.filter(d => unknown.some(p => p === d.dir || p.endsWith(`/${d.dir}`)));
+    const pick = byDir.length === 1 ? byDir[0] : suffix.length === 1 ? suffix[0] : undefined;
+    return pick ? [{ file: pick.files[0]!, symbol: ref.targetName }] : [];
+  }
+
+  /**
+   * The types a Go struct embeds without a package qualifier (`Logger`, `*Base`, `Box[T]`), read
+   * from the declaring file's text (M5-25-R1, review). Qualified embeds are left out.
+   */
+  private goEmbeddedTypes(file: string, type: string): string[] {
+    const text = (this.readWorkspaceText(file) ?? '').replace(/\/\/.*$/gm, '').replace(/`[^`]*`|"(?:[^"\\\n]|\\.)*"/g, '""');
+    const start = new RegExp(`(?:^|\\btype)\\s*${type}\\s*(?:\\[[^\\]]*\\])?\\s*struct\\s*\\{`, 'm').exec(text);
+    if (!start) return [];
+    let depth = 1;
+    let end = start.index + start[0].length;
+    for (; end < text.length && depth; end++) depth += text[end] === '{' ? 1 : text[end] === '}' ? -1 : 0;
+    // The struct's own lines: nested struct and interface bodies removed.
+    let body = text.slice(start.index + start[0].length, end - 1);
+    while (/\{[^{}]*\}/.test(body)) body = body.replace(/\{[^{}]*\}/g, '');
+    return body.split(/[\n;]/)
+      .map(line => line.trim().replace(/\s*""$/, '').match(/^\*?([A-Za-z_]\w*)(?:\[.*\])?$/)?.[1])
+      .filter((t): t is string => !!t);
   }
 
   /** Languages whose imports name modules, packages or namespaces (Java, Rust, Go, Python, Ruby, C#, PHP). */
