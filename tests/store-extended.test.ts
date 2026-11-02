@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Database from 'better-sqlite3';
+import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { globToLike, isGlobPattern, isWildcard } from '../src/core/fuzzy-matcher.js';
+import { buildServer } from '../src/mcp.js';
+import { startUiServer } from '../src/ui-server.js';
+import { Store } from '../src/core/store.js';
+import { cleanup, init, mapx, workspace } from './helpers/e2e.js';
 
 /**
  * Extended Store tests covering:
@@ -587,5 +595,200 @@ describe('Store — extended operations', () => {
       const row = db.prepare('SELECT value FROM meta WHERE key = ?').get('rollback_test') as any;
       expect(row.value).toBe('before');
     });
+  });
+});
+
+// M4-26: a symbol whose own name contains a dot opens by that name. A JS scan gives such a name to a
+// string-keyed member of an object literal (`'api.get': …`, as in Vuex actions), a Lua scan to
+// `function M.foo()`; member assignments (`api.get = …`) produce no symbol. The scoped reading
+// (`Class.method`) is preferred and the exact name is the fallback, so nothing the scoped reading finds
+// is lost; callers, callees and impact take both.
+describe('dotted symbol names in a real scan (M4-26)', () => {
+  let root: string;
+  let client: Client;
+  let server: Server;
+  let base: string;
+  beforeAll(async () => {
+    root = workspace({
+      'src/store/actions.js': [
+        "import { fetchJson } from '../http.js';",
+        'export const actions = {',
+        "  'api.get': (ctx) => fetchJson('/a'),",
+        "  'cart.add'(ctx) { return ctx.commit('added'); },",
+        // Collides with the Go method Server.Start below.
+        "  'Server.Start': (ctx) => fetchJson('/s'),",
+        '};',
+        '',
+      ].join('\n'),
+      'src/http.js': 'export function fetchJson(url) { return url; }\n',
+      // Importers of actions.js: one mentions the member, one only `axios.get`.
+      'src/page.js': "import { actions } from './store/actions.js';\nexport const run = (ctx) => actions['api.get'](ctx);\n",
+      'src/other.js': "import { actions } from './store/actions.js';\nimport axios from 'axios';\nexport const load = () => axios.get('/x') && actions;\n",
+      'src/billing.ts': [
+        'function limits() { return 3; }',
+        'export class BillingService {',
+        '  getEffectiveLimits() { return limits(); }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/main.go': [
+        'package main',
+        'type Server struct{}',
+        'func (s *Server) Start() { helper() }',
+        'func helper() {}',
+        'func main() { s := &Server{}; s.Start() }',
+        '',
+      ].join('\n'),
+      'src/m.lua': 'local M = {}\nfunction M.foo() return M.bar() end\nfunction M.bar() return 1 end\nreturn M\n',
+      // A method whose name is a file extension.
+      'src/Runner.java': 'public class Runner {\n  void go() { }\n}\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
+    await buildServer().connect(serverSide);
+    client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(clientSide);
+    server = startUiServer({ port: 0, host: '127.0.0.1', dir: root }) as unknown as Server;
+    // CLI runs between requests can outlast the 5 s default, and fetch would reuse a socket the server is closing.
+    server.keepAliveTimeout = 120_000;
+    await new Promise<void>((r) => (server.listening ? r() : server.once('listening', () => r())));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }, 120_000);
+  afterAll(async () => {
+    await client?.close();
+    if (server) await new Promise((r) => server.close(r));
+    cleanup(root);
+  });
+
+  const cli = (name: string) => JSON.parse(mapx(root, 'node', name, '--dir', root, '--format', 'json'));
+  const mcp = async (name: string) =>
+    JSON.parse(((await client.callTool({ name: 'mapx_node', arguments: { dir: root, symbol: name, format: 'json' } })) as any).content[0].text);
+  const dashboard = async (name: string) => {
+    const res = await fetch(`${base}/api/symbol/${encodeURIComponent(name)}`);
+    return { status: res.status, body: (await res.json()) as any };
+  };
+  const identity = (r: any) => ({ name: r.name, scope: r.scope ?? null, file: r.file ?? r.file_path, line: r.startLine ?? r.start_line });
+  // `mapx callers` text output, as `caller -> callee @ file` lines (the raw output is the failure message).
+  const expectCallers = (name: string, want: string[]) => {
+    const out = mapx(root, 'callers', name, '--dir', root);
+    const got = [...out.matchAll(/← (\S+) \(calls (\S+)\)\n\s+@ (\S+):/g)].map(([, caller, callee, file]) => `${caller} -> ${callee} @ ${file}`);
+    expect(got.sort(), out).toEqual(want);
+  };
+  const impact = (name: string) => JSON.parse(mapx(root, 'impact', name, '--dir', root, '--format', 'json'));
+  const affected = (r: any) => r.affected.map((x: any) => `[${x.risk}] ${x.symbol} (${x.file})`).sort();
+
+  const API_GET = { name: 'api.get', scope: 'actions', file: 'src/store/actions.js', line: 3 };
+  const CART_ADD = { name: 'cart.add', scope: 'actions', file: 'src/store/actions.js', line: 4 };
+  const KEY_START = { name: 'Server.Start', scope: 'actions', file: 'src/store/actions.js', line: 5 };
+  const GO_START = { name: 'Start', scope: 'Server', file: 'src/main.go', line: 3 };
+  const LIMITS = { name: 'getEffectiveLimits', scope: 'BillingService', file: 'src/billing.ts', line: 3 };
+
+  it('mapx node, MCP mapx_node and the dashboard open a dotted name, with its callee', async () => {
+    for (const [name, want] of [['api.get', API_GET], ['cart.add', CART_ADD]] as const) {
+      expect(identity(cli(name)), name).toEqual(want);
+      expect(identity(await mcp(name)), name).toEqual(want);
+      const { status, body } = await dashboard(name);
+      expect(status, name).toBe(200);
+      expect(identity(body.symbol), name).toEqual(want);
+    }
+    expect(cli('api.get').calleeCount).toBe(1);
+    expect((await mcp('api.get')).calleeCount).toBe(1);
+    const { body } = await dashboard('api.get');
+    expect(body.callees.map((e: any) => [e.source_symbol, e.target_symbol, e.target_file])).toEqual([
+      ['actions::api.get', 'fetchJson', 'src/http.js'],
+    ]);
+    expect(body.sourceCode).toContain("'api.get'");
+  });
+
+  // The scan's Lua call edge (M.foo → M.bar) is missing in some scans under CPU load (a scanner race,
+  // reported in reports/M4-26.md), so callers of a dotted name are pinned at store level below.
+  it('opens a Lua dotted function name', async () => {
+    const M_BAR = { name: 'M.bar', scope: null, file: 'src/m.lua', line: 3 };
+    expect(identity(cli('M.bar'))).toEqual(M_BAR);
+    expect(identity(await mcp('M.bar'))).toEqual(M_BAR);
+    expect(identity((await dashboard('M.bar')).body.symbol)).toEqual(M_BAR);
+  });
+
+  it('Class.method and Class::method still open the class member', async () => {
+    for (const name of ['BillingService.getEffectiveLimits', 'BillingService::getEffectiveLimits']) {
+      expect(identity(cli(name)), name).toEqual(LIMITS);
+      expect(identity(await mcp(name)), name).toEqual(LIMITS);
+      expect(identity((await dashboard(name)).body.symbol), name).toEqual(LIMITS);
+    }
+    expect(cli('BillingService.getEffectiveLimits').calleeCount).toBe(1);
+    // `go` is a file extension, but no file is named Runner.go.
+    expect(identity(cli('Runner.go'))).toEqual({ name: 'go', scope: 'Runner', file: 'src/Runner.java', line: 2 });
+  });
+
+  it('when a dotted name collides with Class.method, node opens the method and callers and impact keep its callers', async () => {
+    for (const name of ['Server.Start', 'Server::Start']) {
+      expect(identity(cli(name)), name).toEqual(GO_START);
+      expect(identity(await mcp(name)), name).toEqual(GO_START);
+      expect(identity((await dashboard(name)).body.symbol), name).toEqual(GO_START);
+    }
+    // The member is reached unambiguously through its scope.
+    expect(identity(cli('actions::Server.Start'))).toEqual(KEY_START);
+    expect(identity((await dashboard('actions::Server.Start')).body.symbol)).toEqual(KEY_START);
+
+    expectCallers('Server.Start', ['main -> Start @ src/main.go']);
+    expect(affected(impact('Server.Start'))).toEqual(['[HIGH] main (src/main.go)']);
+    // Callees take both readings: the method's helper and the member's fetchJson.
+    expect(cli('Server.Start').calleeCount).toBe(2);
+  });
+
+  it('impact of a dotted name flags an importer that mentions it, not one that mentions only its last segment', () => {
+    expect(affected(impact('api.get'))).toEqual(['[LOW] <import> (src/page.js)']);
+  });
+
+  it('context seeds accept a dotted symbol name', () => {
+    const seeded = (seed: string) => JSON.parse(mapx(root, 'context', 'fix bug', '--dir', root, '--seeds', seed, '--format', 'json'))
+      .matchedSymbols.map((s: any) => `${s.name} @ ${s.filePath}`);
+    expect(seeded('Server.Start')).toContain('Start @ src/main.go');
+    expect(seeded('M.foo')).toContain('M.foo @ src/m.lua');
+  });
+});
+
+// M4-26 at store level. Synthetic rows in the shapes a scan writes (observed above): Lua `M.foo`
+// calling `M.bar`; a Go method `Server::Start` called by `main`; a JS member `'Server.Start'` of
+// `actions` calling `fetchJson`.
+describe('Store lookup of dotted names (M4-26)', () => {
+  let store: Store;
+  beforeAll(() => {
+    store = new Store(':memory:');
+    for (const [path, language] of [['src/m.lua', 'lua'], ['src/main.go', 'go'], ['src/store/actions.js', 'javascript'], ['src/http.js', 'javascript']]) {
+      store.upsertFile({ path, repo: 'r', language, gitBlobHash: null, contentHash: null, lastScanned: '', sizeBytes: 0, lines: 0 });
+    }
+    const sym =(filePath: string, name: string, kind: string, scope: string | null, startLine: number) =>
+      store.insertSymbol({ filePath, repo: 'r', name, kind, scope, signature: '', startLine, endLine: startLine, metadata: '{}' });
+    const call = (sourceFile: string, sourceSymbol: string, targetFile: string, targetSymbol: string) =>
+      store.insertEdge({ sourceFile, sourceSymbol, targetFile, targetSymbol, edgeType: 'call', repo: 'r', weight: 1 });
+    sym('src/m.lua', 'M.foo', 'function', null, 2);
+    sym('src/m.lua', 'M.bar', 'function', null, 3);
+    call('src/m.lua', 'M.foo', 'src/m.lua', 'M.bar');
+    sym('src/main.go', 'Start', 'method', 'Server', 3);
+    sym('src/main.go', 'helper', 'function', null, 4);
+    sym('src/main.go', 'main', 'function', null, 5);
+    call('src/main.go', 'Server::Start', 'src/main.go', 'helper');
+    call('src/main.go', 'main', 'src/main.go', 'Start');
+    sym('src/store/actions.js', 'Server.Start', 'method', 'actions', 5);
+    call('src/store/actions.js', 'actions::Server.Start', 'src/http.js', 'fetchJson');
+  });
+  afterAll(() => store.close());
+
+  const at = (rows: any[]) => rows.map((e) => `${e.source_symbol} -> ${e.target_symbol}`).sort();
+
+  it('lists the callers of a dotted name', () => {
+    expect(at(store.getCallersOfSymbol('M.bar'))).toEqual(['M.foo -> M.bar']);
+    expect(at(store.getCalleesOfSymbol('M.foo'))).toEqual(['M.foo -> M.bar']);
+    expect(store.getSymbolByName('M.bar')).toMatchObject({ name: 'M.bar', file_path: 'src/m.lua' });
+  });
+
+  it('on a collision, opens the class member and lists callers and callees of both readings', () => {
+    expect(store.getSymbolByName('Server.Start')).toMatchObject({ name: 'Start', scope: 'Server', file_path: 'src/main.go' });
+    expect(store.getSymbolByName('actions::Server.Start')).toMatchObject({ name: 'Server.Start', scope: 'actions' });
+    expect(at(store.getCallersOfSymbol('Server.Start'))).toEqual(['main -> Start']);
+    expect(at(store.getCalleesOfSymbol('Server.Start'))).toEqual(['Server::Start -> helper', 'actions::Server.Start -> fetchJson']);
+    expect(at(store.getCalleesOfSymbol('Server::Start'))).toEqual(['Server::Start -> helper']);
   });
 });

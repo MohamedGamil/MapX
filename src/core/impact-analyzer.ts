@@ -135,7 +135,8 @@ export class ImpactAnalyzer {
       const importers = this.store.raw
         .prepare("SELECT source_file, target_symbol FROM edges WHERE target_file = ? AND edge_type IN ('import', 'require') AND source_file != ?")
         .all(target.file_path, target.file_path) as { source_file: string; target_symbol: string | null }[];
-      const short = symbolName.split(/::|\.|\\/).pop() || symbolName;
+      // The declared name: the last segment of `A::m`, or the whole of a name such as `'api.get'` (M4-26).
+      const short = (target.name as string) || symbolName.split(/::|\.|\\/).pop() || symbolName;
       const escape = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const mentions = new RegExp(`(^|[^\\w$])${escape(short)}($|[^\\w$])`);
       // A default export is imported under any name (`import fmt from './format'`) (M0-11-R3).

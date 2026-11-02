@@ -282,6 +282,8 @@ The index records the version of the extractor that built it. An index an older 
 
 Inspect a specific symbol node with detailed metadata. Optionally view its source code. If the symbol is not found, suggests similar symbols via fuzzy matching.
 
+`<symbol>` is a name, `Class::method` or `Class.method`. A symbol whose own name contains a dot, such as the object member `'api.get'` or Lua's `M.foo`, opens by that name when no class `api` has a member `get`; when one does, `api.get` opens that member and `actions::api.get` (scope, then name) opens the object member. `mapx callers`, `callees` and `impact` take both readings (M4-26).
+
 ```bash
 mapx node <symbol> [--dir /path] [--source] [--format <format>]
 ```

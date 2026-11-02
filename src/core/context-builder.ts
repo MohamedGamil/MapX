@@ -97,13 +97,11 @@ export class ContextBuilder {
     // Process explicit seeds
     if (options.seeds) {
       for (const seed of options.seeds) {
-        if (seed.includes('.') || seed.includes('/')) {
-          // Likely a file path
-          if (this.store.getFile(seed)) {
-            seedFiles.add(seed);
-          }
+        // A file path when a file has that path; otherwise a symbol name, which may contain a dot
+        // (`Server.Start`, Lua `M.foo`) (M4-26).
+        if ((seed.includes('.') || seed.includes('/')) && this.store.getFile(seed)) {
+          seedFiles.add(seed);
         } else {
-          // Likely a symbol name
           const sym = this.store.getSymbolByName(seed, repo);
           if (sym) {
             seedFiles.add(sym.file_path as string);

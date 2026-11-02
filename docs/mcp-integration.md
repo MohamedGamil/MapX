@@ -332,7 +332,7 @@ Advanced filtered symbol search.
 
 #### `mapx_node`
 Deep inspection of a specific symbol node.
-- `symbol` (string, required): Symbol name
+- `symbol` (string, required): Symbol name, `Class::method` or `Class.method`. A name that itself contains a dot (`api.get`) opens by that name unless a class `api` has a member `get`; `scope::api.get` is unambiguous
 - `source` (boolean, optional): Include source code
 - `dir` (string, optional): Target project directory
 

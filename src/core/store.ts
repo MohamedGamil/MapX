@@ -957,10 +957,27 @@ export class Store {
     return rows as Array<{ name: string; kind: string; file_path: string }>;
   }
 
-  getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
+  /**
+   * Symbols named by `fullName`: `Scope::name`, or `Scope.name` (`.` and `::` taken as the same
+   * separator), matched by scope; and symbols whose own name is `fullName`, such as the string-keyed
+   * member `'api.get'` (M4-26). With `one`, the scoped match is preferred and the exact name is the
+   * fallback, so a lookup never loses what the scoped reading finds; without it, both are returned.
+   * A name ending in a file extension is not split when a file of that path exists.
+   */
+  private findSymbolsByName(fullName: string, repo: string | undefined, one: boolean): Record<string, any>[] {
+    const select = (first: boolean, sql: string, ...params: string[]): Record<string, any>[] => {
+      if (repo) {
+        sql += ' AND repo = ?';
+        params.push(repo);
+      }
+      if (!first) return this.backend.prepare(sql).all(...params);
+      const row = this.backend.prepare(`${sql} LIMIT 1`).get(...params);
+      return row ? [row] : [];
+    };
+    const exact = () => select(one, 'SELECT * FROM symbols WHERE name = ?', fullName);
+
     let scope: string | null = null;
     let name = fullName;
-
     if (fullName.includes('::')) {
       const parts = fullName.split('::');
       name = parts.pop()!;
@@ -973,44 +990,29 @@ export class Store {
         'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
         'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
       ]);
-      if (!commonExtensions.has(last)) {
+      // `Runner.go` is a method `go`, unless `Runner.go` is a scanned file.
+      if (!commonExtensions.has(last) || !this.getFile(fullName)) {
         name = parts.pop()!;
         scope = parts.join('.');
       }
     }
+    if (!scope) return exact();
 
-    if (scope) {
-      let res: any;
-      if (repo) {
-        res = this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? AND repo = ? LIMIT 1').get(scope, name, repo);
-      } else {
-        res = this.backend.prepare('SELECT * FROM symbols WHERE scope = ? AND name = ? LIMIT 1').get(scope, name);
-      }
-      if (res) return res;
-
+    let scoped = select(one, 'SELECT * FROM symbols WHERE scope = ? AND name = ?', scope, name);
+    if (scoped.length === 0) {
       // Fallback with normalized scope matching
-      let candidates: any[];
-      if (repo) {
-        candidates = this.backend.prepare('SELECT * FROM symbols WHERE name = ? AND repo = ?').all(name, repo);
-      } else {
-        candidates = this.backend.prepare('SELECT * FROM symbols WHERE name = ?').all(name);
-      }
+      const candidates = select(false, 'SELECT * FROM symbols WHERE name = ?', name);
       const normScope = scope.replace(/\./g, '::');
-      for (const cand of candidates) {
-        if (cand.scope) {
-          const candNormScope = cand.scope.replace(/\./g, '::');
-          if (candNormScope === normScope) {
-            return cand;
-          }
-        }
-      }
-      return undefined;
-    } else {
-      if (repo) {
-        return this.backend.prepare('SELECT * FROM symbols WHERE name = ? AND repo = ? LIMIT 1').get(fullName, repo);
-      }
-      return this.backend.prepare('SELECT * FROM symbols WHERE name = ? LIMIT 1').get(fullName);
+      scoped = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
+      if (one) scoped = scoped.slice(0, 1);
     }
+    if (one) return scoped.length > 0 ? scoped : exact();
+    const seen = new Set(scoped.map(s => s.id));
+    return [...scoped, ...exact().filter(s => !seen.has(s.id))];
+  }
+
+  getSymbolByName(fullName: string, repo?: string): Record<string, any> | undefined {
+    return this.findSymbolsByName(fullName, repo, true)[0];
   }
 
   getFilesFiltered(options: {
@@ -1061,59 +1063,7 @@ export class Store {
   }
 
   getCallersOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
-    let symbols: Record<string, any>[] = [];
-    let scope: string | null = null;
-    let name = fullName;
-
-    if (fullName.includes('::')) {
-      const parts = fullName.split('::');
-      name = parts.pop()!;
-      scope = parts.join('::');
-    } else if (fullName.includes('.')) {
-      const parts = fullName.split('.');
-      const last = parts[parts.length - 1].toLowerCase();
-      const commonExtensions = new Set([
-        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
-        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
-        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
-      ]);
-      if (!commonExtensions.has(last)) {
-        name = parts.pop()!;
-        scope = parts.join('.');
-      }
-    }
-
-    if (scope) {
-      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
-      const params = [scope, name];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-
-      // Fallback with normalized scope matching
-      if (symbols.length === 0) {
-        let fallbackSql = 'SELECT * FROM symbols WHERE name = ?';
-        const fallbackParams = [name];
-        if (repo) {
-          fallbackSql += ' AND repo = ?';
-          fallbackParams.push(repo);
-        }
-        const candidates = this.backend.prepare(fallbackSql).all(...fallbackParams);
-        const normScope = scope.replace(/\./g, '::');
-        symbols = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
-      }
-    } else {
-      let sql = 'SELECT * FROM symbols WHERE name = ?';
-      const params = [fullName];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-    }
-
+    const symbols = this.findSymbolsByName(fullName, repo, false);
     if (symbols.length === 0) {
       return [];
     }
@@ -1157,59 +1107,7 @@ export class Store {
   }
 
   getCalleesOfSymbol(fullName: string, repo?: string): Record<string, any>[] {
-    let symbols: Record<string, any>[] = [];
-    let scope: string | null = null;
-    let name = fullName;
-
-    if (fullName.includes('::')) {
-      const parts = fullName.split('::');
-      name = parts.pop()!;
-      scope = parts.join('::');
-    } else if (fullName.includes('.')) {
-      const parts = fullName.split('.');
-      const last = parts[parts.length - 1].toLowerCase();
-      const commonExtensions = new Set([
-        'ts', 'js', 'cs', 'java', 'py', 'php', 'go', 'rs', 'swift', 'kt', 
-        'svelte', 'vue', 'lua', 'ex', 'zig', 'sh', 'pas', 'scala', 'rb', 
-        'c', 'cpp', 'h', 'hpp', 'json', 'yaml', 'yml', 'md'
-      ]);
-      if (!commonExtensions.has(last)) {
-        name = parts.pop()!;
-        scope = parts.join('.');
-      }
-    }
-
-    if (scope) {
-      let sql = 'SELECT * FROM symbols WHERE scope = ? AND name = ?';
-      const params = [scope, name];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-
-      // Fallback with normalized scope matching
-      if (symbols.length === 0) {
-        let fallbackSql = 'SELECT * FROM symbols WHERE name = ?';
-        const fallbackParams = [name];
-        if (repo) {
-          fallbackSql += ' AND repo = ?';
-          fallbackParams.push(repo);
-        }
-        const candidates = this.backend.prepare(fallbackSql).all(...fallbackParams);
-        const normScope = scope.replace(/\./g, '::');
-        symbols = candidates.filter(cand => cand.scope && (cand.scope as string).replace(/\./g, '::') === normScope);
-      }
-    } else {
-      let sql = 'SELECT * FROM symbols WHERE name = ?';
-      const params = [fullName];
-      if (repo) {
-        sql += ' AND repo = ?';
-        params.push(repo);
-      }
-      symbols = this.backend.prepare(sql).all(...params);
-    }
-
+    const symbols = this.findSymbolsByName(fullName, repo, false);
     if (symbols.length === 0) {
       return [];
     }
