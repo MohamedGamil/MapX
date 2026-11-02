@@ -262,7 +262,7 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
     // Test hook: skip the language parser for this file, to exercise the capture walk below.
     if (process.env['MAPX_TEST_WORKER_FALLBACK'] === job.filePath) throw new Error('MAPX_TEST_WORKER_FALLBACK');
     const parser = getParserForFile(job.filePath, userLanguages, job.language);
-    const result = await parser.parse(job.filePath, source, { facadeMap, ignoredSymbols });
+    const result = await parser.parse(job.filePath, source, { absolutePath: job.absolutePath, facadeMap, ignoredSymbols });
     return { id: job.id, ...result };
   } catch {
     // Fall back to the generic capture walk below.

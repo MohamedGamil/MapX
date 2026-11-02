@@ -32,7 +32,7 @@ import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS, JS_GLOBAL_FUNCTIONS } from '../parsers/common-methods.js';
 import { resolveThisMember } from '../parsers/languages/vue-options.js';
-import { collectVuexFiles, resolveStoreTarget, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
+import { collectVuexFiles, resolveStoreTarget, storeCallOrPlain, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vueGlobFiles, type GlobalRegistrations, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
@@ -1547,6 +1547,7 @@ export class Scanner {
         try {
           const parser = getParserForFile(relPath, this.config.getResolvedUserLanguages(), fileInfo.language);
           results[i] = await parser.parse(relPath, sources[i]!, {
+            absolutePath: fileInfo.absolutePath,
             facadeMap: this.config.settings.php?.facadeMap,
             ignoredSymbols: ignoredSymbolsForFile(ignoredSymbols, relPath),
           });
@@ -1630,7 +1631,9 @@ export class Scanner {
       .filter(r => r.referenceType !== 'import' && r.referenceType !== 'require' && typeof r.targetName === 'string')
       .map(r => r.targetName.replace(/<[\s\S]*$/, '').split(/\.|::/).pop()!)));
 
-    for (const ref of refs) {
+    for (let ref of refs) {
+      // An imported hook of any name that is not a Pinia store: the call as extracted (M3-05-R2).
+      if (ref.vueStore?.store === 'pinia' && ref.vueStore.fallback) ref = storeCallOrPlain(ref, this.vueResolveContext(sourcePath, fileMap));
       if (!ref.targetName || typeof ref.targetName !== 'string') continue;
       const vueHint = ref.metadata?.vue as VueResolveHint | undefined;
       const navigate = ref.referenceType === 'navigate';

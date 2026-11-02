@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import type { Node } from 'web-tree-sitter';
 import type { ExtractedReference, ParseResult, VueStoreTarget, VuexKind } from '../../types.js';
 import { FUNCTION_VALUES, importSources, isFunctionMember, keyOf, objectOf, optionsObject, stringValue, topLevelDeclarator, valueOf, withScriptTree } from './vue-ast.js';
@@ -59,6 +61,13 @@ const ANY_HOOK = /^use[A-Z0-9_$]/;
 /** A hook call in an SFC, or in a module importing Vue or Pinia: maybe a store of any name. */
 const HOOK_CALL = /\buse[A-Z0-9_$][\w$]*\s*\(/;
 const VUE_IMPORT = /\bfrom\s*['"](?:vue|pinia)['"]/;
+/** A hook imported from a project module (`import { useWish } from '../stores/wish'`): maybe a store (M3-05-R2). */
+const PROJECT_HOOK_IMPORT = /\bimport\s+(?:[\w$]+\s*,\s*)?(?:\{[^}]*\buse[A-Z0-9_$][^}]*\}|use[A-Z0-9_$][\w$]*)\s*from\s*['"](?:\.{1,2}\/|\/|[@~#]\/)/;
+/** A Vuex member's first parameter (`(state) =>`, `({ commit }) =>`, `(context) =>`): maybe a file of members (M3-05-R2). */
+const MEMBER_PARAM_HINT = /\(\s*(?:state|context|ctx|\{[^})]*\b(?:commit|dispatch|rootState|rootGetters)\b[^})]*\})\s*[,)]/;
+/** A Vuex action's context parameter: its name, or the names an object pattern takes from it. */
+const CONTEXT_PARAM = /^(?:context|ctx)$/;
+const CONTEXT_KEYS = new Set(['commit', 'dispatch', 'state', 'getters', 'rootState', 'rootGetters']);
 /** A module of the project (relative, absolute or `@/`, `~/`, `#/` alias), not a package such as `vuex`. */
 const PROJECT_SPECIFIER = /^(?:\.{1,2}\/|\/|[@~#]\/)/;
 const STORE_HINT = /\$store|\b(?:dispatch|commit)\s*\(|\bmap(?:Actions|Getters|State|Mutations|WritableState)\b|\buse[A-Z0-9_$][\w$]*Store\b|\b(?:mutations|actions|getters|namespaced)\b|\b(?:create)?Store\s*\(|\bdefineStore\b/;
@@ -113,6 +122,62 @@ function patternNames(pattern: Node): Map<string, string> {
   return names;
 }
 
+/** Methods that change their receiver: `state.items.push(x)` writes state. */
+const MUTATORS = new Set(['push', 'pop', 'shift', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin', 'set', 'add', 'delete', 'clear']);
+const STATE_PART = /^state\s*[.[]/;
+
+/** True when a function writes to `state`: assigns, updates or deletes a part of it, or mutates one. */
+function writesState(fn: Node): boolean {
+  const ofState = (node: Node | null) => !!node && STATE_PART.test(node.text);
+  const body = fn.childForFieldName('body');
+  const nodes = body?.descendantsOfType(['assignment_expression', 'augmented_assignment_expression', 'update_expression', 'unary_expression', 'call_expression']) ?? [];
+  return nodes.some((node) => {
+    if (!node) return false;
+    if (node.type === 'assignment_expression' || node.type === 'augmented_assignment_expression') return ofState(node.childForFieldName('left'));
+    if (node.type === 'update_expression') return ofState(node.childForFieldName('argument'));
+    if (node.type === 'unary_expression') return node.childForFieldName('operator')?.text === 'delete' && ofState(node.childForFieldName('argument'));
+    const callee = node.childForFieldName('function');
+    if (callee?.type !== 'member_expression') return false;
+    // state.items.push(x), Object.assign(state, …)
+    if (MUTATORS.has(callee.childForFieldName('property')?.text ?? '') && ofState(callee.childForFieldName('object'))) return true;
+    return callee.text === 'Object.assign' && node.childForFieldName('arguments')?.namedChild(0)?.text === 'state';
+  });
+}
+
+/**
+ * The kind of an object of Vuex members kept outside its module (`userActions.js`), or null when
+ * it does not look like one. Every member is a function, and either all take an action's context
+ * (`context`, `ctx`, `{ commit, … }`) or all take `state`. Context members are actions. `state`
+ * members are getters or mutations as the export or file name says (`userGetters`); otherwise
+ * mutations when one of them writes to `state`, getters when none does (M3-05-R2).
+ */
+function memberObjectKind(object: Node, names: string): VuexKind | null {
+  let context = 0, state = 0, writes = false;
+  for (const member of object.namedChildren) {
+    if (member.type === 'spread_element' || member.type === 'comment') continue;
+    const fn = member.type === 'method_definition' ? member : isFunctionMember(member) ? valueOf(member) : null;
+    if (!fn) return null;
+    let param = fn.childForFieldName('parameter')
+      ?? fn.childForFieldName('parameters')?.namedChildren.find((p) => p.type !== 'comment') ?? null;
+    if (param?.type === 'required_parameter' || param?.type === 'optional_parameter') param = param.childForFieldName('pattern');
+    if (param?.type === 'assignment_pattern') param = param.childForFieldName('left');
+    if (param?.type === 'identifier' ? CONTEXT_PARAM.test(param.text)
+      : param?.type === 'object_pattern' && [...patternNames(param).values()].some((key) => CONTEXT_KEYS.has(key))) {
+      context++;
+    } else if (param?.type === 'identifier' && param.text === 'state') {
+      state++;
+      writes ||= writesState(fn);
+    } else {
+      return null;
+    }
+  }
+  // None, or actions mixed with state functions: not one kind of members.
+  if ((context > 0) === (state > 0)) return null;
+  if (context > 0) return 'actions';
+  const named = /(getters|mutations)/i.exec(names)?.[1].toLowerCase() as VuexKind | undefined;
+  return named ?? (writes ? 'mutations' : 'getters');
+}
+
 /**
  * Mapped names of a map-helper call, with the store member each one names. A Vuex name with a
  * path (`'users/activeCount'`) names `activeCount` in the `users` namespace, under the helper's own
@@ -162,15 +227,63 @@ export function mapHelperEntries(call: Node | null, imports: Map<string, string>
   return entries;
 }
 
-/** Adds store targets, store references and the Vuex store model to one script's parse result. */
-export async function annotateStoreRefs(filePath: string, code: string, result: ParseResult): Promise<void> {
-  const hookCalls = HOOK_CALL.test(code) && (filePath.endsWith('.vue') || VUE_IMPORT.test(code));
-  if (!STORE_HINT.test(code) && !hookCalls && !KIND_FILE.test(filePath)) return;
+interface StoreDeps { vuex: boolean; pinia: boolean }
+/** The store libraries a package lists (null: no dependencies), by package.json path, with its mtime. */
+const manifestStores = new Map<string, { mtimeMs: number; stores: StoreDeps | null }>();
+const NO_STORES: StoreDeps = { vuex: false, pinia: false };
+
+/**
+ * Whether the package of a file lists `vuex` or `pinia`: the nearest package.json above it that
+ * declares dependencies (a `{"type": "module"}` marker is skipped). Unknown without a path.
+ */
+export function storeDependencies(absolutePath: string | undefined): StoreDeps {
+  if (!absolutePath) return NO_STORES;
+  for (let dir = dirname(absolutePath); ; dir = dirname(dir)) {
+    const manifest = join(dir, 'package.json');
+    if (existsSync(manifest)) {
+      try {
+        const mtimeMs = statSync(manifest).mtimeMs;
+        let cached = manifestStores.get(manifest);
+        if (cached?.mtimeMs !== mtimeMs) {
+          const pkg = JSON.parse(readFileSync(manifest, 'utf8'));
+          const fields = [pkg?.dependencies, pkg?.devDependencies, pkg?.peerDependencies].filter((d) => d && typeof d === 'object');
+          const stores = fields.length === 0 ? null : { vuex: fields.some((d) => Object.hasOwn(d, 'vuex')), pinia: fields.some((d) => Object.hasOwn(d, 'pinia')) };
+          manifestStores.set(manifest, (cached = { mtimeMs, stores }));
+        }
+        if (cached.stores) return cached.stores;
+      } catch {
+        // An unreadable manifest decides nothing; look further up.
+      }
+    }
+    if (dirname(dir) === dir) return NO_STORES;
+  }
+}
+
+/**
+ * Adds store targets, store references and the Vuex store model to one script's parse result.
+ * Two cases run only in a package that lists the store library (M3-05-R2): a plain module calling
+ * a hook it imports from the project (Pinia), and a file of member objects named by nothing but
+ * their signatures (Vuex). Elsewhere (React, Koa, Redux) the file indexes as before.
+ */
+export async function annotateStoreRefs(filePath: string, code: string, result: ParseResult, absolutePath?: string): Promise<void> {
+  const pass = storePass(filePath, code, absolutePath);
+  if (!pass.run) return;
   try {
-    await withScriptTree(code, (root) => new StorePass(filePath, root, result).run(code));
+    await withScriptTree(code, (root) => new StorePass(filePath, root, result, pass.vuex).run(code));
   } catch {
     // Store references then keep the default resolution.
   }
+}
+
+/** Whether the store pass parses a file, and whether its package lists vuex. The manifest is read only when it decides. */
+export function storePass(filePath: string, code: string, absolutePath?: string): { run: boolean; vuex: boolean } {
+  const hookCalls = HOOK_CALL.test(code) && (filePath.endsWith('.vue') || VUE_IMPORT.test(code));
+  const known = STORE_HINT.test(code) || hookCalls || KIND_FILE.test(filePath);
+  const plainHooks = !known && HOOK_CALL.test(code) && PROJECT_HOOK_IMPORT.test(code);
+  const memberParams = MEMBER_PARAM_HINT.test(code);
+  if (!known && !plainHooks && !memberParams) return { run: false, vuex: false };
+  const deps = storeDependencies(absolutePath);
+  return { run: known || (plainHooks && deps.pinia) || (memberParams && deps.vuex), vuex: deps.vuex };
 }
 
 class StorePass {
@@ -180,7 +293,8 @@ class StorePass {
   private options: Node | null = null;
   private model: VuexModuleInfo | null = null;
 
-  constructor(private readonly filePath: string, private readonly root: Node, private readonly result: ParseResult) {
+  /** `vuexPackage`: the file's package lists vuex, so member objects may be read by signature. */
+  constructor(private readonly filePath: string, private readonly root: Node, private readonly result: ParseResult, private readonly vuexPackage = false) {
     this.component = filePath.endsWith('.vue') ? (filePath.split('/').pop() ?? '').replace(/\.vue$/, '') : null;
     this.imports = importSources(root);
   }
@@ -304,24 +418,29 @@ class StorePass {
   /**
    * A file of module members (`getters.js` exporting `{ visible: (state) => … }`, or any file
    * exporting `const getters = { … }`): its arrow-function members get symbols, scoped to their
-   * kind, so a module that imports the object can name them (M3-05-R1).
+   * kind, so a module that imports the object can name them (M3-05-R1). Under any other name, in a
+   * package that lists vuex, an exported object whose members all take a Vuex member's first
+   * parameter (M3-05-R2).
    */
   private memberObjects(): void {
+    const fileName = this.filePath.split('/').pop() ?? '';
     const fileKind = KIND_FILE.exec(this.filePath)?.[1] as VuexKind | undefined;
     for (const statement of this.root.namedChildren) {
       if (statement.type !== 'export_statement') continue;
-      const objects: [Node | null, VuexKind | undefined][] = [];
+      // The object, its kind by name (if any), and the export's name.
+      const objects: [Node | null, VuexKind | undefined, string][] = [];
       const value = statement.childForFieldName('value');
-      if (value) objects.push([objectOf(value, this.root), fileKind]);
+      if (value) objects.push([objectOf(value, this.root), fileKind, value.type === 'identifier' ? value.text : '']);
       const declaration = statement.childForFieldName('declaration');
       if (declaration?.type === 'lexical_declaration' || declaration?.type === 'variable_declaration') {
         for (const declarator of declaration.namedChildren) {
           const name = declarator.childForFieldName('name')?.text ?? '';
           const kind = (VUEX_KINDS as string[]).includes(name) && name !== 'state' ? name as VuexKind : fileKind;
-          objects.push([objectOf(declarator.childForFieldName('value'), this.root), kind]);
+          objects.push([objectOf(declarator.childForFieldName('value'), this.root), kind, name]);
         }
       }
-      for (const [object, kind] of objects) {
+      for (const [object, named, exportName] of objects) {
+        const kind = named ?? (object && this.vuexPackage ? memberObjectKind(object, `${exportName} ${fileName}`) : null);
         if (!object || !kind) continue;
         for (const member of object.namedChildren) {
           const name = keyOf(member);
@@ -475,7 +594,8 @@ class StorePass {
     const owner = this.owner(at);
     const existing = this.result.references.filter((r) => r.referenceType === 'call' && r.startLine === startLine && r.targetName === local && !r.vueThis && !r.vueStore);
     for (const ref of existing) {
-      ref.vueStore = target;
+      // A hook that may not be a store keeps the call as extracted, for the default resolution (M3-05-R2).
+      ref.vueStore = target.store === 'pinia' && target.fallback ? { ...target, call: { name: ref.targetName, source: ref.sourceSymbol } } : target;
       ref.targetName = name;
       if (owner) ref.sourceSymbol = owner;
     }
@@ -511,6 +631,18 @@ class StorePass {
 }
 
 // ── Resolution ──────────────────────────────────────────────────────────────
+
+/**
+ * The reference to resolve: itself, or, for a hook of any name that is not a store after all,
+ * the call as the generic extraction gave it (its name and source), without a store target, so
+ * the default resolution and its library filters apply as if the store pass had not run (M3-05-R2).
+ */
+export function storeCallOrPlain(ref: ExtractedReference, ctx: VueResolveContext): ExtractedReference {
+  const target = ref.vueStore;
+  if (target?.store !== 'pinia' || !target.fallback || resolveStoreTarget(ref.targetName, target, ctx) !== undefined) return ref;
+  const { vueStore: _store, ...plain } = ref;
+  return target.call ? { ...plain, targetName: target.call.name, sourceSymbol: target.call.source } : plain;
+}
 
 /**
  * The store member a `vueStore` reference names, or null (no edge). Undefined for a `fallback`

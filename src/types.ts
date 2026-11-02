@@ -80,9 +80,10 @@ export type VueStoreTarget =
   /**
    * A member of the Pinia store `hook` (`useCartStore`), imported from `specifier` (null = this file).
    * `fallback`: a hook of any name, maybe a composable; when its module does not define it with
-   * `defineStore`, the reference resolves as any other (M3-05-R1).
+   * `defineStore`, the reference resolves as any other (M3-05-R1), with the name and source the
+   * generic extraction gave it (`call`, M3-05-R2).
    */
-  | { store: 'pinia'; hook: string; specifier: string | null; fallback?: boolean };
+  | { store: 'pinia'; hook: string; specifier: string | null; fallback?: boolean; call?: { name: string; source: string | null } };
 
 export type ReferenceType =
   | 'import'

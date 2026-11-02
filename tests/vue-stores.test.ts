@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
+import { join } from 'node:path';
+import { cleanup, init, mapx, mapxEnv, query, workspace } from './helpers/e2e.js';
+import { storePass } from '../src/parsers/languages/vue-stores.js';
 
 // M3-05: Vuex and Pinia references resolve to the member in the right store file, by namespace or
 // store import, never to a same-named function elsewhere or to the caller (edge contract rules 7
@@ -565,5 +567,374 @@ function go() {
     expect(targetsOf(PAGE, 'go', 'fetchAll')).toEqual([HTTP]);
     // `clear` is a built-in method name the generic extraction skips: still no edge.
     expect(targetsOf(USE_BOTH, 'go', 'clear')).toEqual([]);
+  });
+});
+
+// M3-05-R2: a plain module that imports only an any-name store hook (no `vue` / `pinia` import),
+// and Vuex arrow-function members in an imported object whatever its file is called.
+describe('Plain modules and member objects of any name', () => {
+  const WISH = 'src/stores/wish.ts';
+  const ORDERS = 'src/api/orders.ts';
+  const HTTP = 'src/api/http.ts';
+  const USE_WISH_ADD = 'src/composables/useWishAdd.ts';
+  const USE_PLAIN = 'src/composables/usePlain.ts';
+  const USER_ACTIONS = 'src/store/modules/user/userActions.js';
+  const USER_GETTERS = 'src/store/modules/user/userGetters.js';
+  const USER_MUTATIONS = 'src/store/modules/user/userMutations.js';
+  const USER_API = 'src/api/user.js';
+  const FLAGS = 'src/store/modules/user/flags.js';
+  const FORMAT = 'src/utils/format.js';
+  const MIXED = 'src/utils/mixed.js';
+  const PROFILE = 'src/components/Profile.vue';
+  let root: string;
+  let calls: { source_file: string; source_symbol: string | null; target_file: string; target_symbol: string }[];
+  const targetsOf = (file: string, source: string, target: string) =>
+    calls.filter((e) => e.source_file === file && e.source_symbol === source && e.target_symbol === target).map((e) => e.target_file).sort();
+  const symbolsOf = (file: string, name: string) =>
+    query<{ kind: string; scope: string | null }>(root, 'SELECT kind, scope FROM symbols WHERE file_path = ? AND name = ?', file, name);
+
+  const files: Record<string, string> = {
+      'package.json': JSON.stringify({ name: 'shop', dependencies: { vue: '^3.4.0', vuex: '^4.1.0', pinia: '^2.1.0' } }),
+      [WISH]: `import { defineStore } from 'pinia';
+import { ref } from 'vue';
+
+export const useWish = defineStore('wish', () => {
+  const items = ref<string[]>([]);
+  function add(item: string) { items.value.push(item); }
+  function clear() { items.value = []; }
+  return { items, add, clear };
+});
+`,
+      // Same names, not a store: never a target.
+      [ORDERS]: 'export function add(x: string) { return x; }\nexport function clear() { return 0; }\n',
+      // Imports only the hook: no vue, no pinia, no use…Store name.
+      [USE_WISH_ADD]: `import { useWish } from '../stores/wish';
+
+export function useWishAdd() {
+  const w = useWish();
+  function addOne(item: string) {
+    w.add(item);
+  }
+  function empty() {
+    const wish = useWish();
+    wish.clear();
+  }
+  return { addOne, empty };
+}
+`,
+      // Composables that are not stores, used from a plain module: the default resolution.
+      [HTTP]: 'export function fetchAll() { return 1; }\nexport function clear() { return 0; }\n',
+      'src/composables/useApi.ts': "import { fetchAll } from '../api/http';\nexport function useApi() { return { fetchAll }; }\n",
+      'src/composables/useLocal.ts': 'export function useLocal() {\n  function refresh() { return 0; }\n  return { refresh };\n}\n',
+      [USE_PLAIN]: `import { useApi } from './useApi';
+import { useLocal } from './useLocal';
+
+export function usePlain() {
+  const api = useApi();
+  const { refresh } = useLocal();
+  function go() {
+    api.fetchAll();
+    api.clear();
+    refresh();
+  }
+  return { go };
+}
+`,
+      'src/store/index.js': `import { createStore } from 'vuex';
+import user from './modules/user';
+
+export default createStore({
+  modules: { user },
+});
+`,
+      // Members in imported objects whose files are not named actions.js / getters.js / mutations.js.
+      'src/store/modules/user/index.js': `import userActions from './userActions';
+import userGetters from './userGetters';
+import { userMutations } from './userMutations';
+import { flags } from './flags';
+
+export default {
+  namespaced: true,
+  state: () => ({ current: null, ready: false, on: false }),
+  actions: userActions,
+  getters: { ...userGetters },
+  mutations: { ...userMutations, ...flags },
+};
+`,
+      [USER_ACTIONS]: `import { getUser } from '../../../api/user';
+
+export default {
+  fetchUser: async ({ commit }, id) => {
+    commit('SET_USER', await getUser(id));
+  },
+  logout: (context) => context.commit('SET_USER', null),
+};
+`,
+      // A getter with a block body is still a getter: it writes nothing to state.
+      [USER_GETTERS]: "export default {\n  displayName: (state) => (state.current ? state.current.name : ''),\n  initials: (state) => {\n    return state.current ? state.current.name[0] : '';\n  },\n};\n",
+      // SET_USER writes state through a helper, so only the name says mutations.
+      [USER_MUTATIONS]: 'function applyUser(state, user) {\n  state.current = user;\n}\n\nexport const userMutations = {\n  SET_USER: (state, user) => applyUser(state, user),\n};\n',
+      // No kind in any name: mutations because they write state, an expression body included.
+      [FLAGS]: 'export const flags = {\n  SET_READY: (state, ready) => (state.ready = ready),\n  TOGGLE: (state) => {\n    state.on = !state.on;\n  },\n};\n',
+      // Same names, not a store: never a target.
+      [USER_API]: 'export function getUser(id) { return id; }\nexport function fetchUser() { return 0; }\nexport function displayName() { return 0; }\nexport function SET_USER() { return 0; }\n',
+      // An exported object of arrow functions, not all with a Vuex member's first parameter: no symbols.
+      [FORMAT]: 'export default {\n  label: (state) => state.name,\n  upper: (text) => text.toUpperCase(),\n};\n',
+      // Actions mixed with state functions: not one kind of members, no symbols.
+      [MIXED]: 'export default {\n  load: ({ commit }) => commit(\'X\'),\n  count: (state) => state.n,\n};\n',
+      [PROFILE]: `<template><p>{{ displayName }}</p></template>
+
+<script>
+import { mapActions, mapGetters, mapMutations } from 'vuex';
+
+export default {
+  name: 'Profile',
+  computed: {
+    ...mapGetters('user', ['displayName']),
+  },
+  methods: {
+    ...mapActions('user', ['fetchUser', 'logout']),
+    ...mapMutations('user', ['SET_USER', 'SET_READY']),
+    reload() {
+      this.fetchUser(1);
+    },
+  },
+};
+</script>
+`,
+  };
+
+  beforeAll(() => {
+    root = workspace(files);
+    init(root);
+    mapx(root, 'scan', '.');
+    calls = query(root, `SELECT source_file, source_symbol, target_file, target_symbol FROM edges WHERE edge_type = 'call'`);
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('links w.add and wish.clear in a composable importing only useWish', () => {
+    expect(targetsOf(USE_WISH_ADD, 'addOne', 'add')).toEqual([WISH]);
+    expect(targetsOf(USE_WISH_ADD, 'empty', 'clear')).toEqual([WISH]);
+    expect(calls.filter((e) => e.source_file === USE_WISH_ADD && e.target_file === ORDERS)).toEqual([]);
+  });
+
+  it('leaves calls through composables that are not stores to the default resolution in a plain module', () => {
+    expect(targetsOf(USE_PLAIN, 'go', 'fetchAll')).toEqual([HTTP]);
+    expect(targetsOf(USE_PLAIN, 'go', 'refresh')).toEqual(['src/composables/useLocal.ts']);
+    expect(targetsOf(USE_PLAIN, 'go', 'clear')).toEqual([]);
+  });
+
+  it('links mapActions to an arrow member in userActions.js, and other kinds in any-name member files', () => {
+    expect(targetsOf(PROFILE, 'Profile', 'fetchUser')).toEqual([USER_ACTIONS]);
+    expect(targetsOf(PROFILE, 'Profile', 'logout')).toEqual([USER_ACTIONS]);
+    expect(targetsOf(PROFILE, 'reload', 'fetchUser')).toEqual([USER_ACTIONS]);
+    expect(targetsOf(PROFILE, 'Profile', 'displayName')).toEqual([USER_GETTERS]);
+    expect(targetsOf(PROFILE, 'Profile', 'SET_USER')).toEqual([USER_MUTATIONS]);
+    expect(calls.filter((e) => e.source_file === PROFILE && e.target_file === USER_API)).toEqual([]);
+    expect(symbolsOf(USER_ACTIONS, 'fetchUser')).toEqual([{ kind: 'method', scope: 'actions' }]);
+    expect(symbolsOf(USER_GETTERS, 'displayName')).toEqual([{ kind: 'method', scope: 'getters' }]);
+    expect(symbolsOf(USER_GETTERS, 'initials')).toEqual([{ kind: 'method', scope: 'getters' }]);
+    expect(symbolsOf(USER_MUTATIONS, 'SET_USER')).toEqual([{ kind: 'method', scope: 'mutations' }]);
+  });
+
+  it('scopes members that write state as mutations, an expression-bodied one included', () => {
+    expect(targetsOf(PROFILE, 'Profile', 'SET_READY')).toEqual([FLAGS]);
+    expect(symbolsOf(FLAGS, 'SET_READY')).toEqual([{ kind: 'method', scope: 'mutations' }]);
+    expect(symbolsOf(FLAGS, 'TOGGLE')).toEqual([{ kind: 'method', scope: 'mutations' }]);
+  });
+
+  it('gives no member symbols to an object of plain arrow functions', () => {
+    expect(symbolsOf(FORMAT, 'label')).toEqual([]);
+    expect(symbolsOf(FORMAT, 'upper')).toEqual([]);
+    expect(symbolsOf(MIXED, 'load')).toEqual([]);
+    expect(symbolsOf(MIXED, 'count')).toEqual([]);
+  });
+
+  it('gives the same graph when the files are parsed on workers, which read the package the same way', () => {
+    const viaWorkers = workspace(files);
+    try {
+      init(viaWorkers);
+      mapxEnv(viaWorkers, { MAPX_PARSE_WORKERS: '2' }, 'scan', '.');
+      const graph = (dir: string) => query(dir, `SELECT source_file, source_symbol, edge_type, target_file, target_symbol FROM edges ORDER BY 1, 2, 3, 4, 5`);
+      const members = (dir: string) => query(dir, `SELECT file_path, name, kind, scope FROM symbols ORDER BY 1, 2, 3, 4`);
+      expect(graph(viaWorkers)).toEqual(graph(root));
+      expect(members(viaWorkers)).toEqual(members(root));
+    } finally {
+      cleanup(viaWorkers);
+    }
+  }, 90000);
+});
+
+// M3-05-R2 review: React hooks, Koa handler objects and Redux reducer maps index as they did before
+// the store pass knew them. Outside a package listing vue / vuex / pinia the pass does not run on
+// them; inside one, a hook that is not a store resolves as the call the generic extraction gave
+// (its name, its source, the library filters).
+describe('React, Koa and Redux code outside and inside Vuex and Pinia packages', () => {
+  const DELETE = 'src/components/Delete.tsx';
+  const FORM = 'src/components/Form.tsx';
+  const PAGE = 'src/components/Page.tsx';
+  const LIST = 'src/components/List.tsx';
+  const ORDERS = 'src/api/orders.js';
+  const SESSION = 'src/legacy/session.js';
+  const HTTP = 'src/api/http.ts';
+  const USERS_CONTROLLER = 'src/controllers/users.js';
+  const ROUTES = 'src/routes/index.js';
+  const REDUCERS = 'src/store/reducers.ts';
+  const REDUX_STORE = 'src/store/index.ts';
+  const REACT_FILES = [DELETE, FORM, PAGE];
+  const react: Record<string, string> = {
+    // A destructured hook result named like a browser global (P1-a).
+    'src/hooks/useDialog.ts': 'export function useDialog() {\n  const confirm = (m) => window.confirm(m);\n  return { confirm, alert: (m) => window.alert(m) };\n}\n',
+    [ORDERS]: 'export function confirm(id) { return id; }\nexport function alert(msg) { return msg; }\n',
+    [DELETE]: `import { useDialog } from '../hooks/useDialog';
+export function Delete() {
+  const { confirm, alert } = useDialog();
+  const d = useDialog();
+  if (confirm('sure?')) alert('done');
+  d.confirm('x');
+  return null;
+}
+`,
+    // A renamed destructure (P1-b).
+    'src/hooks/useForm.ts': "import { useState } from 'react';\nexport function useForm() {\n  const [v, setV] = useState({});\n  const submit = async () => v;\n  return { submit, setV };\n}\n",
+    'src/hooks/useModal.ts': 'export function useModal() {\n  return { show: () => 1 };\n}\n',
+    [SESSION]: 'export function submit(form) { return form; }\nexport function open() { return 1; }\n',
+    [FORM]: `import { useForm } from '../hooks/useForm';
+import { useModal } from '../hooks/useModal';
+export function Form() {
+  const { submit: send } = useForm();
+  const { show: open } = useModal();
+  const go = () => { send(); open(); };
+  return go;
+}
+`,
+    // Calls in class methods and in object members that are not symbols (P1-c).
+    'src/hooks/useApi.ts': "import { load, save } from '../api/http';\nexport function useApi() { return { load, save }; }\n",
+    [HTTP]: 'export function load() { return 1; }\nexport function save() { return 1; }\n',
+    [PAGE]: `import { useApi } from '../hooks/useApi';
+export class Page {
+  api = useApi();
+  render() {
+    const api = useApi();
+    const handlers = {
+      onClick: () => { api.load(); },
+    };
+    api.save();
+    return handlers;
+  }
+}
+export const Card = () => {
+  const api = useApi();
+  const cfg = { onSave() { api.save(); } };
+  return cfg;
+};
+`,
+  };
+  const others: Record<string, string> = {
+    // Koa handlers take ctx, as Vuex actions may.
+    'src/services/users.js': "export function findAll() { return []; }\nexport function findOne(id) { return id; }\nexport function show() { return 'svc'; }\n",
+    [USERS_CONTROLLER]: `import { findAll, findOne } from '../services/users';
+export default {
+  list: async (ctx) => {
+    ctx.body = await findAll();
+  },
+  show: async (ctx) => {
+    ctx.body = await findOne(ctx.params.id);
+  },
+};
+`,
+    [ROUTES]: `import Router from 'koa-router';
+import users from '../controllers/users';
+const r = new Router();
+r.get('/users', users.list);
+function local() { show(); list(); }
+export default r;
+`,
+    // Redux reducers and selectors take state, as Vuex mutations and getters do.
+    [REDUCERS]: `export const todoReducers = {
+  add: (state, action) => {
+    state.items.push(action.payload);
+  },
+  remove: (state, action) => {
+    state.items = state.items.filter((i) => i !== action.payload);
+  },
+};
+export const selectors = {
+  count: (state) => state.items.length,
+};
+`,
+    // Runs the store pass (createStore), yet is no Vuex package: no member symbols.
+    [REDUX_STORE]: "import { createStore } from 'redux';\nexport const handlers = {\n  reset: (state) => ({ ...state, items: [] }),\n};\nexport default createStore((state = { items: [] }) => state);\n",
+    [LIST]: `import { useSelector } from 'react-redux';
+import { selectors, todoReducers } from '../store/reducers';
+export function List() {
+  const n = useSelector((state) => selectors.count(state));
+  todoReducers.add({ items: [] }, { payload: 1 });
+  remove();
+  return n;
+}
+function remove() { return 0; }
+`,
+  };
+  let plain: string;
+  let pinia: string;
+  const edgesFrom = (root: string, files: string[]) => query<{ source_file: string; source_symbol: string | null; target_file: string; target_symbol: string }>(root,
+    `SELECT source_file, source_symbol, target_file, target_symbol FROM edges WHERE edge_type = 'call' AND source_file IN (${files.map(() => '?').join(', ')}) ORDER BY 1, 2, 3, 4`, ...files);
+  const symbolsIn = (root: string, file: string) => query<{ name: string; kind: string }>(root, 'SELECT name, kind FROM symbols WHERE file_path = ? ORDER BY start_line, name', file);
+
+  beforeAll(() => {
+    plain = workspace({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { react: '^18.0.0', 'react-redux': '^9.0.0', koa: '^2.0.0', 'koa-router': '^12.0.0' } }),
+      ...react,
+      ...others,
+    });
+    pinia = workspace({ 'package.json': JSON.stringify({ name: 'mixed', dependencies: { vue: '^3.4.0', pinia: '^2.1.0', react: '^18.0.0' } }), ...react });
+    for (const root of [plain, pinia]) {
+      init(root);
+      mapx(root, 'scan', '.');
+    }
+  }, 90000);
+  afterAll(() => {
+    cleanup(plain);
+    cleanup(pinia);
+  });
+
+  it('runs the store pass on a React component or a Koa or Redux module only in a package listing the store library', () => {
+    expect(storePass(DELETE, react[DELETE], join(plain, DELETE)).run).toBe(false);
+    expect(storePass(DELETE, react[DELETE], join(pinia, DELETE)).run).toBe(true);
+    expect(storePass(USERS_CONTROLLER, others[USERS_CONTROLLER], join(plain, USERS_CONTROLLER))).toEqual({ run: false, vuex: false });
+    expect(storePass(LIST, others[LIST], join(plain, LIST)).run).toBe(false);
+    expect(storePass(REDUCERS, others[REDUCERS], join(plain, REDUCERS)).run).toBe(false);
+    // No path, no package: as before.
+    expect(storePass(DELETE, react[DELETE]).run).toBe(false);
+  });
+
+  it('keeps the library filter, the call name and the source of hook calls (as at the parent)', () => {
+    const edges = edgesFrom(plain, REACT_FILES);
+    // P1-a: alert() is a browser global, filtered as before.
+    expect(edges.filter((e) => e.target_file === ORDERS && e.target_symbol === 'alert')).toEqual([]);
+    // P1-b: send() is not looked up as submit.
+    expect(edges.filter((e) => e.target_file === SESSION && e.target_symbol === 'submit')).toEqual([]);
+    // P1-c: calls belong to the method that holds them, by its qualified name.
+    expect(edges.filter((e) => e.source_file === PAGE && e.target_file === HTTP)).toEqual([
+      { source_file: PAGE, source_symbol: 'Card::onSave', target_file: HTTP, target_symbol: 'save' },
+      { source_file: PAGE, source_symbol: 'Page::render', target_file: HTTP, target_symbol: 'load' },
+      { source_file: PAGE, source_symbol: 'Page::render', target_file: HTTP, target_symbol: 'save' },
+    ]);
+  });
+
+  it('resolves hooks that are not stores in a Pinia package exactly as outside one', () => {
+    expect(edgesFrom(pinia, REACT_FILES)).toEqual(edgesFrom(plain, REACT_FILES));
+    for (const file of REACT_FILES) expect(symbolsIn(pinia, file)).toEqual(symbolsIn(plain, file));
+  });
+
+  it('gives Koa handler objects and Redux reducer maps no Vuex member symbols, and no edges by their names', () => {
+    expect(symbolsIn(plain, USERS_CONTROLLER)).toEqual([]);
+    expect(symbolsIn(plain, REDUCERS)).toEqual([{ name: 'todoReducers', kind: 'constant' }, { name: 'selectors', kind: 'constant' }]);
+    expect(storePass(REDUX_STORE, others[REDUX_STORE], join(plain, REDUX_STORE))).toEqual({ run: true, vuex: false });
+    expect(symbolsIn(plain, REDUX_STORE).filter((s) => s.name === 'reset')).toEqual([]);
+    const local = edgesFrom(plain, [ROUTES]).filter((e) => e.source_symbol === 'local');
+    expect(local).toEqual([{ source_file: ROUTES, source_symbol: 'local', target_file: 'src/services/users.js', target_symbol: 'show' }]);
+    expect(edgesFrom(plain, [LIST]).filter((e) => e.target_file === REDUCERS)).toEqual([]);
   });
 });
