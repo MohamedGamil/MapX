@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- An index built by an older MapX is stale: `mapx check` exits 4, the commands warn, and the next `mapx scan` or `mapx update` re-parses every file once. The index records the extractor version that built it (M5-26).
 - `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).
 - `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
 

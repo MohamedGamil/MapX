@@ -28,6 +28,7 @@ import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesT
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, indexableChanges, staleCount, staleNames } from './core/staleness.js';
+import { outdatedIndexWarning } from './core/extractor-version.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { formatLanguageInfo, formatLanguageList, installLanguage, uninstallLanguage } from './languages/installer.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
@@ -2708,6 +2709,13 @@ export function getStaleFileNames(store: Store, dir: string, maxFiles: number = 
 }
 
 export function getMcpStalenessWarning(store: Store, dir: string): string {
+  // An index an older extractor built (M5-26).
+  const outdated = outdatedIndexWarning(store, 'run mapx_sync');
+  if (outdated) return `⚠️  ${outdated}\n\n` + getMcpStalenessWarningForFiles(store, dir);
+  return getMcpStalenessWarningForFiles(store, dir);
+}
+
+function getMcpStalenessWarningForFiles(store: Store, dir: string): string {
   const staleCount = getStaleFilesCount(store, dir);
   if (staleCount > 0) {
     const staleFiles = getStaleFileNames(store, dir);

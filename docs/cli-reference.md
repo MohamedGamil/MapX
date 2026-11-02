@@ -276,6 +276,8 @@ Files that import the symbol's file without calling it are listed as `LOW` (`sym
 
 Commands that read the index warn `Graph index may be stale` when indexed files changed content, were deleted, or new untracked files appeared. A new untracked file counts only if a scan would index it: the same rules apply as for the scan walk. These are the repo's include and exclude patterns from its last scan (including Laravel's default excludes), skipped directories such as `node_modules`, `vendor`, `build` and `coverage`, dot-prefixed files and directories, and a known language.
 
+The index records the version of the extractor that built it. An index an older MapX built (one from before a fix that changes what a scan extracts) is stale too: the commands warn `was built by an older MapX`, `mapx check` exits 4, and the next `mapx scan` or `mapx update` re-parses every file of that repo once (M5-26).
+
 ## `mapx node <symbol>`
 
 Inspect a specific symbol node with detailed metadata. Optionally view its source code. If the symbol is not found, suggests similar symbols via fuzzy matching.
@@ -838,7 +840,7 @@ Exit codes:
 | 1 | Violations of severity error (with `--fail-on warn`, also warn-level violations and warnings) |
 | 2 | Uncovered dependencies, with `--fail-on-uncovered` |
 | 3 | Configuration errors (invalid document, a `+` cycle), no configuration or no such `--view`, or a usage error (an unknown option, a missing value, an unknown `--layer` or `--rule`). With `--format json`, a missing configuration still gives a report with one `config` error |
-| 4 | No index, a repo never scanned, a stale index (run `mapx update` or pass `--sync`), or an internal error |
+| 4 | No index, a repo never scanned, a stale index (run `mapx update` or pass `--sync`), an index an older MapX built (run `mapx scan` or pass `--sync`), or an internal error |
 
 When several apply, the lower-level problem wins: 4, then 3, then 1, then 2. `--layer` and `--rule` narrow what fails, but a configuration error always fails.
 

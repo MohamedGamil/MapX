@@ -20383,15 +20383,64 @@
         "docs/research/deptrac/02-abstract-feature-model.md#AR-17"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check the version comparison.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-02T16:43:11.699Z",
+      "completedAt": "2026-11-02T17:16:08.474Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M5-26.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/index-version.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-26.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-26.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-02T16:43:10.348Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T16:43:11.699Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:16:05.981Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T17:16:08.474Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/index-version.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-26.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-26.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -24949,6 +24998,66 @@
       "verificationCommands": [
         "npx vitest run tests/check-test-cwd.test.ts tests/mcp-coverage.test.ts",
         "node scripts/baton/check-test-cwd.mjs",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-24",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-24-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-26",
+      "title": "A symbol whose name contains a dot opens by its exact name",
+      "objective": "`Store.getSymbolByName` finds a symbol whose own name contains a dot (a Python dotted name, a JS `a.b` assignment) before splitting the name into scope and name, so `mapx node`, MCP mapx_node and the dashboard open it.",
+      "description": "Found by the M4-24-R1 lane (2026-11-02): getSymbolByName splits on `.` unless the last part is a file extension, so a symbol named `x.y` gives a 404 in the dashboard and is not found by `mapx node`.",
+      "outputs": [
+        "src/core/store.ts",
+        "tests/store-extended.test.ts",
+        "reports/M4-26.md"
+      ],
+      "affectedFiles": [
+        "src/core/store.ts",
+        "tests/store-extended.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A scanned symbol named `api.get` (JS assignment) is found by `mapx node api.get` and by the dashboard /api/symbol route (tests).",
+        "`Class.method` and `Class::method` lookups keep working (tests)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/store-extended.test.ts",
         "npm run check"
       ]
     }

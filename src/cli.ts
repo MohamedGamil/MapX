@@ -23,6 +23,7 @@ import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
 import { findStaleFiles, indexableChanges, staleCount, staleNames } from './core/staleness.js';
+import { outdatedIndexWarning, outdatedRepos } from './core/extractor-version.js';
 import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
@@ -2612,14 +2613,27 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
         // A walk, not only git: new files count in a non-git workspace and in nested repos too.
         const stale = findStaleFiles(store, dir, { walk: true });
-        if (staleCount(stale) > 0) {
+        // An index an older extractor built is stale too: its edges may predate a fix (M5-26).
+        const outdated = outdatedRepos(store, config.repos.map((r) => r.name));
+        if (staleCount(stale) > 0 || outdated.length) {
           if (!opts.sync) {
-            const names = staleNames(stale, 5);
-            console.error(`The index is stale: ${staleCount(stale)} file(s) changed since the last scan (${names.join(', ')}${staleCount(stale) > names.length ? ', …' : ''}). Run \`mapx update\`, or \`mapx check --sync\`.`);
+            if (staleCount(stale) > 0) {
+              const names = staleNames(stale, 5);
+              console.error(`The index is stale: ${staleCount(stale)} file(s) changed since the last scan (${names.join(', ')}${staleCount(stale) > names.length ? ', …' : ''}). Run \`mapx update\`, or \`mapx check --sync\`.`);
+            }
+            if (outdated.length) console.error(`The index of ${outdated.join(', ')} was built by an older MapX: run \`mapx scan\`, or \`mapx check --sync\`, to rebuild it.`);
             process.exitCode = EXIT.index;
             return;
           }
+          // The sync re-parses every file of an outdated repo. One it could not rebuild (a missing
+          // folder, an interrupted sync) is still outdated: the gate holds (review of M5-26).
           await new Scanner(store, config, graph).scanIncremental();
+          const still = outdatedRepos(store, config.repos.map((r) => r.name));
+          if (still.length) {
+            console.error(`The index of ${still.join(', ')} was built by an older MapX and the sync could not rebuild it: run \`mapx scan\`.`);
+            process.exitCode = EXIT.index;
+            return;
+          }
         }
 
         // 3: no configuration, or one that cannot be used.
@@ -3470,6 +3484,8 @@ export function getStaleFilesCount(store: Store, dir: string): number {
 }
 
 export function checkAndPrintStaleness(store: Store, dir: string): void {
+  const outdated = outdatedIndexWarning(store, "run 'mapx scan' or 'mapx update'");
+  if (outdated) console.warn(`⚠️  Warning: ${outdated}\n`);
   const report = findStaleFiles(store, dir);
   const count = staleCount(report);
   if (count > 0) {

@@ -38,6 +38,7 @@ import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
 import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, type AliasContext } from './js-aliases.js';
 import { exportSkeleton, hasCommonJsExports, jsExportSignature, scanModule, type JsText } from './js-source.js';
+import { EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
@@ -513,6 +514,10 @@ export class Scanner {
       // edges, files, and clusters from a prior run cannot become stale.
       this.store.resetRepoForScan(repo.name);
     }
+    // An index an older extractor built re-parses every file once (M5-26). A resume state an older
+    // scan left lists files it completed with the older extractor: ignored, as for --force (review).
+    const outdated = !force && outdatedRepos(this.store, [repo.name]).length > 0;
+    if (outdated) this.clearResumeState(repo.name);
 
     const discovered = await this.discoverFiles(repoRoot, repo.name);
     this.onProgress?.({ phase: 'discover', current: discovered.length, total: discovered.length });
@@ -546,7 +551,7 @@ export class Scanner {
     // so re-parse everything once, as for changed filters (M0-10-R3).
     const newlyVisible = this.newlyVisibleRepos(repo.name, discovered.some(f => !f.isNew));
     this.store.setMeta('resolution_repos:' + repo.name, JSON.stringify(this.indexedRepos(repo.name)));
-    const reparseAll = force || newlyVisible || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
+    const reparseAll = force || newlyVisible || outdated || (previousFilters !== null && previousFilters !== undefined && previousFilters !== filters);
     this.store.setMeta(filterKey, filters);
     // Unchanged files that had edges into a removed file now back (M0-02-R2), or into a removed file
     // whose referenced names a new or changed file now holds (M0-02-R4), or that use a Vue tag whose
@@ -736,6 +741,7 @@ export class Scanner {
       this.settleVueRegistry(repo.name);
       const commitSha = isGitRepo(repoRoot) ? getCurrentCommitSha(repoRoot) : null;
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
+      this.store.setMeta(extractorVersionKey(repo.name), String(EXTRACTOR_VERSION));
       this.store.setMeta('last_scan_time:' + repo.name, new Date().toISOString());
       this.clearResumeState(repo.name);
 
@@ -849,6 +855,8 @@ export class Scanner {
     // repo is indexed yet: a git diff from HEAD would list none of its committed files (M0-10-R3).
     const indexed = this.store.getAllFiles(repo.name).length > 0;
     if (!indexed || this.newlyVisibleRepos(repo.name, indexed)) return this._scanFullForRepo(repo);
+    // An index an older extractor built: the full path re-parses every file once (M5-26).
+    if (outdatedRepos(this.store, [repo.name]).length) return this._scanFullForRepo(repo);
     this.store.setMeta('resolution_repos:' + repo.name, JSON.stringify(this.indexedRepos(repo.name)));
 
     // Content-hash based incremental for non-git projects, and for a repo inside a gitignored folder
