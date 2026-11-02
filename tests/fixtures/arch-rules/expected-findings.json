@@ -1,0 +1,1690 @@
+{
+  "version": 1,
+  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive.",
+  "apps": {
+    "php": {
+      "language": "php",
+      "repos": null
+    },
+    "ts": {
+      "language": "typescript",
+      "repos": null
+    },
+    "python": {
+      "language": "python",
+      "repos": null
+    },
+    "go": {
+      "language": "go",
+      "repos": null
+    },
+    "php-broken-cycle": {
+      "language": "php",
+      "repos": null
+    },
+    "workspace": {
+      "language": "typescript",
+      "repos": [
+        "frontend",
+        "backend"
+      ]
+    }
+  },
+  "rows": [
+    {
+      "id": "php-01",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "php-02",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Application/CancelOrder.php",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "php-03",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Controller/BaseController.php",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "php-04",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Controller/BaseController.php",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "php-05",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "php-06",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "php-07",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "skipped",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure; accepted in .mapx/architecture.baseline.json"
+    },
+    {
+      "id": "php-08",
+      "app": "php",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Shared/Result.php",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "php-09",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "php-10",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Application/CancelOrder.php",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/Shared/Result.php",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "php-11",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "php-12",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/MailGateway.php",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "php-13",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "php-14",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "app/Shared/Text.php",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "php-15",
+      "app": "php",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Domain/Ids/OrderId.php",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "php-16",
+      "app": "php",
+      "language": "php",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/Application/Internal/PricingRules.php",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "php-17",
+      "app": "php",
+      "language": "php",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Controller/ReportController.php",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/Application/Internal/TaxRules.php",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "php-18",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Application/Internal/PricingRules.php",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "php-19",
+      "app": "php",
+      "language": "php",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Domain/LedgerHelper.php",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "php-20",
+      "app": "php",
+      "language": "php",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/Application/CancelOrder.php",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/Domain/AuditTrail.php",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "php-21",
+      "app": "php",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/Domain/LedgerHelper.php",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "php-22",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Application/PlaceOrder.php",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/Support/Clock.php",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "php-23",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/MailGateway.php",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/Support/Uuid.php",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "php-24",
+      "app": "php",
+      "language": "php",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "app/Domain/Ids/OrderId.php",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "php-25",
+      "app": "php",
+      "language": "php",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "ts-01",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "ts-02",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/application/CancelOrder.ts",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "ts-03",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/controller/BaseController.ts",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "ts-04",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/controller/BaseController.ts",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "ts-05",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "ts-06",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/infrastructure/SqlOrderRepository.ts",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "ts-07",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/infrastructure/SqlOrderRepository.ts",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure"
+    },
+    {
+      "id": "ts-08",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/shared/Result.ts",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "src/domain/Money.ts",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "ts-09",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "ts-10",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/application/CancelOrder.ts",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "src/shared/Result.ts",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "ts-11",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/SqlOrderRepository.ts",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "ts-12",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/MailGateway.ts",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "ts-13",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/domain/Money.ts",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "ts-14",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/domain/Money.ts",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "src/shared/Text.ts",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "ts-15",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/domain/ids/OrderId.ts",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "ts-16",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/OrderController.ts",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "src/application/internal/PricingRules.ts",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "ts-17",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/controller/ReportController.ts",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "src/application/internal/TaxRules.ts",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "ts-18",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/application/internal/PricingRules.ts",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "ts-19",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/domain/LedgerHelper.ts",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "ts-20",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "src/application/CancelOrder.ts",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "src/domain/AuditTrail.ts",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "ts-21",
+      "app": "ts",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "src/domain/LedgerHelper.ts",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "ts-22",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/application/PlaceOrder.ts",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "src/support/Clock.ts",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "ts-23",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/MailGateway.ts",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "src/support/Uuid.ts",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "ts-24",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "src/domain/ids/OrderId.ts",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "ts-25",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "python-01",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "python-02",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/application/cancel_order.py",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "python-03",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/controller/base_controller.py",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "python-04",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/controller/base_controller.py",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "python-05",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "python-06",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/infrastructure/sql_order_repository.py",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "python-07",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/infrastructure/sql_order_repository.py",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure"
+    },
+    {
+      "id": "python-08",
+      "app": "python",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/shared/result.py",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "app/domain/money.py",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "python-09",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "python-10",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/application/cancel_order.py",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/shared/result.py",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "python-11",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/sql_order_repository.py",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "python-12",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/mail_gateway.py",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "python-13",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/domain/money.py",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "python-14",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/domain/money.py",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "app/shared/text.py",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "python-15",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/domain/ids/order_id.py",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "python-16",
+      "app": "python",
+      "language": "python",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/order_controller.py",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "app/application/internal/pricing_rules.py",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "python-17",
+      "app": "python",
+      "language": "python",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/controller/report_controller.py",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "app/application/internal/tax_rules.py",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "python-18",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/application/internal/pricing_rules.py",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "python-19",
+      "app": "python",
+      "language": "python",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/domain/ledger_helper.py",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "python-20",
+      "app": "python",
+      "language": "python",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "app/application/cancel_order.py",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "app/domain/audit_trail.py",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "python-21",
+      "app": "python",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "app/domain/ledger_helper.py",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "python-22",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/application/place_order.py",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "app/support/clock.py",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "python-23",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/mail_gateway.py",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "app/support/uuid.py",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "python-24",
+      "app": "python",
+      "language": "python",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "app/domain/ids/order_id.py",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "python-25",
+      "app": "python",
+      "language": "python",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "go-01",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "go-02",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "application/cancel_order.go",
+        "symbol": "CancelOrder"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed"
+    },
+    {
+      "id": "go-03",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "controller/base_controller.go",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "go-04",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "controller/base_controller.go",
+        "symbol": "BaseController"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Controller)"
+    },
+    {
+      "id": "go-05",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Domain: Controller may use Application only, and not transitively"
+    },
+    {
+      "id": "go-06",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "infrastructure/sql_order_repository.go",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Infrastructure"
+    },
+    {
+      "id": "go-07",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "infrastructure/sql_order_repository.go",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Infrastructure"
+    },
+    {
+      "id": "go-08",
+      "app": "go",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "shared/result.go",
+        "symbol": "Result"
+      },
+      "to": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Shared \u2192 Domain: Shared may use nothing"
+    },
+    {
+      "id": "go-09",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain"
+    },
+    {
+      "id": "go-10",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/cancel_order.go",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "shared/result.go",
+        "symbol": "Result"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Shared: +Domain also grants Domain's allowances"
+    },
+    {
+      "id": "go-11",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/sql_order_repository.go",
+        "symbol": "SqlOrderRepository"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "go-12",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/mail_gateway.go",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "edgeType": "instantiation",
+      "note": "Infrastructure \u2192 Domain"
+    },
+    {
+      "id": "go-13",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer (Domain)"
+    },
+    {
+      "id": "go-14",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "shared/text.go",
+        "symbol": "Text"
+      },
+      "edgeType": "instantiation",
+      "note": "Domain \u2192 Shared"
+    },
+    {
+      "id": "go-15",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "domain/ids/order_id.go",
+        "symbol": "OrderId"
+      },
+      "edgeType": "instantiation",
+      "note": "OrderId is in Domain and Shared (multi-layer): same layer and an allowed one"
+    },
+    {
+      "id": "go-16",
+      "app": "go",
+      "language": "go",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/order_controller.go",
+        "symbol": "OrderController"
+      },
+      "to": {
+        "file": "application/appinternal/pricing_rules.go",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "Controller \u2192 Application is allowed, but Application/Internal is private to Application"
+    },
+    {
+      "id": "go-17",
+      "app": "go",
+      "language": "go",
+      "rule": "private-layer",
+      "kind": "violation",
+      "from": {
+        "file": "controller/report_controller.go",
+        "symbol": "ReportController"
+      },
+      "to": {
+        "file": "application/appinternal/tax_rules.go",
+        "symbol": "TaxRules"
+      },
+      "edgeType": "instantiation",
+      "note": "private to Application"
+    },
+    {
+      "id": "go-18",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "application/appinternal/pricing_rules.go",
+        "symbol": "PricingRules"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: a private element is reachable from its own layer"
+    },
+    {
+      "id": "go-19",
+      "app": "go",
+      "language": "go",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "domain/ledger_helper.go",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain is allowed, but LedgerHelper is @internal to Domain"
+    },
+    {
+      "id": "go-20",
+      "app": "go",
+      "language": "go",
+      "rule": "internal-element",
+      "kind": "violation",
+      "from": {
+        "file": "application/cancel_order.go",
+        "symbol": "CancelOrder"
+      },
+      "to": {
+        "file": "domain/audit_trail.go",
+        "symbol": "AuditTrail"
+      },
+      "edgeType": "instantiation",
+      "note": "AuditTrail is @internal to Domain"
+    },
+    {
+      "id": "go-21",
+      "app": "go",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "file": "domain/ledger_helper.go",
+        "symbol": "LedgerHelper"
+      },
+      "edgeType": "instantiation",
+      "note": "same layer: an @internal element is reachable from its own layer"
+    },
+    {
+      "id": "go-22",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "application/place_order.go",
+        "symbol": "PlaceOrder"
+      },
+      "to": {
+        "file": "support/clock.go",
+        "symbol": "Clock"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "go-23",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/mail_gateway.go",
+        "symbol": "MailGateway"
+      },
+      "to": {
+        "file": "support/uuid.go",
+        "symbol": "Uuid"
+      },
+      "edgeType": "instantiation",
+      "note": "support/ is in no layer"
+    },
+    {
+      "id": "go-24",
+      "app": "go",
+      "language": "go",
+      "rule": "multi-layer",
+      "kind": "warning",
+      "from": {
+        "file": "domain/ids/order_id.go",
+        "symbol": "OrderId"
+      },
+      "note": "in Domain (path or namespace) and Shared (path)"
+    },
+    {
+      "id": "go-25",
+      "app": "go",
+      "language": "go",
+      "rule": "empty-layer",
+      "kind": "warning",
+      "layer": "Reporting",
+      "note": "Reporting matches nothing"
+    },
+    {
+      "id": "php-26",
+      "app": "php",
+      "language": "php",
+      "rule": "stale-baseline",
+      "kind": "error",
+      "from": {
+        "file": "app/Domain/Money.php",
+        "symbol": "Money"
+      },
+      "to": {
+        "file": "app/Infrastructure/SqlOrderRepository.php",
+        "symbol": "SqlOrderRepository"
+      },
+      "edgeType": "instantiation",
+      "note": "a baseline entry for a dependency that does not exist"
+    },
+    {
+      "id": "php-broken-cycle-01",
+      "app": "php-broken-cycle",
+      "language": "php",
+      "rule": "plus-cycle",
+      "kind": "error",
+      "layer": "Application",
+      "note": "\"+\" allowances form a cycle: Application \u2192 Domain \u2192 Application"
+    },
+    {
+      "id": "workspace-01",
+      "app": "workspace",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "frontend/src/orders.ts",
+        "symbol": "listOrders"
+      },
+      "to": {
+        "file": "backend/app/Http/Controllers/Api/OrderController.php",
+        "symbol": "index"
+      },
+      "edgeType": "http",
+      "note": "Frontend \u2192 PublicApi over http is allowed"
+    },
+    {
+      "id": "workspace-02",
+      "app": "workspace",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "frontend/src/admin.ts",
+        "symbol": "listUsers"
+      },
+      "to": {
+        "file": "backend/app/Http/Controllers/Admin/UserController.php",
+        "symbol": "index"
+      },
+      "edgeType": "http",
+      "note": "Frontend \u2192 Backend (an admin controller outside PublicApi)"
+    }
+  ]
+}
