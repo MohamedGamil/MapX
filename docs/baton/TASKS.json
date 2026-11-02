@@ -15245,6 +15245,10 @@
         {
           "id": "M5-03-R1",
           "type": "hard"
+        },
+        {
+          "id": "M5-25",
+          "type": "hard"
         }
       ],
       "sources": [
@@ -15266,7 +15270,12 @@
         "src/arch/policy.ts",
         "src/arch/evaluate.ts",
         "src/arch/report.ts",
-        "tests/arch-evaluate.test.ts"
+        "tests/arch-evaluate.test.ts",
+        "scripts/eval/score-arch.ts",
+        "tests/arch-fixture.test.ts",
+        "tests/fixtures/arch-rules/expected-findings.json",
+        "docs/architecture-rules.md",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
         "On the M5-01 fixture (excluding baseline, visibility, external and decorator rows owned by later tasks): violation and allowed recall/precision = 1.0.",
@@ -15275,7 +15284,8 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/arch-evaluate.test.ts",
-        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+        "npm run check"
       ],
       "description": "Allow-set expansion (`+`, `*`, `!`), per-rule severity and edge-type scope, verifiability policy, the AR-08 chain (scope → uncovered → same-layer → disallowed-layer → internal-element → private-layer → allowed), multi-layer and empty-layer warnings, ArchReport aggregation with layerEdges, stable fingerprints."
     },
@@ -20103,6 +20113,89 @@
       "rollback": "Revert the task commit."
     },
     {
+      "milestone": "M5",
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "resolution",
+        "go"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-17-R5",
+          "type": "hard"
+        },
+        {
+          "id": "M5-01",
+          "type": "fixture"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-01.md",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-02"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check the new test against the query and the parser change.",
+      "status": "IN_PROGRESS",
+      "owner": "claude-c0",
+      "actualHours": null,
+      "startedAt": "2026-11-02T13:07:19.466Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-02T13:07:18.380Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:07:19.466Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-25",
+      "title": "Go package-qualified composite literals resolve to the type in the imported package",
+      "objective": "A Go composite literal of a package-qualified type (`domain.Order{}`) is an instantiation edge to the type declared in the imported project package, so architecture rules see Go cross-package dependencies.",
+      "description": "Found while planning M5-04 (2026-11-02); recorded as a resolver gap in reports/M5-01.md (Go: 4 of 23 dependency rows had an edge). The Go references query captures composite literals of unqualified types only, and the parser attaches the package (goPackage) only to embedded qualified types, so `domain.Order{}` makes no edge. Reuses the M0-17-R5 resolution (resolveGoQualifiedType): the type in the imported project package's directory, nothing for standard-library or third-party packages.",
+      "outputs": [
+        "queries/go/references.scm",
+        "src/parsers/generic-wasm-parser.ts",
+        "tests/go-qualified-instantiation.test.ts",
+        "reports/M5-25.md"
+      ],
+      "affectedFiles": [
+        "queries/go/references.scm",
+        "src/parsers/generic-wasm-parser.ts",
+        "tests/go-qualified-instantiation.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A real scan of the M5-01 Go fixture app stores an instantiation edge for each cross-package composite literal labelled in tests/fixtures/arch-rules/expected-findings.json (go-05..08, go-16, go-17, go-22, go-23), targeting the labelled file and type (tests/go-qualified-instantiation.test.ts).",
+        "`time.Time{}` (standard library) and a third-party package type make no edge, and an aliased import (`d \"example.com/shop/domain\"`; `d.Order{}`) resolves (same test).",
+        "npm run eval edge recall and precision do not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/go-qualified-instantiation.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
       "id": "M0-02-R10",
       "milestone": "M0",
       "title": "An interrupted sync loses the symbols of the files it started re-indexing",
@@ -23153,14 +23246,27 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff",
       "actualHours": null,
       "startedAt": "2026-11-02T12:44:05.225Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T13:19:07.822Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R11.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/sync-interrupt.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R11.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R11.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T12:44:04.553Z",
@@ -23173,6 +23279,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:19:07.478Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:19:07.822Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/sync-interrupt.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R11.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R11.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -23888,6 +24017,68 @@
           ]
         }
       ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-02-R12",
+      "milestone": "M0",
+      "title": "A full scan killed after its index transaction keeps referrers and changed files",
+      "objective": "A scan killed after its index transaction commits but before the parse results are written leaves the next scan or sync equal to scan --force.",
+      "description": "Independent review of M0-02-R11 (2026-11-02, reproduced for git and hash): the full scan upserts real content and blob hashes before parsing, so a scan killed after that transaction loses the referrers whose removed-file records it consumed (a->b edges lost through later scans and syncs), and in a non-git repo a changed file keeps stale symbols. M0-02-R11 defers the record deletions into that transaction, which covers a rollback but not a kill after commit.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-02-R11",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-02-R11.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts (null hashes until the parse result is written in the full scan)",
+        "tests/sync-interrupt.test.ts",
+        "reports/M0-02-R12.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/sync-interrupt.test.ts",
+        "tests/scanner*.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Git and hash: delete b.ts, scan, restore it, then a full scan that throws after its index transaction (in writeParseResultWithMap) is followed by scans and syncs whose files, symbols and edges equal scan --force, including a->b (tests/sync-interrupt.test.ts).",
+        "Hash: a changed file whose full scan dies after the index transaction has its new symbols after the next scan (test).",
+        "An uninterrupted second full scan still skips unchanged files (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/sync-interrupt.test.ts",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

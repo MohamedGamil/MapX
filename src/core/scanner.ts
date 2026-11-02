@@ -541,6 +541,7 @@ export class Scanner {
     // A file without symbols is re-read by every scan: only new and changed files can name a moved
     // target, or a mention in an unchanged re-export would re-parse its referrers forever (M0-10-R4).
     const movedCandidates = [...newFiles, ...changedFiles];
+    this.startDeferredConsumption();
     const referrers = new Set([
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
@@ -573,6 +574,8 @@ export class Scanner {
       this.graph.addFileNode(f.relativePath, f.language, f.sizeBytes, f.lines);
     }
 
+    // Nothing to re-index: what the scan read is consumed now (M0-02-R11).
+    if (toParse.length === 0) this.applyDeferredConsumption();
     if (toParse.length > 0) {
       this.onProgress?.({ phase: 'index', current: 0, total: toParse.length });
 
@@ -580,6 +583,7 @@ export class Scanner {
       const gitHashes = isGitRepo(repoRoot) ? getGitBlobHashes(repoRoot, workspaceRoot) : new Map<string, string>();
 
       this.store.inTransaction(() => {
+        this.applyDeferredConsumption();
         for (let i = 0; i < toParse.length; i++) {
           const f = toParse[i];
           // HEAD's blob id, kept only when it is the indexed content: a file modified in the working
@@ -851,9 +855,12 @@ export class Scanner {
     // edit reverted to HEAD's content), it is read again; the blob comparison below skips it if the
     // indexed content is still the file's. A checkout whose files differ from HEAD's blobs only by
     // eol conversion is never listed, so it costs nothing.
+    // From here, what the sync consumes is written with its upserts (M0-02-R11).
+    this.startDeferredConsumption();
     const dirtyKey = 'dirty_paths:' + repo.name;
     const wasDirty = new Set(JSON.parse(this.store.getMeta(dirtyKey) ?? '[]') as string[]);
-    this.store.setMeta(dirtyKey, JSON.stringify(this.dirtyPaths(gitChanges, repoRoot, inNestedRepo)));
+    const dirtyNow = JSON.stringify(this.dirtyPaths(gitChanges, repoRoot, inNestedRepo));
+    this.consumeLater(() => this.store.setMeta(dirtyKey, dirtyNow));
 
     // A file removed and restored while HEAD stayed at the last scanned commit is not in the diff:
     // look for the removed files on disk (M0-02-R2).
@@ -892,6 +899,7 @@ export class Scanner {
     const facts = () => JSON.parse(this.store.getMeta('vue_registry:' + repo.name) ?? '{}');
     if (changes.length === 0 && pending.length === 0 && this.vueScopeMoves(repo.name, [], [], {}, facts(), true).size === 0
       && this.configReferrers(repo.name, [], true).size === 0 && !this.analysisInputsChanged(repo.name)) {
+      this.applyDeferredConsumption();
       await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
         filesScanned: 0,
@@ -987,6 +995,7 @@ export class Scanner {
     // .gitignore, .idea/, dist/, *.log), or files whose indexed content is unchanged: nothing to parse,
     // and the analysis inputs are those of its last run. Finish as the no-change return does, without the post-scan analysis (M4-04).
     if (toReindex.length === 0 && !removesIndexed && !analysisInput && !this.analysisInputsChanged(repo.name)) {
+      this.applyDeferredConsumption();
       this.settleVueRegistry(repo.name);
       const commitSha = getCurrentCommitSha(repoRoot);
       if (commitSha) this.store.setMeta('last_scan_commit:' + repo.name, commitSha);
@@ -1002,6 +1011,7 @@ export class Scanner {
     }
 
     this.store.inTransaction(() => {
+      this.applyDeferredConsumption();
       for (const { path: p, fileInfo, contentHash, blobHash } of toReindex) {
         this.store.deleteSymbolsForFile(p);
         this.store.deleteEdgesForFile(p);
@@ -2908,17 +2918,50 @@ export class Scanner {
     this.parsedInRun = null;
   }
 
-  /** The files another repo's scan queued for this repo to re-parse; the queue is emptied. */
+  /**
+   * Record deletions that consume what a sync read (removed-file records, the pending-referrer
+   * queue) are deferred until the transaction that writes the upserts of the files they re-index:
+   * a sync killed before that leaves the records for the next sync (M0-02-R11). Outside a sync's
+   * deferral window they apply at once.
+   */
+  private deferredConsumption: Array<() => void> | null = null;
+
+  private startDeferredConsumption(): void {
+    this.deferredConsumption = [];
+  }
+
+  private consumeLater(consume: () => void): void {
+    if (this.deferredConsumption) this.deferredConsumption.push(consume);
+    else consume();
+  }
+
+  /** Applies the deferred deletions; call inside the upsert transaction, or when nothing is re-indexed. */
+  private applyDeferredConsumption(): void {
+    const pending = this.deferredConsumption ?? [];
+    this.deferredConsumption = null;
+    for (const consume of pending) consume();
+  }
+
+  /**
+   * The files another repo's scan queued for this repo to re-parse. They leave the queue when the
+   * sync's upserts are written; entries queued meanwhile stay (M0-02-R11).
+   */
   private takePendingReferrers(repoName: string): string[] {
     const key = 'pending_referrers:' + repoName;
-    const pending = this.store.getMeta(key);
-    if (pending === null) return [];
-    this.store.setMeta(key, '[]');
-    try {
-      return JSON.parse(pending) as string[];
-    } catch {
-      return [];
-    }
+    const read = (): string[] => {
+      try {
+        return JSON.parse(this.store.getMeta(key) ?? '[]') as string[];
+      } catch {
+        return [];
+      }
+    };
+    if (this.store.getMeta(key) === null) return [];
+    const taken = read();
+    this.consumeLater(() => {
+      const left = read().filter(p => !taken.includes(p));
+      this.store.setMeta(key, JSON.stringify(left));
+    });
+    return taken;
   }
 
   /**
@@ -2985,22 +3028,31 @@ export class Scanner {
     }
   }
 
-  /** The recorded referrers of removed files that are indexed again; their entries are consumed. */
+  /**
+   * The recorded referrers of removed files that are indexed again. Their entries are consumed with
+   * the sync's upserts, re-read then, so records written meanwhile stay (M0-02-R11).
+   */
   private takeReferrers(repoName: string, paths: string[]): Set<string> {
     const removed = this.removedFiles(repoName);
     const names = this.removedNames(repoName);
     const referrers = new Set<string>();
-    let changed = false;
+    const taken: string[] = [];
     for (const p of paths) {
       if (!removed[p] && !names[p]) continue;
       for (const r of removed[p] ?? []) referrers.add(r);
-      delete removed[p];
-      delete names[p];
-      changed = true;
+      taken.push(p);
     }
-    if (changed) {
-      this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
-      this.store.setMeta('removed_names:' + repoName, JSON.stringify(names));
+    if (taken.length) {
+      this.consumeLater(() => {
+        const removedNow = this.removedFiles(repoName);
+        const namesNow = this.removedNames(repoName);
+        for (const p of taken) {
+          delete removedNow[p];
+          delete namesNow[p];
+        }
+        this.store.setMeta('removed_files:' + repoName, JSON.stringify(removedNow));
+        this.store.setMeta('removed_names:' + repoName, JSON.stringify(namesNow));
+      });
     }
     for (const p of paths) referrers.delete(p);
     return referrers;
@@ -3127,7 +3179,9 @@ export class Scanner {
     signatures['#families'] = MANIFEST_FAMILIES.map(f => f.prefix).join(',');
     let before: Record<string, string> | null = null;
     try { before = JSON.parse(this.store.getMeta(key) ?? 'null'); } catch { /* recorded below */ }
-    if (!dryRun) this.store.setMeta(key, JSON.stringify(signatures));
+    // Recorded with the sync's upserts, so a sync killed before them sees the change again (M0-02-R11).
+    const recordNow = JSON.stringify(signatures);
+    if (!dryRun) this.consumeLater(() => this.store.setMeta(key, recordNow));
     // No record yet: nothing to compare with.
     if (!before) return new Set();
     // A family the record does not hold yet (an index from before it) is only recorded: nothing to compare.
@@ -4053,6 +4107,7 @@ export class Scanner {
     // whose referenced names a new or changed file now holds (M0-02-R4), or that use a Vue tag whose
     // global registration changed (M3-08).
     const changedTexts = changed.map(f => ({ path: f.relativePath, content: f.content }));
+    this.startDeferredConsumption();
     const referrers = new Set([
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
@@ -4070,6 +4125,7 @@ export class Scanner {
     }
 
     if (toRemove.length === 0 && toReindex.length === 0) {
+      this.applyDeferredConsumption();
       await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
         filesScanned: 0,
@@ -4081,6 +4137,7 @@ export class Scanner {
     }
 
     this.store.inTransaction(() => {
+      this.applyDeferredConsumption();
       for (const f of toReindex) {
         this.store.deleteSymbolsForFile(f.relativePath);
         this.store.deleteEdgesForFile(f.relativePath);
