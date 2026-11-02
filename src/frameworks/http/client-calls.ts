@@ -257,9 +257,9 @@ export function fetchMethod(init: string | undefined): string {
   return method;
 }
 
-function createBaseURL(text: string, createAt: number): string | undefined {
+function createBaseURL(text: string, createAt: number, masked?: string): string | undefined {
   const open = text.indexOf('(', createAt);
-  const options = callArguments(text, open)[0];
+  const options = callArguments(text, open, masked)[0];
   return options?.startsWith('{') ? objectProperty(options.slice(1, -1), 'baseURL') : undefined;
 }
 
@@ -355,10 +355,39 @@ export function resolveImport(fromFile: string, spec: string, files: Set<string>
 interface Receiver {
   pattern: string;
   client: HttpClientRef;
+  /** Range the binding of a client created in this file is visible in (M2-04-R4). */
+  scope?: [number, number];
 }
 
-function receiversFor(file: string, content: string, providers: ProviderIndex, files: Set<string>, configured: HttpClientConfig[], readText?: ReadText): Receiver[] {
+/**
+ * For each offset, the innermost `{…}` block around it in masked source, or the whole file at top
+ * level, in one pass. Null when the masked braces do not balance (JSX text such as `Don't` opens a
+ * string the masker never closes): block scopes cannot be trusted in that file.
+ */
+function blockScopes(masked: string, offsets: number[]): [number, number][] | null {
+  const queries = [...offsets].sort((a, b) => a - b);
+  const enclosing = new Map<number, number>();
+  const closeOf = new Map<number, number>();
+  const stack: number[] = [];
+  for (let i = 0, q = 0; i < masked.length; i++) {
+    for (; q < queries.length && queries[q] === i; q++) enclosing.set(i, stack[stack.length - 1] ?? -1);
+    if (masked[i] === '{') stack.push(i);
+    else if (masked[i] === '}') {
+      if (!stack.length) return null;
+      closeOf.set(stack.pop()!, i);
+    }
+  }
+  if (stack.length) return null;
+  return offsets.map((at) => {
+    const open = enclosing.get(at) ?? -1;
+    return open < 0 ? [0, masked.length] : [open, closeOf.get(open)!];
+  });
+}
+
+function receiversFor(file: string, content: string, masked: string, providers: ProviderIndex, files: Set<string>, configured: HttpClientConfig[], readText?: ReadText): Receiver[] {
   const receivers: Receiver[] = [];
+  // Bindings declared in this file (clients and factory aliases) with their declaration offsets.
+  const declared: [Receiver, number][] = [];
   const own = (name: string, provider: Provider): HttpClientRef => ({
     kind: provider.kind, name, baseURL: provider.baseURL, baseURLAt: provider.baseURLAt, ...(provider.definedIn !== file ? { definedIn: provider.definedIn } : {}),
   });
@@ -366,9 +395,12 @@ function receiversFor(file: string, content: string, providers: ProviderIndex, f
     if (provider.kind === 'instance') receivers.push({ pattern: escape(local), client: own(local, provider) });
     else {
       receivers.push({ pattern: `${escape(local)}\\s*\\(\\s*\\)`, client: own(`${local}()`, provider) });
-      // Aliases: const api = Api();
-      for (const m of content.matchAll(new RegExp(`(?:const|let|var)\\s+(\\w+)\\s*=\\s*${escape(local)}\\s*\\(\\s*\\)`, 'g')))
-        receivers.push({ pattern: escape(m[1]!), client: { ...own(m[1]!, provider), kind: 'factory' } });
+      // Aliases: const api = Api(); scoped like the clients created in the file.
+      for (const m of masked.matchAll(new RegExp(`(?:const|let|var)\\s+(\\w+)\\s*=\\s*${escape(local)}\\s*\\(\\s*\\)`, 'g'))) {
+        const alias: Receiver = { pattern: escape(m[1]!), client: { ...own(m[1]!, provider), kind: 'factory' } };
+        receivers.push(alias);
+        declared.push([alias, m.index!]);
+      }
     }
   };
   for (const m of content.matchAll(/import\s+\*\s+as\s+(\w+)\s+from\s*['"]axios['"]/g))
@@ -394,12 +426,17 @@ function receiversFor(file: string, content: string, providers: ProviderIndex, f
   // A global window.axios (Laravel's bootstrap.js) makes bare `axios` a client in every file.
   if (providers.globalAxios && !receivers.some(r => r.client.kind === 'axios'))
     receivers.push({ pattern: '(?:window\\.|globalThis\\.)?axios', client: { kind: 'axios', name: 'axios' } });
-  // Clients created or defined in this file.
-  for (const m of content.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*axios\.create\s*\(/g)) {
+  // Clients created in this file; declarations in comments and strings do not count.
+  for (const m of masked.matchAll(/(?:const|let|var)\s+(\w+)\s*=\s*axios\.create\s*\(/g)) {
     const at = m.index! + m[0].lastIndexOf('axios.create');
-    receivers.push({ pattern: escape(m[1]!), client: { kind: 'instance', name: m[1]!, baseURL: createBaseURL(content, at), baseURLAt: at } });
+    const client: Receiver = { pattern: escape(m[1]!), client: { kind: 'instance', name: m[1]!, baseURL: createBaseURL(content, at, masked), baseURLAt: at } };
+    receivers.push(client);
+    declared.push([client, m.index!]);
   }
   for (const [name, provider] of providers.named.get(file) ?? []) addProvider(name, provider);
+  // Each declared binding is visible in the block of its declaration (M2-04-R4).
+  const scopes = blockScopes(masked, declared.map(([, at]) => at));
+  if (scopes) declared.forEach(([r], i) => (r.scope = scopes[i]));
   for (const c of configured)
     if (new RegExp(`(?<![\\w.$])${escape(c.receiver)}\\s*\\.`).test(content))
       receivers.push({ pattern: escape(c.receiver), client: { kind: 'configured', name: c.receiver, ...(c.baseURL !== undefined ? { baseURL: `'${c.baseURL}'` } : {}) } });
@@ -442,15 +479,30 @@ export function extractHttpCalls(
   // Search the masked source: calls in comments, strings or SFC templates are not calls.
   const masked = maskSource(file, content);
   const lineAt = lineIndex(content);
-  for (const r of receiversFor(file, content, ctx.providers, ctx.files, ctx.clients ?? [], ctx.readText)) {
-    const re = new RegExp(`(?<![\\w.$])${r.pattern}\\s*\\.\\s*(${methods})\\s*\\(`, 'g');
+  // Receivers by pattern, in order of first appearance, so each pattern is searched once.
+  const byPattern = new Map<string, Receiver[]>();
+  for (const r of receiversFor(file, content, masked, ctx.providers, ctx.files, ctx.clients ?? [], ctx.readText)) {
+    if (!byPattern.has(r.pattern)) byPattern.set(r.pattern, []);
+    byPattern.get(r.pattern)!.push(r);
+  }
+  // Same-named receivers (`const api = axios.create(..)` in two functions): a call belongs to the
+  // innermost binding whose block contains it; else to an unscoped one (an import), else the first (M2-04-R4).
+  const owner = (same: Receiver[], offset: number): Receiver => {
+    let best: Receiver | undefined;
+    for (const o of same)
+      if (o.scope && o.scope[0] <= offset && offset <= o.scope[1] && (!best || o.scope[1] - o.scope[0] < best.scope![1] - best.scope![0])) best = o;
+    return best ?? same.find(o => !o.scope) ?? same[0]!;
+  };
+  for (const [pattern, same] of byPattern) {
+    const re = new RegExp(`(?<![\\w.$])${pattern}\\s*\\.\\s*(${methods})\\s*\\(`, 'g');
     for (const m of masked.matchAll(re)) {
       if (seen.has(m.index!)) continue;
       const args = callArguments(content, m.index! + m[0].length - 1, masked);
       if (!args[0]) continue;
       seen.add(m.index!);
+      const { client } = owner(same, m.index!);
       for (const rawUrl of urlBranches(args[0]))
-        calls.push({ file, line: lineAt(m.index!), method: m[1]!.toUpperCase(), rawUrl, client: r.client, offset: m.index! });
+        calls.push({ file, line: lineAt(m.index!), method: m[1]!.toUpperCase(), rawUrl, client, offset: m.index! });
     }
   }
   for (const m of masked.matchAll(/(?<![\w.$])(?:window\.|globalThis\.)?fetch\s*\(/g)) {

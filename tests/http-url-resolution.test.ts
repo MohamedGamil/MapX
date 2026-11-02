@@ -6,7 +6,7 @@ import {
   collectConstants, constantsAnywhere, constantsAt, evaluate, expandDotenv, fileBindings, fileConstants, parseDotenv, visibleConstants,
 } from '../src/frameworks/http/url-resolver.js';
 import { cleanup, init, mapx, workspace } from './helpers/e2e.js';
-import { urlBranches } from '../src/frameworks/http/client-calls.js';
+import { collectProviders, extractHttpCalls, urlBranches } from '../src/frameworks/http/client-calls.js';
 
 // M2-04: request URLs from literals, concatenation, templates and string constants.
 describe('URL evaluation', () => {
@@ -230,4 +230,145 @@ describe('scoped constants and env expansion through the scanner (M2-04-R2)', ()
     expect(records.some((r) => 'offset' in r)).toBe(false);
     expect(records.some((r) => 'baseURLAt' in ((r.client ?? {}) as object))).toBe(false);
   });
+});
+
+// M2-04-R4: a call uses the client bound in its own scope, so same-named clients in one file keep
+// their own baseURL scope.
+describe('same-named clients in one file (M2-04-R4)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'web/src/clients.ts': [
+        "import axios from 'axios';",
+        "const BASE = '/top';",
+        'export function one() {',
+        "  const BASE = '/local';",
+        '  const api = axios.create({ baseURL: BASE });',
+        "  return api.get('/a');",
+        '}',
+        'export function two() {',
+        '  const api = axios.create({ baseURL: BASE });',
+        "  return api.get('/b');",
+        '}',
+        'export function three(BASE: string) {',
+        '  const api = axios.create({ baseURL: BASE });',
+        "  return api.get('/c');",
+        '}',
+        '',
+      ].join('\n'),
+      'web/src/single.ts': [
+        "import axios from 'axios';",
+        "const BASE = '/single';",
+        'const api = axios.create({ baseURL: BASE });',
+        "export function list() { return api.get('/items'); }",
+        "export function save() { const BASE = '/ignored'; return api.post('/items', {}); }",
+        'export const remove = (id: string) => api.delete(`/items/${id}`);',
+        '',
+      ].join('\n'),
+      // Review of M2-04-R4: declarations in comments and strings are not clients.
+      'web/src/comments.ts': [
+        "import axios from 'axios';",
+        "export const api = axios.create({ baseURL: '/top' });",
+        'export class Svc {',
+        "  /** Example: const api = axios.create({ baseURL: 'https://example.com' }) */",
+        "  list() { return api.get('/items'); }",
+        '}',
+        'export function f() {',
+        "  // const api = axios.create({ baseURL: '/old' });",
+        "  return api.get('/x');",
+        '}',
+        'export function g() {',
+        "  const doc = `const api = axios.create({ baseURL: '/doc' })`;",
+        "  return api.get('/y');",
+        '}',
+        '',
+      ].join('\n'),
+      // A factory alias in a function outranks a top-level client of the same name.
+      'web/src/factory.ts': "import axios from 'axios';\nexport const makeApi = () => axios.create({ baseURL: '/factory' });\n",
+      'web/src/alias.ts': [
+        "import axios from 'axios';",
+        "import { makeApi } from './factory';",
+        "const api = axios.create({ baseURL: '/top' });",
+        "export function f() { const api = makeApi(); return api.get('/x'); }",
+        "export function g() { return api.get('/y'); }",
+        '',
+      ].join('\n'),
+      // JSX text with an apostrophe opens a string the masker never closes, so the braces do not
+      // balance: block scopes are not trusted and the file keeps the M2-04-R3 behaviour.
+      'web/src/http.ts': "import axios from 'axios';\nexport const api = axios.create({ baseURL: '/imported' });\n",
+      'web/src/A.tsx': [
+        "import { api } from './http';",
+        "import axios from 'axios';",
+        'export function A() {',
+        "  const api = axios.create({ baseURL: '/local' });",
+        "  api.get('/a');",
+        "  return <p>Don't</p>;",
+        '}',
+        "export const B = () => <p>it's</p>;",
+        "export function C() { return api.get('/c'); }",
+        '',
+      ].join('\n'),
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 60000);
+  afterAll(() => cleanup(root));
+
+  const records = (file: string) =>
+    (JSON.parse(readFileSync(join(root, '.mapx', 'http-calls.json'), 'utf8')) as Record<string, unknown>[])
+      .filter((r) => r.file === file)
+      .map((r) => [r.line, r.method, r.url ?? null, r.baseURLUnresolved ?? false]);
+
+  it('gives each call the base of the client in its own function', () => {
+    expect(records('web/src/clients.ts')).toEqual([
+      [6, 'GET', '/local/a', false],
+      [10, 'GET', '/top/b', false],
+      // A parameter BASE has no value: the base stays unresolved.
+      [14, 'GET', '/c', true],
+    ]);
+  });
+
+  it('still gives every call the one top-level client of a file', () => {
+    expect(records('web/src/single.ts')).toEqual([
+      [4, 'GET', '/single/items', false],
+      // A BASE declared where the call is made does not change the client's base.
+      [5, 'POST', '/single/items', false],
+      [6, 'DELETE', '/single/items/{}', false],
+    ]);
+  });
+
+  it('ignores client declarations in comments and strings', () => {
+    expect(records('web/src/comments.ts')).toEqual([
+      [5, 'GET', '/top/items', false],
+      [9, 'GET', '/top/x', false],
+      [13, 'GET', '/top/y', false],
+    ]);
+  });
+
+  it('scopes a factory alias like a client, so it outranks a top-level client of the same name', () => {
+    expect(records('web/src/alias.ts')).toEqual([
+      [4, 'GET', '/factory/x', false],
+      [5, 'GET', '/top/y', false],
+    ]);
+  });
+
+  it('keeps the unscoped behaviour in a file whose masked braces do not balance', () => {
+    expect(records('web/src/A.tsx')).toEqual([
+      [5, 'GET', '/imported/a', false],
+      [9, 'GET', '/imported/c', false],
+    ]);
+  });
+
+  it('extracts 2,000 same-named clients in one file in near-linear time', () => {
+    let content = "import axios from 'axios';\n";
+    for (let i = 0; i < 2000; i++)
+      content += `export function f${i}() {\n  const api = axios.create({ baseURL: '/b${i}' });\n  return api.get('/x${i}');\n}\n`;
+    const files = [{ path: 'src/many.ts', content }];
+    const started = performance.now();
+    const calls = extractHttpCalls('src/many.ts', content, { providers: collectProviders(files), files: new Set(['src/many.ts']) });
+    const elapsed = performance.now() - started;
+    expect(calls.map((c) => c.client.baseURL)).toEqual(Array.from({ length: 2000 }, (_, i) => `'/b${i}'`));
+    // About 50 ms when measured; base took 38 s and the first M2-04-R4 attempt 158 s. The bound leaves room for a loaded machine.
+    expect(elapsed).toBeLessThan(5000);
+  }, 120000);
 });
