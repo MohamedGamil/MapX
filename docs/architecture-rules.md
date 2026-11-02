@@ -6,9 +6,10 @@ What exists so far:
 
 - **The configuration document** (M5-02): its schema, loading, `extends`, parameters, views and validation.
 - **The element view, the core selectors and layer membership** (M5-03).
-- **Rule evaluation and the report** (M5-04): policy expansion, the evaluation chain, findings with fingerprints, and the layer matrix. The `mapx check` command that prints them comes with M5-05.
+- **Rule evaluation and the report** (M5-04): policy expansion, the evaluation chain, findings with fingerprints, and the layer matrix.
+- **`mapx check`** (M5-05): the table and JSON reporters, and the exit contract. See [cli-reference.md](cli-reference.md#mapx-check).
 
-`mapx check`, reporters, baselines and `@internal` markers come in M5-05 to M5-11.
+Baselines, CI reporters, introspection commands and `@internal` markers come in M5-06 to M5-11.
 
 ## The configuration document
 
@@ -150,7 +151,7 @@ Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `imp
 
 ## The report
 
-`runArchitecture(dir)` (`src/arch/report.ts`) returns the report that `mapx check --format json` will print:
+`mapx check --format json` prints this report, described by `schemas/arch-report.schema.json`. It comes from `runArchitecture(dir)` in `src/arch/report.ts`. Uncovered, skipped and allowed findings are listed only with `--report-uncovered`, `--report-skipped` or `--report-allowed`; `counts` always includes them:
 
 - **`findings`:** one per dependency, edge type and rule. A source in several layers gets one finding whose `source.layer` lists them. Each has a `kind` (`violation`, `uncovered`, `allowed`, `warning`, `error`; `skipped` arrives with baselines), a `rule`, a `severity`, the `source` and `target` (element, file, layer, repo, first line), the `edgeType`, `verifiability`, the number of `edges` it stands for, a `fingerprint` and a `message`.
 - **`fingerprint`:** a hash of the rule, both elements and the edge type, with no line number, so it survives edits that move code.

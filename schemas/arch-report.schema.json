@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://unpkg.com/@mgamil/mapx/schemas/arch-report.schema.json",
+  "title": "MapX architecture report",
+  "description": "What `mapx check --format json` prints: the findings of the architecture rules (.mapx/architecture.jsonc) on the index, with counts, layer sizes and the layer-to-layer matrix.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "counts", "findings", "layers", "layerEdges", "configErrors"],
+  "properties": {
+    "version": { "const": 1 },
+    "counts": {
+      "description": "Findings per kind, before --report-* options hide any.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["violation", "skipped", "uncovered", "allowed", "warning", "error"],
+      "properties": {
+        "violation": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "uncovered": { "type": "integer", "minimum": 0 },
+        "allowed": { "type": "integer", "minimum": 0 },
+        "warning": { "type": "integer", "minimum": 0 },
+        "error": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": { "type": "array", "items": { "$ref": "#/definitions/finding" } },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "elements", "files", "overlay"],
+        "properties": {
+          "name": { "type": "string" },
+          "elements": { "type": "integer", "minimum": 0 },
+          "files": { "type": "integer", "minimum": 0 },
+          "overlay": { "type": "boolean" }
+        }
+      }
+    },
+    "layerEdges": {
+      "description": "Dependencies per (source layer, target layer).",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "allowed", "violations", "skipped"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" },
+          "allowed": { "type": "integer", "minimum": 0 },
+          "violations": { "type": "integer", "minimum": 0 },
+          "skipped": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "configErrors": { "type": "array", "items": { "type": "string" } }
+  },
+  "definitions": {
+    "end": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["element", "file"],
+      "properties": {
+        "element": { "description": "A symbol's qualified name, a file's path, or a Go package's import path.", "type": "string" },
+        "file": { "description": "Workspace-relative file (a directory for a package).", "type": "string" },
+        "layer": { "description": "Layers, comma-separated.", "type": "string" },
+        "repo": { "type": "string" },
+        "line": { "description": "First line of the dependency in the source file.", "type": "integer", "minimum": 1 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "severity", "fingerprint", "message"],
+      "properties": {
+        "kind": { "enum": ["violation", "skipped", "uncovered", "allowed", "warning", "error"] },
+        "rule": { "description": "disallowed-layer, private-layer, uncovered, multi-layer, empty-layer, unsupported-selector, plus-cycle, config …", "type": "string" },
+        "severity": { "enum": ["error", "warn", "info"] },
+        "source": { "$ref": "#/definitions/end" },
+        "target": { "$ref": "#/definitions/end" },
+        "edgeType": { "type": "string" },
+        "verifiability": { "enum": ["verified", "inferred"] },
+        "layer": { "description": "For layer-level findings (empty-layer, plus-cycle, unsupported-selector).", "type": "string" },
+        "edges": { "description": "Stored edges this finding stands for.", "type": "integer", "minimum": 1 },
+        "fingerprint": { "description": "Stable identity: rule, both elements and the edge type, never a line number.", "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

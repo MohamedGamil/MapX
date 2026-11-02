@@ -1,7 +1,7 @@
 import { printBanner } from './branding.js';
 import { Command } from 'commander';
 import { resolve, join, dirname, relative, basename, sep } from 'node:path';
-import { existsSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import * as readline from 'node:readline';
@@ -32,6 +32,12 @@ import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
+import { ConfigError, loadArchitectureConfig } from './arch/config.js';
+import type { ArchitectureConfig } from './arch/schema.js';
+import { configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
+import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
+import { renderJson } from './arch/reporters/json.js';
+import { renderTable } from './arch/reporters/table.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
 
@@ -2534,6 +2540,129 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           console.log(`⚠️  Detected ${smells.length} architectural smell(s). Run 'mapx arch --smells' for details.`);
         }
         console.log('');
+      }
+    });
+
+  // Architecture rules (M5-05; docs/architecture-rules.md, AR-16, AR-17): evaluate
+  // .mapx/architecture.jsonc on the index, print the findings, exit with the AR-17 code.
+  program
+    .command('check')
+    .description('Check the architecture rules in .mapx/architecture.jsonc against the index (exit 0 clean, 1 violations, 2 uncovered with --fail-on-uncovered, 3 configuration errors, 4 index missing or stale)')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--view <name>', 'Check the view .mapx/architecture/<name>.jsonc')
+    .option('--format <format>', 'Output format: table or json', 'table')
+    .option('-o, --output <file>', 'Write the report to a file instead of stdout')
+    .option('--report-uncovered', 'Show dependencies on elements in no layer')
+    .option('--fail-on-uncovered', 'Exit 2 when a dependency targets an element in no layer')
+    .option('--report-skipped', 'Show violations a baseline skips')
+    .option('--report-allowed', 'Show allowed dependencies too')
+    .option('--fail-on <severity>', 'Lowest severity that fails the run: error or warn', 'error')
+    .option('--layer <name>', 'Only findings about this layer')
+    .option('--rule <rule>', 'Only findings of this rule (disallowed-layer, private-layer, uncovered, multi-layer, …)')
+    .option('--sync', 'Sync the index first when files changed since the last scan')
+    // A usage error (unknown option, missing value) is a configuration error, exit 3 (AR-17), not
+    // commander's exit 1, which the contract keeps for violations.
+    .exitOverride((err) => { process.exit(err.exitCode === 0 ? 0 : EXIT.config); })
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
+      const format = String(opts.format);
+      const failOn = String(opts.failOn);
+      if (!['table', 'json'].includes(format)) {
+        console.error(`Error: --format must be table or json, not "${format}"`);
+        process.exitCode = EXIT.config;
+        return;
+      }
+      if (!['error', 'warn'].includes(failOn)) {
+        console.error(`Error: --fail-on must be error or warn, not "${failOn}"`);
+        process.exitCode = EXIT.config;
+        return;
+      }
+      const options: CheckOptions = {
+        reportUncovered: !!opts.reportUncovered, failOnUncovered: !!opts.failOnUncovered,
+        reportSkipped: !!opts.reportSkipped, reportAllowed: !!opts.reportAllowed,
+        failOn: failOn as CheckOptions['failOn'], layer: opts.layer as string | undefined, rule: opts.rule as string | undefined,
+      };
+      const emit = (report: ArchReport) => {
+        const shown = shownReport(report, options);
+        const text = format === 'json' ? renderJson(shown) : renderTable(shown);
+        if (opts.output) {
+          // Relative to the current directory, like any output path; its folder is created.
+          const out = resolve(String(opts.output));
+          mkdirSync(dirname(out), { recursive: true });
+          writeFileSync(out, text);
+        } else process.stdout.write(text);
+      };
+      try {
+        // 4 first (AR-17: the lowest-level problem wins): no index, a repo never scanned, or files
+        // changed since the last scan (unless --sync brings the index up to date).
+        if (!existsSync(resolve(dir, '.mapx', 'config.json')) || !existsSync(resolve(dir, '.mapx', 'mapx.db'))) {
+          console.error(`No MapX index in ${dir}: run \`mapx init\` and \`mapx scan\` first.`);
+          process.exitCode = EXIT.index;
+          return;
+        }
+        const { config, store, graph } = await loadContext(dir);
+        // An index file exists as soon as any command opens it: only a finished scan of every
+        // registered repo counts (review of M5-05: an unscanned index passed as clean).
+        const unscanned = config.repos.filter((r) => !store.getMeta(`last_scan_time:${r.name}`)).map((r) => r.name);
+        if (unscanned.length) {
+          console.error(`The index has no completed scan of ${unscanned.join(', ')}: run \`mapx scan\` first.`);
+          process.exitCode = EXIT.index;
+          return;
+        }
+        // A walk, not only git: new files count in a non-git workspace and in nested repos too.
+        const stale = findStaleFiles(store, dir, { walk: true });
+        if (staleCount(stale) > 0) {
+          if (!opts.sync) {
+            const names = staleNames(stale, 5);
+            console.error(`The index is stale: ${staleCount(stale)} file(s) changed since the last scan (${names.join(', ')}${staleCount(stale) > names.length ? ', …' : ''}). Run \`mapx update\`, or \`mapx check --sync\`.`);
+            process.exitCode = EXIT.index;
+            return;
+          }
+          await new Scanner(store, config, graph).scanIncremental();
+        }
+
+        // 3: no configuration, or one that cannot be used.
+        const view = (opts.view as string | undefined) ?? undefined;
+        let archConfig: ArchitectureConfig | null;
+        try {
+          archConfig = loadArchitectureConfig(dir, { view });
+        } catch (err) {
+          if (!(err instanceof ConfigError)) throw err;
+          emit(configErrorReport(err));
+          process.exitCode = EXIT.config;
+          return;
+        }
+        if (!archConfig) {
+          const missing = view ? `.mapx/architecture/${view}.jsonc` : '.mapx/architecture.jsonc';
+          const message = view
+            ? `No view "${view}" in ${dir}: ${missing} does not exist.`
+            : `No architecture configuration in ${dir}: create ${missing} (see docs/architecture-rules.md). \`mapx arch init\`, which will infer one from roles, clusters and frameworks, is not available yet (M5-17).`;
+          console.error(message);
+          // A JSON consumer still gets a report: one configuration error.
+          if (format === 'json' || opts.output) emit(configErrorReport(new ConfigError([{ file: missing, pointer: '', message: 'not found' }])));
+          process.exitCode = EXIT.config;
+          return;
+        }
+        // --layer and --rule must name something: a typo would silently turn the gate off.
+        const layerNames = archConfig.layers.map((l) => l.name);
+        if (options.layer && !layerNames.includes(options.layer)) {
+          console.error(`Error: --layer "${options.layer}" is not a layer of this configuration (${layerNames.join(', ')}).`);
+          process.exitCode = EXIT.config;
+          return;
+        }
+        if (options.rule && !CHECK_RULES.includes(options.rule)) {
+          console.error(`Error: --rule "${options.rule}" is not a rule (${CHECK_RULES.join(', ')}).`);
+          process.exitCode = EXIT.config;
+          return;
+        }
+        const repoPaths = Object.fromEntries(config.repos.map((r) => [r.name, r.path]));
+        const report = runArchitecture(dir, { store, repoPaths, view })!;
+        emit(report);
+        process.exitCode = exitCode(report, options);
+      } catch (err) {
+        console.error(`mapx check failed: ${err instanceof Error ? err.message : String(err)}`);
+        process.exitCode = EXIT.index;
       }
     });
 

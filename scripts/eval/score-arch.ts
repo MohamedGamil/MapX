@@ -178,7 +178,8 @@ export function scanApp(fixture: string, app: string, repos: string[] | null): A
     const reportPath = join(root, '.mapx/architecture-report.json');
     if (hasCheck(root)) {
       try {
-        cli(root, 'check', '--format', 'json', '--output', reportPath);
+        // Every scored kind must be listed: uncovered and skipped findings are hidden by default (M5-05).
+        cli(root, 'check', '--format', 'json', '--output', reportPath, '--report-uncovered', '--report-skipped');
       } catch (err: any) {
         // Exit 1 (violations), 2 (uncovered) and 3 (configuration errors) still write the report.
         if (![1, 2, 3].includes(err?.status)) throw err;

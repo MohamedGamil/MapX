@@ -12,6 +12,10 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).
 - `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
 
+- `mapx check` checks `.mapx/architecture.jsonc` against the index (M5-05):
+  - findings as a table grouped by layer, or as JSON (`--format json`, `--output`, described by `schemas/arch-report.schema.json`);
+  - `--view`, `--layer`, `--rule`, `--report-uncovered`, `--report-allowed`, `--fail-on warn`, `--fail-on-uncovered` and `--sync`;
+  - exit codes: 0 clean, 1 violations, 2 uncovered with `--fail-on-uncovered`, 3 configuration errors or no configuration, 4 no index or a stale one.
 - The architecture rule evaluator and report (`src/arch/report.ts`, run by the coming `mapx check`) (M5-04). It covers:
   - allowances `L`, `+L` (transitive), `!L`, `*`, a `"*"` defaults key, and edge-type-scoped and advisory (`severity: "warn"`) allowances;
   - the evaluation chain: scope, uncovered, same layer, `disallowed-layer`, `private-layer`, allowed;

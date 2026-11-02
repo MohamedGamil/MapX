@@ -3,12 +3,12 @@
 // stale), deleted files count, and new untracked files count when a scan would index them.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import type { Store } from './store.js';
 import type { MapxConfig, RepoConfig } from '../types.js';
 import { getLanguageForFile } from '../languages/registry.js';
-import { effectiveExcludesFor, isScannablePath, shebangLanguage } from './file-rules.js';
+import { effectiveExcludesFor, isScannableDir, isScannablePath, shebangLanguage } from './file-rules.js';
 
 export interface StaleReport {
   changed: string[];
@@ -24,6 +24,11 @@ export interface StaleReport {
  * Laravel's default excludes and dotfiles were reported "(new)" forever.
  */
 export function scannableFilter(store: Store, dir: string): (path: string) => boolean {
+  return scanRules(store, dir).file;
+}
+
+/** The scanner's rules for files and folders of the workspace, per registered repo. */
+function scanRules(store: Store, dir: string): { file: (path: string) => boolean; dir: (relDir: string) => boolean } {
   let config: Partial<MapxConfig> = {};
   try {
     config = JSON.parse(readFileSync(join(dir, '.mapx', 'config.json'), 'utf-8'));
@@ -50,13 +55,50 @@ export function scannableFilter(store: Store, dir: string): (path: string) => bo
     }
     return filters.get(repo.name)!;
   };
-  return (path: string) => {
+  const file = (path: string) => {
     const owner = repos.find(r => path.startsWith(r.prefix));
     if (!owner) return false;
     const { excludes, includes } = filtersFor(owner.repo);
     if (!isScannablePath(path, excludes, includes, owner.prefix)) return false;
     return getLanguageForFile(path) !== null || (!basename(path).includes('.') && shebangLanguage(resolve(dir, path)) !== null);
   };
+  // A folder the walk enters: inside a repo, by that repo's pruning rules; outside every repo, only
+  // when a registered repo lies below it.
+  const folder = (relDir: string) => {
+    const owner = repos.find(r => `${relDir}/`.startsWith(r.prefix));
+    if (!owner) return repos.some(r => r.prefix.startsWith(`${relDir}/`));
+    if (`${relDir}/` === owner.prefix) return true;
+    return isScannableDir(relDir, filtersFor(owner.repo).excludes, owner.prefix);
+  };
+  return { file, dir: folder };
+}
+
+/**
+ * Files a scan would index that the index does not hold, found by walking the workspace with the
+ * scanner's rules (M5-05). Unlike the git listing, it sees new files in a workspace that is not a
+ * git repository and in nested repos; it costs a directory walk, so only `mapx check` uses it.
+ */
+function walkedNewFiles(store: Store, dir: string, known: Set<string>): string[] {
+  const rules = scanRules(store, dir);
+  const out: string[] = [];
+  const visit = (rel: string) => {
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(rel ? join(dir, rel) : dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const path = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        if (rules.dir(path)) visit(path);
+      } else if (e.isFile() && !known.has(path) && rules.file(path)) {
+        out.push(path);
+      }
+    }
+  };
+  visit('');
+  return out;
 }
 
 /** New source files git does not track yet and the index has not seen, if a scan would index them. */
@@ -73,7 +115,12 @@ function untrackedSourceFiles(store: Store, dir: string, known: Set<string>): st
   return out.split('\n').filter(p => p && !p.endsWith('/') && !known.has(p) && scannable(p));
 }
 
-export function findStaleFiles(store: Store, dir: string): StaleReport {
+export interface StaleOptions {
+  /** Find new files by walking the workspace (every repo, git or not) instead of asking git. */
+  walk?: boolean;
+}
+
+export function findStaleFiles(store: Store, dir: string, options: StaleOptions = {}): StaleReport {
   const report: StaleReport = { changed: [], deleted: [], added: [] };
   try {
     const files = store.getAllFiles();
@@ -94,7 +141,8 @@ export function findStaleFiles(store: Store, dir: string): StaleReport {
       }
       report.changed.push(path);
     }
-    report.added = untrackedSourceFiles(store, dir, new Set(files.map(f => f.path as string)));
+    const known = new Set(files.map(f => f.path as string));
+    report.added = options.walk ? walkedNewFiles(store, dir, known) : untrackedSourceFiles(store, dir, known);
   } catch {
     // An unreadable index is reported elsewhere; never fail a query on staleness.
   }

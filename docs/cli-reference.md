@@ -805,6 +805,51 @@ mapx arch --smells                  # Show only code smells
 mapx arch --violations --json       # Show violations as JSON
 ```
 
+## `mapx check`
+
+Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, and private parts. See [architecture-rules.md](architecture-rules.md) for the configuration. It is meant for CI, so it never prints the logo and its exit code says what it found.
+
+```bash
+mapx check [path] [--view <name>] [--format table|json] [--output <file>]
+           [--report-uncovered] [--fail-on-uncovered] [--report-skipped] [--report-allowed]
+           [--fail-on error|warn] [--layer <name>] [--rule <rule>] [--sync]
+```
+
+Options:
+- `--view <name>`: check `.mapx/architecture/<name>.jsonc` instead.
+- `--format`: `table` (default), findings grouped by source layer with file and line; or `json`, the report described by `schemas/arch-report.schema.json`, in a stable order.
+- `--output <file>`: write the report to a file instead of stdout. The path is relative to the current directory, and missing folders are created.
+- `--report-uncovered`: list dependencies on elements in no layer. Otherwise they are only counted.
+- `--fail-on-uncovered`: exit 2 when there are any (also lists them).
+- `--report-skipped`: list violations a baseline skips. Baselines are not supported yet.
+- `--report-allowed`: list allowed dependencies too.
+- `--fail-on warn`: warn-level violations (advisory rules, inferred edges) and warnings (`multi-layer`, `empty-layer`, `unsupported-selector`) also fail the run.
+- `--layer <name>`: only findings whose source or target layer is `<name>`, or that are about that layer. A name that is not a layer of the configuration is an error (exit 3), so a typo cannot turn the check off.
+- `--rule <rule>`: only findings of one rule: `disallowed-layer`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`. An unknown rule is an error (exit 3).
+- `--sync`: when files changed since the last scan, sync the index first instead of failing.
+
+Before checking, `mapx check` makes sure the index is current. Every registered repo must have a completed scan, and no indexed file may have changed or been deleted. No new file a scan would index may be missing, in a git workspace or not, in nested repos too.
+
+Exit codes:
+
+| Code | Meaning |
+| --- | --- |
+| 0 | No failing finding |
+| 1 | Violations of severity error (with `--fail-on warn`, also warn-level violations and warnings) |
+| 2 | Uncovered dependencies, with `--fail-on-uncovered` |
+| 3 | Configuration errors (invalid document, a `+` cycle), no configuration or no such `--view`, or a usage error (an unknown option, a missing value, an unknown `--layer` or `--rule`). With `--format json`, a missing configuration still gives a report with one `config` error |
+| 4 | No index, a repo never scanned, a stale index (run `mapx update` or pass `--sync`), or an internal error |
+
+When several apply, the lower-level problem wins: 4, then 3, then 1, then 2. `--layer` and `--rule` narrow what fails, but a configuration error always fails.
+
+Examples:
+```bash
+mapx check                                   # table; exit 1 on violations
+mapx check --format json -o arch-report.json # the report for CI or other tools
+mapx check --sync --fail-on-uncovered        # sync first; every dependency must be in a layer
+mapx check --layer Domain --rule disallowed-layer
+```
+
 ## `mapx explain <file>`
 
 Explain the automatic file role/layer classification result for a given file. Shows all evaluated signals (path, naming, topology, framework, imports) with confidence weights and alternate role scores.

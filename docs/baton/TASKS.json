@@ -15352,14 +15352,27 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-c0",
       "actualHours": null,
       "startedAt": "2026-11-02T13:51:14.189Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T14:18:43.689Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-05.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-cli.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-05.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-05.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T13:51:13.782Z",
@@ -15372,9 +15385,32 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T14:18:43.368Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T14:18:43.689Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-cli.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-05.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-05.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -15420,7 +15456,8 @@
         "docs/architecture-rules.md",
         "CHANGELOG.md",
         "scripts/eval/score-arch.ts",
-        "tests/arch-fixture.test.ts"
+        "tests/arch-fixture.test.ts",
+        "src/core/staleness.ts"
       ],
       "acceptanceCriteria": [
         "Each exit code 0–4 is produced by a fixture case in tests/arch-cli.test.ts using the built binary.",
@@ -15568,7 +15605,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -15701,7 +15738,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -15773,7 +15810,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -16129,7 +16166,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -20317,6 +20354,72 @@
       "verificationCommands": [
         "npx vitest run tests/go-qualified-instantiation.test.ts",
         "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "arch",
+        "index"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-05.md",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-17"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check the version comparison.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-26",
+      "title": "The index records the extractor version that built it; an older index counts as stale",
+      "objective": "After an upgrade that changes what parsers or the resolver extract, `mapx check` (and staleness warnings) treat an index built by an older extractor as stale instead of evaluating incomplete edges.",
+      "description": "Review of M5-05 (2026-11-02, P2, argued from code): store migrations add columns but keep old extracted data, and nothing records which extractor built the index (ANALYSIS_VERSION in scanner.ts covers only the post-scan analysis). An index scanned before M5-25 has no Go cross-package instantiation edges, so after upgrading, `mapx check` reports fewer violations with no staleness signal.",
+      "outputs": [
+        "src/core/scanner.ts (extractor version meta)",
+        "src/core/staleness.ts",
+        "src/cli.ts",
+        "tests/index-version.test.ts",
+        "reports/M5-26.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/staleness.ts",
+        "src/cli.ts",
+        "tests/index-version.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A scan records the extractor version per repo; an index whose version is older than the running MapX's makes `mapx check` exit 4 with a message to rescan, and `mapx check --sync` performs the rescan (tests/index-version.test.ts).",
+        "Other commands print the staleness warning for an older index; an index with the current version is unaffected."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/index-version.test.ts",
         "npm run check"
       ]
     },

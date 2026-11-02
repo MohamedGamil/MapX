@@ -146,7 +146,7 @@ describe('the scorer', () => {
   });
 });
 
-describe('the real-scan score (M5-04 evaluator, in-process until mapx check exists)', () => {
+describe('the real-scan score (`mapx check`, M5-04 evaluator)', () => {
   // Rows later tasks own: the baseline (M5-06: php-07 skipped, php-26 stale entry) and @internal
   // markers (M5-10/M5-11: internal-element). Every other labelled row is found, and nothing else is.
   const LATER = (r: (typeof rows)[number]) => r.kind === 'skipped' || r.rule === 'stale-baseline' || r.rule === 'internal-element';
