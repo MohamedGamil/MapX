@@ -384,7 +384,7 @@ Show routes extracted from framework controllers or configuration.
 - `framework` (string, optional): Filter by framework name
 - `method` (string, optional): Filter by HTTP method (GET, POST, etc.)
 - `pathPattern` (string, optional): Filter by route path (or request URL with `clients`)
-- `clients` (`"all"` | `"unmatched"`, optional): Instead of routes, list frontend HTTP call sites with their resolved URL and the backend route each reaches; `"unmatched"` lists only calls that reach no live route. Pairing follows the rules of `mapx routes --clients`: literal path evidence, workspace hosts only (`settings.http.hosts`), and method `UNKNOWN` never paired
+- `clients` (`"all"` | `"unmatched"`, optional): Instead of routes, list frontend HTTP call sites with their resolved URL and the backend route each reaches; `"unmatched"` lists only calls that reach no live route. Pairing follows the rules of `mapx routes --clients`: literal path evidence, workspace hosts only (`settings.http.hosts`, `.env*` URLs, client base URLs, literal `Route::domain()` hosts), and method `UNKNOWN` never paired
 - `dir` (string, optional): Target project directory
 
 Each route has the same fields as `mapx routes --json`: `line`, `name`, `middlewares`, `reachable`, `reachability` (`reachable`, `unreachable` or `unknown`), `overridden` (with `overriddenBy`), `conditional`, and `dynamic` and `domain` when they apply.

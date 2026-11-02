@@ -754,7 +754,8 @@ Client receivers MapX cannot recognise on its own (project wrappers) are configu
 A call pairs only with a live route that its literal path supports: at least one literal path segment must match. A URL with no literal segment, such as `` `${endpoint}?page=${n}` ``, stays unmatched. An absolute URL pairs only when its host belongs to the workspace:
 - a local development host (`localhost`, `127.0.0.1`, `*.test`, `*.local`, `*.localhost`);
 - a host named in a `.env*` file of a registered repo or in a configured client `baseURL`;
-- a host listed in `settings.http.hosts`.
+- a host listed in `settings.http.hosts`;
+- a host a live route names literally in `Route::domain()` (a domain with `{param}` or unevaluated parts names no single host). When nothing else names such a host, only the apps that declare it serve it: their routes, plus other apps' routes on a domain that matches it (an unevaluated domain does not count).
 
 Calls to any other host are third-party calls. A call with a host pairs only with routes that serve that host: a route in a `Route::domain()` group needs its domain to match, with `{param}` segments matching one label each (`{account}.example.com` serves `acme.example.com`). A relative URL can pair with a route on any domain. A `fetch` whose method cannot be read from the code (`{ method: verb }`, a spread, an options variable) is listed with method `UNKNOWN` and never paired.
 

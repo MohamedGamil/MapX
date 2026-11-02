@@ -25,7 +25,7 @@ import { canonicalPath } from './workspace-manager.js';
 import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isScannableDir, isScannablePath, normalizePattern, shebangLanguage } from './file-rules.js';
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
-import { pairCall, urlHost } from '../frameworks/http/pairing.js';
+import { pairCall, routeDomainHosts, urlHost } from '../frameworks/http/pairing.js';
 import { closest, importResolverFor, nearestIndex, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
@@ -3996,8 +3996,10 @@ export class Scanner {
 
   /**
    * The workspace's own hosts (M2-06-R1): those named by settings.http (`hosts`, configured client
-   * base URLs) or by a URL in any .env* value of a registered repo. Absolute request URLs on any
-   * other non-local host are calls to third-party services and never pair with a workspace route.
+   * base URLs) or by a URL in any .env* value of a registered repo. A host a live route names in
+   * `Route::domain()` belongs to the workspace too, served by the apps that declare it (M2-06-R4,
+   * `routeDomainHosts`). Absolute request URLs on any other non-local host are calls to
+   * third-party services and never pair with a workspace route.
    */
   private workspaceHosts(): Set<string> {
     const http = this.config.settings.http ?? {};
@@ -4043,8 +4045,8 @@ export class Scanner {
     const routes = routeRegistry.getRoutes();
     const repoOf = new Map(this.store.getAllFiles().map(f => [f.path as string, f.repo as string]));
 
-    const hosts = this.workspaceHosts();
-    const records = registry.getRecords().map(r => ({ ...r, route: pairCall(r, routes, { hosts }) }));
+    const options = { hosts: this.workspaceHosts(), routeHosts: routeDomainHosts(routes) };
+    const records = registry.getRecords().map(r => ({ ...r, route: pairCall(r, routes, options) }));
     registry.setRecords(records);
     await registry.save(workspaceRoot);
 

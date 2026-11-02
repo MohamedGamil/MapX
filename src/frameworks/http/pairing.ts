@@ -22,6 +22,12 @@ export const UNKNOWN_METHOD = 'UNKNOWN';
 export interface PairOptions {
   /** The workspace's own hosts, besides local development hosts (M2-06-R1). */
   hosts?: Set<string>;
+  /**
+   * Hosts that live routes name literally in `Route::domain()`, each with the app roots that declare
+   * it (`routeDomainHosts`, M2-06-R4). Such a host, unless `hosts` has it too, is served only by
+   * those apps and by other apps' routes on a domain that matches it.
+   */
+  routeHosts?: Map<string, Set<string>>;
 }
 
 /** Development hosts that always belong to the workspace. */
@@ -33,6 +39,9 @@ export function urlHost(url: string): string | null {
   return m ? m[1]!.toLowerCase() : null;
 }
 
+/** A `Route::domain()` value as a lower-case host pattern: no scheme or port. */
+const domainHost = (domain: string) => (urlHost(domain) ?? domain).toLowerCase().replace(/:\d+$/, '');
+
 const domainPatterns = new Map<string, RegExp>();
 /**
  * Matcher for the hosts a `Route::domain()` serves (M2-06-R2): a `{param}` stands for one label,
@@ -41,7 +50,7 @@ const domainPatterns = new Map<string, RegExp>();
 function domainPattern(domain: string): RegExp {
   let re = domainPatterns.get(domain);
   if (!re) {
-    const host = (urlHost(domain) ?? domain).toLowerCase().replace(/:\d+$/, '');
+    const host = domainHost(domain);
     const body = host.split(/(\{[^}]*\})/).map((part) =>
       part === '{dynamic}' ? '.+' : /^\{[^}]*\}$/.test(part) ? '[^.]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     re = new RegExp(`^${body.join('')}$`);
@@ -65,6 +74,28 @@ const live = (r: RouteBinding) =>
   r.metadata?.routeType !== 'client' &&
   r.metadata?.reachable !== false &&
   r.metadata?.overridden !== true;
+
+/**
+ * The hosts live routes name literally in their `Route::domain()` (M2-06-R4), each with the roots of
+ * the apps that declare it (`metadata.appRoot`; a route of no known app adds none). The workspace
+ * serves these hosts through those apps. A domain with a `{param}` or `{dynamic}` part names no
+ * single host.
+ */
+export function routeDomainHosts(routes: RouteBinding[]): Map<string, Set<string>> {
+  const hosts = new Map<string, Set<string>>();
+  for (const route of routes) {
+    const domain = route.metadata?.domain;
+    if (typeof domain !== 'string' || !live(route)) continue;
+    const host = domainHost(domain);
+    if (!/^[a-z\d-]+(?:\.[a-z\d-]+)*$/.test(host)) continue;
+    let apps = hosts.get(host);
+    if (!apps) hosts.set(host, (apps = new Set()));
+    const app = route.metadata?.appRoot;
+    if (typeof app === 'string') apps.add(app);
+  }
+  return hosts;
+}
+
 const methodMatches = (route: string, call: string) => {
   const set = route.toUpperCase().split('|');
   return set.includes('ANY') || set.includes('ALL') || set.includes(call.toUpperCase());
@@ -100,13 +131,17 @@ function matchScore(client: string[], route: string[]): { score: number; params:
 /**
  * The live route a call reaches, or null when none serves it. A pair needs literal evidence: at
  * least one literal path segment equal on both sides (only `/` itself, with a known base, matches
- * without one). An absolute URL pairs only on a local or workspace host (`options.hosts`), and
- * only with routes that serve its host: no domain, or a matching `Route::domain()`.
+ * without one). An absolute URL pairs only on a local or workspace host (`options.hosts`, or a
+ * route-domain host of `options.routeHosts`), and only with routes that serve its host: no domain,
+ * or a matching `Route::domain()`. A host only route domains name is served by the apps declaring
+ * it; another app's route serves it only through a matching domain with no `{dynamic}` part.
  */
 export function pairCall(record: HttpCallRecord, routes: RouteBinding[], options: PairOptions = {}): PairedRoute | null {
   if (record.url === undefined || record.method.toUpperCase() === UNKNOWN_METHOD) return null;
   const host = urlHost(record.url);
-  if (host && !LOCAL_HOST.test(host) && !options.hosts?.has(host)) return null;
+  const external = !!host && !LOCAL_HOST.test(host) && !options.hosts?.has(host);
+  const declaringApps = external ? options.routeHosts?.get(host!) : undefined;
+  if (external && !declaringApps) return null;
   const client = urlSegments(record.url);
   let best: { route: RouteBinding; score: number; params: boolean; suffix: boolean } | null = null;
   for (const route of routes) {
@@ -114,6 +149,8 @@ export function pairCall(record: HttpCallRecord, routes: RouteBinding[], options
     // A relative URL goes to whichever host serves the page, so only a known host is checked.
     const domain = route.metadata?.domain;
     if (host && typeof domain === 'string' && domain && !domainPattern(domain).test(host)) continue;
+    if (declaringApps && !declaringApps.has(route.metadata?.appRoot)
+      && (typeof domain !== 'string' || !domain || domain.includes('{dynamic}'))) continue;
     const segments = urlSegments(route.path);
     // An unresolved base URL can stand for any leading segments: match the path as a suffix.
     const candidates = record.baseURLUnresolved && segments.length > client.length

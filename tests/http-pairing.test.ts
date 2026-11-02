@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { pairCall, urlHost, urlSegments } from '../src/frameworks/http/pairing.js';
+import { pairCall, routeDomainHosts, urlHost, urlSegments, type PairOptions } from '../src/frameworks/http/pairing.js';
 import type { HttpCallRecord } from '../src/frameworks/http/http-registry.js';
 import type { RouteBinding } from '../src/types.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
@@ -165,6 +165,191 @@ describe('pairing honours Route::domain (M2-06-R2)', () => {
   });
 });
 
+// M2-06-R4: a route's literal Route::domain is one of the workspace's own hosts, as if a .env named it.
+describe('route domains are workspace hosts (M2-06-R4)', () => {
+  it('takes only literal domains of live backend routes as hosts, with the apps that declare them', () => {
+    const hosts = routeDomainHosts([
+      route('GET', '/feed', 'Feed@index', { domain: 'partners.example.com', appRoot: 'partners' }),
+      route('GET', '/feed2', 'Feed@other', { domain: 'partners.example.com', appRoot: 'mirror' }),
+      route('GET', '/b', 'B@x', { domain: 'https://Billing.Example.com:8443', appRoot: '' }),
+      // A declaring route outside any known app still names the host, for no app's domain-less routes.
+      route('GET', '/n', 'N@x', { domain: 'noapp.example.com' }),
+      // No single host: a {param} label, an unevaluated part, or no domain at all.
+      route('GET', '/t', 'T@x', { domain: '{account}.example.com', appRoot: 'partners' }),
+      route('GET', '/d', 'D@x', { domain: '{dynamic}', appRoot: 'partners' }),
+      route('GET', '/e', 'E@x', { domain: 'api.{dynamic}', appRoot: 'partners' }),
+      route('GET', '/plain', 'P@x', { appRoot: 'shop' }),
+      // Routes no request reaches name no served host.
+      route('GET', '/u', 'U@x', { domain: 'unmounted.example.com', reachable: false }),
+      route('GET', '/o', 'O@x', { domain: 'overridden.example.com', overridden: true }),
+      { ...route('GET', '/page', 'Page'), framework: 'vue-router', metadata: { domain: 'spa.example.com' } },
+    ]);
+    expect(Object.fromEntries([...hosts].map(([host, apps]) => [host, [...apps].sort()]))).toEqual({
+      'billing.example.com': [''],
+      'noapp.example.com': [],
+      'partners.example.com': ['mirror', 'partners'],
+    });
+  });
+
+  // Review of M2-06-R4 (P1): a host only route domains name is served by the apps that declare it.
+  it('never lets a domain-less route of another app serve a host only route domains name', () => {
+    const routeHosts = new Map([['api.example.com', new Set(['partners'])]]);
+    const routes = [
+      route('GET', '/v1/users', 'Partner@users', { domain: 'api.example.com', appRoot: 'partners' }),
+      route('GET', '/v1/status', 'Partner@status', { appRoot: 'partners' }),
+      route('GET', '/v1/users', 'Shop@users', { appRoot: 'shop' }),
+      route('GET', '/v1/orders', 'Shop@orders', { appRoot: 'shop' }),
+      route('GET', '/v1/tenant', 'Shop@tenant', { domain: '{sub}.example.com', appRoot: 'shop' }),
+      route('GET', '/v1/any', 'Shop@any', { domain: '{dynamic}', appRoot: 'shop' }),
+      // A route of no known app (another framework) is another app too.
+      route('GET', '/v1/express', 'expressOrders'),
+    ];
+    const pair = (url: string, options: PairOptions = { routeHosts }) => pairCall(call('GET', url), routes, options)?.handlerSymbol ?? null;
+    expect(pair('https://api.example.com/v1/users')).toBe('Partner@users');
+    expect(pair('https://API.example.com:8443/v1/status')).toBe('Partner@status');
+    expect(pair('https://api.example.com/v1/orders')).toBeNull();
+    expect(pair('https://api.example.com/v1/express')).toBeNull();
+    // Another app serves the host only through a domain that matches it with evidence: {dynamic} is none.
+    expect(pair('https://api.example.com/v1/tenant')).toBe('Shop@tenant');
+    expect(pair('https://api.example.com/v1/any')).toBeNull();
+    // A host the workspace names otherwise (.env, settings) keeps M2-06-R2 pairing.
+    expect(pair('https://api.example.com/v1/orders', { routeHosts, hosts: new Set(['api.example.com']) })).toBe('Shop@orders');
+    // Relative URLs are unaffected.
+    expect(pair('/v1/orders')).toBe('Shop@orders');
+  });
+
+  describe('in a scan', () => {
+    let root: string;
+    beforeAll(() => {
+      root = workspace(
+        {
+          // No .env, no settings.http: the only evidence for partners.example.com is the route domain.
+          'frontend/src/feed.ts': [
+            "import axios from 'axios';",
+            "export const feed = () => axios.get('https://partners.example.com/feed');",
+            "export const status = () => axios.get('https://partners.example.com/status');",
+            "export const admin = () => axios.get('https://admin.example.net/admin-feed');",
+            "export const other = () => axios.get('https://elsewhere.example.org/feed');",
+            // Only the shop app serves /orders, with no domain: it does not serve partners.example.com.
+            "export const orders = () => axios.get('https://partners.example.com/orders');",
+            '',
+          ].join('\n'),
+          'backend/artisan': '#!/usr/bin/env php\n<?php\n',
+          'backend/app/Http/Controllers/FeedController.php':
+            '<?php\nnamespace App\\Http\\Controllers;\nclass FeedController { public function index() {} public function admin() {} public function status() {} }\n',
+          'backend/routes/web.php': [
+            '<?php',
+            'use App\\Http\\Controllers\\FeedController;',
+            "Route::domain('partners.example.com')->group(function () {",
+            "    Route::get('feed', [FeedController::class, 'index']);",
+            '});',
+            "Route::domain(config('app.admin_host'))->group(function () {",
+            "    Route::get('admin-feed', [FeedController::class, 'admin']);",
+            '});',
+            "Route::get('status', [FeedController::class, 'status']);",
+            '',
+          ].join('\n'),
+          'shop/artisan': '#!/usr/bin/env php\n<?php\n',
+          'shop/app/Http/Controllers/OrderController.php':
+            '<?php\nnamespace App\\Http\\Controllers;\nclass OrderController { public function index() {} }\n',
+          'shop/routes/web.php': "<?php\nuse App\\Http\\Controllers\\OrderController;\nRoute::get('orders', [OrderController::class, 'index']);\n",
+        },
+        ['frontend', 'backend', 'shop'],
+      );
+      init(root);
+      mapx(root, 'workspaces', 'add', 'frontend');
+      mapx(root, 'workspaces', 'add', 'backend');
+      mapx(root, 'workspaces', 'add', 'shop');
+    }, 120000);
+    afterAll(() => cleanup(root));
+
+    it('pairs a call to a literal route domain with no .env naming it', () => {
+      const records = JSON.parse(readFileSync(join(root, '.mapx', 'http-calls.json'), 'utf8')) as HttpCallRecord[];
+      const pairs = Object.fromEntries(records.map((r) => [r.url, r.route?.handlerSymbol ?? null]));
+      expect(pairs['https://partners.example.com/feed']).toBe('App\\Http\\Controllers\\FeedController@index');
+      // The host reaches the app, so its domain-less routes serve it too.
+      expect(pairs['https://partners.example.com/status']).toBe('App\\Http\\Controllers\\FeedController@status');
+      expect(pairs['https://elsewhere.example.org/feed']).toBeNull();
+      // A domain-less route of another app does not serve a host only the backend's route domain names.
+      expect(pairs['https://partners.example.com/orders']).toBeNull();
+      const edges = query<{ source_file: string; target_symbol: string }>(
+        root, "SELECT source_file, target_symbol FROM edges WHERE edge_type = 'http' ORDER BY target_symbol",
+      );
+      expect(edges.map((e) => [e.source_file, e.target_symbol])).toEqual([
+        ['frontend/src/feed.ts', 'App\\Http\\Controllers\\FeedController@index'],
+        ['frontend/src/feed.ts', 'App\\Http\\Controllers\\FeedController@status'],
+      ]);
+    });
+
+    it('does not take a {dynamic} domain as a host', () => {
+      const routes = JSON.parse(mapx(root, 'routes', root, '--json')) as { path: string; domain?: string }[];
+      expect(routes.find((r) => r.path.endsWith('admin-feed'))?.domain).toBe('{dynamic}');
+      const unmatched = JSON.parse(mapx(root, 'routes', root, '--clients', '--unmatched', '--json')) as HttpCallRecord[];
+      expect(unmatched.map((r) => r.url).sort()).toEqual([
+        'https://admin.example.net/admin-feed', 'https://elsewhere.example.org/feed', 'https://partners.example.com/orders',
+      ]);
+    });
+  });
+
+  // A domain added or removed by a sync re-pairs exactly as a forced full scan does.
+  describe('through sync', () => {
+    let root: string;
+    const routesFile = () => join(root, 'backend/routes/web.php');
+    const withDomain = (domain: boolean) => [
+      '<?php',
+      'use App\\Http\\Controllers\\FeedController;',
+      ...(domain
+        ? ["Route::domain('partners.example.com')->group(function () {", "    Route::get('feed', [FeedController::class, 'index']);", '});']
+        : ["Route::get('feed', [FeedController::class, 'index']);"]),
+      '',
+    ].join('\n');
+    const state = () => ({
+      records: (JSON.parse(readFileSync(join(root, '.mapx', 'http-calls.json'), 'utf8')) as HttpCallRecord[])
+        .map((r) => `${r.url} → ${r.route?.handlerSymbol ?? null}`),
+      edges: query<{ source_file: string; target_symbol: string }>(
+        root, "SELECT source_file, target_symbol FROM edges WHERE edge_type = 'http' ORDER BY source_file, target_symbol",
+      ).map((e) => `${e.source_file} → ${e.target_symbol}`),
+    });
+    beforeAll(() => {
+      root = workspace(
+        {
+          'frontend/src/feed.ts': "import axios from 'axios';\nexport const feed = () => axios.get('https://partners.example.com/feed');\n",
+          'backend/artisan': '#!/usr/bin/env php\n<?php\n',
+          'backend/app/Http/Controllers/FeedController.php':
+            '<?php\nnamespace App\\Http\\Controllers;\nclass FeedController { public function index() {} }\n',
+          'backend/routes/web.php': withDomain(false),
+        },
+        ['frontend', 'backend'],
+      );
+      init(root);
+      mapx(root, 'workspaces', 'add', 'frontend');
+      mapx(root, 'workspaces', 'add', 'backend');
+    }, 120000);
+    afterAll(() => cleanup(root));
+
+    it('re-pairs when a sync adds or removes a route domain, as a full scan does', () => {
+      const unpaired = { records: ['https://partners.example.com/feed → null'], edges: [] };
+      const paired = {
+        records: ['https://partners.example.com/feed → App\\Http\\Controllers\\FeedController@index'],
+        edges: ['frontend/src/feed.ts → App\\Http\\Controllers\\FeedController@index'],
+      };
+      expect(state()).toEqual(unpaired);
+
+      writeFileSync(routesFile(), withDomain(true));
+      mapx(root, 'sync', root);
+      expect(state()).toEqual(paired);
+      mapx(root, 'scan', root, '--force');
+      expect(state()).toEqual(paired);
+
+      writeFileSync(routesFile(), withDomain(false));
+      mapx(root, 'sync', root);
+      expect(state()).toEqual(unpaired);
+      mapx(root, 'scan', root, '--force');
+      expect(state()).toEqual(unpaired);
+    }, 120000);
+  });
+});
+
 describe('pairing through the scanner', () => {
   let root: string;
   // Records right after the frontend scan, before the backend (and its routes) exists.
@@ -245,6 +430,8 @@ describe('unmatched calls on the M2-02 fixture', () => {
       'GET /{}', 'GET ?page={}',
       // M2-06-R2: the ops route is served only on ops.example.com (L47)
       'GET https://api.example.com/ops/v3/status',
+      // M2-06-R4: only partners-api declares partners.example.com; the backend's route does not serve it (L50)
+      'GET https://partners.example.com/api/notices/latest',
       'GET https://status.example.org/api/health', 'UNKNOWN /api/statuses',
     ]);
   });

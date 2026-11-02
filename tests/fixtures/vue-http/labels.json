@@ -472,6 +472,25 @@
       "url": "https://ops.example.com/ops/v3/status",
       "route": "GET /ops/v3/status",
       "handler": "HomeController@opsStatus"
+    },
+    {
+      "id": "L49",
+      "pattern": "route-domain-host",
+      "file": "vue3/src/services/partners.ts",
+      "line": 4,
+      "method": "GET",
+      "url": "https://partners.example.com/partners/v1/feed",
+      "route": "GET /partners/v1/feed",
+      "handler": "FeedController@index"
+    },
+    {
+      "id": "L50",
+      "pattern": "route-domain-foreign",
+      "file": "vue3/src/services/partners.ts",
+      "line": 6,
+      "method": "GET",
+      "url": "https://partners.example.com/api/notices/latest",
+      "route": null
     }
   ]
 }

@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { normUrl, parseHttpArgs, scanHttpFixture, scoreHttp, workspacePath, type HttpCallRecord, type HttpLabel, type HttpScore } from '../scripts/eval/score-http.ts';
 import { normUri, type Label } from '../scripts/eval/score-routes.ts';
 import { FLOORS_FILE, readFloors } from '../scripts/eval/run-eval.ts';
+import { init, mapx } from './helpers/e2e.js';
 
 // M2-02: Vue 2.7 / Vue 3 HTTP client fixture, labels and scorer (contract D008). The floors are
 // recorded in scripts/eval/floors.json (M4-01), which `npm run eval` also checks in CI; they only rise.
@@ -25,7 +27,9 @@ describe('vue-http fixture labels', () => {
       // M2-04-R2: shadowed constants, a quoted .env value with a comment, ${VAR} expansion
       'constant-scoped', 'env-quoted', 'env-expanded',
       // M2-06-R1: no literal segment, hosts, fetch methods, source dirs named public/, JSX
-      'no-literal', 'foreign-host', 'env-host', 'fetch-method', 'source-dir', 'jsx'])
+      'no-literal', 'foreign-host', 'env-host', 'fetch-method', 'source-dir', 'jsx',
+      // M2-06-R4: a host only a route domain names, and another app's route on it
+      'route-domain-host', 'route-domain-foreign'])
       expect(patterns, p).toContain(p);
     expect(labels.filter((l) => l.route === null).length).toBeGreaterThanOrEqual(2);
     expect(new Set(labels.map((l) => l.id)).size).toBe(labels.length);
@@ -43,10 +47,26 @@ describe('vue-http fixture labels', () => {
     }
   });
 
-  it('pairs only with live routes of the Laravel fixture', () => {
+  // M2-06-R4: the fixture's own partners-api app, scanned alone, reports the routes it serves.
+  let partnersRoutes: { method: string; path: string; reachable: boolean; overridden: boolean }[];
+  beforeAll(() => {
+    const work = mkdtempSync(join(tmpdir(), 'mapx-http-partners-'));
+    try {
+      cpSync(resolve(FIXTURE, 'partners-api'), work, { recursive: true });
+      init(work);
+      mapx(work, 'scan', work);
+      partnersRoutes = JSON.parse(mapx(work, 'routes', work, '--json'));
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }, 60000);
+
+  it('pairs only with live routes of the Laravel fixture or the partners-api app', () => {
     const live = new Set(
       routeLabels.filter((r) => r.expect === 'live' || r.expect === 'conditional').map((r) => `${r.method} ${normUri(r.uri)}`),
     );
+    expect(partnersRoutes.length).toBeGreaterThan(0);
+    for (const r of partnersRoutes) if (r.reachable && !r.overridden) live.add(`${r.method} ${normUri(r.path)}`);
     for (const l of labels.filter((x) => x.route)) {
       const [method, path] = l.route!.split(' ');
       expect(live, `${l.id} ${l.route}`).toContain(`${method} ${normUri(path!)}`);
