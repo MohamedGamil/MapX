@@ -8,6 +8,12 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Added
+- `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
+
+### Fixed
+- The npm package no longer picks up release builds: `make package-*` writes binaries, tarballs and installers to `dist/release/`, which `npm pack` included (185 MB instead of 4.7 MB); `scripts/check-package.ts` now fails if any are packed (M5-02).
+
 ## [0.3.8] — 2026-11-02
 
 ### Added

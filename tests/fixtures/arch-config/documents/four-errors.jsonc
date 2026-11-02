@@ -1,0 +1,18 @@
+// Exactly four problems, in this order:
+{
+  "layers": [
+    // 1. an unknown selector key (a typo of "path")
+    { "name": "Http", "selectors": [{ "paht": "app/Http/**" }] },
+    // 2. a layer selector naming a layer that does not exist
+    { "name": "Api", "selectors": [{ "layer": "Htttp" }] },
+    { "name": "Service", "selectors": [{ "path": "app/Services/**" }] },
+    { "name": "Repo", "selectors": [{ "path": "app/Repositories/**" }] }
+  ],
+  "rules": {
+    // 3. an unknown target layer
+    "Http": ["Servce"],
+    // 4. a "+" cycle: Service → Repo → Service
+    "Service": ["+Repo"],
+    "Repo": ["+Service"]
+  }
+}

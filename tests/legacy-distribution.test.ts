@@ -123,4 +123,22 @@ describe('package check rejects native binaries', () => {
     const r = tsx(dir, 'scripts/check-package.ts');
     expect(r.status, r.stderr).toBe(0);
   }, 60000);
+
+  // M5-02: release builds land in dist/release/; packing them made a 185 MB tarball.
+  it('fails on release artifacts in the pack list, and the real `files` leaves them out', () => {
+    const release = (dir: string) => {
+      mkdirSync(join(dir, 'dist/release'), { recursive: true });
+      writeFileSync(join(dir, 'dist/release/mapx-9.9.9-linux-x64.tar.gz'), Buffer.alloc(64));
+      writeFileSync(join(dir, 'dist/release/mapx-linux-x64-installer.sh'), '#!/bin/sh\n');
+    };
+    const loose = fixture({});
+    release(loose);
+    const r = tsx(loose, 'scripts/check-package.ts');
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('FAIL release artifact packed: dist/release/mapx-9.9.9-linux-x64.tar.gz');
+    const real = fixture({}, pkg.files);
+    release(real);
+    const [packed] = JSON.parse(execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: real, encoding: 'utf8' })) as { files: { path: string }[] }[];
+    expect(packed.files.some((f) => f.path.startsWith('dist/release/'))).toBe(false);
+  }, 60000);
 });

@@ -158,9 +158,12 @@ function dirAliases(dir: string, ctx: AliasContext): DirAliases {
 
 // ── tsconfig / jsconfig ─────────────────────────────────────────────────────────────────────────
 
-/** JSON with comments and trailing commas (tsconfig's dialect); null when unreadable. */
-export function parseJsonc(text: string | null): any {
-  if (text === null) return null;
+/**
+ * JSON with comments and trailing commas (tsconfig's dialect) as plain JSON: comments become
+ * spaces and trailing commas are dropped, outside strings only, so positions and line numbers stay
+ * where they were (M5-02 reports JSON.parse errors at them).
+ */
+export function stripJsonc(text: string): string {
   let out = '';
   for (let i = 0; i < text.length; i++) {
     const c = text[i]!;
@@ -170,15 +173,33 @@ export function parseJsonc(text: string | null): any {
       out += text.slice(i, j + 1);
       i = j;
     } else if (c === '/' && text[i + 1] === '/') {
-      while (i < text.length && text[i] !== '\n') i++;
-      out += '\n';
+      while (i < text.length && text[i] !== '\n') { out += ' '; i++; }
+      if (i < text.length) out += '\n';
     } else if (c === '/' && text[i + 1] === '*') {
       const end = text.indexOf('*/', i + 2);
-      i = end < 0 ? text.length : end + 1;
+      const stop = end < 0 ? text.length : end + 2;
+      out += text.slice(i, stop).replace(/[^\n]/g, ' ');
+      i = stop - 1;
+    } else if (c === ',') {
+      // A trailing comma: only whitespace and comments before the closing bracket.
+      let j = i + 1;
+      for (;;) {
+        while (j < text.length && /\s/.test(text[j]!)) j++;
+        if (text[j] === '/' && text[j + 1] === '/') { while (j < text.length && text[j] !== '\n') j++; continue; }
+        if (text[j] === '/' && text[j + 1] === '*') { const e = text.indexOf('*/', j + 2); j = e < 0 ? text.length : e + 2; continue; }
+        break;
+      }
+      out += text[j] === '}' || text[j] === ']' ? ' ' : ',';
     } else out += c;
   }
+  return out;
+}
+
+/** JSON with comments and trailing commas (tsconfig's dialect); null when unreadable. */
+export function parseJsonc(text: string | null): any {
+  if (text === null) return null;
   try {
-    return JSON.parse(out.replace(/,(\s*[}\]])/g, '$1'));
+    return JSON.parse(stripJsonc(text));
   } catch {
     return null;
   }

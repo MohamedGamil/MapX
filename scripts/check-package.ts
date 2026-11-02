@@ -41,6 +41,8 @@ const [pack] = JSON.parse(
 const problems: string[] = [];
 for (const file of pack.files) {
   if (file.path.endsWith('.map')) problems.push(`source map packed: ${file.path}`);
+  // Release builds (make package-*) write binaries, tarballs and installers here.
+  if (file.path.startsWith('dist/release/')) problems.push(`release artifact packed: ${file.path} (${file.size} bytes)`);
   const kind = nativeKind(file.path);
   if (kind) problems.push(`native ${kind} binary packed: ${file.path} (${file.size} bytes)`);
 }
@@ -75,6 +77,11 @@ else {
   const chunkDir = 'dist/ui/chunks';
   if (existsSync(chunkDir)) for (const f of readdirSync(chunkDir)) if (!packed.has(`${chunkDir}/${f}`)) problems.push(`dashboard chunk not packed: ${chunkDir}/${f}`);
   if (existsSync('dist/ui/layout-worker.js') && !packed.has('dist/ui/layout-worker.js')) problems.push('dist/ui/layout-worker.js not packed');
+}
+
+// Published JSON Schemas (M5-02): editors fetch them through the package's unpkg URL.
+for (const schema of ['schemas/architecture.schema.json']) {
+  if (existsSync(schema) && !pack.files.some((f) => f.path === schema)) problems.push(`${schema} not packed`);
 }
 
 console.log(

@@ -1,0 +1,508 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://unpkg.com/@mgamil/mapx/schemas/architecture.schema.json",
+  "title": "MapX architecture rules",
+  "description": "Layers, selectors and the allow policy MapX checks the dependency graph against (.mapx/architecture.jsonc).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "extends": {
+      "description": "Documents this one builds on: relative files and mapx:preset/<id>. Later documents override layers by name and merge rules.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Values for %name% in name, path and package selectors."
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "types": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "import",
+              "require",
+              "extends",
+              "implements",
+              "call",
+              "instantiation",
+              "return_type",
+              "param_type",
+              "relation",
+              "route",
+              "middleware",
+              "binding",
+              "dispatch",
+              "notify",
+              "hook",
+              "graphql_resolver",
+              "message_handler",
+              "websocket_handler",
+              "render",
+              "http",
+              "navigate"
+            ]
+          },
+          "uniqueItems": true,
+          "description": "Edge types analysed. Default: import, require, extends, implements, call, instantiation, param_type, return_type."
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Only these paths (globs)."
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Never these paths (globs)."
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inferred": {
+          "enum": [
+            "error",
+            "warn",
+            "ignore"
+          ],
+          "description": "How violations through inferred (heuristic) edges count. Default: warn."
+        },
+        "inheritDependencies": {
+          "type": "boolean",
+          "description": "A subclass inherits its parents' dependencies. Default: false."
+        },
+        "uncovered": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "externals": {
+              "type": "boolean",
+              "description": "Report dependencies on third-party elements in no layer. Default: true."
+            },
+            "builtins": {
+              "type": "boolean",
+              "description": "Report dependencies on standard-library elements in no layer. Default: false."
+            }
+          }
+        },
+        "strictLayers": {
+          "type": "boolean",
+          "description": "An element in several layers is an error, not a warning. Default: false."
+        }
+      }
+    },
+    "visibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "internalTags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Doc tags that make an element internal to its layer. Default: @internal, @mapx-internal."
+        },
+        "nativeMarkers": {
+          "type": "boolean",
+          "description": "Treat language visibility (Go internal/, Kotlin internal, …) as internal markers. Default: false."
+        }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/layer"
+      }
+    },
+    "rules": {
+      "type": "object",
+      "description": "Source layer (or \"*\" for defaults every layer gets) → the layers it may depend on. Everything else between distinct layers is denied.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/allowance"
+        }
+      }
+    },
+    "baseline": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Baseline file of accepted violations (fingerprints)."
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "groups": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "hidden": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "selectors"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^(\\*|[+!])"
+          }
+        },
+        "description": {
+          "type": "string"
+        },
+        "selectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/selector"
+          },
+          "description": "An element is in the layer when any selector matches it."
+        },
+        "private": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/selector"
+          },
+          "description": "Elements reachable only from this layer."
+        },
+        "overlay": {
+          "type": "boolean",
+          "description": "Only ever a rule target (Deprecated, Vendor, …): never a source, never counted for coverage."
+        },
+        "group": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        }
+      }
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "description": "Exactly one of the primary keys, plus the modifiers that refine it (kind for name, value for docTag, dev and direct for package, confidence for role).",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Repo-relative path: a glob, or /regex/flags."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Regex on the qualified name (case-insensitive unless /…/flags)."
+        },
+        "kind": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "class",
+              "method",
+              "function",
+              "interface",
+              "trait",
+              "constant",
+              "enum",
+              "property",
+              "namespace",
+              "struct",
+              "module",
+              "field",
+              "variable"
+            ]
+          },
+          "description": "With name: only these symbol kinds."
+        },
+        "extends": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Transitively extends this class (qualified name)."
+        },
+        "implements": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Transitively implements this interface."
+        },
+        "inherits": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Extends or implements this, transitively."
+        },
+        "mixes": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Uses this trait or mixin."
+        },
+        "inheritanceDepth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Ancestry at least this deep."
+        },
+        "decorator": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Carries this decorator, attribute or annotation (name or suffix)."
+        },
+        "docTag": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Its doc block has this tag, e.g. @deprecated."
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "description": "With docTag: the tag value matches this regex."
+        },
+        "member": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Has a method or field whose name matches this regex."
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1,
+          "description": "An external element from a package matching this glob."
+        },
+        "dev": {
+          "type": "boolean",
+          "description": "With package: only dev (true) or only runtime (false) dependencies."
+        },
+        "direct": {
+          "type": "boolean",
+          "description": "With package: only direct dependencies."
+        },
+        "builtin": {
+          "oneOf": [
+            {
+              "const": true
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "description": "Standard library or runtime (true, or a name pattern)."
+        },
+        "ambient": {
+          "oneOf": [
+            {
+              "const": true
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ],
+          "description": "Process-global state: env, globals (true, or a name pattern)."
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Its file has this MapX role."
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "With role: the classifier confidence at least this."
+        },
+        "cluster": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Its file is in this MapX cluster."
+        },
+        "framework": {
+          "enum": [
+            "route-handler",
+            "middleware",
+            "model",
+            "job",
+            "event",
+            "listener",
+            "resolver",
+            "component",
+            "http-client"
+          ],
+          "description": "A framework part, from the edges detectors store."
+        },
+        "repo": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Belongs to this registered repo."
+        },
+        "workspacePackage": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Belongs to this monorepo package."
+        },
+        "language": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Is in this language."
+        },
+        "layer": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Is in this other layer."
+        },
+        "all": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/selector"
+          },
+          "description": "Every selector matches."
+        },
+        "any": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/selector"
+          },
+          "description": "At least one selector matches."
+        },
+        "not": {
+          "$ref": "#/definitions/selector",
+          "description": "The selector does not match."
+        }
+      }
+    },
+    "allowance": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^(\\*|[+!]?[^*+!].*)$",
+          "description": "\"Layer\", \"+Layer\" (also its allowances, transitively), \"!Layer\" (deny) or \"*\" (every non-overlay layer)"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "An allowance scoped to edge types or with its own severity; \"allow\" (a list) or \"to\" (one layer).",
+          "properties": {
+            "allow": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^(\\*|[+!]?[^*+!].*)$",
+                "description": "\"Layer\", \"+Layer\" (also its allowances, transitively), \"!Layer\" (deny) or \"*\" (every non-overlay layer)"
+              }
+            },
+            "to": {
+              "type": "string",
+              "pattern": "^(\\*|[+!]?[^*+!].*)$",
+              "description": "\"Layer\", \"+Layer\" (also its allowances, transitively), \"!Layer\" (deny) or \"*\" (every non-overlay layer)"
+            },
+            "types": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "import",
+                  "require",
+                  "extends",
+                  "implements",
+                  "call",
+                  "instantiation",
+                  "return_type",
+                  "param_type",
+                  "relation",
+                  "route",
+                  "middleware",
+                  "binding",
+                  "dispatch",
+                  "notify",
+                  "hook",
+                  "graphql_resolver",
+                  "message_handler",
+                  "websocket_handler",
+                  "render",
+                  "http",
+                  "navigate"
+                ]
+              },
+              "uniqueItems": true
+            },
+            "severity": {
+              "enum": [
+                "error",
+                "warn"
+              ]
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "allow"
+              ],
+              "not": {
+                "required": [
+                  "to"
+                ]
+              }
+            },
+            {
+              "required": [
+                "to"
+              ],
+              "not": {
+                "required": [
+                  "allow"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -14529,7 +14529,7 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -14537,7 +14537,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T01:20:09.830Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
@@ -14756,15 +14763,64 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-02T01:20:10.475Z",
+      "completedAt": "2026-11-02T01:38:17.465Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M5-02.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-config.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-02.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-02.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-02T01:20:10.153Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T01:20:10.475Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T01:38:17.080Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T01:38:17.465Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-config.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-02.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-02.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -14966,7 +15022,13 @@
         "src/arch/schema.ts",
         "schemas/architecture.schema.json",
         "tests/arch-config.test.ts",
-        "package.json"
+        "package.json",
+        "src/core/js-aliases.ts",
+        "tests/fixtures/arch-config/",
+        "scripts/check-package.ts",
+        "tests/legacy-distribution.test.ts",
+        "CHANGELOG.md",
+        "package-lock.json"
       ],
       "acceptanceCriteria": [
         "Invalid documents yield all errors at once with JSON pointer paths; `+` cycles are reported as errors naming the cycle.",
