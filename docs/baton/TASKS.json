@@ -15574,15 +15574,28 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-07",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T22:47:22.927Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T22:47:22.446Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T22:47:22.927Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -15635,16 +15648,29 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-08",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T22:47:23.880Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
-      "criticalPath": false,
+      "history": [
+        {
+          "at": "2026-11-02T22:47:23.391Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T22:47:23.880Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -15768,14 +15794,27 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-10",
       "actualHours": null,
       "startedAt": "2026-11-02T21:16:56.059Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T23:12:35.128Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-10.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/symbol-annotations.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-10.md"
+        },
+        {
+          "command": "npm test",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-10.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T21:16:55.625Z",
@@ -15788,9 +15827,32 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T23:12:34.717Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T23:12:35.128Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/symbol-annotations.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-10.md"
+            },
+            {
+              "command": "npm test",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-10.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -15862,7 +15924,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -16218,7 +16280,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
