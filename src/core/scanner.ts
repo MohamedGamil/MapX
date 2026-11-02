@@ -26,7 +26,7 @@ import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isSc
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, routeDomainHosts, urlHost } from '../frameworks/http/pairing.js';
-import { closest, goImportOutsideProject, importResolverFor, nearestIndex, type ImportHit } from './import-resolvers.js';
+import { closest, goImportInWorkspaceModule, goImportOutsideProject, importResolverFor, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -39,6 +39,7 @@ import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigat
 import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, type AliasContext } from './js-aliases.js';
 import { exportSkeleton, hasCommonJsExports, jsExportSignature, scanModule, type JsText } from './js-source.js';
 import { EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
+import { ecosystemOf, jsCandidateSpecifier, jsImports, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalRefRow, type JsImport } from './external-refs.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
@@ -75,6 +76,12 @@ const NAMESPACE_KINDS = new Set(['namespace']);
 const TYPE_KINDS = new Set(['class', 'struct', 'interface', 'enum', 'record', 'trait']);
 /** Sources whose imports may use JS/TS path aliases (M3-09). */
 const JS_MODULE_SOURCE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/;
+/** References that use a name an import binds: external references when the import is from outside the workspace (M5-19). */
+const BOUND_KINDS = new Set(['call', 'instantiation', 'extends', 'implements', 'param_type', 'return_type']);
+/** Symbol kinds that hold values, which a statement assigns rather than encloses (M5-19). */
+const VALUE_KINDS = new Set(['variable', 'constant', 'property', 'field']);
+/** A name bound by an import from outside the workspace: the module, and the name imported (null: the module itself) (M5-19). */
+interface ExternalBinding { specifier: string; imported: string | null }
 /**
  * Whether a declaration of `kind` in `language` matches its name whatever the case: PHP class-like,
  * function and method names (PHP's constants, variables and properties are case-sensitive) and
@@ -288,6 +295,17 @@ export class Scanner {
    * sync adding such a module re-parses the file (M2-08-R2).
    */
   private unresolvedImports = new Map<string, Set<string>>();
+  /** While a file's references resolve: its references to targets outside the workspace (M5-19). */
+  private externalRows = new Map<string, ExternalRefRow[]>();
+  /** Per file, its JS/TS import statements and the names it binds from outside the workspace, for one resolution phase (M5-19). */
+  private jsImportsCache = new Map<string, JsImport[]>();
+  private externalBindingsCache = new Map<string, Map<string, ExternalBinding>>();
+  /** The workspace's PHP classes and functions by lower-case qualified name, for one resolution phase (M5-19). */
+  private phpDeclared: Set<string> | null = null;
+  /** Per PHP file, its `use` imports by lower-case alias, for one resolution phase (M5-19). */
+  private phpUsesCache = new Map<string, Map<string, string>>();
+  /** External-reference decisions by ecosystem, folder and specifier, for one resolution phase (M5-19). */
+  private externalDecisions = new Map<string, boolean>();
   /** JS/TS module text without comments, and its export skeleton, for one resolution phase (M2-08-R1). */
   private jsCache = new Map<string, JsText & { skeleton?: string }>();
   /** Per symbols list, the names it declares (outside classes' methods), for the shadowing check (M2-08). */
@@ -527,6 +545,8 @@ export class Scanner {
         if (repo && this.needsSecondPass(repoName)) await this._scanFullForRepo(repo);
         if (this.aborted) break;
       }
+      // Other files decide whether a reference is external: decided again for the workspace as it now is (M5-19).
+      if (!this.aborted) this.decideExternalRefs();
 
       return {
         filesScanned,
@@ -867,6 +887,8 @@ export class Scanner {
         if (repo && this.needsSecondPass(repoName)) await this._scanIncrementalForRepo(repo);
         if (this.aborted) break;
       }
+      // Other files decide whether a reference is external: decided again for the workspace as it now is (M5-19).
+      if (!this.aborted) this.decideExternalRefs();
 
       return {
         filesScanned,
@@ -1665,6 +1687,7 @@ export class Scanner {
     this.store.deleteEdgesForFile(relativePath);
 
     this.unresolvedImports.set(relativePath, new Set());
+    this.externalRows.set(relativePath, []);
     const resolvedRefs = this.resolveReferencesWithMap(result.references, relativePath, repoName, fileMap, result.symbols);
     for (const edge of resolvedRefs) {
       this.graph.addDependencyEdge(edge);
@@ -1673,6 +1696,9 @@ export class Scanner {
     const unresolved = this.unresolvedImports.get(relativePath)!;
     this.unresolvedImports.delete(relativePath);
     if (unresolved.size) this.store.updateFileMetadata(relativePath, { unresolvedImports: [...unresolved].sort() });
+    // With the edges, in the same transaction: an interrupted write leaves neither (M0-02-R10, M0-02-R12).
+    this.store.replaceExternalRefs(relativePath, repoName, uniqueRows(this.externalRows.get(relativePath)!));
+    this.externalRows.delete(relativePath);
   }
 
   private resolveReferencesWithMap(
@@ -1695,6 +1721,28 @@ export class Scanner {
     const usedNames = () => (referencedNames ??= new Set(refs
       .filter(r => r.referenceType !== 'import' && r.referenceType !== 'require' && typeof r.targetName === 'string')
       .map(r => r.targetName.replace(/<[\s\S]*$/, '').split(/\.|::/).pop()!)));
+    // The symbol a reference sits in: the narrowest enclosing one.
+    const enclosingSymbol = (ref: ExtractedReference): string | null => {
+      if (ref.sourceSymbol || !symbols) return ref.sourceSymbol;
+      innermost ??= innermostByLine(symbols);
+      const bestSym = innermost[ref.startLine];
+      return bestSym ? (bestSym.scope ? `${bestSym.scope}::${bestSym.name}` : bestSym.name) : null;
+    };
+    // A reference that gives no edge and names something outside the workspace is kept apart (M5-19).
+    const ecosystem = isJsOrTs ? 'npm' : ecosystemOf(sourceLanguage);
+    const external = this.externalRows.get(sourcePath);
+    // Its source is the enclosing function, method or class, never a variable the statement assigns
+    // (`const yaml = require('js-yaml')` is module level) (M5-19 review).
+    let innermostCode: any[] | undefined;
+    const codeSymbol = (ref: ExtractedReference): string | null => {
+      if (!symbols) return ref.sourceSymbol;
+      innermostCode ??= innermostByLine(symbols.filter((s: any) => !VALUE_KINDS.has(s.kind)));
+      const sym = innermostCode[ref.startLine];
+      return sym ? (sym.scope ? `${sym.scope}::${sym.name}` : sym.name) : null;
+    };
+    const noteExternal = (ref: ExtractedReference) => {
+      if (ecosystem && external) external.push(...this.externalRowsFor(ref, ecosystem, sourcePath, fileMap, codeSymbol(ref)));
+    };
 
     for (let ref of refs) {
       // An imported hook of any name that is not a Pinia store: the call as extracted (M3-05-R2).
@@ -1711,7 +1759,10 @@ export class Scanner {
         jsBindings ??= this.jsImportBindings(sourcePath, fileMap);
         if (receiver ? jsBindings.packages.has(receiver) : jsBindings.packages.has(ref.targetName)
           || (JS_GLOBAL_FUNCTIONS.has(ref.targetName) && !jsBindings.local.has(ref.targetName)
-            && !(symbols ?? []).some((s: any) => s.name === ref.targetName && !s.scope))) continue;
+            && !(symbols ?? []).some((s: any) => s.name === ref.targetName && !s.scope))) {
+          noteExternal(ref);
+          continue;
+        }
       }
       // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
       // named by the module/namespace rather than the raw statement (M0-12-R4).
@@ -1764,17 +1815,10 @@ export class Scanner {
         targets ??= targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
       }
 
+      if (!targets.length) noteExternal(ref);
       for (const { file: targetFile, symbol: targetSymbol, verifiability, metadata: targetMetadata } of targets) {
         const targetRepoName = fileMap.get(targetFile);
-
-        let sourceSymbol: string | null = ref.sourceSymbol;
-        if (!sourceSymbol && symbols) {
-          innermost ??= innermostByLine(symbols);
-          const bestSym = innermost[ref.startLine];
-          if (bestSym) {
-            sourceSymbol = bestSym.scope ? `${bestSym.scope}::${bestSym.name}` : bestSym.name;
-          }
-        }
+        const sourceSymbol = enclosingSymbol(ref);
 
         // C# base lists: the parser guesses class or interface from the name; an indexed target's
         // kind decides (M0-17-R3).
@@ -1898,21 +1942,9 @@ export class Scanner {
       if (declared.has(name) && symbols.some(d => d.name === name && lexical(d) && this.visibleAt(d, ref.startLine, symbols))) return null;
     }
     if (python && !receiver) {
-      let lines = this.lineCache.get(sourcePath);
-      if (!lines) this.lineCache.set(sourcePath, (lines = (this.readWorkspaceText(sourcePath) ?? '').split('\n')));
-      const line = lines[ref.startLine - 1] ?? '';
-      if (!line.includes(name)) return null;
-      let patterns = this.callPatterns.get(name);
-      if (!patterns) {
-        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        patterns = { attribute: new RegExp(`([A-Za-z_][\\w.]*)\\.${escaped}\\s*\\(`), bare: new RegExp(`(^|[^\\w.])${escaped}\\s*\\(`) };
-        this.callPatterns.set(name, patterns);
-      }
-      const attribute = patterns.attribute.exec(line)?.[1];
-      const bare = patterns.bare.test(line);
-      // Both forms on one line (`utils.create(create())`): which reference is which is unknown.
-      if ((attribute && bare) || (!attribute && !bare)) return null;
-      receiver = attribute;
+      const found = this.pythonReceiver(sourcePath, ref.startLine, name);
+      if (found === null) return null;
+      receiver = found;
     }
     if (receiver) {
       const module = bindings.get(receiver);
@@ -1925,6 +1957,28 @@ export class Scanner {
     if (!binding || binding.imported === null) return null;
     const exported = binding.imported === 'default' && !python ? this.defaultExportName(binding.file) : binding.imported;
     return exported ? orNoEdge(this.findExport(binding.file, exported, fileMap)) : null;
+  }
+
+  /**
+   * The dotted receiver of a Python call of `name` on its line (`utils.create(` → `utils`), undefined
+   * for a bare call, or null when the line has neither form or both (`utils.create(create())`).
+   */
+  private pythonReceiver(sourcePath: string, lineNumber: number, name: string): string | undefined | null {
+    let lines = this.lineCache.get(sourcePath);
+    if (!lines) this.lineCache.set(sourcePath, (lines = (this.readWorkspaceText(sourcePath) ?? '').split('\n')));
+    const line = lines[lineNumber - 1] ?? '';
+    if (!line.includes(name)) return null;
+    let patterns = this.callPatterns.get(name);
+    if (!patterns) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      patterns = { attribute: new RegExp(`([A-Za-z_][\\w.]*)\\.${escaped}\\s*\\(`), bare: new RegExp(`(^|[^\\w.])${escaped}\\s*\\(`) };
+      this.callPatterns.set(name, patterns);
+    }
+    const attribute = patterns.attribute.exec(line)?.[1];
+    const bare = patterns.bare.test(line);
+    // Both forms on one line (`utils.create(create())`): which reference is which is unknown.
+    if ((attribute && bare) || (!attribute && !bare)) return null;
+    return attribute;
   }
 
   /** A declaration is visible at a line: anywhere at module level, else within its enclosing symbol. */
@@ -2149,7 +2203,24 @@ export class Scanner {
     if (/^[./~#@]\//.test(specifier) || /^[./]/.test(specifier)) return false;
     const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0]!;
     if (!name || name === '@') return false;
-    // The package names declared in the folders holding indexed files (manifests are not indexed).
+    if (this.npmWorkspacePackageNames().has(name)) return false;
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    for (let dir = sourcePath.includes('/') ? sourcePath.slice(0, sourcePath.lastIndexOf('/')) : ''; ; dir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '') {
+      let manifest: any = null;
+      try { manifest = JSON.parse(this.readWorkspaceText(dir ? `${dir}/package.json` : 'package.json') ?? 'null'); } catch { /* unreadable */ }
+      if (manifest && typeof manifest === 'object') {
+        if (manifest.name === name) return false;
+        const version = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies, ...manifest.optionalDependencies }[name];
+        if (typeof version === 'string') return !/^(workspace:|file:|link:|portal:|\.|\/)/.test(version);
+      }
+      // Installed although no manifest lists it.
+      if (existsSync(resolve(workspaceRoot, dir, 'node_modules', name))) return true;
+      if (!dir) return false;
+    }
+  }
+
+  /** The package names declared in the folders holding indexed files (manifests are not indexed) (M0-17-R4). */
+  private npmWorkspacePackageNames(): Set<string> {
     let workspaceNames = this.npmWorkspaceNames;
     if (!workspaceNames) {
       workspaceNames = new Set<string>();
@@ -2169,19 +2240,258 @@ export class Scanner {
       }
       this.npmWorkspaceNames = workspaceNames;
     }
-    if (workspaceNames.has(name)) return false;
-    const workspaceRoot = this.config.getWorkspaceRoot();
-    for (let dir = sourcePath.includes('/') ? sourcePath.slice(0, sourcePath.lastIndexOf('/')) : ''; ; dir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '') {
-      let manifest: any = null;
-      try { manifest = JSON.parse(this.readWorkspaceText(dir ? `${dir}/package.json` : 'package.json') ?? 'null'); } catch { /* unreadable */ }
-      if (manifest && typeof manifest === 'object') {
-        if (manifest.name === name) return false;
-        const version = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies, ...manifest.optionalDependencies }[name];
-        if (typeof version === 'string') return !/^(workspace:|file:|link:|portal:|\.|\/)/.test(version);
+    return workspaceNames;
+  }
+
+  /**
+   * The external-reference candidates of a reference that gave no edge (M5-19): what it names when
+   * that may lie outside the workspace, each with the decision as the workspace now stands (the end
+   * of the run decides again, `decideExternalRefs`). Imports: a JS/TS specifier of a package's form
+   * (`jsCandidateSpecifier`), an absolute Python module no indexed file satisfies, any Go import, a
+   * PHP class. Other references: a name or receiver bound by such an import (JS/TS, Python), a
+   * package-qualified Go name, a PHP class or function name (never a member call or a construct).
+   */
+  private externalRowsFor(
+    ref: ExtractedReference,
+    ecosystem: Ecosystem,
+    sourcePath: string,
+    fileMap: Map<string, string>,
+    sourceSymbol: string | null,
+  ): ExternalRefRow[] {
+    const kind = ref.referenceType;
+    const name = ref.targetName;
+    const row = (specifier: string, symbol: string | null, as: string = kind, metadata?: ExternalRefRow['metadata']): ExternalRefRow => ({
+      line: ref.startLine, sourceSymbol, specifier, symbol, kind: as, ecosystem,
+      external: this.decideExternal(ecosystem, specifier, sourcePath, fileMap, metadata?.phpCandidates),
+      ...(metadata ? { metadata } : {}),
+    });
+    if (ecosystem === 'npm') {
+      // `require('x')` is reported as a call of `require`.
+      const required = kind === 'call' && name === 'require' && !ref.metadata?.receiver;
+      if (kind === 'import' || required) {
+        const as = required ? 'require' : 'import';
+        return this.jsModuleImports(sourcePath)
+          .filter(s => s.line === ref.startLine && s.require === required && (required || s.specifier === name) && jsCandidateSpecifier(s.specifier))
+          .flatMap(s => s.names.length ? s.names.map(n => row(s.specifier, n.imported, as)) : [row(s.specifier, null, as)]);
       }
-      // Installed although no manifest lists it.
-      if (existsSync(resolve(workspaceRoot, dir, 'node_modules', name))) return true;
-      if (!dir) return false;
+      if (!BOUND_KINDS.has(kind)) return [];
+      const receiver = ref.metadata?.receiver as string | undefined;
+      const hit = this.boundExternal(this.jsExternalBindings(sourcePath), receiver ? `${receiver}.${name}` : name);
+      return hit ? [row(hit.specifier, hit.symbol)] : [];
+    }
+    if (ecosystem === 'pypi') {
+      if (kind === 'import') {
+        const from = name.match(/^from\s+(\.*[\w.]*)\s+import\s+(.+)$/s);
+        const module = from ? from[1]! : name.replace(/^import\s+/, '').split(/\s+as\s+/)[0]!.trim();
+        if (!module || !this.pythonModuleCandidate(module, sourcePath, fileMap)) return [];
+        const names = from ? from[2]!.replace(/#.*$/gm, '').replace(/[()\\\n]/g, ' ').split(',')
+          .map(n => n.trim().split(/\s+as\s+/)[0]!.trim()).filter(n => /^\w+$/.test(n)) : [];
+        return names.length ? names.map(n => row(module, n)) : [row(module, null)];
+      }
+      if (!BOUND_KINDS.has(kind)) return [];
+      // A call's receiver is read from its line, as for project imports (M2-08); a base or a type is named whole.
+      let qualified = name;
+      if (kind === 'call' || kind === 'instantiation') {
+        const receiver = this.pythonReceiver(sourcePath, ref.startLine, name);
+        if (receiver === null) return [];
+        if (receiver) qualified = `${receiver}.${name}`;
+      }
+      const hit = this.boundExternal(this.pythonExternalBindings(sourcePath, fileMap), qualified);
+      return hit ? [row(hit.specifier, hit.symbol)] : [];
+    }
+    if (ecosystem === 'go') {
+      if (kind === 'import') return [row(name.replace(/^"|"$/g, ''), null)];
+      // `fmt.Println()`, `http.Client{}`: the import path the qualifier names (one candidate only).
+      const goPackage = ref.metadata?.goPackage;
+      const paths = typeof goPackage === 'string' ? [goPackage] : Array.isArray(goPackage) ? goPackage.filter((p): p is string => typeof p === 'string') : [];
+      return paths.length === 1 ? [row(paths[0]!, name)] : [];
+    }
+    // PHP. An include path is a file, not a class; a member call (`$x->save()`) names a method:
+    // inferred and unqualified.
+    if (kind === 'import' ? /\/|\.php$/i.test(name) : !BOUND_KINDS.has(kind)) return [];
+    if (kind === 'call' && !ref.phpFunction && ref.verifiability === 'inferred' && !name.includes('\\')) return [];
+    if (ref.phpFunction) {
+      // A function call: under the global name PHP falls back to, unless only one name is possible;
+      // the namespaced name is a candidate too. `isset()`, `empty()` are constructs, not functions.
+      const candidates = ref.phpFunction.map(c => c.replace(/^\\/, ''));
+      const global = candidates[candidates.length - 1]!;
+      if (PHP_CONSTRUCTS.has(global.toLowerCase())) return [];
+      return [row(global, global.slice(global.lastIndexOf('\\') + 1), kind, { phpCandidates: candidates.slice(0, -1) })];
+    }
+    // A facade call (`DB::transaction()`) is stored as the file names it; the class the facade
+    // resolves to goes in the metadata.
+    const facade = typeof ref.metadata?.facadeAlias === 'string' ? ref.metadata.facadeAlias as string : null;
+    const fqn = (facade ? this.phpNamed(sourcePath, facade) : name).replace(/^\\/, '');
+    if (!fqn || /^(self|static|parent)$/i.test(fqn)) return [];
+    return [row(fqn, fqn.slice(fqn.lastIndexOf('\\') + 1), kind, facade ? { facadeTarget: name } : undefined)];
+  }
+
+  /**
+   * The class a PHP file means by a short name: its `use` import (`use X\DB;`, `use X\Y as DB;`),
+   * else the name in the file's namespace, else the global name (M5-19 review).
+   */
+  private phpNamed(sourcePath: string, short: string): string {
+    let uses = this.phpUsesCache.get(sourcePath);
+    if (!uses) {
+      uses = new Map();
+      for (const m of (this.readWorkspaceText(sourcePath) ?? '').matchAll(/^\s*use\s+\\?([\w\\]+)(?:\s+as\s+(\w+))?\s*;/gm)) {
+        uses.set((m[2] ?? m[1]!.slice(m[1]!.lastIndexOf('\\') + 1)).toLowerCase(), m[1]!);
+      }
+      this.phpUsesCache.set(sourcePath, uses);
+    }
+    const namespace = this.phpNamespaces.get(sourcePath);
+    return uses.get(short.toLowerCase()) ?? (namespace ? `${namespace}\\${short}` : short);
+  }
+
+  /**
+   * Whether a candidate's target lies outside the workspace as it now stands (M5-19 and its review).
+   * npm: no alias, workspace package or indexed file satisfies the specifier. Python: no indexed
+   * file satisfies the module and its top-level name is no module or Python folder of the workspace.
+   * Go: the path is outside every workspace module and resolves to no package. PHP: no workspace
+   * class or function has the name, and for a class no PSR-4 root covers it; a function
+   * (`phpCandidates` set, PSR-4 loads classes only) has no workspace declaration under any candidate.
+   */
+  private decideExternal(ecosystem: Ecosystem, specifier: string, sourcePath: string, fileMap: Map<string, string>, phpCandidates?: string[]): boolean {
+    const dir = dirname(sourcePath);
+    const key = [ecosystem, dir, ecosystem === 'npm' && JS_MODULE_SOURCE.test(sourcePath), specifier, phpCandidates ? `f:${phpCandidates.join(',')}` : ''].join('\0');
+    let external = this.externalDecisions.get(key);
+    if (external !== undefined) return external;
+    const ctx = this.importContext(fileMap);
+    if (ecosystem === 'npm') {
+      external = jsCandidateSpecifier(specifier) && this.jsExternalSpecifier(specifier, sourcePath, fileMap);
+    } else if (ecosystem === 'pypi') {
+      external = this.pythonModuleCandidate(specifier, sourcePath, fileMap) && pythonImportOutsideProject(specifier, sourcePath, ctx);
+    } else if (ecosystem === 'go') {
+      const resolver = importResolverFor('go');
+      external = goImportOutsideProject(specifier, sourcePath, (p) => this.readWorkspaceText(p))
+        && !goImportInWorkspaceModule(specifier, sourcePath, ctx)
+        && !(resolver && this.resolveModuleImport(resolver, specifier, sourcePath, fileMap, () => new Set()).length);
+    } else {
+      const declared = (this.phpDeclared ??= this.store.getPhpDeclaredNames());
+      external = phpCandidates
+        ? [specifier, ...phpCandidates].every(n => !declared.has(n.toLowerCase()))
+        : phpNameOutsideProject(specifier, sourcePath, ctx, declared);
+    }
+    this.externalDecisions.set(key, external);
+    return external;
+  }
+
+  /**
+   * Decides every external-reference candidate again against the workspace this run leaves (M5-19
+   * review). Other files decide it (package names, aliases, Python packages, PHP declarations and
+   * PSR-4 roots, go.mod modules), and a sync re-parses a file only when its edges may change, so the
+   * decision is made here for all, without parsing: once per ecosystem, folder and specifier.
+   */
+  private decideExternalRefs(): void {
+    this.store.deleteOrphanExternalCandidates();
+    const rows = this.store.getExternalCandidates();
+    if (!rows.length) return;
+    // The index as this run leaves it, as a forced scan sees it; read anew.
+    this.workspaceFileMap.clear();
+    for (const f of this.store.getAllFiles()) this.workspaceFileMap.set(f.path as string, f.repo as string);
+    this.importFiles = null;
+    this.importTextCache.clear();
+    this.languageCache.clear();
+    this.npmWorkspaceNames = null;
+    this.phpDeclared = null;
+    this.externalDecisions.clear();
+    const changed: Array<[number, number]> = [];
+    for (const r of rows) {
+      let phpCandidates: string[] | undefined;
+      if (r.ecosystem === 'composer' && r.metadata && r.metadata !== '{}') {
+        try { phpCandidates = JSON.parse(r.metadata).phpCandidates; } catch { /* none */ }
+      }
+      const external = this.decideExternal(r.ecosystem as Ecosystem, r.specifier, r.file_path, this.workspaceFileMap, phpCandidates);
+      if (external !== (r.external === 1)) changed.push([external ? 1 : 0, r.id]);
+    }
+    if (changed.length) this.store.setExternalDecisions(changed);
+  }
+
+  /** The import resolvers' context over this phase's file set. */
+  private importContext(fileMap: Map<string, string>): ImportContext {
+    if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
+    return { files: this.importFiles.files, readText: (path) => this.readWorkspaceText(path) };
+  }
+
+  /** A JS/TS file's import, export-from and require statements, for one resolution phase (M5-19). */
+  private jsModuleImports(sourcePath: string): JsImport[] {
+    let imports = this.jsImportsCache.get(sourcePath);
+    if (!imports) {
+      const { code, masked } = this.jsText(sourcePath);
+      this.jsImportsCache.set(sourcePath, (imports = jsImports(code, masked)));
+    }
+    return imports;
+  }
+
+  /**
+   * Whether a JS/TS specifier names a module outside the workspace (M5-19): no path alias of the
+   * file's tsconfig or bundler config, no workspace package's name, and no indexed file.
+   */
+  private jsExternalSpecifier(specifier: string, sourcePath: string, fileMap: Map<string, string>): boolean {
+    if (JS_MODULE_SOURCE.test(sourcePath) && jsAliasTargets(specifier, sourcePath, this.aliasContext(fileMap)).length) return false;
+    if (this.resolveImportPath(specifier, sourcePath, fileMap)) return false;
+    const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0]!;
+    return !this.npmWorkspacePackageNames().has(name);
+  }
+
+  /** The names a JS/TS file binds by imports of a package's form, unless it declares them itself (M5-19). */
+  private jsExternalBindings(sourcePath: string): Map<string, ExternalBinding> {
+    const key = `js\0${sourcePath}`;
+    let bindings = this.externalBindingsCache.get(key);
+    if (bindings) return bindings;
+    bindings = new Map();
+    this.externalBindingsCache.set(key, bindings);
+    const { code } = this.jsText(sourcePath);
+    // As in jsImportBindings: a `require` binding is the import itself, not a shadowing local.
+    const declared = new Set([
+      ...[...code.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=(?!\s*require\s*\()/g)].map(m => m[1]!),
+      ...[...code.matchAll(/\b(?:function|class)\s+([\w$]+)/g)].map(m => m[1]!),
+    ]);
+    for (const s of this.jsModuleImports(sourcePath)) {
+      if (!jsCandidateSpecifier(s.specifier)) continue;
+      for (const n of s.names) {
+        if (n.local && !declared.has(n.local)) bindings.set(n.local, { specifier: s.specifier, imported: n.imported === '*' ? null : n.imported });
+      }
+      if (s.local && !declared.has(s.local)) bindings.set(s.local, { specifier: s.specifier, imported: null });
+    }
+    return bindings;
+  }
+
+  /** The names a Python file binds by absolute imports no indexed file satisfies (M5-19). */
+  private pythonExternalBindings(sourcePath: string, fileMap: Map<string, string>): Map<string, ExternalBinding> {
+    const key = `py\0${sourcePath}`;
+    let bindings = this.externalBindingsCache.get(key);
+    if (bindings) return bindings;
+    bindings = new Map();
+    this.externalBindingsCache.set(key, bindings);
+    for (const statement of pythonImports(stripPythonComments(this.readWorkspaceText(sourcePath) ?? ''))) {
+      for (const n of statement.names) {
+        if (this.pythonModuleCandidate(n.module, sourcePath, fileMap)) bindings.set(n.local, { specifier: n.module, imported: n.imported });
+      }
+    }
+    return bindings;
+  }
+
+  /** An absolute Python module no indexed file satisfies (M5-19). */
+  private pythonModuleCandidate(module: string, sourcePath: string, fileMap: Map<string, string>): boolean {
+    const resolver = importResolverFor('python');
+    if (!resolver || module.startsWith('.')) return false;
+    return !this.resolveModuleImport(resolver, module, sourcePath, fileMap, () => new Set()).length;
+  }
+
+  /**
+   * The binding a dotted use names, by its longest bound prefix (`os.path.join` → `os.path`, else
+   * `os`), and the name used from the module: the imported name, then the rest of the path.
+   */
+  private boundExternal(bindings: Map<string, ExternalBinding>, qualified: string): { specifier: string; symbol: string | null } | null {
+    if (!bindings.size) return null;
+    for (let prefix = qualified; ; prefix = prefix.slice(0, prefix.lastIndexOf('.'))) {
+      const binding = bindings.get(prefix);
+      if (binding) {
+        const symbol = [binding.imported, qualified.slice(prefix.length + 1)].filter(Boolean).join('.');
+        return { specifier: binding.specifier, symbol: symbol || null };
+      }
+      if (!prefix.includes('.')) return null;
     }
   }
 
@@ -3989,6 +4299,11 @@ export class Scanner {
     this.vueScopes.clear();
     this.vueImporters.clear();
     this.npmWorkspaceNames = null;
+    this.jsImportsCache.clear();
+    this.externalBindingsCache.clear();
+    this.phpDeclared = null;
+    this.phpUsesCache.clear();
+    this.externalDecisions.clear();
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 

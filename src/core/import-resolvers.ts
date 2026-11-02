@@ -253,6 +253,23 @@ export function resolveGoImport(target: string, sourcePath: string, ctx: ImportC
 }
 
 /**
+ * True when a Go import path is in a module of the workspace (the go.mod above the importer or an
+ * ancestor's, their local replaces, the go.work modules), whether or not its package is indexed:
+ * `example.com/shop/missing` is the project's own (M5-19).
+ */
+export function goImportInWorkspaceModule(target: string, sourcePath: string, ctx: ImportContext): boolean {
+  const path = target.replace(/^"|"$/g, '');
+  const within = (module: string) => path === module || path.startsWith(`${module}/`);
+  for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
+    const gomod = ctx.readText(join(dir, 'go.mod'));
+    const module = goModulePath(gomod);
+    if (module && (within(module) || goLocalReplaces(gomod!, dir).some(([replaced]) => within(replaced)))) return true;
+    if (!dir) break;
+  }
+  return goWorkModules(sourcePath, ctx).some(([module]) => within(module));
+}
+
+/**
  * True when a Go import that resolves to no project package is known to be outside the project: a
  * standard-library path (no dot in its first element, `C` included), or any path once a go.mod or
  * go.work at or above the importer's folder is in the workspace. Otherwise (no go.mod, or the
@@ -265,6 +282,67 @@ export function goImportOutsideProject(target: string, sourcePath: string, readT
     if (readText(join(dir, 'go.mod')) !== null || readText(join(dir, 'go.work')) !== null) return true;
     if (!dir) return false;
   }
+}
+
+/**
+ * The folders a Python file's absolute imports search, workspace root first: the root, then every
+ * ancestor of the file (src/ layouts, sub-projects, a script's own directory). Python 3 has no
+ * implicit relative imports, so `import json` inside a package is the stdlib, not pkg/json.py: a
+ * package folder (__init__.py) and every folder inside one are no roots (M0-12-R7, M0-12-R9). The
+ * workspace root always is, even with a stray __init__.py. A namespace folder outside any package
+ * stays a root: run as a script, Python puts its folder on sys.path (D018).
+ */
+function pythonRoots(sourcePath: string, ctx: ImportContext): string[] {
+  const ancestors: string[] = [];
+  for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
+    ancestors.push(dir);
+    if (!dir) break;
+  }
+  // ancestors run from the file's folder up to the workspace root.
+  const topPackage = ancestors.reduce((top, dir, i) => (dir && ctx.files.has(join(dir, '__init__.py')) ? i : top), -1);
+  return ancestors.slice(topPackage + 1).reverse();
+}
+
+/** Every folder holding a Python file, at any depth: the folders an import can name as a package. */
+const pythonFolderSets = new WeakMap<Set<string>, Set<string>>();
+function pythonFoldersOf(files: Set<string>): Set<string> {
+  let folders = pythonFolderSets.get(files);
+  if (folders) return folders;
+  folders = new Set<string>();
+  for (const f of files) {
+    if (!f.endsWith('.py')) continue;
+    for (let dir = dirOf(f); dir && !folders.has(dir); dir = dirOf(dir)) folders.add(dir);
+  }
+  pythonFolderSets.set(files, folders);
+  return folders;
+}
+
+/**
+ * True when an absolute Python module that resolves to nothing lies outside the workspace: its
+ * top-level name is no module (`x.py`) and no folder holding Python files (a package or namespace
+ * package) on any root the import searches. `from app.missing import X` in a workspace with an
+ * `app` package is the project's own; a `types/` or `http/` folder of TypeScript files does not hide
+ * the standard library's `types` or `http.client` (M5-19 and its review).
+ */
+export function pythonImportOutsideProject(module: string, sourcePath: string, ctx: ImportContext): boolean {
+  if (module.startsWith('.')) return false;
+  const top = module.split('.')[0];
+  if (!top) return false;
+  const folders = pythonFoldersOf(ctx.files);
+  return !pythonRoots(sourcePath, ctx).some((root) => ctx.files.has(join(root, `${top}.py`)) || folders.has(join(root, top)));
+}
+
+/**
+ * True when a PHP class or function name that resolves to nothing lies outside the workspace,
+ * decided per name: no workspace class, interface, trait, enum or function has that qualified name
+ * (`declared`, lower case), and no PSR-4 root of the file's composer.json files covers it. `App\Missing`
+ * under `"App\\": "app/"` is the project's own; one workspace file in `namespace Vendor\Other` does
+ * not make `Vendor\Lib\Thing` the project's (M5-19 review).
+ */
+export function phpNameOutsideProject(name: string, sourcePath: string, ctx: ImportContext, declared: Set<string>): boolean {
+  const lower = name.replace(/^\\/, '').toLowerCase();
+  if (declared.has(lower)) return false;
+  return !psr4Roots(dirOf(sourcePath), ctx).some(({ prefix }) => prefix && lower.startsWith(prefix.toLowerCase()));
 }
 
 /** Python: `import a.b`, `from .x import y`, `from pkg import mod` → module file or package __init__.py. */
@@ -295,22 +373,7 @@ export function resolvePythonImports(target: string, sourcePath: string, ctx: Im
     let base = dirOf(sourcePath);
     for (let i = 1; i < dots; i++) base = dirOf(base);
     roots = [base];
-  } else {
-    // Absolute imports: workspace root, then every ancestor of the file (src/ layouts, sub-projects,
-    // a script's own directory). Python 3 has no implicit relative imports, so `import json` inside a
-    // package is the stdlib, not pkg/json.py: a package folder (__init__.py) and every folder inside
-    // one are no roots (M0-12-R7, M0-12-R9). The workspace root always is, even with a stray
-    // __init__.py. A namespace folder outside any package stays a root: run as a script, Python puts
-    // its folder on sys.path (D018).
-    const ancestors: string[] = [];
-    for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
-      ancestors.push(dir);
-      if (!dir) break;
-    }
-    // ancestors run from the file's folder up to the workspace root.
-    const topPackage = ancestors.reduce((top, dir, i) => (dir && ctx.files.has(join(dir, '__init__.py')) ? i : top), -1);
-    roots = ancestors.slice(topPackage + 1).reverse();
-  }
+  } else roots = pythonRoots(sourcePath, ctx);
   const qualified = (name: string) => (module.endsWith('.') ? `${module}${name}` : `${module}.${name}`);
   const hits: ImportHit[] = [];
   const add = (file: string | null, symbol: string) => {

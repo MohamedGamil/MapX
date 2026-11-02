@@ -5,8 +5,9 @@ import * as path from 'node:path';
 import { globToLike, isGlobPattern, isWildcard as isWildcardTerm } from './fuzzy-matcher.js';
 import { BunStore } from './store-bun.js';
 import { NodeStore } from './store-node.js';
+import type { ExternalRefRow } from './external-refs.js';
 
-const CURRENT_SCHEMA_VERSION = 9;
+const CURRENT_SCHEMA_VERSION = 10;
 
 function parseSearchPattern(pattern: string): { scopeLike: string | null; namePattern: string } {
   const commonExtensions = new Set([
@@ -221,6 +222,42 @@ const MIGRATIONS: Migration[] = [
       `ALTER TABLE files ADD COLUMN pagerank REAL DEFAULT 0.0`,
       `CREATE INDEX IF NOT EXISTS idx_files_pagerank ON files(pagerank)`
     ]
+  },
+  {
+    version: 10,
+    description: 'Add external references: the candidates table and the external_refs view of those decided external (M5-19)',
+    up: [
+      // Never edges: edge counts, metrics and PageRank ignore them (docs/research/deptrac/03 §4).
+      // Every reference that gave no edge and may name something outside the workspace is a
+      // candidate; `external` is decided against the workspace as it stands, again at the end of
+      // every scan and sync, since other files decide it (review of M5-19). `package` …
+      // `attribution` are filled by the per-ecosystem attribution (M5-20 … M5-23).
+      `CREATE TABLE IF NOT EXISTS external_ref_candidates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_path TEXT NOT NULL,
+        repo TEXT NOT NULL,
+        line INTEGER NOT NULL,
+        source_symbol TEXT,
+        specifier TEXT NOT NULL,
+        symbol TEXT,
+        kind TEXT NOT NULL,
+        ecosystem TEXT NOT NULL,
+        external INTEGER NOT NULL DEFAULT 0,
+        package TEXT,
+        origin TEXT,
+        direct INTEGER,
+        dev INTEGER,
+        attribution TEXT,
+        metadata TEXT DEFAULT '{}'
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_external_ref_candidates_file ON external_ref_candidates(file_path)`,
+      `CREATE INDEX IF NOT EXISTS idx_external_ref_candidates_repo ON external_ref_candidates(repo)`,
+      `CREATE INDEX IF NOT EXISTS idx_external_ref_candidates_specifier ON external_ref_candidates(specifier)`,
+      `CREATE VIEW IF NOT EXISTS external_refs AS
+        SELECT id, file_path, repo, line, source_symbol, specifier, symbol, kind, ecosystem,
+               package, origin, direct, dev, attribution, metadata
+        FROM external_ref_candidates WHERE external = 1`,
+    ]
   }
 ];
 
@@ -370,6 +407,7 @@ export class Store {
   deleteFile(filePath: string): void {
     this.backend.prepare('DELETE FROM symbols WHERE file_path = ?').run(filePath);
     this.backend.prepare('DELETE FROM edges WHERE source_file = ? OR target_file = ?').run(filePath, filePath);
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path = ?').run(filePath);
     this.backend.prepare('DELETE FROM files WHERE path = ?').run(filePath);
   }
 
@@ -505,8 +543,58 @@ export class Store {
     );
   }
 
+  /** A file's outgoing edges and its external-reference candidates: both come from resolving its references (M5-19). */
   deleteEdgesForFile(filePath: string): void {
     this.backend.prepare('DELETE FROM edges WHERE source_file = ?').run(filePath);
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path = ?').run(filePath);
+  }
+
+  /** Replaces a file's external-reference candidates (M5-19). */
+  replaceExternalRefs(filePath: string, repo: string, refs: ExternalRefRow[]): void {
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path = ?').run(filePath);
+    if (!refs.length) return;
+    const insert = this.backend.prepare(
+      'INSERT INTO external_ref_candidates (file_path, repo, line, source_symbol, specifier, symbol, kind, ecosystem, external, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    for (const r of refs) {
+      insert.run(filePath, repo, r.line, r.sourceSymbol, r.specifier, r.symbol, r.kind, r.ecosystem, r.external ? 1 : 0, r.metadata ? JSON.stringify(r.metadata) : '{}');
+    }
+  }
+
+  /** Every candidate with what decides it, for the decision at the end of a scan (M5-19). */
+  getExternalCandidates(): Array<{ id: number; file_path: string; specifier: string; ecosystem: string; external: number; metadata: string | null }> {
+    return this.backend.prepare('SELECT id, file_path, specifier, ecosystem, external, metadata FROM external_ref_candidates')
+      .all() as Array<{ id: number; file_path: string; specifier: string; ecosystem: string; external: number; metadata: string | null }>;
+  }
+
+  /** Records candidates' decisions: [external (0 or 1), id] (M5-19). */
+  setExternalDecisions(decisions: Array<[number, number]>): void {
+    const update = this.backend.prepare('UPDATE external_ref_candidates SET external = ? WHERE id = ?');
+    this.inTransaction(() => { for (const [external, id] of decisions) update.run(external, id); });
+  }
+
+  /** Drops the candidates of files no longer indexed (an index an older MapX synced) (M5-19). */
+  deleteOrphanExternalCandidates(): void {
+    this.backend.prepare('DELETE FROM external_ref_candidates WHERE file_path NOT IN (SELECT path FROM files)').run();
+  }
+
+  /** PHP classes, interfaces, traits, enums and functions of the workspace, by lower-case qualified name (M5-19). */
+  getPhpDeclaredNames(): Set<string> {
+    const rows = this.backend.prepare(
+      "SELECT s.name, f.namespace FROM symbols s JOIN files f ON f.path = s.file_path WHERE f.language = 'php' AND (s.scope IS NULL OR s.scope = '') AND s.kind IN ('class', 'interface', 'trait', 'enum', 'function')"
+    ).all();
+    return new Set(rows.map(r => (r.namespace ? `${r.namespace}\\${r.name}` : String(r.name)).toLowerCase()));
+  }
+
+  /** External references: the candidates decided external, by file and line (M5-19). */
+  getExternalRefs(options: { repo?: string; file?: string } = {}): Record<string, unknown>[] {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (options.repo) { where.push('repo = ?'); params.push(options.repo); }
+    if (options.file) { where.push('file_path = ?'); params.push(options.file); }
+    return this.backend.prepare(
+      `SELECT * FROM external_refs${where.length ? ' WHERE ' + where.join(' AND ') : ''} ORDER BY file_path, line, specifier, symbol, kind, id`
+    ).all(...params);
   }
 
   deleteFrameworkEdgesForRepo(repoName: string): void {
@@ -779,6 +867,7 @@ export class Store {
       this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM external_ref_candidates WHERE repo = ?').run(repoName);
     });
   }
 
@@ -790,6 +879,7 @@ export class Store {
       this.backend.prepare('DELETE FROM classification_signals WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM cluster_metrics WHERE repo = ?').run(repoName);
       this.backend.prepare('DELETE FROM arch_smells WHERE repo = ?').run(repoName);
+      this.backend.prepare('DELETE FROM external_ref_candidates WHERE repo = ?').run(repoName);
       // Every `<kind>:<repo>` record of the repo (scan state, resume state, Vue registry, HTTP inputs, profile).
       this.backend.prepare("DELETE FROM meta WHERE substr(key, -length(?) - 1) = ':' || ?").run(repoName, repoName);
       // The other repos no longer saw this one: when it comes back it is newly visible to them, so

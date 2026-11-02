@@ -160,7 +160,8 @@ describe('layer membership on the fixture apps', () => {
     for (const app of ['php', 'ts', 'python']) {
       const m = computeMembership(apps[app]!.view, apps[app]!.config);
       const classes = apps[app]!.view.elements.filter((e) => e.kind === 'symbol' && e.symbolKind === 'class');
-      expect(classes.length, app).toBe(18);
+      // 18 from M5-01, and the HttpGateway of the external references (M5-19).
+      expect(classes.length, app).toBe(19);
       for (const c of classes) {
         const dir = dirOf[app]!(c.file.path);
         expect(m.of(c), `${app} ${c.qualifiedName}`).toEqual(EXPECTED[dir]);

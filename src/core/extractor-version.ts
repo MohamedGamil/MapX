@@ -18,8 +18,10 @@ import type { Store } from './store.js';
  * - 7: M2-09 (JS/TS member-assigned functions are symbols).
  * - 8: M5-10 (decorators, attributes and doc tags in symbol metadata: PHP, TS/JS, Python, Java,
  *   Kotlin, C#).
+ * - 9: M5-19 (external references: candidates of references outside the workspace, decided again
+ *   at the end of every scan and sync).
  */
-export const EXTRACTOR_VERSION = 8;
+export const EXTRACTOR_VERSION = 9;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 
