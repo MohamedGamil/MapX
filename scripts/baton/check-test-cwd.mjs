@@ -2,13 +2,16 @@
 // M4-09, M4-09-R1: run tests and check they leave the checkout alone. Before and after the run it
 // snapshots `git status` (tracked changes, untracked and ignored paths, file by file) with a hash
 // of each listed file, and a hash of every file under `.mapx/`; any difference fails the check.
+// M4-09-R2: the run gets a private TMPDIR, which must be empty afterwards: a test that leaves a
+// temp directory behind fails the check too.
 // Usage:
 //   node scripts/baton/check-test-cwd.mjs                      # the whole vitest suite
 //   node scripts/baton/check-test-cwd.mjs tests/cli.test.ts    # some test files
 //   node scripts/baton/check-test-cwd.mjs --cmd <command> [args…]   # any command (its own tests)
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const hash = (path) => {
@@ -49,8 +52,33 @@ const snapshot = () => {
 const args = process.argv.slice(2);
 const [cmd, ...cmdArgs] = args[0] === '--cmd' ? args.slice(1) : ['npx', 'vitest', 'run', ...args];
 const before = snapshot();
-const run = spawnSync(cmd, cmdArgs, { stdio: 'inherit' });
-const after = snapshot();
+// Caches the tools keep in the temp directory are no leftovers: Node's compile cache, and tsx's
+// per-user cache (`tsx-<uid>`, or `tsx-<username>` where there is no uid, as on Windows).
+const TOOL_CACHE = /^(?:node-compile-cache|v8-compile-cache(?:-\d+)?|tsx-[^/\\]+)$/;
+const privateTmp = mkdtempSync(join(tmpdir(), 'mapx-check-cwd-tmp-'));
+let run, after, leftInTmp;
+try {
+  run = spawnSync(cmd, cmdArgs, { stdio: 'inherit', env: { ...process.env, TMPDIR: privateTmp, TEMP: privateTmp, TMP: privateTmp } });
+  after = snapshot();
+  leftInTmp = readdirSync(privateTmp).filter((name) => !TOOL_CACHE.test(name)).sort();
+} finally {
+  // A leftover the run made unremovable (a read-only folder) must not hide the reports.
+  try {
+    rmSync(privateTmp, { recursive: true, force: true });
+  } catch {
+    try {
+      // Make every folder writable again, then retry.
+      const writable = (dir) => {
+        chmodSync(dir, 0o700);
+        for (const name of readdirSync(dir)) if (lstatSync(join(dir, name)).isDirectory()) writable(join(dir, name));
+      };
+      writable(privateTmp);
+      rmSync(privateTmp, { recursive: true, force: true });
+    } catch (err) {
+      console.error(`Could not remove ${privateTmp}: ${err.message}`);
+    }
+  }
+}
 const changed = [];
 for (const path of new Set([...before.keys(), ...after.keys()])) {
   const a = before.get(path), b = after.get(path);
@@ -59,4 +87,5 @@ for (const path of new Set([...before.keys(), ...after.keys()])) {
 }
 // A tracked file the run deleted shows as a new " D" entry; one it edited as a new " M" entry.
 if (changed.length) console.error(`The tests touched the checkout:\n  ${changed.sort().join('\n  ')}`);
-process.exit(run.status !== 0 ? run.status ?? 1 : changed.length ? 1 : 0);
+if (leftInTmp.length) console.error(`The tests left in the temp directory:\n  ${leftInTmp.join('\n  ')}`);
+process.exit(run.status !== 0 ? run.status ?? 1 : changed.length || leftInTmp.length ? 1 : 0);

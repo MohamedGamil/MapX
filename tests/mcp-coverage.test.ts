@@ -345,18 +345,23 @@ describe('MCP Server Coverage Boost', () => {
     // A non-git directory, so the repo's own untracked files never leak into the count.
     const realFs = require('node:fs') as typeof import('node:fs');
     const dir = realFs.mkdtempSync(resolve(tmpdir(), 'mapx-stale-'));
-    realFs.mkdirSync(resolve(dir, 'tests'));
-    realFs.writeFileSync(resolve(dir, 'tests/mcp-coverage.test.ts'), 'changed since 2000');
-    const staleCount = getStaleFilesCount(mockStore, dir);
-    expect(staleCount).toBe(2);
+    // Removed even when an assertion fails (M4-09-R2).
+    try {
+      realFs.mkdirSync(resolve(dir, 'tests'));
+      realFs.writeFileSync(resolve(dir, 'tests/mcp-coverage.test.ts'), 'changed since 2000');
+      const staleCount = getStaleFilesCount(mockStore, dir);
+      expect(staleCount).toBe(2);
 
-    const staleNames = getStaleFileNames(mockStore, dir, 1);
-    expect(staleNames).toHaveLength(1);
-    expect(staleNames[0]).toBe('tests/mcp-coverage.test.ts');
+      const staleNames = getStaleFileNames(mockStore, dir, 1);
+      expect(staleNames).toHaveLength(1);
+      expect(staleNames[0]).toBe('tests/mcp-coverage.test.ts');
 
-    const warning = getMcpStalenessWarning(mockStore, dir);
-    expect(warning).toContain('Index is stale');
-    expect(warning).toContain('tests/mcp-coverage.test.ts');
+      const warning = getMcpStalenessWarning(mockStore, dir);
+      expect(warning).toContain('Index is stale');
+      expect(warning).toContain('tests/mcp-coverage.test.ts');
+    } finally {
+      realFs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('covers catch block in executeTool request handler when a tool throws', async () => {

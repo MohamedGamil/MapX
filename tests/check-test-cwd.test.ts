@@ -36,7 +36,18 @@ describe('check-test-cwd', () => {
 
   it('passes when the command leaves the checkout alone, and reports the command\'s own failure', () => {
     expect(check('1').status).toBe(0);
+    // A temp directory the run removes again is fine (M4-09-R2).
+    expect(check("const d = require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'mapx-x-')); require('fs').rmSync(d, { recursive: true })").status).toBe(0);
+    // Tool caches are no leftovers, tsx's under a uid or a user name (review of M4-09-R2).
+    expect(check("require('fs').mkdirSync(require('path').join(require('os').tmpdir(), 'node-compile-cache'))").status).toBe(0);
+    expect(check("require('fs').mkdirSync(require('path').join(require('os').tmpdir(), 'tsx-someone'))").status).toBe(0);
     expect(check('process.exit(3)').status).toBe(3);
+  });
+
+  it('still reports a leftover the check cannot remove', () => {
+    const r = check("const fs = require('fs'), p = require('path'); const d = p.join(require('os').tmpdir(), 'mapx-ro'); fs.mkdirSync(d); fs.writeFileSync(p.join(d, 'y'), 'y'); fs.chmodSync(d, 0o555)");
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('mapx-ro');
   });
 
   it.each([
@@ -46,6 +57,8 @@ describe('check-test-cwd', () => {
     ['edits a file that was already modified', "require('fs').appendFileSync('src/dirty.ts', 'x')", 'src/dirty.ts'],
     ['deletes a tracked file', "require('fs').rmSync('src/a.ts')", 'src/a.ts'],
     ['changes the scan database', "require('fs').appendFileSync('.mapx/mapx.db', 'x')", '.mapx/mapx.db'],
+    // M4-09-R2: a temp directory the run does not remove.
+    ['leaves a temp directory behind', "require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'mapx-left-'))", 'mapx-left-'],
   ])('fails, naming the path, when the command %s', (_name, js, path) => {
     const r = check(js);
     expect(r.status).toBe(1);
