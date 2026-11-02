@@ -78,6 +78,14 @@ Route::prefix('inline')->group(fn () => Route::get('ping', [HomeController::clas
 Route::get('after-inline', [HomeController::class, 'afterInline']);
 
 Route::group(['prefix' => 'archive'], base_path('routes/api/archive.php'));
+
+// M1-07-R3: the legacy form with a list of files mounts each of them.
+Route::group(['prefix' => 'kit'], [__DIR__.'/api/kit/tools.php', __DIR__.'/api/kit/parts.php']);
+
+// M1-07-R3 review: a closure in the list is a group body, and a literal spread is flattened.
+Route::prefix('mix')->group([function () {
+    Route::get('inline', [HomeController::class, 'mixInline']);
+}, __DIR__.'/api/kit/mixed.php', ...[__DIR__.'/api/kit/spread.php']]);
 Route::get('after-legacy', [HomeController::class, 'afterLegacy']);
 
 // M1-03-R1 / M1-06 AC2: interpolated URIs and variable prefixes.

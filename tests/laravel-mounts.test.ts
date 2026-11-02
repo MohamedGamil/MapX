@@ -1573,6 +1573,214 @@ describe('M1-03-R2 review: withRouting order', () => {
   }, 90000);
 });
 
+// Review 2026-11-02 (M1-07-R2/M1-03-R2): Router::group wraps its routes in an array, so a list of
+// files mounts each; a foreach-bound or conditionally reassigned prefix is unknown, not definite.
+describe('M1-07-R3: route files mounted as arrays; loop and conditional prefix variables', () => {
+  type View = { method: string; path: string; handlerSymbol?: string; reachability?: string; dynamic?: boolean; conditional?: boolean; metadata?: Record<string, any> };
+  const RSP = 'app/Providers/RouteServiceProvider.php';
+  const provider = (body: string[]) => [
+    '<?php',
+    'namespace App\\Providers;',
+    'use Illuminate\\Foundation\\Support\\Providers\\RouteServiceProvider as ServiceProvider;',
+    'use Illuminate\\Support\\Facades\\Route;',
+    'class RouteServiceProvider extends ServiceProvider',
+    '{',
+    "    protected $sections = ['docs' => 'Docs'];",
+    '    public function map()',
+    '    {',
+    ...body.map((l) => `        ${l}`),
+    '    }',
+    '}',
+  ].join('\n');
+  const file = (uri: string) => `<?php\nuse Illuminate\\Support\\Facades\\Route;\nRoute::get('${uri}', fn () => 1);\n`;
+  const lineOf = (src: string, needle: string) => src.split('\n').findIndex((l) => l.includes(needle)) + 1;
+  const scanRoutes = (files: Record<string, string>) => {
+    const root = workspace({ artisan: '#!/usr/bin/env php\n<?php\n', ...files });
+    try {
+      init(root);
+      mapx(root, 'scan', root);
+      return JSON.parse(mapx(root, 'routes', root, '--json')) as View[];
+    } finally {
+      cleanup(root);
+    }
+  };
+
+  it('mounts each file of a list under ->group([...]) and Route::group($attributes, [...]), with the group attributes', () => {
+    const rsp = provider([
+      "Route::prefix('bundle')->middleware('web')->group([",
+      "    base_path('routes/first.php'),",
+      "    base_path('routes/second.php'),",
+      ']);',
+      "Route::group(['prefix' => 'kit', 'middleware' => 'api'], array(__DIR__.'/../../routes/tools.php', base_path('routes/parts.php')));",
+      // Review 2026-11-02: a literal spread is flattened.
+      "Route::prefix('sp')->group([...[base_path('routes/s1.php')], base_path('routes/s2.php')]);",
+    ]);
+    const routes = scanRoutes({
+      [RSP]: rsp,
+      'routes/first.php': `${file('first')}Route::prefix('nested')->group([__DIR__.'/nested.php', __DIR__.'/nested2.php']);\n`,
+      // Review 2026-11-02: closures in the list are group bodies; the files in it still mount.
+      'routes/second.php': `${file('second')}Route::prefix('mix')->group([function () { Route::get('inline', fn () => 1); }, __DIR__.'/t.php', static fn () => Route::get('arrow', fn () => 1)]);\n`,
+      'routes/t.php': file('t'),
+      'routes/s1.php': file('s1'),
+      'routes/s2.php': file('s2'),
+      // Both define `same`: the file listed later registers it later, so it wins.
+      'routes/nested.php': `${file('n')}Route::get('same', 'NestedController@same');\n`,
+      'routes/nested2.php': `${file('n2')}Route::get('same', 'Nested2Controller@same');\n`,
+      'routes/tools.php': file('tools'),
+      'routes/parts.php': file('parts'),
+      'routes/orphan.php': file('orphan'),
+    });
+    expect(routes.map((r) => `${r.method} ${r.path} [${(r.metadata?.middlewares ?? []).join(',')}] ${r.reachability}`).sort()).toEqual([
+      'GET /bundle/first [web] reachable',
+      'GET /bundle/mix/arrow [web] reachable',
+      'GET /bundle/mix/inline [web] reachable',
+      'GET /bundle/mix/t [web] reachable',
+      'GET /bundle/nested/n [web] reachable',
+      'GET /bundle/nested/n2 [web] reachable',
+      'GET /bundle/nested/same [web] reachable',
+      'GET /bundle/nested/same [web] reachable',
+      'GET /bundle/second [web] reachable',
+      'GET /kit/parts [api] reachable',
+      'GET /kit/tools [api] reachable',
+      // Every mount was evaluated, so a file nothing loads is proven unreachable.
+      'GET /orphan [] unreachable',
+      'GET /sp/s1 [] reachable',
+      'GET /sp/s2 [] reachable',
+    ]);
+    const mounted = (path: string) => routes.find((r) => r.path === path)?.metadata?.mountedBy;
+    expect(mounted('/bundle/first')).toBe(`${RSP}:${lineOf(rsp, "prefix('bundle')")}`);
+    expect(mounted('/bundle/second')).toBe(`${RSP}:${lineOf(rsp, "prefix('bundle')")}`);
+    expect(mounted('/kit/tools')).toBe(`${RSP}:${lineOf(rsp, "'kit'")}`);
+    expect(mounted('/bundle/nested/n2')).toBe('routes/first.php:4');
+    const live = routes.filter((r) => r.path === '/bundle/nested/same' && !r.metadata?.overriddenBy).map((r) => r.handlerSymbol?.split('\\').pop());
+    expect(live).toEqual(['Nested2Controller@same']);
+    // Each file of the list has its own position: the later one sorts after the earlier.
+    const order = (path: string) => (routes.find((r) => r.path === path)?.metadata?.order ?? []) as number[];
+    const later = (a: number[], b: number[]) => { const i = a.findIndex((x, k) => x !== b[k]); return i >= 0 && a[i]! > b[i]!; };
+    expect(later(order('/bundle/nested/n2'), order('/bundle/nested/n'))).toBe(true);
+  }, 90000);
+
+  it('records a list element that cannot be evaluated unresolved: the other elements mount, unmounted files are unknown', () => {
+    // Two elements cannot be evaluated: the statement's line is listed once. `static::file()` is a
+    // call, not a static closure (review 2026-11-02).
+    const rsp = provider([
+      "Route::prefix('mixed')->group([base_path('routes/known.php'), env('EXTRA_ROUTES'), $this->extra()]);",
+      "Route::prefix('st')->group([static::file('s.php'), base_path('routes/t.php')]);",
+    ]);
+    const routes = scanRoutes({ [RSP]: rsp, 'routes/known.php': file('k'), 'routes/other.php': file('o'), 'routes/s.php': file('s'), 'routes/t.php': file('t') });
+    expect(routes.map((r) => `${r.method} ${r.path} ${r.reachability}`).sort()).toEqual(['GET /mixed/k reachable', 'GET /o unknown', 'GET /s unknown', 'GET /st/t reachable']);
+    expect(routes.find((r) => r.path === '/o')?.metadata?.unresolvedMounts).toEqual([
+      `${RSP}:${lineOf(rsp, "prefix('mixed')")}`,
+      `${RSP}:${lineOf(rsp, "prefix('st')")}`,
+    ]);
+  }, 90000);
+
+  it('makes foreach-bound and conditionally reassigned prefixes {dynamic}, keeping values that are certain', () => {
+    const routes = scanRoutes({
+      [RSP]: provider([
+        "$v = 'v0';",
+        "foreach (['v1', 'v2'] as $v) {",
+        "    Route::prefix($v)->group(base_path('routes/loop.php'));",
+        '}',
+        "$key = 'k0';",
+        'foreach ($this->sections as $key => $label) {',
+        "    Route::prefix($key)->group(base_path('routes/keyed.php'));",
+        '}',
+        "$p = 'admin';",
+        "if ($this->app->environment('local')) {",
+        "    $p = 'staff';",
+        '}',
+        "Route::prefix($p)->group(base_path('routes/cond.php'));",
+        "$q = 'one';",
+        "if (app()->isLocal()) $q = 'two';",
+        "Route::prefix($q)->group(base_path('routes/braceless.php'));",
+        "$r = 'out';",
+        'if (app()->isLocal()) {',
+        "    $r = 'in';",
+        "    Route::prefix($r)->group(base_path('routes/inner.php'));",
+        '}',
+        'if (! $this->app->routesAreCached()) {',
+        "    $s = 'cached';",
+        '}',
+        "Route::prefix($s)->group(base_path('routes/cached.php'));",
+        // Review 2026-11-02: a later assignment in a loop body reaches the next pass; a do body
+        // always runs once.
+        "$w = 'w0';",
+        'while (app()->isLocal()) {',
+        "    Route::prefix($w)->group(base_path('routes/while.php'));",
+        "    $w = 'w1';",
+        '}',
+        "$f = 'f0';",
+        'for ($j = 0; $j < 2; $j++) {',
+        "    Route::prefix($f)->group(base_path('routes/for.php'));",
+        "    $f = 'f1';",
+        '}',
+        "$g = 'g0';",
+        'foreach ([1, 2] as $n) {',
+        "    Route::prefix($g)->group(base_path('routes/each.php'));",
+        "    $g = 'g1';",
+        '}',
+        "$d = 'd0';",
+        'do {',
+        "    $d = 'd1';",
+        '} while (app()->isLocal());',
+        "Route::prefix($d)->group(base_path('routes/do.php'));",
+      ]),
+      'routes/while.php': file('w'),
+      'routes/for.php': file('f'),
+      'routes/each.php': file('g'),
+      'routes/do.php': file('d'),
+      'routes/loop.php': file('l'),
+      'routes/keyed.php': file('k'),
+      'routes/cond.php': file('c'),
+      'routes/braceless.php': file('b'),
+      'routes/inner.php': file('i'),
+      'routes/cached.php': file('s'),
+    });
+    expect(routes.map((r) => `${r.path}${r.dynamic ? ' dynamic' : ''}${r.conditional ? ' conditional' : ''}`).sort()).toEqual([
+      '/cached/s',
+      '/d1/d',
+      '/in/i conditional',
+      '/{dynamic}/b dynamic',
+      '/{dynamic}/c dynamic',
+      '/{dynamic}/f dynamic',
+      '/{dynamic}/g dynamic',
+      '/{dynamic}/k dynamic',
+      '/{dynamic}/l dynamic',
+      '/{dynamic}/w dynamic',
+    ]);
+  }, 90000);
+
+  it('binds foreach variables and conditional assignments only where they surely hold', () => {
+    const src = [
+      '<?php',
+      'function f() {',
+      "    $keep = 'yes'; $v = 'v0'; $k = 'k0'; $w = 'w0';",
+      '    foreach ($items as $k => [$v, &$w]) { /*A*/ }',
+      "    $p = 'admin';",
+      "    if ($x) { $p = 'staff'; /*B*/ }",
+      '    /*C*/',
+      "    while ($y) { $t = 'loop'; }",
+      "    $u = 'one'; if ($z) $u = 'two'; /*D*/",
+      "    $e = 'e0'; while ($y) { /*E*/ $e = 'e1'; /*F*/ }",
+      "    $o = 'o0'; do { /*H*/ $o = 'o1'; } while ($y); /*G*/",
+      '}',
+    ].join('\n');
+    const { code, text } = maskPhp(src);
+    const at = stringAssignments(text, code, { dir: '', root: '' });
+    const vars = (mark: string) => Object.fromEntries(varsAt(at, src.indexOf(mark)));
+    expect(vars('/*A*/')).toEqual({ keep: 'yes' });
+    expect(vars('/*B*/')).toEqual({ keep: 'yes', p: 'staff' });
+    expect(vars('/*C*/')).toEqual({ keep: 'yes' });
+    expect(vars('/*D*/')).toEqual({ keep: 'yes' });
+    // Review 2026-11-02: the next pass of a loop sees its later assignments; a do body runs once.
+    expect(vars('/*E*/')).toEqual({ keep: 'yes' });
+    expect(vars('/*F*/')).toEqual({ keep: 'yes', e: 'e1' });
+    expect(vars('/*G*/')).toEqual({ keep: 'yes', o: 'o1' });
+    expect(vars('/*H*/')).toEqual({ keep: 'yes' });
+  });
+});
+
 // Review 2026-10-31 (M1-03-R2): a compound assignment under a condition may not have run.
 describe('M1-03-R2 review: conditional compound assignments', () => {
   it('makes a .= under an if unknown, never applies it as certain', () => {

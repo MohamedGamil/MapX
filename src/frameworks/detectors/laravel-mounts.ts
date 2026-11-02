@@ -322,16 +322,46 @@ export function stringAssignments(content: string, code?: string, paths?: Omit<P
   // sorts after the declarations' -1), then the write itself holds until the end of its body.
   if (code) for (const name of new Set([...code.matchAll(/\$this\s*->\s*(\w+)\s*(?:\.|\?\?)?=(?![=>])/g)].map(w => w[1]!)))
     result.push({ name: `this->${name}`, value: null, index: -0.5, end: Infinity });
+  // An assignment under a condition or loop holds until that block ends; after it, whether it ran
+  // is unknown, and so is the value (`if (local) { $p = 'staff'; }`, M1-07-R3).
+  const bind = (name: string, value: string | null, index: number) => {
+    const end = endOf(index);
+    const scoped = code ? conditionalEnd(code, index, innermost(index)?.start ?? 0) : null;
+    if (scoped === null || scoped >= end) result.push({ name, value, index, end });
+    else result.push({ name, value, index, end: scoped }, { name, value: null, index: scoped, end });
+  };
   const record = (name: string, value: string | null, index: number, property = false) => {
-    if (property) {
-      result.push({ name: `this->${name}`, value, index, end: endOf(index) });
-      return;
-    }
+    if (property) return bind(`this->${name}`, value, index);
     const head = PROPERTY_HEAD.exec((code ?? content).slice(Math.max(0, index - 120), index));
     if (head && /\bstatic\b/.test(head[0])) return;
     if (head && value === null) return;
-    result.push(head ? { name: `this->${name}`, value, index: -1, end: Infinity } : { name, value, index, end: endOf(index) });
+    if (head) result.push({ name: `this->${name}`, value, index: -1, end: Infinity });
+    else bind(name, value, index);
   };
+  // A foreach binds its key and value variables to each element in turn: unknown from its head on
+  // (`foreach (['a', 'b'] as $p)`, never a value `$p` held before the loop; M1-07-R3).
+  if (code) for (const loop of code.matchAll(/\bforeach\s*\(/g)) {
+    const close = closingBracket(code, loop.index! + loop[0].length - 1);
+    const as = close < 0 ? null : /^([\s\S]*)\bas\b([\s\S]*)\)$/.exec(code.slice(loop.index!, close));
+    if (!as) continue;
+    const at = loop.index! + as[1]!.length;
+    for (const v of as[2]!.matchAll(/\$(\w+)/g)) if (v[1] !== 'this') result.push({ name: v[1]!, value: null, index: at, end: endOf(at) });
+  }
+  // A loop body's assignments reach its next pass: a variable assigned anywhere in the body is
+  // unknown from the body's start, before the assignment too (`while (…) { mount($w); $w = 'w1'; }`,
+  // review 2026-11-02).
+  if (code) for (const loop of code.matchAll(/\b(?:for|foreach|while)\s*\(|\bdo\s*\{/g)) {
+    let open = loop.index! + loop[0].length - 1;
+    if (code[open] === '(') {
+      open = closingBracket(code, open);
+      if (open < 0) continue;
+      while (/\s/.test(code[open] ?? '')) open++;
+    }
+    const close = code[open] === '{' ? closingBracket(code, open) : code.indexOf(';', open) + 1;
+    if (close <= 0) continue;
+    const assigned = [...code.slice(open, close).matchAll(/\$(this\s*->\s*)?(\w+)\s*(?:\.|\?\?)?=(?![=>])/g)].map(w => (w[1] ? `this->${w[2]}` : w[2]!));
+    for (const name of new Set(assigned)) result.push({ name, value: null, index: open, end: endOf(open) });
+  }
   const re = /\$(\w+)\s*=\s*((['"])(?:\\.|(?!\3).)*\3)\s*;/gs;
   let m: RegExpExecArray | null;
   const literals = new Set<number>();
@@ -365,7 +395,7 @@ export function stringAssignments(content: string, code?: string, paths?: Omit<P
     // nothing named before (no parameter, `use`, foreach, global, ...). Anything else is unknown.
     // Under a condition or loop of its function, whether it ran is unknown: so is the value after it
     // (`if (local) { $p .= '-dev'; }`, review 2026-10-31).
-    if (a[3] && conditionalAt(code, a.index!, innermost(a.index!)?.start ?? 0)) value = null;
+    if (a[3] && conditionalEnd(code, a.index!, innermost(a.index!)?.start ?? 0) !== null) value = null;
     else if (a[3] === '.') value = old !== undefined && rhs !== null ? old + rhs : null;
     else if (a[3] === '??') {
       const body = property ? undefined : innermost(a.index!);
@@ -377,23 +407,43 @@ export function stringAssignments(content: string, code?: string, paths?: Omit<P
 }
 
 /**
- * Whether the statement at `index` runs under a condition or loop opened after `bodyStart`: an
- * enclosing `{` led by if / elseif / else / for / foreach / while / do / switch, or a brace-less
- * `if (…) stmt;`. Masked code, so strings and comments cannot fool it.
+ * Whether code ending in front of a `{` or a brace-less statement opens the body of a condition or
+ * loop. `if (! $this->app->routesAreCached())` does not: it runs whenever routes load, and nor does
+ * a `do` body, which always runs once.
  */
-function conditionalAt(code: string, index: number, bodyStart: number): boolean {
+function opensConditionalScope(lead: string, keywords = /\b(?:if|elseif|else|for|foreach|while|switch|case|default)\b[^;{}]*$/): boolean {
+  return keywords.test(lead) && (opensConditionalBlock(lead) || !/\bif\s*\([^;{}]*$/.test(lead));
+}
+
+/**
+ * Where the condition or loop running the statement at `index` ends, when one opened after
+ * `bodyStart` holds it: past the closing brace of the innermost enclosing `{` led by if / elseif /
+ * else / for / foreach / while / switch, or past the `;` of a brace-less `if (…) stmt;`.
+ * Null when the statement runs unconditionally. Masked code, so strings and comments cannot fool it.
+ */
+function conditionalEnd(code: string, index: number, bodyStart: number): number | null {
   const statement = code.slice(Math.max(code.lastIndexOf(';', index), code.lastIndexOf('{', index), code.lastIndexOf('}', index)) + 1, index);
-  if (/\b(?:if|elseif|else|for|foreach|while)\b/.test(statement)) return true;
+  if (opensConditionalScope(statement, /\b(?:if|elseif|else|for|foreach|while)\b/)) {
+    let depth = 0;
+    for (let i = index; i < code.length; i++) {
+      if ('([{'.includes(code[i]!)) depth++;
+      else if (')]}'.includes(code[i]!)) depth--;
+      else if (code[i] === ';' && depth <= 0) return i + 1;
+    }
+    return code.length;
+  }
   let depth = 0;
   for (let i = index - 1; i > bodyStart; i--) {
     if (code[i] === '}') depth++;
     else if (code[i] === '{') {
       if (depth > 0) { depth--; continue; }
-      const lead = code.slice(Math.max(bodyStart, i - 200), i);
-      if (/\b(?:if|elseif|else|for|foreach|while|do|switch|case|default)\b[^;{}]*$/.test(lead)) return true;
+      if (opensConditionalScope(code.slice(Math.max(bodyStart, i - 200), i))) {
+        const close = closingBracket(code, i);
+        return close < 0 ? code.length : close;
+      }
     }
   }
-  return false;
+  return null;
 }
 
 /**

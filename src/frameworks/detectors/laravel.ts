@@ -1211,6 +1211,17 @@ function phpArrayEntries(arg: string | undefined): { key: string | null; value: 
   });
 }
 
+/**
+ * The values of a PHP array literal in order, with literal spreads (`...[a, b]`) flattened, as
+ * PHP builds the array. Null when the argument is not an array literal.
+ */
+function phpListItems(arg: string | undefined): string[] | null {
+  return phpArrayEntries(arg)?.flatMap(e => {
+    const spread = e.key === null ? /^\.\.\.\s*([\s\S]+)$/.exec(e.value) : null;
+    return (spread && phpListItems(spread[1])) ?? [e.value];
+  }) ?? null;
+}
+
 /** A `['key' => 'value', ...]` array of strings. */
 function stringMap(arg: string, scope: PhpScope): Record<string, string> {
   const map: Record<string, string> = {};
@@ -1883,7 +1894,7 @@ function walkRouteFile(
     const end = closed > 0 ? closed : code.length;
     globLoops.push({ variable: loop[2]!, pattern: parseArgs(loop[1]!, true)[0] ?? '', at: m.index!, start: head.endIndex, end });
   }
-  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; excluded?: string[]; namespaces: string[]; controller: string | null; domain?: string | null; names?: string[] } = { prefixes: [], middlewares: [], namespaces: [], controller: null }, once = false) => {
+  const mountAt = (expr: string, index: number, extra: { prefixes: string[]; middlewares: string[]; excluded?: string[]; namespaces: string[]; controller: string | null; domain?: string | null; names?: string[] } = { prefixes: [], middlewares: [], namespaces: [], controller: null }, once = false, item?: number) => {
     const base = current();
     const push = (file: string, sub?: number) => mounts.push({
       file: normalizeMountPath(file),
@@ -1914,9 +1925,10 @@ function walkRouteFile(
       return true;
     }
     const path = phpString(expr, scopeAt(index));
-    if (path === null) unresolved.push(lineAt(content, index));
+    if (path === null && unresolved.at(-1) !== lineAt(content, index)) unresolved.push(lineAt(content, index));
     if (!path || !path.endsWith('.php')) return false;
-    push(path);
+    // `item`: the element's position in a group's list of files.
+    push(path, item);
     return true;
   };
 
@@ -1960,11 +1972,27 @@ function walkRouteFile(
         // `->group(<path>)` and legacy `Route::group($attributes, <path>)` mount a file; they
         // don't open a group in this one.
         const args = parseArgs(group.args, true);
-        const body = args.length > 1 ? args[args.length - 1] : args[0] && !/^(\[|array\s*\()/.test(args[0]) ? args[0] : undefined;
-        if (body && !/^(function\b|fn\b|static\b)/.test(body)) {
-          mountAt(body, i, chainAttributes(parsed.calls, scope));
-          i = groupEnd - 1;
-          continue;
+        // A closure, never a call such as `static::file('a.php')` (review 2026-11-02).
+        const closure = (e: string) => /^(?:static\s+)?(?:function|fn)\b/.test(e);
+        // Router::group wraps its routes in an array (Arr::wrap), so a list mounts each file, in
+        // order: `->group([a, b])` and `Route::group($attributes, [a, b])` (M1-07-R3). A literal
+        // spread (`...[a]`) is flattened. Closures in the list are group bodies: the group is then
+        // walked below, so their routes get its attributes.
+        const items = phpListItems(args[args.length - 1]);
+        if (items) {
+          const attributes = chainAttributes(parsed.calls, scope);
+          items.forEach((item, k) => closure(item) || mountAt(item, i, attributes, false, k));
+          if (!items.some(closure)) {
+            i = groupEnd - 1;
+            continue;
+          }
+        } else {
+          const body = args.length > 1 ? args[args.length - 1] : args[0];
+          if (body && !closure(body)) {
+            mountAt(body, i, chainAttributes(parsed.calls, scope));
+            i = groupEnd - 1;
+            continue;
+          }
         }
       }
       const before = routes.length;

@@ -1168,6 +1168,97 @@
       "expect": "live",
       "name": "zone.{dynamic}.map",
       "dynamic": true
+    },
+    {
+      "id": "L146",
+      "pattern": "rsp-file-array",
+      "method": "GET",
+      "uri": "bundle/first",
+      "handler": "HomeController@bundleFirst",
+      "expect": "live"
+    },
+    {
+      "id": "L147",
+      "pattern": "rsp-file-array",
+      "method": "GET",
+      "uri": "bundle/second",
+      "handler": "HomeController@bundleSecond",
+      "expect": "live"
+    },
+    {
+      "id": "L148",
+      "pattern": "file-array-mount",
+      "method": "GET",
+      "uri": "api/kit/tools",
+      "handler": "HomeController@kitTools",
+      "expect": "live"
+    },
+    {
+      "id": "L149",
+      "pattern": "file-array-mount",
+      "method": "GET",
+      "uri": "api/kit/parts",
+      "handler": "HomeController@kitParts",
+      "expect": "live"
+    },
+    {
+      "id": "L150",
+      "pattern": "rsp-foreach-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/build",
+      "handler": "HomeController@channelBuild",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L151",
+      "pattern": "rsp-foreach-prefix-wrong",
+      "method": "GET",
+      "uri": "stable/build",
+      "handler": "HomeController@channelBuild",
+      "expect": "absent"
+    },
+    {
+      "id": "L152",
+      "pattern": "rsp-conditional-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/tickets",
+      "handler": "HomeController@deskTickets",
+      "expect": "live",
+      "dynamic": true
+    },
+    {
+      "id": "L153",
+      "pattern": "file-array-closure",
+      "method": "GET",
+      "uri": "api/mix/inline",
+      "handler": "HomeController@mixInline",
+      "expect": "live"
+    },
+    {
+      "id": "L154",
+      "pattern": "file-array-closure",
+      "method": "GET",
+      "uri": "api/mix/mixed",
+      "handler": "HomeController@mixFile",
+      "expect": "live"
+    },
+    {
+      "id": "L155",
+      "pattern": "file-array-spread",
+      "method": "GET",
+      "uri": "api/mix/spread",
+      "handler": "HomeController@spreadFile",
+      "expect": "live"
+    },
+    {
+      "id": "L156",
+      "pattern": "rsp-loop-reassigned-prefix",
+      "method": "GET",
+      "uri": "{dynamic}/go",
+      "handler": "HomeController@laneGo",
+      "expect": "live",
+      "dynamic": true
     }
   ]
 }

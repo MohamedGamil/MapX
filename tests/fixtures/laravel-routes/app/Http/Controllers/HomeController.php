@@ -50,4 +50,14 @@ class HomeController
     public function tierPerks() {}
     public function editionNotes() {}
     public function zoneMap() {}
+    public function bundleFirst() {}
+    public function bundleSecond() {}
+    public function kitTools() {}
+    public function kitParts() {}
+    public function channelBuild() {}
+    public function deskTickets() {}
+    public function mixInline() {}
+    public function mixFile() {}
+    public function spreadFile() {}
+    public function laneGo() {}
 }

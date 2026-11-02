@@ -14,6 +14,7 @@ class RouteServiceProvider extends ServiceProvider
         // Route::prefix('old')->middleware('web')->group(base_path('routes/old.php'));
         $this->mapProviderRoutes();
         $this->mapAssignedRoutes();
+        $this->mapListedRoutes();
     }
 
     protected function mapAdminRoutes(): void
@@ -59,5 +60,33 @@ class RouteServiceProvider extends ServiceProvider
         $this->edition = 'e2';
         Route::prefix($this->edition)->group(base_path('routes/rsp/edition.php'));
         Route::prefix("zone{$this->zone()}")->name("zone.{$this->zone()}.")->group(base_path('routes/rsp/zone.php'));
+    }
+
+    // M1-07-R3: a list of files under one group (Router::group wraps its routes in an array), and
+    // prefixes bound by a foreach or reassigned under a condition.
+    protected function mapListedRoutes(): void
+    {
+        Route::prefix('bundle')->middleware('web')->group([
+            base_path('routes/rsp/bundle/first.php'),
+            base_path('routes/rsp/bundle/second.php'),
+        ]);
+        // Laravel mounts channel.php under beta and under nightly. MapX does not expand a loop over
+        // a literal array yet, so it reports one {dynamic} prefix (label L150, a placeholder until
+        // it does); never the pre-loop 'stable'.
+        $channel = 'stable';
+        foreach (['beta', 'nightly'] as $channel) {
+            Route::prefix($channel)->group(base_path('routes/rsp/channel.php'));
+        }
+        $desk = 'help';
+        if ($this->app->environment('local')) {
+            $desk = 'support';
+        }
+        Route::prefix($desk)->group(base_path('routes/rsp/desk.php'));
+        // Review 2026-11-02: the next pass sees the assignment after the mount.
+        $lane = 'slow';
+        while ($this->moreLanes()) {
+            Route::prefix($lane)->group(base_path('routes/rsp/lane.php'));
+            $lane = 'fast';
+        }
     }
 }
