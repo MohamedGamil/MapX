@@ -37,6 +37,7 @@ import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vue
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
 import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, type AliasContext } from './js-aliases.js';
+import { exportSkeleton, hasCommonJsExports, jsExportSignature, scanModule, type JsText } from './js-source.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
@@ -109,12 +110,11 @@ function codeOnly(path: string, text: string): string {
 const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
 
 /**
- * Source text without comments (and Python docstrings), for the import and re-export scans: a
- * commented-out `import` binds nothing (M2-08). `//` after a colon (a URL) is kept.
+ * Python source without comments and docstrings, for the import scans: a commented-out `import`
+ * binds nothing (M2-08). JS/TS text goes through `scanModule` (M2-08-R1).
  */
-function stripComments(text: string, python: boolean): string {
-  if (python) return text.replace(/("""|''')[\s\S]*?\1/g, '').replace(/#.*$/gm, '');
-  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
+function stripPythonComments(text: string): string {
+  return text.replace(/("""|''')[\s\S]*?\1/g, '').replace(/#.*$/gm, '');
 }
 
 /** A name a file binds by import to a project module: `imported` is the export, null for the module itself (M2-08). */
@@ -213,6 +213,15 @@ export interface WorkerStats {
 
 const STATIC_LANGUAGES = new Set(Object.values(getBuiltinLanguages()).filter(l => l.tier === 'static').map(l => l.name));
 
+/**
+ * Where an imported name is declared: the declaration; false for a value symbol no call reaches;
+ * 'absent' when the module certainly neither declares nor re-exports it (M2-08-R1); null when unknown.
+ */
+type ExportLookup = { file: string; symbol: string } | false | 'absent' | null;
+
+/** A name certainly absent from the imported project module gets no edge, not a name lookup (M2-08-R1). */
+const orNoEdge = (found: ExportLookup): { file: string; symbol: string } | false | null => (found === 'absent' ? false : found);
+
 export class Scanner {
   private store: Store;
   private config: Config;
@@ -233,9 +242,11 @@ export class Scanner {
   /** Per file, the names it binds by import to project modules, for one resolution phase (M2-08). */
   private importBindingsCache = new Map<string, Map<string, ImportBinding>>();
   /** findExport per file and name, for one resolution phase; null while being searched (M2-08). */
-  private exportCache = new Map<string, { file: string; symbol: string } | false | null>();
+  private exportCache = new Map<string, ExportLookup>();
   /** Source lines per file, for one resolution phase (Python call receivers, M2-08). */
   private lineCache = new Map<string, string[]>();
+  /** JS/TS module text without comments, and its export skeleton, for one resolution phase (M2-08-R1). */
+  private jsCache = new Map<string, JsText & { skeleton?: string }>();
   /** Per symbols list, the names it declares (outside classes' methods), for the shadowing check (M2-08). */
   private declaredNames = new WeakMap<object, Set<string>>();
   /** Per called name, the patterns that find its receiver on a Python line (M2-08). */
@@ -550,7 +561,7 @@ export class Scanner {
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, newFiles.map(f => f.relativePath)),
-        ...this.importerReferrers([...newFiles, ...changedFiles].map(f => f.relativePath)),
+        ...this.importerReferrers([...newFiles, ...changedFiles].map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.movedReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.removedSymbolReferrers(repo.name, changedFiles.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.vanishedNameReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
@@ -983,9 +994,11 @@ export class Scanner {
     // holds (M0-02-R4), and those using a Vue tag whose global registration changed (M3-08).
     const reindexed = new Set(toReindex.map(r => r.path));
     const listedTexts = [...contents].map(([path, content]) => ({ path, content }));
-    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove), ...this.importerReferrers(listedTexts.map(t => t.path))];
+    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove), ...this.importerReferrers(listedTexts)];
     const vueUsers = this.vueRegistryReferrers(repo.name, listedTexts, toRemove);
-    for (const r of new Set([...pending, ...this.ownReferrers(repo.name, [...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers, ...moved, ...vueUsers])])) {
+    // Taken again: removeFiles queued the importers of the removed modules (M2-08-R1).
+    const queued = toRemove.length ? this.takePendingReferrers(repo.name) : [];
+    for (const r of new Set([...pending, ...queued, ...this.ownReferrers(repo.name, [...this.takeReferrers(repo.name, [...reindexed]), ...renamedReferrers, ...moved, ...vueUsers])])) {
       if (reindexed.has(r) || toRemove.includes(r) || this.store.getFile(r)?.repo !== repo.name) continue;
       const absolutePath = resolve(workspaceRoot, r);
       const fileInfo = existsSync(absolutePath) ? await this.getFileInfo(absolutePath, r) : null;
@@ -1543,8 +1556,10 @@ export class Scanner {
     repoName: string,
     fileMap: Map<string, string>,
   ): void {
-    if (result.fileMetadata) {
-      this.store.updateFileMetadata(relativePath, result.fileMetadata);
+    // The export signature the next sync compares with, to decide whether importers re-parse (D032).
+    const exportSig = JS_TS_FILE.test(relativePath) ? jsExportSignature(this.jsText(relativePath)) : undefined;
+    if (result.fileMetadata || exportSig) {
+      this.store.updateFileMetadata(relativePath, { ...result.fileMetadata, ...(exportSig ? { exportSig } : {}) });
     }
     this.store.deleteSymbolsForFile(relativePath);
 
@@ -1709,17 +1724,28 @@ export class Scanner {
   /**
    * The files importing a changed JS/TS/Python module, and the importers of each barrel among them
    * (a module that re-exports, or a package __init__.py), up to five levels: their calls resolve
-   * through what the module declares or re-exports, so sync re-parses them (M2-08).
+   * through what the module declares or re-exports, so sync re-parses them (M2-08). A JS/TS module
+   * whose export signature is unchanged (an edit inside a body) re-parses none (D032, M2-08-R1).
+   * Without `content` a module counts as changed (a deleted one).
    */
-  private importerReferrers(paths: string[]): Set<string> {
+  private importerReferrers(changed: Array<{ path: string; content?: string }>): Set<string> {
     const importers = new Set<string>();
+    const paths = changed.map(c => c.path);
+    const contents = new Map(changed.map(c => [c.path, c.content]));
+    const visited = new Set<string>();
     let level = paths.filter(p => MODULE_FILE.test(p));
     for (let depth = 0; depth < 5 && level.length; depth++) {
       const next: string[] = [];
       for (const p of level) {
-        for (const importer of this.store.getImporters(p)) {
-          if (importers.has(importer) || paths.includes(importer)) continue;
-          importers.add(importer);
+        const direct = this.store.getImporters(p);
+        // The signature is compared only for a changed module someone imports.
+        if (depth === 0 && direct.length && !this.exportSurfaceChanged(p, contents.get(p))) continue;
+        for (const importer of direct) {
+          if (visited.has(importer)) continue;
+          visited.add(importer);
+          // A changed file is parsed anyway, but a changed barrel still passes the change on: its
+          // importers are walked even when its own signature is unchanged (review 2026-11-02).
+          if (!paths.includes(importer)) importers.add(importer);
           if (this.isBarrel(importer)) next.push(importer);
         }
       }
@@ -1728,10 +1754,37 @@ export class Scanner {
     return importers;
   }
 
-  /** A module whose exports include another module's: `export … from`, or a package __init__.py. */
+  /**
+   * Whether a module's export signature differs from the one its last parse recorded (D032). Only
+   * JS/TS modules record one; any other module, or one never recorded, counts as changed.
+   */
+  private exportSurfaceChanged(path: string, content: string | undefined): boolean {
+    if (content === undefined || !JS_TS_FILE.test(path)) return true;
+    const metadata = this.store.getFile(path)?.metadata;
+    let recorded: unknown;
+    try {
+      recorded = typeof metadata === 'string' ? JSON.parse(metadata).exportSig : undefined;
+    } catch {
+      return true;
+    }
+    return !recorded || recorded !== jsExportSignature(scanModule(path, content));
+  }
+
+  /**
+   * A module whose exports include another module's: `export … from`, `import { x } …; export { x }`,
+   * or a package __init__.py (M2-08-R1).
+   */
   private isBarrel(path: string): boolean {
     if (path.endsWith('__init__.py')) return true;
-    return /\bexport\s*(?:\*|\{[^}]*\})\s*from\b/.test(stripComments(this.readWorkspaceText(path) ?? '', false));
+    const code = this.jsText(path).code;
+    return /\bexport\s*(?:\*|\{[^}]*\})\s*from\b/.test(code) || (/\bexport\s*\{[^}]*\}(?!\s*from)/.test(code) && /\bimport\b/.test(code));
+  }
+
+  /** A JS/TS module's text without comments, for this resolution phase (M2-08-R1). */
+  private jsText(path: string): JsText & { skeleton?: string } {
+    let js = this.jsCache.get(path);
+    if (!js) this.jsCache.set(path, (js = scanModule(path, this.readWorkspaceText(path) ?? '')));
+    return js;
   }
 
   /**
@@ -1779,12 +1832,12 @@ export class Scanner {
     }
     if (receiver) {
       const module = bindings.get(receiver);
-      return module && module.imported === null ? this.findExport(module.file, name, fileMap) : null;
+      return module && module.imported === null ? orNoEdge(this.findExport(module.file, name, fileMap)) : null;
     }
     const binding = bindings.get(name);
     if (!binding || binding.imported === null) return null;
     const exported = binding.imported === 'default' && !python ? this.defaultExportName(binding.file) : binding.imported;
-    return exported ? this.findExport(binding.file, exported, fileMap) : null;
+    return exported ? orNoEdge(this.findExport(binding.file, exported, fileMap)) : null;
   }
 
   /** A declaration is visible at a line: anywhere at module level, else within its enclosing symbol. */
@@ -1804,7 +1857,7 @@ export class Scanner {
    * The top-level declaration of `name` in `file`, or in the module it re-exports it from (M2-08).
    * False when it is a value symbol a call cannot reach (a JS/TS/Python constant or variable).
    */
-  private findExport(file: string, name: string, fileMap: Map<string, string>, depth = 0): { file: string; symbol: string } | false | null {
+  private findExport(file: string, name: string, fileMap: Map<string, string>, depth = 0): ExportLookup {
     // Memoised per phase, and a module seen on the current path ends it: a barrel graph (`export *`
     // fan-out, cycles) is walked once per name (review 2026-11-01).
     const key = `${file}\0${name}`;
@@ -1815,7 +1868,7 @@ export class Scanner {
     return found;
   }
 
-  private findExportUncached(file: string, name: string, fileMap: Map<string, string>, depth: number): { file: string; symbol: string } | false | null {
+  private findExportUncached(file: string, name: string, fileMap: Map<string, string>, depth: number): ExportLookup {
     const declared = (this.symbolIndex?.get(name.toLowerCase()) ?? []).filter(e => e.file === file && e.name === name && !e.scope);
     if (declared.length) {
       const value = (e: SymbolIndexEntry) => (e.kind === 'constant' || e.kind === 'variable') && VALUE_SYMBOL_LANGUAGES.has(this.languageOf(file) ?? '');
@@ -1826,9 +1879,10 @@ export class Scanner {
     // A name the file imports and passes on: `from .impl import x` in a package's __init__.py, or
     // `import { x } from './a'; export { x }`.
     const bound = this.importBindings(file, python, fileMap).get(name);
-    const text = stripComments(this.readWorkspaceText(file) ?? '', python);
     if (python) return bound?.imported ? this.findExport(bound.file, bound.imported, fileMap, depth + 1) : null;
-    let hit: { file: string; symbol: string } | false | null;
+    const js = this.jsText(file);
+    const text = js.code;
+    let hit: ExportLookup;
     for (const m of text.matchAll(/\bexport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
       for (const part of m[1]!.split(',')) {
         const [orig, alias] = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/);
@@ -1841,17 +1895,26 @@ export class Scanner {
     if (bound?.imported && new RegExp(`\\bexport\\s*\\{[^}]*(?<![\\w$])${escapedName}(?![\\w$])[^}]*\\}(?!\\s*from)`).test(text)) {
       return this.findExport(bound.file, bound.imported, fileMap, depth + 1);
     }
+    // Absent: the name occurs nowhere in the module's top level (bodies emptied, as in the export
+    // signature sync compares: D032), the module has no CommonJS or `export =` exports, and every
+    // `export *` target is a project module where it is absent too (M2-08-R1).
+    js.skeleton ??= exportSkeleton(js);
+    // A scan that could not balance its braces proves nothing absent.
+    let absent = js.balanced && !new RegExp(`(?<![\\w$])${escapedName}(?![\\w$])`).test(js.skeleton) && !hasCommonJsExports(js);
     for (const m of text.matchAll(/\bexport\s*\*\s*from\s*['"]([^'"]+)['"]/g)) {
       const target = this.resolveImportPath(m[1]!, file, fileMap);
       hit = target ? this.findExport(target, name, fileMap, depth + 1) : null;
+      if (hit === 'absent') continue;
       if (hit !== null) return hit;
+      absent = false;
     }
-    return null;
+    return absent ? 'absent' : null;
   }
 
   /** The declared name of a JS/TS module's default export (`export default function build`). */
   private defaultExportName(file: string): string | null {
-    const text = this.readWorkspaceText(file) ?? '';
+    // Without comments: a commented-out `export default function legacy` names nothing (M2-08-R1).
+    const text = this.jsText(file).code;
     const m = /\bexport\s+default\s+(?:async\s+)?(?:function\s*\*?\s*|class\s+)?([A-Za-z_$][\w$]*)/.exec(text);
     return m && !['function', 'class', 'async'].includes(m[1]!) ? m[1]! : null;
   }
@@ -1862,7 +1925,8 @@ export class Scanner {
     if (cached) return cached;
     const bindings = new Map<string, ImportBinding>();
     this.importBindingsCache.set(file, bindings);
-    const text = stripComments(this.readWorkspaceText(file) ?? '', python);
+    // JS/TS: through scanModule (a .vue/.svelte file's <script> blocks, JSX text inert: M2-08-R1).
+    const text = python ? stripPythonComments(this.readWorkspaceText(file) ?? '') : this.jsText(file).code;
     if (python) {
       const resolver = importResolverFor('python');
       if (!resolver) return bindings;
@@ -2607,19 +2671,21 @@ export class Scanner {
       jsToTsCandidates.push(base + '.tsx', base + '.ts');
     }
 
+    // A file before a folder's index, as Node and TypeScript resolve: `./utils` is `utils.ts` when
+    // both it and `utils/index.ts` exist (M2-08-R1).
     const candidates = [
       normalizedTarget,
       ...jsToTsCandidates,
-      normalizedTarget + '/index.js',
-      normalizedTarget + '/index.ts',
-      normalizedTarget + '/index.tsx',
-      normalizedTarget + '/index.jsx',
-      normalizedTarget + '/index.vue',
       normalizedTarget + '.js',
       normalizedTarget + '.ts',
       normalizedTarget + '.tsx',
       normalizedTarget + '.jsx',
       normalizedTarget + '.vue',
+      normalizedTarget + '/index.js',
+      normalizedTarget + '/index.ts',
+      normalizedTarget + '/index.tsx',
+      normalizedTarget + '/index.jsx',
+      normalizedTarget + '/index.vue',
     ];
 
     for (const candidate of candidates) {
@@ -2899,6 +2965,16 @@ export class Scanner {
     return own;
   }
 
+  /** Indexed files grouped by their repo. */
+  private byRepo(paths: Iterable<string>): Map<string, string[]> {
+    const groups = new Map<string, string[]>();
+    for (const p of paths) {
+      const owner = this.store.getFile(p)?.repo as string | undefined;
+      if (owner) groups.set(owner, [...(groups.get(owner) ?? []), p]);
+    }
+    return groups;
+  }
+
   private queueReferrers(repoName: string, paths: Iterable<string>): void {
     const key = 'pending_referrers:' + repoName;
     const before = JSON.parse(this.store.getMeta(key) ?? '[]') as string[];
@@ -3025,6 +3101,10 @@ export class Scanner {
         .filter((n): n is string => !!n);
       if (referenced.length > 0) names[p] = [...new Set([...(names[p] ?? []), ...referenced])];
       changed = true;
+      // Every name the module exported is gone: its importers, and those of the barrels re-exporting
+      // it, are queued for this sync to re-parse, in the same transaction (D032, M2-08-R1).
+      const importers = [...this.importerReferrers([{ path: p }])].filter(r => !paths.includes(r));
+      for (const [owner, queued] of this.byRepo(importers)) this.queueReferrers(owner, queued);
       this.store.deleteFile(p);
     }
     if (changed) {
@@ -3626,6 +3706,7 @@ export class Scanner {
     this.importBindingsCache.clear();
     this.exportCache.clear();
     this.lineCache.clear();
+    this.jsCache.clear();
     this.languageCache.clear();
     this.phpNamespaces.clear();
     this.vueGlobals.clear();
@@ -4117,7 +4198,7 @@ export class Scanner {
       ...this.takePendingReferrers(repo.name),
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath)),
-        ...this.importerReferrers(changedTexts.map(t => t.path)),
+        ...this.importerReferrers(changedTexts),
         ...this.movedReferrers(repo.name, changedTexts),
         ...this.removedSymbolReferrers(repo.name, changedTexts),
         ...this.vanishedNameReferrers(repo.name, changedTexts),

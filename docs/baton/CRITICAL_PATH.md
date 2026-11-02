@@ -6,7 +6,7 @@ Remaining longest dependency path: **26h** (full-plan path: 214h).
 
 M5-10 → M5-11 → M5-98
 
-Remaining effort min/expected/max: **120 / 169 / 245h**. Capacity: 1 engineer(s) × 20 h/week → **8.4 weeks**, conditional finish **2026-12-31** (as of 2026-11-02).
+Remaining effort min/expected/max: **126.5 / 180 / 262h**. Capacity: 1 engineer(s) × 20 h/week → **9.0 weeks**, conditional finish **2027-01-04** (as of 2026-11-02).
 
 ## Open items and blockers
 - M5-06 (BACKLOG): prerequisites satisfied
@@ -30,7 +30,6 @@ Remaining effort min/expected/max: **120 / 169 / 245h**. Capacity: 1 engineer(s)
 - M5-24 (BACKLOG): M5-20; M5-21; M5-22; M5-23
 - M5-26 (BACKLOG): prerequisites satisfied
 - M5-02-R1 (BACKLOG): prerequisites satisfied
-- M2-08-R1 (READY): prerequisites satisfied
 - M4-13-R1 (BACKLOG): prerequisites satisfied
 - M0-12-R11 (BACKLOG): prerequisites satisfied
 - M3-05-R2 (BACKLOG): prerequisites satisfied
@@ -39,6 +38,11 @@ Remaining effort min/expected/max: **120 / 169 / 245h**. Capacity: 1 engineer(s)
 - M2-06-R4 (BACKLOG): prerequisites satisfied
 - M4-24-R1 (BACKLOG): prerequisites satisfied
 - M0-02-R12 (BACKLOG): prerequisites satisfied
+- M2-08-R2 (BACKLOG): prerequisites satisfied
+- M5-25-R1 (BACKLOG): prerequisites satisfied
+- M5-03-R2 (BACKLOG): prerequisites satisfied
+- M5-05-R1 (BACKLOG): prerequisites satisfied
+- M4-09-R2 (BACKLOG): prerequisites satisfied
 
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
@@ -64,7 +68,6 @@ Remaining effort min/expected/max: **120 / 169 / 245h**. Capacity: 1 engineer(s)
 | M5-23 | 6 | 10 | 16 | 20 | 10 |
 | M5-24 | 12 | 18 | 20 | 26 | 8 |
 | M5-26 | 0 | 3 | 23 | 26 | 23 |
-| M2-08-R1 | 0 | 4 | 22 | 26 | 22 |
 | M4-13-R1 | 0 | 2 | 24 | 26 | 24 |
 | M0-12-R11 | 0 | 2 | 24 | 26 | 24 |
 | M3-05-R2 | 0 | 2 | 24 | 26 | 24 |
@@ -73,3 +76,8 @@ Remaining effort min/expected/max: **120 / 169 / 245h**. Capacity: 1 engineer(s)
 | M2-06-R4 | 0 | 2 | 24 | 26 | 24 |
 | M4-24-R1 | 0 | 2 | 24 | 26 | 24 |
 | M0-02-R12 | 0 | 4 | 22 | 26 | 22 |
+| M2-08-R2 | 0 | 3 | 23 | 26 | 23 |
+| M5-25-R1 | 0 | 4 | 22 | 26 | 22 |
+| M5-03-R2 | 0 | 4 | 22 | 26 | 22 |
+| M5-05-R1 | 0 | 3 | 23 | 26 | 23 |
+| M4-09-R2 | 0 | 1 | 25 | 26 | 25 |

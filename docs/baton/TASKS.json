@@ -23584,17 +23584,38 @@
         "docs/baton/DECISIONS.md#D032"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
+      "status": "DONE",
       "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": "2026-11-02T13:36:51.551Z",
-      "completedAt": null,
+      "startedAt": "2026-11-02T14:43:46.746Z",
+      "completedAt": "2026-11-02T16:02:39.731Z",
       "commits": [],
       "artifacts": [
         "docs/baton/reports/M2-08-R1.md",
         "docs/baton/reports/M2-08-R1/attempt-1.patch"
       ],
-      "evidence": [],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R1.md"
+        },
+        {
+          "command": "npx vitest run tests/js-source.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R1.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T13:36:51.067Z",
@@ -23619,6 +23640,45 @@
           "from": "BLOCKED",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T14:43:46.746Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T16:02:39.424Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T16:02:39.731Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R1.md"
+            },
+            {
+              "command": "npx vitest run tests/js-source.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R1.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -23632,13 +23692,20 @@
       "outputs": [
         "src/core/scanner.ts",
         "tests/import-bound-calls.test.ts",
-        "reports/M2-08-R1.md"
+        "reports/M2-08-R1.md",
+        "src/core/js-source.ts",
+        "tests/js-source.test.ts"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
         "src/parsers/**",
         "tests/import-bound-calls.test.ts",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "src/core/js-source.ts",
+        "tests/js-source.test.ts",
+        "queries/javascript/references.scm",
+        "queries/typescript/references.scm",
+        "queries/typescript/references-tsx.scm"
       ],
       "acceptanceCriteria": [
         "A module behind export-from and export-star barrels gains the called symbol; a sync equals scan --force (test).",
@@ -23646,6 +23713,8 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/import-bound-calls.test.ts",
+        "npx vitest run tests/js-source.test.ts",
+        "npm run eval",
         "npm run check"
       ]
     },
@@ -24389,6 +24458,324 @@
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-08-R2",
+      "title": "Sync re-parses importers whose JS/TS import a new file now satisfies or shadows",
+      "objective": "After sync adds a module that an existing import named but could not resolve, or that now takes precedence for it (utils.ts beside utils/index.ts), the importer resolves through it, as scan --force does.",
+      "description": "Found while doing M2-08-R1 (pre-existing): `import { run } from \"./m\"` with no m.ts resolves by name; adding m.ts and syncing leaves the importer unparsed, so its call keeps the name-lookup target until scan --force. The 2026-11-02 review of M2-08-R1 found the same for a new utils.ts beside an existing utils/index.ts (file before folder index since M2-08-R1); before it, the mirror case (a new utils/index.ts beside utils.ts) had the defect.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-calls.test.ts",
+        "reports/M2-08-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/import-bound-calls.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A file importing a missing ./m, then m.ts added with the imported name: after sync the call links m.ts, and call edges equal scan --force, in git and hash sync (tests/import-bound-calls.test.ts).",
+        "An existing import of ./utils resolving to utils/index.ts, then utils.ts added: after sync the call links utils.ts, equal to scan --force, in git and hash sync (test).",
+        "An added file no import names re-parses no other file (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-calls.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-25",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-25.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-25-R1",
+      "title": "Go package-qualified calls, and generic, slice and map literals of imported types",
+      "objective": "`domain.NewOrder()` and methods on a qualified literal link the imported package's declaration; `domain.Box[int]{}`, `[]domain.Item{{}}` and `map[K]domain.Item{}` make the instantiation edge.",
+      "description": "Recall gaps recorded in the M5-25 report (handoff of 2026-11-02): package-qualified calls and methods on qualified literals resolve by name; generic, slice and map composite literals of an imported type make no edge.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "queries/go/references.scm",
+        "tests/go-qualified-instantiation.test.ts",
+        "reports/M5-25-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "queries/go/references.scm",
+        "tests/go-qualified-instantiation.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A Go fixture with two packages declaring NewOrder: `domain.NewOrder()` links the imported package's function only (test).",
+        "`domain.Box[int]{}`, `[]domain.Item{{}}` and `map[string]domain.Item{}` each give one instantiation edge to the imported type (test).",
+        "npm run eval holds every floor."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/go-qualified-instantiation.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-03-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-03-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-03-R2",
+      "title": "Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces",
+      "objective": "C++ classes in .h headers, symbols in a C# file with several namespace blocks, and calls inside a one-line C++ namespace get the qualified names and source symbols of their own block.",
+      "description": "Limitations recorded in the M5-03-R1 report: .h headers are indexed as C (path-form names for C++ classes); a C# file with several namespace blocks uses the first block for every symbol; a one-line `namespace a::b { void use() {…} }` makes the namespace the source symbol of use's calls.",
+      "outputs": [
+        "src/arch/elements.ts",
+        "src/languages/registry.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "tests/arch-selectors.test.ts",
+        "reports/M5-03-R2.md"
+      ],
+      "affectedFiles": [
+        "src/arch/elements.ts",
+        "src/languages/registry.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "tests/arch-selectors.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A .h header with a C++ class in namespace acme gives `acme::Order` (test).",
+        "A C# file with namespaces A and B gives `A.X` and `B.Y` (test).",
+        "A one-line `namespace a::b { void use() { f(); } }` gives the call edge from use (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-selectors.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-05.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-05-R1",
+      "title": "Staleness in status, MCP and the other commands finds new files as check does",
+      "objective": "`mapx status`, the MCP staleness warning and the other commands count a new file in a non-git workspace or a nested repo as stale, as `mapx check` does.",
+      "description": "Handoff of 2026-11-02: findStaleFiles(store, dir, { walk: true }) is opt-in and used only by mapx check; the default git listing misses new files outside a single git repo, so the other commands' warnings disagree with check.",
+      "outputs": [
+        "src/core/staleness.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "tests/legacy-impact-staleness.test.ts",
+        "reports/M5-05-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/staleness.ts",
+        "src/cli.ts",
+        "src/mcp.ts",
+        "tests/legacy-impact-staleness.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A new file in a non-git workspace and one in a nested repo: `mapx status` reports them stale, and the MCP warning names them (tests).",
+        "A workspace with no change reports nothing stale, and a status run walks the tree at most once (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-impact-staleness.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-09-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-09-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-09-R2",
+      "title": "Tests remove the temp directories they create",
+      "objective": "A test run leaves no new mapx-* directory in the system temp folder.",
+      "description": "Found on 2026-11-02: tests/mcp-coverage.test.ts makes a mapx-stale-* directory per run and never removes it (270 left in /tmp); check-test-cwd watches only the checkout.",
+      "outputs": [
+        "tests/mcp-coverage.test.ts",
+        "scripts/baton/check-test-cwd.mjs",
+        "tests/check-test-cwd.test.ts",
+        "reports/M4-09-R2.md"
+      ],
+      "affectedFiles": [
+        "tests/mcp-coverage.test.ts",
+        "scripts/baton/check-test-cwd.mjs",
+        "tests/check-test-cwd.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Running the whole suite leaves no new mapx-* entry in os.tmpdir() (checked by check-test-cwd, test in tests/check-test-cwd.test.ts).",
+        "tests/mcp-coverage.test.ts removes its mapx-stale-* directory, also when an assertion fails (try/finally)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/check-test-cwd.test.ts tests/mcp-coverage.test.ts",
+        "npm run check"
+      ]
     }
   ]
 }

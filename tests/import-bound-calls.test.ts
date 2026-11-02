@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
@@ -201,8 +201,10 @@ def caller():
     expect(from('literal')).toEqual([]);
   });
 
-  it('falls back to name lookup when the imported module does not declare the name', () => {
-    expect(callsFrom(root, 'src/app/main.ts')('missing')).toEqual(['src/app/helpers.ts#ghost']);
+  // M2-08-R1: a name imported from a project module that neither declares nor re-exports it links
+  // nothing, never another file's same-named symbol (review 2026-11-02).
+  it('gives no edge when the imported project module does not declare the name', () => {
+    expect(callsFrom(root, 'src/app/main.ts')('missing')).toEqual([]);
   });
 
   it('lets a declaration in the file shadow the import', () => {
@@ -236,10 +238,15 @@ describe('sync follows changes to imported modules and barrels (review 2026-11-0
   beforeEach(() => {
     root = workspace({
       'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
-      'src/app/helpers.ts': 'export function create() { return 0; }\n',
+      'src/app/helpers.ts': 'export function create() { return 0; }\nexport function run() { return 0; }\nexport function starred() { return 0; }\n',
       'src/lib/impl.ts': 'export function shout() { return 1; }\n',
+      // M2-08-R1: modules behind an `export … from` and an `export *` barrel (review 2026-11-02).
+      'src/lib/base.ts': 'export function other2() { return 0; }\n',
+      'src/lib/star.ts': "export * from './starimpl';\n",
+      'src/lib/starimpl.ts': 'export function other3() { return 0; }\n',
+      'src/app/barrels.ts': "import { run } from '../lib';\nimport { starred } from '../lib/star';\nexport function runIt() { return run(); }\nexport function starIt() { return starred(); }\n",
       'src/lib/impl2.ts': 'export function shout() { return 2; }\n',
-      'src/lib/index.ts': "export { shout } from './impl';\n",
+      'src/lib/index.ts': "export { shout } from './impl';\nexport { run } from './base';\n",
       'src/lib/utils.ts': 'export function other() { return 0; }\n',
       'src/app/main.ts': "import { shout } from '../lib';\nimport { create } from '../lib/utils';\nexport function go() { return shout(); }\nexport function make() { return create(); }\n",
     });
@@ -257,12 +264,213 @@ describe('sync follows changes to imported modules and barrels (review 2026-11-0
   it.each([
     ['a barrel re-exporting from another module', (r: string) => writeFileSync(join(r, 'src/lib/index.ts'), "export { shout } from './impl2';\n"), 'src/lib/impl2.ts#shout', 'go'],
     ['an imported module gaining the imported name', (r: string) => writeFileSync(join(r, 'src/lib/utils.ts'), 'export function other() { return 0; }\nexport function create() { return 1; }\n'), 'src/lib/utils.ts#create', 'make'],
-  ])('re-parses the importers after %s, so sync equals scan --force', (_name, change, expected, symbol) => {
+    ['the module behind an export-from barrel gaining the name', (r: string) => writeFileSync(join(r, 'src/lib/base.ts'), 'export function other2() { return 0; }\nexport function run() { return 1; }\n'), 'src/lib/base.ts#run', 'runIt', 'src/app/barrels.ts'],
+    ['the module behind an export-star barrel gaining the name', (r: string) => writeFileSync(join(r, 'src/lib/starimpl.ts'), 'export function other3() { return 0; }\nexport function starred() { return 1; }\n'), 'src/lib/starimpl.ts#starred', 'starIt', 'src/app/barrels.ts'],
+  ])('re-parses the importers after %s, so sync equals scan --force', (_name, change, expected, symbol, file = 'src/app/main.ts') => {
+    // Before the change the imported name is declared nowhere behind the import: no edge (M2-08-R1).
+    if (symbol === 'runIt' || symbol === 'starIt' || symbol === 'make') expect(callsFrom(root, file)(symbol)).toEqual([]);
     change(root);
     mapx(root, 'sync', '.');
-    expect(callsFrom(root, 'src/app/main.ts')(symbol)).toEqual([expected]);
+    expect(callsFrom(root, file)(symbol)).toEqual([expected]);
     const synced = all();
     mapx(root, 'scan', '.', '--force');
     expect(synced).toEqual(all());
+  }, 120000);
+});
+
+// M2-08-R1: the "absent" rule (no edge for a name the imported project module certainly lacks) and
+// the comment stripper it reads through, on the shapes the 2026-11-02 review reproduced.
+describe('names absent from the imported project module (M2-08-R1)', () => {
+  let root: string;
+  let from: (symbol: string) => string[];
+  const FALLBACK = 'src/app/helpers.ts#run';
+  const MODULES = ['str', 're', 'body', 'ext', 'cjs', 'star-compiled', 'assign', 'dynamic', 'two-star', 'no-star', 'pkg-star', 'alias', 'utils'];
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+      // Name lookup would pick this one: same folder as every caller.
+      'src/app/helpers.ts': 'export function run() { return 0; }\nexport function build() { return 0; }\n',
+      'src/lib/impl.ts': 'export function run() { return 1; }\n',
+      'src/lib/other.ts': 'export function other() { return 1; }\n',
+      // Comment openers inside a string and a regex literal hide nothing.
+      'src/lib/str.ts': "const accept = 'image/*';\nexport { run } from './impl';\n// */\n",
+      'src/lib/re.ts': "const slash = /\\/*$/;\nexport { run } from './impl';\n// */\n",
+      // A commented-out default export names nothing.
+      'src/lib/build.ts': '// export default function legacyBuild() {}\nexport default function build() { return 1; }\n',
+      // The name only inside a body: absent from the module's top level.
+      'src/lib/body.ts': 'export function other() { const run = 1; return run; }\n',
+      // The name at the top level, but not declared or re-exported: unknown, name lookup.
+      'src/lib/ext.ts': "import { run } from 'some-pkg';\nexport function other() { return run(); }\n",
+      // CommonJS and compiled exports: unknown.
+      'src/lib/cjs.js': "module.exports = require('./impl');\n",
+      'src/lib/star-compiled.js': '"use strict";\n__exportStar(require("./impl"), exports);\n',
+      'src/lib/assign.js': "Object.assign(exports, require('./impl'));\n",
+      'src/lib/dynamic.js': "const m = require('./impl');\nfor (const k of Object.keys(m)) exports[k] = m[k];\n",
+      // Barrels: two stars, one resolving to the name; two stars, neither; a package star; a local alias.
+      'src/lib/two-star.ts': "export * from './other';\nexport * from './impl';\n",
+      'src/lib/no-star.ts': "export * from './other';\nexport * from './body';\n",
+      'src/lib/pkg-star.ts': "export * from 'some-pkg';\nexport * from './other';\n",
+      'src/lib/alias.ts': 'function a() { return 2; }\nexport { a as run };\n',
+      // A file and a folder index of the same name: the file wins, as in Node and TypeScript.
+      'src/lib/utils.ts': 'export function run() { return 3; }\n',
+      'src/lib/utils/index.ts': 'export function other() { return 4; }\n',
+      // One caller per module, each importing `run` unaliased, so name lookup would find helpers' run.
+      ...Object.fromEntries(MODULES.map(m => [`src/app/use-${m}.ts`, `import { run } from '../lib/${m}';\nexport function call() { return run(); }\n`])),
+      'src/app/use-build.ts': "import build from '../lib/build';\nexport function call() { return build(); }\n",
+      // JSX and Vue template text is no code: an unterminated `/*` or an apostrophe in it hides nothing.
+      // A later real comment closes the text's `/*`, and the `//` of a URL would end the line.
+      'src/lib/help.tsx': "export function Help() {\n  return <p>Patterns like src/*.ts don't match.</p>;\n}\n/* re-exported */ export { run } from './impl';\n",
+      'src/lib/note.tsx': "export function Note() { return <p>see https://example.com</p>; } export { run } from './impl';\n",
+      'src/app/use-note.ts': "import { run } from '../lib/note';\nexport function call() { return run(); }\n",
+      'src/app/use-help.ts': "import { run } from '../lib/help';\nexport function call() { return run(); }\n",
+      'src/app/GlobHelp.vue': "<template>\n  <p>Patterns like src/*.ts don't match.</p>\n</template>\n<script setup lang=\"ts\">\nimport { run } from '../lib/impl';\n/* the run */\nconst out = run();\n</script>\n",
+
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+    from = (m: string) => callsFrom(root, `src/app/use-${m}.ts`)('call');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('reads re-exports after a comment opener inside a string or a regex literal', () => {
+    expect(from('str')).toEqual(['src/lib/impl.ts#run']);
+    expect(from('re')).toEqual(['src/lib/impl.ts#run']);
+  });
+
+  it('reads past an unterminated /* and an apostrophe in JSX and Vue template text', () => {
+    expect(from('help')).toEqual(['src/lib/impl.ts#run']);
+    expect(from('note')).toEqual(['src/lib/impl.ts#run']);
+    const vue = query<Edge>(root, "SELECT source_file, source_symbol, target_file, target_symbol FROM edges WHERE edge_type = 'call' AND source_file = 'src/app/GlobHelp.vue' AND target_symbol = 'run'");
+    expect(vue.map(e => `${e.target_file}#${e.target_symbol}`)).toEqual(['src/lib/impl.ts#run']);
+  });
+
+  it('ignores a commented-out default export', () => {
+    expect(from('build')).toEqual(['src/lib/build.ts#build']);
+  });
+
+  it('gives no edge when the name is absent from the module and every export-star target', () => {
+    expect(from('body')).toEqual([]);
+    expect(from('no-star')).toEqual([]);
+  });
+
+  it('follows the export-star target that declares the name', () => {
+    expect(from('two-star')).toEqual(['src/lib/impl.ts#run']);
+  });
+
+  it.each([
+    ['the name occurs at the top level', 'ext'],
+    ['module.exports = require(…)', 'cjs'],
+    ['compiled __exportStar(require(…), exports)', 'star-compiled'],
+    ['Object.assign(exports, …)', 'assign'],
+    ['exports[k] = …', 'dynamic'],
+    ['an export-star target outside the project', 'pkg-star'],
+    ['a local export alias', 'alias'],
+  ])('keeps name lookup when %s', (_name, symbol) => {
+    expect(from(symbol)).toEqual([FALLBACK]);
+  });
+
+  it('resolves a module path to the file before the folder index', () => {
+    expect(from('utils')).toEqual(['src/lib/utils.ts#run']);
+  });
+});
+
+// D032 (M2-08-R1): sync re-parses the importers behind a barrel only when the module's exported
+// names change; a body-only edit re-parses none. Both sync paths (git and content hashes).
+describe.each([['git', true], ['hash', false]])('barrel importers in %s sync follow export changes only (D032)', (_mode, useGit) => {
+  let root: string;
+  const importers = ['a', 'b', 'c'];
+  beforeEach(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+      'src/app/helpers.ts': 'export function added() { return 0; }\nexport function leafFn() { return 0; }\n',
+      // A return type: the body is still a body (review 2026-11-02).
+      'src/lib/leaf.ts': 'export function leafFn(): number { return 1; }\n',
+      'src/lib/side.ts': 'export function sideFn() { return 1; }\n',
+      'src/lib/index.ts': "export * from './leaf';\nexport * from './side';\n",
+      // An import-then-export barrel (review 2026-11-02), and its importer.
+      'src/lib/reexp.ts': "import { leafFn, added } from './leaf';\nexport { leafFn, added };\n",
+      'src/app/d.ts': "import { added } from '../lib/reexp';\nexport function d2() { return added(); }\n",
+      // JSX whose text and closing tags once cut the export skeleton short (review 2026-11-02).
+      'src/lib/history.tsx': "export function History({ show, data }: { show: boolean; data: string }) {\n  return <div>{show && <pre data={data} />}</div>;\n}\nexport function Note() {\n  return <p>You don't have items, see https://example.com</p>;\n}\n",
+      'src/app/e.ts': "import { History, useHistory } from '../lib/history';\nexport function e1() { return History; }\nexport function e2() { return useHistory(); }\n",
+      ...Object.fromEntries(importers.map(n => [`src/app/${n}.ts`, `import { leafFn, added } from '../lib';\nexport function ${n}1() { return leafFn(); }\nexport function ${n}2() { return added(); }\n`])),
+    });
+    if (useGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    }
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterEach(() => cleanup(root));
+
+  const all = () => query<Edge>(root, `SELECT source_file, source_symbol, target_file, target_symbol FROM edges
+    WHERE edge_type IN ('call', 'instantiation') ORDER BY 1, 2, 3, 4`);
+  const sync = () => /Updated (\d+) files/.exec(mapx(root, 'sync', '.'))?.[1];
+  const equalsForce = () => {
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(synced).toEqual(all());
+  };
+
+  it('re-parses no importer after an edit inside a body', () => {
+    writeFileSync(join(root, 'src/lib/leaf.ts'), 'export function leafFn(): number {\n  const x = 2;\n  return x;\n}\n');
+    writeFileSync(join(root, 'src/lib/side.ts'), 'export function sideFn() { return 2; }\n');
+    // The two edited modules only.
+    expect(sync()).toBe('2');
+    expect(callsFrom(root, 'src/app/a.ts')('a1')).toEqual(['src/lib/leaf.ts#leafFn']);
+    equalsForce();
+  }, 120000);
+
+  it('re-parses the importers through the barrel when the module gains an export', () => {
+    expect(callsFrom(root, 'src/app/a.ts')('a2')).toEqual([]);
+    expect(callsFrom(root, 'src/app/d.ts')('d2')).toEqual([]);
+    writeFileSync(join(root, 'src/lib/leaf.ts'), 'export function leafFn() { return 1; }\nexport function added() { return 1; }\n');
+    // The leaf, both barrels and their four importers.
+    expect(sync()).toBe('7');
+    for (const n of [...importers, 'd']) expect(callsFrom(root, `src/app/${n}.ts`)(`${n}2`)).toEqual(['src/lib/leaf.ts#added']);
+    equalsForce();
+  }, 120000);
+
+  it('re-parses them when a body edit declares a nested function of the imported name', () => {
+    // The index holds nested declarations without a scope, so findExport finds them: the signature
+    // lists every declared name, not only the top level.
+    writeFileSync(join(root, 'src/lib/leaf.ts'), 'export function leafFn(): number {\n  function added() { return 2; }\n  return added();\n}\n');
+    mapx(root, 'sync', '.');
+    equalsForce();
+  }, 120000);
+
+  it('re-parses them when the module loses or renames an export', () => {
+    writeFileSync(join(root, 'src/lib/leaf.ts'), 'export function leafRenamed() { return 1; }\n');
+    // The leaf, both barrels and their four importers.
+    expect(sync()).toBe('7');
+    expect(callsFrom(root, 'src/app/a.ts')('a1')).toEqual([]);
+    equalsForce();
+  }, 120000);
+
+  it('re-parses them when the barrel changes in the same sync without changing its exports', () => {
+    writeFileSync(join(root, 'src/lib/leaf.ts'), 'export function leafFn(): number { return 1; }\nexport function added() { return 1; }\n');
+    writeFileSync(join(root, 'src/lib/index.ts'), "// barrel\nexport * from './leaf';\nexport * from './side';\n");
+    mapx(root, 'sync', '.');
+    expect(callsFrom(root, 'src/app/a.ts')('a2')).toEqual(['src/lib/leaf.ts#added']);
+    equalsForce();
+  }, 120000);
+
+  it('re-parses the importers of a JSX module that gains an export', () => {
+    expect(callsFrom(root, 'src/app/e.ts')('e2')).toEqual([]);
+    writeFileSync(join(root, 'src/lib/history.tsx'), readFileSync(join(root, 'src/lib/history.tsx'), 'utf8') + 'export const useHistory = () => [];\n');
+    mapx(root, 'sync', '.');
+    expect(callsFrom(root, 'src/app/e.ts')('e2')).toEqual(['src/lib/history.tsx#useHistory']);
+    equalsForce();
+  }, 120000);
+
+  it('re-parses them when the module behind the barrel is deleted', () => {
+    rmSync(join(root, 'src/lib/leaf.ts'));
+    if (useGit) git(root, 'rm', '-q', '--cached', 'src/lib/leaf.ts');
+    mapx(root, 'sync', '.');
+    // The barrel's star target is gone: unknown, so name lookup applies, as in scan --force.
+    expect(callsFrom(root, 'src/app/a.ts')('a1')).toEqual(['src/app/helpers.ts#leafFn']);
+    equalsForce();
   }, 120000);
 });

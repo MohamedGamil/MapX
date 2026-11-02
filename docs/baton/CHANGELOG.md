@@ -47,3 +47,15 @@
 - M0-02-R9 DONE: sync tracks go.mod and composer.json signatures per folder (NUL-prefixed family keys, per-family marker). Review P2s fixed.
 - M0-12-R10 DONE: Svelte template references with Vue resolution hints; render branch accepts .svelte and follows barrels (also Vue). Review P1 (escaped quote) and P2s fixed.
 - M0-17-R6 DONE: four heuristic follow-ups (codeOnly for vanished names, router shadowing/return types, Laravel module @, export/call-gated binding promotion). Review P1 (export default) and P2s fixed. All D019 gap tasks done.
+
+## 2026-11-02 — Consolidation under claude-ff
+
+- The owner closed the parallel sessions (mapx-c0, mapx-fa). Each handed off with nothing in flight.
+- Their findings that no task recorded were registered as BACKLOG: M5-25-R1, M5-03-R2, M5-05-R1, M4-09-R2. Registered while doing M2-08-R1: M2-08-R2 (a new file satisfying or shadowing an import).
+- M2-08-R1 DONE (attempt 2, D032):
+  - an export-signature gate for the barrel walk;
+  - JSX-, regex- and template-aware comment stripping (`src/core/js-source.ts`);
+  - the deleted-module importer queue;
+  - file before folder index.
+
+  Independent review: 3 P1 (a changed barrel not walked, JSX text cutting the skeleton, an unterminated `/*` in text) and P2s. All were fixed, except the shadowing case, which went to M2-08-R2. `verificationCommands` gained `tests/js-source.test.ts` and `npm run eval`; `affectedFiles` gained `js-source` and the queries.

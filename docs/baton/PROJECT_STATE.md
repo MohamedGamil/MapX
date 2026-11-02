@@ -1,6 +1,14 @@
 # MapX project state
 
-Updated 2026-11-02, after the review: M4-25 is done (D031, owner request). `mapx init`, `scan` and `sync` open with the text-art logo at half its size, 32×12 in half-block cells, keeping every row of the art. It is CLI only, never in pipes, CI, `TERM=dumb` or MCP. M5-02-R2 was cancelled by D030: the architecture config may stay gitignored.
+Updated 2026-11-02, consolidation: the owner closed the other sessions (mapx-c0, mapx-fa), and claude-ff now owns every lane. Neither session left work in flight. Their unrecorded findings are now BACKLOG tasks:
+- M5-25-R1: Go qualified calls, and generic, slice and map literals;
+- M5-03-R2: qualified names in C++ `.h` headers, multi-namespace C# files and one-line C++ namespaces;
+- M5-05-R1: staleness in status and MCP that finds new files as check does;
+- M4-09-R2: tests leave `mapx-*` temp directories.
+
+M2-08-R1 is done (D032). A call to a name its project module certainly lacks gets no edge. Sync re-parses a barrel's importers only when a module's export signature changes: in a 300-importer `export *` barrel, a body-only edit re-parses 1 file, against 302 in attempt 1. A deleted module's importers are re-parsed. JSX text and Vue templates no longer hide imports. `./utils` resolves to the file before the folder index. The independent review's three P1s were fixed. Its pre-existing added-file gap is **M2-08-R2**.
+
+Earlier: Updated 2026-11-02, after the review: M4-25 is done (D031, owner request). `mapx init`, `scan` and `sync` open with the text-art logo at half its size, 32×12 in half-block cells, keeping every row of the art. It is CLI only, never in pipes, CI, `TERM=dumb` or MCP. M5-02-R2 was cancelled by D030: the architecture config may stay gitignored.
 
 Reviewed 2026-11-02 (`reviews/REVIEW-2026-11-02-b2558df592cf.md`, range `24902da..b2558df`, 57 DONE items, six independent reviewers). Fixed in the review, each with a regression test that failed first:
 - P0: the M5 fixture configs under `tests/fixtures/**/.mapx/` were gitignored and never committed (a fresh clone failed 12 arch tests); `.gitignore` negations and `tests/fixtures-tracked.test.ts`. They are committed with the review.

@@ -3,6 +3,10 @@
 (import_statement
   source: (string) @ref.target_import) @ref.type_import
 
+; `export { x } from './m'` and `export * from './m'`: a barrel depends on the modules it re-exports (M2-08-R1).
+(export_statement
+  source: (string) @ref.target_import) @ref.type_import
+
 (import_clause
   (named_imports
     (import_specifier

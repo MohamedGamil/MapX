@@ -50,6 +50,11 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `not` over a symbol-level selector no longer puts every file in a layer, and `language: typescript` also matches `.tsx` files (M5-03-R1).
 - `mapx scan --repo` and `mapx sync --repo` with a name no repo is registered under fail with a message listing the registered repos (exit 1; the MCP `mapx_scan` and `mapx_sync` tools report it too) instead of reporting 0 files. A git sync reports the files it re-indexed, not every path git listed, as the hash sync does (M0-10-R6).
 - A sync killed before its re-indexed files were written no longer loses a restored file, the edges into it, another repo's queued referrers, a changed tsconfig alias, or the record of a reverted edit: those records are consumed in the same transaction as the files (M0-02-R11).
+- JS/TS import-bound calls (M2-08-R1):
+  - a call to a name imported from a project module that neither declares nor re-exports it no longer links a same-named function in another file;
+  - `mapx sync` follows `export … from` and `export *` barrels, re-parsing a barrel's importers only when a module behind it gains, loses or renames an export, or is deleted; an edit inside a function body re-parses none;
+  - a `/*` inside a string or regex literal no longer hides a module's re-exports, and a commented-out `export default` names nothing;
+  - `./utils` resolves to `utils.ts` before `utils/index.ts`, as Node and TypeScript do.
 - The test suite no longer appends to the checkout's `.mapx/tool-calls.jsonl`: `tests/mcp-coverage.test.ts` runs from a temporary folder, and `scripts/baton/check-test-cwd.mjs` now compares every tracked, untracked and ignored file (with its content) and runs the whole suite by default (M4-09-R1).
 - The npm package no longer picks up release builds: `make package-*` writes binaries, tarballs and installers to `dist/release/`, which `npm pack` included (185 MB instead of 4.7 MB); `scripts/check-package.ts` now fails if any are packed (M5-02).
 

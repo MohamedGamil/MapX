@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@8a6b956d6802343093e82ab650da9f1da3b6852a (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
+Revision: develop@4b6028930202187e22ac268907f4777b6a30ee35 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
 
 ## Baseline
-Last completed: M5-05 — `mapx check` CLI: table/json reporters, exit contract, staleness.
-Evidence: `npx vitest run tests/arch-cli.test.ts` (exit 0) → docs/baton/reports/M5-05.md; `npm run check` (exit 0) → docs/baton/reports/M5-05.md.
+Last completed: M2-08-R1 — Import-bound calls: export-from barrels in sync, and no fallback past a project import.
+Evidence: `npx vitest run tests/import-bound-calls.test.ts` (exit 0) → docs/baton/reports/M2-08-R1.md; `npx vitest run tests/js-source.test.ts` (exit 0) → docs/baton/reports/M2-08-R1.md; `npm run eval` (exit 0) → docs/baton/reports/M2-08-R1.md; `npm run check` (exit 0) → docs/baton/reports/M2-08-R1.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
