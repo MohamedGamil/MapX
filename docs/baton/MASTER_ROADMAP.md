@@ -161,7 +161,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-04-R3** HTTP URL follow-ups: shadowed baseURL constants, nested dotenv defaults — DONE, P2, 2h; depends on M2-04-R2.
 - **M2-08** Calls resolve through the file's own imports before name lookup — DONE, P1, 8h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-17-R4, M0-02-R7.
 - **M2-06-R3** HTTP edges into another repo record their target repo — DONE, P1, 2h; depends on M2-06.
-- **M2-08-R1** Import-bound calls: export-from barrels in sync, and no fallback past a project import — BLOCKED, P2, 4h; depends on M2-08.
+- **M2-08-R1** Import-bound calls: export-from barrels in sync, and no fallback past a project import — READY, P2, 4h; depends on M2-08.
 - **M2-04-R4** Same-named axios clients in one file keep their own baseURL scope — BACKLOG, P2, 2h; depends on M2-04-R3.
 - **M2-06-R4** Route domains are workspace hosts for HTTP pairing — BACKLOG, P2, 2h; depends on M2-06-R2.
 

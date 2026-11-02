@@ -320,3 +320,11 @@ Answers the decision left open by `reviews/REVIEW-2026-11-02-b2558df592cf.md` (M
 ## D031 — A compact logo for init, scan and sync (owner, 2026-11-02)
 
 The owner asked for the terminal logo of `mapx init` (D028) to be scaled down without losing its detail, and to be shown by `mapx scan` and `mapx sync` as well, in the CLI only (not MCP). Registered as M4-25. The compact mark is half the art's width and height (32×12) in half-block cells, so every row of the 23-row art survives; the shading becomes #ff02fe mixed toward the terminal background. `assets/brand/mapx-logo.txt` stays the source.
+
+## D032 — Barrel sync re-parses importers only when exported names change (owner, 2026-11-02)
+
+Answers M2-08-R1's blocking condition, after attempt 1 was reverted (`reports/M2-08-R1.md`: a 300× sync re-parse on body-only edits behind an `export *` barrel). When a module behind an `export … from` / `export *` barrel changes, `mapx sync` re-parses the barrel's importers **only when the module's exported names change**, never on every edit behind the barrel. This is correct for real API changes and cheap for body-only edits. It costs more code: the exported names are compared before and after. M2-08-R1 is unblocked (READY), still owned by claude-ff, and must test both cases: a body-only edit re-parses no importer; adding, removing or renaming an export re-parses them.
+
+## D033 — Fixture row workspace-03 stays (owner, 2026-11-02)
+
+M5-04 added the expected-findings row `workspace-03`: `backend/routes/api.php` imports the API controller, which is Backend → PublicApi, and the two-repo app's rules forbid it (`Backend: []`). M5-01 had left it unlabelled. The owner confirmed the label is the fixture's intent: the rules stay as they are and the row stays. Also recorded, without objection: M5-04 evaluates `private-layer` (the AR-08 chain names it), so M5-11 keeps internal markers, native markers and its fixture criterion for both rules.

@@ -1,6 +1,6 @@
 # MapX BATON handoff
 
-Revision: develop@0e8a769d6778290615345f889d69a8449476375e (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
+Revision: develop@8a6b956d6802343093e82ab650da9f1da3b6852a (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
 
 ## Baseline
 Last completed: M5-05 — `mapx check` CLI: table/json reporters, exit contract, staleness.
@@ -21,4 +21,4 @@ Run `npm run plan:validate`, inspect `git status`, then `npm run check`. Never r
 ## Next
 Remaining critical path: M5-10 → M5-11 → M5-98 (26h). Recompute with `npm run plan:report` after every completion.
 Pending gates: none; request approval only with reviewable evidence. Owner-initiated (never request): G-RELEASE.
-External blockers: M2-08-R1: Owner decision: may sync re-parse every importer of a barrel when a module behind it changes (correct, costly in barrel-heavy repos), or only when the module`s exported names change.
+External blockers: none.

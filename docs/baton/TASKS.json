@@ -23578,14 +23578,13 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [
-        "Owner decision: may sync re-parse every importer of a barrel when a module behind it changes (correct, costly in barrel-heavy repos), or only when the module`s exported names change"
-      ],
+      "blockingConditions": [],
       "sources": [
-        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
+        "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md",
+        "docs/baton/DECISIONS.md#D032"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BLOCKED",
+      "status": "READY",
       "owner": "claude-ff",
       "actualHours": null,
       "startedAt": "2026-11-02T13:36:51.551Z",
@@ -23613,6 +23612,12 @@
           "at": "2026-11-02T14:04:18.772Z",
           "from": "IN_PROGRESS",
           "to": "BLOCKED",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T14:36:49.065Z",
+          "from": "BLOCKED",
+          "to": "READY",
           "evidence": []
         }
       ],

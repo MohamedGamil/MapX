@@ -30,7 +30,7 @@ Remaining effort min/expected/max: **120 / 169 / 245h**. Capacity: 1 engineer(s)
 - M5-24 (BACKLOG): M5-20; M5-21; M5-22; M5-23
 - M5-26 (BACKLOG): prerequisites satisfied
 - M5-02-R1 (BACKLOG): prerequisites satisfied
-- M2-08-R1 (BLOCKED): Owner decision: may sync re-parse every importer of a barrel when a module behind it changes (correct, costly in barrel-heavy repos), or only when the module`s exported names change
+- M2-08-R1 (READY): prerequisites satisfied
 - M4-13-R1 (BACKLOG): prerequisites satisfied
 - M0-12-R11 (BACKLOG): prerequisites satisfied
 - M3-05-R2 (BACKLOG): prerequisites satisfied
