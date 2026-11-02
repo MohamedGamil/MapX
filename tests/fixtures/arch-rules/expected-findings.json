@@ -1685,6 +1685,22 @@
       },
       "edgeType": "http",
       "note": "Frontend \u2192 Backend (an admin controller outside PublicApi)"
+    },
+    {
+      "id": "workspace-03",
+      "app": "workspace",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "backend/routes/api.php"
+      },
+      "to": {
+        "file": "backend/app/Http/Controllers/Api/OrderController.php",
+        "symbol": "OrderController"
+      },
+      "edgeType": "import",
+      "note": "Backend \u2192 PublicApi: the route file imports the API controller, and Backend may use nothing. Added by M5-04 (2026-11-02): a true dependency the M5-01 labels missed; the configuration is unchanged"
     }
   ]
 }

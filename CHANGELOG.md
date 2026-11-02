@@ -12,6 +12,15 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).
 - `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
 
+- The architecture rule evaluator and report (`src/arch/report.ts`, run by the coming `mapx check`) (M5-04). It covers:
+  - allowances `L`, `+L` (transitive), `!L`, `*`, a `"*"` defaults key, and edge-type-scoped and advisory (`severity: "warn"`) allowances;
+  - the evaluation chain: scope, uncovered, same layer, `disallowed-layer`, `private-layer`, allowed;
+  - inferred edges as warnings by default;
+  - one finding per class-level dependency and edge type, with a line-independent fingerprint;
+  - `multi-layer`, `empty-layer` and `plus-cycle`;
+  - a layer-pair matrix.
+
+  On the labelled fixture it finds every row but those baselines and `@internal` markers own (M5-04).
 - An architecture-rules fixture set (PHP, TypeScript, Python, Go and a two-repo workspace, with labelled violations, skips, uncovered and baseline rows) and `scripts/eval/score-arch.ts`, which scores a report per kind; the baseline is 0.0 until `mapx check` exists (M5-01).
 - The architecture element view and core selectors (`path`, `name`, `layer`, `all`/`any`/`not`, `role`, `cluster`, `repo`, `workspacePackage`, `language`, `framework`) with layer membership that records which selector matched, computed once per scan and configuration (M5-03).
 

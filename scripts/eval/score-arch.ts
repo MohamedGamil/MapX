@@ -1,16 +1,17 @@
 // Scores architecture-rule findings against the labelled fixture tests/fixtures/arch-rules (M5-01;
 // docs/research/deptrac AR-08, AR-09, AR-10). For each app it copies the fixture to a temp
 // directory, runs the real CLI (init, workspaces for the two-repo app, scan, then `check` once the
-// CLI has it, M5-05) and reads the findings report at .mapx/architecture-report.json (AR-09's
+// CLI has it, M5-05; until then the evaluator in-process, M5-04) and reads the findings report at .mapx/architecture-report.json (AR-09's
 // ArchReport). A missing report means no findings: recall 0, not an error.
 //   npx tsx scripts/eval/score-arch.ts <fixture> [--json] [--app <name>] [--min-recall R] [--min-precision P]
 // Exit code 1 when a threshold is missed; 2 on usage or scan errors.
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseScorerArgs } from './args.ts';
+import { runArchitecture } from '../../src/arch/report.ts';
 
 /** The finding kinds scored (AR-09). `allowed` and `none` label negatives. */
 export const SCORED_KINDS = ['violation', 'skipped', 'uncovered', 'warning', 'error'] as const;
@@ -182,6 +183,11 @@ export function scanApp(fixture: string, app: string, repos: string[] | null): A
         // Exit 1 (violations), 2 (uncovered) and 3 (configuration errors) still write the report.
         if (![1, 2, 3].includes(err?.status)) throw err;
       }
+    } else {
+      // Until `mapx check` exists (M5-05), the evaluator runs in-process on the scanned copy (M5-04).
+      const repoPaths = Object.fromEntries((repos ?? []).map((r) => [r, r]));
+      const report = runArchitecture(root, { repoPaths });
+      if (report) writeFileSync(reportPath, JSON.stringify(report, null, 2));
     }
     return existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) as ArchReport : null;
   } finally {

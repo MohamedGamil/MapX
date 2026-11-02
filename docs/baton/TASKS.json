@@ -15210,14 +15210,32 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-c0",
       "actualHours": null,
       "startedAt": "2026-11-02T13:20:00.122Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T13:47:48.802Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-04.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-evaluate.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-04.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-04.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-04.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T13:19:59.771Z",
@@ -15230,9 +15248,37 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:47:47.372Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:47:48.802Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-evaluate.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-04.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-04.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-04.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -23414,15 +23460,28 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T13:36:51.551Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T13:36:51.067Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T13:36:51.551Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

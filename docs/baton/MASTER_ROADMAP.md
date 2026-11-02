@@ -114,7 +114,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-06-R2** The compiled binary parses on worker threads — DONE, P1, 4h; depends on M0-06-R1.
 - **M0-32-R3** Architecture tab data: cycle smells name the real cycle; the profile ignores graph-excluded frameworks — DONE, P1, 4h; depends on M0-32-R2.
 - **M0-02-R11** A sync killed before its upserts commit keeps restored files — DONE, P2, 3h; depends on M0-02-R10.
-- **M0-10-R6** Unknown --repo is an error; git sync counts indexed files — BACKLOG, P2, 2h; depends on M0-10-R5.
+- **M0-10-R6** Unknown --repo is an error; git sync counts indexed files — DONE, P2, 2h; depends on M0-10-R5.
 - **M0-12-R11** Svelte template names scoped per block; quoted handlers — BACKLOG, P2, 2h; depends on M0-12-R10.
 - **M0-02-R12** A full scan killed after its index transaction keeps referrers and changed files — BACKLOG, P2, 4h; depends on M0-02-R11.
 
@@ -161,7 +161,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-04-R3** HTTP URL follow-ups: shadowed baseURL constants, nested dotenv defaults — DONE, P2, 2h; depends on M2-04-R2.
 - **M2-08** Calls resolve through the file's own imports before name lookup — DONE, P1, 8h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-17-R4, M0-02-R7.
 - **M2-06-R3** HTTP edges into another repo record their target repo — DONE, P1, 2h; depends on M2-06.
-- **M2-08-R1** Import-bound calls: export-from barrels in sync, and no fallback past a project import — BACKLOG, P2, 4h; depends on M2-08.
+- **M2-08-R1** Import-bound calls: export-from barrels in sync, and no fallback past a project import — IN_PROGRESS, P2, 4h; depends on M2-08.
 - **M2-04-R4** Same-named axios clients in one file keep their own baseURL scope — BACKLOG, P2, 2h; depends on M2-04-R3.
 - **M2-06-R4** Route domains are workspace hosts for HTTP pairing — BACKLOG, P2, 2h; depends on M2-06-R2.
 
@@ -229,7 +229,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-01** Architecture-rules fixture set and scorer (PHP, TS, Python, Go, cross-repo) — DONE, P1, 12h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6, M0-02-R10, M4-10, M4-11, M4-13, M4-12, M4-14, M4-15, M4-16, M4-19, M4-17, M4-20, M4-21, M4-22, M4-23.
 - **M5-02** Architecture config: JSONC schema, loader, extends/parameters, validate-config — DONE, P1, 8h; depends on M0-02-R6, M0-17-R4, M3-08-R1, M3-09-R1, M0-02-R7, M0-10-R4, M1-07-R2, M0-04-R6, M3-02-R1, M3-05-R1, M3-11-R1, M3-07-R1, M0-12-R7, M0-17-R5, M0-20-R3, M2-06-R2, M2-04-R3, M0-09-R5, M1-03-R2, M0-11-R3, M0-02-R8, M0-12-R8, M0-12-R9, M2-08, M0-02-R9, M0-12-R10, M0-17-R6, M0-02-R10, M4-10, M4-11, M4-13, M4-12, M4-14, M4-15, M4-16, M4-19, M4-17, M4-20, M4-21, M4-22, M4-23.
 - **M5-03** Element view, core selectors and layer membership with selector trace — DONE, P1, 10h; depends on M5-01, M5-02.
-- **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — BACKLOG, P1, 12h; depends on M5-03, M5-03-R1, M5-25.
+- **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — DONE, P1, 12h; depends on M5-03, M5-03-R1, M5-25.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — BACKLOG, P1, 8h; depends on M5-04.
 - **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — BACKLOG, P1, 7h; depends on M5-05.
 - **M5-07** CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit — BACKLOG, P2, 6h; depends on M5-05.

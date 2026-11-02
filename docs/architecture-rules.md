@@ -6,8 +6,9 @@ What exists so far:
 
 - **The configuration document** (M5-02): its schema, loading, `extends`, parameters, views and validation.
 - **The element view, the core selectors and layer membership** (M5-03).
+- **Rule evaluation and the report** (M5-04): policy expansion, the evaluation chain, findings with fingerprints, and the layer matrix. The `mapx check` command that prints them comes with M5-05.
 
-Rule evaluation, `mapx check`, reports and baselines come in M5-04 to M5-08.
+`mapx check`, reporters, baselines and `@internal` markers come in M5-05 to M5-11.
 
 ## The configuration document
 
@@ -109,3 +110,57 @@ Not evaluated yet: these never match, `not` of them never matches either, and me
 - **Private parts.** A layer's `private` selectors mark the elements only that layer may reach. A file is private to a layer when its `private` selectors match the file or one of its top-level symbols.
 - **Explanations.** Membership records why an element is in a layer: the selector position (`selectors[0].name`), and for a file the top-level symbol that put it there.
 - **Caching.** Membership is computed once per scan and configuration.
+
+## Rules
+
+`rules` maps each non-overlay source layer to the layers it may depend on. Dependencies between different layers are denied unless allowed; dependencies within one layer are always allowed.
+
+| Form | Meaning |
+| --- | --- |
+| `"L"` | may depend on L |
+| `"+L"` | may depend on L, and on everything L may depend on, transitively |
+| `"!L"` | may never depend on L |
+| `"*"` | may depend on every non-overlay layer |
+| `{ "allow": ["L"], "types": ["param_type"] }` or `{ "to": "L", "types": [...] }` | only over those edge types |
+| `{ "allow": ["L"], "severity": "warn" }` | advisory: such dependencies are reported as warnings instead of errors |
+
+A `"*"` key gives defaults to every source layer: `"*": ["Shared", "!Legacy"]`.
+
+**Precedence.** `!` beats explicit allowances, which beat what `+` brings, which beats `*`. For one target, only the strongest form's allowances count, so an explicit `{ "to": "C", "types": ["import"] }` limits C to imports even if a `+` would bring C for calls. Allowances brought through `+` keep that `+`'s edge types and advisory severity. Each `+` path counts on its own, so the order of rules never matters.
+
+## Evaluation
+
+Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `implements`, `call`, `instantiation`, `param_type`, `return_type`) is checked in this order. The first step that applies decides:
+
+1. **Out of scope:** the edge is skipped when its source or target path fails `scope.include`/`scope.exclude`, when it is inferred and `policy.inferred` is `"ignore"`, or when both ends are the same element.
+2. **No source layer:** the source is in no layer, so there is nothing to check.
+3. **Then, once for each non-overlay layer of the source:**
+   1. **Denied overlay:** the target is in an overlay layer the source layer denies (`"*": ["!Deprecated"]`). This is a `disallowed-layer` violation, whatever the target's other layers. Overlays matter only as denied targets: `*` and default-deny never involve them.
+   2. **Uncovered:** the target is in no non-overlay layer.
+   3. **Same layer:** every non-overlay layer of the target is the source layer. Nothing is recorded.
+   4. **`disallowed-layer`:** one of the target's other layers is not allowed for this edge type, or is denied.
+   5. **`private-layer`:** the target is private to a layer other than the source layer (a `private` selector).
+   6. **Allowed.**
+
+**Severity.** A violation is an `error`. It is a `warn` when the edge is inferred (under the default `policy.inferred: "warn"`) or when the pair is advisory. Uncovered dependencies are `warn`.
+
+**Granularity.** Layers are decided on the finest element an edge names: the method, or the file for an import. An edge end names a symbol only when the file has exactly one symbol of that name; an import path names the file. A finding then names the top-level declaration: a method's dependency is reported on its class, even when the method is declared in another file of the class's namespace or package (Go, C# partial classes). An import is reported on the file's only top-level symbol, or on the file when it has several. So one class-to-class dependency is one finding per edge type, however many edges carry it. There are two exceptions:
+- the target of an `http` or `route` edge stays the handler method;
+- a Go import names a package, so its target is the package (its import path, with the layers of its directory's in-scope files). It is dropped when every importing file already has a finding of the same kind and rule on a type of that package.
+
+## The report
+
+`runArchitecture(dir)` (`src/arch/report.ts`) returns the report that `mapx check --format json` will print:
+
+- **`findings`:** one per dependency, edge type and rule. A source in several layers gets one finding whose `source.layer` lists them. Each has a `kind` (`violation`, `uncovered`, `allowed`, `warning`, `error`; `skipped` arrives with baselines), a `rule`, a `severity`, the `source` and `target` (element, file, layer, repo, first line), the `edgeType`, `verifiability`, the number of `edges` it stands for, a `fingerprint` and a `message`.
+- **`fingerprint`:** a hash of the rule, both elements and the edge type, with no line number, so it survives edits that move code.
+- **Warnings:**
+  - `multi-layer`, for a top-level declaration in several non-overlay layers. It is an error under `policy.strictLayers`. A symbol-less file gets one only when it is a dependency end;
+  - `empty-layer`, for a non-overlay layer that matches nothing;
+  - `unsupported-selector`, for a selector this version cannot evaluate yet. It matches nothing.
+- **Errors:** an invalid configuration gives `error` findings, `plus-cycle` for a `+` cycle (naming its first layer) and `config` for the rest.
+- **`layers`:** elements and files per layer.
+- **`layerEdges`:** allowed and violating dependencies per layer pair.
+- **`counts`:** per kind.
+
+A workspace with a configuration but no index is an error (`run mapx scan first`), never an empty report.
