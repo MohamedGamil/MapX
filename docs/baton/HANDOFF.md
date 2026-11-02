@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@4b6028930202187e22ac268907f4777b6a30ee35 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
+Revision: develop@f53532345740d54d0ee20ac5db0b033f84b737d7 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M4 — Measurement and developer experience.
 
 ## Baseline
-Last completed: M2-08-R1 — Import-bound calls: export-from barrels in sync, and no fallback past a project import.
-Evidence: `npx vitest run tests/import-bound-calls.test.ts` (exit 0) → docs/baton/reports/M2-08-R1.md; `npx vitest run tests/js-source.test.ts` (exit 0) → docs/baton/reports/M2-08-R1.md; `npm run eval` (exit 0) → docs/baton/reports/M2-08-R1.md; `npm run check` (exit 0) → docs/baton/reports/M2-08-R1.md.
+Last completed: M5-05-R1 — Staleness in status, MCP and the other commands finds new files as check does.
+Evidence: `npx vitest run tests/legacy-impact-staleness.test.ts` (exit 0) → docs/baton/reports/M5-05-R1.md; `npm run check` (exit 0) → docs/baton/reports/M5-05-R1.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,8 +12,8 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M5-10 — Capture decorators/attributes and doc tags in symbol metadata (tier 1). Prerequisites: M5-01, M3-04. Read docs/baton/iterations/M5-10.md. Objective: Parsers persist `metadata.decorators` (normalised name, raw args) and `metadata.docTags` ({tag, value}) on symbols for PHP (attributes, PHPDoc), TS/JS (decorators, JSDoc/TSDoc), Python (decorators, docstring deprecations), Java/Kotlin (annotations, Javadoc/KDoc), C# (attributes, XML doc); add decorator and docTag selectors. Expected outputs: parser changes; src/arch/selectors/{decorator,doc-tag}.ts; tests/symbol-annotations.test.ts. Verify: `npx vitest run tests/symbol-annotations.test.ts`; `npm test`.
-Also eligible: M5-06, M5-19, M0-02-R12, M0-12-R11, M1-07-R3.
-Active work: none. One active iteration per owner.
+Also eligible: M5-06, M5-19, M3-05-R3, M4-13-R1, M5-07.
+Active work: M4-24-R1 (claude-ff-lane-M4-24-R1), M5-25-R1 (claude-ff-lane-M5-25-R1), M5-03-R2 (claude-ff-lane-M5-03-R2), M2-09 (claude-ff-lane-M2-09), M2-10 (claude-ff-lane-M2-10). One active iteration per owner.
 
 ## Observe
 Run `npm run plan:validate`, inspect `git status`, then `npm run check`. Never rely on this packet alone; read docs/baton/reports/ for executed evidence and limitations.

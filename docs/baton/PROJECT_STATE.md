@@ -1,19 +1,29 @@
 # MapX project state
 
-Updated 2026-11-02, later in the consolidation. Done since M2-08-R1, each independently reviewed, with its findings fixed before DONE:
-- M4-09-R2: temp-dir leftovers fail check-test-cwd.
-- M0-02-R12: a killed full scan keeps its work; `last_scanned` is the read time.
-- M5-26: the index records its extractor version (now 2); an older index is stale and re-parses once.
-- M2-08-R2: sync re-links imports a new module satisfies or shadows.
-- Lanes, cherry-picked: M0-12-R11 (Svelte block scopes), M1-07-R3 (Laravel route-file arrays; routes floors raised), M3-05-R2 (Pinia and Vuex, gated on the package), M5-02-R1 (`arch validate-config`, CLI and MCP; 34 MCP tools).
+Updated 2026-11-02 (evening), consolidation under claude-ff. Every task below was independently reviewed and its P0/P1 findings fixed before DONE. `EXTRACTOR_VERSION` is now 3, so an older index re-parses once.
 
-M4-24-R1 is integrated (`7f127e2`) and waits only for `npm run test:ui` on a quiet machine: its perf budgets fail under load, as HEAD's code does.
+Done this session:
+- M2-08-R1, M2-08-R2: barrel-aware sync; new modules re-link their importers.
+- M0-02-R12: a killed full scan keeps its work.
+- M4-09-R2: test temp-dir hygiene.
+- M5-26: the extractor version.
+- M0-12-R11: Svelte block scopes.
+- M1-07-R3: Laravel route-file arrays.
+- M3-05-R2: Pinia and Vuex, gated on the package.
+- M5-02-R1: `arch validate-config`.
+- M2-04-R4: axios client scopes.
+- M2-06-R4: route-domain hosts.
+- M4-26: dotted symbol names.
+- M5-05-R1: walk-based staleness.
+- M4-27 (P1, found this session): the Lua grammar parsed only the first file of a process. Rebuilt with a patched scanner; a grammar health test now covers every bundled grammar.
 
-In progress as lanes: M2-04-R4, M2-06-R4, M4-26 and M5-05-R1.
+M4-24-R1 is integrated (`7f127e2`). Its DONE waits for `npm run test:ui` on a quiet machine: the two perf budgets fail under load.
 
-Registered: M4-26 (dotted symbol names) and M3-05-R3 (the store gate follows package.json).
+In progress as lanes: M5-25-R1, M5-03-R2, M2-09 and M2-10.
 
-Next: the remaining defects (M4-13-R1, M5-25-R1, M5-03-R2, M3-05-R3), then M5: M5-10 (critical path), M5-06, M5-19, M5-08, M5-09, M5-07 and M5-13.
+Next:
+- defects: M4-13-R1 (needs a quiet machine) and M3-05-R3;
+- M5: M5-10 (critical path), M5-06, M5-19, M5-08, M5-09, M5-07 and M5-13.
 
 Earlier: Updated 2026-11-02, consolidation: the owner closed the other sessions (mapx-c0, mapx-fa), and claude-ff now owns every lane. Neither session left work in flight. Their unrecorded findings are now BACKLOG tasks:
 - M5-25-R1: Go qualified calls, and generic, slice and map literals;
