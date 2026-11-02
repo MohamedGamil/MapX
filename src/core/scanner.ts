@@ -43,8 +43,25 @@ import { EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extract
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
 
-/** Symbol index entry: a declaration by name, with its file, scope and kind. */
-type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string };
+/**
+ * Symbol index entry: a declaration by name, with its file, scope and kind. `assigned`: a JS/TS
+ * member-assigned function (`obj.m = function`, `exports.f = …`: M2-09).
+ */
+type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string; assigned?: boolean };
+/**
+ * Per line, the smallest symbol enclosing it (the first of equal spans): a reference's source symbol.
+ * Painted widest first, so a file of many symbols costs their spans, not references × symbols (M2-09).
+ */
+function innermostByLine<T extends { startLine: number; endLine: number }>(symbols: T[]): (T | undefined)[] {
+  const byLine: (T | undefined)[] = [];
+  const order = symbols.map((s, i) => [s, i] as const)
+    .sort(([a, i], [b, j]) => (b.endLine - b.startLine) - (a.endLine - a.startLine) || j - i);
+  for (const [s] of order) for (let line = s.startLine; line <= s.endLine; line++) byLine[line] = s;
+  return byLine;
+}
+
+/** `exports.f = function` (M2-09): the module's export `f`, reached through the module, never by its bare name. */
+const exportOnly = (e: { scope?: string | null; assigned?: boolean }) => !!e.assigned && e.scope === 'exports';
 
 /** Names a Lua file declares `local` at its top level (column 0): `local M = {}`, `local A, B = …` (M2-10). */
 function luaTopLevelLocals(text: string): Set<string> {
@@ -1674,6 +1691,7 @@ export class Scanner {
     // Simple names this file uses (C# picks, among the files declaring a namespace, those whose types it uses).
     let referencedNames: Set<string> | undefined;
     let jsBindings: { packages: Set<string>; local: Set<string> } | undefined;
+    let innermost: any[] | undefined;
     const usedNames = () => (referencedNames ??= new Set(refs
       .filter(r => r.referenceType !== 'import' && r.referenceType !== 'require' && typeof r.targetName === 'string')
       .map(r => r.targetName.replace(/<[\s\S]*$/, '').split(/\.|::/).pop()!)));
@@ -1751,17 +1769,8 @@ export class Scanner {
 
         let sourceSymbol: string | null = ref.sourceSymbol;
         if (!sourceSymbol && symbols) {
-          let bestSym: any = null;
-          let bestSpan = Infinity;
-          for (const sym of symbols) {
-            if (sym.startLine <= ref.startLine && ref.startLine <= sym.endLine) {
-              const span = sym.endLine - sym.startLine;
-              if (span < bestSpan) {
-                bestSpan = span;
-                bestSym = sym;
-              }
-            }
-          }
+          innermost ??= innermostByLine(symbols);
+          const bestSym = innermost[ref.startLine];
           if (bestSym) {
             sourceSymbol = bestSym.scope ? `${bestSym.scope}::${bestSym.name}` : bestSym.name;
           }
@@ -1870,7 +1879,7 @@ export class Scanner {
    */
   private resolveImportedCall(
     ref: ExtractedReference, sourcePath: string, language: string | null, isJsOrTs: boolean, fileMap: Map<string, string>,
-    symbols?: Array<{ name: string; kind: string; startLine: number; endLine: number }>,
+    symbols?: Array<{ name: string; kind: string; scope?: string | null; startLine: number; endLine: number; metadata?: Record<string, unknown> }>,
   ): { file: string; symbol: string } | false | null {
     const python = language === 'python';
     if (!isJsOrTs && !python) return null;
@@ -1883,8 +1892,10 @@ export class Scanner {
     // file's own (review 2026-11-01).
     if (!receiver && symbols) {
       let declared = this.declaredNames.get(symbols);
-      if (!declared) this.declaredNames.set(symbols, (declared = new Set(symbols.filter(d => d.kind !== 'method').map(d => d.name))));
-      if (declared.has(name) && symbols.some(d => d.name === name && d.kind !== 'method' && this.visibleAt(d, ref.startLine, symbols))) return null;
+      // `exports.f = function` binds no lexical `f` (M2-09).
+      const lexical = (d: NonNullable<typeof symbols>[number]) => d.kind !== 'method' && !exportOnly({ scope: d.scope, assigned: d.metadata?.['assigned'] === true });
+      if (!declared) this.declaredNames.set(symbols, (declared = new Set(symbols.filter(lexical).map(d => d.name))));
+      if (declared.has(name) && symbols.some(d => d.name === name && lexical(d) && this.visibleAt(d, ref.startLine, symbols))) return null;
     }
     if (python && !receiver) {
       let lines = this.lineCache.get(sourcePath);
@@ -1905,7 +1916,10 @@ export class Scanner {
     }
     if (receiver) {
       const module = bindings.get(receiver);
-      return module && module.imported === null ? orNoEdge(this.findExport(module.file, name, fileMap)) : null;
+      if (!module) return null;
+      if (module.imported === null) return orNoEdge(this.findExport(module.file, name, fileMap));
+      // `import { api } from './api'; api.get()`: the function that module assigns to `api.get` (M2-09).
+      return isJsOrTs ? this.assignedMember(module.file, module.imported, name) : null;
     }
     const binding = bindings.get(name);
     if (!binding || binding.imported === null) return null;
@@ -1942,7 +1956,14 @@ export class Scanner {
   }
 
   private findExportUncached(file: string, name: string, fileMap: Map<string, string>, depth: number): ExportLookup {
-    const declared = (this.symbolIndex?.get(name.toLowerCase()) ?? []).filter(e => e.file === file && e.name === name && !e.scope);
+    // A top-level declaration, or a CommonJS export: `exports.f = …`, or a member of the object that
+    // `module.exports = obj` exports (M2-09).
+    const entries = (this.symbolIndex?.get(name.toLowerCase()) ?? []).filter(e => e.file === file && e.name === name);
+    let declared = entries.filter(e => !e.scope || exportOnly(e));
+    if (!declared.length && entries.some(e => e.assigned)) {
+      const main = this.commonJsMain(file);
+      declared = entries.filter(e => e.assigned && e.scope === main);
+    }
     if (declared.length) {
       const value = (e: SymbolIndexEntry) => (e.kind === 'constant' || e.kind === 'variable') && VALUE_SYMBOL_LANGUAGES.has(this.languageOf(file) ?? '');
       return declared.every(value) ? false : { file, symbol: name };
@@ -1982,6 +2003,19 @@ export class Scanner {
       absent = false;
     }
     return absent ? 'absent' : null;
+  }
+
+  /** The function `file` assigns to `object.name` (`api.get = function`), or null (M2-09). */
+  private assignedMember(file: string, object: string, name: string): { file: string; symbol: string } | null {
+    const owner = object === 'default' ? this.defaultExportName(file) ?? this.commonJsMain(file) : object;
+    const hit = (this.symbolIndex?.get(name.toLowerCase()) ?? []).some(e => e.file === file && e.name === name && e.assigned && e.scope === owner);
+    return hit ? { file, symbol: name } : null;
+  }
+
+  /** The name a CommonJS module exports whole (`module.exports = hooks`), or null (M2-09). */
+  private commonJsMain(file: string): string | null {
+    const all = [...this.jsText(file).code.matchAll(/(?<![\w$.])module\.exports\s*=\s*([A-Za-z_$][\w$]*)\s*(?:;|$)/gm)];
+    return all.length ? all[all.length - 1]![1]! : null;
   }
 
   /** The declared name of a JS/TS module's default export (`export default function build`). */
@@ -3028,7 +3062,8 @@ export class Scanner {
       if (found === undefined) {
         found = null;
         // The lowercased key holds every case variant of a name.
-        const lookup = (name: string) => named(name, this.symbolIndex!.get(name.toLowerCase()) ?? []);
+        // `exports.f = function` is reached through its module (findExport), never by name (M2-09).
+        const lookup = (name: string) => named(name, (this.symbolIndex!.get(name.toLowerCase()) ?? []).filter(e => !exportOnly(e)));
         let key = symbolName;
         let indexed = lookup(key);
         if (!indexed.length) {
@@ -3045,7 +3080,10 @@ export class Scanner {
             }
           }
         }
-        const compatible = indexed.length > 0 ? filterMatches(indexed) : [];
+        let compatible = indexed.length > 0 ? filterMatches(indexed) : [];
+        // A member-assigned function (`obj.m = function`) ranks below declared functions and methods:
+        // it is a candidate only when no declaration has the name (M2-09).
+        if (compatible.some(m => m.assigned) && compatible.some(m => !m.assigned)) compatible = compatible.filter(m => !m.assigned);
         if (compatible.length > 0) {
           // An exact-case declaration first, else a PHP or Pascal one in another case. Of several
           // files, the one nearest the caller, then by path: never the index order, which differs
@@ -3954,8 +3992,8 @@ export class Scanner {
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 
-    const addEntry = (name: string, file: string, scope: string | null, kind?: string) => {
-      const entry = { name, file, scope, kind };
+    const addEntry = (name: string, file: string, scope: string | null, kind?: string, assigned?: boolean) => {
+      const entry: SymbolIndexEntry = assigned ? { name, file, scope, kind, assigned } : { name, file, scope, kind };
       const key = name.toLowerCase();
       const existing = index.get(key);
       if (existing) {
@@ -3980,7 +4018,8 @@ export class Scanner {
       const filePath = sym.file_path as string;
       const symRepo = sym.repo as string;
       if (symRepo === repoName && excludeSet.has(filePath)) continue;
-      addEntry(sym.name as string, filePath, (sym.scope as string) || null, sym.kind as string);
+      addEntry(sym.name as string, filePath, (sym.scope as string) || null, sym.kind as string,
+        typeof sym.metadata === 'string' && sym.metadata.includes('"assigned":true'));
     }
 
     // PHP namespaces: stored ones, replaced by this phase's parse results.
@@ -3996,7 +4035,7 @@ export class Scanner {
         const res = results[i];
         if (!res) continue;
         for (const sym of res.symbols) {
-          addEntry(sym.name, filePath, sym.scope, sym.kind);
+          addEntry(sym.name, filePath, sym.scope, sym.kind, sym.metadata?.['assigned'] === true);
         }
         if (this.languageOf(filePath) === 'php') this.phpNamespaces.set(filePath, res.fileMetadata?.namespace ?? '');
       }

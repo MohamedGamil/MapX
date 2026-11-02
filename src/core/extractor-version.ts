@@ -15,8 +15,9 @@ import type { Store } from './store.js';
  *   namespace of each C# and Scala declaration).
  * - 6: M2-10 (Lua `obj:m()` and `self:m()` method calls; global `function f()` symbols; no locals or
  *   `self.x` fields as constants, M2-11).
+ * - 7: M2-09 (JS/TS member-assigned functions are symbols).
  */
-export const EXTRACTOR_VERSION = 6;
+export const EXTRACTOR_VERSION = 7;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

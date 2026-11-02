@@ -559,7 +559,7 @@ export class GenericWasmParser implements LanguageParser {
               endLine,
               // The namespace of each C# and Scala declaration, for its qualified name (M5-03-R2).
               metadata: kind !== 'namespace' && (this.languageName === 'c-sharp' || this.languageName === 'scala')
-                ? { namespace: declaredNamespace(capture.node) } : {},
+                ? { namespace: declaredNamespace(capture.node) } : this.symbolMetadata(capture.node),
             });
           }
         }
@@ -663,6 +663,11 @@ export class GenericWasmParser implements LanguageParser {
   }
 
 
+
+  /** A symbol's parser metadata, from its kind node (JS/TS member assignments: M2-09). */
+  protected symbolMetadata(_node: any): Record<string, unknown> {
+    return {};
+  }
 
   protected extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {
     const lines = source.split('\n');

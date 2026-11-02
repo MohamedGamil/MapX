@@ -277,6 +277,9 @@ function opensBody(masked: string, i: number): boolean {
   return /\)\s*:\s*[^;{}()=\s][^;{}()=]*$/.test(masked.slice(Math.max(0, i - 256), i));
 }
 
+/** `a.b = function`, `a.b = async (…) =>`, `a.b = x =>`: a member assigned a function (M2-09). */
+const MEMBER_FUNCTION = /(?<![\w$.])((?:[A-Za-z_$][\w$]*\s*\.\s*)+[A-Za-z_$][\w$]*)\s*=(?![=>])\s*(?:async\b\s*)?(?:function\b|\(|[A-Za-z_$][\w$]*\s*=>)/g;
+
 /** CommonJS or `export =` exports, compiled ones included (`__exportStar(require(…), exports)`). */
 export function hasCommonJsExports(js: JsText): boolean {
   return /(?<![\w$])exports(?![\w$])|\bexport\s*=(?!=)/.test(js.masked);
@@ -284,12 +287,14 @@ export function hasCommonJsExports(js: JsText): boolean {
 
 /**
  * What a module's importers resolve through, as a hash: the export skeleton, every function, class,
- * interface, enum and type alias name it declares (nested ones are indexed too), and whether it has
- * CommonJS exports. Equal hashes mean the importers' call edges cannot change (D032).
+ * interface, enum and type alias name it declares (nested ones are indexed too), every member it
+ * assigns a function to at any depth (`Baz.prototype.quux = function`, inside an IIFE too: M2-09),
+ * and whether it has CommonJS exports. Equal hashes mean the importers' call edges cannot change (D032).
  */
 export function jsExportSignature(js: JsText): string {
   const declared = [...js.masked.matchAll(/\b(?:function\s*\*?\s*|class\s+|interface\s+|enum\s+|type\s+(?=[A-Za-z_$][\w$]*\s*[=<]))([A-Za-z_$][\w$]*)/g)]
     .map(m => m[1]!);
+  for (const m of js.masked.matchAll(MEMBER_FUNCTION)) declared.push(m[1]!.replace(/\s+/g, ''));
   const surface = JSON.stringify([exportSkeleton(js), [...new Set(declared)].sort(), hasCommonJsExports(js)]);
   return createHash('sha1').update(surface).digest('hex');
 }
