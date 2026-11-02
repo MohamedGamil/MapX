@@ -1,0 +1,6 @@
+﻿// Synthetic (M5-02-R1): an extended document saved with a UTF-8 BOM.
+{
+  "layers": [
+    { "name": "Core", "selectors": [{ "path": "src/core/**" }] }
+  ]
+}

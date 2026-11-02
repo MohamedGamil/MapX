@@ -20,7 +20,7 @@ export interface ProviderTemplate {
 /**
  * MCP config definitions for agent tools.
  * Each entry generates a project-local JSON config file that auto-registers
- * mapx as an MCP server so the agent can discover all 33 tools on startup.
+ * mapx as an MCP server so the agent can discover all 34 tools on startup.
  *
  * Config files use the sentinel-block pattern (<!-- mapx --> markers are not
  * used — the entire file is owned by mapx and can safely be overwritten).
@@ -282,6 +282,7 @@ When running as an MCP server, MapxGraph exposes these tools:
 - \`mapx_smells\` - Detect design smells and architectural violations
 - \`mapx_dsm\` - Generate cluster Dependency Structure Matrix (DSM)
 - \`mapx_layers\` - List files grouped by architectural roles/layers
+- \`mapx_arch_validate_config\` - Validate the architecture rules configuration (.mapx/architecture.jsonc): every problem with its JSON pointer
 - \`mapx_export\` - Export compact graph summary (formats: llm, json, dot, svg, toon)
 - \`mapx_context\` - Intelligent, token-budgeted workspace context builder
 - \`mapx_workspaces\` - Retrieve workspace configuration and repositories (list/discover)
@@ -347,12 +348,12 @@ To share one long-running server between clients, start it with \`mapx serve --s
 }
 \`\`\`
 
-## MCP Tools Available (33 total)
+## MCP Tools Available (34 total)
 
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
 **Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`, \`mapx_arch_validate_config\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
@@ -379,12 +380,12 @@ alwaysApply: false
 
 Use MapxGraph commands or MCP tools to understand code structure.
 
-## Available MCP Tools (33 total)
+## Available MCP Tools (34 total)
 
 **Graph:** \`mapx_scan\`, \`mapx_sync\`
 **Search:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
 **Deps:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`, \`mapx_arch_validate_config\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\`
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
@@ -403,7 +404,7 @@ Use MapxGraph commands or MCP tools to understand code structure.
     isAppend: true,
     content: `## MapxGraph Integration
 
-This project uses MapxGraph (${LANGUAGE_COUNT} languages, 33 MCP tools). You can run the following CLI commands to understand the codebase:
+This project uses MapxGraph (${LANGUAGE_COUNT} languages, 34 MCP tools). You can run the following CLI commands to understand the codebase:
 - \`mapx export\` - Graph overview (LLM summary, or --format=json/dot/svg/toon)
 - \`mapx query <term>\` - Search symbols (supports glob patterns: \`*Service\`, \`get*\`, and flexible namespace notations: \`BillingService::getEffectiveLimits\` or \`BillingService.getEffectiveLimits\`)
 - \`mapx search <term> --kind class\` - Advanced filtered search (auto-expands if kind has 0 results)
@@ -432,7 +433,7 @@ trigger: model_decided
 ---
 # MapxGraph Rules for Windsurf
 
-This project utilizes MapxGraph to maintain local code indexes across **${LANGUAGE_COUNT} languages** with **33 MCP tools**.
+This project utilizes MapxGraph to maintain local code indexes across **${LANGUAGE_COUNT} languages** with **34 MCP tools**.
 
 Use the MapxGraph MCP tools or CLI commands to navigate:
 - \`mapx_export\` / \`mapx export\` on startup.
@@ -454,7 +455,7 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
     isAppend: true,
     content: `## MapxGraph Rules for Cline
 
-This project is indexed by MapxGraph (${LANGUAGE_COUNT} languages, 33 MCP tools).
+This project is indexed by MapxGraph (${LANGUAGE_COUNT} languages, 34 MCP tools).
 Auto-start the MCP server with the configured directory \`{{PROJECT_DIR}}\`.
 Available tools:
 - \`mapx_export\` - Call this first to get the summary.
@@ -504,7 +505,7 @@ To load it by hand instead, run \`aider --read AIDER.md\` (or \`/read-only AIDER
     isAppend: false,
     content: `# MapxGraph Gemini Integration
 
-Utilize MapxGraph to obtain codebase context for Gemini across **${LANGUAGE_COUNT} languages** with **33 MCP tools**.
+Utilize MapxGraph to obtain codebase context for Gemini across **${LANGUAGE_COUNT} languages** with **34 MCP tools**.
 
 ## CLI Commands
 
@@ -533,7 +534,7 @@ Utilize MapxGraph to obtain codebase context for Gemini across **${LANGUAGE_COUN
     isAppend: false,
     companions: ['continue-impact', 'continue-callers', 'continue-context', 'continue-sync'],
     legacyFiles: ['.continue/mapx.yaml'],
-    content: `# MapxGraph MCP server for Continue (${LANGUAGE_COUNT} languages, 33 MCP tools)
+    content: `# MapxGraph MCP server for Continue (${LANGUAGE_COUNT} languages, 34 MCP tools)
 name: MapxGraph
 version: '{{MAPX_VERSION}}'
 schema: v1
@@ -567,7 +568,7 @@ mcpServers:
     mcpConfigs: ['zed'],
     content: `# Zed Assistant MapxGraph Instructions
 
-This project uses MapxGraph (${LANGUAGE_COUNT} languages, 33 MCP tools).
+This project uses MapxGraph (${LANGUAGE_COUNT} languages, 34 MCP tools).
 \`mapx agents generate --providers zed\` also registers the mapx MCP server under \`context_servers\` in \`.zed/settings.json\`, keeping your other settings.
 
 ## Key Commands
@@ -591,7 +592,7 @@ This project uses MapxGraph (${LANGUAGE_COUNT} languages, 33 MCP tools).
 ## Context
 
 Triggered when a new task is received, before any planning, reasoning, or execution steps begin.
-This project is indexed by **MapxGraph** — a local code graph memory system (${LANGUAGE_COUNT} languages, 33 MCP tools) that provides persistent, structured understanding of the codebase.
+This project is indexed by **MapxGraph** — a local code graph memory system (${LANGUAGE_COUNT} languages, 34 MCP tools) that provides persistent, structured understanding of the codebase.
 
 ## Requirements
 
@@ -626,7 +627,7 @@ After completing file writes:
 **Graph Building:** \`mapx_scan\`, \`mapx_sync\`
 **Symbol Discovery:** \`mapx_query\`, \`mapx_search\`, \`mapx_node\`, \`mapx_files\`
 **Dependencies & Flow:** \`mapx_dependencies\`, \`mapx_callers\`, \`mapx_callees\`, \`mapx_trace\`, \`mapx_sources\`, \`mapx_sinks\`, \`mapx_routes\`, \`mapx_hooks\`, \`mapx_edges\`
-**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`
+**Analysis:** \`mapx_impact\`, \`mapx_clusters\`, \`mapx_status\`, \`mapx_metrics\`, \`mapx_profile\`, \`mapx_explain\`, \`mapx_smells\`, \`mapx_dsm\`, \`mapx_layers\`, \`mapx_arch_validate_config\`
 **Export:** \`mapx_export\` (llm/json/dot/svg/toon), \`mapx_context\`
 **Workspaces:** \`mapx_workspaces\` (list/discover)
 **Languages:** \`mapx_lang_list\`, \`mapx_lang_info\` (all grammars bundled; \`mapx_lang_install\`/\`mapx_lang_uninstall\` are no-ops)
@@ -644,7 +645,7 @@ After completing file writes:
     isAppend: false,
     content: `# MapX MCP Server - Agent Instructions Guide
 
-MapX exposes **33** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
+MapX exposes **34** Model Context Protocol (MCP) tools that allow AI agents to navigate, analyze, and build context from a multi-language codebase.
 
 ---
 
@@ -767,6 +768,7 @@ List supported languages and show a language's extensions, file names and gramma
 - \`mapx_smells\`: Run architectural and design smell detection audit.
 - \`mapx_dsm\`: Generate the cluster Dependency Structure Matrix (DSM) matrix.
 - \`mapx_layers\`: List project files grouped by their dynamically classified architectural roles.
+- \`mapx_arch_validate_config\`: Validate \`.mapx/architecture.jsonc\` (or a \`view\`) as \`mapx arch validate-config\` does; every problem with its file and JSON pointer.
 
 ---
 

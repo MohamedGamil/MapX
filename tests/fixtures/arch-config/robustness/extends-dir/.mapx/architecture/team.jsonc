@@ -1,0 +1,4 @@
+// Synthetic (M5-02-R1): a view, so .mapx/architecture/ exists as a directory.
+{
+  "extends": "../architecture.jsonc"
+}

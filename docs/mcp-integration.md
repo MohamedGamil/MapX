@@ -296,7 +296,7 @@ When active, the MCP server prints all incoming JSON-RPC calls and their outcome
 
 This is highly useful when debugging integrations with clients like Claude Desktop, Cursor, or custom LLM frameworks.
 
-## Available Tools (33 total)
+## Available Tools (34 total)
 
 ### Graph Building
 
@@ -452,6 +452,12 @@ Generate the cluster-level Dependency Structure Matrix (DSM).
 
 #### `mapx_layers`
 List files grouped by active dynamic architectural roles.
+- `dir` (string, optional): Target project directory
+
+#### `mapx_arch_validate_config`
+Validate the [architecture rules](architecture-rules.md) configuration, `.mapx/architecture.jsonc` or a view, with every document it extends, as `mapx arch validate-config` does. It needs no index. The result is JSON: `{ valid, view, files, issues: [{ file, pointer, message }] }`, every problem at once in document order. An invalid or missing configuration is a tool error (`isError`), as the CLI exits 3.
+- `view` (string, optional): Validate `.mapx/architecture/<view>.jsonc`
+- `format` (string, optional): `json` (default) or `text`, one `file#pointer: message` line per problem, as the CLI prints
 - `dir` (string, optional): Target project directory
 
 ### Export & LLM Prompts

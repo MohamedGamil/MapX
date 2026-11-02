@@ -1,0 +1,4 @@
+// Synthetic (M5-02-R1): a valid main document; the test asks for the view "../../outside".
+{
+  "layers": [{ "name": "App", "selectors": [{ "path": "src/**" }] }]
+}

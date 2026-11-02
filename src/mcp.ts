@@ -38,6 +38,7 @@ import { WorkspaceManager } from './core/workspace-manager.js';
 import { applyCollapsedRepos, codeWorkspaceFiles, crossRepoDependencies, crossRepoPairs, repoState, summarizeRepos, workspaceExport } from './core/workspace-summary.js';
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
+import { formatValidation, validateArchitectureConfig } from './arch/config.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -333,6 +334,19 @@ EXAMPLES:
           type: 'object',
           properties: {
             repo: { type: 'string', description: 'Filter by repo name (for multi-repo workspaces)' },
+            ...dirProperty,
+          },
+        },
+      },
+      {
+        name: 'mapx_arch_validate_config',
+        description: `Validate the architecture rules configuration (.mapx/architecture.jsonc, or a view .mapx/architecture/<view>.jsonc) with its extends chain, as \`mapx arch validate-config\` does. Needs no index.
+Returns JSON { valid, view, files, issues: [{ file, pointer, message }] }: every problem at once, each with its document and JSON pointer, in document order. An invalid or missing configuration is a tool error.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            view: { type: 'string', description: 'A view name: validates .mapx/architecture/<view>.jsonc' },
+            format: { type: 'string', enum: ['json', 'text'], description: 'json (default) or text: one "file#pointer: message" line per problem, as the CLI prints' },
             ...dirProperty,
           },
         },
@@ -2481,6 +2495,17 @@ Callees: ${callees.length}`;
         return { content: [{ type: 'text', text: lines.join('\n') }] };
       }
 
+      // As `mapx arch validate-config` (M5-02-R1): problems are a tool error, like the CLI's exit 3.
+      case 'mapx_arch_validate_config': {
+        const resolved = resolveOrFail(args || {});
+        if ('error' in resolved) return { content: [{ type: 'text', text: resolved.error }], isError: true };
+        const { view, format = 'json' } = (args ?? {}) as { view?: string; format?: string };
+        if (format !== 'json' && format !== 'text') return { content: [{ type: 'text', text: `Error: format must be json or text, not "${format}"` }], isError: true };
+        const { report, config } = validateArchitectureConfig(resolved.dir, { view });
+        const text = format === 'json' ? JSON.stringify(report, null, 2) : formatValidation(report, config ?? undefined);
+        return report.valid ? { content: [{ type: 'text', text }] } : { content: [{ type: 'text', text }], isError: true };
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
     }
@@ -2611,7 +2636,7 @@ function generateConfigs(dir: string, transport: 'stdio' | 'sse', port?: number)
     '  Available tools: mapx_scan, mapx_sync, mapx_query, mapx_dependencies, mapx_export, mapx_status, mapx_metrics, mapx_edges,',
     '                    mapx_clusters, mapx_trace, mapx_sources, mapx_sinks, mapx_search, mapx_context, mapx_callers, mapx_callees,',
     '                    mapx_impact, mapx_node, mapx_files, mapx_routes, mapx_hooks, mapx_workspaces, mapx_agents_generate,',
-    '                    mapx_lang_list, mapx_lang_info, mapx_lang_install, mapx_lang_uninstall',
+    '                    mapx_lang_list, mapx_lang_info, mapx_lang_install, mapx_lang_uninstall, mapx_arch_validate_config',
     '',
   );
 

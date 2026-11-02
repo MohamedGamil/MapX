@@ -2,7 +2,7 @@
 
 ## Overview
 
-MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **23 languages** across two tiers (built-in, bundled) and provides **33 MCP tools** for LLM integration.
+MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **23 languages** across two tiers (built-in, bundled) and provides **34 MCP tools** for LLM integration.
 
 
 <!-- ![Architecture Diagram](./images/01-arch.png) -->
@@ -180,10 +180,10 @@ Manages multi-repository workspaces:
   - `delimiter: 'comma' | 'tab' | 'pipe'`
   - `keyFolding: boolean` — collapse single-key chains into dotted paths
 
-Model Context Protocol server with 33 tools:
+Model Context Protocol server with 34 tools:
 
 - **Transports**: stdio (default) and SSE (HTTP)
-- **Tools**: scan, sync, query, search, node, files, dependencies, callers, callees, trace, sources, sinks, impact, clusters, status, export, context, workspaces, lang_list, lang_info, lang_install, lang_uninstall, profile, explain, smells, dsm, layers, routes, hooks, edges, metrics, agents_generate, batch
+- **Tools**: scan, sync, query, search, node, files, dependencies, callers, callees, trace, sources, sinks, impact, clusters, status, export, context, workspaces, lang_list, lang_info, lang_install, lang_uninstall, profile, explain, smells, dsm, layers, routes, hooks, edges, metrics, agents_generate, batch, arch_validate_config
 - Configuration snippet generation for Claude Desktop, Cursor, VS Code, and opencode
 
 ### CLI Progress Display (`src/cli.ts`)

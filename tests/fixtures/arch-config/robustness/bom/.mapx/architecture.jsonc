@@ -1,0 +1,8 @@
+﻿// Synthetic (M5-02-R1): saved with a UTF-8 BOM, and extends a base saved with one too.
+{
+  "extends": "./base.jsonc",
+  "layers": [
+    { "name": "Api", "selectors": [{ "path": "src/api/**" }] }
+  ],
+  "rules": { "Api": ["Core"] }
+}

@@ -8,12 +8,13 @@ What exists so far:
 - **The element view, the core selectors and layer membership** (M5-03).
 - **Rule evaluation and the report** (M5-04): policy expansion, the evaluation chain, findings with fingerprints, and the layer matrix.
 - **`mapx check`** (M5-05): the table and JSON reporters, and the exit contract. See [cli-reference.md](cli-reference.md#mapx-check).
+- **`mapx arch validate-config`** and the MCP tool `mapx_arch_validate_config` (M5-02-R1): validate the configuration alone, without an index.
 
 Baselines, CI reporters, introspection commands and `@internal` markers come in M5-06 to M5-11.
 
 ## The configuration document
 
-Put the configuration in `.mapx/architecture.jsonc`. Views go in `.mapx/architecture/<view>.jsonc`. The format is JSON with comments and trailing commas. Point `$schema` at `schemas/architecture.schema.json`, which the npm package ships, for editor completion:
+Put the configuration in `.mapx/architecture.jsonc`. Views go in `.mapx/architecture/<view>.jsonc`, and a view name cannot lead outside that folder. The format is JSON with comments and trailing commas; a UTF-8 byte order mark is ignored. Point `$schema` at `schemas/architecture.schema.json`, which the npm package ships, for editor completion:
 
 ```jsonc
 {
@@ -39,7 +40,13 @@ Put the configuration in `.mapx/architecture.jsonc`. Views go in `.mapx/architec
 - rule lists are merged per source layer;
 - other settings are overridden key by key.
 
-**`%name%`** is replaced in `name`, `path` and `package` values from the merged `parameters`.
+**`%name%`** is replaced from the merged `parameters` in every string value of a selector: `path`, `name`, `package`, `repo`, `cluster`, `workspacePackage`, `role`, `language`, `framework` and the rest.
+
+- **`name`, `path` and `package`:** a `%name%` without a value is an error.
+- **Other keys:** only a declared parameter is replaced. Any other `%…%` stays as written, so a `docTag` value such as `"%s%s"` or a `member` regex such as `"/^%d%x$/"` means what it says.
+- **`%%`** is a literal `%` in every key (`"^100%%"` is `^100%`).
+- **A parameter value can name other parameters:** `"root": "%base%/app"`. Such a reference without a value is an error, and so is a cycle (`%a% → %b% → %a%`).
+- **A `framework` part given as a parameter** is checked after it is replaced.
 
 **Validation reports every problem at once.** Each problem names its file and a JSON pointer, in document order. Validation catches:
 
@@ -48,7 +55,10 @@ Put the configuration in `.mapx/architecture.jsonc`. Views go in `.mapx/architec
 - an unknown layer in rules, `layer` selectors or report groups. It suggests the closest name: `did you mean "Http"?`;
 - an overlay layer used as a rule source;
 - `+` cycles, named: `"+" allowances form a cycle: Service → Repo → Service`;
-- circular `extends`, a missing extended file, an unknown preset, a parameter without a value, and a regular expression that does not compile.
+- circular `extends`, a missing extended file, an `extends` naming a directory or a path that cannot be read (a symlink loop, no permission), an unknown preset, a parameter without a value or in a cycle, and a regular expression that does not compile;
+- an empty view name, or a view outside `.mapx/architecture/` (by `..` or through a symlink).
+
+`mapx arch validate-config` prints these problems and exits 3 when there are any; see [cli-reference.md](cli-reference.md#mapx-arch-validate-config). `mapx check` reports them the same way, also with exit 3.
 
 ## Elements and qualified names
 

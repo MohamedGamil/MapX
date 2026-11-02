@@ -807,6 +807,27 @@ mapx arch --smells                  # Show only code smells
 mapx arch --violations --json       # Show violations as JSON
 ```
 
+### `mapx arch validate-config`
+
+Validates the architecture rules configuration, `.mapx/architecture.jsonc` or a view, with every document it `extends`. It reads no index, so it works before `mapx init`. Every problem is printed at once, in document order, as `file#pointer: message`, where the pointer is a JSON pointer into that document. See [architecture-rules.md](architecture-rules.md#the-configuration-document) for what is checked.
+
+```bash
+mapx arch validate-config [path] [--dir /path] [--view <name>] [--format text|json]
+```
+
+Options:
+- `--view <name>`: validate `.mapx/architecture/<name>.jsonc`. An empty name is an error, and so is a name or a symlink that leads outside `.mapx/architecture/` (`../x`).
+- `--format json`: `{ valid, view, files, issues: [{ file, pointer, message }] }`, where `files` lists the documents read, extended ones first.
+
+It exits 0 when the configuration is valid, and 3 when it has problems, does not exist, or for a usage error. The MCP tool `mapx_arch_validate_config` does the same.
+
+```bash
+$ mapx arch validate-config
+.mapx/architecture.jsonc#/layers/0/selectors/0/paht: unknown selector key "paht"; expected one of path, name, …
+.mapx/architecture.jsonc#/rules/Http/0: unknown layer "Servce"
+2 problems in .mapx/architecture.jsonc.
+```
+
 ## `mapx check`
 
 Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, and private parts. See [architecture-rules.md](architecture-rules.md) for the configuration. It is meant for CI, so it never prints the logo and its exit code says what it found.

@@ -2,7 +2,7 @@
 // view `.mapx/architecture/<view>.jsonc`, with `extends` (files and `mapx:preset/<id>`), `%parameter%`
 // substitution and validation. Every problem is reported at once, each with the file and a JSON
 // pointer, in document order; a configuration with any problem throws a ConfigError.
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { stripJsonc } from '../core/js-aliases.js';
 import {
@@ -43,6 +43,44 @@ export function architectureConfigPath(dir: string, view?: string | null): strin
   return view ? join(dir, '.mapx', 'architecture', `${view}.jsonc`) : join(dir, '.mapx', 'architecture.jsonc');
 }
 
+/** Is `path` inside `base`? `..legacy` is a name inside; only a `..` segment leaves. */
+function isInside(base: string, path: string): boolean {
+  const rel = relative(base, path);
+  return !isAbsolute(rel) && rel.split(/[\\/]/)[0] !== '..';
+}
+
+/**
+ * Why `view` cannot name a view: it is empty, or its file lies outside `.mapx/architecture/`,
+ * by name (`../../x`) or through a symlink. A path that cannot be resolved is left to the loader.
+ */
+function viewProblem(dir: string, view: string): ConfigIssue | null {
+  const where = { file: '.mapx/architecture', pointer: '' };
+  if (!view.trim()) return { ...where, message: 'empty view name: a view is a file name in .mapx/architecture/, such as "contexts" for .mapx/architecture/contexts.jsonc' };
+  const views = join(dir, '.mapx', 'architecture');
+  const file = architectureConfigPath(dir, view);
+  let inside = isInside(views, file);
+  if (inside) {
+    try {
+      inside = isInside(realpathSync(views), realpathSync(file));
+    } catch { /* missing or unreadable: reported when it is loaded */ }
+  }
+  return inside ? null : { ...where, message: `view ${quote(view)} is outside .mapx/architecture/: a view is a file name there, such as "contexts" for .mapx/architecture/contexts.jsonc` };
+}
+
+/** A filesystem error in words, with its code (M5-02-R1: every one is a configuration problem). */
+function fsReason(err: unknown): string {
+  const code = (err as NodeJS.ErrnoException)?.code;
+  const words: Record<string, string> = {
+    EISDIR: 'it is a directory, not a file',
+    EACCES: 'permission denied',
+    EPERM: 'permission denied',
+    ELOOP: 'too many symbolic links (a symlink loop)',
+    ENOTDIR: 'a part of the path is not a directory',
+  };
+  if (code && words[code]) return `${words[code]} (${code})`;
+  return err instanceof Error ? err.message : String(err);
+}
+
 const escapePointer = (token: string | number) => String(token).replace(/~/g, '~0').replace(/\//g, '~1');
 const at = (pointer: string, ...tokens: Array<string | number>) => pointer + tokens.map((t) => '/' + escapePointer(t)).join('');
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -52,7 +90,8 @@ const quote = (s: string) => JSON.stringify(s);
 
 /** Parses JSONC text (the dialect `workspaces` and tsconfig use); a syntax error is one issue with its line and column. */
 export function parseArchitectureText(text: string, file: string): { doc: unknown; issues: ConfigIssue[] } {
-  const stripped = stripJsonc(text);
+  // A UTF-8 BOM (some Windows editors write one) is not JSON whitespace (M5-02-R1).
+  const stripped = stripJsonc(text.replace(/^\uFEFF/, ''));
   try {
     return { doc: JSON.parse(stripped), issues: [] };
   } catch (err) {
@@ -217,7 +256,8 @@ function validateSelector(sel: unknown, p: string, issue: IssueFn) {
     } else if (key === 'builtin' || key === 'ambient') {
       if (value !== true && (typeof value !== 'string' || !value)) issue(kp, 'expected true or a name pattern');
     } else if (key === 'framework') {
-      if (!FRAMEWORK_PARTS.includes(value as never)) issue(kp, `unknown framework part ${quote(String(value))}; expected one of ${FRAMEWORK_PARTS.join(', ')}`);
+      // `%param%` is checked after substitution, when the parameters of the whole chain are known.
+      if (!(typeof value === 'string' && PARAMETER_REF.test(value)) && !FRAMEWORK_PARTS.includes(value as never)) issue(kp, unknownFramework(value));
     } else if (key === 'all' || key === 'any') {
       if (!Array.isArray(value) || value.length === 0) issue(kp, 'expected a non-empty list of selectors');
       else value.forEach((s, i) => validateSelector(s, at(kp, i), issue));
@@ -226,6 +266,8 @@ function validateSelector(sel: unknown, p: string, issue: IssueFn) {
     }
   }
 }
+
+const unknownFramework = (value: unknown) => `unknown framework part ${quote(String(value))}; expected one of ${FRAMEWORK_PARTS.join(', ')}`;
 
 const ALLOWANCE_STRING = /^([+!])?(.+)$/;
 
@@ -290,7 +332,14 @@ class Loader {
       if (preset === undefined) return; // reported by the extending document
       text = preset;
     } else {
-      text = readFileSync(file, 'utf8');
+      // A directory or an unreadable file is a problem to report, not an EISDIR crash (M5-02-R1).
+      try {
+        text = readFileSync(file, 'utf8');
+      } catch (err) {
+        this.issues.push({ file: shown, pointer: '', message: `cannot be read: ${fsReason(err)}` });
+        this.done.add(file);
+        return;
+      }
     }
     let doc: unknown;
     if (typeof text === 'string') {
@@ -322,8 +371,20 @@ class Loader {
           return;
         } else {
           target = resolve(dirname(file), entry);
-          if (!existsSync(target)) {
+          // ELOOP, EACCES and ENOTDIR throw even with throwIfNoEntry: each is a problem at this entry.
+          let stat;
+          try {
+            stat = statSync(target, { throwIfNoEntry: false });
+          } catch (err) {
+            this.issues.push({ file: shown, pointer, message: `extended path ${quote(entry)} cannot be read: ${fsReason(err)} (${this.display(target)})` });
+            return;
+          }
+          if (!stat) {
             this.issues.push({ file: shown, pointer, message: `extended file ${quote(entry)} not found (${this.display(target)})` });
+            return;
+          }
+          if (stat.isDirectory()) {
+            this.issues.push({ file: shown, pointer, message: `extended path ${quote(entry)} is a directory, not a file (${this.display(target)})` });
             return;
           }
         }
@@ -352,15 +413,56 @@ interface MergedAllowance { allowance: Allowance; origin: Origin }
  * `.mapx/architecture.jsonc`, or no such view); throws ConfigError listing every problem.
  */
 export function loadArchitectureConfig(dir: string, options: LoadOptions = {}): ArchitectureConfig | null {
+  const { config, issues } = loadWithIssues(dir, options);
+  if (issues.length) throw new ConfigError(issues);
+  return config;
+}
+
+function loadWithIssues(dir: string, options: LoadOptions): { config: ArchitectureConfig | null; files: string[]; issues: ConfigIssue[] } {
   const workspace = resolve(dir);
+  const outside = options.view !== undefined ? viewProblem(workspace, options.view) : null;
+  if (outside) return { config: null, files: [], issues: [outside] };
   const path = architectureConfigPath(workspace, options.view);
-  if (!existsSync(path)) return null;
   const loader = new Loader(workspace, options.presets ?? PRESETS);
+  // Only "no such file" means no configuration; any other error is a problem with it.
+  try {
+    if (!statSync(path, { throwIfNoEntry: false })) return { config: null, files: [], issues: [] };
+  } catch (err) {
+    return { config: null, files: [], issues: [{ file: loader.display(path), pointer: '', message: `cannot be read: ${fsReason(err)}` }] };
+  }
   loader.load(path, []);
   const { config, issues } = mergeAndValidate(loader.docs, options.view ?? null);
-  const all = sortIssues([...loader.issues, ...issues], loader.docs);
-  if (all.length) throw new ConfigError(all);
-  return config;
+  return { config, files: loader.docs.map((d) => d.file), issues: sortIssues([...loader.issues, ...issues], loader.docs) };
+}
+
+/** What `mapx arch validate-config` and `mapx_arch_validate_config` report (M5-02-R1). */
+export interface ValidationReport {
+  valid: boolean;
+  view: string | null;
+  /** The documents read, in load order (extended documents first). */
+  files: string[];
+  /** Every problem, in document order; a missing configuration is one `not found` issue. */
+  issues: ConfigIssue[];
+}
+
+/** Validates the configuration of the workspace at `dir` (or a view); needs no index. */
+export function validateArchitectureConfig(dir: string, options: LoadOptions = {}): { report: ValidationReport; config: ArchitectureConfig | null } {
+  const view = options.view ?? null;
+  const { config, files, issues } = loadWithIssues(dir, options);
+  if (!config && !issues.length) {
+    const file = view ? `.mapx/architecture/${view}.jsonc` : '.mapx/architecture.jsonc';
+    issues.push({ file, pointer: '', message: view ? `not found: no view ${quote(view)}` : 'not found: create it (see docs/architecture-rules.md)' });
+  }
+  return { report: { valid: issues.length === 0, view, files, issues }, config: issues.length ? null : config };
+}
+
+/** The text form: one `file#pointer: message` line per problem and a count, or a one-line verdict. */
+export function formatValidation(report: ValidationReport, config?: Pick<ArchitectureConfig, 'layers'>): string {
+  if (report.valid) return `Valid: ${report.files.join(', ')}${config ? ` (${config.layers.length} layer${config.layers.length === 1 ? '' : 's'})` : ''}.`;
+  const lines = report.issues.map((i) => `${i.file}${i.pointer ? `#${i.pointer}` : ''}: ${i.message}`);
+  const files = [...new Set(report.issues.map((i) => i.file))];
+  lines.push(`${report.issues.length} problem${report.issues.length === 1 ? '' : 's'} in ${files.join(', ')}.`);
+  return lines.join('\n');
 }
 
 /** Validates one document as a whole configuration (no `extends` resolution): the issues, or none. */
@@ -398,7 +500,8 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
   const issues: ConfigIssue[] = [];
   const issue = (origin: Origin, message: string) => issues.push({ file: origin.file, pointer: origin.pointer, message });
 
-  const parameters: Record<string, string> = {};
+  const declared: Record<string, string> = {};
+  const parameterOrigins: Record<string, Origin> = {};
   const scope: ArchitectureConfig['scope'] = { types: [...DEFAULT_SCOPE_TYPES], include: [], exclude: [] };
   const policy: ArchitectureConfig['policy'] = { ...DEFAULTS.policy, uncovered: { ...DEFAULTS.policy.uncovered } };
   const visibility: ArchitectureConfig['visibility'] = { ...DEFAULTS.visibility, internalTags: [...DEFAULTS.visibility.internalTags] };
@@ -408,7 +511,13 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
   const rules = new Map<string, { origin: Origin; list: MergedAllowance[] }>();
 
   for (const { file, doc } of docs) {
-    if (isObject(doc.parameters)) for (const [k, v] of Object.entries(doc.parameters)) if (typeof v === 'string') parameters[k] = v;
+    if (isObject(doc.parameters)) {
+      for (const [k, v] of Object.entries(doc.parameters)) {
+        if (typeof v !== 'string') continue;
+        declared[k] = v;
+        parameterOrigins[k] = { file, pointer: at('/parameters', k) };
+      }
+    }
     if (isObject(doc.scope)) {
       if (Array.isArray(doc.scope.types)) scope.types = doc.scope.types.filter((t) => EDGE_TYPES.includes(t));
       if (Array.isArray(doc.scope.include)) scope.include = doc.scope.include.filter((s) => typeof s === 'string');
@@ -470,15 +579,21 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
   const names = new Set(layers.map((l) => l.layer.name));
   const overlays = new Set(layers.filter((l) => l.layer.overlay === true).map((l) => l.layer.name));
 
+  const parameters = resolveParameters(declared, parameterOrigins, issue);
+
   // Layers: parameters, regexes, `layer` selectors.
   const layerRefs = new Map<string, Array<{ to: string; origin: Origin }>>();
   for (const { layer, origin } of layers) {
     const visit = (sel: unknown, pointer: string) => {
       if (!isObject(sel)) return;
-      for (const key of ['name', 'path', 'package'] as const) {
-        if (typeof sel[key] !== 'string') continue;
-        const { value, missing } = substitute(sel[key] as string, parameters);
-        for (const m of missing) issue({ file: origin.file, pointer: at(pointer, key) }, `parameter %${m}% has no value; declare it in "parameters"`);
+      // Every string value (M5-02-R1). In name, path and package an undefined parameter is an error,
+      // as before; in the other keys it stays literal text, so `"value": "%s%s"` keeps loading.
+      for (const [key, raw] of Object.entries(sel)) {
+        if (typeof raw !== 'string') continue;
+        const { value, missing } = substitute(raw, parameters);
+        if (STRICT_PARAMETER_KEYS.has(key)) for (const m of missing) issue({ file: origin.file, pointer: at(pointer, key) }, `parameter %${m}% has no value; declare it in "parameters"`);
+        // A framework part given by a parameter is checked once substituted (validateSelector skips it).
+        if (key === 'framework' && PARAMETER_REF.test(raw) && !FRAMEWORK_PARTS.includes(value as never)) issue({ file: origin.file, pointer: at(pointer, key) }, unknownFramework(value));
         sel[key] = value;
       }
       for (const key of ['name', 'member', 'value'] as const) {
@@ -574,15 +689,57 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
   return { config, issues };
 }
 
-/** `%name%` replaced from `parameters`; `missing` lists names without a value. */
+/** `%%` (a literal `%`) or a `%name%` reference. */
+const PARAMETER = /%%|%([A-Za-z_][\w.-]*)%/g;
+const PARAMETER_REF = /%[A-Za-z_][\w.-]*%/;
+/** Selector keys in which an undefined parameter is an error (M5-02); elsewhere it is literal text. */
+const STRICT_PARAMETER_KEYS = new Set(['name', 'path', 'package']);
+
+/** `%name%` replaced from `parameters` and `%%` by `%`; `missing` lists names without a value (kept as written). */
 function substitute(value: string, parameters: Record<string, string>): { value: string; missing: string[] } {
   const missing: string[] = [];
-  const out = value.replace(/%([A-Za-z_][\w.-]*)%/g, (whole, name: string) => {
+  const out = value.replace(PARAMETER, (whole, name: string | undefined) => {
+    if (name === undefined) return '%';
     if (name in parameters) return parameters[name]!;
     missing.push(name);
     return whole;
   });
   return { value: out, missing };
+}
+
+/**
+ * Parameter values with the parameters they name resolved (`"root": "%base%/app"`). An undefined
+ * reference, or a cycle (named once: `%a% → %b% → %a%`), is an error at the parameter.
+ */
+function resolveParameters(declared: Record<string, string>, origins: Record<string, Origin>, issue: (origin: Origin, message: string) => void): Record<string, string> {
+  const resolved: Record<string, string> = {};
+  const stack: string[] = [];
+  const cycles = new Set<string>();
+  const resolveOne = (name: string): string => {
+    if (name in resolved) return resolved[name]!;
+    stack.push(name);
+    const value = declared[name]!.replace(PARAMETER, (whole, ref: string | undefined) => {
+      if (ref === undefined) return '%';
+      if (!(ref in declared)) {
+        issue(origins[name]!, `parameter %${ref}% has no value; declare it in "parameters"`);
+        return whole;
+      }
+      const at = stack.indexOf(ref);
+      if (at < 0) return resolveOne(ref);
+      const chain = [...stack.slice(at), ref];
+      const key = [...new Set(chain)].sort().join('\u0000');
+      if (!cycles.has(key)) {
+        cycles.add(key);
+        issue(origins[chain[0]!]!, `parameters form a cycle: ${chain.map((n) => `%${n}%`).join(' → ')}`);
+      }
+      return whole;
+    });
+    stack.pop();
+    resolved[name] = value;
+    return value;
+  };
+  for (const name of Object.keys(declared)) resolveOne(name);
+  return resolved;
 }
 
 /** Why a selector regex does not compile (`/body/flags` or a bare body), or null. */

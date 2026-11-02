@@ -33,7 +33,7 @@ import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
-import { ConfigError, loadArchitectureConfig } from './arch/config.js';
+import { ConfigError, formatValidation, loadArchitectureConfig, validateArchitectureConfig } from './arch/config.js';
 import type { ArchitectureConfig } from './arch/schema.js';
 import { configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
@@ -2455,7 +2455,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       console.log('');
     });
 
-  program
+  const archCmd = program
     .command('arch')
     .description('Show full architecture report: profile, layers, smells, and DSM')
     .argument('[path]', 'Target directory')
@@ -2542,6 +2542,30 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         }
         console.log('');
       }
+    });
+
+  // Validates .mapx/architecture.jsonc (or a view) without an index (M5-02-R1; AR-17: exit 3 on
+  // configuration errors). `mapx arch [path]` keeps working: only this name is a subcommand.
+  archCmd
+    .command('validate-config')
+    .description('Validate .mapx/architecture.jsonc (or a view): every problem with its file and JSON pointer; exit 0 valid, 3 invalid or missing')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--view <name>', 'Validate the view .mapx/architecture/<name>.jsonc')
+    .option('--format <format>', 'Output format: text or json', 'text')
+    .exitOverride((err) => { process.exit(err.exitCode === 0 ? 0 : EXIT.config); })
+    .action((pathArg: string | undefined, opts: Record<string, unknown>) => {
+      // `arch` has its own --dir, which takes the option when it precedes any unknown one.
+      const dir = pathArg ? resolve(pathArg) : resolveDir({ dir: opts.dir ?? archCmd.opts().dir }, program.opts());
+      const format = String(opts.format);
+      if (!['text', 'json'].includes(format)) {
+        console.error(`Error: --format must be text or json, not "${format}"`);
+        process.exitCode = EXIT.config;
+        return;
+      }
+      const { report, config } = validateArchitectureConfig(dir, { view: opts.view as string | undefined });
+      console.log(format === 'json' ? JSON.stringify(report, null, 2) : formatValidation(report, config ?? undefined));
+      process.exitCode = report.valid ? EXIT.ok : EXIT.config;
     });
 
   // Architecture rules (M5-05; docs/architecture-rules.md, AR-16, AR-17): evaluate
