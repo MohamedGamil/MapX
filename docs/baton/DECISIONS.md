@@ -299,3 +299,16 @@ The release holds everything since v0.3.7:
 - cross-repo HTTP edges (M2-06-R3) and the analysis fixes (M0-32-R3).
 
 The changelog's Unreleased entries moved to `[0.3.8] — 2026-11-02`. The tag is local; nothing is published or pushed. M5 follows.
+
+**Installed (2026-11-02):**
+- `make package-linux` built `dist/release/mapx-0.3.8-linux-x64.tar.gz` and the installer; `checksums-sha256.txt` verifies them, and the packaging smoke scan ran on worker threads.
+- **Why not the installer:** its copy of the binary failed with "Text file busy", because three `mapx serve` MCP servers (the user's editors) were running the old one.
+- **What was done instead:**
+  - the binary was installed by rename (`~/.local/bin/mapx.new` → `mapx`); the running servers keep v0.3.7 until restarted;
+  - the data folders were copied as the installer does;
+  - `~/.local/share/mapx/ui` was cleared first: the installer merges into it, and the bundle is now split into hashed chunks.
+- **Verified** outside the repository with a PATH without Node:
+  - `mapx --version` 0.3.8;
+  - a 400-file scan on 4 worker threads;
+  - `mapx ui` serves the page, `main.js`, `layout-worker.js`, a lazy chunk, the logo, `/api/repos`, `/api/config` and `/api/http`, and `/api/graph` compressed (brotli 11 KB against 212 KB);
+  - `mapx serve` answers MCP `initialize` with version 0.3.8.
