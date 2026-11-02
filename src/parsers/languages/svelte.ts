@@ -155,6 +155,9 @@ const DOM_EVENTS = new Set(['click', 'dblclick', 'contextmenu', 'input', 'change
   'drag', 'dragstart', 'dragend', 'dragenter', 'dragleave', 'dragover', 'drop', 'scroll', 'resize', 'load', 'error', 'select', 'copy', 'cut',
   'paste', 'animationstart', 'animationend', 'transitionend', 'play', 'pause', 'ended', 'timeupdate', 'close', 'toggle', 'beforeinput']);
 
+/** HTML elements with no closing tag, so no scope. */
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+
 /** The index of the quote closing the string opened at `i`, past escaped quotes (review 2026-11-01). */
 function stringEnd(text: string, i: number): number {
   for (let j = i + 1; j < text.length; j++) {
@@ -176,9 +179,46 @@ function templateCalls(code: string): { name: string; index: number }[] {
   return calls;
 }
 
-/** Identifiers a pattern binds (`item`, `{ id, name }`, `[a, b]`, `item, i`). */
+/**
+ * The index of the first unmatched `)`, `]` or `}` from `i` (with `comma`, or of a `,` outside any
+ * nesting), skipping strings and nested brackets; with `angles`, `<…>` nests too (a TS type).
+ */
+function scanTo(text: string, i: number, comma: boolean, angles = false): number {
+  let depth = 0;
+  for (; i < text.length; i++) {
+    const c = text[i]!;
+    if (c === '"' || c === "'" || c === '`') {
+      const k = stringEnd(text, i);
+      if (k > 0) i = k;
+    } else if (c === '(' || c === '[' || c === '{' || (angles && c === '<')) depth++;
+    else if (c === ')' || c === ']' || c === '}' || (angles && c === '>' && text[i - 1] !== '=')) {
+      if (depth-- === 0) return i;
+    } else if (comma && c === ',' && depth === 0) return i;
+  }
+  return i;
+}
+
+/**
+ * Identifiers a pattern binds (`item`, `{ id, name }`, `[a, b]`, `item, i`), leaving out object keys
+ * (`{ children: kids }` binds `kids`), defaults and TS types (`item: Item` binds `item`).
+ */
 function patternNames(pattern: string): string[] {
-  return [...pattern.replace(/=[^,}\]]*/g, '').matchAll(/[A-Za-z_$][\w$]*/g)].map((m) => m[0]);
+  const names: string[] = [];
+  const open: string[] = [];
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i]!;
+    if (c === '(' || c === '[' || c === '{') open.push(c);
+    else if (c === ')' || c === ']' || c === '}') open.pop();
+    else if (c === '=') i = scanTo(pattern, i + 1, true) - 1;
+    else if (c === ':' && open.length === 0) i = scanTo(pattern, i + 1, true, true) - 1;
+    else if (/[A-Za-z_$]/.test(c)) {
+      const id = /^[A-Za-z_$][\w$]*/.exec(pattern.slice(i))![0];
+      const key = open[open.length - 1] === '{' && /^\s*:/.test(pattern.slice(i + id.length));
+      if (!key) names.push(id);
+      i += id.length - 1;
+    }
+  }
+  return names;
 }
 
 /** The names the component's scripts import: local name → module specifier and imported name. */
@@ -207,10 +247,10 @@ function scriptImports(scripts: string[]): Map<string, { specifier: string; name
  * to the component's own function, else to the module that imports it, never by name elsewhere; a
  * component tag renders the file its import resolves to. Calls come from `{expr}` blocks, block
  * headers (`{#if}`, `{#each}`, `{#await}`, `{#key}`, `{@const}`, `{@render}`), attribute values and
- * `use:` actions; an event handler named by itself (`on:click={save}`, `onclick={save}`) is a call
- * of it. Each-block items, `let:`, `{@const}`, `{:then}` / `{:catch}` values and snippet names and
- * parameters are local to the template: never resolved. `{@html}`, comments, `<script>` and
- * `<style>` hold none.
+ * `use:` actions; an event handler named by itself (`on:click={save}`, `onclick={save}`, also in
+ * quotes) is a call of it. Each-block items, `let:`, `{@const}`, `{:then}` / `{:catch}` values and
+ * snippet names and parameters are template-local: never resolved inside their block, branch or
+ * element (M0-12-R11). `{@html}`, comments, `<script>` and `<style>` hold none.
  */
 export function svelteTemplateReferences(
   source: string, componentName: string, scripts: string[], blocks: Array<{ start: number; end: number }>,
@@ -222,7 +262,42 @@ export function svelteTemplateReferences(
   for (const m of [...text.matchAll(/<style[\s>][\s\S]*?<\/style\s*>|<!--[\s\S]*?-->/gi)]) blank(m.index!, m.index! + m[0].length);
 
   const imports = scriptImports(scripts);
-  const locals = new Set<string>();
+  // Template-local names hide a call only inside their scope, as in .vue templates (M0-12-R11). A
+  // block, a branch (`{:else}`, `{:then}`, `{:catch}`) and an element are scopes; a name hides from
+  // `from` to the end of the scope holding it. The ranges are applied once the walk is done.
+  // `start` is where the scope's body starts: after a block's header or an element's opening tag.
+  type Scope = { block: string | null; tag: string | null; start: number; names: Array<{ name: string; from: number }> };
+  const scopes: Scope[] = [{ block: null, tag: null, start: 0, names: [] }];
+  // Stack indices of the open block scopes, and of the open element scopes per tag name, so that
+  // closing a block or a tag never walks the stack (review 2026-11-02: quadratic on large templates).
+  const blockAt: number[] = [];
+  const tagAt = new Map<string, number[]>();
+  const hidden = new Map<string, Array<{ from: number; to: number }>>();
+  const open = (block: string | null, tag: string | null, start: number) => {
+    if (block) blockAt.push(scopes.length);
+    if (tag) { const at = tagAt.get(tag); if (at) at.push(scopes.length); else tagAt.set(tag, [scopes.length]); }
+    scopes.push({ block, tag, start, names: [] });
+  };
+  const bind = (names: string[], from: number, scope = scopes[scopes.length - 1]!) => { for (const name of names) scope.names.push({ name, from }); };
+  const hide = (name: string, from: number, to: number) => {
+    const ranges = hidden.get(name);
+    if (ranges) ranges.push({ from, to });
+    else hidden.set(name, [{ from, to }]);
+  };
+  /** Ends the scopes from index `k` up, at offset `at`. */
+  const closeScopes = (k: number, at: number) => {
+    while (scopes.length > k) {
+      const scope = scopes.pop()!;
+      if (scope.block) blockAt.pop();
+      if (scope.tag) tagAt.get(scope.tag)!.pop();
+      for (const n of scope.names) hide(n.name, n.from, at);
+    }
+  };
+  /** The innermost block scope (of `word`, if given), past any elements left open inside it; -1 if none. */
+  const innerBlock = (word?: string) => {
+    for (let b = blockAt.length - 1; b >= 0; b--) if (!word || scopes[blockAt[b]!]!.block === word) return blockAt[b]!;
+    return -1;
+  };
   // Line starts once, then a binary search per reference: re-splitting per reference was quadratic.
   const lineStarts = [0];
   for (let k = text.indexOf('\n'); k >= 0; k = text.indexOf('\n', k + 1)) lineStarts.push(k + 1);
@@ -252,33 +327,59 @@ export function svelteTemplateReferences(
     }
     return text.length;
   };
+  /** A `{…}` whose content starts at `at` (its `{` is at `at - 1`). */
   const block = (content: string, at: number) => {
     const head = /^\s*([#:@/])(\w+)\s*([\s\S]*)$/.exec(content);
     if (!head) return expression(content, at);
     const [, sigil, word, rest] = head;
     const restAt = at + content.indexOf(rest!);
-    if (sigil === '/' || word === 'html' || word === 'debug') return;
+    if (sigil === '/') {
+      const k = innerBlock(word);
+      if (k > 0) closeScopes(k, at - 1);
+      return;
+    }
+    // A block's or branch's body starts after its header: a {@const} there does not reach the header.
+    const body = at + content.length + 1;
+    if (sigil === '#') open(word!, null, body);
+    else if (sigil === ':') {
+      // A branch: the names of the one before end here.
+      const k = innerBlock();
+      if (k > 0) { const of = scopes[k]!.block; closeScopes(k, at - 1); open(of, null, body); }
+    }
+    if (word === 'html' || word === 'debug') return;
     if (word === 'each') {
       const m = /^([\s\S]*?)\s+as\s+([\s\S]*?)(?:\(([\s\S]*)\))?\s*$/.exec(rest!);
-      if (!m) return expression(rest!, restAt);
-      for (const n of patternNames(m[2]!)) locals.add(n);
+      if (!m) {
+        // Svelte 5 `{#each { length: 8 }, rank}`: an index with no item.
+        const index = /,\s*([A-Za-z_$][\w$]*)\s*$/.exec(rest!);
+        if (index) bind([index[1]!], restAt + index.index!);
+        return expression(index ? rest!.slice(0, index.index) : rest!, restAt);
+      }
+      // The aliases hide from the pattern on: the source expression is read outside them.
+      bind(patternNames(m[2]!), restAt + m[0].indexOf(m[2]!, m[1]!.length));
       expression(m[1]!, restAt);
       if (m[3]) expression(m[3], restAt + rest!.indexOf(m[3]));
       return;
     }
     if (word === 'await' || word === 'then' || word === 'catch') {
       const m = /^([\s\S]*?)(?:\s*\b(then|catch)\b\s*([\s\S]*))?$/.exec(rest!);
-      if (word !== 'await') { for (const n of patternNames(rest!)) locals.add(n); return; }
-      if (m?.[3]) for (const n of patternNames(m[3])) locals.add(n);
+      if (word !== 'await') return bind(patternNames(rest!), restAt);
+      if (m?.[3]) bind(patternNames(m[3]), restAt + rest!.length - m[3].length);
       return expression(m?.[1] ?? rest!, restAt);
     }
     if (word === 'const') {
+      // Svelte orders a block's {@const} declarations itself: the names hold in the whole block.
       const m = /^([\s\S]*?)=([\s\S]*)$/.exec(rest!);
-      if (m) { for (const n of patternNames(m[1]!)) locals.add(n); expression(m[2]!, restAt + m[1]!.length + 1); }
+      if (m) { const scope = scopes[scopes.length - 1]!; bind(patternNames(m[1]!), scope.start, scope); expression(m[2]!, restAt + m[1]!.length + 1); }
       return;
     }
     if (word === 'snippet') {
-      for (const n of patternNames(rest!.replace(/\)[\s\S]*$/, '').replace('(', ','))) locals.add(n);
+      // The parameters hold in the snippet; its name in the enclosing scope, before it too (hoisted).
+      const name = /^[\w$]+/.exec(rest!)?.[0];
+      const paren = rest!.indexOf('(');
+      if (paren >= 0) bind(patternNames(rest!.slice(paren + 1, scanTo(rest!, paren + 1, false))), at - 1);
+      const parent = scopes[scopes.length - 2];
+      if (name && parent) bind([name], parent.start, parent);
       return;
     }
     // #if, :else if, #key, @render: an expression.
@@ -291,10 +392,17 @@ export function svelteTemplateReferences(
       const end = closeBrace(i);
       block(text.slice(i + 1, end), i + 1);
       i = end;
+    } else if (c === '<' && text[i + 1] === '/') {
+      // A closing tag ends its element's scope and those left open inside it, never past a block.
+      const name = /^[A-Za-z][\w.:-]*/.exec(text.slice(i + 2))?.[0];
+      const same = name ? tagAt.get(name) : undefined;
+      const k = same?.[same.length - 1];
+      if (k !== undefined && k > (blockAt[blockAt.length - 1] ?? 0)) closeScopes(k, i);
     } else if (c === '<' && /[A-Za-z]/.test(text[i + 1] ?? '')) {
       const name = /^[A-Za-z][\w.:-]*/.exec(text.slice(i + 1))![0];
       if (/^[A-Z]/.test(name) || (name.includes('.') && !name.startsWith('svelte:'))) renders.push({ name, at: i });
       const dynamic = name === 'svelte:component';
+      const letNames: string[] = [];
       let j = i + 1 + name.length;
       while (j < text.length && text[j] !== '>') {
         if (/\s/.test(text[j]!) || text[j] === '/') { j++; continue; }
@@ -314,15 +422,20 @@ export function svelteTemplateReferences(
             j = end + 1;
           } else if (text[j] === '"' || text[j] === "'") {
             const end = text.indexOf(text[j]!, j + 1);
-            const inner = text.slice(j + 1, end < 0 ? text.length : end);
-            for (const m of inner.matchAll(/\{([^}]*)\}/g)) expression(m[1]!, j + 1 + m.index! + 1);
+            if (text[j + 1] === '{' && end > 0 && closeBrace(j + 1) === end - 1) {
+              // One expression in quotes (`on:click="{save}"`) reads as the unquoted one (M0-12-R11).
+              value = { code: text.slice(j + 2, end - 1), at: j + 2 };
+            } else {
+              const inner = text.slice(j + 1, end < 0 ? text.length : end);
+              for (const m of inner.matchAll(/\{([^}]*)\}/g)) expression(m[1]!, j + 1 + m.index! + 1);
+            }
             j = end < 0 ? text.length : end + 1;
           } else {
             j += /^[^\s>]*/.exec(text.slice(j))![0].length;
           }
         }
         if (attr.startsWith('let:')) {
-          for (const n of patternNames(value?.code ?? attr.slice(4))) locals.add(n);
+          letNames.push(...patternNames(value?.code ?? attr.slice(4)));
         } else if (dynamic && attr === 'this' && value && /^\s*[A-Za-z_$][\w$.]*\s*$/.test(value.code)) {
           // <svelte:component this={Card}>: a render of what Card names.
           renders.push({ name: value.code.trim(), at: i });
@@ -338,13 +451,45 @@ export function svelteTemplateReferences(
           expression(value.code, value.at);
         }
       }
+      // An element is a scope up to its closing tag. `let:` names hold in it: in a plain element's
+      // attributes too, but not in a component's, which Svelte reads in the parent's scope.
+      const component = /^[A-Z]/.test(name) || name.includes('.') || name === 'svelte:component' || name === 'svelte:self';
+      let last = j - 1;
+      while (last > i && /\s/.test(text[last]!)) last--;
+      // Void elements are lowercase HTML tags: `<Input>` and `<Link>` are components (review 2026-11-02).
+      if (text[last] === '/' || VOID_TAGS.has(name)) { if (!component) for (const n of letNames) hide(n, i, j); }
+      else { open(null, name, j + 1); bind(letNames, component ? j + 1 : i); }
       i = j;
     }
   }
+  closeScopes(0, text.length);
+  // Per name, the ranges merged into sorted disjoint ones, so a lookup is a binary search.
+  for (const [name, ranges] of hidden) {
+    ranges.sort((a, b) => a.from - b.from);
+    const merged: typeof ranges = [];
+    for (const r of ranges) {
+      const prev = merged[merged.length - 1];
+      if (prev && r.from <= prev.to) prev.to = Math.max(prev.to, r.to);
+      else merged.push({ ...r });
+    }
+    hidden.set(name, merged);
+  }
+  const isHidden = (name: string, at: number) => {
+    const ranges = hidden.get(name);
+    if (!ranges) return false;
+    let lo = 0;
+    let hi = ranges.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (ranges[mid]!.from <= at) lo = mid;
+      else hi = mid - 1;
+    }
+    return ranges[lo]!.from <= at && at < ranges[lo]!.to;
+  };
 
   const refs: ExtractedReference[] = [];
   for (const { name, at } of pending) {
-    if (locals.has(name)) continue;
+    if (isHidden(name, at)) continue;
     const imported = imports.get(name);
     const from = imported && imported.name !== '*' && imported.name !== 'default' ? [imported] : [];
     refs.push({

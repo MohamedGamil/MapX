@@ -341,3 +341,168 @@ describe('Svelte templates: review cases (M0-12-R10, review 2026-11-01)', () => 
     expect(from('src/vue/App.vue', 'render')).toEqual(['src/vue/components/Foo.vue#Foo']);
   });
 });
+
+// Review 2026-11-02 (M0-12-R11): a template-local name hides references only inside its block, as
+// in .vue templates; a quoted handler links like an unquoted one. Every function has its own name,
+// so each assertion is about one reference: `…Before` before the block, `…Inside` inside it and
+// `…After` outside it.
+describe('Svelte templates: names scoped per block, quoted handlers (M0-12-R11)', () => {
+  let root: string;
+  let calls: Record<string, string[]>;
+  const fns = (names: string) => names.split(' ').map((n) => `  function ${n}() {}\n`).join('');
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', devDependencies: { svelte: '^5.0.0' } }),
+      'src/List.svelte': '<slot item={1} />\n',
+      // Svelte 4 syntax: each, await, let:, @const and on: handlers.
+      'src/Legacy.svelte': `<script>
+  import List from './List.svelte';
+  let items = [];
+  let promise;
+${fns('eachBefore eachInside eachAfter eachElse rows looseInside looseAfter awaitThen awaitCatch awaitError awaitAfter letBefore letInside letAfter constBefore constInside constAfter pick close tidy')}</script>
+
+<p>{eachBefore()}</p>
+{#each items as { eachBefore, eachInside, eachAfter, eachElse }}
+  <i>{eachInside()}</i>
+{:else}
+  <i>{eachElse()}</i>
+{/each}
+<p>{eachAfter()}</p>
+{#each rows() as rows}{rows.id}{/each}
+<ul>
+  {#each items as { looseInside, looseAfter }}<li>{looseInside()}{/each}
+</ul>
+<p>{looseAfter()}</p>
+
+{#await promise then { awaitThen, awaitCatch }}
+  {awaitThen()}
+{:catch { awaitError, awaitAfter }}
+  {awaitCatch()} {awaitError()}
+{/await}
+<p>{awaitAfter()}</p>
+
+<p>{letBefore()}</p>
+<List let:letBefore let:letInside let:letAfter><p>{letInside()}</p></List>
+<p>{letAfter()}</p>
+
+<p>{constBefore()}</p>
+{#if items.length}
+  {@const { constBefore, constInside, constAfter } = pick(items)}
+  <p>{constInside()}</p>
+{/if}
+<p>{constAfter()}</p>
+
+<button on:click="{close}">close</button>
+<button on:click={tidy}>tidy</button>
+`,
+      // Svelte 5 syntax: snippets and DOM-event handler attributes.
+      'src/Runes.svelte': `<script>
+${fns('early cell snippetBefore snippetParam snippetAfter save')}</script>
+
+<p>{snippetBefore()}</p>
+{@render early()}
+{#snippet early()}<b />{/snippet}
+<div>
+  {#snippet cell(snippetBefore, snippetParam, snippetAfter)}<i>{snippetParam()}</i>{/snippet}
+  {@render cell(1, 2, 3)}
+</div>
+<p>{cell()} {snippetAfter()}</p>
+<button onclick="{save}">save</button>
+`,
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+    calls = {};
+    for (const file of ['src/Legacy.svelte', 'src/Runes.svelte']) {
+      calls[file] = query<{ t: string }>(root, `SELECT DISTINCT target_symbol AS t FROM edges
+        WHERE source_file = ? AND target_file = ? AND edge_type = 'call' ORDER BY t`, file, file).map((r) => r.t);
+    }
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('hides each-block aliases inside the block only, not in {:else} or the source expression', () => {
+    expect(calls['src/Legacy.svelte']).toEqual(expect.arrayContaining(['eachBefore', 'eachAfter', 'eachElse', 'rows', 'looseAfter']));
+    expect(calls['src/Legacy.svelte']).not.toContain('eachInside');
+    expect(calls['src/Legacy.svelte']).not.toContain('looseInside');
+  });
+
+  it('hides {:then} and {:catch} values inside their branch only', () => {
+    expect(calls['src/Legacy.svelte']).toEqual(expect.arrayContaining(['awaitCatch', 'awaitAfter']));
+    expect(calls['src/Legacy.svelte']).not.toContain('awaitThen');
+    expect(calls['src/Legacy.svelte']).not.toContain('awaitError');
+  });
+
+  it('hides let: names inside their element and {@const} names inside their block only', () => {
+    expect(calls['src/Legacy.svelte']).toEqual(expect.arrayContaining(['letBefore', 'letAfter', 'constBefore', 'constAfter', 'pick']));
+    expect(calls['src/Legacy.svelte']).not.toContain('letInside');
+    expect(calls['src/Legacy.svelte']).not.toContain('constInside');
+  });
+
+  it('hides snippet parameters inside the snippet and snippet names inside their parent, before their declaration too', () => {
+    expect(calls['src/Runes.svelte']).toEqual(['cell', 'save', 'snippetAfter', 'snippetBefore']);
+  });
+
+  it('links a quoted handler like an unquoted one', () => {
+    expect(calls['src/Legacy.svelte']).toEqual(expect.arrayContaining(['close', 'tidy']));
+    expect(calls['src/Runes.svelte']).toContain('save');
+    // Everything the template calls outside a binding of the name, and nothing else.
+    expect(calls['src/Legacy.svelte']).toEqual(['awaitAfter', 'awaitCatch', 'close', 'constAfter', 'constBefore', 'eachAfter', 'eachBefore',
+      'eachElse', 'letAfter', 'letBefore', 'looseAfter', 'pick', 'rows', 'tidy']);
+  });
+
+  // Independent review of M0-12-R11 (2026-11-02), checked against what svelte@4/5 compile.
+  describe('review cases', () => {
+    let nav: string[];
+    beforeAll(() => {
+      const r = workspace({
+        'package.json': JSON.stringify({ name: 'app', version: '1.0.0', devDependencies: { svelte: '^5.0.0' } }),
+        'src/Link.svelte': '<slot active={true} />\n',
+        'src/Input.svelte': '<slot value={1} />\n',
+        'src/List.svelte': '<slot items={[]} />\n',
+        'src/Nav.svelte': `<script lang="ts">
+  import Link from './Link.svelte';
+  import Input from './Input.svelte';
+  import List from './List.svelte';
+  let rows = [];
+${fns('active value items total check rank Item children kids dup gap mid')}</script>
+
+<Link to="/about" let:active><span class:on={active()}>About</span></Link>
+<Input let:value>{value()}</Input>
+<List items={items()} let:items><p>{items()}</p></List>
+{#each total() as row}{@const total = row.a}{total}{/each}
+{#if check()}{@const check = 1}{check}{/if}
+{#each { length: 8 }, rank}{rank()}{/each}
+{#snippet cell(item: Item)}{Item()}{/snippet}
+{#each rows as { children: kids }}{children()}{kids()}{/each}
+{#each rows as { dup, gap, mid }}{mid()}{/each}<p>{gap()}</p>{#each rows as { dup, gap, mid }}{/each}{#each rows as dup}{dup()}{/each}
+`,
+      });
+      init(r);
+      mapx(r, 'scan', '.');
+      nav = query<{ t: string }>(r, `SELECT DISTINCT target_symbol AS t FROM edges
+        WHERE source_file = 'src/Nav.svelte' AND target_file = 'src/Nav.svelte' AND edge_type = 'call' ORDER BY t`).map((x) => x.t);
+      cleanup(r);
+    }, 120000);
+
+    it('treats <Link>, <Input> as components, not void elements: their let: names hold in their children', () => {
+      expect(nav).not.toContain('active');
+      expect(nav).not.toContain('value');
+    });
+
+    it('reads a block header outside its {@const} names, and a component\'s attributes outside its let: names', () => {
+      expect(nav).toEqual(expect.arrayContaining(['total', 'check', 'items']));
+    });
+
+    it('binds an index-only each, but neither a snippet parameter\'s type nor a destructuring key', () => {
+      expect(nav).not.toContain('rank');
+      expect(nav).not.toContain('kids');
+      expect(nav).toEqual(['Item', 'check', 'children', 'gap', 'items', 'total']);
+    });
+
+    it('finds the binding among many of the same name: hidden in the first or third block, not between them', () => {
+      expect(nav).toContain('gap');
+      expect(nav).not.toContain('dup');
+      expect(nav).not.toContain('mid');
+    });
+  });
+});
