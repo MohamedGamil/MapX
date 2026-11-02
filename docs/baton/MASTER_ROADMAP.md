@@ -115,8 +115,8 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-32-R3** Architecture tab data: cycle smells name the real cycle; the profile ignores graph-excluded frameworks — DONE, P1, 4h; depends on M0-32-R2.
 - **M0-02-R11** A sync killed before its upserts commit keeps restored files — DONE, P2, 3h; depends on M0-02-R10.
 - **M0-10-R6** Unknown --repo is an error; git sync counts indexed files — DONE, P2, 2h; depends on M0-10-R5.
-- **M0-12-R11** Svelte template names scoped per block; quoted handlers — BACKLOG, P2, 2h; depends on M0-12-R10.
-- **M0-02-R12** A full scan killed after its index transaction keeps referrers and changed files — BACKLOG, P2, 4h; depends on M0-02-R11.
+- **M0-12-R11** Svelte template names scoped per block; quoted handlers — IN_PROGRESS, P2, 2h; depends on M0-12-R10.
+- **M0-02-R12** A full scan killed after its index transaction keeps referrers and changed files — DONE, P2, 4h; depends on M0-02-R11.
 
 ## M1 — Laravel route correctness
 
@@ -140,7 +140,7 @@ Route URIs, handlers and mounts match Laravel on the labelled fixture (report P0
 - **M1-05-R1** Laravel resources: array options, nested and plural registration; array handler attributes — DONE, P2, 4h; depends on M1-05.
 - **M1-07-R2** RouteServiceProvider mounts walked like other providers; prefixes, names and domains evaluated — DONE, P1, 6h; depends on M1-07-R1, M1-03-R1, M1-05-R1.
 - **M1-03-R2** Laravel route walker: require_once and cycles, trailing slashes, dynamic resource names, match verbs, invokable controllers — DONE, P2, 4h; depends on M1-03-R1, M1-07-R2.
-- **M1-07-R3** Laravel route files mounted as arrays; loop and conditional prefix variables — BACKLOG, P2, 2h; depends on M1-07-R2, M1-03-R2.
+- **M1-07-R3** Laravel route files mounted as arrays; loop and conditional prefix variables — IN_PROGRESS, P2, 2h; depends on M1-07-R2, M1-03-R2.
 
 ## M2 — Cross-language precision and HTTP pairing
 
@@ -188,7 +188,7 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-05-R1** Vuex map-helper path forms and Pinia outside SFCs — DONE, P2, 5h; depends on M3-05, M3-04.
 - **M3-11-R1** More Vue Router navigation and route-table forms — DONE, P2, 4h; depends on M3-11, M3-08-R1.
 - **M3-07-R1** Framework detection keeps its folder scope when package.json files are indexed — DONE, P2, 2h; depends on M3-07.
-- **M3-05-R2** Pinia hooks of any name in plain modules; Vuex arrow members in imported objects — BACKLOG, P2, 2h; depends on M3-05-R1.
+- **M3-05-R2** Pinia hooks of any name in plain modules; Vuex arrow members in imported objects — IN_PROGRESS, P2, 2h; depends on M3-05-R1.
 
 ## M4 — Measurement and developer experience
 
@@ -220,9 +220,9 @@ Fixture scoring in CI; optional message edges.
 - **M4-23** Cross-repo HTTP communication view in the dashboard — DONE, P1, 10h; depends on M4-21.
 - **M4-09-R1** The whole test suite leaves the checkout untouched (COMPLETION DISPUTED for M4-09) — DONE, P1, 2h; depends on M4-09.
 - **M4-13-R1** Parse pool sizing honours CPU affinity; the worker bench exercises workers — BACKLOG, P2, 2h; depends on M4-13.
-- **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — BACKLOG, P2, 2h; depends on M4-24.
+- **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — IN_PROGRESS, P2, 2h; depends on M4-24.
 - **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
-- **M4-09-R2** Tests remove the temp directories they create — BACKLOG, P2, 1h; depends on M4-09-R1.
+- **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 
@@ -256,7 +256,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — BACKLOG, P2, 3h; depends on M5-05.
 - **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.
-- **M5-02-R1** arch validate-config (CLI and MCP) and loader robustness — BACKLOG, P2, 4h; depends on M5-05.
+- **M5-02-R1** arch validate-config (CLI and MCP) and loader robustness — IN_PROGRESS, P2, 4h; depends on M5-05.
 - **M5-02-R2** The architecture config is committable in user projects and in MapX itself — CANCELLED, P1, 3h; depends on M5-02.
 - **M5-25-R1** Go package-qualified calls, and generic, slice and map literals of imported types — BACKLOG, P2, 4h; depends on M5-25.
 - **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — BACKLOG, P2, 4h; depends on M5-03-R1.

@@ -59,3 +59,5 @@
   - file before folder index.
 
   Independent review: 3 P1 (a changed barrel not walked, JSX text cutting the skeleton, an unterminated `/*` in text) and P2s. All were fixed, except the shadowing case, which went to M2-08-R2. `verificationCommands` gained `tests/js-source.test.ts` and `npm run eval`; `affectedFiles` gained `js-source` and the queries.
+- M4-09-R2 DONE: `check-test-cwd` gives the run a private TMPDIR and fails on leftovers. The `mapx-stale-*` leak in `tests/mcp-coverage.test.ts` is fixed. Review P2s fixed: the Windows tsx cache name, and cleanup failures. `verificationCommands` gained the whole-suite check.
+- M0-02-R12 DONE: the full scan writes hashes with each parse result. Review P1 fixed: `last_scanned` is now the read time in all three paths, so edits made during a parse stay stale. `affectedFiles` gained `src/core/store.ts`.

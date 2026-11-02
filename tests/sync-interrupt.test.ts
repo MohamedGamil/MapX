@@ -223,3 +223,110 @@ describe.each([['git sync', true], ['hash sync', false]])('an interrupted %s', (
     expect(phases.has('cluster')).toBe(false);
   }, 120000);
 });
+
+// M0-02-R12: a full scan writes its index rows in one transaction and the parse results in later
+// ones. A scan killed between them must leave the files for the next scan to re-parse: the referrers
+// it consumed, and in a non-git repo the changed files (review of M0-02-R11, 2026-11-02).
+describe.each([['git', true], ['hash', false]])('a %s full scan killed after its index transaction', (_name, withGit) => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'mapx-interrupt-full-'));
+    write(root, FILES);
+    if (withGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    }
+  });
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  const scanner = async (store: Store) => {
+    const config = await Config.load(root);
+    return new Scanner(store, config, new MapxGraph(config.repos[0]!.name));
+  };
+  /** Runs a full scan that dies writing its first parse result, after the index transaction committed. */
+  const killedFullScan = async (store: Store) => {
+    const proto = Scanner.prototype as unknown as { writeParseResultWithMap: (...a: unknown[]) => void };
+    const original = proto.writeParseResultWithMap;
+    proto.writeParseResultWithMap = () => { throw new Error('killed'); };
+    try {
+      await expect((await scanner(store)).scanFull()).rejects.toThrow('killed');
+    } finally {
+      proto.writeParseResultWithMap = original;
+    }
+  };
+  const forced = async () => {
+    const fresh = new Store(':memory:');
+    await (await scanner(fresh)).scanFull(undefined, { force: true });
+    return dump(fresh);
+  };
+
+  it('keeps the referrers of a restored file, so later scans and syncs equal scan --force', async () => {
+    const store = new Store(':memory:');
+    await (await scanner(store)).scanFull();
+    rmSync(join(root, 'src/b.ts'));
+    await (await scanner(store)).scanFull();
+    expect(store.getFile('src/b.ts')).toBeUndefined();
+    if (withGit) git(root, 'checkout', '--', 'src/b.ts');
+    else write(root, { 'src/b.ts': FILES['src/b.ts'] });
+
+    await killedFullScan(store);
+    await (await scanner(store)).scanFull();
+    await (await scanner(store)).scanIncremental();
+
+    const expected = await forced();
+    expect(dump(store).symbols).toEqual(expected.symbols);
+    expect(dump(store).edges).toEqual(expected.edges);
+    expect(dump(store).edges).toContain('src/a.ts a src/b.ts b call');
+  }, 120000);
+
+  it('re-parses a changed file whose scan died, so it gets its new symbols', async () => {
+    const store = new Store(':memory:');
+    await (await scanner(store)).scanFull();
+    appendFileSync(join(root, 'src/b.ts'), 'export function b2() { return 2; }\n');
+    if (withGit) { git(root, 'add', '-A'); git(root, 'commit', '-qm', 'b2'); }
+
+    await killedFullScan(store);
+    await (await scanner(store)).scanFull();
+
+    expect(dump(store).symbols).toContain('src/b.ts b2 function null 2');
+    expect(dump(store).symbols).toEqual((await forced()).symbols);
+  }, 120000);
+
+  // Review of M0-02-R12: the scan time is when the files were read, not when the results are
+  // written, so an edit made while the scan parses stays newer than the index.
+  it.each([['full scan', false], ['sync', true]])('reports a file edited while the %s parsed as stale', async (_kind, sync) => {
+    const store = new Store(':memory:');
+    if (sync) {
+      await (await scanner(store)).scanFull();
+      // b.ts is among the files the sync re-indexes.
+      appendFileSync(join(root, 'src/b.ts'), 'export function b3() { return 3; }\n');
+    }
+    let edited = false;
+    const config = await Config.load(root);
+    const s = new Scanner(store, config, new MapxGraph(config.repos[0]!.name), (p) => {
+      if (p.phase === 'parse' && !edited) {
+        edited = true;
+        appendFileSync(join(root, 'src/b.ts'), 'export function late() { return 0; }\n');
+      }
+    });
+    await (sync ? s.scanIncremental() : s.scanFull());
+    expect(edited).toBe(true);
+    expect(findStaleFiles(store, root).changed).toContain('src/b.ts');
+  }, 120000);
+
+  it('still skips unchanged files in an uninterrupted second full scan', async () => {
+    const store = new Store(':memory:');
+    await (await scanner(store)).scanFull();
+    const proto = Scanner.prototype as unknown as { writeParseResultWithMap: (...a: unknown[]) => void };
+    const original = proto.writeParseResultWithMap;
+    const written: unknown[] = [];
+    proto.writeParseResultWithMap = function (this: unknown, ...args: unknown[]) { written.push(args[0]); return original.apply(this, args); };
+    try {
+      await (await scanner(store)).scanFull();
+    } finally {
+      proto.writeParseResultWithMap = original;
+    }
+    expect(written).toEqual([]);
+  }, 120000);
+});

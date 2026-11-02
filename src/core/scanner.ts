@@ -597,6 +597,10 @@ export class Scanner {
       // Keyed by workspace path, as files are stored, also for a repo that is not at the root.
       const gitHashes = isGitRepo(repoRoot) ? getGitBlobHashes(repoRoot, workspaceRoot) : new Map<string, string>();
 
+      // Each file's hashes, written with its parse result (M0-02-R12), and when the files were read:
+      // the scan's start, before discovery read them.
+      const hashes = new Map<string, { content: string; blob: string | null }>();
+      const readAt = new Date(startTime).toISOString();
       this.store.inTransaction(() => {
         this.applyDeferredConsumption();
         for (let i = 0; i < toParse.length; i++) {
@@ -605,14 +609,18 @@ export class Scanner {
           // tree stores null, so sync never takes it for unchanged (M0-02-R4).
           const headBlob = gitHashes.get(f.relativePath);
           const blobHash = headBlob && f.content !== undefined && gitBlobId(f.content) === headBlob ? headBlob : null;
+          hashes.set(f.relativePath, { content: f.contentHash, blob: blobHash });
 
+          // No hashes until the parse result is written: a scan killed after this transaction
+          // commits leaves the file changed for the next scan, with the referrers whose records
+          // the transaction consumed (M0-02-R12, as M0-02-R10 for sync).
           this.store.upsertFile({
             path: f.relativePath,
             repo: repo.name,
             language: f.language,
-            gitBlobHash: blobHash,
-            contentHash: f.contentHash,
-            lastScanned: new Date().toISOString(),
+            gitBlobHash: null,
+            contentHash: null,
+            lastScanned: UNSCANNED,
             sizeBytes: f.sizeBytes,
             lines: f.lines,
           });
@@ -682,7 +690,10 @@ export class Scanner {
 
         this.store.inTransaction(() => {
           for (let i = batchStart; i < batchEnd; i++) {
-            this.writeParseResultWithMap(toParse[i].relativePath, parseResults[i], repo.name, fileMap);
+            const path = toParse[i].relativePath;
+            this.writeParseResultWithMap(path, parseResults[i], repo.name, fileMap);
+            const hash = hashes.get(path)!;
+            this.store.setFileHashes(path, hash.content, hash.blob, readAt);
           }
         });
 
@@ -1097,7 +1108,7 @@ export class Scanner {
         const result = parseResults[i];
 
         this.writeParseResult(relPath, result, repo.name);
-        this.store.setFileHashes(relPath, contentHash, blobHash);
+        this.store.setFileHashes(relPath, contentHash, blobHash, new Date(startTime).toISOString());
 
         totalSymbols += result.symbols.length;
         totalEdges += result.references.length;
@@ -4291,7 +4302,7 @@ export class Scanner {
         const result = parseResults[i];
 
         this.writeParseResult(f.relativePath, result, repo.name);
-        this.store.setFileHashes(f.relativePath, f.contentHash, null);
+        this.store.setFileHashes(f.relativePath, f.contentHash, null, new Date(startTime).toISOString());
 
         totalSymbols += result.symbols.length;
         totalEdges += result.references.length;

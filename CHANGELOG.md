@@ -55,6 +55,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - `mapx sync` follows `export … from` and `export *` barrels, re-parsing a barrel's importers only when a module behind it gains, loses or renames an export, or is deleted; an edit inside a function body re-parses none;
   - a `/*` inside a string or regex literal no longer hides a module's re-exports, and a commented-out `export default` names nothing;
   - `./utils` resolves to `utils.ts` before `utils/index.ts`, as Node and TypeScript do.
+- A full scan killed after it indexed files, but before it wrote their parse results, no longer leaves changed files with stale symbols or loses the edges of a restored file's referrers. A file edited while a scan or sync parses it is reported stale afterwards (M0-02-R12).
 - The test suite no longer appends to the checkout's `.mapx/tool-calls.jsonl`: `tests/mcp-coverage.test.ts` runs from a temporary folder, and `scripts/baton/check-test-cwd.mjs` now compares every tracked, untracked and ignored file (with its content) and runs the whole suite by default (M4-09-R1).
 - The npm package no longer picks up release builds: `make package-*` writes binaries, tarballs and installers to `dist/release/`, which `npm pack` included (185 MB instead of 4.7 MB); `scripts/check-package.ts` now fails if any are packed (M5-02).
 
