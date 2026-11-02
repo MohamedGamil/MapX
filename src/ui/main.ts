@@ -2848,7 +2848,7 @@ async function loadGraph() {
                 <div class="detail-stat-grid-item" style="display: none;"></div>
                 <div class="detail-stat-mini">
                   <span class="detail-stat-mini-label">Symbols</span>
-                  <span class="detail-stat-mini-value">${symbolCount}</span>
+                  <span class="detail-stat-mini-value">${num(symbolCount)}</span>
                 </div>` : ''}
                 ${pagerank ? `
                 <div class="detail-stat-mini">
@@ -3316,10 +3316,10 @@ function languageName(id: string): string {
 function barList(rows: Array<[string, number]>, unit: string, color = 'var(--accent)'): string {
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return `<ul class="bar-list" style="--bar: ${color};">${rows.map(([label, n]) => `
-    <li class="bar-row" title="${escapeHtml(label)}: ${n} ${unit}">
+    <li class="bar-row" title="${escapeHtml(label)}: ${num(n)} ${unit}">
       <span class="bar-label">${escapeHtml(label)}</span>
       <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width: ${Math.max(2, Math.round((n / max) * 100))}%;"></span></span>
-      <span class="bar-value">${n.toLocaleString()}</span>
+      <span class="bar-value">${escapeHtml(n.toLocaleString())}</span>
     </li>`).join('')}</ul>`;
 }
 
@@ -4404,7 +4404,7 @@ function renderDSM(dsm: any) {
       if (i === j) {
         html += `<td class="dsm-cell dsm-diagonal" title="${escapeHtml(names[i])} self-coupling">—</td>`;
       } else {
-        const val = matrix[i][j] || 0;
+        const val = Number(matrix[i][j]) || 0;
         const domType = (dominantTypes[i] && dominantTypes[i][j]) || '';
         
         let bgStyle = '';
@@ -4443,7 +4443,7 @@ function renderDSM(dsm: any) {
       const detailEl = document.getElementById('dsm-legend-detail');
       if (detailEl) {
         if (parseInt(val, 10) > 0) {
-          detailEl.innerHTML = `<strong>${escapeHtml(src)}</strong> depends on <strong>${escapeHtml(tgt)}</strong> (weight: <strong>${val}</strong>, primary: <em>${escapeHtml(domType)}</em>)`;
+          detailEl.innerHTML = `<strong>${escapeHtml(src)}</strong> depends on <strong>${escapeHtml(tgt)}</strong> (weight: <strong>${escapeHtml(val)}</strong>, primary: <em>${escapeHtml(domType)}</em>)`;
         } else {
           detailEl.innerHTML = `No direct dependencies from <strong>${escapeHtml(src)}</strong> to <strong>${escapeHtml(tgt)}</strong>`;
         }

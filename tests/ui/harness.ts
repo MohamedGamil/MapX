@@ -46,3 +46,16 @@ export function watchErrors(page: Page) {
 export async function graphReady(page: Page, timeout = 120_000) {
   await page.waitForSelector('body[data-graph="ready"]', { timeout, state: 'attached' });
 }
+
+/** The dashboard's tabs, as its navigation lists them (M4-24-R1: a spec can prove it opened each). */
+export async function navTabs(page: Page): Promise<string[]> {
+  const tabs = await page.locator('.nav-item[data-tab]').evaluateAll((els) => els.map((e) => e.getAttribute('data-tab') ?? ''));
+  return [...new Set(tabs)].sort();
+}
+
+/** Opens `tab` from the navigation and waits for it to show and for its requests to settle. */
+export async function openTab(page: Page, tab: string) {
+  await page.click(`.nav-item[data-tab="${tab}"]`);
+  await page.locator(`#tab-${tab}.active`).waitFor({ state: 'attached' });
+  await page.waitForLoadState('networkidle');
+}
