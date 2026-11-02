@@ -25043,14 +25043,32 @@
         "docs/baton/reports/M5-25.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-25-R1",
       "actualHours": null,
       "startedAt": "2026-11-02T19:18:23.123Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T20:34:53.452Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-25-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R1.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T19:18:22.560Z",
@@ -25063,6 +25081,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T20:34:52.716Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T20:34:53.452Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R1.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -25854,6 +25900,130 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/lua-calls.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-10",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-10.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-11",
+      "title": "Lua locals and self fields are not module constants",
+      "objective": "`self.balance = …` and `local x = …` inside a Lua function produce no module-level constant symbol, so calls on those lines keep the enclosing function as their source.",
+      "description": "Found by the M2-10 lane (2026-11-02): queries/lua/symbols.scm captures `self.balance = …` and locals inside functions as constants; a call on such a line is credited to that constant (`run::acct -> Account.new` instead of `run`).",
+      "outputs": [
+        "queries/lua/symbols.scm",
+        "tests/lua-calls.test.ts",
+        "reports/M2-11.md"
+      ],
+      "affectedFiles": [
+        "queries/lua/**",
+        "src/parsers/languages/lua.ts",
+        "tests/lua-calls.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "`function run() local acct = Account.new() acct:withdraw(1) end` gives source symbol `run` for both calls and no constant `acct` (test).",
+        "Module-level `local M = {}` and `M.VERSION = 1` keep their symbols (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/lua-calls.test.ts",
+        "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-25-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-25-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-25-R2",
+      "title": "Go methods with a generic receiver are indexed",
+      "objective": "`func (p Pair[K, V]) Swap()` gives a method symbol Swap with scope Pair, so `gen.Pair[int, string]{}.Swap()` links it.",
+      "description": "Found by the M5-25-R1 lane (2026-11-02): queries/go/symbols.scm does not index methods whose receiver type is generic, so calls to them link nothing.",
+      "outputs": [
+        "queries/go/symbols.scm",
+        "tests/go-qualified-instantiation.test.ts",
+        "reports/M5-25-R2.md"
+      ],
+      "affectedFiles": [
+        "queries/go/**",
+        "tests/go-qualified-instantiation.test.ts",
+        "src/core/extractor-version.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "`func (p Pair[K, V]) Swap()` and `func (p *Pair[K, V]) Set()` give methods Swap and Set scoped Pair (test).",
+        "`gen.Pair[int, string]{}.Swap()` from another package links gen's Swap (test); `npm run eval` holds every floor."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/go-qualified-instantiation.test.ts",
         "npm run eval",
         "npm run check"
       ]
