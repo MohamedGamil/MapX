@@ -265,7 +265,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-02-R1** arch validate-config (CLI and MCP) and loader robustness — DONE, P2, 4h; depends on M5-05.
 - **M5-02-R2** The architecture config is committable in user projects and in MapX itself — CANCELLED, P1, 3h; depends on M5-02.
 - **M5-25-R1** Go package-qualified calls, and generic, slice and map literals of imported types — DONE, P2, 4h; depends on M5-25.
-- **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — IN_PROGRESS, P2, 4h; depends on M5-03-R1.
+- **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — DONE, P2, 4h; depends on M5-03-R1.
 - **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — DONE, P2, 3h; depends on M5-05.
 - **M5-25-R2** Go methods with a generic receiver are indexed — BACKLOG, P2, 2h; depends on M5-25-R1.
 
