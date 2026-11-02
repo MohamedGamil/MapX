@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- `mapx check` gains baselines (`--generate-baseline`, `--baseline`, Deptrac-style `skip_violations`; stale entries exit 3) and the `--compare <base-report.json>` ratchet, which fails only on violations new since the base revision (M5-06).
 - `mapx arch validate-config` and the MCP tool `mapx_arch_validate_config` validate `.mapx/architecture.jsonc` (or a view) without an index, listing every problem with its JSON pointer (exit 3). The loader now accepts a UTF-8 BOM, reports `extends` to a directory, views outside `.mapx/architecture/`, symlink loops and permission errors as configuration errors, and substitutes `%parameters%` in every selector key, with `%%` for a literal `%` and parameters inside parameter values (M5-02-R1).
 - An index built by an older MapX is stale: `mapx check` exits 4, the commands warn, and the next `mapx scan` or `mapx update` re-parses every file once. The index records the extractor version that built it (M5-26).
 - `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).

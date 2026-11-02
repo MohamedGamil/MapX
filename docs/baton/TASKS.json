@@ -15474,14 +15474,22 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-06",
       "actualHours": null,
       "startedAt": "2026-11-02T20:52:25.720Z",
-      "completedAt": null,
+      "completedAt": "2026-11-02T22:46:53.174Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-06.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-baseline.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-06.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T20:52:25.213Z",
@@ -15494,6 +15502,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-02T22:46:52.753Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T22:46:53.174Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-baseline.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-06.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -15742,15 +15768,28 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-10",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T21:16:56.059Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T21:16:55.625Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T21:16:56.059Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
@@ -26238,6 +26277,77 @@
       "verificationCommands": [
         "npx vitest run tests/go-qualified-instantiation.test.ts",
         "npm run eval",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [
+        "Owner decision: under CPU load, idle lanes steal new grammars more often, so M4-12 AC1 (grammar loads at most languages + workers) and AC2 (no worker idles while files remain) conflict. Either cap new-grammar steals per batch (AC1 holds; a lane may end while another still has files) or restate AC1 as plan + up to (workers - 1) steals (AC2 holds)."
+      ],
+      "sources": [
+        "docs/baton/reports/M4-12.md",
+        "docs/baton/reports/M5-10.md",
+        "docs/baton/reports/M5-19.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BLOCKED",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-02T22:16:39.687Z",
+          "from": "BACKLOG",
+          "to": "BLOCKED",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-12-R1",
+      "title": "Grammar-load bound and work stealing agree under load",
+      "objective": "tests/worker-pool.test.ts \"deals a real scan of that mix to 4 workers\" passes deterministically, whatever the CPU load, with the bound the owner chooses.",
+      "description": "Found 2026-11-03 by the M5-10 and M5-19 lanes (and in their reviews): the test fails 1 in 4 to 3 in 4 runs at load ~30 with 10 grammar loads against the asserted 9 (languages + workers). The plan deals at most lanes + languages - 1 loads; the idle-lane steal of the heaviest other group adds one load per steal, and under load more lanes go idle early. M4-12 is DONE with this criterion, so the remedy needs an owner decision.",
+      "outputs": [
+        "src/core/worker-pool.ts",
+        "tests/worker-pool.test.ts",
+        "reports/M4-12-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/worker-pool.ts",
+        "tests/worker-pool.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "The 4-worker mix test passes 20 of 20 runs under a synthetic CPU load (stress loop), asserting the bound the owner chose (test).",
+        "The bench (scripts/bench/workers.ts) is not more than 10% slower than M4-12 on the generated fixture (report)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts",
         "npm run check"
       ]
     }

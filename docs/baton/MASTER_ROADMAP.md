@@ -229,6 +229,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
+- **M4-12-R1** Grammar-load bound and work stealing agree under load — BLOCKED, P2, 3h; depends on M4-12.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 
@@ -239,11 +240,11 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-03** Element view, core selectors and layer membership with selector trace — DONE, P1, 10h; depends on M5-01, M5-02.
 - **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — DONE, P1, 12h; depends on M5-03, M5-03-R1, M5-25.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — DONE, P1, 8h; depends on M5-04.
-- **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — IN_PROGRESS, P1, 7h; depends on M5-05.
+- **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — DONE, P1, 7h; depends on M5-05.
 - **M5-07** CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit — BACKLOG, P2, 6h; depends on M5-05.
 - **M5-08** Introspection: arch layers --why, which, unassigned, deps, unused, changed, allowed — BACKLOG, P2, 10h; depends on M5-04, M5-05.
 - **M5-09** Hierarchy and member selectors (transitive ancestry, depth, members) — BACKLOG, P2, 8h; depends on M5-03, M5-03-R1.
-- **M5-10** Capture decorators/attributes and doc tags in symbol metadata (tier 1) — BACKLOG, P1, 16h; depends on M5-01, M3-04.
+- **M5-10** Capture decorators/attributes and doc tags in symbol metadata (tier 1) — IN_PROGRESS, P1, 16h; depends on M5-01, M3-04.
 - **M5-11** Visibility rules: private selectors and internal markers — BACKLOG, P2, 8h; depends on M5-04, M5-10.
 - **M5-12** External, builtin and ambient elements with package attribution — CANCELLED, P1, 24h; depends on M5-01, M5-03, M4-03.
 - **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — BACKLOG, P2, 6h; depends on M5-04.
