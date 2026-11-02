@@ -342,7 +342,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--no-discover', 'Skip monorepo / nested-repo discovery step')
     .option('--no-workspaces', 'Skip the submodule and VS Code workspace registration step')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
-      // The MapX logo heads init's output on a terminal (D028); never in pipes or CI.
+      // The compact MapX logo heads init's output on a terminal (D028, M4-25); never in pipes or CI.
       printBanner();
       const dir = path ? resolve(path) : resolveDir(opts, program.opts());
       const isLaravel = detectLaravel(dir);
@@ -606,6 +606,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--force', 'Force re-parsing of all files (bypass cache)', false)
     .option('--no-parallel', 'Parse on the main thread only (default: worker threads when the work repays them; see settings.parseWorkers)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      // The compact MapX logo heads scan's output on a terminal (M4-25, D031); never in pipes or CI.
+      printBanner();
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
 
@@ -662,6 +664,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--all', 'Update all registered repositories (the default)')
     .option('--no-parallel', 'Parse on the main thread only (default: worker threads when the work repays them; see settings.parseWorkers)')
     .action(async (path: string | undefined, opts: Record<string, unknown>) => {
+      // As for scan: the compact logo heads update/sync on a terminal (M4-25, D031).
+      printBanner();
       const dir = path ? resolve(path) : resolveDir({}, program.opts());
       const { config, store, graph } = await loadContext(dir);
       const onProgress = createProgressRenderer();

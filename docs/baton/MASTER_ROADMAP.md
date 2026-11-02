@@ -219,6 +219,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-09-R1** The whole test suite leaves the checkout untouched (COMPLETION DISPUTED for M4-09) — READY, P1, 2h; depends on M4-09.
 - **M4-13-R1** Parse pool sizing honours CPU affinity; the worker bench exercises workers — BACKLOG, P2, 2h; depends on M4-13.
 - **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — BACKLOG, P2, 2h; depends on M4-24.
+- **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 

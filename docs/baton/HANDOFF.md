@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@b2558df592cf083524960d072c727f9a6681989f (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
+Revision: develop@a1f150cdc81cbcf2da43380c8d0206827edbd8c1 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M5 — Architecture rules (Deptrac-inspired).
 
 ## Baseline
-Last completed: M5-03 — Element view, core selectors and layer membership with selector trace.
-Evidence: `npx vitest run tests/arch-selectors.test.ts` (exit 0) → docs/baton/reports/M5-03.md; `npm run check` (exit 0) → docs/baton/reports/M5-03.md.
+Last completed: M4-25 — Compact terminal logo for init, scan and sync.
+Evidence: `npx vitest run tests/branding.test.ts` (exit 0) → docs/baton/reports/M4-25.md; `npm run check` (exit 0) → docs/baton/reports/M4-25.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect

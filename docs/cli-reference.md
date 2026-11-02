@@ -20,7 +20,7 @@ mapx -d /path/to/project scan
 
 ## `mapx init`
 
-In a terminal at least 64 columns wide, init first prints the MapX logo as text art in `#ff02fe`. It uses 24-bit colour where the terminal reports it, otherwise the nearest 256 colour, and prints the logo plain under `NO_COLOR`. The logo is never printed in a pipe or in CI, and `MAPX_NO_BANNER=1` turns it off.
+In a terminal at least 32 columns wide, `init`, `scan` and `sync` (`update`) first print the MapX logo: the text art at half its size, 32 columns by 12 rows, in half-block cells shaded with `#ff02fe`. It uses 24-bit colour where the terminal reports it (`COLORTERM=truecolor`), otherwise 256 colours with one colour per shade. The shading fades toward a dark or light background when `COLORFGBG` names one, else toward a mid grey that reads on both. Under `NO_COLOR` it prints plain shade characters. The logo is never printed in a pipe, when `CI` is set, on `TERM=dumb`, or by the MCP tools, and `MAPX_NO_BANNER=1` turns it off.
 
 Initialize MapxGraph in the current project. Creates `.mapx/` directory, `AGENTS.md`, and auto-adds `.mapx/` to `.gitignore`.
 
@@ -64,6 +64,8 @@ The uninit command will:
 
 ## `mapx scan`
 
+In a terminal, scan opens with the MapX logo (see [`mapx init`](#mapx-init)).
+
 Perform a full scan of all source files. Builds the graph from scratch. Without `--repo`, every registered repository is scanned, as with `--all`: run at a workspace root, `mapx scan` covers the nested repos registered there as well as the root repo.
 
 - Shows real-time progress: discover, index, and parse phases
@@ -88,6 +90,8 @@ Options:
 - `--no-parallel` — Parse on the main thread only. By default, a batch large enough to repay worker startup (about 768 KB of source) parses on worker threads, sized from the source, the CPUs and the available memory; see `settings.parseWorkers` in [Parallel parsing](configuration.md#parallel-parsing)
 
 ## `mapx update` / `mapx sync`
+
+In a terminal, update and sync open with the MapX logo (see [`mapx init`](#mapx-init)).
 
 Incremental scan. Detects changed files via git, or via content hashes outside git, and only re-scans those. The exceptions are re-scans that keep the graph identical to `mapx scan`:
 

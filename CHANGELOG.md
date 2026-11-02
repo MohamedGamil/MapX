@@ -9,10 +9,14 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).
 - `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
 
 - An architecture-rules fixture set (PHP, TypeScript, Python, Go and a two-repo workspace, with labelled violations, skips, uncovered and baseline rows) and `scripts/eval/score-arch.ts`, which scores a report per kind; the baseline is 0.0 until `mapx check` exists (M5-01).
 - The architecture element view and core selectors (`path`, `name`, `layer`, `all`/`any`/`not`, `role`, `cluster`, `repo`, `workspacePackage`, `language`, `framework`) with layer membership that records which selector matched, computed once per scan and configuration (M5-03).
+
+### Changed
+- The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
 - Go: a struct embedding `v1.UnimplementedFooServer` or `database.Store` links again when the package name is not the import path's last element (`api/v1`, a package named differently from its folder); when two imported project packages could both be meant, no edge is made (M0-17-R5, review 2026-11-02).

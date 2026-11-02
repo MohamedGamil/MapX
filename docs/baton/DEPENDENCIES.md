@@ -245,3 +245,4 @@ flowchart LR
 - M1-07-R3 ← M1-07-R2 (hard), M1-03-R2 (hard)
 - M2-06-R4 ← M2-06-R2 (hard)
 - M4-24-R1 ← M4-24 (hard)
+- M4-25 ← M4-18 (hard)
