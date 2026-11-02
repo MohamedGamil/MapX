@@ -165,8 +165,8 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-04-R4** Same-named axios clients in one file keep their own baseURL scope — DONE, P2, 2h; depends on M2-04-R3.
 - **M2-06-R4** Route domains are workspace hosts for HTTP pairing — DONE, P2, 2h; depends on M2-06-R2.
 - **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
-- **M2-09** JS/TS member-assigned functions are symbols — BACKLOG, P2, 4h; depends on M2-08.
-- **M2-10** Lua method calls with `:` and `self` give call edges — BACKLOG, P2, 3h; depends on M4-27.
+- **M2-09** JS/TS member-assigned functions are symbols — IN_PROGRESS, P2, 4h; depends on M2-08.
+- **M2-10** Lua method calls with `:` and `self` give call edges — IN_PROGRESS, P2, 3h; depends on M4-27.
 
 ## M3 — Vue SFC semantics
 
@@ -263,7 +263,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.
 - **M5-02-R1** arch validate-config (CLI and MCP) and loader robustness — DONE, P2, 4h; depends on M5-05.
 - **M5-02-R2** The architecture config is committable in user projects and in MapX itself — CANCELLED, P1, 3h; depends on M5-02.
-- **M5-25-R1** Go package-qualified calls, and generic, slice and map literals of imported types — BACKLOG, P2, 4h; depends on M5-25.
-- **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — BACKLOG, P2, 4h; depends on M5-03-R1.
-- **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — IN_PROGRESS, P2, 3h; depends on M5-05.
+- **M5-25-R1** Go package-qualified calls, and generic, slice and map literals of imported types — IN_PROGRESS, P2, 4h; depends on M5-25.
+- **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — IN_PROGRESS, P2, 4h; depends on M5-03-R1.
+- **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — DONE, P2, 3h; depends on M5-05.
 

@@ -4209,12 +4209,12 @@
       },
       {
         "id": "M5-05-R1",
-        "duration": 3,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 3,
-        "latestStart": 23,
+        "earliestFinish": 0,
+        "latestStart": 26,
         "latestFinish": 26,
-        "slack": 23
+        "slack": 26
       },
       {
         "id": "M4-09-R2",
@@ -4271,13 +4271,13 @@
         "slack": 23
       }
     ],
-    "totalEffort": 165
+    "totalEffort": 162
   },
   "resourceSchedule": {
-    "hours": 165,
-    "weeks": 8.25,
+    "hours": 162,
+    "weeks": 8.1,
     "forecastAsOf": "2026-11-02",
-    "conditionalDate": "2026-12-29",
+    "conditionalDate": "2026-12-28",
     "assignments": [
       {
         "id": "M0-01",
@@ -5651,43 +5651,43 @@
         "id": "M5-05-R1",
         "worker": 0,
         "start": 152,
-        "finish": 155
+        "finish": 152
       },
       {
         "id": "M4-09-R2",
         "worker": 0,
-        "start": 155,
-        "finish": 155
+        "start": 152,
+        "finish": 152
       },
       {
         "id": "M4-26",
         "worker": 0,
-        "start": 155,
-        "finish": 155
+        "start": 152,
+        "finish": 152
       },
       {
         "id": "M3-05-R3",
         "worker": 0,
-        "start": 155,
-        "finish": 158
+        "start": 152,
+        "finish": 155
       },
       {
         "id": "M2-09",
         "worker": 0,
-        "start": 158,
-        "finish": 162
+        "start": 155,
+        "finish": 159
       },
       {
         "id": "M4-27",
         "worker": 0,
-        "start": 162,
-        "finish": 162
+        "start": 159,
+        "finish": 159
       },
       {
         "id": "M2-10",
         "worker": 0,
-        "start": 162,
-        "finish": 165
+        "start": 159,
+        "finish": 162
       }
     ]
   }
