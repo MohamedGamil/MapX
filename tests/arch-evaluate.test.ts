@@ -117,7 +117,8 @@ const key = (f: ArchReport['findings'][number]) => `${f.kind} ${f.rule ?? ''} ${
 
 describe('the evaluation chain on the PHP app (AR-08)', () => {
   it('reports each dependency once per edge type at the class level, with the AR-08 rule', () => {
-    const r = runArchitecture(roots['php']!)!;
+    // The evaluator alone: the fixture's baseline (php-07, php-26) is M5-06's, tested in arch-baseline.
+    const r = runArchitecture(roots['php']!, { baseline: false })!;
     const shown = r.findings.filter((f) => f.kind !== 'allowed' && f.edgeType === 'instantiation').map(key);
     expect(shown).toEqual([
       'violation disallowed-layer App\\Controller\\OrderController -> App\\Domain\\Order instantiation',

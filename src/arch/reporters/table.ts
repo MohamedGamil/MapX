@@ -6,7 +6,7 @@ import type { ArchReport, Finding } from '../report.js';
 const MARK: Record<string, string> = { violation: '✖', uncovered: '?', skipped: '-', allowed: '✓', warning: '!', error: '✖' };
 
 function line(f: Finding): string {
-  const severity = f.kind === 'violation' ? ` [${f.severity}]` : '';
+  const severity = f.kind === 'violation' ? ` [${f.severity}]` : f.skippedBy ? ` [${f.skippedBy}]` : '';
   const head = `  ${MARK[f.kind] ?? '·'} ${f.rule ?? f.kind}${severity}`;
   if (!f.source) return `${head}  ${f.message}`;
   if (!f.target) return `${head}  ${f.message}\n      ${f.source.file}`; // multi-layer: where the element is

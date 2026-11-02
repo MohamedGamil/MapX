@@ -6,7 +6,8 @@
 //   0  no failing finding
 //   1  violations of severity error (with --fail-on warn: also warn-level violations and warnings)
 //   2  uncovered dependencies, with --fail-on-uncovered
-//   3  configuration errors (invalid document, a "+" cycle, no configuration at all)
+//   3  configuration errors (invalid document, a "+" cycle, no configuration at all) and baseline
+//      errors (an invalid baseline or base report, a stale baseline entry)
 //   4  the index is missing or stale (scan or --sync required), or an internal error
 // When several apply, the lowest-level problem wins: 4 before 3 before 1 before 2. The CLI checks
 // the index (4) before it loads the configuration (3); this module decides 3, 1 and 2.
@@ -18,7 +19,7 @@ export interface CheckOptions {
   /** Show uncovered dependencies (they never fail the run without failOnUncovered). */
   reportUncovered?: boolean;
   failOnUncovered?: boolean;
-  /** Show skipped (baselined) violations; baselines arrive with M5-06. */
+  /** Show skipped violations (a baseline or `--compare` accepts them, M5-06). */
   reportSkipped?: boolean;
   /** Show allowed dependencies (normally only counted). */
   reportAllowed?: boolean;
@@ -28,6 +29,12 @@ export interface CheckOptions {
   layer?: string;
   /** Only findings with this rule (`disallowed-layer`, `private-layer`, `uncovered`, `multi-layer` …). */
   rule?: string;
+  /**
+   * Fingerprints of a base revision's report (`--compare`, M5-06): a failing finding among them
+   * (a warning under `--fail-on warn`, an uncovered dependency under `--fail-on-uncovered`, a
+   * strict `multi-layer` error) does not fail the run. Known violations are already skipped.
+   */
+  known?: Set<string>;
 }
 
 /** Error findings about the configuration or baseline, not the code: exit 3. */
@@ -79,7 +86,7 @@ function withCounts(report: ArchReport): ArchReport {
 /** The exit code of a run that produced `report` (exit 4 is the CLI's: it never gets a report). */
 export function exitCode(report: ArchReport, options: CheckOptions): number {
   if (report.findings.some((f) => f.kind === 'error' && CONFIG_RULES.has(f.rule ?? ''))) return EXIT.config;
-  const selected = selectFindings(report, options).findings;
+  const selected = selectFindings(report, options).findings.filter((f) => !options.known?.has(f.fingerprint));
   const failsOn = (f: Finding) =>
     f.kind === 'violation' && (f.severity === 'error' || options.failOn === 'warn')
     || f.kind === 'error' // multi-layer under strictLayers

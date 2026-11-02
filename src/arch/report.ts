@@ -1,9 +1,9 @@
 // The architecture report (M5-04; docs/research/deptrac AR-09, AR-12). Aggregates the evaluator's
 // decisions into findings with stable fingerprints, adds the multi-layer and empty-layer warnings
 // and configuration errors, and counts dependencies per layer pair (layerEdges, for graphs and the
-// DSM). `runArchitecture` is the whole pipeline; M5-05's `mapx check` calls it.
-import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+// DSM). `runArchitecture` is the whole pipeline; M5-05's `mapx check` calls it. A baseline and a
+// base report (M5-06, AR-10) turn known violations into skipped ones; stale entries are errors.
+import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { Store } from '../core/store.js';
 import { ConfigError, loadArchitectureConfig, type LoadOptions } from './config.js';
@@ -11,6 +11,7 @@ import type { ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership } from './membership.js';
 import { expandPolicy } from './policy.js';
 import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Finding, type FindingKind } from './evaluate.js';
+import { BaselineMatcher, fingerprint, loadBaseline, repoKey, type Baseline } from './baseline.js';
 
 export type { Finding, FindingKind } from './evaluate.js';
 
@@ -21,11 +22,25 @@ export interface ArchReport {
   layers: Array<{ name: string; elements: number; files: number; overlay: boolean }>;
   layerEdges: Array<{ from: string; to: string; allowed: number; violations: number; skipped: number }>;
   configErrors: string[];
+  /**
+   * What `mapx check` evaluated and kept (M5-06): the view and the `--layer`/`--rule` filters, so
+   * `--compare` can refuse a base report made on something else. Absent from in-process reports.
+   */
+  selection?: Selection;
 }
 
-/** A finding's stable identity (AR-09): rule, both elements and the edge type; never a line number. */
-export function fingerprint(rule: string, source: string, target: string, edgeType: string): string {
-  return createHash('sha256').update(JSON.stringify([rule, source, target, edgeType])).digest('hex').slice(0, 16);
+export interface Selection { view: string | null; layer: string | null; rule: string | null }
+
+// The fingerprint is the baseline's identity: it lives in baseline.ts, where it is documented.
+export { fingerprint };
+
+export interface SkipOptions {
+  /** Violations this baseline lists become skipped; its unmatched entries become errors. */
+  baseline?: Baseline | null;
+  /** Fingerprints of a base revision's report (`--compare`): violations among them become skipped. */
+  known?: Set<string>;
+  /** Repo name → workspace-relative path, for the repos fingerprints name (`.` is the root repo). */
+  repoPaths?: Record<string, string>;
 }
 
 const KINDS: FindingKind[] = ['violation', 'skipped', 'uncovered', 'allowed', 'warning', 'error'];
@@ -38,7 +53,7 @@ export function sortFindings(findings: Finding[]): Finding[] {
 }
 
 /** Builds the report of `config` over the membership (and so the index) it was computed on. */
-export function buildReport(store: Store, config: ArchitectureConfig, membership: LayerMembership): ArchReport {
+export function buildReport(store: Store, config: ArchitectureConfig, membership: LayerMembership, skip: SkipOptions = {}): ArchReport {
   const view = membership.view;
   const policy = expandPolicy(config);
   const { dependencies: deps, endFiles } = evaluateEdges(store, config, membership, policy);
@@ -50,6 +65,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
   // unique within a report (review of M5-04). Each finding remembers the layer pairs it counts for.
   const byKey = new Map<string, Finding>();
   const meta = new Map<Finding, { sourceLayers: Set<string>; pairs: Set<string>; packageDir?: string; sourceFiles: Set<string> }>();
+  const repoPaths = skip.repoPaths ?? {};
   for (const d of deps) {
     const src = reportElement(view, d.source);
     const tgt = ENDPOINT_EDGES.has(d.edgeType) && d.target.kind === 'symbol' ? d.target : reportElement(view, d.target);
@@ -57,7 +73,14 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     const t = d.targetPackage ? d.targetPackage.name : elementName(tgt);
     const targetFile = d.targetPackage ? d.targetPackage.dir : tgt.file.path;
     const rule = d.rule ?? 'allowed';
-    const key = JSON.stringify([d.kind, rule, s, t, d.edgeType]);
+    // The fingerprint's ends (AR-09, review of M5-06): an end the edge names at file level (an
+    // import) is its file, not the file's only top-level symbol shown above, so a symbol added to
+    // either file does not re-key it. Repos keep identical names in two repos apart.
+    const idS = d.source.kind === 'file' ? d.source.file.path : s;
+    const idT = d.targetPackage ? t : d.target.kind === 'file' ? d.target.file.path : t;
+    const sRepo = repoKey(src.file.repo, repoPaths);
+    const tRepo = repoKey(tgt.file.repo, repoPaths);
+    const key = JSON.stringify([d.kind, rule, s, t, d.edgeType, idS, idT, sRepo, tRepo]);
     let finding = byKey.get(key);
     if (!finding) {
       const targetLayer = d.targetLayers.join(', ') || undefined;
@@ -66,7 +89,8 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
         source: { element: s, file: src.file.path, layer: d.sourceLayer, repo: src.file.repo, ...(d.line !== undefined ? { line: d.line } : {}) },
         target: { element: t, file: targetFile, ...(targetLayer ? { layer: targetLayer } : {}), repo: tgt.file.repo },
         edgeType: d.edgeType, verifiability: d.verifiability, edges: 0,
-        fingerprint: fingerprint(rule, s, t, d.edgeType), message: '',
+        fingerprint: fingerprint(rule, idS, idT, d.edgeType, sRepo, tRepo), message: '',
+        ...(idS !== s || idT !== t || sRepo || tRepo ? { identity: { source: idS, target: idT, ...(sRepo || tRepo ? { sourceRepo: sRepo, targetRepo: tRepo } : {}) } } : {}),
       };
       byKey.set(key, finding);
       meta.set(finding, { sourceLayers: new Set(), pairs: new Set(), sourceFiles: new Set(), ...(d.targetPackage ? { packageDir: d.targetPackage.dir } : {}) });
@@ -101,6 +125,15 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     if (m.packageDir !== undefined && [...m.sourceFiles].every((file) => finer.has(JSON.stringify([f.kind, f.rule ?? '', file, m.packageDir])))) byKey.delete(key);
   }
 
+  // AR-10: a violation the baseline lists, or the base report already had, is skipped. Before the
+  // layer matrix is counted, so a skipped dependency counts as skipped there too.
+  const matcher = skip.baseline ? new BaselineMatcher(skip.baseline) : null;
+  for (const f of byKey.values()) {
+    if (f.kind !== 'violation') continue;
+    const by = matcher?.match(f) ? 'baseline' : skip.known?.has(f.fingerprint) ? 'compare' : undefined;
+    if (by) { f.kind = 'skipped'; f.skippedBy = by; }
+  }
+
   // layerEdges: dependencies (findings) per layer pair, counted after the subsumption above.
   const pairs = new Map<string, { from: string; to: string; allowed: number; violations: number; skipped: number }>();
   for (const f of byKey.values()) {
@@ -108,6 +141,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
       const [from, to] = pk.split('\u0000') as [string, string];
       const pair = pairs.get(pk) ?? { from, to, allowed: 0, violations: 0, skipped: 0 };
       if (f.kind === 'allowed') pair.allowed++;
+      else if (f.kind === 'skipped') pair.skipped++;
       else pair.violations++;
       pairs.set(pk, pair);
     }
@@ -130,6 +164,8 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
   for (const layer of membership.emptyLayers) {
     findings.push({ kind: 'warning', rule: 'empty-layer', severity: 'warn', layer, fingerprint: fingerprint('empty-layer', layer, '', ''), message: `layer ${layer} matches no element` });
   }
+  // An entry that matched nothing is stale: the baseline only shrinks (Deptrac's PostProcess).
+  if (matcher) findings.push(...matcher.stale(view, repoPaths));
   for (const e of policy.errors) findings.push({ kind: 'error', rule: 'config', severity: 'error', fingerprint: fingerprint('config', e, '', ''), message: e });
   // A selector this version cannot evaluate matches nothing: say so rather than fail silently.
   for (const u of membership.unsupported) {
@@ -176,6 +212,13 @@ export class NoIndexError extends Error {
 }
 
 export interface RunOptions extends LoadOptions {
+  /**
+   * The baseline: a file (`--baseline`, overriding the configuration's), or false for none (as
+   * `--generate-baseline` evaluates). Otherwise the configuration's, or the default file if it exists.
+   */
+  baseline?: string | false;
+  /** Fingerprints of a base revision's report (`--compare`). */
+  known?: Set<string>;
   /** An open store on the index; otherwise `<dir>/.mapx/mapx.db` is opened and closed. */
   store?: Store;
   /** Repo name → its path in the workspace (module roots fall back to these). */
@@ -198,11 +241,30 @@ export function runArchitecture(dir: string, options: RunOptions = {}): ArchRepo
   const dbPath = join(dir, '.mapx', 'mapx.db');
   // Never evaluate an empty index: an unscanned workspace would look clean (review of M5-04).
   if (!options.store && !existsSync(dbPath)) throw new NoIndexError(dir);
+  let baseline: Baseline | null = null;
+  try {
+    if (options.baseline !== false) baseline = loadBaseline(dir, config, options.baseline);
+  } catch (err) {
+    if (err instanceof ConfigError) return configErrorReport(err);
+    throw err;
+  }
   const store = options.store ?? new Store(dbPath);
   try {
     const membership = getMembership(store, dir, config, dbPath, options.repoPaths);
-    return buildReport(store, config, membership);
+    // Fingerprints name repos by path: from the caller, else from the workspace's config.json.
+    const repoPaths = options.repoPaths ?? registeredRepoPaths(dir);
+    return buildReport(store, config, membership, { baseline, known: options.known, repoPaths });
   } finally {
     if (!options.store) store.close();
+  }
+}
+
+/** Repo name → path from `<dir>/.mapx/config.json`; empty when it cannot be read. */
+function registeredRepoPaths(dir: string): Record<string, string> {
+  try {
+    const cfg = JSON.parse(readFileSync(join(dir, '.mapx', 'config.json'), 'utf8')) as { repos?: Array<{ name?: unknown; path?: unknown }> };
+    return Object.fromEntries((cfg.repos ?? []).filter((r) => typeof r.name === 'string' && typeof r.path === 'string').map((r) => [r.name as string, r.path as string]));
+  } catch {
+    return {};
   }
 }

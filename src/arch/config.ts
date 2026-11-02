@@ -537,7 +537,10 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
       if (Array.isArray(doc.visibility.internalTags)) visibility.internalTags = doc.visibility.internalTags.filter((s) => typeof s === 'string');
       if (typeof doc.visibility.nativeMarkers === 'boolean') visibility.nativeMarkers = doc.visibility.nativeMarkers;
     }
-    if (typeof doc.baseline === 'string') baseline = doc.baseline;
+    // A view has its own baseline (.mapx/architecture/<view>.baseline.json) unless the view document
+    // itself names one: a view extending the main configuration must not read or overwrite the
+    // main baseline (review of M5-06).
+    if (typeof doc.baseline === 'string' && (view === null || doc === docs[docs.length - 1]!.doc)) baseline = doc.baseline;
     if (isObject(doc.report)) {
       if (isObject(doc.report.groups)) for (const [g, ls] of Object.entries(doc.report.groups)) if (Array.isArray(ls)) report.groups[g] = ls.filter((s) => typeof s === 'string');
       if (Array.isArray(doc.report.hidden)) report.hidden = [...new Set([...report.hidden, ...doc.report.hidden.filter((s) => typeof s === 'string')])];

@@ -9,8 +9,9 @@ What exists so far:
 - **Rule evaluation and the report** (M5-04): policy expansion, the evaluation chain, findings with fingerprints, and the layer matrix.
 - **`mapx check`** (M5-05): the table and JSON reporters, and the exit contract. See [cli-reference.md](cli-reference.md#mapx-check).
 - **`mapx arch validate-config`** and the MCP tool `mapx_arch_validate_config` (M5-02-R1): validate the configuration alone, without an index.
+- **Baselines and the `--compare` ratchet** (M5-06): see [Baselines and the ratchet](#baselines-and-the-ratchet). These are CLI only for now: `mapx check` has no MCP tool yet (M5-14).
 
-Baselines, CI reporters, introspection commands and `@internal` markers come in M5-06 to M5-11.
+CI reporters, introspection commands and `@internal` markers come in M5-07 to M5-11.
 
 ## The configuration document
 
@@ -171,15 +172,86 @@ Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `imp
 
 `mapx check --format json` prints this report, described by `schemas/arch-report.schema.json`. It comes from `runArchitecture(dir)` in `src/arch/report.ts`. Uncovered, skipped and allowed findings are listed only with `--report-uncovered`, `--report-skipped` or `--report-allowed`; `counts` always includes them:
 
-- **`findings`:** one per dependency, edge type and rule. A source in several layers gets one finding whose `source.layer` lists them. Each has a `kind` (`violation`, `uncovered`, `allowed`, `warning`, `error`; `skipped` arrives with baselines), a `rule`, a `severity`, the `source` and `target` (element, file, layer, repo, first line), the `edgeType`, `verifiability`, the number of `edges` it stands for, a `fingerprint` and a `message`.
-- **`fingerprint`:** a hash of the rule, both elements and the edge type, with no line number, so it survives edits that move code.
+- **`findings`:** one per dependency, edge type and rule. A source in several layers gets one finding whose `source.layer` lists them. Each has a `kind` (`violation`, `skipped`, `uncovered`, `allowed`, `warning`, `error`), a `rule`, a `severity`, the `source` and `target` (element, file, layer, repo, first line), the `edgeType`, `verifiability`, the number of `edges` it stands for, a `fingerprint` and a `message`. A `skipped` finding says why in `skippedBy`: `baseline` or `compare`. A finding whose fingerprint inputs differ from the elements it shows has an `identity`; see [Fingerprints](#fingerprints).
+- **`fingerprint`:** a hash of the rule, both elements and the edge type, with no line number, so it survives edits that move code. See [Fingerprints](#fingerprints).
 - **Warnings:**
   - `multi-layer`, for a top-level declaration in several non-overlay layers. It is an error under `policy.strictLayers`. A symbol-less file gets one only when it is a dependency end;
   - `empty-layer`, for a non-overlay layer that matches nothing;
   - `unsupported-selector`, for a selector this version cannot evaluate yet. It matches nothing.
-- **Errors:** an invalid configuration gives `error` findings, `plus-cycle` for a `+` cycle (naming its first layer) and `config` for the rest.
+- **Errors:** an invalid configuration gives `error` findings, `plus-cycle` for a `+` cycle (naming its first layer) and `config` for the rest. A baseline entry that matches nothing is a `stale-baseline` error.
 - **`layers`:** elements and files per layer.
-- **`layerEdges`:** allowed and violating dependencies per layer pair.
+- **`layerEdges`:** allowed, violating and skipped dependencies per layer pair.
 - **`counts`:** per kind.
+- **`selection`** (from `mapx check`): the `view`, `layer` and `rule` the run evaluated and kept, `null` when not given.
 
 A workspace with a configuration but no index is an error (`run mapx scan first`), never an empty report.
+
+## Baselines and the ratchet
+
+A baseline lets you adopt rules on code that already breaks them. It freezes today's violations, so only new ones fail. It can only shrink: an entry that no longer matches a violation is an error, and you delete it. The code is in `src/arch/baseline.ts`.
+
+### The baseline file
+
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "fingerprint": "0816fbd611f92a81",
+      "rule": "disallowed-layer",
+      "source": "App\\Domain\\Order",
+      "target": "App\\Infrastructure\\SqlOrderRepository",
+      "edgeType": "instantiation"
+    }
+  ],
+  "skip_violations": {
+    "App\\Domain\\Order": ["App\\Infrastructure\\SqlOrderRepository"]
+  }
+}
+```
+
+- **`entries`** are what `mapx check --generate-baseline` writes. There is one per violation, sorted by rule, source, target and edge type, with no timestamp. The same violations always give the same bytes, so a diff of the baseline is a review of the debt.
+  - **Fields:** an entry needs a `fingerprint`, or all of `rule`, `source`, `target` and `edgeType`, from which the fingerprint is computed. When both are given, they must agree.
+  - **Repos:** an entry in a multi-repo workspace also has `sourceRepo` and `targetRepo` when an end is outside the root repo.
+  - **Ends:** `source` and `target` are the fingerprint's ends, so an import's `source` is the importing file (`app/Domain/Order.php`).
+- **`skip_violations`** is Deptrac's form: source element → target elements. A pair matches every violation between the two elements, whatever its rule or edge type. Use it to carry a Deptrac baseline over.
+- **Matching:** a violation whose fingerprint, or element pair, is in the baseline is reported as `skipped`. It never fails the run and is counted as skipped in `layerEdges`.
+- **Stale entries:** every entry or pair that matched no violation is an `error` finding with rule `stale-baseline`, and the run exits 3. Its ends name the files when the elements still exist. Regenerating drops it.
+- **Which file:** `--baseline <file>`, else the configuration's `"baseline"` (relative to the workspace), else `.mapx/architecture.baseline.json` if it exists.
+  - **Views:** a view uses `.mapx/architecture/<view>.baseline.json`, unless the view's own document sets `"baseline"`. A `baseline` it inherits through `extends` is ignored, so a view never reads or overwrites the main baseline.
+  - **Errors:** a file named by the option or the configuration must exist. A missing file, invalid JSON, an unknown key or a bad entry is a configuration error (exit 3), reported with a JSON pointer. A UTF-8 byte order mark is ignored.
+  - **Where to keep it:** under `.mapx/`. MapX indexes JSON files, so a baseline elsewhere in the workspace makes the index stale (exit 4) until the next scan; `--generate-baseline` warns and suggests a `.mapx/` path.
+
+### Fingerprints
+
+A fingerprint is the first 16 hex characters of sha256 over `[rule, source, target, edge type]`. When an end is outside the workspace's root repo, it is taken over `[rule, source, target, edge type, source repo, target repo]`.
+
+- **The ends:**
+  - **Symbol-level ends** are the reported element: a qualified name (`App\Domain\Order`, `app.domain.order.Order`, `src/domain/order.ts#Order`), with a method lifted to its class.
+  - **File-level ends** are the workspace-relative file path. These are the ends an edge names at file level: an import's importing file, and an import path's target file. The report shows such an end as the file's only top-level declaration when it has one, but the fingerprint keeps the file. So adding a function or a constant to either file does not re-key the dependency. The finding's `identity` gives the ends when they differ from those shown. A file-level and a symbol-level dependency between the same two declarations, on the same edge type, are two findings.
+- **Repos:** a repo is named by its workspace-relative path (`backend`), and the root repo by nothing. A single-repo workspace never names its repo, and in a multi-repo workspace two Laravel apps' `App\Domain\Order` are different dependencies.
+- **Stable across runs and machines:** it hashes no line number, no layer, and nothing absolute or time-dependent.
+- **Stable across path separators:** the store records paths with `/` on every OS. A hand-written entry with Windows separators in a path (`src\a.ts`) is normalised before it is fingerprinted, while a PHP name keeps its backslashes.
+- **A moved line still matches,** since the line is not part of it. So does a re-scan of an unchanged tree, or a file edited elsewhere.
+- **What re-keys it:**
+  - **A renamed or moved class** is a new dependency.
+  - **A moved file** re-keys its file-level ends everywhere. It also re-keys every element of a language whose qualified names are paths (TypeScript, JavaScript and the other path-form languages: `src/domain/order.ts#Order`). Moving such a file is, to the baseline, removing a dependency and adding one: regenerate.
+  - **Another edge type** is another dependency: an `import` and an `instantiation` between the same two classes are two entries. A Deptrac pair covers both.
+
+### `--compare`: the ratchet without a committed baseline
+
+CI checks the merge base and keeps its JSON report. It then checks the head against it:
+
+```bash
+mapx check <base checkout> --format json --report-skipped --report-uncovered -o /tmp/base.json
+mapx check --compare /tmp/base.json
+```
+
+- **What it skips:** a violation whose fingerprint is anywhere in the base report is skipped (`skippedBy: "compare"`), so only violations new since the base fail.
+- **Other failing findings:** a warning under `--fail-on warn`, an uncovered dependency under `--fail-on-uncovered` or a strict `multi-layer` error does not fail when the base report has its fingerprint.
+- **What always fails:** configuration errors and stale baseline entries.
+- **Fixed violations** are not errors: paying debt off is the point.
+- **Producing the base report:** produce it with `--report-skipped` and `--report-uncovered`, because hidden findings are not in the report and so cannot be recognised. A baseline still applies under `--compare`.
+- **Like with like:** the report records its `selection`. A base report of another view, or one narrowed by a `--layer` or `--rule` that the head does not share, is refused (exit 3). Its missing findings would look new, or one view's findings would excuse another's. A narrower head against a whole base is fine.
+
+`--since <git-ref>`, which would scan the ref itself, is deferred (REQ-ARCH-021).

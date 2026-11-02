@@ -53,7 +53,18 @@
         }
       }
     },
-    "configErrors": { "type": "array", "items": { "type": "string" } }
+    "configErrors": { "type": "array", "items": { "type": "string" } },
+    "selection": {
+      "description": "What mapx check evaluated and kept: the view and the --layer/--rule filters (null when not given). --compare refuses a base report with another view, or narrowed by a filter the head does not share.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["view", "layer", "rule"],
+      "properties": {
+        "view": { "type": ["string", "null"] },
+        "layer": { "type": ["string", "null"] },
+        "rule": { "type": ["string", "null"] }
+      }
+    }
   },
   "definitions": {
     "end": {
@@ -74,7 +85,7 @@
       "required": ["kind", "severity", "fingerprint", "message"],
       "properties": {
         "kind": { "enum": ["violation", "skipped", "uncovered", "allowed", "warning", "error"] },
-        "rule": { "description": "disallowed-layer, private-layer, uncovered, multi-layer, empty-layer, unsupported-selector, plus-cycle, config …", "type": "string" },
+        "rule": { "description": "disallowed-layer, private-layer, uncovered, multi-layer, empty-layer, unsupported-selector, plus-cycle, config, stale-baseline …", "type": "string" },
         "severity": { "enum": ["error", "warn", "info"] },
         "source": { "$ref": "#/definitions/end" },
         "target": { "$ref": "#/definitions/end" },
@@ -83,6 +94,19 @@
         "layer": { "description": "For layer-level findings (empty-layer, plus-cycle, unsupported-selector).", "type": "string" },
         "edges": { "description": "Stored edges this finding stands for.", "type": "integer", "minimum": 1 },
         "fingerprint": { "description": "Stable identity: rule, both elements and the edge type, never a line number.", "type": "string", "pattern": "^[0-9a-f]{16}$" },
+        "identity": {
+          "description": "The fingerprint's inputs where they differ from the shown elements: a file-level end is its file path; an end outside the root repo names its repo (workspace-relative path).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source", "target"],
+          "properties": {
+            "source": { "type": "string" },
+            "target": { "type": "string" },
+            "sourceRepo": { "type": "string" },
+            "targetRepo": { "type": "string" }
+          }
+        },
+        "skippedBy": { "description": "Why a skipped finding is skipped: a baseline entry, or the base report of --compare.", "enum": ["baseline", "compare"] },
         "message": { "type": "string" }
       }
     }

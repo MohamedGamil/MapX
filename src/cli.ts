@@ -1,6 +1,6 @@
 import { printBanner } from './branding.js';
 import { Command } from 'commander';
-import { resolve, join, dirname, relative, basename, sep } from 'node:path';
+import { resolve, join, dirname, relative, basename, sep, isAbsolute } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +37,7 @@ import { ConfigError, formatValidation, loadArchitectureConfig, validateArchitec
 import type { ArchitectureConfig } from './arch/schema.js';
 import { configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
+import { baselineLocation, displayPath, loadCompareReport, renderBaseline } from './arch/baseline.js';
 import { renderJson } from './arch/reporters/json.js';
 import { renderTable } from './arch/reporters/table.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
@@ -2593,7 +2594,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   // .mapx/architecture.jsonc on the index, print the findings, exit with the AR-17 code.
   program
     .command('check')
-    .description('Check the architecture rules in .mapx/architecture.jsonc against the index (exit 0 clean, 1 violations, 2 uncovered with --fail-on-uncovered, 3 configuration errors, 4 index missing or stale)')
+    .description('Check the architecture rules in .mapx/architecture.jsonc against the index (exit 0 clean, 1 violations, 2 uncovered with --fail-on-uncovered, 3 configuration or baseline errors, 4 index missing or stale)')
     .argument('[path]', 'Target directory')
     .option('-d, --dir <path>', 'Target directory')
     .option('--view <name>', 'Check the view .mapx/architecture/<name>.jsonc')
@@ -2601,12 +2602,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('-o, --output <file>', 'Write the report to a file instead of stdout')
     .option('--report-uncovered', 'Show dependencies on elements in no layer')
     .option('--fail-on-uncovered', 'Exit 2 when a dependency targets an element in no layer')
-    .option('--report-skipped', 'Show violations a baseline skips')
+    .option('--report-skipped', 'Show violations a baseline or --compare skips')
     .option('--report-allowed', 'Show allowed dependencies too')
     .option('--fail-on <severity>', 'Lowest severity that fails the run: error or warn', 'error')
     .option('--layer <name>', 'Only findings about this layer')
     .option('--rule <rule>', 'Only findings of this rule (disallowed-layer, private-layer, uncovered, multi-layer, …)')
     .option('--sync', 'Sync the index first when files changed since the last scan')
+    .option('--baseline <file>', "Use this baseline instead of the configuration's (relative to the current directory)")
+    .option('--generate-baseline [file]', 'Write every current violation to the baseline (or to <file>) and exit 0')
+    .option('--compare <report>', 'Fail only on violations absent from this JSON report of the base revision')
     // A usage error (unknown option, missing value) is a configuration error, exit 3 (AR-17), not
     // commander's exit 1, which the contract keeps for violations.
     .exitOverride((err) => { process.exit(err.exitCode === 0 ? 0 : EXIT.config); })
@@ -2624,13 +2628,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         process.exitCode = EXIT.config;
         return;
       }
+      // `--generate-baseline [file]` takes an optional value, so a word after it is taken as the
+      // file: `mapx check --generate-baseline <dir>` would write over a directory or check the
+      // wrong workspace. The file must be a .json file that is not a directory (review of M5-06).
+      if (typeof opts.generateBaseline === 'string') {
+        const file = String(opts.generateBaseline);
+        if (!file.toLowerCase().endsWith('.json') || (existsSync(resolve(file)) && statSync(resolve(file)).isDirectory())) {
+          console.error(`Error: --generate-baseline writes a .json file, not "${file}". Put the workspace path before the option: \`mapx check <path> --generate-baseline [file.json]\`.`);
+          process.exitCode = EXIT.config;
+          return;
+        }
+      }
       const options: CheckOptions = {
         reportUncovered: !!opts.reportUncovered, failOnUncovered: !!opts.failOnUncovered,
         reportSkipped: !!opts.reportSkipped, reportAllowed: !!opts.reportAllowed,
         failOn: failOn as CheckOptions['failOn'], layer: opts.layer as string | undefined, rule: opts.rule as string | undefined,
       };
+      const selection = { view: (opts.view as string | undefined) ?? null, layer: options.layer ?? null, rule: options.rule ?? null };
       const emit = (report: ArchReport) => {
-        const shown = shownReport(report, options);
+        const shown = { ...shownReport(report, options), selection };
         const text = format === 'json' ? renderJson(shown) : renderTable(shown);
         if (opts.output) {
           // Relative to the current directory, like any output path; its folder is created.
@@ -2716,9 +2732,56 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           return;
         }
         const repoPaths = Object.fromEntries(config.repos.map((r) => [r.name, r.path]));
-        const report = runArchitecture(dir, { store, repoPaths, view })!;
+        // Baselines and the ratchet (M5-06, AR-10). Paths given on the command line are relative to
+        // the current directory, like --output; the configuration's `baseline` is relative to the workspace.
+        const baselineFile = opts.baseline ? resolve(String(opts.baseline)) : undefined;
+        if (opts.generateBaseline !== undefined) {
+          if (opts.compare || options.layer || options.rule) {
+            console.error('Error: --generate-baseline writes every violation; it takes no --compare, --layer or --rule.');
+            process.exitCode = EXIT.config;
+            return;
+          }
+          // Evaluated without any baseline, so a regenerated baseline lists every violation again.
+          const report = runArchitecture(dir, { store, repoPaths, view, baseline: false })!;
+          if (exitCode(report, {}) === EXIT.config) {
+            emit(report);
+            process.exitCode = EXIT.config;
+            return;
+          }
+          const used = baselineLocation(dir, archConfig, baselineFile).path;
+          const target = typeof opts.generateBaseline === 'string' ? resolve(opts.generateBaseline) : used;
+          mkdirSync(dirname(target), { recursive: true });
+          writeFileSync(target, renderBaseline(report.findings));
+          const n = report.counts.violation;
+          console.log(`Wrote ${n} baseline ${n === 1 ? 'entry' : 'entries'} to ${displayPath(dir, target)}.`);
+          // MapX indexes JSON: a baseline in the workspace outside .mapx/ is a new file, so the next
+          // check finds the index stale (exit 4). Point at .mapx/ instead (review of M5-06).
+          const rel = relative(dir, target);
+          const inWorkspace = !rel.startsWith('..') && !isAbsolute(rel);
+          if (inWorkspace && rel.split(sep)[0] !== '.mapx') {
+            const suggested = displayPath(process.cwd(), join(dir, '.mapx', basename(target)));
+            console.error(`Warning: ${displayPath(dir, target)} is inside the workspace, and MapX indexes JSON files, so \`mapx check\` finds the index stale (exit 4) until the next scan. Keep baselines under .mapx/: \`mapx check --generate-baseline ${suggested}\`, then \`--baseline ${suggested}\` or "baseline": ".mapx/${basename(target)}" in the configuration.`);
+          } else if (target !== used) {
+            // --baseline is relative to the current directory, so the hint is too.
+            console.log(`\`mapx check\` reads ${displayPath(dir, used)}: pass \`--baseline ${displayPath(process.cwd(), target)}\`, or set "baseline" in the configuration.`);
+          }
+          process.exitCode = EXIT.ok;
+          return;
+        }
+        let known: Set<string> | undefined;
+        if (opts.compare) {
+          try {
+            known = loadCompareReport(resolve(String(opts.compare)), String(opts.compare), selection);
+          } catch (err) {
+            if (!(err instanceof ConfigError)) throw err;
+            emit(configErrorReport(err));
+            process.exitCode = EXIT.config;
+            return;
+          }
+        }
+        const report = runArchitecture(dir, { store, repoPaths, view, baseline: baselineFile, known })!;
         emit(report);
-        process.exitCode = exitCode(report, options);
+        process.exitCode = exitCode(report, { ...options, known });
       } catch (err) {
         console.error(`mapx check failed: ${err instanceof Error ? err.message : String(err)}`);
         process.exitCode = EXIT.index;

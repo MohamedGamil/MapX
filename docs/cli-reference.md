@@ -842,6 +842,7 @@ Checks the architecture rules in `.mapx/architecture.jsonc` against the index: l
 mapx check [path] [--view <name>] [--format table|json] [--output <file>]
            [--report-uncovered] [--fail-on-uncovered] [--report-skipped] [--report-allowed]
            [--fail-on error|warn] [--layer <name>] [--rule <rule>] [--sync]
+           [--baseline <file>] [--generate-baseline [file]] [--compare <report.json>]
 ```
 
 Options:
@@ -850,12 +851,23 @@ Options:
 - `--output <file>`: write the report to a file instead of stdout. The path is relative to the current directory, and missing folders are created.
 - `--report-uncovered`: list dependencies on elements in no layer. Otherwise they are only counted.
 - `--fail-on-uncovered`: exit 2 when there are any (also lists them).
-- `--report-skipped`: list violations a baseline skips. Baselines are not supported yet.
+- `--report-skipped`: list violations a baseline or `--compare` skips. Each has `skippedBy` set to `baseline` or `compare`.
 - `--report-allowed`: list allowed dependencies too.
 - `--fail-on warn`: warn-level violations (advisory rules, inferred edges) and warnings (`multi-layer`, `empty-layer`, `unsupported-selector`) also fail the run.
 - `--layer <name>`: only findings whose source or target layer is `<name>`, or that are about that layer. A name that is not a layer of the configuration is an error (exit 3), so a typo cannot turn the check off.
 - `--rule <rule>`: only findings of one rule: `disallowed-layer`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`. An unknown rule is an error (exit 3).
 - `--sync`: when files changed since the last scan, sync the index first instead of failing.
+- `--baseline <file>`: use this baseline instead of the configuration's `baseline`. The path is relative to the current directory.
+- `--generate-baseline [file]`: write every current violation to the baseline and exit 0.
+  - Without `<file>`, it writes the baseline the check reads: `--baseline`, else the configuration's `baseline`, else `.mapx/architecture.baseline.json` (`.mapx/architecture/<view>.baseline.json` for a view).
+  - It ignores the baseline in force, so a regenerated baseline lists every violation and drops stale entries.
+  - It takes no `--compare`, `--layer` or `--rule` (exit 3), and writes no report, so `--format` and `--output` have no effect.
+  - `<file>` must end in `.json` and must not be a directory (exit 3). The option takes the word after it, so put the workspace path first: `mapx check <path> --generate-baseline`.
+  - A view writes `.mapx/architecture/<view>.baseline.json` unless the view's own document sets `baseline`.
+  - A file in the workspace outside `.mapx/` gets a warning with a `.mapx/` path to use instead: it would make the index stale (exit 4).
+- `--compare <report.json>`: the ratchet without a committed baseline. A violation whose fingerprint is in this report (`mapx check --format json` on the base revision) is skipped. Only new violations fail. Warnings under `--fail-on warn`, uncovered dependencies under `--fail-on-uncovered` and strict `multi-layer` errors whose fingerprints the report has do not fail either. Configuration errors and stale baseline entries always fail. A base report of another `--view`, or narrowed by a `--layer` or `--rule` the check does not share, is refused (exit 3): each report records them as `selection`.
+
+Baselines are described in [architecture-rules.md](architecture-rules.md#baselines-and-the-ratchet). Keep baselines and base reports under `.mapx/` or outside the workspace. MapX indexes JSON files, so a new one anywhere else makes the index stale (exit 4) until the next scan.
 
 Before checking, `mapx check` makes sure the index is current. Every registered repo must have a completed scan, and no indexed file may have changed or been deleted. No new file a scan would index may be missing, in a git workspace or not, in nested repos too.
 
@@ -866,7 +878,7 @@ Exit codes:
 | 0 | No failing finding |
 | 1 | Violations of severity error (with `--fail-on warn`, also warn-level violations and warnings) |
 | 2 | Uncovered dependencies, with `--fail-on-uncovered` |
-| 3 | Configuration errors (invalid document, a `+` cycle), no configuration or no such `--view`, or a usage error (an unknown option, a missing value, an unknown `--layer` or `--rule`). With `--format json`, a missing configuration still gives a report with one `config` error |
+| 3 | Configuration errors (invalid document, a `+` cycle), no configuration or no such `--view`, a usage error (an unknown option, a missing value, an unknown `--layer` or `--rule`), or a baseline error: a stale entry (`stale-baseline`), a missing or invalid baseline, or a missing or invalid `--compare` report. With `--format json`, a missing configuration still gives a report with one `config` error |
 | 4 | No index, a repo never scanned, a stale index (run `mapx update` or pass `--sync`), an index an older MapX built (run `mapx scan` or pass `--sync`), or an internal error |
 
 When several apply, the lower-level problem wins: 4, then 3, then 1, then 2. `--layer` and `--rule` narrow what fails, but a configuration error always fails.
@@ -877,6 +889,10 @@ mapx check                                   # table; exit 1 on violations
 mapx check --format json -o arch-report.json # the report for CI or other tools
 mapx check --sync --fail-on-uncovered        # sync first; every dependency must be in a layer
 mapx check --layer Domain --rule disallowed-layer
+mapx check --generate-baseline               # freeze today's violations in .mapx/architecture.baseline.json
+# CI ratchet: check a scanned checkout of the merge base, then compare the head with it
+mapx check ../base --format json --report-skipped --report-uncovered -o /tmp/base.json
+mapx check --compare /tmp/base.json          # exit 1 only on violations new since the base
 ```
 
 ## `mapx explain <file>`

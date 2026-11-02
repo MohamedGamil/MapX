@@ -42,6 +42,14 @@ export interface Finding {
   /** How many stored edges this finding stands for. */
   edges?: number;
   fingerprint: string;
+  /**
+   * The fingerprint's inputs where they differ from the shown elements (M5-06): a file-level end is
+   * its file path, whatever symbols the file declares, and an end outside the workspace's root
+   * repo names its repo (workspace-relative path).
+   */
+  identity?: { source: string; target: string; sourceRepo?: string; targetRepo?: string };
+  /** Why a `skipped` finding is skipped: a baseline entry, or the base report of `--compare` (M5-06). */
+  skippedBy?: 'baseline' | 'compare';
   message: string;
 }
 

@@ -46,14 +46,19 @@ describe('the fixture', () => {
   it('has the + cycle, the baseline with one matched and one stale entry, and the two-repo http case', () => {
     expect(rows.filter((r) => r.app === 'php-broken-cycle')).toEqual([expect.objectContaining({ kind: 'error', rule: 'plus-cycle', layer: 'Application' })]);
     const baseline = JSON.parse(readFileSync(join(FIXTURE, 'php/.mapx/architecture.baseline.json'), 'utf8'));
-    expect(baseline.entries).toHaveLength(2);
     const skipped = rows.filter((r) => r.app === 'php' && r.kind === 'skipped');
     const stale = rows.filter((r) => r.app === 'php' && r.rule === 'stale-baseline');
     expect(skipped).toHaveLength(1);
     expect(stale).toEqual([expect.objectContaining({ kind: 'error' })]);
-    expect(baseline.entries[0].source.endsWith(skipped[0]!.from!.symbol!)).toBe(true);
-    expect(baseline.entries[0].target.endsWith(skipped[0]!.to!.symbol!)).toBe(true);
-    expect(baseline.entries[1].source.endsWith(stale[0]!.from!.symbol!)).toBe(true);
+    // The accepted dependency is a Deptrac element pair, covering every edge type between the two
+    // classes (M5-06 review); the stale one is an edge-typed entry.
+    const pairs = Object.entries(baseline.skip_violations as Record<string, string[]>);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]![0].endsWith(skipped[0]!.from!.symbol!)).toBe(true);
+    expect(pairs[0]![1]).toHaveLength(1);
+    expect(pairs[0]![1][0]!.endsWith(skipped[0]!.to!.symbol!)).toBe(true);
+    expect(baseline.entries).toHaveLength(1);
+    expect(baseline.entries[0].source.endsWith(stale[0]!.from!.symbol!)).toBe(true);
     const ws = rows.filter((r) => r.app === 'workspace');
     // workspace-03 was added by M5-04: the route file's import of the API controller (Backend → PublicApi).
     expect(ws.map((r) => [r.kind, r.edgeType])).toEqual([['allowed', 'http'], ['violation', 'http'], ['violation', 'import']]);
@@ -146,12 +151,12 @@ describe('the scorer', () => {
   });
 });
 
-describe('the real-scan score (`mapx check`, M5-04 evaluator)', () => {
-  // Rows later tasks own: the baseline (M5-06: php-07 skipped, php-26 stale entry) and @internal
-  // markers (M5-10/M5-11: internal-element). Every other labelled row is found, and nothing else is.
-  const LATER = (r: (typeof rows)[number]) => r.kind === 'skipped' || r.rule === 'stale-baseline' || r.rule === 'internal-element';
+describe('the real-scan score (`mapx check`, M5-04 evaluator, M5-06 baseline)', () => {
+  // Rows later tasks own: @internal markers (M5-10/M5-11: internal-element). Every other labelled
+  // row is found, and nothing else is.
+  const LATER = (r: (typeof rows)[number]) => r.rule === 'internal-element';
 
-  it('score-arch.ts finds every row but those later tasks own, with no false positive beyond the baselined one', () => {
+  it('score-arch.ts finds every row but those later tasks own, and nothing else', () => {
     const out = execFileSync(process.execPath, ['--import', 'tsx', resolve(__dirname, '../scripts/eval/score-arch.ts'), FIXTURE, '--json'], { encoding: 'utf8', cwd: resolve(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'] });
     const score = JSON.parse(out);
     expect(score.apps).toHaveLength(Object.keys(expected.apps).length);
@@ -159,18 +164,16 @@ describe('the real-scan score (`mapx check`, M5-04 evaluator)', () => {
     const misses = score.apps.flatMap((a: any) => a.misses).sort();
     expect(misses).toEqual(rows.filter(LATER).map((r) => r.id).sort());
     expect(score.apps.flatMap((a: any) => a.negativeHits)).toEqual([]);
-    // Recall 1 for uncovered, warning and error rows; precision 1 for all but violation, whose one
-    // extra finding is php-07 reported as a violation until M5-06 applies the baseline.
-    for (const kind of ['uncovered', 'warning']) expect(score.kinds[kind], kind).toMatchObject({ recall: 1, precision: 1 });
-    expect(score.kinds.error).toMatchObject({ matched: 1, reported: 1 }); // the + cycle; the stale entry is M5-06's
+    // Recall and precision 1 for skipped (php-07), uncovered, warning and error rows (the + cycle
+    // and php-26's stale baseline entry, M5-06).
+    for (const kind of ['skipped', 'uncovered', 'warning', 'error']) expect(score.kinds[kind], kind).toMatchObject({ recall: 1, precision: 1 });
     const violation = score.kinds.violation;
     const later = rows.filter((r) => r.kind === 'violation' && LATER(r)).length;
     expect(violation.matched).toBe(violation.expected - later);
-    expect(violation.reported).toBe(violation.matched + 1);
-    // …and that one is php-07: the PHP app's only unmatched violation is Order → SqlOrderRepository.
+    // No false positive: the baseline's pair skips both edges of php-07 (import and instantiation).
+    expect(violation.reported).toBe(violation.matched);
     const php = score.apps.find((a: any) => a.app === 'php');
-    expect(php.kinds.violation.reported - php.kinds.violation.matched).toBe(1);
-    expect(php.misses).toContain('php-07');
+    expect(php.misses).not.toContain('php-07');
     expect(score.failures).toEqual([]);
   }, 300_000);
 });
