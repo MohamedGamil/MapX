@@ -6,18 +6,17 @@ Remaining longest dependency path: **18h** (full-plan path: 214h).
 
 M5-13 → M5-15
 
-Remaining effort min/expected/max: **81 / 113 / 160h**. Capacity: 1 engineer(s) × 20 h/week → **5.7 weeks**, conditional finish **2026-12-12** (as of 2026-11-03).
+Remaining effort min/expected/max: **78 / 109 / 155h**. Capacity: 1 engineer(s) × 20 h/week → **5.5 weeks**, conditional finish **2026-12-11** (as of 2026-11-03).
 
 ## Open items and blockers
-- M5-07 (IN_PROGRESS): prerequisites satisfied
 - M5-09 (BACKLOG): prerequisites satisfied
 - M5-11 (IN_PROGRESS): prerequisites satisfied
 - M5-13 (BACKLOG): prerequisites satisfied
-- M5-14 (BACKLOG): prerequisites satisfied
+- M5-14 (IN_PROGRESS): prerequisites satisfied
 - M5-15 (BACKLOG): M5-13
 - M5-16 (BACKLOG): prerequisites satisfied
 - M5-17 (BACKLOG): prerequisites satisfied
-- M5-18 (BACKLOG): M5-07
+- M5-18 (BACKLOG): prerequisites satisfied
 - M5-98 (BACKLOG): M5-11; M5-16
 - M5-20 (IN_PROGRESS): prerequisites satisfied
 - M5-21 (BACKLOG): prerequisites satisfied
@@ -29,11 +28,11 @@ Remaining effort min/expected/max: **81 / 113 / 160h**. Capacity: 1 engineer(s) 
 - M3-05-R3 (BACKLOG): prerequisites satisfied
 - M5-25-R2 (BACKLOG): prerequisites satisfied
 - M4-12-R1 (BLOCKED): Owner decision: under CPU load, idle lanes steal new grammars more often, so M4-12 AC1 (grammar loads at most languages + workers) and AC2 (no worker idles while files remain) conflict. Either cap new-grammar steals per batch (AC1 holds; a lane may end while another still has files) or restate AC1 as plan + up to (workers - 1) steals (AC2 holds).
+- M5-07-R1 (BACKLOG): prerequisites satisfied
 
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
 |---|---:|---:|---:|---:|---:|
-| M5-07 | 0 | 6 | 6 | 12 | 6 |
 | M5-09 | 0 | 8 | 10 | 18 | 10 |
 | M5-11 | 0 | 8 | 8 | 16 | 8 |
 | M5-13 | 0 | 6 | 0 | 6 | 0 |
@@ -41,7 +40,7 @@ Remaining effort min/expected/max: **81 / 113 / 160h**. Capacity: 1 engineer(s) 
 | M5-15 | 6 | 18 | 6 | 18 | 0 |
 | M5-16 | 0 | 8 | 8 | 16 | 8 |
 | M5-17 | 0 | 12 | 6 | 18 | 6 |
-| M5-18 | 6 | 12 | 12 | 18 | 6 |
+| M5-18 | 0 | 6 | 12 | 18 | 12 |
 | M5-98 | 8 | 10 | 16 | 18 | 8 |
 | M5-20 | 0 | 6 | 6 | 12 | 6 |
 | M5-21 | 0 | 4 | 8 | 12 | 8 |
@@ -53,3 +52,4 @@ Remaining effort min/expected/max: **81 / 113 / 160h**. Capacity: 1 engineer(s) 
 | M3-05-R3 | 0 | 3 | 15 | 18 | 15 |
 | M5-25-R2 | 0 | 2 | 16 | 18 | 16 |
 | M4-12-R1 | 0 | 3 | 15 | 18 | 15 |
+| M5-07-R1 | 0 | 2 | 16 | 18 | 16 |

@@ -241,14 +241,14 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-04** Policy expansion and rule evaluator (handler chain, findings, fingerprints) — DONE, P1, 12h; depends on M5-03, M5-03-R1, M5-25.
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — DONE, P1, 8h; depends on M5-04.
 - **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — DONE, P1, 7h; depends on M5-05.
-- **M5-07** CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit — IN_PROGRESS, P2, 6h; depends on M5-05.
+- **M5-07** CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit — DONE, P2, 6h; depends on M5-05.
 - **M5-08** Introspection: arch layers --why, which, unassigned, deps, unused, changed, allowed — DONE, P2, 10h; depends on M5-04, M5-05.
 - **M5-09** Hierarchy and member selectors (transitive ancestry, depth, members) — BACKLOG, P2, 8h; depends on M5-03, M5-03-R1.
 - **M5-10** Capture decorators/attributes and doc tags in symbol metadata (tier 1) — DONE, P1, 16h; depends on M5-01, M3-04.
 - **M5-11** Visibility rules: private selectors and internal markers — IN_PROGRESS, P2, 8h; depends on M5-04, M5-10.
 - **M5-12** External, builtin and ambient elements with package attribution — CANCELLED, P1, 24h; depends on M5-01, M5-03, M4-03.
 - **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — BACKLOG, P2, 6h; depends on M5-04.
-- **M5-14** MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates — BACKLOG, P1, 8h; depends on M5-05, M5-08, M5-02-R1.
+- **M5-14** MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates — IN_PROGRESS, P1, 8h; depends on M5-05, M5-08, M5-02-R1.
 - **M5-15** Dashboard Architecture view and /api/arch endpoints — BACKLOG, P3, 12h; depends on M5-05, M5-13.
 - **M5-16** Rule-derived smells and single-source layer violations — BACKLOG, P2, 8h; depends on M5-04, M5-08.
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — BACKLOG, P2, 12h; depends on M5-04, M5-06.
@@ -269,4 +269,5 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — DONE, P2, 4h; depends on M5-03-R1.
 - **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — DONE, P2, 3h; depends on M5-05.
 - **M5-25-R2** Go methods with a generic receiver are indexed — BACKLOG, P2, 2h; depends on M5-25-R1.
+- **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — BACKLOG, P2, 2h; depends on M5-07.
 

@@ -15574,14 +15574,22 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-07",
       "actualHours": null,
       "startedAt": "2026-11-02T22:47:22.927Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T01:55:17.316Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-07.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-reporters.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-07.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T22:47:22.446Z",
@@ -15594,6 +15602,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T01:55:15.967Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T01:55:17.316Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-reporters.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-07.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -16163,15 +16189,28 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-14",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T01:10:14.122Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T01:10:13.375Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T01:10:14.122Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -20356,7 +20395,7 @@
       "milestone": "M5",
       "title": "Package, builtin and ambient selectors; uncovered and vendor-confinement reporting",
       "objective": "Architecture rules can select elements by package, builtin and ambient access, and the check reports uncovered external dependencies and vendor-confinement violations.",
-      "description": "Architecture rules can select elements by package, builtin and ambient access, and the check reports uncovered external dependencies and vendor-confinement violations. Decomposed from epic M5-12 (D019).",
+      "description": "Architecture rules can select elements by package, builtin and ambient access, and the check reports uncovered external dependencies and vendor-confinement violations. Decomposed from epic M5-12 (D019). Also (assigned 2026-11-03 from M5-20): ambient globals (window, document, process, Buffer, globalThis members used without import) are not extracted or classified yet; this needs parser support and an extractor-version bump, or a separate task if it outgrows M5-24.",
       "priority": "P2",
       "estimate": {
         "min": 4,
@@ -26488,6 +26527,67 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/worker-pool.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-07",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-07.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-07-R1",
+      "title": "CI reporters locate files from the repository root when the workspace is a subfolder",
+      "objective": "SARIF, GitHub annotations, CodeClimate and JUnit paths are relative to the git repository root (or carry the subfolder prefix) when the MapX workspace is below it, so GitHub code scanning and PR annotations point at the right files.",
+      "description": "Limitation of M5-07 (2026-11-03): reporters write workspace-relative paths; in a repository whose MapX workspace is a subfolder (monorepo), code scanning and annotations miss the files.",
+      "outputs": [
+        "src/arch/reporters/context.ts",
+        "tests/arch-reporters.test.ts",
+        "reports/M5-07-R1.md"
+      ],
+      "affectedFiles": [
+        "src/arch/reporters/**",
+        "tests/arch-reporters.test.ts",
+        "docs/cli-reference.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A workspace at repo/sub: SARIF uri, ::error file= and CodeClimate path are sub/…, JUnit file attributes too (test, all four formats).",
+        "A workspace at the repo root or outside git is unchanged (goldens hold)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-reporters.test.ts",
         "npm run check"
       ]
     }
