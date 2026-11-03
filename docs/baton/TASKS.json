@@ -29775,6 +29775,186 @@
       ]
     },
     {
+      "milestone": "M2",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-13",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-12.md",
+        "docs/baton/reports/M2-13.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-17",
+      "title": "PHP functions in several namespace blocks of one file resolve",
+      "objective": "A function declared in an earlier `namespace A { }` block of a file is found by calls in that block; the scanner no longer keeps a single namespace per PHP file for its functions.",
+      "description": "Lane B (M2-13 review fixes): the scanner keeps one namespace per PHP file for declared functions, so a function in an earlier block is not found.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/php-one-line.test.ts",
+        "reports/M2-17.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/languages/php.ts",
+        "tests/php-one-line.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Two namespace blocks each declaring and calling a function: each call links its own block's function (test); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/php-one-line.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-13",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-12.md",
+        "docs/baton/reports/M2-13.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-18",
+      "title": "PHP `use` imports are scoped to their namespace block",
+      "objective": "In a file with several namespace blocks, a `use` statement applies only to names in its own block, as PHP scopes it.",
+      "description": "Lane B (M2-13 review fixes): PHP `use` imports are treated as file-wide.",
+      "outputs": [
+        "src/parsers/languages/php.ts",
+        "tests/php-one-line.test.ts",
+        "reports/M2-18.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "src/core/scanner.ts",
+        "tests/php-one-line.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A `use Foo\\Bar` in block A does not resolve `Bar` in block B (test); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/php-one-line.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-12.md",
+        "docs/baton/reports/M2-13.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-19",
+      "title": "Java default interface methods are walked as bases",
+      "objective": "A call on a Java object whose class lacks the method but implements an interface with a default method of that name links the interface method.",
+      "description": "Lane B (M2-12 review fixes): Java default interface methods are not walked as bases.",
+      "outputs": [
+        "src/parsers/languages/**",
+        "tests/new-expression-calls.test.ts",
+        "reports/M2-19.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/**",
+        "src/core/scanner.ts",
+        "tests/new-expression-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`new Impl().greet()` with `interface I { default void greet() {} }` links I#greet (test); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/new-expression-calls.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
       "milestone": "M5",
       "priority": "P2",
       "estimate": {
