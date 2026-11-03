@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- `mapx arch graph` draws the layer graph as Graphviz DOT, SVG (no Graphviz needed), Mermaid, a layer DSM or JSON, with dependency counts per layer pair, violations in red, skipped ones dashed, groups as subgraphs, hidden layers and point-to-group (M5-13).
 - Five MCP tools give agents the architecture rules: `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed` (a pre-flight check that names allowed alternatives), `mapx_arch_explain` and `mapx_arch_init` (a role-based proposal that writes only with `write: true`). They answer as `mapx check` and `mapx arch …` do, and the generated agent instructions say to call `mapx_arch_allowed` before adding an import across modules. MCP now has 39 tools (M5-14).
 - External references to npm packages now record their package, whether it is a direct or transitive dependency and whether it is dev-only, from package.json and package-lock, pnpm or yarn lockfiles. Node built-ins (`fs`, `node:fs`, `fs/promises`) are classified as built-ins, and a package.json or lockfile change makes the index stale (M5-20).
 - Architecture checks now report `internal-element` violations for symbols tagged `@internal` or `@mapx-internal` (configurable with `visibility.internalTags`). With `visibility.nativeMarkers` they also report references the language's own module visibility refuses: Go `internal/` packages, Python `_private` modules and names, Kotlin and C# `internal`, Java package-private and Rust `pub(crate)` (M5-11).

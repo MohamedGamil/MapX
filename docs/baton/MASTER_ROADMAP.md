@@ -247,11 +247,11 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-10** Capture decorators/attributes and doc tags in symbol metadata (tier 1) — DONE, P1, 16h; depends on M5-01, M3-04.
 - **M5-11** Visibility rules: private selectors and internal markers — DONE, P2, 8h; depends on M5-04, M5-10.
 - **M5-12** External, builtin and ambient elements with package attribution — CANCELLED, P1, 24h; depends on M5-01, M5-03, M4-03.
-- **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — IN_PROGRESS, P2, 6h; depends on M5-04.
+- **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — DONE, P2, 6h; depends on M5-04.
 - **M5-14** MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates — DONE, P1, 8h; depends on M5-05, M5-08, M5-02-R1.
 - **M5-15** Dashboard Architecture view and /api/arch endpoints — BACKLOG, P3, 12h; depends on M5-05, M5-13.
 - **M5-16** Rule-derived smells and single-source layer violations — BACKLOG, P2, 8h; depends on M5-04, M5-08.
-- **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — BACKLOG, P2, 12h; depends on M5-04, M5-06.
+- **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — IN_PROGRESS, P2, 12h; depends on M5-04, M5-06.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — BACKLOG, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
