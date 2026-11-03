@@ -1,6 +1,27 @@
 # MapX project state
 
-Updated 2026-11-02 (evening), consolidation under claude-ff. Every task below was independently reviewed and its P0/P1 findings fixed before DONE. `EXTRACTOR_VERSION` is now 3, so an older index re-parses once.
+Updated 2026-11-03, consolidation under claude-ff. The owner closed the other sessions; claude-ff runs every lane (one worktree per task, an independent review per commit, P0/P1 fixed before DONE, a clean-clone `npm run check` before each closure). `EXTRACTOR_VERSION` is 13. Commits are local on `develop`; nothing is pushed or published.
+
+Done since the last update:
+- **M5:**
+  - **Rules:** M5-10 and M5-11 (internal and visibility rules; the arch scorer is at 33/33, precision 1); M5-09 (hierarchy and member selectors; inherited dependencies).
+  - **Reporting and tooling:** M5-06 (baselines); M5-07 (CI reporters); M5-08 (the arch report in `mapx arch`); M5-13 (layer graph reporters); M5-14 (MCP architecture tools, 39 MCP tools); M5-16 (rule-derived smells); M5-17 (`mapx arch init` with eight presets).
+  - **External references:** M5-19 (the external_refs pipeline); M5-20 (npm attribution); M5-21 (Composer attribution and PHP built-ins).
+- **Remediation:** M5-08-R1 (P0 security: git refs no longer reach a shell), M5-07-R1 (CI paths in a subfolder workspace), M5-25-R1, M5-25-R2 (Go generic receivers; Go method calls resolve on declared types), M5-03-R2, M2-09, M2-10, M2-11, M4-26 and M4-27.
+
+In progress as lanes:
+- **External references:** M5-20-R1 (npm unreadable nested lock) with M5-22 (pip, Poetry and uv; review findings being fixed), and M5-23 (Go modules).
+- **Other:** M3-05-R3 (Pinia/Vuex at workspace roots; review findings being fixed) and M5-18 (dogfood config and CI step, per D030).
+
+Next: M5-24 (package, builtin and ambient selectors; waits on M5-22 and M5-23), then M5-98 (M5 acceptance re-score), then M5-15 (dashboard Architecture view, P3).
+
+Open for the owner:
+- **M4-12-R1 (BLOCKED):** under CPU load, M4-12's grammar-load bound (AC1) and its no-idle-worker rule (AC2) conflict. The owner chooses which one gives.
+- **Quiet machine needed:** M4-24-R1 (`npm run test:ui` perf budgets) and M4-13-R1.
+
+`tests/worker-pool.test.ts` (grammar count) and the 30 s arch CLI tests can fail at load averages above 25; they pass when rerun.
+
+Earlier: Updated 2026-11-02 (evening), consolidation under claude-ff. Every task below was independently reviewed and its P0/P1 findings fixed before DONE. `EXTRACTOR_VERSION` is now 3, so an older index re-parses once.
 
 Done this session:
 - M2-08-R1, M2-08-R2: barrel-aware sync; new modules re-link their importers.
@@ -70,7 +91,7 @@ Earlier: Updated 2026-11-01, after the remediation of the review of `3ac0d6d..2d
 | M2 Cross-language precision and HTTP pairing | M2-04-R3, M2-06-R2, M2-08 DONE | HTTP scorer: 48 labels, every metric 1.0 |
 | M3 Vue SFC semantics | All remediation DONE (M3-08-R1, M3-09-R1, M3-02-R1, M3-05-R1, M3-07-R1, M3-11-R1) | Edge scorer: 132 labels, recall 1.0, precision 0.992 (1 FP of 32 negatives: v3-039) |
 | M4 Measurement and DX | All DONE except the review's remediation (M4-09-R1, M4-13-R1, M4-24-R1); M4-25 compact logo DONE (M4-09, M4-01, M4-03, M4-08, M4-05, M4-04; worker pool M4-10–M4-15; dashboard M4-16–M4-24) | `npm run eval` checks the three scorers against `scripts/eval/floors.json` in a CI `Eval` job (M4-01). Name resolution is linear on shared names: a generated 16,000-file scan takes 18 s instead of 70 s, with identical edges (M4-03). The routes and HTTP scorers reject malformed options (M4-08). Installs no longer bundle the dashboard; pack/publish and `mapx ui` from source do (M4-05, D020). A git sync that changes nothing indexed skips the post-scan analysis: 11 s → 2 s at 16,000 files (M4-04). M4-02, M4-06 and M4-07 deferred. M4-02, M4-06 and M4-07 deferred |
-| M5 Architecture rules (Deptrac-inspired) | 7 of 29 DONE (M5-01, M5-02, M5-03, M5-03-R1, M5-25, M5-04, M5-05), 2 cancelled (M5-12, M5-02-R2 by D030); remediation M5-02-R1 open | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
+| M5 Architecture rules (Deptrac-inspired) | 28 of 37 DONE, 2 cancelled (M5-12, M5-02-R2 by D030); in progress M5-18, M5-20-R1, M5-22, M5-23; next M5-24, M5-98, M5-15 | Added 2026-10-31 (D013) from `docs/research/deptrac/`. M5-01 and M5-02 wait for the D019 gap tasks. Epic M5-12 decomposed into M5-19 … M5-24 and cancelled (D019). Interface deps: M5-10 → M3-04, M5-19 → M4-03, M5-18 → M4-01 |
 
 Live list: `npm run plan:scan`.
 
