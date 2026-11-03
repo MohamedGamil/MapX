@@ -1060,18 +1060,20 @@ describe('sync re-links renamed symbols and follows config changes (M0-02-R8)', 
   }, 120000);
 
   it('re-resolves when package.json gains a dependency, as scan --force', () => {
+    // An ES module's un-imported `create()` is a global, until an auto-import tool (Nuxt) makes the
+    // project's exports global (M2-08-R3). Receivers bound by package imports no longer depend on the
+    // listing: such a module is outside the project either way.
     const root = committed({
       'package.json': JSON.stringify({ name: 'app' }),
       'src/lib.js': 'export function create() { return 1; }\n',
-      'src/use.js': "import axios from 'axios';\nexport const c = () => axios.create();\n",
+      'src/use.js': 'export const c = () => create();\n',
     });
     try {
       mapx(root, 'scan', root);
-      // axios is no listed package yet: name resolution applies.
-      expect(calls(root)).toEqual(['src/use.js -> src/lib.js#create']);
-      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'app', dependencies: { axios: '^1.0.0' } }));
-      mapx(root, 'sync', root);
       expect(calls(root)).toEqual([]);
+      writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'app', dependencies: { nuxt: '^3.0.0' } }));
+      mapx(root, 'sync', root);
+      expect(calls(root)).toEqual(['src/use.js -> src/lib.js#create']);
       const synced = all(root);
       mapx(root, 'scan', root, '--force');
       expect(all(root)).toEqual(synced);

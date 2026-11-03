@@ -36,11 +36,11 @@ import { collectVuexFiles, resolveStoreTarget, storeCallOrPlain, workspaceSearch
 import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vueGlobFiles, type GlobalRegistrations, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
-import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, type AliasContext } from './js-aliases.js';
-import { exportSkeleton, hasCommonJsExports, jsExportSignature, scanModule, type JsText } from './js-source.js';
+import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, jsBaseUrlTarget, type AliasContext } from './js-aliases.js';
+import { declaredGlobalNames, exportSkeleton, globalScopeKey, hasCommonJsExports, hasModuleSyntax, jsExportSignature, scanModule, type JsText } from './js-source.js';
 import { EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
 import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalAttribution, type ExternalRefRow, type JsImport } from './external-refs.js';
-import { NpmAttributor, repoParentDirs, yarnRootDirs } from './manifests/npm.js';
+import { NpmAttributor, nodeBuiltin, npmPackageName, repoParentDirs, yarnRootDirs } from './manifests/npm.js';
 import { EXTERNAL_INPUTS_KEY, changedInputFiles, contentHash, parseExternalInputs } from './manifests/inputs.js';
 import { ComposerAttributor, type PhpName } from './manifests/composer.js';
 import { PypiAttributor } from './manifests/pypi.js';
@@ -185,6 +185,8 @@ interface NameCandidates {
 }
 /** JS/TS modules: where Vue global registrations (M3-02) and route tables (M3-06) live. */
 const JS_TS_FILE = /\.[cm]?[jt]sx?$/;
+/** Packages that make a project's own exports global, so an un-imported name may be one (M2-08-R3). */
+const AUTO_IMPORT_PACKAGES = ['nuxt', 'nuxt3', 'nuxt-edge', '@nuxt/bridge', 'unplugin-auto-import', 'unimport'];
 /** What a JS/TS module contributes to Vue resolution, as kept in `meta vue_registry:<repo>` (M3-08). */
 type VueModuleFacts = GlobalRegistrations & { routes?: StoredRoute[] };
 
@@ -1664,10 +1666,12 @@ export class Scanner {
     repoName: string,
     fileMap: Map<string, string>,
   ): void {
-    // The export signature the next sync compares with, to decide whether importers re-parse (D032).
-    const exportSig = JS_TS_FILE.test(relativePath) ? jsExportSignature(this.jsText(relativePath)) : undefined;
-    if (result.fileMetadata || exportSig) {
-      this.store.updateFileMetadata(relativePath, { ...result.fileMetadata, ...(exportSig ? { exportSig } : {}) });
+    // The export signature the next sync compares with, to decide whether importers re-parse (D032),
+    // and what the file puts in the global scope, to decide whether by-name referrers do (M2-08-R3).
+    const js = JS_TS_FILE.test(relativePath) ? this.jsText(relativePath) : undefined;
+    const exportSig = js ? jsExportSignature(js) : undefined;
+    if (result.fileMetadata || js) {
+      this.store.updateFileMetadata(relativePath, { ...result.fileMetadata, ...(js ? { exportSig, globalScope: globalScopeKey(js) } : {}) });
     }
     this.store.deleteSymbolsForFile(relativePath);
 
@@ -1771,6 +1775,14 @@ export class Scanner {
           continue;
         }
       }
+      // A name, or a receiver, bound by an import from outside the workspace (a package, `node:path`,
+      // a bare builtin such as `fs`) is that module's, by any reference kind: never a same-named
+      // project symbol. It goes to the external references instead (M2-08-R3).
+      if (isJsOrTs && !vueHint && !navigate && !ref.vueThis && !ref.vueStore
+        && ref.referenceType !== 'import' && ref.referenceType !== 'require' && this.boundOutside(ref, sourcePath, fileMap)) {
+        noteExternal(ref);
+        continue;
+      }
       // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
       // named by the module/namespace rather than the raw statement (M0-12-R4).
       let targets: { file: string; symbol: string; verifiability?: 'verified' | 'inferred'; metadata?: Record<string, unknown> }[] | undefined;
@@ -1818,7 +1830,8 @@ export class Scanner {
             targets = viaImport ? [viaImport] : [];
             targetFile = null;
           } else {
-            targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable);
+            targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable,
+              ref.vueThis || ref.vueStore ? undefined : this.globalScopeFilter(ref, sourcePath, fileMap));
           }
         }
         targets ??= targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
@@ -1886,7 +1899,31 @@ export class Scanner {
       }
       level = next;
     }
+    for (const r of this.globalScopeReferrers(changed)) if (!paths.includes(r)) importers.add(r);
     return importers;
+  }
+
+  /**
+   * The files with edges into a changed JS/TS file whose global scope changed since its last parse
+   * (M2-08-R3 review): a script that became a module, or a module whose `declare global` names
+   * changed, may no longer be what their names reach. As with any new declaration, files that may
+   * now reach a newly global name are not looked for.
+   */
+  private globalScopeReferrers(changed: Array<{ path: string; content?: string }>): Set<string> {
+    const referrers = new Set<string>();
+    for (const { path, content } of changed) {
+      if (content === undefined || !JS_TS_FILE.test(path)) continue;
+      let recorded: unknown;
+      try {
+        const metadata = this.store.getFile(path)?.metadata;
+        recorded = typeof metadata === 'string' ? JSON.parse(metadata).globalScope : undefined;
+      } catch {
+        continue;
+      }
+      if (typeof recorded !== 'string' || recorded === globalScopeKey(scanModule(path, content))) continue;
+      for (const e of this.store.getReverseEdges(path)) if (e.source_file !== path) referrers.add(e.source_file as string);
+    }
+    return referrers;
   }
 
   /**
@@ -2045,21 +2082,30 @@ export class Scanner {
         const [orig, alias] = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/);
         if ((alias ?? orig) !== name || !orig) continue;
         const target = this.resolveImportPath(m[2]!, file, fileMap);
-        return target ? this.findExport(target, orig === 'default' ? this.defaultExportName(target) ?? orig : orig, fileMap, depth + 1) : null;
+        if (target) return this.findExport(target, orig === 'default' ? this.defaultExportName(target) ?? orig : orig, fileMap, depth + 1);
+        // Re-exported from outside the project (`export { join } from 'node:path'`): no project
+        // declaration (M2-08-R3 review).
+        return this.outsideProject(m[2]!, file, fileMap) ? 'absent' : null;
       }
     }
     const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (bound?.imported && new RegExp(`\\bexport\\s*\\{[^}]*(?<![\\w$])${escapedName}(?![\\w$])[^}]*\\}(?!\\s*from)`).test(text)) {
+    const passedOn = new RegExp(`\\bexport\\s*\\{[^}]*(?<![\\w$])${escapedName}(?![\\w$])[^}]*\\}(?!\\s*from)`);
+    if (bound?.imported && passedOn.test(text)) {
       return this.findExport(bound.file, bound.imported, fileMap, depth + 1);
     }
+    // `import { join } from 'node:path'; export { join }`: no project declaration either.
+    const outside = this.jsModuleImports(file).find(s => s.names.some(n => n.local === name));
+    if (!bound && outside && this.outsideProject(outside.specifier, file, fileMap) && passedOn.test(text)) return 'absent';
     // Absent: the name occurs nowhere in the module's top level (bodies emptied, as in the export
     // signature sync compares: D032), the module has no CommonJS or `export =` exports, and every
-    // `export *` target is a project module where it is absent too (M2-08-R1).
+    // `export *` target is a project module where it is absent too (M2-08-R1), or a module outside the
+    // project, which declares nothing of the project's (M2-08-R3 review).
     js.skeleton ??= exportSkeleton(js);
     // A scan that could not balance its braces proves nothing absent.
     let absent = js.balanced && !new RegExp(`(?<![\\w$])${escapedName}(?![\\w$])`).test(js.skeleton) && !hasCommonJsExports(js);
     for (const m of text.matchAll(/\bexport\s*\*\s*from\s*['"]([^'"]+)['"]/g)) {
       const target = this.resolveImportPath(m[1]!, file, fileMap);
+      if (!target && this.outsideProject(m[1]!, file, fileMap)) continue;
       hit = target ? this.findExport(target, name, fileMap, depth + 1) : null;
       if (hit === 'absent') continue;
       if (hit !== null) return hit;
@@ -2569,6 +2615,152 @@ export class Scanner {
     return bindings;
   }
 
+  /**
+   * A JS/TS reference whose name, or receiver, an import from outside the project binds (M2-08-R3). A
+   * name the file declares itself is not bound.
+   */
+  private boundOutside(ref: ExtractedReference, sourcePath: string, fileMap: Map<string, string>): boolean {
+    const receiver = ref.metadata?.receiver as string | undefined;
+    const hit = this.boundExternal(this.jsExternalBindings(sourcePath), receiver ? `${receiver}.${ref.targetName}` : ref.targetName);
+    return !!hit && this.outsideProject(hit.specifier, sourcePath, fileMap);
+  }
+
+  /**
+   * A JS/TS specifier certainly outside the project (M2-08-R3 review). No project file, alias or
+   * workspace package satisfies it (`decideExternal`), and it is one of these:
+   * - a Node built-in (`node:path`, `fs`);
+   * - a package an enclosing package.json lists or node_modules holds;
+   * - a package name that no project folder or file is called (`some-pkg`).
+   * Anything else, such as `components/Button` beside a `components` folder that an alias MapX cannot
+   * read may name, is unknown: name lookup applies, as before.
+   */
+  private outsideProject(specifier: string, sourcePath: string, fileMap: Map<string, string>): boolean {
+    if (!jsCandidateSpecifier(specifier) || !this.decideExternal('npm', specifier, sourcePath, fileMap)) return false;
+    if (nodeBuiltin(specifier) || this.isNpmPackage(specifier, sourcePath)) return true;
+    const names = this.projectNamesOf(fileMap);
+    return !npmPackageName(specifier).replace(/^@/, '').split('/').some(part => names.has(part));
+  }
+
+  /** Every folder name and file stem of the project, per resolution phase (M2-08-R3 review). */
+  private projectNamesOf(fileMap: Map<string, string>): Set<string> {
+    if (this.projectNames) return this.projectNames;
+    const names = new Set<string>();
+    for (const path of fileMap.keys()) {
+      const parts = path.split('/');
+      for (const part of parts.slice(0, -1)) names.add(part);
+      names.add(parts[parts.length - 1]!.replace(/\.[^.]*$/, '').replace(/\.d$/, ''));
+    }
+    return (this.projectNames = names);
+  }
+
+  /**
+   * The files name lookup may pick for a bare JS/TS name, or undefined for no restriction (M2-08-R3).
+   * - **Bound outside the project:** a name bound by an import or a destructured dynamic import from
+   *   outside the project, which the file also declares (`const join = …` in one function, `import {
+   *   join } from 'node:path'` used in another), is the import or the file's own local: only the file
+   *   itself.
+   * - **A global:** for a name an ES module neither imports nor declares (the DOM `Node`), the caller's
+   *   own file, a script (no top-level import or export, a global `.d.ts` among them) and a module whose
+   *   `declare global` block declares the name. Another module's declarations are out of reach without
+   *   an import.
+   * - **Undefined, no restriction:** a name imported from a project module, or from a module that may
+   *   be one (M2-08-R1 keeps the fallback), or declared otherwise; a receiver; a script or a Vue/Svelte
+   *   caller (template expressions, SFC auto-imports); a source under a package.json using an
+   *   auto-import tool (Nuxt, unplugin-auto-import).
+   */
+  private globalScopeFilter(ref: ExtractedReference, sourcePath: string, fileMap: Map<string, string>): ((file: string) => boolean) | undefined {
+    const name = ref.targetName;
+    if (!JS_TS_FILE.test(sourcePath) || ref.metadata?.receiver || !/^[\w$]+$/.test(name)) return undefined;
+    const specifiers = [
+      ...this.jsModuleImports(sourcePath).filter(s => s.local === name || s.names.some(n => n.local === name)).map(s => s.specifier),
+      ...(this.dynamicImportsOf(sourcePath).get(name) ?? []),
+    ];
+    if (specifiers.some(s => !this.outsideProject(s, sourcePath, fileMap))) return undefined;
+    if (specifiers.length) return (file) => file === sourcePath;
+    if (!this.isEsModule(sourcePath) || this.autoImports(sourcePath) || this.localNamesOf(sourcePath).has(name)) return undefined;
+    return (file) => file === sourcePath || !JS_MODULE_FILE.test(file)
+      || (JS_TS_FILE.test(file) && !this.isEsModule(file)) || this.globalNamesOf(file).has(name);
+  }
+
+  /** A JS/TS file with a top-level `import` or `export` statement: an ES module (M2-08-R3). */
+  private isEsModule(path: string): boolean {
+    let esm = this.esModules.get(path);
+    if (esm === undefined) this.esModules.set(path, (esm = hasModuleSyntax(this.jsText(path))));
+    return esm;
+  }
+
+  /** The names a module's `declare global { … }` blocks declare (M2-08-R3). */
+  private globalNamesOf(path: string): Set<string> {
+    let names = this.globalDeclarations.get(path);
+    if (!names) this.globalDeclarations.set(path, (names = new Set(declaredGlobalNames(this.jsText(path)))));
+    return names;
+  }
+
+  /**
+   * The names a JS/TS file declares: functions, classes, types, variables, destructured ones too,
+   * over-inclusively (M2-08-R3).
+   */
+  private localNamesOf(path: string): Set<string> {
+    let names = this.localNames.get(path);
+    if (names) return names;
+    names = new Set();
+    this.localNames.set(path, names);
+    const { masked } = this.jsText(path);
+    for (const m of masked.matchAll(/\b(?:function\*?|class|interface|type|enum|namespace|const|let|var)\s+([\w$]+)/g)) names.add(m[1]!);
+    // `const { a, b: c } = …`, `const [a] = …`.
+    for (const m of masked.matchAll(/\b(?:const|let|var)\s*([{[][^=;]*?[}\]])\s*=/g)) {
+      for (const id of m[1]!.matchAll(/[A-Za-z_$][\w$]*/g)) names.add(id[0]);
+    }
+    return names;
+  }
+
+  /**
+   * The names a JS/TS file destructures from a dynamic import, with its specifiers, over-inclusively:
+   * `const { a } = await import('x')` and `import('x').then(({ a }) => …)` (M2-08-R3).
+   */
+  private dynamicImportsOf(path: string): Map<string, string[]> {
+    let bound = this.dynamicImports.get(path);
+    if (bound) return bound;
+    bound = new Map();
+    this.dynamicImports.set(path, bound);
+    const { code, masked } = this.jsText(path);
+    // The masked text keeps a literal's quotes at the same offsets; the code holds its contents.
+    const add = (pattern: string, quote: number) => {
+      const end = code.indexOf(code[quote]!, quote + 1);
+      if (end < 0) return;
+      for (const id of pattern.matchAll(/[A-Za-z_$][\w$]*/g)) bound!.set(id[0], [...(bound!.get(id[0]) ?? []), code.slice(quote + 1, end)]);
+    };
+    for (const m of masked.matchAll(/\b(?:const|let|var)\s*\{([^}]*)\}\s*=\s*(?:await\s+)?import\s*\(\s*(?=['"`])/g)) add(m[1]!, m.index! + m[0].length);
+    for (const m of masked.matchAll(/\bimport\s*\(\s*['"`][^)]*\)\s*\.then\s*\(\s*(?:async\s*)?\(\s*\{([^}]*)\}/g)) {
+      add(m[1]!, m.index! + m[0].search(/['"`]/));
+    }
+    return bound;
+  }
+
+  /**
+   * Whether a package.json from the file's folder up to the workspace root depends on an auto-import
+   * tool, which makes a project's composables and utilities global (M2-08-R3).
+   */
+  private autoImports(sourcePath: string): boolean {
+    const dirs: string[] = [];
+    let found: boolean | undefined;
+    for (let dir = dirname(sourcePath); ; dir = dirname(dir)) {
+      const key = dir === '.' ? '' : dir;
+      found = this.autoImportDirs.get(key);
+      if (found !== undefined) break;
+      dirs.push(key);
+      let manifest: any = null;
+      try { manifest = JSON.parse(this.readWorkspaceText(key ? `${key}/package.json` : 'package.json') ?? 'null'); } catch { /* unreadable */ }
+      if (manifest && typeof manifest === 'object') {
+        const deps = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies };
+        if (AUTO_IMPORT_PACKAGES.some(p => p in deps)) { found = true; break; }
+      }
+      if (!key) { found = false; break; }
+    }
+    for (const d of dirs) this.autoImportDirs.set(d, found);
+    return found;
+  }
+
   /** The names a Python file binds by absolute imports no indexed file satisfies (M5-19). */
   private pythonExternalBindings(sourcePath: string, fileMap: Map<string, string>): Map<string, ExternalBinding> {
     const key = `py\0${sourcePath}`;
@@ -3049,6 +3241,17 @@ export class Scanner {
   private vueRoutes = new Map<string, ResolvedRoute[]>();
   /** Names declared by the workspace's package.json files, per resolution phase (M0-17-R4). */
   private npmWorkspaceNames: Set<string> | null = null;
+  /**
+   * Per resolution phase (M2-08-R3): JS/TS files with a top-level import or export; each file's
+   * `declare global` names, declared names and dynamic-import bindings; folders under a package.json
+   * using an auto-import tool; the project's folder names and file stems.
+   */
+  private esModules = new Map<string, boolean>();
+  private globalDeclarations = new Map<string, Set<string>>();
+  private localNames = new Map<string, Set<string>>();
+  private dynamicImports = new Map<string, Map<string, string[]>>();
+  private projectNames: Set<string> | null = null;
+  private autoImportDirs = new Map<string, boolean>();
   /** Folder listings for exact-case checks, per sync. */
   private listings = new Map<string, Set<string>>();
   /** The files each repo parsed in the current multi-repo run, in run order (M0-10-R4). */
@@ -3308,7 +3511,13 @@ export class Scanner {
     const bases = !target.startsWith('.') && JS_MODULE_SOURCE.test(sourcePath)
       ? jsAliasTargets(target, sourcePath, this.aliasContext(fileMap))
       : [];
-    const aliased = bases.length > 0;
+    const aliases = [...bases];
+    // A bare import under the tsconfig/jsconfig `baseUrl`, after `paths`; a package when no file is
+    // there (M2-08-R3 review).
+    const viaBaseUrl = !target.startsWith('.') && JS_MODULE_SOURCE.test(sourcePath)
+      ? jsBaseUrlTarget(target, sourcePath, this.aliasContext(fileMap))
+      : null;
+    if (viaBaseUrl !== null) bases.push(viaBaseUrl);
     bases.push(target.startsWith('.') ? join(dir, target) : target);
     for (const base of bases) {
       const hit = this.probeModule(base, fileMap);
@@ -3316,8 +3525,8 @@ export class Scanner {
     }
     // A project module that is not there (yet): recorded for the file being resolved (M2-08-R2).
     const pending = this.unresolvedImports.get(sourcePath);
-    if (pending && (aliased || target.startsWith('.')) && !ASSET_IMPORT.test(target)) {
-      for (const base of aliased ? bases.slice(0, -1) : bases) pending.add(moduleKey(base));
+    if (pending && (aliases.length || target.startsWith('.')) && !ASSET_IMPORT.test(target)) {
+      for (const base of aliases.length ? aliases : bases) pending.add(moduleKey(base));
     }
     return null;
   }
@@ -3508,7 +3717,9 @@ export class Scanner {
     return names;
   }
 
-  private resolveSymbolToFile(symbolName: string, fileMap: Map<string, string>, sourcePath?: string, callableOnly = false): string | null {
+  private resolveSymbolToFile(
+    symbolName: string, fileMap: Map<string, string>, sourcePath?: string, callableOnly = false, allowFile?: (file: string) => boolean,
+  ): string | null {
     if (!symbolName || typeof symbolName !== 'string') return null;
 
     const sourceLang = sourcePath ? this.languageOf(sourcePath) : null;
@@ -3595,12 +3806,18 @@ export class Scanner {
         return declared.includes(sourcePath ?? '') ? sourcePath! : closest(declared, sourcePath ?? '');
       }
       if (sourcePath && found.sameFile.has(sourcePath)) return sourcePath;
+      // Only the files whose declarations the caller can see by name (M2-08-R3).
+      if (allowFile) {
+        const visible = found.files.filter(allowFile);
+        return visible.length ? closest(visible, sourcePath ?? '') : null;
+      }
       if (found.files.length <= 16) return closest(found.files, sourcePath ?? '');
       return (found.nearest ??= nearestIndex(found.files))(sourcePath ?? '');
     }
 
     // The store's search is a case-insensitive substring match: keep only declarations of the name.
     let matches = named(symbolName, filterMatches(this.store.searchSymbols(symbolName)));
+    if (allowFile) matches = matches.filter(m => m.file_path === sourcePath || allowFile(m.file_path as string));
     if (matches.length > 0) {
       // Prefer a definition in the same file as the caller to avoid false cross-file edges
       if (sourcePath) {
@@ -4491,6 +4708,12 @@ export class Scanner {
     this.vueScopes.clear();
     this.vueImporters.clear();
     this.npmWorkspaceNames = null;
+    this.esModules.clear();
+    this.globalDeclarations.clear();
+    this.localNames.clear();
+    this.dynamicImports.clear();
+    this.projectNames = null;
+    this.autoImportDirs.clear();
     this.jsImportsCache.clear();
     this.externalBindingsCache.clear();
     this.phpDeclared = null;

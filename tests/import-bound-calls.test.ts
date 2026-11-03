@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M2-08: a call of a name the file imports from a project module links that module's declaration
-// (through re-exports), never another file's same-named symbol; unimported names keep name lookup.
+// (through re-exports), never another file's same-named symbol; a script's unimported names keep name lookup.
 const git = (root: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd: root, stdio: 'pipe' });
 type Edge = { source_file: string; source_symbol: string | null; target_file: string; target_symbol: string };
@@ -44,6 +44,8 @@ export function viaStar() { return whisper(); }
 export function unimported() { return local(); }
 `,
       'src/app/legacy.js': "const { create: mk } = require('../lib/utils');\nfunction viaRequire() { return mk(); }\nmodule.exports = { viaRequire };\n",
+      // A script (no import or export): its names are globals, found by name.
+      'src/app/script.js': 'function fromScript() { return local(); }\n',
     });
     init(root);
     mapx(root, 'scan', '.');
@@ -70,8 +72,11 @@ export function unimported() { return local(); }
     expect(callsFrom(root, 'src/app/legacy.js')('viaRequire')).toEqual(['src/lib/utils.ts#create']);
   });
 
-  it('keeps name lookup for a name the file does not import', () => {
-    expect(from('unimported')).toEqual(['src/app/helpers.ts#local']);
+  // An ES module sees another module's declaration only through an import: an un-imported name is a
+  // global, never helpers.ts's export (M2-08-R3). A script keeps name lookup.
+  it('keeps name lookup for a name a script does not import, but not for an ES module', () => {
+    expect(from('unimported')).toEqual([]);
+    expect(callsFrom(root, 'src/app/script.js')('fromScript')).toEqual(['src/app/helpers.ts#local']);
   });
 });
 
@@ -351,6 +356,8 @@ describe('names absent from the imported project module (M2-08-R1)', () => {
   it('gives no edge when the name is absent from the module and every export-star target', () => {
     expect(from('body')).toEqual([]);
     expect(from('no-star')).toEqual([]);
+    // A star from outside the project declares nothing of the project's (M2-08-R3 review).
+    expect(from('pkg-star')).toEqual([]);
   });
 
   it('follows the export-star target that declares the name', () => {
@@ -363,7 +370,6 @@ describe('names absent from the imported project module (M2-08-R1)', () => {
     ['compiled __exportStar(require(…), exports)', 'star-compiled'],
     ['Object.assign(exports, …)', 'assign'],
     ['exports[k] = …', 'dynamic'],
-    ['an export-star target outside the project', 'pkg-star'],
     ['a local export alias', 'alias'],
   ])('keeps name lookup when %s', (_name, symbol) => {
     expect(from(symbol)).toEqual([FALLBACK]);

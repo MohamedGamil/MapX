@@ -1,0 +1,333 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
+
+// M2-08-R3: a name bound by an import from a package or builtin module is that module's, never a
+// same-named project symbol; a bare name an ES module neither imports nor declares is a global, never
+// another project module's declaration (found by M5-18: `join` from node:path → a project `join`).
+// TS parameter types are extracted for constructors (DI), so the type cases use constructors.
+type Edge = { source_symbol: string | null; edge_type: string; target_file: string; target_symbol: string };
+
+function edgesFrom(root: string, file: string): string[] {
+  return query<Edge>(root, `SELECT source_symbol, edge_type, target_file, target_symbol FROM edges
+    WHERE source_file = ? AND target_file != source_file AND edge_type NOT IN ('import', 'require') ORDER BY 1, 2, 3, 4`, file)
+    .map((e) => `${e.source_symbol} ${e.edge_type} ${e.target_file}#${e.target_symbol}`);
+}
+
+describe('names imported from outside the project (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', dependencies: { lodash: '^4.17.21' } }),
+      // Name lookup would pick these: every imported name below is declared here too.
+      'src/b.ts': `export function join(a: string, b: string) { return a + b; }
+export function resolve(a: string) { return a; }
+export function debounce(f: unknown) { return f; }
+export function readFileSync(p: string) { return p; }
+export class Node {}
+export class Parser {}
+`,
+      // A script's names are globals any file may see by name, unless an import binds the name.
+      'src/vendor/legacy.js': 'function join(a, b) { return a + b; }\nfunction resolve(a) { return a; }\nfunction debounce(f) { return f; }\nfunction readFileSync(p) { return p; }\nclass Parser {}\n',
+      'src/a.ts': `import { join, resolve } from 'node:path';
+
+export function run(p: string) {
+  return join(resolve(p), 'x');
+}
+`,
+      'src/c.ts': `import { join, resolve, debounce } from 'lodash';
+
+export function run(p: string) {
+  debounce(() => join([resolve(p)], ','));
+}
+`,
+      // A bare builtin, a default and a namespace binding, a type-only import.
+      'src/d.ts': `import path from 'path';
+import * as fs from 'fs';
+import { readFileSync } from 'fs';
+import type { Node } from 'web-tree-sitter';
+import { Parser } from 'web-tree-sitter';
+
+export class Loader {
+  constructor(private node: Node) {}
+  load(): string {
+    const p = new Parser();
+    fs.readFileSync(path.join('a', 'b'));
+    return readFileSync(path.resolve(String(this.node), String(p)));
+  }
+}
+`,
+      // The same names imported from the project still link.
+      'src/e.ts': `import { join, Node } from './b';
+
+export class Holder {
+  constructor(private node: Node) {}
+  local() { return join('a', String(this.node)); }
+}
+`,
+      // One function declares a local `join`, another calls the imported one (MapX's
+      // src/arch/elements.ts): neither is b.ts's.
+      'src/f.ts': `import { join } from 'node:path';
+
+export function view(root: string) {
+  return join(root, 'view');
+}
+
+export function label(input: { name?: string; path: string }): string {
+  const { path, name } = input;
+  const join = (prefix: string | null, sep: string, scopeSep = sep) =>
+    name === undefined ? (prefix ?? path) : [prefix, name].filter(Boolean).join(sep + scopeSep);
+  switch (path) {
+    case 'a':
+      return join(path, '.');
+    default:
+      return join(null, '::');
+  }
+}
+`,
+      // An SFC: the same rule for its script.
+      'src/Page.vue': `<script setup lang="ts">
+import { join } from 'node:path';
+function full(a: string) { return join(a, 'b'); }
+</script>
+<template><div>{{ full('a') }}</div></template>
+`,
+      // Destructuring a dynamic import binds like an import.
+      'src/g.ts': `export async function lazy() {
+  const { resolve } = await import('./b');
+  return resolve('x');
+}
+export function later() {
+  return import('./b')
+    .then(({ debounce }) => debounce(1));
+}
+`,
+      // A project barrel passing on names from outside the project.
+      'src/barrel.ts': "export { join } from 'node:path';\nexport * from 'lodash';\n",
+      'src/barrel2.ts': "import { resolve } from 'node:path';\nexport { resolve };\n",
+      'src/h.ts': `import { join, debounce } from './barrel';
+import { resolve } from './barrel2';
+
+export function viaBarrel() {
+  debounce(() => join('a', resolve('b')));
+}
+`,
+      // A dynamic import from outside the project.
+      'src/i.ts': `export async function dyn() {
+  const { join } = await import('node:path');
+  return join('a', 'b');
+}
+export function dynThen() {
+  return import('node:path').then(({ resolve }) => resolve('a'));
+}
+`,
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('a name a project barrel re-exports from outside the project links no project symbol', () => {
+    expect(edgesFrom(root, 'src/h.ts')).toEqual([]);
+  });
+
+  it('a name destructured from a dynamic import of a builtin links no project symbol', () => {
+    expect(edgesFrom(root, 'src/i.ts')).toEqual([]);
+  });
+
+  it('a name imported from a node: builtin links no project symbol', () => {
+    expect(edgesFrom(root, 'src/a.ts')).toEqual([]);
+  });
+
+  it('a name imported from an npm package links no project symbol', () => {
+    expect(edgesFrom(root, 'src/c.ts')).toEqual([]);
+  });
+
+  it('bare builtins, default and namespace receivers and type-only imports link no project symbol', () => {
+    expect(edgesFrom(root, 'src/d.ts')).toEqual([]);
+  });
+
+  it('a Vue SFC\'s name imported from a builtin links no project symbol', () => {
+    expect(edgesFrom(root, 'src/Page.vue')).toEqual([]);
+  });
+
+  it('the imported calls are recorded as external references instead (M5-19)', () => {
+    const rows = query<{ specifier: string; symbol: string }>(root,
+      `SELECT DISTINCT specifier, symbol FROM external_ref_candidates WHERE file_path = 'src/a.ts' AND kind = 'call' ORDER BY 2`);
+    expect(rows.map((r) => `${r.specifier}#${r.symbol}`)).toEqual(['node:path#join', 'node:path#resolve']);
+  });
+
+  it('the same names imported from a project module still link it', () => {
+    expect(edgesFrom(root, 'src/e.ts')).toEqual([
+      'Holder::constructor param_type src/b.ts#Node',
+      'Holder::local call src/b.ts#join',
+    ]);
+  });
+
+  it('an imported builtin the file also declares as a local links no other module', () => {
+    expect(edgesFrom(root, 'src/f.ts')).toEqual([]);
+  });
+
+  it('a name destructured from a dynamic import of a project module keeps name lookup', () => {
+    expect(edgesFrom(root, 'src/g.ts')).toEqual(['later call src/b.ts#debounce', 'lazy call src/b.ts#resolve']);
+  });
+});
+
+describe('globals an ES module neither imports nor declares (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+      'src/dom.ts': 'export class Node {}\nexport class Element {}\nexport class Request {}\nexport function helper() { return 1; }\n',
+      // DOM globals, and a function only another module declares.
+      'src/view.ts': `export class View {
+  constructor(private node: Node, private el: Element) {}
+  render() {
+    helper();
+    return new Request();
+  }
+}
+`,
+      'src/imported.ts': `import { Node, Element, Request, helper } from './dom';
+
+export class View {
+  constructor(private node: Node, private el: Element) {}
+  render() {
+    helper();
+    return new Request();
+  }
+}
+`,
+      // A script (no import or export) puts its declarations in the global scope.
+      'src/legacy/globals.js': 'function legacyHelper() { return 1; }\n',
+      'src/legacy/page.js': 'function page() { return legacyHelper(); }\n',
+      'src/uses-legacy.ts': 'export function viaScript() { return legacyHelper(); }\n',
+      // `declare global` in a module: the names it declares are global, the module's others are not.
+      'src/types/bus.ts': 'export {};\ndeclare global {\n  class EventBus {}\n}\nexport class NotGlobal {}\n',
+      'src/uses-bus.ts': 'export class Bus {\n  constructor(private bus: EventBus, private other: NotGlobal) {}\n}\n',
+      // A global .d.ts (no import or export).
+      'src/types/env.d.ts': 'declare class AppEnv {}\n',
+      'src/uses-env.ts': 'export class Env {\n  constructor(private env: AppEnv) {}\n}\n',
+      // A global .d.ts whose namespace and ambient module bodies export: still a script.
+      'src/types/widgets.d.ts': `declare namespace API {
+  export interface Options { id: string }
+}
+declare module 'widget-lib' {
+  export function create(): void;
+}
+declare class WidgetD {}
+`,
+      'src/uses-widget.ts': 'export function makeWidget() { return new WidgetD(); }\n',
+      // TS namespace scripts: `export` inside a namespace body makes no module.
+      'src/ns/models.ts': 'namespace App {\n  export function makeOrder() { return 1; }\n}\n',
+      'src/ns/app.ts': 'namespace App {\n  export function start() { return makeOrder(); }\n}\n',
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('Node, Element and Request link no project class of another module; an unimported helper links nothing', () => {
+    expect(edgesFrom(root, 'src/view.ts')).toEqual([]);
+  });
+
+  it('the same names imported from that module still link', () => {
+    expect(edgesFrom(root, 'src/imported.ts')).toEqual([
+      'View::constructor param_type src/dom.ts#Element',
+      'View::constructor param_type src/dom.ts#Node',
+      'View::render call src/dom.ts#helper',
+      'View::render instantiation src/dom.ts#Request',
+    ]);
+  });
+
+  it('a script\'s declarations stay reachable by name, from a script and from a module', () => {
+    expect(edgesFrom(root, 'src/legacy/page.js')).toEqual(['page call src/legacy/globals.js#legacyHelper']);
+    expect(edgesFrom(root, 'src/uses-legacy.ts')).toEqual(['viaScript call src/legacy/globals.js#legacyHelper']);
+  });
+
+  it('a name declared in `declare global` links; the module\'s other declarations do not', () => {
+    expect(edgesFrom(root, 'src/uses-bus.ts')).toEqual(['Bus::constructor param_type src/types/bus.ts#EventBus']);
+  });
+
+  it('a global .d.ts declaration links', () => {
+    expect(edgesFrom(root, 'src/uses-env.ts')).toEqual(['Env::constructor param_type src/types/env.d.ts#AppEnv']);
+  });
+
+  it('an `export` inside a namespace or `declare module` body makes no module', () => {
+    expect(edgesFrom(root, 'src/uses-widget.ts')).toEqual(['makeWidget instantiation src/types/widgets.d.ts#WidgetD']);
+    expect(edgesFrom(root, 'src/ns/app.ts')).toEqual(['start call src/ns/models.ts#makeOrder']);
+  });
+});
+
+describe('imports the alias resolver cannot place (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', dependencies: { react: '^18.0.0' } }),
+      // create-react-app: only `baseUrl`.
+      'jsconfig.json': JSON.stringify({ compilerOptions: { baseUrl: 'src' } }),
+      'src/components/Button.jsx': 'export function Button() { return null; }\n',
+      'src/a11y/Button.jsx': 'export function Button() { return null; }\n',
+      'src/App.jsx': "import React from 'react';\nimport { Button } from 'components/Button';\nexport function App() { return Button(); }\n",
+      // A webpack app (its own root, outside the jsconfig's `baseUrl`) with an alias whose value is no literal.
+      'web/package.json': JSON.stringify({ name: 'web', version: '1.0.0', devDependencies: { webpack: '^5.0.0' } }),
+      'web/webpack.config.js': "const path = require('path');\nconst SRC = path.resolve(__dirname, 'src');\nmodule.exports = { resolve: { alias: { shared: SRC + '/shared' } } };\n",
+      'web/src/shared/money.js': 'export function formatMoney(n) { return String(n); }\n',
+      'web/src/app/wp.js': "import { formatMoney } from 'shared/money';\nexport function viaWp() { return formatMoney(1); }\n",
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('resolves a bare import under the jsconfig `baseUrl`', () => {
+    expect(edgesFrom(root, 'src/App.jsx')).toEqual(['App call src/components/Button.jsx#Button']);
+  });
+
+  it('keeps name lookup for an import that names a project folder', () => {
+    expect(edgesFrom(root, 'web/src/app/wp.js')).toEqual(['viaWp call web/src/shared/money.js#formatMoney']);
+  });
+});
+
+describe('sync when a file switches between script and module (hash sync)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+      'legacy/plain.ts': 'function plainGlobal() { return 1; }\n',
+      'legacy/use.ts': 'export function usePlain() { return plainGlobal(); }\n',
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('drops the edge into a script that became a module, as scan --force does', () => {
+    expect(edgesFrom(root, 'legacy/use.ts')).toEqual(['usePlain call legacy/plain.ts#plainGlobal']);
+    writeFileSync(join(root, 'legacy/plain.ts'), 'function plainGlobal() { return 1; }\nexport {};\n');
+    mapx(root, 'sync', '.');
+    expect(edgesFrom(root, 'legacy/use.ts')).toEqual([]);
+    mapx(root, 'scan', '.', '--force');
+    expect(edgesFrom(root, 'legacy/use.ts')).toEqual([]);
+  }, 120000);
+});
+
+describe('auto-imported names (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      // Nuxt auto-imports composables: `useB()` needs no import.
+      'web/package.json': JSON.stringify({ name: 'web', version: '1.0.0', dependencies: { nuxt: '^3.0.0' } }),
+      'web/composables/useA.ts': 'export function useA() { return useB(); }\n',
+      'web/composables/useB.ts': 'export function useB() { return 1; }\n',
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('an un-imported name under an auto-import tool keeps name lookup', () => {
+    expect(edgesFrom(root, 'web/composables/useA.ts')).toEqual(['useA call web/composables/useB.ts#useB']);
+  });
+});

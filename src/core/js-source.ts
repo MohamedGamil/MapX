@@ -298,3 +298,50 @@ export function jsExportSignature(js: JsText): string {
   const surface = JSON.stringify([exportSkeleton(js), [...new Set(declared)].sort(), hasCommonJsExports(js)]);
   return createHash('sha1').update(surface).digest('hex');
 }
+
+/**
+ * Whether a JS/TS text has a top-level `import` or `export` statement, which makes it an ES module, as
+ * TypeScript's `isExternalModule` decides: one inside a `declare module '…' { … }` or `namespace X
+ * { … }` body does not count, nor a dynamic `import(…)` or `import.meta`. A statement starts a line
+ * or follows `;` or `}`. When the scan could not balance its braces, only a statement at the start
+ * of a line counts (M2-08-R3).
+ */
+export function hasModuleSyntax(js: JsText): boolean {
+  const { masked } = js;
+  const statement = (at: number, keyword: string) => {
+    let i = at - 1;
+    while (i >= 0 && (masked[i] === ' ' || masked[i] === '\t')) i--;
+    if (i >= 0 && !'\n;}'.includes(masked[i]!)) return false;
+    const after = masked.slice(at + keyword.length, at + keyword.length + 16);
+    return keyword === 'import' ? /^\s*[\w${*'"`]/.test(after) : /^\s*[\w${*=]/.test(after);
+  };
+  let depth = 0;
+  for (const m of masked.matchAll(/[{}]|(?<![\w$.])(?:import|export)(?![\w$])/g)) {
+    if (m[0] === '{') depth++;
+    else if (m[0] === '}') depth--;
+    else if ((js.balanced ? depth === 0 : m.index === 0 || masked[m.index! - 1] === '\n') && statement(m.index!, m[0])) return true;
+  }
+  return false;
+}
+
+/** The names `declare global { … }` blocks declare (M2-08-R3). */
+export function declaredGlobalNames(js: JsText): string[] {
+  const { masked } = js;
+  const names = new Set<string>();
+  for (const m of masked.matchAll(/\bdeclare\s+global\s*\{/g)) {
+    let depth = 1;
+    let end = m.index! + m[0].length;
+    for (; end < masked.length && depth; end++) depth += masked[end] === '{' ? 1 : masked[end] === '}' ? -1 : 0;
+    const block = masked.slice(m.index! + m[0].length, end);
+    for (const d of block.matchAll(/\b(?:function|class|interface|type|enum|namespace|const|let|var)\s+([\w$]+)/g)) names.add(d[1]!);
+  }
+  return [...names].sort();
+}
+
+/**
+ * What a JS/TS file puts in the global scope, for sync to compare (M2-08-R3 review): `s` for a script
+ * (every top-level name is global), else `m:` and its `declare global` names.
+ */
+export function globalScopeKey(js: JsText): string {
+  return hasModuleSyntax(js) ? `m:${declaredGlobalNames(js).join(',')}` : 's';
+}

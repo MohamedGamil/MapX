@@ -31,8 +31,11 @@ import type { Store } from './store.js';
  *   by-name match stays in the caller's package or a package its file imports).
  * - 14: M3-05-R3 (a Pinia/Vuex library declared at a monorepo root counts for the packages its
  *   workspace globs list, up to the repository root).
+ * - 15: M2-08-R3 (a JS/TS name bound by an import from outside the project links no project symbol;
+ *   a bare name an ES module neither imports nor declares links no other module's declaration; bare
+ *   imports resolve under a tsconfig/jsconfig `baseUrl`; files record their global scope).
  */
-export const EXTRACTOR_VERSION = 14;
+export const EXTRACTOR_VERSION = 15;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

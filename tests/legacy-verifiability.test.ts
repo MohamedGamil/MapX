@@ -22,7 +22,8 @@ describe('edge verifiability', () => {
       // Constants and variables (M0-17-R1 kinds) are not call targets; a homonym function is.
       'src/consts.js': 'export const config = { port: 1 };\nlet state = {};\nexport const setup = 1;\n',
       'src/setup.js': 'export function setup() { return 2; }\n',
-      'src/params.js': 'export function b(config, state) {\n  config();\n  state();\n  return setup();\n}\n',
+      // A script: an ES module would see no un-imported `setup` (M2-08-R3).
+      'src/params.js': 'function b(config, state) {\n  config();\n  state();\n  return setup();\n}\n',
       'py/settings.py': 'LIMIT = 10\nhandlers = []\n',
       'py/run.py': 'def go(LIMIT, handlers):\n    LIMIT()\n    handlers()\n',
       // Callables made by a factory or bound to another name are call targets; a literal is not (M0-17-R5).

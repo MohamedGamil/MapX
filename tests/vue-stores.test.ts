@@ -846,13 +846,17 @@ export default {
   },
 };
 `,
+    // `show` is imported: an ES module sees no un-imported name of another module (M2-08-R3).
     [ROUTES]: `import Router from 'koa-router';
 import users from '../controllers/users';
+import { show } from '../services/users';
 const r = new Router();
 r.get('/users', users.list);
-function local() { show(); list(); }
+function local() { show(); }
 export default r;
 `,
+    // A script keeps name lookup (M2-08-R3): its `list()` would reach a handler member by name.
+    'src/routes/legacy.js': 'function legacyRoutes() { list(); }\n',
     // Redux reducers and selectors take state, as Vuex mutations and getters do.
     [REDUCERS]: `export const todoReducers = {
   add: (state, action) => {
@@ -938,6 +942,7 @@ function remove() { return 0; }
     expect(symbolsIn(plain, REDUX_STORE).filter((s) => s.name === 'reset')).toEqual([]);
     const local = edgesFrom(plain, [ROUTES]).filter((e) => e.source_symbol === 'local');
     expect(local).toEqual([{ source_file: ROUTES, source_symbol: 'local', target_file: 'src/services/users.js', target_symbol: 'show' }]);
+    expect(edgesFrom(plain, ['src/routes/legacy.js'])).toEqual([]);
     expect(edgesFrom(plain, [LIST]).filter((e) => e.target_file === REDUCERS)).toEqual([]);
   });
 });

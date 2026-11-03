@@ -21,7 +21,7 @@ interface AliasRule { pattern: string; targets: string[] }
  * config, or a bundler or dev server among its package.json dependencies), 'package' for any other
  * package.json naming a package or dependencies, 'none' otherwise (a `{"type": "module"}` marker).
  */
-interface DirAliases { compiler: AliasRule[] | null; bundler: AliasRule[] | null; root: 'none' | 'package' | 'app' }
+interface DirAliases { compiler: AliasRule[] | null; bundler: AliasRule[] | null; root: 'none' | 'package' | 'app'; baseUrl: string | null }
 
 /** Dependencies that make a package.json folder its own build, with its own resolution. */
 export const BUILD_TOOLS = [
@@ -62,13 +62,7 @@ const caches = new WeakMap<Set<string>, Map<string, DirAliases>>();
  */
 export function jsAliasTargets(target: string, sourcePath: string, ctx: AliasContext): string[] {
   if (target.startsWith('.') || target.startsWith('/')) return [];
-  let cache = caches.get(ctx.files);
-  if (!cache) caches.set(ctx.files, (cache = new Map()));
-  const at = (dir: string) => {
-    let aliases = cache!.get(dir);
-    if (aliases === undefined) cache!.set(dir, (aliases = dirAliases(dir, ctx)));
-    return aliases;
-  };
+  const at = aliasesAt(ctx);
   let compiler: AliasRule[] | null = null;
   const bundlers: AliasRule[][] = [];
   let compilerDone = false;
@@ -110,6 +104,33 @@ export function jsAliasTargets(target: string, sourcePath: string, ctx: AliasCon
   return [...new Set(out)];
 }
 
+/** One directory's config files, cached per file set. */
+function aliasesAt(ctx: AliasContext): (dir: string) => DirAliases {
+  let cache = caches.get(ctx.files);
+  if (!cache) caches.set(ctx.files, (cache = new Map()));
+  return (dir) => {
+    let aliases = cache!.get(dir);
+    if (aliases === undefined) cache!.set(dir, (aliases = dirAliases(dir, ctx)));
+    return aliases;
+  };
+}
+
+/**
+ * The module path a bare import names under the `baseUrl` of the nearest tsconfig/jsconfig, as tsc
+ * tries it after `paths` (`components/Button` → `src/components/Button` with `"baseUrl": "src"`, a
+ * create-react-app jsconfig); null without one. Not an alias: a package import probes it too, and
+ * stays a package when no file is there (M2-08-R3 review).
+ */
+export function jsBaseUrlTarget(target: string, sourcePath: string, ctx: AliasContext): string | null {
+  if (target.startsWith('.') || target.startsWith('/')) return null;
+  const at = aliasesAt(ctx);
+  for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
+    const aliases = at(dir);
+    if (aliases.compiler) return aliases.baseUrl === null ? null : join(aliases.baseUrl, target);
+    if (aliases.root === 'app' || !dir) return null;
+  }
+}
+
 /** A Laravel module folder (nwidart/laravel-modules): `Modules/Blog`, under an app holding `artisan`. */
 const LARAVEL_MODULE = /(?:^|\/)Modules\/[^/]+$/;
 
@@ -134,9 +155,11 @@ function match(rules: AliasRule[], target: string): string[] | null {
 
 function dirAliases(dir: string, ctx: AliasContext): DirAliases {
   let compiler: AliasRule[] | null = null;
+  let baseUrl: string | null = null;
   for (const name of TS_CONFIGS) {
     const path = posix.join(dir, name);
     if (ctx.readText(path) === null) continue;
+    if (compiler === null) baseUrl = tsPaths(path, ctx)?.paths.baseUrl ?? null;
     compiler = tsConfigRules(path, ctx);
     if (compiler.length) break;
   }
@@ -153,7 +176,7 @@ function dirAliases(dir: string, ctx: AliasContext): DirAliases {
     (bundler ??= []).push(...bundlerRules(text, dir));
     root = 'app';
   }
-  return { compiler, bundler, root };
+  return { compiler, bundler, root, baseUrl };
 }
 
 // ── tsconfig / jsconfig ─────────────────────────────────────────────────────────────────────────
