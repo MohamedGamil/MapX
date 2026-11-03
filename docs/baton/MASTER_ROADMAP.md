@@ -171,8 +171,8 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-09** JS/TS member-assigned functions are symbols — DONE, P2, 4h; depends on M2-08.
 - **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.
 - **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
-- **M2-12** A method called on a new-expression gets a call edge (`new X().m()`) — BACKLOG, P2, 4h; depends on M2-09.
-- **M2-13** Calls inside a one-line PHP class are indexed — BACKLOG, P2, 3h; depends on nothing.
+- **M2-12** A method called on a new-expression gets a call edge (`new X().m()`) — IN_PROGRESS, P2, 4h; depends on M2-09.
+- **M2-13** Calls inside a one-line PHP class are indexed — READY, P2, 3h; depends on nothing.
 
 ## M3 — Vue SFC semantics
 
@@ -240,11 +240,11 @@ Fixture scoring in CI; optional message edges.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 - **M4-27-R1** Lua grammar: Luau type syntax and string escapes parse without errors — BACKLOG, P3, 6h; depends on M4-27.
 - **M4-28** Release documentation for 0.3.9: README, docs and CHANGELOG cover every change since 0.3.5 — DONE, P1, 8h; depends on M5-24, M2-08-R3, M5-15, M5-18.
-- **M4-28-R1** Agent templates do not advertise `mapx explain --reclassify` — BACKLOG, P2, 1h; depends on M4-28.
-- **M4-28-R2** `mapx_status` honours its exclude and include parameters — BACKLOG, P2, 1h; depends on M4-28.
-- **M4-29** The installer replaces a running mapx binary — BACKLOG, P2, 1h; depends on nothing.
-- **M4-30** CLI-spawning arch tests stay within their timeouts under load — IN_PROGRESS, P2, 5h; depends on nothing.
-- **M4-31** Test runs add no more than ten process listeners (MaxListenersExceededWarning) — BACKLOG, P3, 2h; depends on nothing.
+- **M4-28-R1** Agent templates do not advertise `mapx explain --reclassify` — IN_PROGRESS, P2, 1h; depends on M4-28.
+- **M4-28-R2** `mapx_status` honours its exclude and include parameters — READY, P2, 1h; depends on M4-28.
+- **M4-29** The installer replaces a running mapx binary — READY, P2, 1h; depends on nothing.
+- **M4-30** CLI-spawning arch tests stay within their timeouts under load — DONE, P2, 5h; depends on nothing.
+- **M4-31** Test runs add no more than ten process listeners (MaxListenersExceededWarning) — READY, P3, 2h; depends on nothing.
 - **M4-32** Root CLAUDE.md generated block is current — DONE, P3, 1h; depends on nothing.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — DONE, P2, 3h; depends on M4-12.
 - **M4-12-R2** Worker pool: the grammar-load bound holds across crashes and refused retries — BACKLOG, P3, 2h; depends on M4-12-R1.
@@ -290,7 +290,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-24-R1** Ambient access is extracted: environment, globals and superglobals — BACKLOG, P2, 8h; depends on M5-24.
 - **M5-24-R2** External elements: multi-layer warning and inherited dependencies — BACKLOG, P2, 4h; depends on M5-24, M5-09.
 - **M5-24-R3** Agent templates describe package and built-in targets for mapx_arch_allowed — BACKLOG, P3, 1h; depends on M5-24.
-- **M5-24-R4** Uncovered packages are opt-in — BACKLOG, P1, 5h; depends on M5-24.
+- **M5-24-R4** Uncovered packages are opt-in — IN_PROGRESS, P1, 5h; depends on M5-24.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — DONE, P2, 3h; depends on M5-05.
 - **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.

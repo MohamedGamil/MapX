@@ -21917,15 +21917,28 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-A",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T16:52:32.357Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T16:52:31.928Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T16:52:32.357Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -27715,7 +27728,7 @@
       "id": "M4-09-R5",
       "title": "No test leaves temp folders: a suite-wide check",
       "objective": "A vitest global teardown and the Playwright global teardown assert that a run leaves no new mapx-* or playwright-artifacts-* entry in os.tmpdir(), and the tests that leak today (mapx-arch-*, mapx-e2e-*, mapx-bench-*, Playwright artifacts) clean up.",
-      "description": "Finding 2026-11-03: after M4-09-R3 fixed external-refs, 437 mapx-* folders (mapx-arch-*, mapx-e2e-*, mapx-extrefs-* from older runs) and 123 playwright-artifacts-* folders had accumulated in /tmp.",
+      "description": "Finding 2026-11-03: after M4-09-R3 fixed external-refs, 437 mapx-* folders (mapx-arch-*, mapx-e2e-*, mapx-extrefs-* from older runs) and 123 playwright-artifacts-* folders had accumulated in /tmp. Review of M4-30: an interrupted run (SIGINT/SIGTERM) also leaks the built-CLI mirror /tmp/mapx-cli-* (tests/helpers/e2e.ts afterAll); cover it here.",
       "outputs": [
         "tests/global-teardown.ts",
         "reports/M4-09-R5.md"
@@ -28461,15 +28474,28 @@
         "docs/baton/reports/M4-28.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-C",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T16:52:35.772Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T16:52:34.059Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T16:52:35.772Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -28517,7 +28543,7 @@
         "docs/baton/reports/M4-28.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -28525,7 +28551,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T16:52:34.490Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -28570,7 +28603,7 @@
         "docs/baton/DECISIONS.md#D037"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -28578,7 +28611,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T16:52:34.930Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -28624,14 +28664,22 @@
         "docs/baton/reports/M2-08-R3.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M4-30",
       "actualHours": null,
       "startedAt": "2026-11-03T15:16:03.194Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T16:52:31.455Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-30.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-reporters.test.ts tests/arch-baseline.test.ts tests/legacy-metrics-edges.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-30.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T15:16:02.778Z",
@@ -28644,6 +28692,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T16:52:31.035Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T16:52:31.455Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-reporters.test.ts tests/arch-baseline.test.ts tests/legacy-metrics-edges.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-30.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -28692,7 +28758,7 @@
         "docs/baton/reports/M4-09-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -28700,7 +28766,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T16:52:35.346Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -29077,15 +29150,28 @@
         "docs/baton/reports/M4-28.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-B",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T16:52:33.648Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T16:52:32.798Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T16:52:33.648Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -29134,7 +29220,7 @@
         "docs/baton/reports/M5-03-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -29142,7 +29228,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T16:52:33.231Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

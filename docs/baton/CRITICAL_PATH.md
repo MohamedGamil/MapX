@@ -6,7 +6,7 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **115.5 / 197 / 294h**. Capacity: 1 engineer(s) × 20 h/week → **9.8 weeks**, conditional finish **2027-01-10** (as of 2026-11-03).
+Remaining effort min/expected/max: **112.5 / 192 / 286h**. Capacity: 1 engineer(s) × 20 h/week → **9.6 weeks**, conditional finish **2027-01-09** (as of 2026-11-03).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
@@ -21,20 +21,19 @@ Remaining effort min/expected/max: **115.5 / 197 / 294h**. Capacity: 1 engineer(
 - M5-24-R1 (BACKLOG): prerequisites satisfied
 - M5-24-R2 (BACKLOG): prerequisites satisfied
 - M5-24-R3 (BACKLOG): prerequisites satisfied
-- M5-24-R4 (BACKLOG): prerequisites satisfied
+- M5-24-R4 (IN_PROGRESS): prerequisites satisfied
 - M4-22-R1 (BACKLOG): prerequisites satisfied
 - M4-13-R1 (BACKLOG): Owner hold (D035, 2026-11-03): start only when the owner explicitly asks.
 - M2-08-R4 (BACKLOG): prerequisites satisfied
 - M4-09-R5 (BACKLOG): prerequisites satisfied
 - M0-02-R13 (BACKLOG): prerequisites satisfied
 - M4-27-R1 (BACKLOG): prerequisites satisfied
-- M4-28-R1 (BACKLOG): prerequisites satisfied
-- M4-28-R2 (BACKLOG): prerequisites satisfied
-- M4-29 (BACKLOG): prerequisites satisfied
-- M4-30 (IN_PROGRESS): prerequisites satisfied
-- M4-31 (BACKLOG): prerequisites satisfied
-- M2-12 (BACKLOG): prerequisites satisfied
-- M2-13 (BACKLOG): prerequisites satisfied
+- M4-28-R1 (IN_PROGRESS): prerequisites satisfied
+- M4-28-R2 (READY): prerequisites satisfied
+- M4-29 (READY): prerequisites satisfied
+- M4-31 (READY): prerequisites satisfied
+- M2-12 (IN_PROGRESS): prerequisites satisfied
+- M2-13 (READY): prerequisites satisfied
 - M5-25-R3 (BACKLOG): prerequisites satisfied
 - M5-25-R4 (BACKLOG): prerequisites satisfied
 - M4-12-R2 (BACKLOG): prerequisites satisfied
@@ -75,7 +74,6 @@ Remaining effort min/expected/max: **115.5 / 197 / 294h**. Capacity: 1 engineer(
 | M4-28-R1 | 0 | 1 | 50 | 51 | 50 |
 | M4-28-R2 | 0 | 1 | 50 | 51 | 50 |
 | M4-29 | 0 | 1 | 50 | 51 | 50 |
-| M4-30 | 0 | 5 | 46 | 51 | 46 |
 | M4-31 | 0 | 2 | 49 | 51 | 49 |
 | M2-12 | 0 | 4 | 47 | 51 | 47 |
 | M2-13 | 0 | 3 | 48 | 51 | 48 |
