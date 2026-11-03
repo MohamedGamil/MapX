@@ -188,6 +188,11 @@ class LaneQueue {
     return this.took(group.items.pop()!);
   }
 
+  /** The languages with files left here. */
+  *keysLeft(): Iterable<string> {
+    for (const key of this.order) { const g = this.groups.get(key)!; if (g.head < g.items.length) yield key; }
+  }
+
   /** The language with the most work left here, and that work's weight. */
   heaviestGroup(): { key: string; weight: number } | undefined {
     let best: { key: string; weight: number } | undefined;
@@ -227,9 +232,25 @@ class LaneQueue {
  * - a lane takes from its own queue; when it is empty, from another lane's files of a language it
  *   holds, and then from the largest remaining queue if at least the penalty's worth of work is
  *   left there (about one grammar load, at most a quarter of a share: a grammar load must pay
- *   off); otherwise the lane ends and the owner finishes.
+ *   off) and the batch's grammar-load budget allows it (below); otherwise the lane ends and the
+ *   owner finishes.
  * Files a crashed worker left come first, to any lane. Weights are bytes, static-tier files a
  * twentieth (as in the scanner's sizing), and static files have no grammar.
+ *
+ * Grammar-load bound (M4-12 AC1, D034): a batch loads at most languages + lanes grammars, whatever
+ * the order in which lanes ask. "Languages" are the batch's grammar keys (static files excluded); a
+ * load is a lane handed a file of a grammar its worker did not hold (`held`: what it held before the
+ * batch, plus every grammar it was handed). `committed()` counts the loads made so far plus the
+ * loads still due from each lane's own queue (a grammar queued there that the lane does not hold):
+ * - the plan commits at most lanes + languages - 1 (each segment boundary splits one language);
+ * - handing a lane a file from its own queue or of a grammar it holds leaves committed() unchanged,
+ *   and another lane taking the last queued files of a grammar a lane did not hold lowers it;
+ * - only a steal of a grammar the lane does not hold raises it, by one, and such a steal is granted
+ *   only while committed() < budget.
+ * So committed() never exceeds the budget, and the loads made never exceed committed(). An idle lane
+ * may therefore end while another lane still has files of a grammar it would have to load (D034).
+ * Not covered: a crash. A replaced worker (`resetLane`) reloads its grammars, and a crashed batch's
+ * files (`requeue`) go to whichever lane asks next.
  */
 /**
  * Languages parsed with another language's grammar: Vue and Svelte read their scripts with the
@@ -242,9 +263,14 @@ export class AffinityScheduler {
   /** About one grammar load (100 ms) of parsing on real code, in weighted bytes. */
   static readonly GRAMMAR_LOAD_BYTES = 110 * 1024;
   private readonly queues: LaneQueue[];
-  private readonly keys: Array<Set<string>>;
+  /** Grammars each lane's worker holds: from earlier batches, and every one it was handed since. */
+  private readonly held: Array<Set<string>>;
   private readonly retry: number[] = [];
   private readonly penalty: number;
+  /** Grammar loads the batch may make: its languages + lanes (M4-12 AC1, D034). */
+  private readonly budget: number;
+  /** Grammars handed to lanes that did not hold them. */
+  private loads = 0;
 
   constructor(
     private readonly items: Array<{ key: string; weight: number }>,
@@ -252,11 +278,12 @@ export class AffinityScheduler {
     known: Array<Set<string>>,
   ) {
     const lanes = Math.max(1, known.length);
-    this.keys = known.map(k => new Set(k));
+    this.held = known.map(k => new Set(k));
     this.queues = known.map(() => new LaneQueue(items));
     const total = items.reduce((n, it) => n + it.weight, 0);
     const share = total / lanes;
     this.penalty = Math.min(AffinityScheduler.GRAMMAR_LOAD_BYTES, share / 4);
+    this.budget = new Set(items.map(it => it.key).filter(k => k !== '')).size + lanes;
 
     // Languages end to end, the heaviest first (static files last), cut into one segment per lane:
     // a lane holds only the languages crossing its segment, so grammar loads stay within
@@ -280,7 +307,7 @@ export class AffinityScheduler {
     // Segments to lanes by the weight of each segment the lane's worker already holds (a warm pool):
     // the largest overlaps first, ties to the lane holding fewer languages; the rest in order.
     const overlap = (segment: number[], lane: number) =>
-      segment.reduce((n, i) => n + (this.keys[lane]!.has(items[i]!.key) ? items[i]!.weight : 0), 0);
+      segment.reduce((n, i) => n + (this.held[lane]!.has(items[i]!.key) ? items[i]!.weight : 0), 0);
     const pairs: Array<{ seg: number; lane: number; w: number }> = [];
     for (let seg = 0; seg < segments.length; seg++) {
       for (let lane = 0; lane < lanes; lane++) {
@@ -288,7 +315,7 @@ export class AffinityScheduler {
         if (w > 0) pairs.push({ seg, lane, w });
       }
     }
-    pairs.sort((a, b) => b.w - a.w || this.keys[a.lane]!.size - this.keys[b.lane]!.size || a.seg - b.seg || a.lane - b.lane);
+    pairs.sort((a, b) => b.w - a.w || this.held[a.lane]!.size - this.held[b.lane]!.size || a.seg - b.seg || a.lane - b.lane);
     const laneOf = new Array<number>(segments.length).fill(-1);
     const taken = new Set<number>();
     for (const { seg, lane } of pairs) {
@@ -297,10 +324,10 @@ export class AffinityScheduler {
       taken.add(lane);
     }
     const free = Array.from({ length: lanes }, (_, l) => l).filter(l => !taken.has(l))
-      .sort((a, b) => this.keys[a]!.size - this.keys[b]!.size || a - b);
+      .sort((a, b) => this.held[a]!.size - this.held[b]!.size || a - b);
     for (let seg = 0; seg < segments.length; seg++) {
       const lane = laneOf[seg]! >= 0 ? laneOf[seg]! : free.shift()!;
-      for (const i of segments[seg]!) { this.queues[lane]!.push(i); this.keys[lane]!.add(items[i]!.key); }
+      for (const i of segments[seg]!) this.queues[lane]!.push(i);
     }
   }
 
@@ -309,35 +336,52 @@ export class AffinityScheduler {
    * rest of a batch after its first file), never a language the lane does not hold (M4-14).
    */
   next(lane: number, newGrammar = true): number | undefined {
-    if (this.retry.length > 0) return this.retry.shift();
+    if (this.retry.length > 0) return this.hand(lane, this.retry.shift()!);
     const own = this.queues[lane]!.shift();
-    if (own !== undefined) return own;
-    const keys = this.keys[lane]!;
+    if (own !== undefined) return this.hand(lane, own);
+    const held = this.held[lane]!;
     // Another lane's files of a language this lane holds (or static files): no grammar to load.
     let victim = -1;
     let victimKey = '';
     let victimCount = 0;
     for (let l = 0; l < this.queues.length; l++) {
       if (l === lane || this.queues[l]!.size === 0) continue;
-      for (const key of ['', ...keys]) {
+      for (const key of ['', ...held]) {
         const n = this.queues[l]!.countOf(key);
         if (n > victimCount) { victim = l; victimKey = key; victimCount = n; }
       }
     }
-    if (victim >= 0) return this.queues[victim]!.popKey(victimKey);
+    if (victim >= 0) return this.hand(lane, this.queues[victim]!.popKey(victimKey)!);
     if (!newGrammar) return undefined;
     // The language with the most work left in another lane, if a grammar load pays off there
     // (review 2026-11-01: taking a queue's last language stole small languages, loading their
-    // grammars twice).
+    // grammars twice) and the batch's grammar-load budget has room for it (D034).
     let best: { lane: number; key: string; weight: number } | undefined;
     for (let l = 0; l < this.queues.length; l++) {
       if (l === lane) continue;
       const g = this.queues[l]!.heaviestGroup();
       if (g && (!best || g.weight > best.weight)) best = { lane: l, ...g };
     }
-    if (!best || best.weight < this.penalty) return undefined;
-    const index = this.queues[best.lane]!.popKey(best.key)!;
-    keys.add(this.items[index]!.key);
+    if (!best || best.weight < this.penalty || this.committed() >= this.budget) return undefined;
+    return this.hand(lane, this.queues[best.lane]!.popKey(best.key)!);
+  }
+
+  /**
+   * Grammar loads made, plus those still due from the lanes' own queues: never above the budget
+   * (see the class comment).
+   */
+  committed(): number {
+    let n = this.loads;
+    for (let l = 0; l < this.queues.length; l++) {
+      for (const key of this.queues[l]!.keysLeft()) if (key !== '' && !this.held[l]!.has(key)) n++;
+    }
+    return n;
+  }
+
+  /** Hands `index` to `lane`, counting a grammar load when the lane's worker did not hold its language. */
+  private hand(lane: number, index: number): number {
+    const key = this.items[index]!.key;
+    if (key !== '' && !this.held[lane]!.has(key)) { this.held[lane]!.add(key); this.loads++; }
     return index;
   }
 
@@ -348,7 +392,7 @@ export class AffinityScheduler {
 
   /** The lane's worker was replaced: its new worker holds no language yet. */
   resetLane(lane: number): void {
-    this.keys[lane] = new Set();
+    this.held[lane] = new Set();
   }
 
   /** Every file not yet handed out. */

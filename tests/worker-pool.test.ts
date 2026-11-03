@@ -594,6 +594,93 @@ describe('M4-12: files are dealt to workers by language', () => {
     expect(plan.map((q) => [...new Set(q.map((i) => list[i]!.key))].sort())).toEqual(expected);
   });
 
+  describe('M4-12-R1: grammar loads stay within languages + lanes whatever the timing (D034)', () => {
+    /** mulberry32: a seeded generator, so every completion order below is reproducible. */
+    const rng = (seed: number) => () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+
+    /**
+     * Drives the scheduler as the pool does (a first file that may load a grammar, then up to 15
+     * of grammars the lane holds), with lane l's batches taking period[l] × a random factor in
+     * [0.2, 5) ticks: the lane whose batch ends first asks next. Returns the grammars handed to
+     * each lane (what its worker loads) and the files handed out.
+     */
+    function race(list: Array<{ key: string; weight: number }>, known: string[][], period: number[], seed: number) {
+      const random = rng(seed);
+      const scheduler = new AffinityScheduler(list, known.map((k) => new Set(k)));
+      const loaded = known.map(() => new Set<string>());
+      const handed: number[] = [];
+      const freeAt = known.map(() => random());
+      const active = new Set(known.map((_, l) => l));
+      while (active.size > 0) {
+        const lane = [...active].reduce((a, b) => (freeAt[b]! < freeAt[a]! ? b : a));
+        const batch: number[] = [];
+        for (let index = scheduler.next(lane); index !== undefined; index = batch.length < BATCH_FILES ? scheduler.next(lane, false) : undefined) batch.push(index);
+        if (batch.length === 0) { active.delete(lane); continue; }
+        for (const i of batch) { handed.push(i); if (list[i]!.key !== '' && !known[lane]!.includes(list[i]!.key)) loaded[lane]!.add(list[i]!.key); }
+        freeAt[lane]! += batch.length * period[lane]! * (0.2 + random() * 4.8);
+        expect(scheduler.committed()).toBeLessThanOrEqual(new Set(list.map((it) => it.key).filter(Boolean)).size + known.length);
+      }
+      return { loads: loaded.reduce((n, s) => n + s.size, 0), handed };
+    }
+
+    it('in the 4-lane mix, under 300 completion orders with lanes stalled, sped up and jittered', () => {
+      const list = items();
+      let worst = 0;
+      for (let seed = 1; seed <= 300; seed++) {
+        // A lane at a time stalls (period 40) while another races (period 0.25), as under CPU load.
+        const period = [1, 1, 1, 1];
+        period[seed % 4] = 40;
+        period[(seed >> 2) % 4] = seed % 3 === 0 ? 0.25 : period[(seed >> 2) % 4]!;
+        const run = race(list, [[], [], [], []], period, seed);
+        // Every file is handed out exactly once.
+        expect(run.handed.slice().sort((a, b) => a - b)).toEqual(list.map((_, i) => i));
+        worst = Math.max(worst, run.loads);
+      }
+      expect(worst).toBeLessThanOrEqual(Object.keys(MIX).length + 4);
+    });
+
+    it('with eight lanes, static files, a warm pool and uneven languages', () => {
+      const keys = ['typescript', 'php', 'typescript', 'php', 'python', 'go', 'ruby', '', 'typescript', 'vue'];
+      const list = Array.from({ length: 1200 }, (_, i) => ({ key: keys[(i * 7) % keys.length]!, weight: 40 + ((i * 37) % 900) }));
+      const known = [['php'], [], ['typescript', 'go'], [], [], ['ruby'], [], []];
+      for (let seed = 1; seed <= 200; seed++) {
+        const period = Array.from({ length: 8 }, (_, l) => ((seed + l) % 5 === 0 ? 30 : (seed * (l + 1)) % 7 === 0 ? 0.3 : 1));
+        const run = race(list, known, period, seed);
+        expect(run.handed).toHaveLength(list.length);
+        expect(run.loads).toBeLessThanOrEqual(6 + 8);
+      }
+    });
+
+    it('an idle lane ends rather than load a grammar past the budget, and still takes one it holds', () => {
+      // Three lanes; lanes 0 and 1 plan 40 a each, lane 2 plans 10 a and 30 b: 4 loads, budget 2 + 3 = 5.
+      const list = [...Array.from({ length: 90 }, () => ({ key: 'a', weight: 100 })), ...Array.from({ length: 30 }, () => ({ key: 'b', weight: 100 }))];
+      const scheduler = new AffinityScheduler(list, [new Set(), new Set(), new Set()]);
+      const key = (i: number | undefined) => (i === undefined ? undefined : list[i]!.key);
+      expect(scheduler.committed()).toBe(4);
+      // Lane 2 reaches its first b file, lane 1 parses one a file, and both stall.
+      for (let i = 0; i < 10; i++) expect(key(scheduler.next(2))).toBe('a');
+      expect(key(scheduler.next(2))).toBe('b');
+      expect(key(scheduler.next(1))).toBe('a');
+      // Lane 0 takes every a file (it holds a), then b from lane 2: the fifth and last load.
+      const lane0: Array<string | undefined> = [];
+      for (let i = 0; i < 79; i++) lane0.push(key(scheduler.next(0)));
+      expect(lane0.every((k) => k === 'a')).toBe(true);
+      expect(key(scheduler.next(0))).toBe('b');
+      expect(scheduler.committed()).toBe(5);
+      // Lane 1 holds only a, and 28 b files remain: loading b would be a sixth load, so it ends.
+      expect(scheduler.next(1)).toBeUndefined();
+      // Lanes holding b still take it.
+      expect(key(scheduler.next(0))).toBe('b');
+      expect(key(scheduler.next(2))).toBe('b');
+      expect(scheduler.committed()).toBe(5);
+    });
+  });
+
   it('records the languages each pooled worker parsed, and gives a later batch to the worker holding it', async () => {
     const root = workspace({
       ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`app/P${i}.php`, `<?php\nclass P${i} { public function a() { return ${i}; } }\n`])),
