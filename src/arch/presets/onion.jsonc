@@ -1,0 +1,27 @@
+// mapx:preset/onion: the Onion Architecture, rings depending inward only.
+// AR-15 (M5-17-R1). The domain model at the centre, then domain services, then application
+// services; the outer ring (presentation and infrastructure) depends inward and never on itself:
+// the two meet only at the composition root.
+// Parameter: root, the folder holding the ring folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // The centre: entities, value objects and the repository interfaces.
+    { "name": "DomainModel", "selectors": [{ "path": "%root%domain/{model,models,entities}/**" }, { "path": "%root%{core,domain-model}/**" }] },
+    // Domain services: rules that span entities.
+    { "name": "DomainServices", "selectors": [{ "path": "%root%domain/services/**" }, { "path": "%root%domain-services/**" }] },
+    // Application services: the use cases.
+    { "name": "ApplicationServices", "selectors": [{ "path": "%root%{application,application-services,app-services}/**" }] },
+    // The outer ring, user side: UI, API, CLI.
+    { "name": "Presentation", "selectors": [{ "path": "%root%{presentation,ui,api,web}/**" }] },
+    // The outer ring, machine side: persistence and external services.
+    { "name": "Infrastructure", "selectors": [{ "path": "%root%{infrastructure,infra,persistence}/**" }] }
+  ],
+  "rules": {
+    "Presentation": ["ApplicationServices", "DomainServices", "DomainModel"],
+    "Infrastructure": ["ApplicationServices", "DomainServices", "DomainModel"],
+    "ApplicationServices": ["DomainServices", "DomainModel"],
+    "DomainServices": ["DomainModel"],
+    "DomainModel": []
+  }
+}

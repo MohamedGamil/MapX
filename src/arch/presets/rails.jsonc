@@ -1,0 +1,44 @@
+// mapx:preset/rails: a Ruby on Rails application.
+// AR-15 (M5-17-R1). By Rails' app/ folders, and by the framework base classes wherever a class
+// lives: a subclass of ActiveRecord::Base (through ApplicationRecord), ActionController, ActiveJob,
+// ActionMailer or ActionCable is placed by its ancestry. Models may enqueue jobs and send mail from
+// their callbacks, and never depend on controllers or services.
+// Parameter: root, the folder holding the application ("" when the Gemfile is at the repo root).
+{
+  "parameters": { "root": "" },
+  "layers": [
+    // config/routes.rb: it names controllers by symbol.
+    { "name": "Routes", "selectors": [{ "path": "%root%config/routes.rb" }, { "path": "%root%config/routes/**" }] },
+    // Controllers: app/controllers, and any ActionController subclass.
+    { "name": "Controllers", "selectors": [
+      { "path": "%root%app/controllers/**" },
+      { "inherits": "ActionController::Base" },
+      { "inherits": "ActionController::API" }
+    ] },
+    // Action Cable channels.
+    { "name": "Channels", "selectors": [{ "path": "%root%app/channels/**" }, { "inherits": "ActionCable::Channel::Base" }] },
+    // View helpers.
+    { "name": "Helpers", "selectors": [{ "path": "%root%app/helpers/**" }] },
+    // Service objects, interactors and form objects outside the framework.
+    { "name": "Services", "selectors": [{ "path": "%root%app/{services,interactors,operations,forms}/**" }] },
+    // Active Job jobs.
+    { "name": "Jobs", "selectors": [{ "path": "%root%app/jobs/**" }, { "inherits": "ActiveJob::Base" }] },
+    // Action Mailer mailers.
+    { "name": "Mailers", "selectors": [{ "path": "%root%app/mailers/**" }, { "inherits": "ActionMailer::Base" }] },
+    // Active Record models (and concerns under app/models).
+    { "name": "Models", "selectors": [{ "path": "%root%app/models/**" }, { "inherits": "ActiveRecord::Base" }] },
+    // Migrations, the schema and seeds.
+    { "name": "Database", "selectors": [{ "path": "%root%db/**" }] }
+  ],
+  "rules": {
+    "Routes": ["Controllers"],
+    "Controllers": ["Helpers", "Services", "Jobs", "Mailers", "Models"],
+    "Channels": ["Services", "Jobs", "Models"],
+    "Helpers": ["Models"],
+    "Services": ["Jobs", "Mailers", "Models"],
+    "Jobs": ["Services", "Mailers", "Models"],
+    "Mailers": ["Helpers", "Models"],
+    "Models": ["Jobs", "Mailers"],
+    "Database": ["Models"]
+  }
+}

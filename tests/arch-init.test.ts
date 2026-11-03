@@ -12,7 +12,7 @@ import { stripJsonc } from '../src/core/js-aliases.js';
 import { loadArchitectureText, PRESETS } from '../src/arch/config.js';
 import { PRESET_TEXTS } from '../src/arch/presets/index.js';
 import { presetModule } from '../scripts/gen-arch-presets.js';
-import { writeAll } from '../src/arch/infer.js';
+import { FRAMEWORK_PRESETS, writeAll } from '../src/arch/infer.js';
 
 // M5-17: `mapx arch init` (AR-15). Every case runs the real CLI on a scanned temp copy of a
 // synthetic fixture: tests/fixtures/arch-init/<name> (each file says which preset it is for and
@@ -22,6 +22,10 @@ const LARAVEL = resolve(__dirname, 'fixtures/laravel-routes');
 const ROLES = resolve(__dirname, 'fixtures/arch-mcp/ts'); // roles: Data → Service breaks the web-api order
 const SCHEMA = JSON.parse(readFileSync(resolve(__dirname, '../schemas/architecture.schema.json'), 'utf8'));
 const SLOW = { timeout: 300_000 };
+// AR-15's catalogue: the first wave (M5-17) and the rest (M5-17-R1).
+// The framework presets, each the choice of `--from framework` on its fixture (FRAMEWORK_PRESETS).
+const FRAMEWORK_IDS = ['laravel', 'nestjs', 'django', 'symfony', 'nextjs', 'express', 'fastapi', 'rails', 'spring', 'aspnet', 'flutter', 'vue'];
+const ALL_PRESETS = ['aspnet', 'clean', 'ddd-contexts', 'django', 'express', 'fastapi', 'feature-sliced', 'flutter', 'hexagonal', 'laravel', 'layered', 'mvc', 'mvvm', 'nestjs', 'nextjs', 'onion', 'rails', 'spring', 'symfony', 'vue'];
 
 let tmp = '';
 const copies = new Map<string, string>();
@@ -75,10 +79,14 @@ afterAll(async () => {
 });
 
 describe('the shipped presets', () => {
-  it('are the .jsonc files, embedded (scripts/gen-arch-presets.ts), and include the first wave', () => {
+  it('are the .jsonc files, embedded (scripts/gen-arch-presets.ts): the twenty of AR-15', () => {
     expect(readFileSync(resolve(__dirname, '../src/arch/presets/index.ts'), 'utf8')).toBe(presetModule());
-    expect(Object.keys(PRESETS).sort()).toEqual(['clean', 'ddd-contexts', 'django', 'feature-sliced', 'hexagonal', 'laravel', 'layered', 'nestjs']);
+    expect(Object.keys(PRESETS).sort()).toEqual(ALL_PRESETS);
     for (const [id, text] of Object.entries(PRESET_TEXTS)) expect(PRESETS[id]).toBe(text);
+  });
+
+  it('--from framework knows every framework preset (M5-17-R1)', () => {
+    expect([...new Set(Object.values(FRAMEWORK_PRESETS))].sort()).toEqual([...FRAMEWORK_IDS].sort());
   });
 
   it('each validates against the schema and loads, extended, without an issue', () => {
@@ -102,29 +110,45 @@ describe('the shipped presets', () => {
 // fixture fills every layer of its preset (review of M5-17: a rule between two empty layers is
 // never tested), except M1-01's route fixture, kept for the acceptance criterion, which fills 3 of
 // 11 and so gets the "most layers are empty" warning.
-const CASES: Array<{ name?: string; preset: string; fixture: string; layers: Record<string, number>; violations: string[]; parameters?: Record<string, string>; partial?: string }> = [
+// `unclassified` (review of M5-17-R1): the paths of the Unclassified layer, the code no preset layer
+// selects (an entry point, an app/Enums folder), which every layer may use so that day one passes.
+const CASES: Array<{ name?: string; preset: string; fixture: string; layers: Record<string, number>; violations: string[]; parameters?: Record<string, string>; partial?: string; unclassified?: string[] }> = [
   {
     name: 'laravel (the M1-01 route fixture)', preset: 'laravel', fixture: LARAVEL, parameters: { root: '' },
     layers: { Routes: 43, Http: 17, Providers: 1 },
     violations: [],
+    // Module route files and providers outside the preset's folders (review of M5-17-R1).
+    unclassified: [
+      'Modules/Blog/app/Providers/**', 'Modules/Blog/routes/**', 'app/Modules/Billing/BillingServiceProvider.php', 'app/Modules/Billing/Routes/**',
+      'app/Modules/Shop/ShopServiceProvider.php', 'app/Modules/Shop/routes.php', 'artisan', 'bootstrap/**',
+    ],
     partial: 'Warning: 8 of 11 layers are empty (Console, Jobs, Events, Listeners, Services, Models, Views, Database): `mapx check` warns about each until code lands there.\n',
   },
   {
     // Idiomatic Laravel 11 (review of M5-17): route-model binding in a route closure, an invokable
     // action routed directly, the scheduler in routes/console.php, channel authorisation with
     // models, a listener type-hinting its event. Clean but for the planted Model → Http request.
+    // app/Billing (M5-17-R1) is in no folder the preset names: its model, queued job and controller
+    // are placed by ancestry alone (Models, Jobs and Http each count one of its files).
     name: 'laravel (a Laravel 11 app filling every layer)', preset: 'laravel', fixture: join(FIXTURES, 'laravel11'), parameters: { root: '' },
-    layers: { Routes: 3, Http: 4, Console: 2, Providers: 1, Jobs: 1, Events: 1, Listeners: 1, Services: 2, Models: 3, Views: 1, Database: 2 },
+    layers: { Routes: 3, Http: 5, Console: 2, Providers: 1, Jobs: 2, Events: 1, Listeners: 1, Services: 2, Models: 5, Views: 1, Database: 2 },
+    unclassified: ['app/Enums/**', 'artisan', 'bootstrap/**'],
     violations: ['app/Models/OrderItem.php → app/Http/Requests/StoreOrderRequest.php'],
   },
   {
+    // src/billing (M5-17-R1) has no Nest file suffix: @Entity, @Injectable and `implements
+    // CanActivate` place its three files (an @Injectable guard is in Enhancer only).
     preset: 'nestjs', fixture: join(FIXTURES, 'nestjs'),
-    layers: { Module: 2, Controller: 1, Enhancer: 1, Provider: 1, Dto: 1, Entity: 1 },
+    layers: { Module: 2, Controller: 1, Enhancer: 2, Provider: 2, Dto: 1, Entity: 2 },
+    unclassified: ['src/main.ts'],
     violations: ['src/orders/orders.controller.ts → src/orders/order.entity.ts'],
   },
   {
+    // shop/billing.py and shop/api.py (M5-17-R1) are in no module the preset names: models.Model
+    // and the class-based view bases place them.
     preset: 'django', fixture: join(FIXTURES, 'django'),
-    layers: { Urls: 1, Views: 1, Admin: 1, Commands: 2, Forms: 1, Serializers: 1, Migrations: 2, Models: 1 },
+    layers: { Urls: 1, Views: 2, Admin: 1, Commands: 2, Forms: 1, Serializers: 1, Migrations: 2, Models: 2 },
+    unclassified: ['manage.py', 'shop/__init__.py', 'shop/management/__init__.py'],
     violations: ['shop/admin.py → shop/views.py'],
   },
   {
@@ -152,6 +176,79 @@ const CASES: Array<{ name?: string; preset: string; fixture: string; layers: Rec
     layers: { App: 1, Processes: 1, Pages: 1, Widgets: 1, Features: 1, Entities: 1, Shared: 1 },
     violations: ['src/entities/Product.ts → src/features/AddToCart.ts'],
   },
+  // M5-17-R1: the rest of AR-15. Each fixture (tests/fixtures/arch-init/<preset>) fills every layer
+  // and plants one violation, named in a comment. Those whose preset selects by ancestry or
+  // annotation also have a file in a folder no path selector names (a Billing folder).
+  {
+    preset: 'onion', fixture: join(FIXTURES, 'onion'), parameters: { root: 'src/' },
+    layers: { DomainModel: 1, DomainServices: 1, ApplicationServices: 1, Presentation: 1, Infrastructure: 1 },
+    violations: ['src/application/Checkout.ts → src/infrastructure/SqlOrderRepository.ts'],
+  },
+  {
+    preset: 'mvc', fixture: join(FIXTURES, 'mvc'), parameters: { root: 'src/' },
+    layers: { Controllers: 1, Views: 1, Models: 1 },
+    violations: ['src/views/OrderView.ts → src/controllers/OrderController.ts'],
+  },
+  {
+    preset: 'mvvm', fixture: join(FIXTURES, 'mvvm'), parameters: { root: 'src/' },
+    layers: { Views: 1, ViewModels: 1, Services: 1, Models: 1 },
+    violations: ['src/views/OrderView.ts → src/services/OrderService.ts'],
+  },
+  {
+    // src/Billing: an #[ORM\Entity] and an AbstractController subclass.
+    preset: 'symfony', fixture: join(FIXTURES, 'symfony'), parameters: { root: '' },
+    layers: { Controller: 2, Form: 1, Command: 1, EventSubscriber: 1, MessageHandler: 1, Message: 1, Service: 1, Repository: 1, Entity: 2 },
+    unclassified: ['bin/**'],
+    violations: ['src/Entity/Order.php → src/Service/OrderTotals.php'],
+  },
+  {
+    preset: 'express', fixture: join(FIXTURES, 'express'), parameters: { root: 'src/' },
+    layers: { App: 1, Routes: 1, Controllers: 1, Middleware: 1, Services: 1, Models: 1, Config: 1 },
+    violations: ['src/models/order.ts → src/controllers/orderController.ts'],
+  },
+  {
+    preset: 'fastapi', fixture: join(FIXTURES, 'fastapi'), parameters: { root: 'app/' },
+    layers: { App: 1, Routers: 2, Dependencies: 1, Services: 2, Schemas: 2, Models: 2, Core: 3 },
+    unclassified: ['app/__init__.py'],
+    violations: ['app/models/order.py → app/routers/orders.py'],
+  },
+  {
+    // app/billing: an ApplicationRecord model and an ApplicationJob job.
+    preset: 'rails', fixture: join(FIXTURES, 'rails'), parameters: { root: '' },
+    layers: { Routes: 1, Controllers: 2, Channels: 1, Helpers: 1, Services: 1, Jobs: 3, Mailers: 2, Models: 3, Database: 2 },
+    unclassified: ['Gemfile'],
+    violations: ['app/models/order.rb → app/services/place_order.rb'],
+  },
+  {
+    // com.example.shop.billing: a Spring Data repository and a @Service.
+    preset: 'spring', fixture: join(FIXTURES, 'spring'),
+    layers: { Controller: 1, Config: 1, Service: 2, Repository: 2, Dto: 1, Entity: 1 },
+    unclassified: ['src/main/java/com/example/shop/ShopApplication.java'],
+    violations: ['src/main/java/com/example/shop/domain/Order.java → src/main/java/com/example/shop/dto/OrderDto.java'],
+  },
+  {
+    // Billing/: a DbContext and a ControllerBase subclass.
+    preset: 'aspnet', fixture: join(FIXTURES, 'aspnet'),
+    layers: { Controllers: 2, Pages: 1, Middleware: 1, Services: 1, Data: 2, Dtos: 1, Models: 1 },
+    unclassified: ['Program.cs'],
+    violations: ['Models/Order.cs → Services/OrderService.cs'],
+  },
+  {
+    // lib/billing: a ChangeNotifier.
+    preset: 'flutter', fixture: join(FIXTURES, 'flutter'), parameters: { root: 'lib/' },
+    layers: { App: 1, Screens: 1, Widgets: 1, State: 2, Services: 1, Models: 1 },
+    violations: ['lib/widgets/order_tile.dart → lib/services/order_api.dart'],
+  },
+  {
+    preset: 'nextjs', fixture: join(FIXTURES, 'nextjs'), parameters: { root: '' },
+    layers: { Routes: 1, Api: 1, Actions: 1, Components: 1, Hooks: 1, Lib: 1 },
+    violations: ['lib/orders.ts → components/OrderList.tsx'],
+  },
+  {
+    preset: 'vue', fixture: join(FIXTURES, 'vue'), parameters: { root: 'src/' },
+    layers: { App: 2, Router: 1, Views: 1, Components: 1, Composables: 1, Stores: 1, Services: 1, Shared: 1 },
+    violations: ['src/services/ordersApi.ts → src/stores/orders.ts'],
+  },
 ];
 
 describe('mapx arch init --preset: a config that validates and that mapx check runs without configuration errors', SLOW, () => {
@@ -169,6 +266,13 @@ describe('mapx arch init --preset: a config that validates and that mapx check r
       // Every layer the preset defines holds a file, so each of its rules is exercised.
       if (!c.partial) expect(dry.body.layers.map((l: { name: string }) => l.name).sort()).toEqual(Object.keys(c.layers).sort());
       expect(JSON.parse(stripJsonc(dry.body.config)).extends).toBe(`mapx:preset/${c.preset}`);
+      // The code no layer selects is in Unclassified, which every layer may use and which may use every layer.
+      expect(dry.body.unclassified?.paths ?? []).toEqual(c.unclassified ?? []);
+      if (c.unclassified) {
+        const doc = JSON.parse(stripJsonc(dry.body.config));
+        expect(doc.layers.find((l: { name: string }) => l.name === 'Unclassified')).toEqual({ name: 'Unclassified', selectors: c.unclassified.map((path) => ({ path })) });
+        expect([doc.rules['*'], doc.rules.Unclassified]).toEqual([expect.arrayContaining(['Unclassified']), ['*']]);
+      }
 
       const written = run(root, 'arch', 'init', '--preset', c.preset, '--write');
       expect([written.status, written.stderr]).toEqual([0, c.partial ?? '']);
@@ -177,9 +281,20 @@ describe('mapx arch init --preset: a config that validates and that mapx check r
       const check = json(root, 'check', '--format', 'json');
       expect(check.body.configErrors).toEqual([]);
       expect(check.body.findings.filter((f: { kind: string }) => f.kind === 'error')).toEqual([]);
+      // No element lands in two layers (review of M5-17-R1: a Laravel model in app/Services).
+      expect(check.body.findings.filter((f: { rule: string }) => f.rule === 'multi-layer').map((f: { message: string }) => f.message)).toEqual([]);
       expect(check.status).toBe(c.violations.length ? 1 : 0);
       expect(violations(check.body)).toEqual(c.violations);
       expect(check.body.counts.violation).toBe(dry.body.violations);
+
+      // Day one (M5-17-R1): with the baseline, `check --fail-on-uncovered` passes.
+      expect(run(root, 'arch', 'init', '--preset', c.preset, '--baseline', '--write', '--force').status).toBe(0);
+      const dayOne = run(root, 'check', '--fail-on-uncovered');
+      expect(dayOne.status, dayOne.stdout).toBe(0);
+      // A framework preset is what `--from framework` picks on its fixture, with no other framework.
+      if (FRAMEWORK_IDS.includes(c.preset)) {
+        expect(json(root, 'arch', 'init', '--from', 'framework', '--json').body).toMatchObject({ source: 'preset', preset: c.preset, notes: [] });
+      }
     });
   }
 });
@@ -200,6 +315,27 @@ describe('mapx arch init --preset: the folder parameter is inferred from the ind
     const check = json(root, 'check', '--format', 'json');
     expect([check.status, check.body.configErrors]).toEqual([1, []]);
     expect(violations(check.body)).toEqual(['services/api/src/domain/Order.ts → services/api/src/infrastructure/SystemClock.ts']);
+  });
+
+  it('a layer selected inside `all` counts: the Next.js Learn layout (app/ui, app/lib) keeps root "" (review of M5-17-R1)', () => {
+    const root = scanned('nextjs-learn', join(FIXTURES, 'nextjs-learn'));
+    const dry = json(root, 'arch', 'init', '--preset', 'nextjs', '--json');
+    expect(dry.body.parameters).toEqual({ root: '' });
+    expect(Object.fromEntries(dry.body.layers.map((l: { name: string; files: number }) => [l.name, l.files]))).toEqual({ Routes: 2, Api: 1, Actions: 1, Components: 2, Hooks: 0, Lib: 2 });
+    expect(run(root, 'arch', 'init', '--preset', 'nextjs', '--write').status).toBe(0);
+    const check = json(root, 'check', '--format', 'json');
+    expect([check.status, check.body.configErrors, violations(check.body)]).toEqual([0, [], []]);
+
+    // Under src/ with no route handler or action file, only the `all` layers (Routes, Components,
+    // Lib) find the folder: it is src/, not the default "".
+    const nested = join(tmp, 'nextjs-learn-src');
+    cpSync(join(FIXTURES, 'nextjs-learn'), join(nested, 'src'), { recursive: true });
+    for (const f of ['src/app/query/route.ts', 'src/app/lib/actions.ts', 'src/app/ui/invoices/create-form.tsx']) rmSync(join(nested, f));
+    init(nested);
+    mapx(nested, 'scan');
+    const src = json(nested, 'arch', 'init', '--preset', 'nextjs', '--json');
+    expect(src.body.parameters).toEqual({ root: 'src/' });
+    expect(Object.fromEntries(src.body.layers.map((l: { name: string; files: number }) => [l.name, l.files]))).toEqual({ Routes: 2, Api: 0, Actions: 0, Components: 1, Hooks: 0, Lib: 2 });
   });
 
   it('a folder with glob characters (svc (v2)/) is escaped, so the layers match it (review of M5-17)', () => {
@@ -399,11 +535,11 @@ describe('mapx arch init: dry run by default, no silent overwrite, stable bytes,
   it('usage errors are exit 3: an unknown preset, a preset with --from, a view outside .mapx/architecture/, no framework to use', () => {
     const before = snapshot(root);
     const cases: Array<[string[], string]> = [
-      [['--preset', 'nope'], 'unknown preset "nope"; available: clean, ddd-contexts, django, feature-sliced, hexagonal, laravel, layered, nestjs'],
+      [['--preset', 'nope'], `unknown preset "nope"; available: ${ALL_PRESETS.join(', ')}`],
       [['--preset', 'clean', '--from', 'roles'], 'give a preset or a source (from), not both'],
       [['--from', 'graph'], 'from must be one of roles, clusters, framework, not "graph"'],
       [['--view', '../x', '--write'], 'view "../x" is not a file name in .mapx/architecture/'],
-      [['--from', 'framework'], 'No framework with a preset was detected in this index (detected: none; presets exist for laravel, nestjs, django). Pass a preset instead.'],
+      [['--from', 'framework'], 'No framework with a preset was detected in this index (detected: none; presets exist for laravel, nestjs, django, symfony, nextjs, express, fastapi, rails, spring, aspnet, flutter, vue-router). Pass a preset instead.'],
     ];
     for (const [args, message] of cases) {
       const r = run(root, 'arch', 'init', ...args);
@@ -436,7 +572,8 @@ describe('mapx arch init on a project with packages: check --fail-on-uncovered p
       expect(written.status, written.stderr).toBe(0);
       const config = JSON.parse(stripJsonc(readFileSync(join(root, '.mapx/architecture.jsonc'), 'utf8')));
       expect(config.layers.find((l: { name: string }) => l.name === 'Packages')).toEqual({ name: 'Packages', selectors: [{ package: '*' }] });
-      expect(config.rules['*']).toEqual(['Packages']);
+      // Packages first; then Unclassified (review of M5-17-R1) when the proposal leaves code unplaced.
+      expect(config.rules['*']).toEqual(config.layers.some((l: { name: string }) => l.name === 'Unclassified') ? ['Packages', 'Unclassified'] : ['Packages']);
       expect(readFileSync(join(root, '.mapx/architecture.jsonc'), 'utf8')).toContain('policy.uncovered.externals');
       const check = run(root, 'check', '--fail-on-uncovered', '--format', 'json', '--report-uncovered');
       const report = JSON.parse(check.stdout);

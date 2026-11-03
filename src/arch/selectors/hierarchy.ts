@@ -2,12 +2,16 @@
 // `inheritanceDepth`, and AR-02 inherited dependencies). A type's direct bases come from:
 //
 //   a. the stored `extends` and `implements` edges (bases the index resolved to a workspace type);
-//   b. the base list its signature declares (the declaration's first line), for the bases outside
-//      the index. Each is named through what the file records: PHP's `extends`/`implements`
+//   b. the base list its declaration's header names, for the bases outside the index. The header is
+//      read from the source, from the type's keyword to its body, past the annotation and attribute
+//      lines above it and across a wrapped base list (M5-17-R1: `@Transactional` over a Java
+//      repository, `[Authorize]` over a C# controller, `#[Route]` over a PHP one); the stored
+//      signature, the declaration's first line, is the fallback. Each is named through what the file records: PHP's `extends`/`implements`
 //      candidates (M5-19; fully qualified through `use`), a TS class's `extends` candidate
 //      (`sequelize#Model`), TS and Python import candidates (`models.Model` after
 //      `from django.db import models` is `django.db.models.Model`), and Java, Kotlin and Scala
-//      `import` lines, PHP `use` and namespace; otherwise as written, generics dropped. A name so
+//      `import` lines, PHP `use` and namespace, Python import aliases (`import Model as DM`);
+//      otherwise as written, generics dropped. A name so
 //      qualified that is a workspace type links to it. Where an edge linked a same-named workspace
 //      type the file does not mean (its import names a package, or resolution another name), the
 //      declared base wins (review of M5-09);
@@ -147,6 +151,45 @@ export function declaredBases(signature: string, language: string, symbolKind: s
   return out;
 }
 
+const BRACE_LANGUAGES = new Set(['php', 'java', 'typescript', 'tsx', 'javascript', 'scala', 'dart', 'groovy', 'kotlin', 'c-sharp', 'swift']);
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * A type's declaration header in `lines` (its file), read from `line` (1-based: where the symbol
+ * starts, an annotation above it included): from the type's keyword (`class`, `interface` …) and
+ * name to its body, joined into one line. Annotation and attribute lines before the keyword are
+ * passed over, and a base list that wraps continues while the header is open (a bracket, a trailing
+ * `,`, `:` or keyword) or the next line starts with one. Null when the keyword and name are not
+ * within 40 lines. Exported for tests.
+ */
+export function declarationHeader(lines: string[], line: number, name: string, language: string): string | null {
+  const window = lines.slice(Math.max(0, line - 1), line - 1 + 40);
+  const keyword = new RegExp(`(?:^|[^\\w$])((?:class|interface|trait|enum|record|struct|object|protocol|mixin)\\s+${escapeRe(name)})(?![\\w$])`);
+  let at = -1;
+  let col = 0;
+  for (let i = 0; i < window.length && at < 0; i++) {
+    // A comment line (`// class Order …`, a doc block) is never the declaration.
+    if (/^\s*(\/\/|\/\*|\*|#(?!\[))/.test(window[i]!)) continue;
+    const m = keyword.exec(window[i]!);
+    if (m) { at = i; col = m.index + m[0].length - m[1]!.length; }
+  }
+  if (at < 0) return null;
+  const strip = (t: string) => t.replace(/\/\/.*$/, '').replace(/#(?!\[).*$/, '');
+  const depthOf = (t: string) => [...t].reduce((d, c) => d + ('(<['.includes(c) ? 1 : ')>]'.includes(c) ? -1 : 0), 0);
+  let text = strip(window[at]!.slice(col)).trim();
+  if (BRACE_LANGUAGES.has(language)) {
+    let depth = depthOf(text);
+    for (let i = at + 1; i < window.length && !/[{;]/.test(text); i++) {
+      const next = strip(window[i]!).trim();
+      const open = depth > 0 || /[,:(<]$|\b(extends|implements|with|where)$/.test(text);
+      if (!open && !/^([:,{(<]|extends\b|implements\b|with\b|where\b)/.test(next)) break;
+      text = `${text} ${next}`;
+      depth += depthOf(next);
+    }
+  }
+  return text;
+}
+
 /** `import a.b.C;` / `import a.b.C` lines of a Java, Kotlin or Scala file: short name → qualified name. */
 function jvmImports(root: string, path: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -183,6 +226,32 @@ function phpUses(root: string, path: string): Map<string, string> {
         const [name, alias] = part.trim().split(/\s+as\s+/i);
         if (name) add(name, alias?.trim());
       }
+    }
+  }
+  return map;
+}
+
+/**
+ * The aliases of a Python file's absolute imports: `from a.b import C as D` and `import a.b as D`
+ * (D → `a.b.C`, `a.b`), parenthesised lists included. Relative imports are left to the edges.
+ */
+function pythonAliases(root: string, path: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const file = join(root, path);
+  if (!existsSync(file)) return map;
+  let text: string;
+  try { text = readFileSync(file, 'utf8'); } catch { return map; }
+  text = text.replace(/\(([^)]*)\)/g, (_, inner: string) => inner.replace(/\s+/g, ' '));
+  for (const m of text.matchAll(/^\s*from\s+([\w.]+)\s+import\s+([^\n#]+)/gm)) {
+    for (const part of m[2]!.split(',')) {
+      const am = /^\s*(\w+)\s+as\s+(\w+)\s*$/.exec(part);
+      if (am) map.set(am[2]!, `${m[1]}.${am[1]}`);
+    }
+  }
+  for (const m of text.matchAll(/^\s*import\s+([^\n#]+)/gm)) {
+    for (const part of m[1]!.split(',')) {
+      const am = /^\s*([\w.]+)\s+as\s+(\w+)\s*$/.exec(part);
+      if (am) map.set(am[2]!, am[1]!);
     }
   }
   return map;
@@ -325,6 +394,12 @@ function buildHierarchy(view: ElementView): Hierarchy {
       return { name: written, qualified: false, source: 'written' };
     }
     if (lang === 'python') {
+      // An aliased import (`from django.db.models import Model as DM`, `from django.db import models as m`).
+      const alias = importsOf(type.file.path, pythonAliases).get(head!);
+      if (alias) {
+        const external = cands.some((x) => x.kind === 'import' && (alias === x.specifier || alias.startsWith(`${x.specifier}.`)));
+        return { name: [alias, ...rest].join('.'), qualified: true, source: external ? 'external' : 'resolved' };
+      }
       const imp = cands.find((x) => x.kind === 'import' && x.symbol === head);
       if (imp) return { name: [imp.specifier, imp.symbol, ...rest].join('.'), qualified: true, source: 'external' };
       const mod = cands.find((x) => x.kind === 'import' && x.symbol === null && (written === x.specifier || written.startsWith(`${x.specifier}.`)));
@@ -351,12 +426,29 @@ function buildHierarchy(view: ElementView): Hierarchy {
     return norm(named.name) !== norm(target.qualifiedName);
   };
 
+  // A type's header from its source (past annotation lines, across a wrapped base list), else the
+  // stored signature.
+  const sources = new Map<string, string[] | null>();
+  const linesOf = (path: string): string[] | null => {
+    if (!sources.has(path)) {
+      let lines: string[] | null = null;
+      try { lines = readFileSync(join(view.root, path), 'utf8').split(/\r?\n/); } catch { /* moved or unreadable: the signature */ }
+      sources.set(path, lines);
+    }
+    return sources.get(path)!;
+  };
+  const headerOf = (type: Element): string | undefined => {
+    const lines = type.line && type.name ? linesOf(type.file.path) : null;
+    return (lines && declarationHeader(lines, type.line!, type.name!, type.file.language)) || type.signature;
+  };
+
   const basesCache = new Map<string, Base[]>();
   const bases = (type: Element): Base[] => {
     let out = basesCache.get(type.id);
     if (out) return out;
     const iface = type.symbolKind === 'interface';
-    const declared = type.signature ? declaredBases(type.signature, type.file.language, type.symbolKind ?? '') : [];
+    const header = headerOf(type);
+    const declared = header ? declaredBases(header, type.file.language, type.symbolKind ?? '') : [];
     const used = new Set<number>();
     out = [];
     for (const b of edgeBases.get(type.id) ?? []) {

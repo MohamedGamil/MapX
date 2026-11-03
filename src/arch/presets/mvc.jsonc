@@ -1,0 +1,20 @@
+// mapx:preset/mvc: Model-View-Controller.
+// AR-15 (M5-17-R1). Controllers take the input, update models and pick views; views read models;
+// models depend on nothing. A view never calls its controller.
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // Controllers: input handling.
+    { "name": "Controllers", "selectors": [{ "path": "%root%{controllers,controller}/**" }] },
+    // Views and templates.
+    { "name": "Views", "selectors": [{ "path": "%root%{views,view,templates}/**" }] },
+    // Models: data and rules.
+    { "name": "Models", "selectors": [{ "path": "%root%{models,model}/**" }] }
+  ],
+  "rules": {
+    "Controllers": ["Views", "Models"],
+    "Views": ["Models"],
+    "Models": []
+  }
+}

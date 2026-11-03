@@ -1,0 +1,6 @@
+{
+  "name": "m5-17-r1-vue-fixture",
+  "private": true,
+  "description": "Synthetic Vue app for M5-17-R1. Not a real application.",
+  "dependencies": { "vue": "^3.4.0", "vue-router": "^4.3.0", "pinia": "^2.1.0" }
+}

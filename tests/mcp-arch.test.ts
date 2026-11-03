@@ -338,8 +338,16 @@ describe('mapx_arch_init', SLOW, () => {
     const layers = b.layers.map((l: { name: string; role: string }) => [l.name, l.role]);
     expect(layers.length).toBeGreaterThan(0);
     const doc = JSON.parse(stripJsonc(b.config)); // comments explain each layer and rule (M5-17)
-    expect(doc.layers).toEqual(b.layers.map((l: { name: string; role: string }) => ({ name: l.name, selectors: [{ role: l.role }] })));
-    expect(doc.rules).toEqual(Object.fromEntries(layers.map(([name]: string[], i: number) => [name, layers.slice(i + 1).map(([n]: string[]) => n)])));
+    // The code no role layer holds goes into Unclassified, every layer's to use (review of M5-17-R1).
+    expect(b.unclassified).toMatchObject({ name: 'Unclassified', paths: ['src/application/**'] });
+    expect(doc.layers).toEqual([
+      ...b.layers.map((l: { name: string; role: string }) => ({ name: l.name, selectors: [{ role: l.role }] })),
+      { name: 'Unclassified', selectors: [{ path: 'src/application/**' }] },
+    ]);
+    expect(doc.rules).toEqual({
+      '*': ['Unclassified'], Unclassified: ['*'],
+      ...Object.fromEntries(layers.map(([name]: string[], i: number) => [name, layers.slice(i + 1).map(([n]: string[]) => n)])),
+    });
   });
 
   it('write: true writes the proposal, which `mapx check` loads without a configuration error; never over an existing file', async () => {

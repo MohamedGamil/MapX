@@ -275,7 +275,7 @@ function validateSelector(sel: unknown, p: string, issue: IssueFn) {
       if (!Number.isInteger(value) || (value as number) < 1) issue(kp, 'expected a whole number ≥ 1');
     } else if (key === 'confidence') {
       if (typeof value !== 'number' || value < 0 || value > 1) issue(kp, 'expected a number from 0 to 1');
-    } else if (key === 'dev' || key === 'direct') {
+    } else if (key === 'dev' || key === 'direct' || key === 'members') {
       if (typeof value !== 'boolean') issue(kp, 'expected true or false');
     } else if (key === 'builtin' || key === 'ambient') {
       if (value !== true && (typeof value !== 'string' || !value)) issue(kp, 'expected true or a name pattern');

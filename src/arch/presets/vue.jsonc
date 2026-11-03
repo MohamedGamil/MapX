@@ -1,0 +1,36 @@
+// mapx:preset/vue: a Vue 3 application (Vite or Vue CLI layout, Vue Router, Pinia or Vuex).
+// AR-15 (M5-17-R1). By the src/ folders of create-vue. Views compose components; components and
+// composables reach the API through stores; a navigation guard may read a store and a store may
+// navigate (router.push); the API client depends on nothing in the app but Shared.
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // The entry point and the root component.
+    { "name": "App", "selectors": [{ "path": "%root%{main.{ts,js},App.vue}" }] },
+    // Route definitions and navigation guards.
+    { "name": "Router", "selectors": [{ "path": "%root%router/**" }] },
+    // Route-level components.
+    { "name": "Views", "selectors": [{ "path": "%root%{views,pages}/**" }] },
+    // Reusable components.
+    { "name": "Components", "selectors": [{ "path": "%root%components/**" }] },
+    // Composition functions.
+    { "name": "Composables", "selectors": [{ "path": "%root%{composables,hooks}/**" }] },
+    // Pinia or Vuex stores.
+    { "name": "Stores", "selectors": [{ "path": "%root%{stores,store}/**" }] },
+    // API clients and other services.
+    { "name": "Services", "selectors": [{ "path": "%root%{services,api}/**" }] },
+    // Types, utilities and constants every layer may use.
+    { "name": "Shared", "selectors": [{ "path": "%root%{types,utils,lib,helpers,constants}/**" }] }
+  ],
+  "rules": {
+    "App": ["Router", "Views", "Components", "Stores", "Shared"],
+    "Router": ["Views", "Stores", "Shared"],
+    "Views": ["Components", "Composables", "Stores", "Services", "Shared"],
+    "Components": ["Composables", "Stores", "Shared"],
+    "Composables": ["Stores", "Services", "Shared"],
+    "Stores": ["Router", "Services", "Shared"],
+    "Services": ["Shared"],
+    "Shared": []
+  }
+}

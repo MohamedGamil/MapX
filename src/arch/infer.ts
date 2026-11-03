@@ -7,7 +7,7 @@
 // Sources:
 //   roles      one layer per MapX role in the archetype's LAYER_ORDER, "may depend downward" (M5-14)
 //   clusters   one layer per primary cluster; the rules allow the cluster graph the index has today
-//   framework  the preset of the framework the codebase profile detected (laravel, nestjs, django)
+//   framework  the preset of the framework the codebase profile detected (FRAMEWORK_PRESETS)
 //   preset     a document extending mapx:preset/<id>, its path parameters inferred from the index
 // Every proposal is loaded through config.ts (presets resolved) and evaluated with buildReport, so
 // its issues and counts are what `mapx arch validate-config` and `mapx check` would report.
@@ -18,7 +18,7 @@ import type { Store } from '../core/store.js';
 import { LAYER_ORDER } from '../core/flow-validator.js';
 import type { CodebaseArchetype, FileRole } from '../types.js';
 import { architectureConfigPath, loadArchitectureText, parseArchitectureText, PRESET_PREFIX, PRESETS, viewProblem, type ConfigIssue } from './config.js';
-import type { ArchitectureDocument, Layer } from './schema.js';
+import type { ArchitectureDocument, Layer, Selector } from './schema.js';
 import { getMembership } from './membership.js';
 import { buildReport, type ArchReport } from './report.js';
 import { defaultBaselinePath, renderBaseline } from './baseline.js';
@@ -26,8 +26,14 @@ import { defaultBaselinePath, renderBaseline } from './baseline.js';
 export const INIT_SOURCES = ['roles', 'clusters', 'framework'] as const;
 export type InitSource = typeof INIT_SOURCES[number];
 
-/** The preset of each framework a detector names (src/frameworks/detectors), in the order tried. */
-export const FRAMEWORK_PRESETS: Readonly<Record<string, string>> = { laravel: 'laravel', nestjs: 'nestjs', django: 'django' };
+/** The preset of each framework a detector names (src/frameworks/detectors), in the order tried: a
+ * framework before the one it builds on or ships with (NestJS and Next.js before Express, Laravel
+ * and Symfony before a Vue front end). M5-17-R1 added the presets after django. */
+export const FRAMEWORK_PRESETS: Readonly<Record<string, string>> = {
+  laravel: 'laravel', nestjs: 'nestjs', django: 'django',
+  symfony: 'symfony', nextjs: 'nextjs', express: 'express', fastapi: 'fastapi', rails: 'rails',
+  spring: 'spring', aspnet: 'aspnet', flutter: 'flutter', 'vue-router': 'vue',
+};
 
 export interface InitOptions {
   /** Where layers come from (default roles); `framework` picks the preset of the detected framework. */
@@ -59,6 +65,12 @@ export interface Proposal {
   layers: ProposedLayer[];
   /** Roles the index assigns that the archetype's order does not place (roles source). */
   unplaced: Array<{ role: string; files: number }>;
+  /**
+   * The layer holding the code files no other layer selects (review of M5-17-R1), so that no source
+   * folder is uncovered on day one: its name, its path selectors and its files; null when every
+   * code file is in a layer. Not in `layers`.
+   */
+  unclassified: { name: string; paths: string[]; files: number } | null;
   /** The observed layer graph: dependencies per layer pair, and how many break the proposed rules. */
   observed: ObservedPair[];
   /** Violations the proposal reports on today's index (what a baseline would list). */
@@ -198,6 +210,53 @@ function addPackagesLayer(store: Store, draft: Draft, reserved: string[] = []): 
   return packages;
 }
 
+/**
+ * The layer of the code files no layer of `draft` selects (review of M5-17-R1): an Enums, Mail,
+ * Security or types folder a preset does not name, a role the archetype's order leaves out. Without
+ * it a dependency on them is uncovered and `check --fail-on-uncovered` fails on day one. Each file
+ * goes in by the highest folder that holds no placed file (`app/Enums/**`), else by its own path.
+ * The choice of rules: it is a to-do, not a layer of the design, so it constrains nothing yet: every
+ * layer may use it (`"*"`) and it may use every layer (`["*"]`). Moving its folders into layers, or
+ * giving them their own, is what tightens the rules. Returns it, or null when every code file is placed.
+ */
+function addUnclassifiedLayer(store: Store, workspace: string, draft: Draft, options: InitOptions, reserved: string[] = []): Proposal['unclassified'] {
+  const { config } = loadArchitectureText(workspace, draftText(draft), { view: options.view });
+  if (!config) return null;
+  const membership = getMembership(store, workspace, config, join(workspace, '.mapx', 'mapx.db'), options.repoPaths);
+  const code = new Set(codePaths(store));
+  const files = membership.view.elements.filter((e) => e.kind === 'file' && code.has(e.file.path));
+  const placed = files.filter((f) => membership.primaryOf(f).length).map((f) => f.file.path);
+  const unplaced = files.filter((f) => !membership.primaryOf(f).length).map((f) => f.file.path).sort();
+  if (!unplaced.length) return null;
+  const paths = new Set<string>();
+  for (const path of unplaced) {
+    const parts = path.split('/');
+    let folder: string | null = null;
+    for (let depth = 1; depth < parts.length && !folder; depth++) {
+      const dir = `${parts.slice(0, depth).join('/')}/`;
+      if (!placed.some((p) => p.startsWith(dir))) folder = dir;
+    }
+    paths.add(folder ? `${globLiteral(folder)}**` : globLiteral(path));
+  }
+  const taken = new Set([...reserved, ...(draft.layers ?? []).map((l) => l.layer.name)]);
+  let name = 'Unclassified';
+  for (let i = 2; taken.has(name); i++) name = `Unclassified${i}`;
+  const list = [...paths].sort();
+  draft.layers = [...(draft.layers ?? []), {
+    comment: [
+      `TODO: ${plural(unplaced.length, 'code file')} no layer selects. Move each folder into a layer, or give it one of its own;`,
+      'until then it constrains nothing: every layer may use it and it may use every layer, so nothing it holds is uncovered',
+    ],
+    layer: { name, selectors: list.map((path) => ({ path })) },
+  }];
+  const star = draft.rules?.find((r) => r.source === '*');
+  if (star) star.list = [...star.list, name];
+  else draft.rules = [{ source: '*', list: [name], comment: [`every layer may use ${name}`] }, ...(draft.rules ?? [])];
+  if (star) star.comment = [`every layer may use ${star.list.join(' and ')}`];
+  draft.rules = [...(draft.rules ?? []), { source: name, list: ['*'], comment: [`${name} may use every layer (a to-do: see the layer)`] }];
+  return { name, paths: list, files: unplaced.length };
+}
+
 /** `Data 3, Shared 1` for the pairs out of `layer`, and those against the rules. */
 function outgoing(observed: ObservedPair[], layer: string): { today: string; against: string } {
   const out = observed.filter((o) => o.from === layer);
@@ -212,6 +271,10 @@ const ruleComment = (observed: ObservedPair[]) => (source: string): string[] => 
   if (!today) return ['no dependency on another layer today'];
   return [`today: ${today}${against ? `; against these rules: ${against}` : ''}`];
 };
+
+function unclassifiedLine(u: Proposal['unclassified']): string[] {
+  return u ? [`TODO: ${plural(u.files, 'code file')} no layer selects ${u.files === 1 ? 'is' : 'are'} in ${u.name} (${u.paths.join(', ')}): place them, then tighten its rules.`] : [];
+}
 
 function summary(observed: ObservedPair[], report: ArchReport | null): string[] {
   if (!report) return [];
@@ -299,9 +362,10 @@ function fromRoles(store: Store, workspace: string, archetype: CodebaseArchetype
   if (!layers.length) {
     draft.header = [`Proposed by \`mapx arch init\` from MapX roles and the "${archetype}" layer order (AR-15): no role has a place in it.`];
     const issues = [{ file: '.mapx/architecture.jsonc', pointer: '/layers', message: 'no role the index assigns has a place in the layer order: nothing to propose' }];
-    return { source: 'roles', preset: null, parameters: {}, layers, unplaced, observed: [], text: renderDraft(draft), issues, notes: [], report: null };
+    return { source: 'roles', preset: null, parameters: {}, layers, unplaced, unclassified: null, observed: [], text: renderDraft(draft), issues, notes: [], report: null };
   }
   const packages = addPackagesLayer(store, draft);
+  const unclassified = addUnclassifiedLayer(store, workspace, draft, options);
   const { report, issues } = evaluate(store, workspace, draftText(draft), options);
   const observed = observedOf(report, packages);
   draft.header = [
@@ -309,10 +373,11 @@ function fromRoles(store: Store, workspace: string, archetype: CodebaseArchetype
     'Review it before relying on it: rename layers, replace role selectors with paths, tighten rules.',
     'Each layer may depend on the layers after it in that order; the comments give the dependencies the index has today.',
     ...(unplaced.length ? [`Roles left out (no place in the order): ${unplaced.map((u) => `${u.role} (${u.files})`).join(', ')}.`] : []),
+    ...unclassifiedLine(unclassified),
     ...summary(observed, report),
     ...baselineLine(workspace, options, report),
   ];
-  return { source: 'roles', preset: null, parameters: {}, layers, unplaced, observed, text: renderDraft(draft, ruleComment(observed)), issues, notes: [], report };
+  return { source: 'roles', preset: null, parameters: {}, layers, unplaced, unclassified, observed, text: renderDraft(draft, ruleComment(observed)), issues, notes: [], report };
 }
 
 function fromClusters(store: Store, workspace: string, options: InitOptions): Inferred {
@@ -342,16 +407,17 @@ function fromClusters(store: Store, workspace: string, options: InitOptions): In
   if (!layers.length) {
     draft.header = ['Proposed by `mapx arch init --from clusters` (AR-15): the index has no clusters.'];
     const issues = [{ file: '.mapx/architecture.jsonc', pointer: '/layers', message: 'the index has no primary clusters: run `mapx scan`, or propose from roles' }];
-    return { source: 'clusters', preset: null, parameters: {}, layers, unplaced: [], observed: [], text: renderDraft(draft), issues, notes, report: null };
+    return { source: 'clusters', preset: null, parameters: {}, layers, unplaced: [], unclassified: null, observed: [], text: renderDraft(draft), issues, notes, report: null };
   }
   const packages = addPackagesLayer(store, draft);
+  const unclassified = addUnclassifiedLayer(store, workspace, draft, options);
   // The observed cluster graph, from the layers with no allowance: every dependency between two of
   // them is a violation, counted per pair. The rules then allow exactly those pairs (packages are
   // every layer's through "*").
   const first = evaluate(store, workspace, draftText(draft), options);
   const order = new Map(layers.map((l, i) => [l.name, i]));
   for (const rule of draft.rules!) {
-    if (rule.source === '*') continue;
+    if (rule.source === '*' || rule.source === unclassified?.name) continue;
     rule.list = observedOf(first.report, packages).filter((o) => o.from === rule.source && o.dependencies > 0).map((o) => o.to).sort((a, b) => order.get(a)! - order.get(b)!);
   }
   const { report, issues } = first.report ? evaluate(store, workspace, draftText(draft), options) : first;
@@ -361,10 +427,11 @@ function fromClusters(store: Store, workspace: string, options: InitOptions): In
     'The rules allow exactly the dependencies between clusters the index has today, so a new one fails `mapx check`.',
     'Review it before relying on it: rename layers, merge clusters, and remove the allowances you want gone.',
     ...notes,
+    ...unclassifiedLine(unclassified),
     ...summary(observed, report),
     ...baselineLine(workspace, options, report),
   ];
-  return { source: 'clusters', preset: null, parameters: {}, layers: withFiles(layers, report), unplaced: [], observed, text: renderDraft(draft, ruleComment(observed)), issues, notes, report };
+  return { source: 'clusters', preset: null, parameters: {}, layers: withFiles(layers, report), unplaced: [], unclassified, observed, text: renderDraft(draft, ruleComment(observed)), issues, notes, report };
 }
 
 /** The layers with the files the report counts (a cluster's own count is per primary membership). */
@@ -389,9 +456,16 @@ function codePaths(store: Store): string[] {
  */
 function inferFolder(paths: string[], doc: ArchitectureDocument, param: string): { value: string; layers: number; total: number; files: number } | null {
   const ref = `%${param}%`;
+  // The path selectors that place files, inside `all` and `any` too (review of M5-17-R1: the nextjs
+  // Routes layer is an `all`); a path under `not` excludes, and is left out.
+  const positivePaths = (s: Selector): string[] => [
+    ...(typeof s.path === 'string' ? [s.path] : []),
+    ...((s.all ?? []) as Selector[]).flatMap(positivePaths),
+    ...((s.any ?? []) as Selector[]).flatMap(positivePaths),
+  ];
   const globs = (doc.layers ?? []).map((l) => (l.selectors ?? [])
-    .map((s) => s.path)
-    .filter((p): p is string => typeof p === 'string' && p.startsWith(ref) && !p.slice(ref.length).includes('%'))
+    .flatMap(positivePaths)
+    .filter((p): p is string => p.startsWith(ref) && !p.slice(ref.length).includes('%'))
     .map((p) => picomatch(p.slice(ref.length), { dot: true })));
   const total = globs.filter((g) => g.length).length;
   if (!total) return null;
@@ -468,11 +542,13 @@ function fromPreset(store: Store, workspace: string, id: string, options: InitOp
   }
   // The packages layer is this configuration's, merged over the preset's layers and "*" rule.
   const packages = addPackagesLayer(store, draft, (doc.layers ?? []).map((l) => l.name));
+  const unclassified = addUnclassifiedLayer(store, workspace, draft, options, (doc.layers ?? []).map((l) => l.name));
   const { report, issues } = evaluate(store, workspace, draftText(draft), options);
   const observed = observedOf(report);
   const files = new Map((report?.layers ?? []).map((l) => [l.name, l.files]));
-  // The proposal's layers are the preset's and the contexts: the packages layer holds no file.
-  const layerNames = report ? report.layers.map((l) => l.name).filter((n) => n !== packages) : [];
+  // The proposal's layers are the preset's and the contexts: the packages layer holds no file, and
+  // the unclassified one is reported on its own.
+  const layerNames = report ? report.layers.map((l) => l.name).filter((n) => n !== packages && n !== unclassified?.name) : [];
   const layers: ProposedLayer[] = layerNames.map((name) => {
     const own = draft.layers?.find((l) => l.layer.name === name);
     return { name, files: files.get(name) ?? 0, ...(own ? { path: own.layer.selectors[0]!.path } : {}) };
@@ -490,10 +566,11 @@ function fromPreset(store: Store, workspace: string, id: string, options: InitOp
       const what = l.files ? plural(l.files, 'file') : 'no files (an empty-layer warning)';
       return `  ${l.name.padEnd(width)}  ${what}${today ? `; → ${today}` : ''}${against ? `; against the rules: ${against}` : ''}`;
     }),
+    ...unclassifiedLine(unclassified),
     ...summary(observed, report),
     ...baselineLine(workspace, options, report),
   ];
-  return { source: 'preset', preset: id, parameters, layers, unplaced: [], observed, text: renderDraft(draft), issues, notes, report };
+  return { source: 'preset', preset: id, parameters, layers, unplaced: [], unclassified, observed, text: renderDraft(draft), issues, notes, report };
 }
 
 // ─── Writing ─────────────────────────────────────────────────────────────────────────────────
@@ -518,6 +595,7 @@ export interface InitResult {
   parameters: Record<string, string>;
   layers: ProposedLayer[];
   unplaced: Proposal['unplaced'];
+  unclassified: Proposal['unclassified'];
   observed: ObservedPair[];
   violations: number;
   baseline: { path: string; entries: number; exists: boolean; written: boolean } | null;
@@ -556,7 +634,7 @@ export function runInit(store: Store, workspace: string, request: InitRequest): 
   const writesBaseline = !!proposal.baseline && (proposal.baseline.entries > 0 || baselineExists);
   const result: InitResult = {
     path, view: request.view ?? null, exists, written: false, source: proposal.source, preset: proposal.preset, archetype: proposal.archetype,
-    parameters: proposal.parameters, layers: proposal.layers, unplaced: proposal.unplaced, observed: proposal.observed, violations: proposal.violations,
+    parameters: proposal.parameters, layers: proposal.layers, unplaced: proposal.unplaced, unclassified: proposal.unclassified, observed: proposal.observed, violations: proposal.violations,
     baseline: proposal.baseline ? { path: display(workspace, baselineTarget), entries: proposal.baseline.entries, exists: baselineExists, written: false } : null,
     issues: proposal.issues, notes: proposal.notes, warnings, config: proposal.text,
   };

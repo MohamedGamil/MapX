@@ -554,7 +554,7 @@ Proposes a configuration from the index (AR-15), as `mapx arch init --json` does
 - `from: "framework"`, or `preset`: a configuration that extends a shipped preset (`mapx:preset/<id>`), its folder parameter inferred from the indexed paths. `from: "framework"` takes the preset of the detected framework (laravel, nestjs or django) and is an error (`exitCode: 3`) when none is detected.
 - The JSONC comments give each layer's files and the observed layer graph; `observed` has the same as data.
 
-The result is `{ path, view, exists, written, source, preset, archetype, parameters, layers: [{ name, files, role?, cluster?, path? }], unplaced, observed: [{ from, to, dependencies, violations }], violations, baseline: { path, entries, exists, written } | null, issues, notes, warnings, config }`, where `config` is the JSONC text.
+The result is `{ path, view, exists, written, source, preset, archetype, parameters, layers: [{ name, files, role?, cluster?, path? }], unplaced, unclassified: { name, paths, files } | null (the code no layer selects, every layer's to use; review of M5-17-R1), observed: [{ from, to, dependencies, violations }], violations, baseline: { path, entries, exists, written } | null, issues, notes, warnings, config }`, where `config` is the JSONC text.
 
 **It writes nothing unless `write: true`.** Each of these is refused as a tool error (`exitCode: 3`) that writes nothing:
 - an existing configuration or baseline, unless `force: true`;
@@ -563,7 +563,7 @@ The result is `{ path, view, exists, written, source, preset, archetype, paramet
 
 The files are staged and replaced together, so a failed write is also `exitCode: 3` and leaves the configuration and baseline as they were. A proposal reads roles and paths, so a stale index is accepted, except with `baseline: true`, which lists today's violations and needs a current index (`exitCode: 4`, or `sync: true`). The proposal is a starting point to review.
 - `from` (string, optional): `roles` (default), `clusters` or `framework`.
-- `preset` (string, optional): `clean`, `ddd-contexts`, `django`, `feature-sliced`, `hexagonal`, `laravel`, `layered` or `nestjs`. It excludes `from`.
+- `preset` (string, optional): `aspnet`, `clean`, `ddd-contexts`, `django`, `express`, `fastapi`, `feature-sliced`, `flutter`, `hexagonal`, `laravel`, `layered`, `mvc`, `mvvm`, `nestjs`, `nextjs`, `onion`, `rails`, `spring`, `symfony` or `vue`. It excludes `from`.
 - `baseline` (boolean, optional): Also propose, and with `write` write, the baseline of today's violations (`.mapx/architecture.baseline.json`, or the view's), so `mapx check` passes on day one.
 - `write` (boolean, optional): Write `.mapx/architecture.jsonc`, or the view.
 - `force` (boolean, optional): With `write`, overwrite an existing configuration and baseline.

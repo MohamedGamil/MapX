@@ -20,7 +20,9 @@ import { validateArchitectureText } from '../src/arch/config.js';
 const FIXTURE = resolve(__dirname, 'fixtures/arch-hierarchy');
 const APPS = ['php', 'ts', 'python', 'java'] as const;
 // `mixed` (review of M5-09): same-named local classes, parser edge cases, a duplicate import.
-const SETUP = [...APPS, 'mixed'] as const;
+// `annotated` (review of M5-17-R1): annotations and attributes above a declaration, a wrapped base
+// list, Python import aliases.
+const SETUP = [...APPS, 'mixed', 'annotated'] as const;
 type App = typeof SETUP[number];
 const CLI = { timeout: 300_000 };
 const roots = {} as Record<App, string>;
@@ -254,6 +256,22 @@ describe('declared base lists, as the index stores signatures (unit)', () => {
     ['go', 'struct', 'type Order struct', []],
   ])('%s %s: %s', (language, kind, signature, want) => {
     expect(declaredBases(signature, language, kind).map((b) => [b.written, b.kind])).toEqual(want);
+  });
+});
+
+describe('the header is read past annotation lines, across a wrapped base list, through Python aliases (review of M5-17-R1)', CLI, () => {
+  it.each([
+    ['Java: @Transactional above a Spring Data repository', { extends: 'org.springframework.data.jpa.repository.JpaRepository' }, ['com.acme.OrderRepository']],
+    ['Java: a multi-line annotation and a doc comment naming the class, over a wrapped `extends`', { extends: 'org.springframework.data.jpa.domain.AbstractPersistable' }, ['com.acme.Order']],
+    ['Java: the wrapped `implements` line', { implements: 'java.io.Serializable' }, ['com.acme.Order']],
+    ['C#: [Authorize] and [Route] above a controller', { extends: 'ControllerBase' }, ['Shop.Admin.AuditController']],
+    ['Kotlin: @Service above a class', { extends: 'BaseService' }, ['kt/Billing.kt#Billing']],
+    ['Kotlin: an annotation above a data class', { implements: 'Persistable' }, ['kt/Billing.kt#Invoice']],
+    ['PHP: #[Route] above a controller', { extends: 'Symfony\\Bundle\\FrameworkBundle\\Controller\\AbstractController' }, ['App\\Admin\\AdminController']],
+    ['PHP: a multi-line #[ORM\\Entity(...)] above an entity', { extends: 'Doctrine\\Common\\Model' }, ['App\\Admin\\Product']],
+    ['Python: `import Model as DM`, `import models as m`, and a decorated class', { extends: 'django.db.models.Model' }, ['py.billing.Credit', 'py.billing.Invoice', 'py.billing.Refund']],
+  ] as Array<[string, Selector, string[]]>)('%s', (_, selector, want) => {
+    expect(names('annotated', selector)).toEqual(want);
   });
 });
 

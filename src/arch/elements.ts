@@ -44,6 +44,8 @@ export interface Element {
   visibility?: string;
   /** A type's declaration line as stored (its base list; M5-09); absent for other symbols. */
   signature?: string;
+  /** A type's first line in its file (an annotation above it included; M5-17-R1): where its header is read. */
+  line?: number;
   /** The traits a PHP type uses, fully qualified (`metadata.mixins`; M5-09). */
   mixins?: string[];
   /** For an external element (M5-24): what the scan attributed its references to. */
@@ -467,7 +469,7 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
       const topLevel = scoped
         ? (!parent || namespaceLike(parent)) && !(scope && !(s.kind in CONTAINER_RANK) && !scopedToNamespace)
         : !s.scope;
-      const signature = TYPE_SYMBOL_KINDS.has(s.kind) && s.signature ? { signature: s.signature } : {};
+      const signature = TYPE_SYMBOL_KINDS.has(s.kind) && s.signature ? { signature: s.signature, ...(s.start_line ? { line: s.start_line } : {}) } : {};
       add({ id: `symbol:${file.path}#${qn}#${s.kind}`, kind: 'symbol', qualifiedName: qn, file, name: s.name, symbolKind: s.kind, scope: s.scope, topLevel, ...signature, ...annotationsOf(s) });
     }
   }

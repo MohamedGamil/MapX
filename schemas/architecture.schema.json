@@ -345,6 +345,10 @@
           "minLength": 1,
           "description": "A symbol carrying this decorator, attribute or annotation: the value equals its stored name (PHP: the fully qualified name, or the name as written) or is a suffix of it on a namespace boundary (\\ or .), case-insensitively. Outside PHP, where names are stored as written, a qualified value also matches the stored name it ends in (System.Obsolete matches [Obsolete]). A leading @, \\ or #[ is ignored, and in C# X and XAttribute match each other. /regex/flags is a regex on the stored name. Never matches a file."
         },
+        "members": {
+          "type": "boolean",
+          "description": "With decorator: true also matches a member (method, property, field, constant) of a type that carries the decorator, so a layer of @Entity or @Service classes holds their members too. Default false: a member matches only by its own decorator."
+        },
         "docTag": {
           "type": "string",
           "minLength": 1,

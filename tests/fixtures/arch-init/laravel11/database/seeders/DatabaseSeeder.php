@@ -10,5 +10,6 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         Order::factory()->count(3)->create();
+        (new Order(['total' => 1]))->save();
     }
 }

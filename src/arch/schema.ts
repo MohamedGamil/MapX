@@ -28,7 +28,7 @@ export const SELECTOR_PRIMARY_KEYS = [
   'member', 'package', 'builtin', 'ambient', 'role', 'cluster', 'framework', 'repo', 'workspacePackage',
   'language', 'layer', 'all', 'any', 'not',
 ] as const;
-export const SELECTOR_MODIFIERS: Record<string, string> = { kind: 'name', value: 'docTag', dev: 'package', direct: 'package', confidence: 'role' };
+export const SELECTOR_MODIFIERS: Record<string, string> = { kind: 'name', value: 'docTag', members: 'decorator', dev: 'package', direct: 'package', confidence: 'role' };
 export const SELECTOR_KEYS: readonly string[] = [...SELECTOR_PRIMARY_KEYS, ...Object.keys(SELECTOR_MODIFIERS)];
 
 export type SelectorPrimary = typeof SELECTOR_PRIMARY_KEYS[number];
@@ -47,6 +47,8 @@ export interface Selector {
   mixes?: string;
   inheritanceDepth?: number;
   decorator?: string;
+  /** With `decorator`: a member of a type carrying it matches too (review of M5-17-R1). */
+  members?: boolean;
   docTag?: string;
   value?: string;
   member?: string;

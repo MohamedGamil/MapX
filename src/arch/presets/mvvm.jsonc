@@ -1,0 +1,23 @@
+// mapx:preset/mvvm: Model-View-ViewModel.
+// AR-15 (M5-17-R1). Views bind to view models and read the models they expose; view models call
+// services; services load models; models depend on nothing. A view never calls a service.
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // Views: screens, pages and their components.
+    { "name": "Views", "selectors": [{ "path": "%root%{views,view,ui,screens,pages}/**" }] },
+    // View models: presentation state and commands.
+    { "name": "ViewModels", "selectors": [{ "path": "%root%{viewmodels,viewmodel,view-models,view_models,ViewModels}/**" }] },
+    // Services and repositories behind the view models.
+    { "name": "Services", "selectors": [{ "path": "%root%{services,repositories,data}/**" }] },
+    // Models: data and rules.
+    { "name": "Models", "selectors": [{ "path": "%root%{models,model,Models}/**" }] }
+  ],
+  "rules": {
+    "Views": ["ViewModels", "Models"],
+    "ViewModels": ["Services", "Models"],
+    "Services": ["Models"],
+    "Models": []
+  }
+}

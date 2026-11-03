@@ -108,7 +108,13 @@ export function matchSelector(selector: Selector, element: Element, ctx: Selecto
   // Decorators, attributes and annotations, and doc tags, as the parsers store them (M5-10).
   if (selector.decorator !== undefined) {
     if (element.kind !== 'symbol') return inapplicable;
-    return hasDecorator(element, selector.decorator) ? yes('decorator') : no;
+    if (hasDecorator(element, selector.decorator)) return yes('decorator');
+    // `members: true` (review of M5-17-R1): a member of a decorated type matches too, so an
+    // @Entity's getters and a @Service's methods are in the layer the annotation puts the class in,
+    // and a call to one is not uncovered. Without it a member matches only by its own decorator.
+    if (!selector.members || isType(element)) return no;
+    const owner = hierarchyOf(ctx.view).ownerType(element);
+    return owner && hasDecorator(owner, selector.decorator) ? yes('decorator') : no;
   }
   if (selector.docTag !== undefined) {
     if (element.kind !== 'symbol') return inapplicable;

@@ -1,21 +1,37 @@
 // mapx:preset/nestjs: a NestJS application.
-// AR-15. By Nest's file-name conventions and decorators.
+// AR-15. By Nest's file-name conventions, the decorators MapX stores (M5-10) and the enhancer
+// interfaces (M5-17-R1): a class is placed by its decorator or interface wherever it lives, and the
+// file-name suffixes stay the fallback for classes without one.
 // Controllers reach the domain only through providers; entities depend on nothing.
 // No parameters: the file names place every file, wherever it is.
 {
   "layers": [
     // @Module classes: they wire controllers, providers and other modules.
-    { "name": "Module", "selectors": [{ "path": "**/*.module.{ts,js}" }, { "decorator": "Module" }] },
+    { "name": "Module", "selectors": [{ "path": "**/*.module.{ts,js}" }, { "decorator": "Module", "members": true }] },
     // @Controller classes: the HTTP surface.
-    { "name": "Controller", "selectors": [{ "path": "**/*.controller.{ts,js}" }, { "decorator": "Controller" }] },
-    // Guards, interceptors, pipes, filters, middleware and auth strategies.
-    { "name": "Enhancer", "selectors": [{ "path": "**/*.{guard,interceptor,pipe,filter,middleware,strategy}.{ts,js}" }] },
-    // Services, providers and repositories (@Injectable).
-    { "name": "Provider", "selectors": [{ "path": "**/*.{service,provider,repository}.{ts,js}" }] },
+    { "name": "Controller", "selectors": [{ "path": "**/*.controller.{ts,js}" }, { "decorator": "Controller", "members": true }] },
+    // Guards, interceptors, pipes, filters, middleware and auth strategies, and any class that
+    // implements one of Nest's enhancer interfaces.
+    { "name": "Enhancer", "selectors": [
+      { "path": "**/*.{guard,interceptor,pipe,filter,middleware,strategy}.{ts,js}" },
+      { "implements": "/^@nestjs\\/common#(CanActivate|NestInterceptor|PipeTransform|ExceptionFilter|NestMiddleware)$/" }
+    ] },
+    // Services, providers and repositories, and any other @Injectable class: an enhancer is
+    // @Injectable too, and stays in Enhancer only.
+    { "name": "Provider", "selectors": [
+      { "path": "**/*.{service,provider,repository}.{ts,js}" },
+      { "all": [
+        { "decorator": "Injectable", "members": true },
+        { "not": { "any": [
+          { "path": "**/*.{guard,interceptor,pipe,filter,middleware,strategy}.{ts,js}" },
+          { "implements": "/^@nestjs\\/common#(CanActivate|NestInterceptor|PipeTransform|ExceptionFilter|NestMiddleware)$/" }
+        ] } }
+      ] }
+    ] },
     // Data transfer objects.
     { "name": "Dto", "selectors": [{ "path": "**/*.dto.{ts,js}" }, { "path": "**/dto/**" }] },
-    // Persistence entities.
-    { "name": "Entity", "selectors": [{ "path": "**/*.entity.{ts,js}" }, { "path": "**/entities/**" }] }
+    // Persistence entities, and any class decorated @Entity (TypeORM, MikroORM).
+    { "name": "Entity", "selectors": [{ "path": "**/*.entity.{ts,js}" }, { "path": "**/entities/**" }, { "decorator": "Entity", "members": true }] }
   ],
   "rules": {
     "Module": ["Controller", "Enhancer", "Provider", "Entity"],
