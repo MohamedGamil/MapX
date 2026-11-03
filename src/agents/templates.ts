@@ -215,7 +215,7 @@ All commands accept a target directory. Three ways to specify:
 mapx scan /path/to/project
 
 # 2. --dir / -d flag
-mapx scan --dir /path/to/project
+mapx export --dir /path/to/project
 mapx query "MyClass" -d /path/to/project
 
 # 3. Global flag (works with any subcommand)
@@ -248,8 +248,8 @@ mapx -d /path/to/project scan
 - \`mapx routes [path] [--framework name] [--method verb] [--json]\` - Show framework routes
 - \`mapx hooks [path] [--framework name] [--type type] [--json]\` - Show framework hooks
 - \`mapx profile [path]\` - Show codebase profile (archetype, frameworks, active taxonomy)
-- \`mapx arch [path] [--smells] [--dsm] [--violations] [--json]\` - Full architecture and health report
-- \`mapx explain <file> [--reclassify]\` - Explain file role classification signals and weights
+- \`mapx arch [path] [--smells] [--dsm] [--violations]\` - Full architecture and health report
+- \`mapx explain <file>\` - Explain file role classification signals and weights
 - \`mapx layers [path] [--json]\` - List files grouped by architectural roles/layers
 - \`mapx check [path] [--layer name] [--rule rule] [--format json]\` - Check the architecture rules in \`.mapx/architecture.jsonc\` (exit 1 on violations)
 - \`mapx arch allowed <from> <to> [--json]\` - Would a dependency between two files, symbols or layers be allowed? (also \`mapx arch layers|which|unassigned|deps|unused|changed\`)
