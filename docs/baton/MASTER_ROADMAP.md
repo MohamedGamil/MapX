@@ -227,13 +227,14 @@ Fixture scoring in CI; optional message edges.
 - **M4-23** Cross-repo HTTP communication view in the dashboard — DONE, P1, 10h; depends on M4-21.
 - **M4-09-R1** The whole test suite leaves the checkout untouched (COMPLETION DISPUTED for M4-09) — DONE, P1, 2h; depends on M4-09.
 - **M4-13-R1** Parse pool sizing honours CPU affinity; the worker bench exercises workers — BACKLOG, P2, 2h; depends on M4-13.
-- **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — IN_PROGRESS, P2, 2h; depends on M4-24.
+- **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — DONE, P2, 2h; depends on M4-24.
 - **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
 - **M4-09-R3** external-refs tests remove every temp workspace, including unreadable ones — DONE, P2, 1h; depends on M4-09-R2.
 - **M4-09-R4** store-coverage tests keep their databases out of tests/ — DONE, P2, 0.5h; depends on M4-09-R3.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
+- **M4-28** Release documentation for 0.3.9: README, docs and CHANGELOG cover every change since 0.3.5 — IN_PROGRESS, P1, 8h; depends on M5-24, M2-08-R3, M5-15, M5-18.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — IN_PROGRESS, P2, 3h; depends on M4-12.
 
 ## M5 — Architecture rules (Deptrac-inspired)

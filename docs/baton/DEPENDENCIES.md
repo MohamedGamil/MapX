@@ -22,6 +22,7 @@ flowchart LR
   M4 --> M2
   M0 --> M2
   M4 --> M0
+  M5 --> M4
 ```
 
 - M0-01 ← none
@@ -273,6 +274,7 @@ flowchart LR
 - M0-02-R13 ← M3-05-R3 (hard)
 - M2-09 ← M2-08 (hard)
 - M4-27 ← M4-26 (hard)
+- M4-28 ← M5-24 (hard), M2-08-R3 (hard), M5-15 (hard), M5-18 (hard)
 - M2-10 ← M4-27 (hard)
 - M2-11 ← M2-10 (hard)
 - M5-25-R2 ← M5-25-R1 (hard)

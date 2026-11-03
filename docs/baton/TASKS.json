@@ -26140,14 +26140,32 @@
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M4-24-R1",
       "actualHours": null,
       "startedAt": "2026-11-02T16:03:49.743Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T13:39:07.964Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-24-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/ui-escaping.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-24-R1.md"
+        },
+        {
+          "command": "npm run test:ui",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-24-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-24-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T16:03:47.923Z",
@@ -26160,6 +26178,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T13:39:07.431Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T13:39:07.964Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/ui-escaping.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-24-R1.md"
+            },
+            {
+              "command": "npm run test:ui",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-24-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-24-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -27971,7 +28017,7 @@
           "evidence": []
         }
       ],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
