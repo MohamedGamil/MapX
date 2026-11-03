@@ -50,6 +50,11 @@ export interface Finding {
   identity?: { source: string; target: string; sourceRepo?: string; targetRepo?: string };
   /** Why a `skipped` finding is skipped: a baseline entry, or the base report of `--compare` (M5-06). */
   skippedBy?: 'baseline' | 'compare';
+  /**
+   * Where to fix a finding that is not about code (M5-07 review): a stale baseline entry is in the
+   * baseline file (workspace-relative, `/`) at a JSON pointer. CI reporters locate it here.
+   */
+  location?: { file: string; pointer?: string };
   message: string;
 }
 

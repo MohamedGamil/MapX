@@ -23,7 +23,7 @@
 // fingerprint the base revision's report contains is skipped, and nothing else is forgiven.
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ConfigError, type ConfigIssue } from './config.js';
 import type { ArchitectureConfig } from './schema.js';
 import type { ElementView } from './elements.js';
@@ -77,6 +77,8 @@ export interface BaselineEntry {
   edgeType?: string;
   sourceRepo?: string;
   targetRepo?: string;
+  /** Where the entry is in its file (`/entries/3`): the location of its stale-entry error (M5-07). */
+  pointer?: string;
 }
 
 export interface Baseline {
@@ -84,7 +86,7 @@ export interface Baseline {
   file: string;
   entries: BaselineEntry[];
   /** Deptrac element pairs: source element → target elements. */
-  pairs: Array<{ source: string; target: string }>;
+  pairs: Array<{ source: string; target: string; pointer?: string }>;
 }
 
 /**
@@ -139,7 +141,7 @@ export function parseBaseline(text: string, file: string): Baseline {
       issue(pointer('entries', i, 'fingerprint'), `${e.fingerprint} is not the fingerprint of its rule, source, target, edgeType and repos (${computed}); regenerate the baseline or fix the entry`);
       continue;
     }
-    entries.push({ ...e, fingerprint: e.fingerprint ?? computed! });
+    entries.push({ ...e, fingerprint: e.fingerprint ?? computed!, pointer: pointer('entries', i) });
   }
 
   const pairs: Baseline['pairs'] = [];
@@ -148,7 +150,7 @@ export function parseBaseline(text: string, file: string): Baseline {
     if (!Array.isArray(targets)) { issue(pointer('skip_violations', source), 'expected a list of target elements'); continue; }
     targets.forEach((t, i) => {
       if (typeof t !== 'string' || !t) issue(pointer('skip_violations', source, i), 'expected a non-empty string');
-      else pairs.push({ source: normalizeElement(source), target: normalizeElement(t) });
+      else pairs.push({ source: normalizeElement(source), target: normalizeElement(t), pointer: pointer('skip_violations', source, i) });
     });
   }
   if (issues.length) throw new ConfigError(issues);
@@ -184,10 +186,20 @@ export function baselineLocation(dir: string, config: ArchitectureConfig, overri
   return { path: defaultBaselinePath(dir, config.view), required: false };
 }
 
+/**
+ * `path` relative to the workspace, with `/`, even outside it (`../ci/baseline.json`): reports name
+ * the baseline this way, never by an absolute path that differs per machine (review of M5-07). A
+ * path on another Windows drive, which has no relative form, is named by its file name.
+ */
+export function workspacePath(dir: string, path: string): string {
+  const rel = relative(dir, path);
+  return isAbsolute(rel) ? basename(path) : rel.split(sep).join('/');
+}
+
 /** Reads the baseline a check uses; null when there is none. Problems are ConfigErrors. */
 export function loadBaseline(dir: string, config: ArchitectureConfig, override?: string): Baseline | null {
   const { path, required } = baselineLocation(dir, config, override);
-  const file = displayPath(dir, path);
+  const file = workspacePath(dir, path);
   if (!existsSync(path)) {
     if (!required) return null;
     throw new ConfigError([{ file, pointer: '', message: 'baseline file not found; create it with `mapx check --generate-baseline`' }]);
@@ -217,10 +229,16 @@ export class BaselineMatcher {
     return !!(entry || pair);
   }
 
-  /** One `stale-baseline` error per entry that matched nothing; ends resolved to files when they still exist. */
+  /**
+   * One `stale-baseline` error per entry that matched nothing; ends resolved to files when they
+   * still exist. Its `location` is the entry in the baseline file (relative, with a JSON pointer),
+   * which is what has to change; the message names it the same way (review of M5-07).
+   */
   stale(view?: ElementView, repoPaths: Record<string, string> = {}): Finding[] {
     const fileOf = elementFiles(view, repoPaths);
     const end = (element: string, repo = '') => ({ element, file: fileOf.get(`${repo}\u0000${element}`) ?? fileOf.get(`*\u0000${element}`) ?? '' });
+    const at = (ptr?: string) => ({ location: { file: this.baseline.file, ...(ptr ? { pointer: ptr } : {}) } });
+    const where = (ptr?: string) => `${this.baseline.file}${ptr ? `#${ptr}` : ''}`;
     const out: Finding[] = [];
     for (const e of this.baseline.entries) {
       if (this.matched.has(e)) continue;
@@ -231,7 +249,8 @@ export class BaselineMatcher {
         ...(e.source ? { source: end(e.source, e.sourceRepo) } : {}), ...(e.target ? { target: end(e.target, e.targetRepo) } : {}),
         ...(e.edgeType ? { edgeType: e.edgeType } : {}),
         fingerprint: e.fingerprint,
-        message: `${this.baseline.file}: the baseline entry ${what} matches no violation; delete it`,
+        ...at(e.pointer),
+        message: `${where(e.pointer)}: the baseline entry ${what} matches no violation; delete it`,
       });
     }
     for (const p of this.baseline.pairs) {
@@ -239,7 +258,8 @@ export class BaselineMatcher {
       out.push({
         kind: 'error', rule: 'stale-baseline', severity: 'error', source: end(p.source), target: end(p.target),
         fingerprint: fingerprint(PAIR_RULE, p.source, p.target, ''),
-        message: `${this.baseline.file}: skip_violations ${p.source} → ${p.target} matches no violation; delete it`,
+        ...at(p.pointer),
+        message: `${where(p.pointer)}: skip_violations ${p.source} → ${p.target} matches no violation; delete it`,
       });
     }
     return out;

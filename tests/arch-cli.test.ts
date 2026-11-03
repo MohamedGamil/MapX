@@ -14,7 +14,10 @@ let bin = '';
 const temps: string[] = [];
 
 function run(cwd: string, ...args: string[]) {
-  const r = spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1', MAPX_NO_BANNER: '1', MAPX_NO_TELEMETRY: '1' } });
+  // Without GITHUB_ACTIONS: on a GitHub runner it would make the table assertions see annotations (M5-07).
+  const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', MAPX_NO_BANNER: '1', MAPX_NO_TELEMETRY: '1' };
+  delete env.GITHUB_ACTIONS;
+  const r = spawnSync(process.execPath, [bin, ...args], { cwd, encoding: 'utf8', env });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 

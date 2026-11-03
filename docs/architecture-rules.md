@@ -11,8 +11,9 @@ What exists so far:
 - **`mapx arch validate-config`** and the MCP tool `mapx_arch_validate_config` (M5-02-R1): validate the configuration alone, without an index.
 - **Baselines and the `--compare` ratchet** (M5-06): see [Baselines and the ratchet](#baselines-and-the-ratchet). These are CLI only for now: `mapx check` has no MCP tool yet (M5-14).
 - **Introspection** (M5-08): `mapx arch layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed`. See [Introspection](#introspection). They are CLI only until M5-14.
+- **CI reports** (M5-07): `--format sarif`, `github` (automatic inside GitHub Actions), `codeclimate` and `junit`. See [CI reports](#ci-reports).
 
-CI reporters and `@internal` markers come in M5-07 to M5-11.
+`@internal` markers come in M5-09 to M5-11.
 
 ## The configuration document
 
@@ -225,6 +226,45 @@ Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `imp
 - **`selection`** (from `mapx check`): the `view`, `layer` and `rule` the run evaluated and kept, `null` when not given.
 
 A workspace with a configuration but no index is an error (`run mapx scan first`), never an empty report.
+
+## CI reports
+
+`mapx check --format` also writes the formats CI systems read natively. The code is in `src/arch/reporters/`; the mapping of every finding kind is in [cli-reference.md](cli-reference.md#ci-formats).
+
+| Format | For | Notes |
+| --- | --- | --- |
+| `sarif` | GitHub code scanning (`github/codeql-action/upload-sarif`), IDE SARIF viewers | SARIF 2.1.0; skipped violations are suppressed (`external`, accepted); `partialFingerprints["mapx/v1"]` is the finding's fingerprint. GitHub accepts up to 10 MB (compressed) and 25,000 results per run |
+| `github` | GitHub Actions annotations on the pull request | Chosen automatically when `GITHUB_ACTIONS` is `true`, no `--format` is given and the report goes to stdout. The run's causes are annotated first (GitHub shows 10 per level and step); every finding is also a log line |
+| `codeclimate` | GitLab Code Quality (`artifacts:reports:codequality`) | A violation's issue fingerprint is the finding's fingerprint; other kinds derive one from kind and rule; severities from `report.codeclimate` |
+| `junit` | GitLab and Jenkins test reports | One suite per layer, one testcase per finding; a testcase fails exactly when its finding fails the run |
+
+- **Failing level:** every format marks exactly the findings that fail the run (the exit-code rule, with `--fail-on`, `--fail-on-uncovered` and `--compare`) at its failing level: SARIF `error`, `::error`, the CodeClimate `error` severity, a JUnit failure or error. So the cause of exit 1, 2 or 3 is always shown as an error.
+- **Paths** are workspace-relative and use `/` in every format; a finding without a file is located on the configuration file. Run `mapx check` at the repository root so CI links the right file.
+- **Determinism:** the same findings give the same bytes: no timestamps, durations, host names or absolute paths. Only SARIF's `tool.driver.version` changes with the MapX version.
+- **Baselines and `--compare`:** a skipped violation is a SARIF suppression, a `::notice`, a CodeClimate issue at the `skipped` severity and a JUnit `<skipped>`, listed only with `--report-skipped`. A stale baseline entry is an error located on the baseline file (relative to the workspace, never absolute), its message naming the entry by JSON pointer (`.mapx/architecture.baseline.json#/entries/0`); the report gives it as `location`.
+
+**The CodeClimate severity map.** `report.codeclimate` maps what a finding is to a CodeClimate severity (`info`, `minor`, `major`, `critical`, `blocker`). `error` is for the findings that fail the run. Other violations and warnings (an advisory rule, `"severity": "warn"`, or an inferred edge under `policy.inferred: "warn"`, without `--fail-on warn`) are `warn`; uncovered dependencies (without `--fail-on-uncovered`) and skipped violations are keyed by kind. Keys left out keep the defaults below, and an `extends` chain merges the map key by key. An unknown key or severity is a configuration error (exit 3).
+
+```jsonc
+{
+  "report": {
+    // the defaults: a failure is major, a skipped violation minor, an uncovered dependency info (as Deptrac)
+    "codeclimate": { "error": "major", "warn": "minor", "uncovered": "info", "skipped": "minor" }
+  }
+}
+```
+
+A GitHub Actions job, as an example:
+
+```yaml
+- run: npx @mgamil/mapx scan && npx @mgamil/mapx check   # annotations, since GITHUB_ACTIONS is set
+- run: npx @mgamil/mapx check --format sarif -o mapx.sarif
+  if: always()
+- uses: github/codeql-action/upload-sarif@v3
+  if: always()
+  with:
+    sarif_file: mapx.sarif
+```
 
 ## Baselines and the ratchet
 

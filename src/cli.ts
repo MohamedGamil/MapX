@@ -33,13 +33,12 @@ import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
-import { ConfigError, formatValidation, loadArchitectureConfig, validateArchitectureConfig } from './arch/config.js';
+import { architectureConfigPath, ConfigError, formatValidation, loadArchitectureConfig, validateArchitectureConfig } from './arch/config.js';
 import { EDGE_TYPES, type ArchitectureConfig } from './arch/schema.js';
 import { configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
 import { baselineLocation, displayPath, loadCompareReport, renderBaseline } from './arch/baseline.js';
-import { renderJson } from './arch/reporters/json.js';
-import { renderTable } from './arch/reporters/table.js';
+import { defaultFormat, FORMATS, renderReport, type ReportContext, type ReportFormat } from './arch/reporters/index.js';
 import { changedLayers, changedSince, IntrospectError, isAllowed, layerDependencies, layerMembers, layerSummaries, openArchitecture, unassignedElements, unusedAllowances, whichLayers, type ArchContext } from './arch/introspect.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
@@ -2759,7 +2758,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .argument('[path]', 'Target directory')
     .option('-d, --dir <path>', 'Target directory')
     .option('--view <name>', 'Check the view .mapx/architecture/<name>.jsonc')
-    .option('--format <format>', 'Output format: table or json', 'table')
+    .option('--format <format>', 'Output format: table, json, sarif, github, codeclimate or junit (default: table; github on stdout when GITHUB_ACTIONS is "true")')
     .option('-o, --output <file>', 'Write the report to a file instead of stdout')
     .option('--report-uncovered', 'Show dependencies on elements in no layer')
     .option('--fail-on-uncovered', 'Exit 2 when a dependency targets an element in no layer')
@@ -2777,10 +2776,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .exitOverride((err) => { process.exit(err.exitCode === 0 ? 0 : EXIT.config); })
     .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
       const dir = pathArg ? resolve(pathArg) : resolveDir(opts, program.opts());
-      const format = String(opts.format);
+      // No --format inside GitHub Actions: annotations on stdout (M5-07, AR-16); a file keeps the table.
+      const format = defaultFormat(opts.format as string | undefined, process.env, !opts.output) as ReportFormat;
       const failOn = String(opts.failOn);
-      if (!['table', 'json'].includes(format)) {
-        console.error(`Error: --format must be table or json, not "${format}"`);
+      if (!FORMATS.includes(format)) {
+        console.error(`Error: --format must be one of ${FORMATS.join(', ')}, not "${format}"`);
         process.exitCode = EXIT.config;
         return;
       }
@@ -2806,9 +2806,15 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         failOn: failOn as CheckOptions['failOn'], layer: opts.layer as string | undefined, rule: opts.rule as string | undefined,
       };
       const selection = { view: (opts.view as string | undefined) ?? null, layer: options.layer ?? null, rule: options.rule ?? null };
+      // What the CI formats need besides the report (M5-07): set once the configuration is loaded.
+      const reportContext: ReportContext = {
+        configFile: relative(dir, architectureConfigPath(dir, selection.view)).split(sep).join('/'),
+        check: options,
+        version: VERSION,
+      };
       const emit = (report: ArchReport) => {
         const shown = { ...shownReport(report, options), selection };
-        const text = format === 'json' ? renderJson(shown) : renderTable(shown);
+        const text = renderReport(format, shown, reportContext);
         if (opts.output) {
           // Relative to the current directory, like any output path; its folder is created.
           const out = resolve(String(opts.output));
@@ -2840,11 +2846,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             ? `No view "${view}" in ${dir}: ${missing} does not exist.`
             : `No architecture configuration in ${dir}: create ${missing} (see docs/architecture-rules.md). \`mapx arch init\`, which will infer one from roles, clusters and frameworks, is not available yet (M5-17).`;
           console.error(message);
-          // A JSON consumer still gets a report: one configuration error.
-          if (format === 'json' || opts.output) emit(configErrorReport(new ConfigError([{ file: missing, pointer: '', message: 'not found' }])));
+          // A JSON or CI-format consumer still gets a report: one configuration error.
+          if (format !== 'table' || opts.output) emit(configErrorReport(new ConfigError([{ file: missing, pointer: '', message: 'not found' }])));
           process.exitCode = EXIT.config;
           return;
         }
+        reportContext.codeclimate = archConfig.report.codeclimate;
         // --layer and --rule must name something: a typo would silently turn the gate off.
         const layerNames = archConfig.layers.map((l) => l.name);
         if (options.layer && !layerNames.includes(options.layer)) {
@@ -2906,6 +2913,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           }
         }
         const report = runArchitecture(dir, { store, repoPaths, view, baseline: baselineFile, known })!;
+        reportContext.check = { ...options, known };
         emit(report);
         process.exitCode = exitCode(report, { ...options, known });
       } catch (err) {

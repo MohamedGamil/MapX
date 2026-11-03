@@ -156,7 +156,7 @@ describe('baseline: generate, match, stale entries (AR-10)', () => {
     })]);
     const table = mapxResult(root, 'check');
     expect(table.status).toBe(3);
-    expect(table.stdout).toContain(`${DEFAULT}: the baseline entry disallowed-layer app/Domain/Money.php → App\\Infra\\Mailer (import) matches no violation; delete it`);
+    expect(table.stdout).toContain(`${DEFAULT}#/entries/1: the baseline entry disallowed-layer app/Domain/Money.php → App\\Infra\\Mailer (import) matches no violation; delete it`);
     // Regenerating drops the stale entry: the baseline only shrinks.
     expect(mapxResult(root, 'check', '--generate-baseline').stdout).toContain('Wrote 2 baseline entries');
     expect(mapxResult(root, 'check').status).toBe(0);
@@ -379,7 +379,7 @@ describe('baseline.ts units', () => {
   const finding = (over: Partial<Finding>): Finding => ({ kind: 'violation', rule: 'disallowed-layer', severity: 'error', fingerprint: '', message: '', ...over });
 
   it('accepts a UTF-8 BOM, as the configuration loader does', () => {
-    expect(parseBaseline('\uFEFF{"version":1,"entries":[{"fingerprint":"aaaaaaaaaaaaaaaa"}]}', 'b.json').entries).toEqual([{ fingerprint: 'aaaaaaaaaaaaaaaa' }]);
+    expect(parseBaseline('\uFEFF{"version":1,"entries":[{"fingerprint":"aaaaaaaaaaaaaaaa"}]}', 'b.json').entries).toEqual([{ fingerprint: 'aaaaaaaaaaaaaaaa', pointer: '/entries/0' }]);
   });
 
   it('parses readable-key entries (the fixture form) and fingerprints them, and dedupes repeats', () => {
@@ -387,7 +387,7 @@ describe('baseline.ts units', () => {
       { rule: 'disallowed-layer', source: 'A', target: 'B', edgeType: 'import' },
       { fingerprint: fingerprint('disallowed-layer', 'A', 'B', 'import') },
     ] }), 'b.json');
-    expect(b.entries).toEqual([{ rule: 'disallowed-layer', source: 'A', target: 'B', edgeType: 'import', fingerprint: fingerprint('disallowed-layer', 'A', 'B', 'import') }]);
+    expect(b.entries).toEqual([{ rule: 'disallowed-layer', source: 'A', target: 'B', edgeType: 'import', fingerprint: fingerprint('disallowed-layer', 'A', 'B', 'import'), pointer: '/entries/0' }]);
   });
 
   it('hand-written Windows paths match the store\'s POSIX paths; PHP names keep their backslashes', () => {
@@ -399,7 +399,7 @@ describe('baseline.ts units', () => {
       skip_violations: { 'App\\Domain\\Order': ['lib\\x.py'] },
     }), 'b.json');
     expect(b.entries[0]).toMatchObject({ source: 'src/a.ts', target: 'src/b/c.ts#C' });
-    expect(b.pairs).toEqual([{ source: 'App\\Domain\\Order', target: 'lib/x.py' }]);
+    expect(b.pairs).toEqual([{ source: 'App\\Domain\\Order', target: 'lib/x.py', pointer: '/skip_violations/App\\Domain\\Order/0' }]);
   });
 
   it('rejects unknown keys, bad fingerprints, non-string values and a wrong version, each with its pointer', () => {

@@ -890,7 +890,7 @@ $ mapx arch unassigned --kind class                                # coverage ga
 Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, and private parts. See [architecture-rules.md](architecture-rules.md) for the configuration. It is meant for CI, so it never prints the logo and its exit code says what it found.
 
 ```bash
-mapx check [path] [--view <name>] [--format table|json] [--output <file>]
+mapx check [path] [--view <name>] [--format table|json|sarif|github|codeclimate|junit] [--output <file>]
            [--report-uncovered] [--fail-on-uncovered] [--report-skipped] [--report-allowed]
            [--fail-on error|warn] [--layer <name>] [--rule <rule>] [--sync]
            [--baseline <file>] [--generate-baseline [file]] [--compare <report.json>]
@@ -898,7 +898,13 @@ mapx check [path] [--view <name>] [--format table|json] [--output <file>]
 
 Options:
 - `--view <name>`: check `.mapx/architecture/<name>.jsonc` instead.
-- `--format`: `table` (default), findings grouped by source layer with file and line; or `json`, the report described by `schemas/arch-report.schema.json`, in a stable order.
+- `--format`: how the report is printed. Every format lists the same findings (those the `--report-*` options show), in the same stable order, and is byte-stable: no timestamps, durations or absolute paths. See [CI formats](#ci-formats) below.
+  - `table` (the default): findings grouped by source layer, with file and line.
+  - `json`: the report described by `schemas/arch-report.schema.json`.
+  - `sarif`: SARIF 2.1.0, for GitHub code scanning and IDE viewers.
+  - `github`: GitHub Actions annotations. Chosen when `GITHUB_ACTIONS` is `true`, no `--format` is given and the report goes to stdout (with `--output`, the file gets the table).
+  - `codeclimate`: a GitLab Code Quality report.
+  - `junit`: JUnit XML, for GitLab's and Jenkins's test reports.
 - `--output <file>`: write the report to a file instead of stdout. The path is relative to the current directory, and missing folders are created.
 - `--report-uncovered`: list dependencies on elements in no layer. Otherwise they are only counted.
 - `--fail-on-uncovered`: exit 2 when there are any (also lists them).
@@ -929,7 +935,7 @@ Exit codes:
 | 0 | No failing finding |
 | 1 | Violations of severity error (with `--fail-on warn`, also warn-level violations and warnings) |
 | 2 | Uncovered dependencies, with `--fail-on-uncovered` |
-| 3 | Configuration errors (invalid document, a `+` cycle), no configuration or no such `--view`, a usage error (an unknown option, a missing value, an unknown `--layer` or `--rule`), or a baseline error: a stale entry (`stale-baseline`), a missing or invalid baseline, or a missing or invalid `--compare` report. With `--format json`, a missing configuration still gives a report with one `config` error |
+| 3 | Configuration errors (invalid document, a `+` cycle), no configuration or no such `--view`, a usage error (an unknown option, a missing value, an unknown `--layer` or `--rule`), or a baseline error: a stale entry (`stale-baseline`), a missing or invalid baseline, or a missing or invalid `--compare` report. With any `--format` but `table` (or with `--output`), a missing configuration still gives a report with one `config` error |
 | 4 | No index, a repo never scanned, a stale index (run `mapx update` or pass `--sync`), an index an older MapX built (run `mapx scan` or pass `--sync`), or an internal error |
 
 When several apply, the lower-level problem wins: 4, then 3, then 1, then 2. `--layer` and `--rule` narrow what fails, but a configuration error always fails.
@@ -944,7 +950,28 @@ mapx check --generate-baseline               # freeze today's violations in .map
 # CI ratchet: check a scanned checkout of the merge base, then compare the head with it
 mapx check ../base --format json --report-skipped --report-uncovered -o /tmp/base.json
 mapx check --compare /tmp/base.json          # exit 1 only on violations new since the base
+mapx check --format sarif -o mapx.sarif      # for github/codeql-action/upload-sarif
+mapx check --format codeclimate -o gl-code-quality.json
+mapx check --format junit -o mapx-junit.xml
 ```
+
+### CI formats
+
+Paths in every CI format are relative to the workspace, with `/`, so run `mapx check` at the repository root (or the paths are relative to the workspace, not the repository). A stale baseline entry is located on the baseline file (relative, even outside the workspace: `../ci/baseline.json`), its message naming the entry by JSON pointer (`#/entries/0`). A finding without a source file (a configuration error, `empty-layer`, `unsupported-selector`) is located on the configuration file, `.mapx/architecture.jsonc` or the view's. Allowed dependencies (`--report-allowed`) appear only in `sarif` (as `kind: "pass"`) and `junit` (as passing testcases).
+
+**Every format marks exactly the findings that fail the run at its failing level:** SARIF `error`, `::error`, the CodeClimate `error` severity, and a JUnit `<failure>` or `<error>`. Which findings fail follows the exit code: errors always do, warn-level violations and warnings with `--fail-on warn`, uncovered dependencies with `--fail-on-uncovered`, and nothing the `--compare` base report knows. So a run that exits 1, 2 or 3 always shows its cause at the failing level.
+
+| Finding | Fails the run | `sarif` level | `github` command | `codeclimate` severity key (default) | `junit` |
+| --- | --- | --- | --- | --- | --- |
+| failing (see above) | yes | `error` | `::error` | `error` (`major`) | `<failure>`; `<error>` for `config`, `plus-cycle`, `stale-baseline`, in suite `configuration` |
+| violation or warning that does not fail (warn level without `--fail-on warn`, known to `--compare`) | no | `warning` | `::warning` | `warn` (`minor`) | passes, message in `<system-out>` |
+| uncovered, without `--fail-on-uncovered` | no | `note` | `::notice` | `uncovered` (`info`) | passes |
+| skipped (baseline or `--compare`) | no | `note`, with an `external`, accepted suppression | `::notice` | `skipped` (`minor`) | `<skipped>` |
+
+- **`sarif`:** one run of the driver `MapX`, with the rules its results use. Each result has a `%SRCROOT%`-relative location with its first line (1 when the finding has none: code scanning requires one), the element as a logical location, `partialFingerprints["mapx/v1"]` (the finding's fingerprint) and properties (kind, layers, target, edge type, verifiability). `automationDetails.id` is `mapx-check/`, or `mapx-check/<view>/`, so code scanning keeps views apart. It validates against the official SARIF 2.1.0 schema. GitHub code scanning accepts uploads up to 10 MB (gzip-compressed) and 25,000 results per run; MapX does not truncate, so narrow a larger report with `--layer` or `--rule`, or leave out `--report-uncovered`, `--report-skipped` and `--report-allowed`.
+- **`github`:** first every finding as a plain log line (`[error] app/Domain/Order.php:5 disallowed-layer: …`), then one workflow command per finding (`::error file=…,line=…,title=<rule>::<message>`), then the counts line. GitHub shows at most 10 annotations of each level per step, so the run's causes are annotated first: configuration errors, stale baseline entries, then failing findings by severity, then the rest in report order. Beyond 10 per level a finding is not annotated, and the counts line says how many (`N more not annotated`); the log lines above still list it, and `sarif` has them all. Text is escaped as the Actions toolkit does: `%`, CR and LF in the message, and also `:` and `,` in properties; a log line has its line breaks replaced by spaces. So a finding is always one line. The format is chosen automatically only for stdout: with `--output` and no `--format`, the file gets the table.
+- **`codeclimate`:** the JSON array GitLab reads as `artifacts:reports:codequality`. Each issue has `type`, `check_name` (the rule), `description`, `categories`, `severity`, `fingerprint` and `location` (`path`, `lines.begin`; 1 when the finding has no line). A violation's `fingerprint` is the finding's, as in the JSON report and baselines, so GitLab tracks it across base and head; every other kind gets one derived from its kind, rule and finding fingerprint, because one finding fingerprint can name a violation, the same dependency skipped, and its stale baseline entry. Severities come from `report.codeclimate` in the configuration ([architecture-rules.md](architecture-rules.md#ci-reports)).
+- **`junit`:** for `artifacts:reports:junit` and Jenkins's `junit` step. One testsuite per non-overlay layer, in the configuration's order, then one per other group: a source in several layers (`Domain, Shared`) and `configuration`. With `--layer`, only that layer and the groups with findings. **One testcase per finding**, named after the dependency (`App\Domain\Order → App\Infra\Repo (import)`) with the rule as class name. A layer without findings has one passing testcase, `no findings`, so a clean run is never an empty report. Characters XML 1.0 cannot carry (control characters, lone surrogates) become U+FFFD. It validates against the Jenkins xUnit plugin's JUnit schema.
 
 ## `mapx explain <file>`
 

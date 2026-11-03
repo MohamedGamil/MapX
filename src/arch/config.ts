@@ -6,7 +6,7 @@ import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { stripJsonc } from '../core/js-aliases.js';
 import {
-  ALLOWANCE_KEYS, DEFAULTS, DEFAULT_SCOPE_TYPES, EDGE_TYPES, FRAMEWORK_PARTS, LAYER_KEYS, POLICY_KEYS, REPORT_KEYS, SCOPE_KEYS,
+  ALLOWANCE_KEYS, CODECLIMATE_KEYS, CODECLIMATE_SEVERITIES, DEFAULTS, DEFAULT_SCOPE_TYPES, EDGE_TYPES, FRAMEWORK_PARTS, LAYER_KEYS, POLICY_KEYS, REPORT_KEYS, SCOPE_KEYS,
   SELECTOR_KEYS, SELECTOR_MODIFIERS, SELECTOR_PRIMARY_KEYS, SYMBOL_KINDS, TOP_LEVEL_KEYS, UNCOVERED_KEYS, VISIBILITY_KEYS,
   type Allowance, type ArchitectureConfig, type ArchitectureDocument, type Layer, type Selector,
 } from './schema.js';
@@ -195,6 +195,18 @@ export function validateDocument(doc: unknown, file: string): ConfigIssue[] {
           else for (const [name, layers] of Object.entries(g)) stringList(layers, at(p, 'groups', name), 'a list of layer names');
         }
         if ('hidden' in value) stringList(value['hidden'], at(p, 'hidden'), 'a list of layer names');
+        if ('codeclimate' in value) {
+          // The CodeClimate severity map (M5-07): finding severity or kind → CodeClimate severity.
+          const cc = value['codeclimate'];
+          const cp = at(p, 'codeclimate');
+          if (!isObject(cc)) issue(cp, `expected an object of ${CODECLIMATE_KEYS.join(', ')} → severity`);
+          else {
+            knownKeys(cc, cp, CODECLIMATE_KEYS, 'report.codeclimate');
+            for (const [k, v] of Object.entries(cc)) {
+              if (CODECLIMATE_KEYS.includes(k as never) && !CODECLIMATE_SEVERITIES.includes(v as never)) issue(at(cp, k), `expected one of ${CODECLIMATE_SEVERITIES.join(', ')}`);
+            }
+          }
+        }
         break;
       default:
         issue(p, `unknown key ${quote(key)}; expected one of ${TOP_LEVEL_KEYS.join(', ')}`);
@@ -505,7 +517,7 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
   const scope: ArchitectureConfig['scope'] = { types: [...DEFAULT_SCOPE_TYPES], include: [], exclude: [] };
   const policy: ArchitectureConfig['policy'] = { ...DEFAULTS.policy, uncovered: { ...DEFAULTS.policy.uncovered } };
   const visibility: ArchitectureConfig['visibility'] = { ...DEFAULTS.visibility, internalTags: [...DEFAULTS.visibility.internalTags] };
-  const report: ArchitectureConfig['report'] = { groups: {}, hidden: [] };
+  const report: ArchitectureConfig['report'] = { groups: {}, hidden: [], codeclimate: {} };
   let baseline: string | null = null;
   const layers: MergedLayer[] = [];
   const rules = new Map<string, { origin: Origin; list: MergedAllowance[] }>();
@@ -544,6 +556,12 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
     if (isObject(doc.report)) {
       if (isObject(doc.report.groups)) for (const [g, ls] of Object.entries(doc.report.groups)) if (Array.isArray(ls)) report.groups[g] = ls.filter((s) => typeof s === 'string');
       if (Array.isArray(doc.report.hidden)) report.hidden = [...new Set([...report.hidden, ...doc.report.hidden.filter((s) => typeof s === 'string')])];
+      if (isObject(doc.report.codeclimate)) {
+        for (const k of CODECLIMATE_KEYS) {
+          const v = doc.report.codeclimate[k];
+          if (CODECLIMATE_SEVERITIES.includes(v as never)) report.codeclimate[k] = v;
+        }
+      }
     }
     if (Array.isArray(doc.layers)) {
       const namesHere = new Set<string>();

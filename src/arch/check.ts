@@ -83,15 +83,32 @@ function withCounts(report: ArchReport): ArchReport {
   return { ...report, counts };
 }
 
-/** The exit code of a run that produced `report` (exit 4 is the CLI's: it never gets a report). */
-export function exitCode(report: ArchReport, options: CheckOptions): number {
-  if (report.findings.some((f) => f.kind === 'error' && CONFIG_RULES.has(f.rule ?? ''))) return EXIT.config;
-  const selected = selectFindings(report, options).findings.filter((f) => !options.known?.has(f.fingerprint));
-  const failsOn = (f: Finding) =>
-    f.kind === 'violation' && (f.severity === 'error' || options.failOn === 'warn')
+/** A configuration or baseline error: exit 3, whatever the options. */
+const isConfigError = (f: Finding) => f.kind === 'error' && CONFIG_RULES.has(f.rule ?? '');
+
+/** Does `f` fail the run as a violation (exit 1)? A finding the base report knows does not. */
+function failsAsViolation(f: Finding, options: CheckOptions): boolean {
+  if (options.known?.has(f.fingerprint)) return false;
+  return f.kind === 'violation' && (f.severity === 'error' || options.failOn === 'warn')
     || f.kind === 'error' // multi-layer under strictLayers
     || (f.kind === 'warning' && options.failOn === 'warn');
-  if (selected.some(failsOn)) return EXIT.violations;
-  if (options.failOnUncovered && selected.some((f) => f.kind === 'uncovered')) return EXIT.uncovered;
+}
+
+const failsAsUncovered = (f: Finding, options: CheckOptions) => !!options.failOnUncovered && f.kind === 'uncovered' && !options.known?.has(f.fingerprint);
+
+/**
+ * Does this finding make the run fail (exit 3, 1 or 2)? The JUnit reporter (M5-07) fails exactly
+ * these testcases, so its failures agree with the exit code.
+ */
+export function failsRun(f: Finding, options: CheckOptions): boolean {
+  return isConfigError(f) || failsAsViolation(f, options) || failsAsUncovered(f, options);
+}
+
+/** The exit code of a run that produced `report` (exit 4 is the CLI's: it never gets a report). */
+export function exitCode(report: ArchReport, options: CheckOptions): number {
+  if (report.findings.some(isConfigError)) return EXIT.config;
+  const selected = selectFindings(report, options).findings;
+  if (selected.some((f) => failsAsViolation(f, options))) return EXIT.violations;
+  if (selected.some((f) => failsAsUncovered(f, options))) return EXIT.uncovered;
   return EXIT.ok;
 }

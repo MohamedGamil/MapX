@@ -183,7 +183,7 @@ describe('the AR-11 example document', () => {
     expect(config.rules['Frontend']).toEqual([{ allow: ['PublicApi'], types: ['http'] }]);
     expect(config.rules['*']).toEqual(['!Deprecated', '!DevOnly']);
     expect(config.baseline).toBe('.mapx/architecture.baseline.json');
-    expect(config.report).toEqual({ groups: { Entry: ['Http'] }, hidden: ['Vendor'] });
+    expect(config.report).toEqual({ groups: { Entry: ['Http'] }, hidden: ['Vendor'], codeclimate: {} });
   });
 
   it('the published JSON Schema accepts it, rejects a typo, and covers every key the loader knows', () => {

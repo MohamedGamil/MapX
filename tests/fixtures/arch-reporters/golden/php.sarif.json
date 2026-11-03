@@ -1,0 +1,824 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "MapX",
+          "informationUri": "https://github.com/MohamedGamil/mapx",
+          "version": "<version>",
+          "rules": [
+            {
+              "id": "disallowed-layer",
+              "shortDescription": {
+                "text": "A dependency on a layer the source layer may not use."
+              },
+              "helpUri": "https://github.com/MohamedGamil/mapx/blob/main/docs/architecture-rules.md",
+              "properties": {
+                "tags": [
+                  "architecture"
+                ]
+              }
+            },
+            {
+              "id": "empty-layer",
+              "shortDescription": {
+                "text": "A layer that matches no element."
+              },
+              "helpUri": "https://github.com/MohamedGamil/mapx/blob/main/docs/architecture-rules.md",
+              "properties": {
+                "tags": [
+                  "architecture"
+                ]
+              }
+            },
+            {
+              "id": "multi-layer",
+              "shortDescription": {
+                "text": "A declaration in more than one layer."
+              },
+              "helpUri": "https://github.com/MohamedGamil/mapx/blob/main/docs/architecture-rules.md",
+              "properties": {
+                "tags": [
+                  "architecture"
+                ]
+              }
+            },
+            {
+              "id": "private-layer",
+              "shortDescription": {
+                "text": "A dependency on an element private to another layer."
+              },
+              "helpUri": "https://github.com/MohamedGamil/mapx/blob/main/docs/architecture-rules.md",
+              "properties": {
+                "tags": [
+                  "architecture"
+                ]
+              }
+            },
+            {
+              "id": "stale-baseline",
+              "shortDescription": {
+                "text": "A baseline entry that matches no violation any more."
+              },
+              "helpUri": "https://github.com/MohamedGamil/mapx/blob/main/docs/architecture-rules.md",
+              "properties": {
+                "tags": [
+                  "architecture"
+                ]
+              }
+            },
+            {
+              "id": "uncovered",
+              "shortDescription": {
+                "text": "A dependency on an element in no layer."
+              },
+              "helpUri": "https://github.com/MohamedGamil/mapx/blob/main/docs/architecture-rules.md",
+              "properties": {
+                "tags": [
+                  "architecture"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "automationDetails": {
+        "id": "mapx-check/"
+      },
+      "results": [
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\OrderController must not depend on App\\Domain\\Order (Controller on Domain) [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/OrderController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 6
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\OrderController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "70c56a560c7ac130"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Domain\\Order",
+            "targetFile": "app/Domain/Order.php",
+            "targetLayer": "Domain",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\OrderController must not depend on App\\Domain\\Order (Controller on Domain) [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/OrderController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 15
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\OrderController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "0616a75572a2e512"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Domain\\Order",
+            "targetFile": "app/Domain/Order.php",
+            "targetLayer": "Domain",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\ReportController must not depend on App\\Infrastructure\\SqlOrderRepository (Controller on Infrastructure) [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/ReportController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 6
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\ReportController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "8cd92df1e078ce3d"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Infrastructure\\SqlOrderRepository",
+            "targetFile": "app/Infrastructure/SqlOrderRepository.php",
+            "targetLayer": "Infrastructure",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\ReportController must not depend on App\\Infrastructure\\SqlOrderRepository (Controller on Infrastructure) [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/ReportController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 15
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\ReportController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "187fa70fa1617288"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Infrastructure\\SqlOrderRepository",
+            "targetFile": "app/Infrastructure/SqlOrderRepository.php",
+            "targetLayer": "Infrastructure",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "App\\Shared\\Result must not depend on App\\Domain\\Money (Shared on Domain) [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Shared/Result.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 5
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Shared\\Result"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "1e258ed008c77fad"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Shared",
+            "target": "App\\Domain\\Money",
+            "targetFile": "app/Domain/Money.php",
+            "targetLayer": "Domain",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "App\\Shared\\Result must not depend on App\\Domain\\Money (Shared on Domain) [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Shared/Result.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 11
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Shared\\Result"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "ee1b92af1c89c8e1"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Shared",
+            "target": "App\\Domain\\Money",
+            "targetFile": "app/Domain/Money.php",
+            "targetLayer": "Domain",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "private-layer",
+          "ruleIndex": 3,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/OrderController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 7
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\OrderController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "dd5a91dac6e0b8d1"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Application\\Internal\\PricingRules",
+            "targetFile": "app/Application/Internal/PricingRules.php",
+            "targetLayer": "Application",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "private-layer",
+          "ruleIndex": 3,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/OrderController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 16
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\OrderController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "c725b3b17bbe2c2f"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Application\\Internal\\PricingRules",
+            "targetFile": "app/Application/Internal/PricingRules.php",
+            "targetLayer": "Application",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "private-layer",
+          "ruleIndex": 3,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/ReportController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 7
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\ReportController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "c2266fbfc1e35843"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Application\\Internal\\TaxRules",
+            "targetFile": "app/Application/Internal/TaxRules.php",
+            "targetLayer": "Application",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "private-layer",
+          "ruleIndex": 3,
+          "level": "error",
+          "message": {
+            "text": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Controller/ReportController.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 16
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Controller\\ReportController"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "3c555d3915d9bf5a"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Controller",
+            "target": "App\\Application\\Internal\\TaxRules",
+            "targetFile": "app/Application/Internal/TaxRules.php",
+            "targetLayer": "Application",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "note",
+          "message": {
+            "text": "App\\Domain\\Order must not depend on App\\Infrastructure\\SqlOrderRepository (Domain on Infrastructure) [import] (skipped by the baseline)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Domain/Order.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 5
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Domain\\Order"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "0033987da4ee9798"
+          },
+          "suppressions": [
+            {
+              "kind": "external",
+              "status": "accepted",
+              "justification": "listed in the architecture baseline"
+            }
+          ],
+          "properties": {
+            "kind": "skipped",
+            "sourceLayer": "Domain",
+            "target": "App\\Infrastructure\\SqlOrderRepository",
+            "targetFile": "app/Infrastructure/SqlOrderRepository.php",
+            "targetLayer": "Infrastructure",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "disallowed-layer",
+          "ruleIndex": 0,
+          "level": "note",
+          "message": {
+            "text": "App\\Domain\\Order must not depend on App\\Infrastructure\\SqlOrderRepository (Domain on Infrastructure) [instantiation] (skipped by the baseline)"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Domain/Order.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 12
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Domain\\Order"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "0816fbd611f92a81"
+          },
+          "suppressions": [
+            {
+              "kind": "external",
+              "status": "accepted",
+              "justification": "listed in the architecture baseline"
+            }
+          ],
+          "properties": {
+            "kind": "skipped",
+            "sourceLayer": "Domain",
+            "target": "App\\Infrastructure\\SqlOrderRepository",
+            "targetFile": "app/Infrastructure/SqlOrderRepository.php",
+            "targetLayer": "Infrastructure",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 5,
+          "level": "note",
+          "message": {
+            "text": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Application/PlaceOrder.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 8
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Application\\PlaceOrder"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "94b80fe386fd8378"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Application",
+            "target": "App\\Support\\Clock",
+            "targetFile": "app/Support/Clock.php",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 5,
+          "level": "note",
+          "message": {
+            "text": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Application/PlaceOrder.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 17
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Application\\PlaceOrder"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "8f18ce41efea5a61"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Application",
+            "target": "App\\Support\\Clock",
+            "targetFile": "app/Support/Clock.php",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 5,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/MailGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 6
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\MailGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "bf103071893127a5"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "App\\Support\\Uuid",
+            "targetFile": "app/Support/Uuid.php",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 5,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/MailGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 13
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\MailGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "6f9bc068b793f898"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "App\\Support\\Uuid",
+            "targetFile": "app/Support/Uuid.php",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "empty-layer",
+          "ruleIndex": 1,
+          "level": "warning",
+          "message": {
+            "text": "layer Reporting matches no element"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".mapx/architecture.jsonc",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "6018d09af2288738"
+          },
+          "properties": {
+            "kind": "warning",
+            "layer": "Reporting"
+          }
+        },
+        {
+          "ruleId": "multi-layer",
+          "ruleIndex": 2,
+          "level": "warning",
+          "message": {
+            "text": "App\\Domain\\Ids\\OrderId is in 2 layers: Domain, Shared"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Domain/Ids/OrderId.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Domain\\Ids\\OrderId"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "53851e1159481fb2"
+          },
+          "properties": {
+            "kind": "warning",
+            "sourceLayer": "Domain, Shared"
+          }
+        },
+        {
+          "ruleId": "stale-baseline",
+          "ruleIndex": 4,
+          "level": "error",
+          "message": {
+            "text": ".mapx/architecture.baseline.json#/entries/0: the baseline entry disallowed-layer App\\Domain\\Money → App\\Infrastructure\\SqlOrderRepository (instantiation) matches no violation; delete it"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".mapx/architecture.baseline.json",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 1
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Domain\\Money"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "c2931e002988da2e"
+          },
+          "properties": {
+            "kind": "error",
+            "target": "App\\Infrastructure\\SqlOrderRepository",
+            "targetFile": "app/Infrastructure/SqlOrderRepository.php",
+            "edgeType": "instantiation"
+          }
+        }
+      ]
+    }
+  ]
+}

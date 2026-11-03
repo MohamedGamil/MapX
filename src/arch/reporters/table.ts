@@ -27,8 +27,13 @@ export function renderTable(report: ArchReport): string {
     for (const f of findings) out.push(line(f));
     out.push('');
   }
+  out.push(countsLine(report));
+  return `${out.join('\n')}\n`;
+}
+
+/** The summary of the counts: the table's last line, and the GitHub reporter's. */
+export function countsLine(report: ArchReport): string {
   const c = report.counts;
   const errors = report.findings.filter((f) => f.kind === 'violation' && f.severity === 'error').length;
-  out.push(`Violations: ${c.violation} (${errors} error, ${c.violation - errors} warn)   Uncovered: ${c.uncovered}   Skipped: ${c.skipped}   Allowed: ${c.allowed}   Warnings: ${c.warning}   Errors: ${c.error}`);
-  return `${out.join('\n')}\n`;
+  return `Violations: ${c.violation} (${errors} error, ${c.violation - errors} warn)   Uncovered: ${c.uncovered}   Skipped: ${c.skipped}   Allowed: ${c.allowed}   Warnings: ${c.warning}   Errors: ${c.error}`;
 }

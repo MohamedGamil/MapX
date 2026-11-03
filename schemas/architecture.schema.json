@@ -177,6 +177,49 @@
           "items": {
             "type": "string"
           }
+        },
+        "codeclimate": {
+          "description": "CodeClimate (GitLab Code Quality) severity per finding: error and warn by the finding's severity, uncovered and skipped by its kind (mapx check --format codeclimate).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "enum": [
+                "info",
+                "minor",
+                "major",
+                "critical",
+                "blocker"
+              ]
+            },
+            "warn": {
+              "enum": [
+                "info",
+                "minor",
+                "major",
+                "critical",
+                "blocker"
+              ]
+            },
+            "uncovered": {
+              "enum": [
+                "info",
+                "minor",
+                "major",
+                "critical",
+                "blocker"
+              ]
+            },
+            "skipped": {
+              "enum": [
+                "info",
+                "minor",
+                "major",
+                "critical",
+                "blocker"
+              ]
+            }
+          }
         }
       }
     }

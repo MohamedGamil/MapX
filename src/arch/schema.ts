@@ -110,8 +110,19 @@ export interface ArchitectureDocument {
   /** Source layer (or `*`, defaults for every layer) → its allowances. */
   rules?: Record<string, Allowance[]>;
   baseline?: string;
-  report?: { groups?: Record<string, string[]>; hidden?: string[] };
+  report?: { groups?: Record<string, string[]>; hidden?: string[]; codeclimate?: CodeClimateSeverityMap };
 }
+
+/** CodeClimate (GitLab Code Quality) severities, from least to most severe. */
+export const CODECLIMATE_SEVERITIES = ['info', 'minor', 'major', 'critical', 'blocker'] as const;
+export type CodeClimateSeverity = typeof CODECLIMATE_SEVERITIES[number];
+/**
+ * What a finding is, for the CodeClimate severity map (M5-07, AR-16): `error` if it fails the run
+ * (the exit-code rule), else `uncovered` or `skipped` by kind, else `warn` (other violations, such
+ * as advisory rules and inferred edges, and warnings).
+ */
+export const CODECLIMATE_KEYS = ['error', 'warn', 'uncovered', 'skipped'] as const;
+export type CodeClimateSeverityMap = Partial<Record<typeof CODECLIMATE_KEYS[number], CodeClimateSeverity>>;
 
 export const TOP_LEVEL_KEYS = ['$schema', 'extends', 'parameters', 'scope', 'policy', 'visibility', 'layers', 'rules', 'baseline', 'report'] as const;
 export const SCOPE_KEYS = ['types', 'include', 'exclude'] as const;
@@ -120,7 +131,7 @@ export const UNCOVERED_KEYS = ['externals', 'builtins'] as const;
 export const VISIBILITY_KEYS = ['internalTags', 'nativeMarkers'] as const;
 export const LAYER_KEYS = ['name', 'description', 'selectors', 'private', 'overlay', 'group', 'color'] as const;
 export const ALLOWANCE_KEYS = ['allow', 'to', 'types', 'severity'] as const;
-export const REPORT_KEYS = ['groups', 'hidden'] as const;
+export const REPORT_KEYS = ['groups', 'hidden', 'codeclimate'] as const;
 
 /** The loaded configuration: every document of the `extends` chain merged, parameters applied, defaults filled. */
 export interface ArchitectureConfig {
@@ -134,7 +145,7 @@ export interface ArchitectureConfig {
   layers: Layer[];
   rules: Record<string, Allowance[]>;
   baseline: string | null;
-  report: { groups: Record<string, string[]>; hidden: string[] };
+  report: { groups: Record<string, string[]>; hidden: string[]; codeclimate: CodeClimateSeverityMap };
 }
 
 export const DEFAULTS = {

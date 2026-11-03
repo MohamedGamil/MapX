@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="mapx check" tests="19" failures="10" errors="1">
+  <testsuite name="Controller" tests="8" failures="8" errors="0" skipped="0">
+    <testcase name="App\Controller\OrderController → App\Domain\Order (import)" classname="disallowed-layer">
+      <failure type="disallowed-layer" message="App\Controller\OrderController must not depend on App\Domain\Order (Controller on Domain) [import]">app/Controller/OrderController.php:6
+App\Controller\OrderController must not depend on App\Domain\Order (Controller on Domain) [import]
+fingerprint: 70c56a560c7ac130</failure>
+    </testcase>
+    <testcase name="App\Controller\OrderController → App\Domain\Order (instantiation)" classname="disallowed-layer">
+      <failure type="disallowed-layer" message="App\Controller\OrderController must not depend on App\Domain\Order (Controller on Domain) [instantiation]">app/Controller/OrderController.php:15
+App\Controller\OrderController must not depend on App\Domain\Order (Controller on Domain) [instantiation]
+fingerprint: 0616a75572a2e512</failure>
+    </testcase>
+    <testcase name="App\Controller\ReportController → App\Infrastructure\SqlOrderRepository (import)" classname="disallowed-layer">
+      <failure type="disallowed-layer" message="App\Controller\ReportController must not depend on App\Infrastructure\SqlOrderRepository (Controller on Infrastructure) [import]">app/Controller/ReportController.php:6
+App\Controller\ReportController must not depend on App\Infrastructure\SqlOrderRepository (Controller on Infrastructure) [import]
+fingerprint: 8cd92df1e078ce3d</failure>
+    </testcase>
+    <testcase name="App\Controller\ReportController → App\Infrastructure\SqlOrderRepository (instantiation)" classname="disallowed-layer">
+      <failure type="disallowed-layer" message="App\Controller\ReportController must not depend on App\Infrastructure\SqlOrderRepository (Controller on Infrastructure) [instantiation]">app/Controller/ReportController.php:15
+App\Controller\ReportController must not depend on App\Infrastructure\SqlOrderRepository (Controller on Infrastructure) [instantiation]
+fingerprint: 187fa70fa1617288</failure>
+    </testcase>
+    <testcase name="App\Controller\OrderController → App\Application\Internal\PricingRules (import)" classname="private-layer">
+      <failure type="private-layer" message="App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [import]">app/Controller/OrderController.php:7
+App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [import]
+fingerprint: dd5a91dac6e0b8d1</failure>
+    </testcase>
+    <testcase name="App\Controller\OrderController → App\Application\Internal\PricingRules (instantiation)" classname="private-layer">
+      <failure type="private-layer" message="App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [instantiation]">app/Controller/OrderController.php:16
+App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [instantiation]
+fingerprint: c725b3b17bbe2c2f</failure>
+    </testcase>
+    <testcase name="App\Controller\ReportController → App\Application\Internal\TaxRules (import)" classname="private-layer">
+      <failure type="private-layer" message="App\Controller\ReportController must not depend on App\Application\Internal\TaxRules: it is private to Application (Controller on Application) [import]">app/Controller/ReportController.php:7
+App\Controller\ReportController must not depend on App\Application\Internal\TaxRules: it is private to Application (Controller on Application) [import]
+fingerprint: c2266fbfc1e35843</failure>
+    </testcase>
+    <testcase name="App\Controller\ReportController → App\Application\Internal\TaxRules (instantiation)" classname="private-layer">
+      <failure type="private-layer" message="App\Controller\ReportController must not depend on App\Application\Internal\TaxRules: it is private to Application (Controller on Application) [instantiation]">app/Controller/ReportController.php:16
+App\Controller\ReportController must not depend on App\Application\Internal\TaxRules: it is private to Application (Controller on Application) [instantiation]
+fingerprint: 3c555d3915d9bf5a</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="Application" tests="2" failures="0" errors="0" skipped="0">
+    <testcase name="App\Application\PlaceOrder → App\Support\Clock (import)" classname="uncovered">
+      <system-out>uncovered (warn): app/Application/PlaceOrder.php:8
+App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [import]
+fingerprint: 94b80fe386fd8378</system-out>
+    </testcase>
+    <testcase name="App\Application\PlaceOrder → App\Support\Clock (instantiation)" classname="uncovered">
+      <system-out>uncovered (warn): app/Application/PlaceOrder.php:17
+App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [instantiation]
+fingerprint: 8f18ce41efea5a61</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="Domain" tests="2" failures="0" errors="0" skipped="2">
+    <testcase name="App\Domain\Order → App\Infrastructure\SqlOrderRepository (import)" classname="disallowed-layer">
+      <skipped message="skipped by the baseline"/>
+      <system-out>app/Domain/Order.php:5
+App\Domain\Order must not depend on App\Infrastructure\SqlOrderRepository (Domain on Infrastructure) [import] (skipped by the baseline)
+fingerprint: 0033987da4ee9798</system-out>
+    </testcase>
+    <testcase name="App\Domain\Order → App\Infrastructure\SqlOrderRepository (instantiation)" classname="disallowed-layer">
+      <skipped message="skipped by the baseline"/>
+      <system-out>app/Domain/Order.php:12
+App\Domain\Order must not depend on App\Infrastructure\SqlOrderRepository (Domain on Infrastructure) [instantiation] (skipped by the baseline)
+fingerprint: 0816fbd611f92a81</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="Shared" tests="2" failures="2" errors="0" skipped="0">
+    <testcase name="App\Shared\Result → App\Domain\Money (import)" classname="disallowed-layer">
+      <failure type="disallowed-layer" message="App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [import]">app/Shared/Result.php:5
+App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [import]
+fingerprint: 1e258ed008c77fad</failure>
+    </testcase>
+    <testcase name="App\Shared\Result → App\Domain\Money (instantiation)" classname="disallowed-layer">
+      <failure type="disallowed-layer" message="App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [instantiation]">app/Shared/Result.php:11
+App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [instantiation]
+fingerprint: ee1b92af1c89c8e1</failure>
+    </testcase>
+  </testsuite>
+  <testsuite name="Infrastructure" tests="2" failures="0" errors="0" skipped="0">
+    <testcase name="App\Infrastructure\MailGateway → App\Support\Uuid (import)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/MailGateway.php:6
+App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [import]
+fingerprint: bf103071893127a5</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\MailGateway → App\Support\Uuid (instantiation)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/MailGateway.php:13
+App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [instantiation]
+fingerprint: 6f9bc068b793f898</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="Reporting" tests="1" failures="0" errors="0" skipped="0">
+    <testcase name="layer Reporting matches no element" classname="empty-layer">
+      <system-out>warning (warn): .mapx/architecture.jsonc
+layer Reporting matches no element
+fingerprint: 6018d09af2288738</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="Domain, Shared" tests="1" failures="0" errors="0" skipped="0">
+    <testcase name="App\Domain\Ids\OrderId is in 2 layers: Domain, Shared" classname="multi-layer">
+      <system-out>warning (warn): app/Domain/Ids/OrderId.php
+App\Domain\Ids\OrderId is in 2 layers: Domain, Shared
+fingerprint: 53851e1159481fb2</system-out>
+    </testcase>
+  </testsuite>
+  <testsuite name="configuration" tests="1" failures="0" errors="1" skipped="0">
+    <testcase name="App\Domain\Money → App\Infrastructure\SqlOrderRepository (instantiation)" classname="stale-baseline">
+      <error type="stale-baseline" message=".mapx/architecture.baseline.json#/entries/0: the baseline entry disallowed-layer App\Domain\Money → App\Infrastructure\SqlOrderRepository (instantiation) matches no violation; delete it">.mapx/architecture.baseline.json
+.mapx/architecture.baseline.json#/entries/0: the baseline entry disallowed-layer App\Domain\Money → App\Infrastructure\SqlOrderRepository (instantiation) matches no violation; delete it
+fingerprint: c2931e002988da2e</error>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -11,6 +11,16 @@ const MAIN = resolve(__dirname, '../../src/main.ts');
 // Absolute loader URL: the temp workspace has no node_modules to resolve `tsx` from.
 const TSX = pathToFileURL(resolve(__dirname, '../../node_modules/tsx/dist/loader.mjs')).href;
 
+/**
+ * The CLI's environment: this process's, without GITHUB_ACTIONS, which a GitHub runner sets and
+ * which turns `mapx check` output into annotations (M5-07). A test that wants it passes it.
+ */
+export function baseEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1' };
+  delete env.GITHUB_ACTIONS;
+  return env;
+}
+
 export function workspace(files: Record<string, string>, gitDirs: string[] = []): string {
   const root = mkdtempSync(join(tmpdir(), 'mapx-e2e-'));
   for (const [path, content] of Object.entries(files)) {
@@ -25,7 +35,7 @@ export function mapx(cwd: string, ...args: string[]): string {
   return execFileSync(process.execPath, ['--import', TSX, MAIN, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1' },
+    env: baseEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
@@ -35,7 +45,7 @@ export function mapxEnv(cwd: string, env: Record<string, string>, ...args: strin
   return execFileSync(process.execPath, ['--import', TSX, MAIN, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1', ...env },
+    env: { ...baseEnv(), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
@@ -45,7 +55,7 @@ export function mapxWithStderr(cwd: string, ...args: string[]): { stdout: string
   const r = spawnSync(process.execPath, ['--import', TSX, MAIN, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1' },
+    env: baseEnv(),
   });
   if (r.status !== 0) throw new Error(`mapx ${args.join(' ')} exited ${r.status}: ${r.stderr}`);
   return { stdout: r.stdout, stderr: r.stderr };
@@ -53,10 +63,15 @@ export function mapxWithStderr(cwd: string, ...args: string[]): { stdout: string
 
 /** Runs the CLI without throwing, for asserting exit codes and error messages. */
 export function mapxResult(cwd: string, ...args: string[]): { status: number | null; stdout: string; stderr: string } {
+  return mapxResultEnv(cwd, {}, ...args);
+}
+
+/** Like `mapxResult`, with extra environment variables (GITHUB_ACTIONS, say). */
+export function mapxResultEnv(cwd: string, env: Record<string, string>, ...args: string[]): { status: number | null; stdout: string; stderr: string } {
   const r = spawnSync(process.execPath, ['--import', TSX, MAIN, ...args], {
     cwd,
     encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1', MAPX_NO_TELEMETRY: '1' },
+    env: { ...baseEnv(), ...env },
   });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }

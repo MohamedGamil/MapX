@@ -1,0 +1,306 @@
+[
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Controller\\OrderController must not depend on App\\Domain\\Order (Controller on Domain) [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "70c56a560c7ac130",
+    "location": {
+      "path": "app/Controller/OrderController.php",
+      "lines": {
+        "begin": 6
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Controller\\OrderController must not depend on App\\Domain\\Order (Controller on Domain) [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "0616a75572a2e512",
+    "location": {
+      "path": "app/Controller/OrderController.php",
+      "lines": {
+        "begin": 15
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Controller\\ReportController must not depend on App\\Infrastructure\\SqlOrderRepository (Controller on Infrastructure) [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "8cd92df1e078ce3d",
+    "location": {
+      "path": "app/Controller/ReportController.php",
+      "lines": {
+        "begin": 6
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Controller\\ReportController must not depend on App\\Infrastructure\\SqlOrderRepository (Controller on Infrastructure) [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "187fa70fa1617288",
+    "location": {
+      "path": "app/Controller/ReportController.php",
+      "lines": {
+        "begin": 15
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Shared\\Result must not depend on App\\Domain\\Money (Shared on Domain) [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "1e258ed008c77fad",
+    "location": {
+      "path": "app/Shared/Result.php",
+      "lines": {
+        "begin": 5
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Shared\\Result must not depend on App\\Domain\\Money (Shared on Domain) [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "ee1b92af1c89c8e1",
+    "location": {
+      "path": "app/Shared/Result.php",
+      "lines": {
+        "begin": 11
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "private-layer",
+    "description": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "dd5a91dac6e0b8d1",
+    "location": {
+      "path": "app/Controller/OrderController.php",
+      "lines": {
+        "begin": 7
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "private-layer",
+    "description": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "c725b3b17bbe2c2f",
+    "location": {
+      "path": "app/Controller/OrderController.php",
+      "lines": {
+        "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "private-layer",
+    "description": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "c2266fbfc1e35843",
+    "location": {
+      "path": "app/Controller/ReportController.php",
+      "lines": {
+        "begin": 7
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "private-layer",
+    "description": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "3c555d3915d9bf5a",
+    "location": {
+      "path": "app/Controller/ReportController.php",
+      "lines": {
+        "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Domain\\Order must not depend on App\\Infrastructure\\SqlOrderRepository (Domain on Infrastructure) [import] (skipped by the baseline)",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "minor",
+    "fingerprint": "142b5c34f32ed3c8",
+    "location": {
+      "path": "app/Domain/Order.php",
+      "lines": {
+        "begin": 5
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Domain\\Order must not depend on App\\Infrastructure\\SqlOrderRepository (Domain on Infrastructure) [instantiation] (skipped by the baseline)",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "minor",
+    "fingerprint": "29fe971d16560aa3",
+    "location": {
+      "path": "app/Domain/Order.php",
+      "lines": {
+        "begin": 12
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "a7953c2a4a25c546",
+    "location": {
+      "path": "app/Application/PlaceOrder.php",
+      "lines": {
+        "begin": 8
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "69bce6103fcf2b08",
+    "location": {
+      "path": "app/Application/PlaceOrder.php",
+      "lines": {
+        "begin": 17
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "279cd99b49feb1d6",
+    "location": {
+      "path": "app/Infrastructure/MailGateway.php",
+      "lines": {
+        "begin": 6
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "d360895fc040b412",
+    "location": {
+      "path": "app/Infrastructure/MailGateway.php",
+      "lines": {
+        "begin": 13
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "empty-layer",
+    "description": "layer Reporting matches no element",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "minor",
+    "fingerprint": "4632f5419a3d8bff",
+    "location": {
+      "path": ".mapx/architecture.jsonc",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "multi-layer",
+    "description": "App\\Domain\\Ids\\OrderId is in 2 layers: Domain, Shared",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "minor",
+    "fingerprint": "c918b8520793129e",
+    "location": {
+      "path": "app/Domain/Ids/OrderId.php",
+      "lines": {
+        "begin": 1
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "stale-baseline",
+    "description": ".mapx/architecture.baseline.json#/entries/0: the baseline entry disallowed-layer App\\Domain\\Money → App\\Infrastructure\\SqlOrderRepository (instantiation) matches no violation; delete it",
+    "categories": [
+      "Bug Risk"
+    ],
+    "severity": "major",
+    "fingerprint": "ff3ac3337a9de46d",
+    "location": {
+      "path": ".mapx/architecture.baseline.json",
+      "lines": {
+        "begin": 1
+      }
+    }
+  }
+]

@@ -107,6 +107,16 @@
           }
         },
         "skippedBy": { "description": "Why a skipped finding is skipped: a baseline entry, or the base report of --compare.", "enum": ["baseline", "compare"] },
+        "location": {
+          "description": "Where to fix a finding that is not about code: a stale baseline entry is in the baseline file (workspace-relative, with /) at a JSON pointer.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": {
+            "file": { "type": "string" },
+            "pointer": { "type": "string" }
+          }
+        },
         "message": { "type": "string" }
       }
     }
