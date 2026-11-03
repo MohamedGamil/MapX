@@ -411,3 +411,13 @@ Findings from the 2026-11-03 session not registered before are BACKLOG too: M4-0
 - **Root CLAUDE.md:** regenerate its MapxGraph block with `mapx agents generate --providers claude --force` (M4-32, unblocked).
 - **Uncovered packages become opt-in.** This reverses M5-24's default (AR-08/AR-05), which shipped in v0.3.9. A package that no layer covers is reported as uncovered only when the config opts in, through `policy.uncovered.externals: true` or by using a `package` selector. Registered as M5-24-R4 (P1), with a CHANGELOG "Changed" entry.
 - **M6's target scale is 100,000+ files.** The M6 tasks now include a 100k fixture and set their budgets at 100k. Server-side aggregation (M6-02) is required, and M6-03 chooses a WebGL-class renderer.
+
+D039 addendum (2026-11-03, integration owner, from the M5-24-R4 review). The opt-in is narrowed so it does what the owner intended: a layer opts the config in to uncovered packages only when it covers packages. Opts in:
+- a positive `package` selector in a non-overlay layer's `selectors` or `private`;
+- such a selector inside `any`/`all`.
+
+Does not opt in:
+- a package selector only under `not`;
+- a package selector only in overlay layers (a dev-only overlay alone, for example), since overlays never cover.
+
+An explicit `policy.uncovered.externals` always wins.
