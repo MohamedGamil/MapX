@@ -21358,10 +21358,10 @@
         "docs/baton/reports/M5-19.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-G3",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T23:22:51.574Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -21371,6 +21371,12 @@
           "at": "2026-11-03T22:42:30.592Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:22:51.574Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -30838,10 +30844,10 @@
         "npx vitest run tests/external-refs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-G2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T23:22:49.953Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -30851,6 +30857,12 @@
           "at": "2026-11-03T22:42:27.772Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:22:49.953Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
