@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- `mapx arch` gains introspection subcommands (`layers --why`, `which`, `unassigned`, `deps`, `unused`, `changed`, `allowed`), each with `--format json` and AR-17 exit codes. They answer which elements are in a layer and why, what is in no layer, which edges join two layers, which allowances are unused, which layers a change touches, and whether a dependency would be allowed, exactly as `mapx check` decides it (M5-08).
 - The index now records references to packages, modules and classes outside the workspace (npm, Composer, pip and Go) in a new `external_refs` view, kept equal to a forced scan on every sync and without changing edges or metrics. The extractor version is now 9 (M5-19).
 - Scans now record each symbol's decorators, attributes or annotations and its doc tags for PHP, TypeScript, JavaScript, Python, Java, Kotlin and C#, and architecture layers can select symbols with `decorator` and `docTag` (M5-10).
 - `mapx check` gains baselines (`--generate-baseline`, `--baseline`, Deptrac-style `skip_violations`; stale entries exit 3) and the `--compare <base-report.json>` ratchet, which fails only on violations new since the base revision (M5-06).

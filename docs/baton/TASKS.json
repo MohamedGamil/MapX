@@ -15648,14 +15648,22 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-08",
       "actualHours": null,
       "startedAt": "2026-11-02T22:47:23.880Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T01:06:46.839Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-08.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-introspect.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-08.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T22:47:23.391Z",
@@ -15668,9 +15676,27 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T01:06:44.953Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T01:06:46.839Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-introspect.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-08.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -16086,7 +16112,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -16221,7 +16247,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -16293,7 +16319,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -16507,7 +16533,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -20088,15 +20114,28 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-20",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-02T23:41:44.465Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-02T23:41:43.969Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-02T23:41:44.465Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

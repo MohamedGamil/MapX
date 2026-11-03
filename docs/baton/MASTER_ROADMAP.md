@@ -242,7 +242,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-05** `mapx check` CLI: table/json reporters, exit contract, staleness — DONE, P1, 8h; depends on M5-04.
 - **M5-06** Baseline (generate, match, stale-entry errors) and `--compare <report>` ratchet — DONE, P1, 7h; depends on M5-05.
 - **M5-07** CI reporters: SARIF, GitHub annotations, CodeClimate, JUnit — IN_PROGRESS, P2, 6h; depends on M5-05.
-- **M5-08** Introspection: arch layers --why, which, unassigned, deps, unused, changed, allowed — IN_PROGRESS, P2, 10h; depends on M5-04, M5-05.
+- **M5-08** Introspection: arch layers --why, which, unassigned, deps, unused, changed, allowed — DONE, P2, 10h; depends on M5-04, M5-05.
 - **M5-09** Hierarchy and member selectors (transitive ancestry, depth, members) — BACKLOG, P2, 8h; depends on M5-03, M5-03-R1.
 - **M5-10** Capture decorators/attributes and doc tags in symbol metadata (tier 1) — DONE, P1, 16h; depends on M5-01, M3-04.
 - **M5-11** Visibility rules: private selectors and internal markers — IN_PROGRESS, P2, 8h; depends on M5-04, M5-10.
@@ -255,7 +255,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — BACKLOG, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
-- **M5-20** External references: npm package attribution and builtins — BACKLOG, P2, 6h; depends on M5-19, M5-01.
+- **M5-20** External references: npm package attribution and builtins — IN_PROGRESS, P2, 6h; depends on M5-19, M5-01.
 - **M5-21** External references: Composer package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — BACKLOG, P2, 5h; depends on M5-19, M5-01.
 - **M5-23** External references: Go modules package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
