@@ -10,7 +10,7 @@ import { ConfigError, loadArchitectureConfig, type LoadOptions } from './config.
 import type { ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership } from './membership.js';
 import { expandPolicy } from './policy.js';
-import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Finding, type FindingKind } from './evaluate.js';
+import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Finding, type FindingKind, type FindingSeverity } from './evaluate.js';
 import { BaselineMatcher, fingerprint, loadBaseline, repoKey, type Baseline } from './baseline.js';
 
 export type { Finding, FindingKind } from './evaluate.js';
@@ -19,8 +19,13 @@ export interface ArchReport {
   version: 1;
   counts: Record<FindingKind, number>;
   findings: Finding[];
-  layers: Array<{ name: string; elements: number; files: number; overlay: boolean }>;
-  layerEdges: Array<{ from: string; to: string; allowed: number; violations: number; skipped: number }>;
+  /** Elements and files per layer, and its uncovered dependencies: findings whose source is in it (M5-13). */
+  layers: Array<{ name: string; elements: number; files: number; overlay: boolean; uncovered: number }>;
+  /**
+   * Dependencies per layer pair. `warnings` counts the `violations` reported at `warn` (an advisory
+   * allowance, or an inferred edge under `policy.inferred: "warn"`), per pair (M5-13).
+   */
+  layerEdges: LayerEdge[];
   configErrors: string[];
   /**
    * What `mapx check` evaluated and kept (M5-06): the view and the `--layer`/`--rule` filters, so
@@ -28,6 +33,8 @@ export interface ArchReport {
    */
   selection?: Selection;
 }
+
+export interface LayerEdge { from: string; to: string; allowed: number; violations: number; warnings: number; skipped: number }
 
 export interface Selection { view: string | null; layer: string | null; rule: string | null }
 
@@ -68,7 +75,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
   // (AR-12) gets one finding naming every source layer the rule applies to, so fingerprints are
   // unique within a report (review of M5-04). Each finding remembers the layer pairs it counts for.
   const byKey = new Map<string, Finding>();
-  const meta = new Map<Finding, { sourceLayers: Set<string>; pairs: Set<string>; packageDir?: string; sourceFiles: Set<string> }>();
+  const meta = new Map<Finding, { sourceLayers: Set<string>; pairs: Map<string, FindingSeverity>; packageDir?: string; sourceFiles: Set<string> }>();
   const repoPaths = skip.repoPaths ?? {};
   for (const d of deps) {
     const src = reportElement(view, d.source);
@@ -97,7 +104,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
         ...(idS !== s || idT !== t || sRepo || tRepo ? { identity: { source: idS, target: idT, ...(sRepo || tRepo ? { sourceRepo: sRepo, targetRepo: tRepo } : {}) } } : {}),
       };
       byKey.set(key, finding);
-      meta.set(finding, { sourceLayers: new Set(), pairs: new Set(), sourceFiles: new Set(), ...(d.targetPackage ? { packageDir: d.targetPackage.dir } : {}) });
+      meta.set(finding, { sourceLayers: new Set(), pairs: new Map(), sourceFiles: new Set(), ...(d.targetPackage ? { packageDir: d.targetPackage.dir } : {}) });
     }
     const m = meta.get(finding)!;
     m.sourceFiles.add(d.source.file.path); // a type's methods can span files (Go, C# partial classes)
@@ -106,7 +113,15 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     // A verified edge outranks an inferred one: the finding keeps the stronger severity.
     if (d.severity === 'error' && finding.severity !== 'error') { finding.severity = 'error'; finding.verifiability = d.verifiability; }
     if (d.line !== undefined && (finding.source!.line === undefined || d.line < finding.source!.line)) finding.source!.line = d.line;
-    if (d.kind !== 'uncovered') for (const to of d.violatedLayers ?? d.targetLayers) if (to !== d.sourceLayer) m.pairs.add(`${d.sourceLayer}\u0000${to}`);
+    // Each pair keeps its own strongest severity: a source in two layers can be advisory on one
+    // pair and an error on the other (M5-13: layerEdges[].warnings).
+    if (d.kind !== 'uncovered') {
+      for (const to of d.violatedLayers ?? d.targetLayers) {
+        if (to === d.sourceLayer) continue;
+        const pk = `${d.sourceLayer}\u0000${to}`;
+        if (m.pairs.get(pk) !== 'error') m.pairs.set(pk, d.severity);
+      }
+    }
     const violated = (d.violatedLayers ?? d.targetLayers).join(', ');
     finding.message = d.kind === 'uncovered'
       ? `${s} depends on ${t}, which is in no layer`
@@ -153,18 +168,21 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
   }
 
   // layerEdges: dependencies (findings) per layer pair, counted after the subsumption above.
-  const pairs = new Map<string, { from: string; to: string; allowed: number; violations: number; skipped: number }>();
+  const pairs = new Map<string, LayerEdge>();
   for (const f of byKey.values()) {
-    for (const pk of meta.get(f)!.pairs) {
+    for (const [pk, severity] of meta.get(f)!.pairs) {
       const [from, to] = pk.split('\u0000') as [string, string];
-      const pair = pairs.get(pk) ?? { from, to, allowed: 0, violations: 0, skipped: 0 };
+      const pair = pairs.get(pk) ?? { from, to, allowed: 0, violations: 0, warnings: 0, skipped: 0 };
       if (f.kind === 'allowed') pair.allowed++;
       else if (f.kind === 'skipped') pair.skipped++;
-      else pair.violations++;
+      else { pair.violations++; if (severity === 'warn') pair.warnings++; }
       pairs.set(pk, pair);
     }
   }
   const findings: Finding[] = [...byKey.values()];
+  // Uncovered dependencies per source layer, from the layers themselves (a name may contain ", ").
+  const uncoveredIn = new Map<string, number>();
+  for (const f of findings) if (f.kind === 'uncovered') for (const l of meta.get(f)!.sourceLayers) uncoveredIn.set(l, (uncoveredIn.get(l) ?? 0) + 1);
 
   // AR-12: an element in several non-overlay layers. Reported once per top-level declaration, or
   // for a file without one that takes part in a dependency (an empty `__init__.py` does not):
@@ -199,7 +217,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     version: 1,
     counts: Object.fromEntries(KINDS.map((k) => [k, 0])) as Record<FindingKind, number>,
     findings: sortFindings(findings),
-    layers: membership.layers.map((l) => ({ name: l.name, elements: membership.members(l.name).length, files: filesIn(l.name), overlay: !!l.overlay })),
+    layers: membership.layers.map((l) => ({ name: l.name, elements: membership.members(l.name).length, files: filesIn(l.name), overlay: !!l.overlay, uncovered: uncoveredIn.get(l.name) ?? 0 })),
     layerEdges: [...pairs.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0)),
     configErrors: policy.errors,
   };

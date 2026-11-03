@@ -1,6 +1,15 @@
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
 
+/**
+ * A DOT double-quoted ID or label: `"` and `\` escaped, line breaks as `\n`, other control
+ * characters dropped (M5-13: the layer graph quotes every name through this; layer names are free text).
+ */
+export function dotQuote(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r\n?|\n/g, '\\n').replace(/[\u0000-\u001F\u007F]/g, '')}"`;
+}
+
 export class DotExporter {
   private store: Store;
   private graph: MapxGraph;

@@ -891,6 +891,35 @@ $ mapx arch changed --since origin/main --with-dependents --json   # selective C
 $ mapx arch unassigned --kind class                                # coverage gate: exit 2 if any
 ```
 
+### `mapx arch graph`
+
+Draws the layer graph: one node per layer, and per layer pair the dependencies `mapx check` counts, with the same decisions. See [architecture-rules.md](architecture-rules.md#layer-graphs) for what it draws and the JSON shape.
+
+```bash
+mapx arch graph [--format dot|svg|mermaid|dsm|json] [-o <file>] [--view <name>] [--baseline <file>] [--no-graphviz] [--sync] [-d <dir>]
+```
+
+- `--format`: `dot` (default, Graphviz), `svg`, `mermaid` (a flowchart for Markdown), `dsm` (a layer × layer text matrix) or `json` (the graph itself; `--json` is the same).
+- `-o, --output <file>`: write to a file (relative to the current directory; its folder is created) instead of stdout.
+- `--baseline <file>`: use this baseline instead of the configuration's. As in `mapx check`, baselined violations are drawn as skipped.
+- `--no-graphviz`: for `svg`, always use the built-in renderer. Without it, `svg` uses Graphviz (`dot -Tsvg`) when it is installed, as `mapx export --format svg` does, and the built-in renderer otherwise: when `dot` is missing, fails, prints no SVG, or runs longer than `MAPX_GRAPHVIZ_TIMEOUT_MS` (default 10000; it is then killed). The timeout and the output check apply to `mapx export --format svg` too. The built-in renderer needs no dependency, and its output is byte-stable on every machine; Graphviz output depends on the Graphviz version.
+- `-d/--dir`, `--view` and `--sync` work as for the introspection subcommands.
+
+Edge labels are dependency counts. Allowed dependencies are grey, violations red, warn-level violations (an advisory allowance, or an inferred edge under `policy.inferred: "warn"`) amber, and skipped (baselined) violations dashed. A pair with several statuses gets one edge per status. Groups are subgraphs, hidden layers are left out, and the totals (a graph label in DOT, a `%%` comment in Mermaid, the footer in SVG and the DSM) are `mapx check`'s own counts, hidden layers included. A dependency on an element in two layers counts once in the totals, but on both pairs' edges. The output is sorted by the configuration's layer order, so the same index and configuration give the same bytes.
+
+It exits 0 whatever the graph shows: it is not a gate. 3 is a configuration or usage error (an unknown `--format`, a missing `--baseline` file), and 4 an index problem, as for the subcommands above.
+
+```bash
+$ mapx arch graph | dot -Tpng -o layers.png
+$ mapx arch graph --format mermaid -o docs/layers.mmd
+$ mapx arch graph --format svg --no-graphviz -o layers.svg
+$ mapx arch graph --format dsm
+── Layer Dependency Structure Matrix (DSM) ────────────
+                    L1   L2   L3   L4
+...
+L1 Controller        *   8!   2~    .
+```
+
 ## `mapx check`
 
 Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, private parts and internal elements. See [architecture-rules.md](architecture-rules.md) for the configuration. It is meant for CI, so it never prints the logo and its exit code says what it found.

@@ -191,7 +191,7 @@ const hostile: ArchReport = {
     finding({ kind: 'warning', rule: 'empty-layer', severity: 'warn', layer: 'Empty', fingerprint: '0000000000000006' }),
     finding({ kind: 'error', rule: 'config', severity: 'error', fingerprint: '0000000000000007' }),
   ],
-  layers: [{ name: 'App', elements: 3, files: 3, overlay: false }, { name: 'Domain', elements: 1, files: 1, overlay: false }, { name: 'Vendor', elements: 0, files: 0, overlay: true }, { name: 'Empty', elements: 0, files: 0, overlay: false }],
+  layers: [{ name: 'App', elements: 3, files: 3, overlay: false, uncovered: 0 }, { name: 'Domain', elements: 1, files: 1, overlay: false, uncovered: 0 }, { name: 'Vendor', elements: 0, files: 0, overlay: true, uncovered: 0 }, { name: 'Empty', elements: 0, files: 0, overlay: false, uncovered: 0 }],
   layerEdges: [],
   configErrors: [HOSTILE],
   selection: { view: null, layer: null, rule: null },

@@ -20,7 +20,7 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
-import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
+import { calculateDSM, buildMetricsReport, formatDsmText, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { getChangedFiles, isGitRepo, type GitFileStatus } from './core/git-tracker.js';
 import { findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
 import { outdatedIndexWarning } from './core/extractor-version.js';
@@ -36,10 +36,10 @@ import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
 import { architectureConfigPath, ConfigError, formatValidation, loadArchitectureConfig, validateArchitectureConfig } from './arch/config.js';
 import { EDGE_TYPES, type ArchitectureConfig } from './arch/schema.js';
-import { configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
+import { buildReport, configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
-import { baselineLocation, displayPath, loadCompareReport, renderBaseline } from './arch/baseline.js';
-import { defaultFormat, FORMATS, renderReport, type ReportContext, type ReportFormat } from './arch/reporters/index.js';
+import { baselineLocation, displayPath, loadBaseline, loadCompareReport, renderBaseline } from './arch/baseline.js';
+import { defaultFormat, FORMATS, GRAPH_FORMATS, layerGraph, renderLayerGraph, renderReport, type GraphFormat, type ReportContext, type ReportFormat } from './arch/reporters/index.js';
 import { changedLayers, changedSince, IntrospectError, isAllowed, layerDependencies, layerMembers, layerSummaries, openArchitecture, unassignedElements, unusedAllowances, whichLayers, type ArchContext } from './arch/introspect.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
@@ -2524,24 +2524,12 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         if (dsm.clusterNames.length === 0) {
           console.log('No clusters found to build DSM.');
         } else {
-          console.log('\n── Dependency Structure Matrix (DSM) ──────────────────');
-          const maxLength = Math.max(...dsm.clusterNames.map((n: string) => n.length), 5);
-          const headers = [''.padEnd(maxLength), ...dsm.clusterNames.map((_, idx) => `C${idx + 1}`.padStart(4))].join(' ');
-          console.log(headers);
-          console.log('-'.repeat(headers.length));
-          dsm.clusterNames.forEach((name, i) => {
-            const cells = dsm.matrix[i].map((val, j) => {
-              if (i === j) return '   *';
-              if (val === 0) return '   .';
-              return val.toString().padStart(4);
-            }).join(' ');
-            console.log(`${`C${i + 1} ${name}`.padEnd(maxLength)} ${cells}`);
-          });
-          console.log(`\nLegend:\n  * = self\n  . = no dependency\n  number = edge count from row cluster to column cluster`);
-          console.log('\nCluster Key:');
-          dsm.clusterNames.forEach((name, idx) => {
-            console.log(`  C${idx + 1}: ${name}`);
-          });
+          console.log(formatDsmText(dsm.clusterNames, dsm.matrix, {
+            title: '\n── Dependency Structure Matrix (DSM) ──────────────────',
+            prefix: 'C',
+            legend: ['number = edge count from row cluster to column cluster'],
+            keyTitle: 'Cluster Key:',
+          }));
         }
         console.log('');
         if (!showAll) return;
@@ -2600,12 +2588,14 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   const archQuestion = (
     name: string, description: string,
     answer: (ctx: ArchContext, args: unknown[], opts: Record<string, unknown>) => { json: unknown; text: string; exit?: number },
-    options: { allowStale?: boolean; configure?: (cmd: Command) => void } = {},
+    options: { allowStale?: boolean; configure?: (cmd: Command) => void; formats?: readonly string[]; defaultFormat?: string } = {},
   ) => {
+    // Formats other than json print the answer's text (`mapx arch graph`: dot, svg, mermaid, dsm).
+    const formats = options.formats ?? ['text', 'json'];
     const cmd = archCmd.command(name).description(description)
       .option('-d, --dir <path>', 'Target directory')
       .option('--view <name>', 'Use the view .mapx/architecture/<name>.jsonc')
-      .option('--format <format>', 'Output format: text or json', 'text')
+      .option('--format <format>', `Output format: ${formats.slice(0, -1).join(', ')} or ${formats[formats.length - 1]}`, options.defaultFormat ?? 'text')
       .option('--json', 'Same as --format json');
     if (!options.allowStale) cmd.option('--sync', 'Sync the index first when files changed since the last scan');
     options.configure?.(cmd);
@@ -2615,8 +2605,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // `arch` has its own --dir, which takes the option when it precedes any unknown one.
       const dir = resolveDir({ dir: opts.dir ?? archCmd.opts().dir }, program.opts());
       const format = opts.json ? 'json' : String(opts.format);
-      if (!['text', 'json'].includes(format)) {
-        console.error(`Error: --format must be text or json, not "${format}"`);
+      if (!formats.includes(format)) {
+        console.error(`Error: --format must be ${formats.slice(0, -1).join(', ')} or ${formats[formats.length - 1]}, not "${format}"`);
         process.exitCode = EXIT.config;
         return;
       }
@@ -2653,8 +2643,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           return;
         }
         const out = answer(ctx, this.processedArgs, opts);
-        if (format === 'json') console.log(JSON.stringify(out.json, null, 2));
-        else process.stdout.write(out.text.endsWith('\n') ? out.text : `${out.text}\n`);
+        const text = format === 'json' ? `${JSON.stringify(out.json, null, 2)}\n` : out.text.endsWith('\n') ? out.text : `${out.text}\n`;
+        if (opts.output) {
+          // Relative to the current directory, like `mapx check --output`; its folder is created.
+          const file = resolve(String(opts.output));
+          mkdirSync(dirname(file), { recursive: true });
+          writeFileSync(file, text);
+        } else process.stdout.write(text);
         process.exitCode = out.exit ?? EXIT.ok;
       } catch (err) {
         if (err instanceof IntrospectError) { fail(err.message, err.candidates.length ? { candidates: err.candidates } : {}); return; }
@@ -2753,6 +2748,30 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     for (const a of r.alternatives) lines.push(`  instead, in ${a.layer}: ${a.symbols.map((s) => `${s.element} (${s.match})`).join(', ')}${a.total > a.symbols.length ? `, and ${a.total - a.symbols.length} more` : ''}`);
     return { json: r, text: lines.join('\n'), exit: r.exitCode ? EXIT.violations : EXIT.ok };
   }, { configure: (c) => c.argument('<from>', 'Source layer, file or symbol').argument('<to>', 'Target layer, file or symbol').option('--type <edgeType>', 'Decide for this edge type only (default: the types the index has between the two, else every type in scope)') });
+
+  // The layer graph (M5-13, AR-16; docs/architecture-rules.md#layer-graphs): the dependencies
+  // `mapx check` counts per layer pair, drawn. The baseline applies as in `mapx check`, so its
+  // violations are drawn as skipped. Not a gate: exit 0 unless the configuration, the baseline (3)
+  // or the index (4) cannot be used.
+  archQuestion('graph', 'The layer graph: dependency counts per layer pair, violations red, skipped dashed, groups as subgraphs (dot, svg, mermaid, dsm or json; AR-16)', (ctx, _args, opts) => {
+    let baseline;
+    try {
+      baseline = loadBaseline(ctx.dir, ctx.config, opts.baseline ? resolve(String(opts.baseline)) : undefined);
+    } catch (err) {
+      if (err instanceof ConfigError) throw new IntrospectError(err.message);
+      throw err;
+    }
+    const graph = layerGraph(buildReport(ctx.store, ctx.config, ctx.membership, { baseline, repoPaths: ctx.repoPaths }), ctx.config);
+    const format = (opts.json ? 'json' : String(opts.format)) as GraphFormat;
+    return { json: graph, text: format === 'json' ? '' : renderLayerGraph(format, graph, { graphviz: opts.graphviz !== false }) };
+  }, {
+    formats: GRAPH_FORMATS,
+    defaultFormat: 'dot',
+    configure: (c) => c
+      .option('-o, --output <file>', 'Write the graph to a file instead of stdout')
+      .option('--baseline <file>', "Use this baseline instead of the configuration's (relative to the current directory)")
+      .option('--no-graphviz', 'For svg: always use the built-in renderer, even when Graphviz is installed'),
+  });
 
   // Architecture rules (M5-05; docs/architecture-rules.md, AR-16, AR-17): evaluate
   // .mapx/architecture.jsonc on the index, print the findings, exit with the AR-17 code.

@@ -203,6 +203,7 @@ export function validateDocument(doc: unknown, file: string): ConfigIssue[] {
           else for (const [name, layers] of Object.entries(g)) stringList(layers, at(p, 'groups', name), 'a list of layer names');
         }
         if ('hidden' in value) stringList(value['hidden'], at(p, 'hidden'), 'a list of layer names');
+        if ('pointToGroups' in value && typeof value['pointToGroups'] !== 'boolean') issue(at(p, 'pointToGroups'), 'expected true or false');
         if ('codeclimate' in value) {
           // The CodeClimate severity map (M5-07): finding severity or kind → CodeClimate severity.
           const cc = value['codeclimate'];
@@ -525,7 +526,7 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
   const scope: ArchitectureConfig['scope'] = { types: [...DEFAULT_SCOPE_TYPES], include: [], exclude: [] };
   const policy: ArchitectureConfig['policy'] = { ...DEFAULTS.policy, uncovered: { ...DEFAULTS.policy.uncovered } };
   const visibility: ArchitectureConfig['visibility'] = { ...DEFAULTS.visibility, internalTags: [...DEFAULTS.visibility.internalTags] };
-  const report: ArchitectureConfig['report'] = { groups: {}, hidden: [], codeclimate: {} };
+  const report: ArchitectureConfig['report'] = { groups: {}, hidden: [], pointToGroups: false, codeclimate: {} };
   let baseline: string | null = null;
   const layers: MergedLayer[] = [];
   const rules = new Map<string, { origin: Origin; list: MergedAllowance[] }>();
@@ -563,6 +564,7 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
     if (typeof doc.baseline === 'string' && (view === null || doc === docs[docs.length - 1]!.doc)) baseline = doc.baseline;
     if (isObject(doc.report)) {
       if (isObject(doc.report.groups)) for (const [g, ls] of Object.entries(doc.report.groups)) if (Array.isArray(ls)) report.groups[g] = ls.filter((s) => typeof s === 'string');
+      if (typeof doc.report.pointToGroups === 'boolean') report.pointToGroups = doc.report.pointToGroups;
       if (Array.isArray(doc.report.hidden)) report.hidden = [...new Set([...report.hidden, ...doc.report.hidden.filter((s) => typeof s === 'string')])];
       if (isObject(doc.report.codeclimate)) {
         for (const k of CODECLIMATE_KEYS) {

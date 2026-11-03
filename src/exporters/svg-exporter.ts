@@ -1,7 +1,41 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { Store } from '../core/store.js';
 import { MapxGraph } from '../core/graph.js';
 import { DotExporter } from './dot-exporter.js';
+
+/** How long Graphviz may run: `MAPX_GRAPHVIZ_TIMEOUT_MS`, default 10 s. */
+export function graphvizTimeout(env: NodeJS.ProcessEnv = process.env): number {
+  const ms = Number(env.MAPX_GRAPHVIZ_TIMEOUT_MS);
+  return Number.isFinite(ms) && ms > 0 ? ms : 10_000;
+}
+
+/**
+ * Renders DOT with Graphviz (`dot -Tsvg`); null when Graphviz is not installed, fails, runs past
+ * `graphvizTimeout()` (it is killed), or prints no SVG, so the caller falls back to its own
+ * renderer (shared with the layer graph, M5-13; the timeout and the output check: review of M5-13).
+ */
+export function graphvizSvg(dot: string): string | null {
+  try {
+    const out = execFileSync('dot', ['-Tsvg'], {
+      input: dot,
+      encoding: 'utf-8',
+      maxBuffer: 50 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: graphvizTimeout(),
+      killSignal: 'SIGKILL',
+    });
+    return /<svg[\s>]/.test(out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+/** SVG text and attribute values: the XML specials escaped, characters XML 1.0 cannot carry as U+FFFD. */
+export function escapeXml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F￾￿]/g, '�');
+}
 
 export class SvgExporter {
   private store: Store;
@@ -19,16 +53,7 @@ export class SvgExporter {
     const dotExporter = new DotExporter(this.store, this.graph);
     const dot = dotExporter.export(repo, filesFilter, opts);
 
-    try {
-      return execSync('dot -Tsvg', {
-        input: dot,
-        encoding: 'utf-8',
-        maxBuffer: 50 * 1024 * 1024,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-    } catch {
-      return this.renderFallback(repo, filesFilter, opts);
-    }
+    return graphvizSvg(dot) ?? this.renderFallback(repo, filesFilter, opts);
   }
 
   private renderFallback(repo?: string, filesFilter?: string[], opts?: { cluster?: 'none' | 'auto'; depth?: number; forceFallback?: boolean }): string {

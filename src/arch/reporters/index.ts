@@ -7,6 +7,11 @@ import { renderJson } from './json.js';
 import { renderJunit } from './junit.js';
 import { renderSarif } from './sarif.js';
 import { renderTable } from './table.js';
+import { renderDot } from './dot.js';
+import { renderLayerDsm } from './dsm.js';
+import type { LayerGraph } from './graph.js';
+import { renderMermaid } from './mermaid.js';
+import { renderSvg, type SvgOptions } from './svg.js';
 
 export { FORMATS, type ReportContext, type ReportFormat };
 
@@ -29,4 +34,20 @@ export function renderReport(format: ReportFormat, report: ArchReport, ctx: Repo
 export function defaultFormat(given: string | undefined, env: NodeJS.ProcessEnv = process.env, toStdout = true): string {
   if (given !== undefined) return given;
   return toStdout && env.GITHUB_ACTIONS === 'true' ? 'github' : 'table';
+}
+
+// The layer graph of `mapx arch graph --format` (M5-13; AR-16).
+export const GRAPH_FORMATS = ['dot', 'svg', 'mermaid', 'dsm', 'json'] as const;
+export type GraphFormat = typeof GRAPH_FORMATS[number];
+export { layerGraph, type LayerGraph } from './graph.js';
+export { layerDsm, type LayerDsm } from './dsm.js';
+
+export function renderLayerGraph(format: GraphFormat, graph: LayerGraph, options: SvgOptions = {}): string {
+  switch (format) {
+    case 'dot': return renderDot(graph);
+    case 'svg': return renderSvg(graph, options);
+    case 'mermaid': return renderMermaid(graph);
+    case 'dsm': return renderLayerDsm(graph);
+    case 'json': return `${JSON.stringify(graph, null, 2)}\n`;
+  }
 }

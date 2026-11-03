@@ -179,6 +179,10 @@
             "type": "string"
           }
         },
+        "pointToGroups": {
+          "description": "Layer graphs (mapx arch graph): an edge into a layer named like its group points at the group.",
+          "type": "boolean"
+        },
         "codeclimate": {
           "description": "CodeClimate (GitLab Code Quality) severity per finding: error and warn by the finding's severity, uncovered and skipped by its kind (mapx check --format codeclimate).",
           "type": "object",

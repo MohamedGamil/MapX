@@ -110,7 +110,8 @@ export interface ArchitectureDocument {
   /** Source layer (or `*`, defaults for every layer) → its allowances. */
   rules?: Record<string, Allowance[]>;
   baseline?: string;
-  report?: { groups?: Record<string, string[]>; hidden?: string[]; codeclimate?: CodeClimateSeverityMap };
+  /** Layer graphs (M5-13): `groups` and `hidden` layers, and `pointToGroups`; `codeclimate` (M5-07). */
+  report?: { groups?: Record<string, string[]>; hidden?: string[]; pointToGroups?: boolean; codeclimate?: CodeClimateSeverityMap };
 }
 
 /** CodeClimate (GitLab Code Quality) severities, from least to most severe. */
@@ -131,7 +132,7 @@ export const UNCOVERED_KEYS = ['externals', 'builtins'] as const;
 export const VISIBILITY_KEYS = ['internalTags', 'nativeMarkers'] as const;
 export const LAYER_KEYS = ['name', 'description', 'selectors', 'private', 'overlay', 'group', 'color'] as const;
 export const ALLOWANCE_KEYS = ['allow', 'to', 'types', 'severity'] as const;
-export const REPORT_KEYS = ['groups', 'hidden', 'codeclimate'] as const;
+export const REPORT_KEYS = ['groups', 'hidden', 'pointToGroups', 'codeclimate'] as const;
 
 /** The loaded configuration: every document of the `extends` chain merged, parameters applied, defaults filled. */
 export interface ArchitectureConfig {
@@ -145,7 +146,7 @@ export interface ArchitectureConfig {
   layers: Layer[];
   rules: Record<string, Allowance[]>;
   baseline: string | null;
-  report: { groups: Record<string, string[]>; hidden: string[]; codeclimate: CodeClimateSeverityMap };
+  report: { groups: Record<string, string[]>; hidden: string[]; pointToGroups: boolean; codeclimate: CodeClimateSeverityMap };
 }
 
 export const DEFAULTS = {

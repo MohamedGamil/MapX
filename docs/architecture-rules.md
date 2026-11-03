@@ -13,6 +13,7 @@ What exists so far:
 - **Introspection** (M5-08): `mapx arch layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed`. See [Introspection](#introspection).
 - **CI reports** (M5-07): `--format sarif`, `github` (automatic inside GitHub Actions), `codeclimate` and `junit`. See [CI reports](#ci-reports).
 - **MCP tools** (M5-14, AR-19): `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed`, `mapx_arch_explain` and `mapx_arch_init` wrap `mapx check` and the introspection functions. See [mcp-integration.md](mcp-integration.md#architecture-rules-ar-19).
+- **Layer graphs** (M5-13): `mapx arch graph --format dot|svg|mermaid|dsm|json`. See [Layer graphs](#layer-graphs). CLI only: no MCP tool draws the graph yet.
 
 `@internal` markers come in M5-09 to M5-11.
 
@@ -259,8 +260,8 @@ Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `imp
   - `empty-layer`, for a non-overlay layer that matches nothing;
   - `unsupported-selector`, for a selector this version cannot evaluate yet. It matches nothing.
 - **Errors:** an invalid configuration gives `error` findings, `plus-cycle` for a `+` cycle (naming its first layer) and `config` for the rest. A baseline entry that matches nothing is a `stale-baseline` error.
-- **`layers`:** elements and files per layer.
-- **`layerEdges`:** allowed, violating and skipped dependencies per layer pair.
+- **`layers`:** elements and files per layer, and `uncovered`: the uncovered dependencies whose source is in the layer.
+- **`layerEdges`:** allowed, violating and skipped dependencies per layer pair, and `warnings`: how many of the violations are reported at `warn` (an advisory allowance, or an inferred edge under `policy.inferred: "warn"`). A pair keeps its own severity, so a source in two layers can be advisory on one pair and an error on the other.
 - **`counts`:** per kind.
 - **`selection`** (from `mapx check`): the `view`, `layer` and `rule` the run evaluated and kept, `null` when not given.
 
@@ -304,6 +305,44 @@ A GitHub Actions job, as an example:
   with:
     sarif_file: mapx.sarif
 ```
+
+## Layer graphs
+
+`mapx arch graph` draws the layer graph (Deptrac's `graphviz-*` and `mermaidjs` formatters); its options are in [cli-reference.md](cli-reference.md#mapx-arch-graph). It is built from the report `mapx check` builds, baseline included, so every count and status is `check`'s own decision. `layerGraph(report, config)` in `src/arch/reporters/graph.ts` returns the graph, which `--format json` prints and the dashboard (M5-15) reads.
+
+- **Nodes:** one per layer, in configuration order. A layer's `color` fills its node when it is `#rrggbb`, `#rrggbbaa` or a colour name; other values are ignored. Overlay layers have a dashed border.
+- **Edges:** for each layer pair, the dependencies counted in `layerEdges` (one per element pair and edge type), one edge per status: allowed (grey), violations (red), warn-level violations (amber) and skipped, that is baselined, violations (dashed). The label is the count.
+- **Groups** are subgraphs. A layer's group is the first group of `report.groups` that lists it, else its own `group` key.
+- **Hidden layers** (`report.hidden`) are analysed but not drawn: neither the node nor its edges appear. The totals still count them; they name the number of hidden layers, never their names.
+- **Point to group** (`report.pointToGroups: true`, Deptrac's `pointToGroups`): an edge into the layer named like its group points at the group, which shows a module's public API. An edge from inside the group still reaches the layer. DOT uses `lhead`, Mermaid an edge to the subgraph.
+- **The layer DSM** (`--format dsm`) is a matrix of the visible layers, rows depending on columns, printed like the cluster DSM of `mapx arch --dsm`. A cell is its pair's count, marked by its worst status: `!` violations, `~` warn-level violations only, `s` skipped violations only. Columns widen to the widest cell.
+- **Totals** are `mapx check`'s counts (`counts`, one per finding), with `warnings` the violations at `warn`. They are not sums over the pairs: a dependency on an element in both Domain and Shared counts on both pairs but once in the totals.
+- **Escaping:** DOT node and cluster IDs are synthetic (`n0`, `n1` … and `cluster_0` …, numbered in name order), so no name can mean something to Graphviz as an ID (`%Domain`). Labels are double-quoted with `"` and `\` escaped and `&` written `&amp;`, so Graphviz shows `&lt;`, `\N` or `\G` in a name as written. Mermaid IDs are derived from the names (`layer_Http_Api`, then `_2` … on a clash) and labels use Mermaid entity codes (`#quot;`, `#lt;` …). SVG text is XML-escaped.
+- **Determinism:** nodes and edges follow the configuration's layer order, so the same index and configuration give the same bytes. SVG through Graphviz depends on the Graphviz version; `--no-graphviz` is byte-stable everywhere.
+
+```jsonc
+{
+  "layers": [
+    { "name": "Controller", "group": "Web", "color": "#fde68a", "selectors": [{ "path": "src/controller/**" }] },
+    // …
+  ],
+  "report": {
+    "groups": { "Domain": ["Domain", "Shared"] },  // edges into Domain from outside point at the group
+    "pointToGroups": true,
+    "hidden": ["Infrastructure"]                    // counted, not drawn
+  }
+}
+```
+
+```
+{ version: 1, view,
+  layers: [{ name, overlay, elements, files, group, color, hidden, uncovered }],
+  groups: [{ name, layers, pointTo }],
+  edges: [{ from, to, allowed, violations, warnings, skipped, hidden }],
+  totals: { allowed, violations, warnings, skipped, uncovered, hiddenLayers } }
+```
+
+`uncovered` counts the source layer's dependencies on elements in no layer, which have no edge to draw (the report's `layers[].uncovered`). `pointTo` is the layer whose incoming edges point at the group, or null.
 
 ## Baselines and the ratchet
 

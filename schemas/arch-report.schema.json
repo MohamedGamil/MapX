@@ -28,12 +28,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "elements", "files", "overlay"],
+        "required": ["name", "elements", "files", "overlay", "uncovered"],
         "properties": {
           "name": { "type": "string" },
           "elements": { "type": "integer", "minimum": 0 },
           "files": { "type": "integer", "minimum": 0 },
-          "overlay": { "type": "boolean" }
+          "overlay": { "type": "boolean" },
+          "uncovered": { "description": "Uncovered dependencies (targets in no layer) whose source is in this layer.", "type": "integer", "minimum": 0 }
         }
       }
     },
@@ -43,12 +44,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["from", "to", "allowed", "violations", "skipped"],
+        "required": ["from", "to", "allowed", "violations", "warnings", "skipped"],
         "properties": {
           "from": { "type": "string" },
           "to": { "type": "string" },
           "allowed": { "type": "integer", "minimum": 0 },
           "violations": { "type": "integer", "minimum": 0 },
+          "warnings": { "description": "Of the violations, those reported at warn (an advisory allowance, or an inferred edge under policy.inferred: warn).", "type": "integer", "minimum": 0 },
           "skipped": { "type": "integer", "minimum": 0 }
         }
       }

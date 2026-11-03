@@ -286,6 +286,46 @@ export interface DependencyMatrix {
   dominantTypes: string[][];
 }
 
+export interface DsmTextOptions {
+  /** The heading line(s) printed first. */
+  title: string;
+  /** Row and column key prefix: `C1`, `C2` … for clusters, `L1` … for layers. */
+  prefix: string;
+  /** Legend lines after `* = self` and `. = no dependency`. */
+  legend: string[];
+  keyTitle: string;
+  /** A non-empty off-diagonal cell's text (at most 4 characters); its count by default. */
+  cell?: (row: number, col: number, value: number) => string;
+  /**
+   * Pad the row labels (`L1 Name`) to the widest one. The cluster DSM pads to the widest name
+   * alone, so a long name pushes its row out of line; its output is kept as it was.
+   */
+  alignRows?: boolean;
+}
+
+/**
+ * A DSM as text: the matrix with keyed headers, the legend and the key. `mapx arch --dsm` (cluster
+ * DSM) and `mapx arch graph --format dsm` (layer DSM, M5-13) both print through it.
+ */
+export function formatDsmText(names: string[], matrix: number[][], opts: DsmTextOptions): string {
+  const lines = [opts.title];
+  const maxLength = Math.max(...names.map((n, i) => (opts.alignRows ? `${opts.prefix}${i + 1} ${n}` : n).length), 5);
+  // Every column is as wide as the widest cell or key, at least 4: the matrices people read keep
+  // their layout, and a large count (`1234!`) no longer shifts its row (review of M5-13).
+  const text = matrix.map((row, i) => row.map((val, j) => (i === j ? '*' : val === 0 ? '.' : opts.cell ? opts.cell(i, j, val) : val.toString())));
+  const w = Math.max(4, ...names.map((_, idx) => `${opts.prefix}${idx + 1}`.length), ...text.flat().map((t) => t.length));
+  const headers = [''.padEnd(maxLength), ...names.map((_, idx) => `${opts.prefix}${idx + 1}`.padStart(w))].join(' ');
+  lines.push(headers, '-'.repeat(headers.length));
+  names.forEach((name, i) => {
+    const cells = text[i]!.map((t) => t.padStart(w)).join(' ');
+    lines.push(`${`${opts.prefix}${i + 1} ${name}`.padEnd(maxLength)} ${cells}`);
+  });
+  lines.push(`\nLegend:\n  * = self\n  . = no dependency${opts.legend.map((l) => `\n  ${l}`).join('')}`);
+  lines.push(`\n${opts.keyTitle}`);
+  names.forEach((name, idx) => lines.push(`  ${opts.prefix}${idx + 1}: ${name}`));
+  return lines.join('\n');
+}
+
 export function calculateClusterMetrics(store: Store, repo: string): ClusterMetrics[] {
   // Query all clusters for the repo
   const clusters = store.raw.prepare('SELECT name, source FROM clusters WHERE repo = ?').all(repo) as any[];

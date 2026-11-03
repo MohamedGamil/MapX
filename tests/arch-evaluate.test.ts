@@ -154,8 +154,8 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
     const r = runArchitecture(roots['php']!)!;
     const pair = (from: string, to: string) => r.layerEdges.find((e) => e.from === from && e.to === to);
     // Controller → Application: PlaceOrder and CancelOrder allowed, PricingRules and TaxRules private (import + instantiation each).
-    expect(pair('Controller', 'Application')).toEqual({ from: 'Controller', to: 'Application', allowed: 4, violations: 4, skipped: 0 });
-    expect(pair('Controller', 'Domain')).toEqual({ from: 'Controller', to: 'Domain', allowed: 0, violations: 2, skipped: 0 });
+    expect(pair('Controller', 'Application')).toEqual({ from: 'Controller', to: 'Application', allowed: 4, violations: 4, warnings: 0, skipped: 0 });
+    expect(pair('Controller', 'Domain')).toEqual({ from: 'Controller', to: 'Domain', allowed: 0, violations: 2, warnings: 0, skipped: 0 });
     expect(pair('Domain', 'Shared')).toMatchObject({ allowed: 4, violations: 0 }); // Money → Text, Order → OrderId
     expect(r.layerEdges.map((e) => `${e.from}>${e.to}`)).toEqual(r.layerEdges.map((e) => `${e.from}>${e.to}`).sort());
     expect(pair('Controller', 'Controller')).toBeUndefined();
