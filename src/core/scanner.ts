@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
 import picomatch from 'picomatch';
 import { ParseWorkerPool, availableMemory, createParsePool, parseWorkersSetting, poolSize } from './worker-pool.js';
-import { Store } from './store.js';
+import { Store, type ExternalDecision } from './store.js';
 import { findAssetRoot } from '../parsers/assets.js';
 import { ClusterEngine } from './cluster-engine.js';
 import { MapxGraph } from './graph.js';
@@ -39,7 +39,9 @@ import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigat
 import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, type AliasContext } from './js-aliases.js';
 import { exportSkeleton, hasCommonJsExports, jsExportSignature, scanModule, type JsText } from './js-source.js';
 import { EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
-import { ecosystemOf, jsCandidateSpecifier, jsImports, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalRefRow, type JsImport } from './external-refs.js';
+import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalAttribution, type ExternalRefRow, type JsImport } from './external-refs.js';
+import { NpmAttributor, repoParentDirs, yarnRootDirs } from './manifests/npm.js';
+import { EXTERNAL_INPUTS_KEY, changedInputFiles, contentHash, parseExternalInputs } from './manifests/inputs.js';
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
@@ -2385,7 +2387,11 @@ export class Scanner {
   private decideExternalRefs(): void {
     this.store.deleteOrphanExternalCandidates();
     const rows = this.store.getExternalCandidates();
-    if (!rows.length) return;
+    const recorded = parseExternalInputs(this.store.getMeta(EXTERNAL_INPUTS_KEY));
+    if (!rows.length) {
+      if (recorded && Object.keys(recorded.files).length) this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at: Date.now(), files: {}, yarnRoots: [] }));
+      return;
+    }
     // The index as this run leaves it, as a forced scan sees it; read anew.
     this.workspaceFileMap.clear();
     for (const f of this.store.getAllFiles()) this.workspaceFileMap.set(f.path as string, f.repo as string);
@@ -2395,16 +2401,68 @@ export class Scanner {
     this.npmWorkspaceNames = null;
     this.phpDeclared = null;
     this.externalDecisions.clear();
-    const changed: Array<[number, number]> = [];
+    // Package attribution (M5-20): manifests and lockfiles as they stand, read once per pass, each
+    // file's only within its own repo. When none of those the last pass read changed (their hashes in
+    // meta) and the indexed folders give the yarn locks the same roots, the stored attribution
+    // stands: only rows that have none, or became external, are attributed (review of M5-20).
+    const at = Date.now();
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const repoRoots = new Map(this.config.repos.map((r) => [r.name, relative(workspaceRoot, resolve(workspaceRoot, r.path)).split(sep).join('/')]));
+    const repoRootOf = (path: string) => repoRoots.get(this.workspaceFileMap.get(path) ?? '') ?? '';
+    let manifestDirs: Array<[string, string]> | null = null;
+    const workspace = {
+      readText: (path: string) => { try { return this.readWorkspaceText(path); } catch { return null; } },
+      repoRootOf,
+      manifestDirs: () => (manifestDirs ??= this.npmManifestDirs(repoRootOf)),
+    };
+    const unchanged = !!recorded
+      && !changedInputFiles(workspaceRoot, recorded).length
+      && recorded.yarnRoots.every((y) => yarnRootDirs(workspace.manifestDirs(), y.lock, y.repo).join('\0') === y.dirs.join('\0'));
+    const npm = new NpmAttributor(workspace);
+    const attributions = new Map<string, ExternalAttribution>();
+    const attribute = (ecosystem: string, specifier: string, sourcePath: string): ExternalAttribution => {
+      if (ecosystem !== 'npm') return NO_ATTRIBUTION;
+      const key = `${dirname(sourcePath)}\0${specifier}`;
+      let a = attributions.get(key);
+      if (!a) attributions.set(key, (a = npm.attribute(specifier, sourcePath)));
+      return a;
+    };
+    const flag = (b: boolean | null) => (b === null ? null : b ? 1 : 0);
+    const changed: ExternalDecision[] = [];
     for (const r of rows) {
       let phpCandidates: string[] | undefined;
       if (r.ecosystem === 'composer' && r.metadata && r.metadata !== '{}') {
         try { phpCandidates = JSON.parse(r.metadata).phpCandidates; } catch { /* none */ }
       }
       const external = this.decideExternal(r.ecosystem as Ecosystem, r.specifier, r.file_path, this.workspaceFileMap, phpCandidates);
-      if (external !== (r.external === 1)) changed.push([external ? 1 : 0, r.id]);
+      if (unchanged && external && r.external === 1 && (r.ecosystem !== 'npm' || r.origin !== null)) continue;
+      const a = external ? attribute(r.ecosystem, r.specifier, r.file_path) : NO_ATTRIBUTION;
+      const d: ExternalDecision = { id: r.id, external: external ? 1 : 0, package: a.package, origin: a.origin, direct: flag(a.direct), dev: flag(a.dev), attribution: a.attribution };
+      if (d.external !== r.external || d.package !== r.package || d.origin !== r.origin || d.direct !== r.direct || d.dev !== r.dev || d.attribution !== r.attribution) changed.push(d);
     }
     if (changed.length) this.store.setExternalDecisions(changed);
+    // What this pass read, added to what the last one read when that still stands.
+    const files: Record<string, string | null> = unchanged ? { ...recorded!.files } : {};
+    for (const [path, text] of npm.reads) files[path] = contentHash(text);
+    const yarnRoots = unchanged ? [...recorded!.yarnRoots] : [];
+    for (const y of npm.yarnRoots) if (!yarnRoots.some((o) => o.repo === y.repo && o.lock === y.lock)) yarnRoots.push(y);
+    this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at, files, yarnRoots }));
+  }
+
+  /**
+   * The folders holding a package.json, each with its repo's root: walked from the indexed files up
+   * to their repo's root, never above it (M5-20: a yarn lock's roots).
+   */
+  private npmManifestDirs(repoRootOf: (path: string) => string): Array<[string, string]> {
+    const dirs = new Map<string, string>();
+    for (const path of this.workspaceFileMap.keys()) {
+      const root = repoRootOf(path);
+      for (const dir of repoParentDirs(path, root)) {
+        if (dirs.has(dir)) break;
+        dirs.set(dir, root);
+      }
+    }
+    return [...dirs].filter(([dir]) => { try { return this.readWorkspaceText(dir ? `${dir}/package.json` : 'package.json') !== null; } catch { return false; } });
   }
 
   /** The import resolvers' context over this phase's file set. */

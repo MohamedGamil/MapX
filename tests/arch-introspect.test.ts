@@ -52,7 +52,8 @@ describe('mapx arch layers (AR-13a)', CLI, () => {
       { name: 'Application', overlay: false, elements: 12, files: 4 },
       { name: 'Domain', overlay: false, elements: 15, files: 5 },
       { name: 'Shared', overlay: false, elements: 9, files: 3 },
-      { name: 'Infrastructure', overlay: false, elements: 11, files: 3 }, // HttpGateway.ts came with M5-19
+      // HttpGateway.ts came with M5-19; Tooling.ts (file and its toolingCheck function) with M5-20.
+      { name: 'Infrastructure', overlay: false, elements: 13, files: 4 },
       { name: 'Reporting', overlay: false, elements: 0, files: 0 },
     ] } });
   });

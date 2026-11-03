@@ -12,6 +12,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseScorerArgs } from './args.ts';
 import { runArchitecture } from '../../src/arch/report.ts';
+import { Store } from '../../src/core/store.ts';
 
 /** The finding kinds scored (AR-09). `allowed` and `none` label negatives. */
 export const SCORED_KINDS = ['violation', 'skipped', 'uncovered', 'warning', 'error'] as const;
@@ -146,6 +147,86 @@ export interface ArchScore {
   kinds: Record<ScoredKind, KindScore>;
 }
 
+// ─── External-reference attribution (M5-20 npm; M5-21 … M5-23 add their ecosystems' rows) ────
+
+/** A labelled external reference (expected-externals.json): identity, and its attribution once labelled. */
+export interface ExpectedExternal {
+  app: string; file: string; line: number; sourceSymbol: string | null; specifier: string; symbol: string | null; kind: string; ecosystem: string;
+  package?: string | null; origin?: string | null; direct?: boolean | null; dev?: boolean | null; attribution?: string | null;
+}
+/** An external_refs row as scanned, in the labels' shape. */
+export type ScannedExternal = Omit<ExpectedExternal, 'app'>;
+export interface ExternalScore {
+  expected: number; reported: number; matched: number; recall: number; precision: number | null;
+  /** Expected and matched rows per class: builtin, direct-prod, direct-dev, transitive-prod, transitive-dev, unlisted (in no manifest, dev unknown: no lockfile, or none holds it). */
+  classes: Record<string, { expected: number; matched: number }>;
+  misses: string[];
+  extras: string[];
+}
+
+const externalIdentity = (r: ScannedExternal) => [r.file, r.line, r.sourceSymbol, r.specifier, r.symbol, r.kind].join(' | ');
+const externalAttributed = (app: string, r: ScannedExternal) =>
+  `${app}: ${externalIdentity(r)} → ${r.package} ${r.origin} direct=${r.direct} dev=${r.dev} ${r.attribution}`;
+/** The class of a labelled row, for the per-class breakdown. */
+export function externalClass(r: ScannedExternal): string {
+  if (r.origin !== 'package') return r.origin ?? 'none';
+  if (!r.direct && (r.dev === null || r.dev === undefined)) return 'unlisted';
+  return `${r.direct ? 'direct' : 'transitive'}-${r.dev ? 'dev' : 'prod'}`;
+}
+
+/**
+ * Attribution scores per ecosystem, for the ecosystems whose rows carry attribution labels (`origin`
+ * present). A scanned row counts as reported for its ecosystem whatever its attribution, so an
+ * unlabelled or unattributed row lowers precision; a match needs the identity and every attribution
+ * field equal.
+ */
+export function scoreExternals(labels: ExpectedExternal[], scanned: Map<string, ScannedExternal[]>): Record<string, ExternalScore> {
+  const ecosystems = [...new Set(labels.filter((l) => 'origin' in l).map((l) => l.ecosystem))].sort();
+  const out: Record<string, ExternalScore> = {};
+  for (const eco of ecosystems) {
+    const expected = labels.filter((l) => l.ecosystem === eco && scanned.has(l.app));
+    const reported = [...scanned].flatMap(([app, rows]) => rows.filter((r) => r.ecosystem === eco).map((r) => externalAttributed(app, r)));
+    const pool = new Map<string, number>();
+    for (const r of reported) pool.set(r, (pool.get(r) ?? 0) + 1);
+    const classes: ExternalScore['classes'] = {};
+    const misses: string[] = [];
+    let matched = 0;
+    for (const l of expected) {
+      const c = (classes[externalClass(l)] ??= { expected: 0, matched: 0 });
+      c.expected++;
+      const k = externalAttributed(l.app, l);
+      if (pool.get(k)) { pool.set(k, pool.get(k)! - 1); matched++; c.matched++; } else misses.push(k);
+    }
+    const extras = [...pool].flatMap(([k, n]) => Array(n).fill(k) as string[]);
+    out[eco] = {
+      expected: expected.length, reported: reported.length, matched,
+      recall: expected.length ? matched / expected.length : 1,
+      precision: reported.length ? matched / reported.length : null,
+      classes, misses, extras,
+    };
+  }
+  return out;
+}
+
+export function loadExpectedExternals(fixture: string): ExpectedExternal[] {
+  const path = join(fixture, 'expected-externals.json');
+  return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as { rows: ExpectedExternal[] }).rows : [];
+}
+
+/** The external_refs rows of a scanned copy, in the labels' shape. */
+function readExternals(root: string): ScannedExternal[] {
+  const store = new Store(join(root, '.mapx/mapx.db'));
+  try {
+    const flag = (v: unknown) => (v === null || v === undefined ? null : v === 1);
+    return store.getExternalRefs().map((r: any) => ({
+      file: r.file_path, line: r.line, sourceSymbol: r.source_symbol, specifier: r.specifier, symbol: r.symbol, kind: r.kind, ecosystem: r.ecosystem,
+      package: r.package, origin: r.origin, direct: flag(r.direct), dev: flag(r.dev), attribution: r.attribution,
+    }));
+  } finally {
+    store.close();
+  }
+}
+
 export function combine(apps: AppScore[]): ArchScore {
   const kinds = Object.fromEntries(SCORED_KINDS.map((k) => {
     const expected = apps.reduce((n, a) => n + a.kinds[k].expected, 0);
@@ -171,8 +252,11 @@ function hasCheck(cwd: string): boolean {
   return checkCommand;
 }
 
-/** Scans one fixture app in a temp copy and returns its report, or null when none was written. */
-export function scanApp(fixture: string, app: string, repos: string[] | null): ArchReport | null {
+/**
+ * Scans one fixture app in a temp copy and returns its report, or null when none was written; its
+ * external_refs rows go to `externals` when given (M5-20).
+ */
+export function scanApp(fixture: string, app: string, repos: string[] | null, externals?: Map<string, ScannedExternal[]>): ArchReport | null {
   const root = mkdtempSync(join(tmpdir(), `mapx-arch-${app}-`));
   try {
     cpSync(join(fixture, app), root, { recursive: true });
@@ -182,6 +266,7 @@ export function scanApp(fixture: string, app: string, repos: string[] | null): A
       cli(root, 'workspaces', 'add', repo);
     }
     cli(root, 'scan');
+    externals?.set(app, readExternals(root));
     const reportPath = join(root, '.mapx/architecture-report.json');
     if (hasCheck(root)) {
       try {
@@ -224,8 +309,10 @@ async function main() {
   const expected = loadExpected(fixture);
   const apps = Object.entries(expected.apps).filter(([name]) => !only || name === only);
   if (only && !apps.length) throw new Error(`unknown app ${only}; expected one of ${Object.keys(expected.apps).join(', ')}`);
-  const scores = apps.map(([name, meta]) => scoreApp(name, expected.rows.filter((r) => r.app === name), scanApp(fixture, name, meta.repos)));
+  const scanned = new Map<string, ScannedExternal[]>();
+  const scores = apps.map(([name, meta]) => scoreApp(name, expected.rows.filter((r) => r.app === name), scanApp(fixture, name, meta.repos, scanned)));
   const score = combine(scores);
+  const externals = scoreExternals(loadExpectedExternals(fixture), scanned);
 
   const minRecall = args.thresholds['min-recall'];
   const minPrecision = args.thresholds['min-precision'];
@@ -234,9 +321,13 @@ async function main() {
     if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`${kind} recall ${k.recall.toFixed(3)} < ${minRecall}`);
     if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`${kind} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
   }
+  for (const [eco, k] of Object.entries(externals)) {
+    if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`externals ${eco} recall ${k.recall.toFixed(3)} < ${minRecall}`);
+    if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`externals ${eco} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
+  }
 
   if (args.flags.has('json')) {
-    console.log(JSON.stringify({ ...score, failures }, null, 2));
+    console.log(JSON.stringify({ ...score, externals, failures }, null, 2));
   } else {
     console.log(`Architecture findings (${fixture}): ${scores.filter((s) => s.report).length} of ${scores.length} apps wrote a report`);
     console.log('  kind        expected  reported  matched  recall  precision');
@@ -244,6 +335,12 @@ async function main() {
       console.log(`  ${kind.padEnd(10)}  ${String(k.expected).padStart(8)}  ${String(k.reported).padStart(8)}  ${String(k.matched).padStart(7)}  ${pct(k.recall).padStart(6)}  ${pct(k.precision).padStart(9)}`);
     }
     for (const s of scores) if (s.negativeHits.length) console.log(`  ${s.app}: findings on allowed or same-layer rows ${s.negativeHits.join(', ')}`);
+    for (const [eco, k] of Object.entries(externals)) {
+      const classes = Object.entries(k.classes).map(([c, n]) => `${c} ${n.matched}/${n.expected}`).join(', ');
+      console.log(`  externals ${eco.padEnd(8)}  ${String(k.expected).padStart(4)}  ${String(k.reported).padStart(8)}  ${String(k.matched).padStart(7)}  ${pct(k.recall).padStart(6)}  ${pct(k.precision).padStart(9)}  (${classes})`);
+      for (const m of k.misses) console.log(`    missed ${m}`);
+      for (const x of k.extras) console.log(`    extra  ${x}`);
+    }
     for (const f of failures) console.log(`  FAIL ${f}`);
   }
   process.exitCode = failures.length ? 1 : 0;

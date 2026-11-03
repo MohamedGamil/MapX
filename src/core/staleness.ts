@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { accessSync, constants as fsConstants, existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import type { Store } from './store.js';
+import { EXTERNAL_INPUTS_KEY, changedInputFiles, parseExternalInputs } from './manifests/inputs.js';
 import type { MapxConfig, RepoConfig } from '../types.js';
 import { getBuiltinLanguages, getLanguageForFile } from '../languages/registry.js';
 import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isScannablePath, shebangLanguage } from './file-rules.js';
@@ -197,6 +198,14 @@ export function findStaleFiles(store: Store, dir: string, options: StaleOptions 
     if (options.newFiles !== false) report.added = walkedNewFiles(store, dir, known);
   } catch {
     // An unreadable index is reported elsewhere; never fail a query on staleness.
+  }
+  try {
+    // The manifests and lockfiles the external-reference attribution read: no indexed file, but a
+    // change to one makes the stored attribution stale (review of M5-20).
+    const inputs = parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY));
+    if (inputs) for (const path of changedInputFiles(dir, inputs)) if (!report.changed.includes(path)) report.changed.push(path);
+  } catch {
+    // A store without meta (a test double): nothing recorded.
   }
   return report;
 }

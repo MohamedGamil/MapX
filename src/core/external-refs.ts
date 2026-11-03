@@ -37,6 +37,26 @@ export interface ExternalRefRow {
 }
 
 /**
+ * What an external reference belongs to (M5-20 npm … M5-23 Go), decided with the external flag at
+ * the end of every scan and sync from the manifests and lockfiles as they stand. All null for a row
+ * no ecosystem task attributes yet.
+ */
+export interface ExternalAttribution {
+  /** The package (`pg`, `@scope/pkg`) or built-in module (`node:fs`) the specifier names. */
+  package: string | null;
+  /** `package`, `builtin` (the language's standard library or runtime) or `ambient`. */
+  origin: 'package' | 'builtin' | 'ambient' | null;
+  /** A manifest of the file lists the package (true), or only a lockfile holds it or nothing does (false); null for a built-in. */
+  direct: boolean | null;
+  /** A dev-only dependency; null when unknown (no lockfile tells) and for a built-in. */
+  dev: boolean | null;
+  /** `lock` when a lockfile was read, `manifest` when the manifests alone answered (missing or unreadable lockfile). */
+  attribution: 'lock' | 'manifest' | null;
+}
+
+export const NO_ATTRIBUTION: ExternalAttribution = { package: null, origin: null, direct: null, dev: null, attribution: null };
+
+/**
  * Whether a JS/TS specifier may name a module outside the workspace, by its form alone: not
  * relative or absolute, not a `#` subpath import, a `~`, `@/` or `$` alias (SvelteKit `$lib`, `$app`:
  * no npm package name starts with `$`), and no URL or other scheme than `node:` (a Deno or remote

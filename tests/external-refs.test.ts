@@ -10,7 +10,9 @@ import { Config } from '../src/core/config.js';
 import { MapxGraph } from '../src/core/graph.js';
 import { extractorVersionKey } from '../src/core/extractor-version.js';
 import { jsImports } from '../src/core/external-refs.js';
-import { cleanup, init, mapx, query } from './helpers/e2e';
+import { builtinModules } from 'node:module';
+import { NODE_BUILTINS, NODE_PREFIX_ONLY_BUILTINS, nodeBuiltin, npmPackageName, parsePackageLock, parsePnpmLock, parseYarnLock } from '../src/core/manifests/npm.js';
+import { cleanup, init, mapx, mapxResult, query } from './helpers/e2e';
 
 // M5-19: references to modules, packages, classes and functions outside the workspace are kept apart
 // from edges; whether a candidate is external is decided again at the end of every scan and sync, so
@@ -18,7 +20,8 @@ import { cleanup, init, mapx, query } from './helpers/e2e';
 
 const FIXTURE = resolve(__dirname, 'fixtures/arch-rules');
 
-interface Label { app: string; file: string; line: number; sourceSymbol: string | null; specifier: string; symbol: string | null; kind: string; ecosystem: string }
+interface Attribution { package?: string | null; origin?: string | null; direct?: boolean | null; dev?: boolean | null; attribution?: string | null }
+interface Label extends Attribution { app: string; file: string; line: number; sourceSymbol: string | null; specifier: string; symbol: string | null; kind: string; ecosystem: string }
 const labels = JSON.parse(readFileSync(join(FIXTURE, 'expected-externals.json'), 'utf8')) as { apps: string[]; rows: Label[] };
 const REPOS: Record<string, string[]> = { workspace: ['frontend', 'backend'] };
 
@@ -68,9 +71,13 @@ function scanApp(app: string): Array<Omit<Label, 'app'>> {
     mapx(root, 'scan');
     // Never an edge: every edge stays between indexed files.
     expect(query(root, 'SELECT source_file, target_file FROM edges WHERE target_file NOT IN (SELECT path FROM files)')).toEqual([]);
-    const rows = query<{ file_path: string; line: number; source_symbol: string | null; specifier: string; symbol: string | null; kind: string; ecosystem: string }>(
-      root, 'SELECT file_path, line, source_symbol, specifier, symbol, kind, ecosystem FROM external_refs')
-      .map((r) => ({ file: r.file_path, line: r.line, sourceSymbol: r.source_symbol, specifier: r.specifier, symbol: r.symbol, kind: r.kind, ecosystem: r.ecosystem }));
+    const flag = (n: number | null) => (n === null ? null : n === 1);
+    const rows = query<{ file_path: string; line: number; source_symbol: string | null; specifier: string; symbol: string | null; kind: string; ecosystem: string; package: string | null; origin: string | null; direct: number | null; dev: number | null; attribution: string | null }>(
+      root, 'SELECT file_path, line, source_symbol, specifier, symbol, kind, ecosystem, package, origin, direct, dev, attribution FROM external_refs')
+      .map((r) => ({
+        file: r.file_path, line: r.line, sourceSymbol: r.source_symbol, specifier: r.specifier, symbol: r.symbol, kind: r.kind, ecosystem: r.ecosystem,
+        package: r.package, origin: r.origin, direct: flag(r.direct), dev: flag(r.dev), attribution: r.attribution,
+      }));
     scanned.set(app, rows);
     return rows;
   } finally {
@@ -120,6 +127,13 @@ describe('a scan of the arch-rules fixture', () => {
     expect(scanApp(app).map(key).sort()).toEqual(labels.rows.filter((l) => l.app === app).map(key).sort());
   }, 120000);
 
+  // M5-20: every npm row carries the labelled package, origin, direct, dev and attribution.
+  it.each(labels.apps)('attributes every npm row of %s as labelled: package or built-in, direct or transitive, dev or production', (app) => {
+    const attributed = (r: Omit<Label, 'app'>) => `${key(r)} | ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`;
+    expect(scanApp(app).filter((r) => r.ecosystem === 'npm').map(attributed).sort())
+      .toEqual(labels.rows.filter((l) => l.app === app && l.ecosystem === 'npm').map(attributed).sort());
+  }, 120000);
+
   it.each(labels.apps)('gives a row to every import of %s that names something outside the workspace', (app) => {
     const imports = [...new Set(scanApp(app).filter((r) => r.kind === 'import' || r.kind === 'require').map((r) => `${r.file}:${r.line} ${r.specifier}`))].sort();
     expect(imports).toEqual(importOracle(app));
@@ -162,6 +176,9 @@ const git = (root: string, ...args: string[]) =>
 
 const dumpRefs = (store: Store) => store.getExternalRefs()
   .map((r) => `${r.file_path}:${r.line} ${r.source_symbol} ${r.specifier} ${r.symbol} ${r.kind} ${r.ecosystem}`).sort();
+/** With the attribution (M5-20): package, origin, direct, dev, attribution. */
+const dumpAll = (store: Store) => store.getExternalRefs()
+  .map((r) => `${r.file_path}:${r.line} ${r.source_symbol} ${r.specifier} ${r.symbol} ${r.kind} ${r.ecosystem} | ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`).sort();
 const dumpEdges = (store: Store) => store.getAllEdges()
   .map((e) => `${e.source_file} ${e.source_symbol} ${e.target_file} ${e.target_symbol} ${e.edge_type}`).sort();
 
@@ -246,7 +263,7 @@ describe.each([
     edit();
     await p.sync(store, full);
     const fresh = await p.forced();
-    expect(dumpRefs(store)).toEqual(dumpRefs(fresh));
+    expect(dumpAll(store)).toEqual(dumpAll(fresh));
     expect(dumpRefs(store)).toEqual(expect.arrayContaining([
       'src/db.ts:2 null lodash default import npm',
       'src/renamed.ts:1 null zod z import npm',
@@ -271,7 +288,7 @@ describe.each([
     });
     expect((await interrupted.scanIncremental()).interrupted).toBe(true);
     await p.sync(store, full);
-    expect(dumpRefs(store)).toEqual(dumpRefs(await p.forced()));
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
   }, 120000);
 
   it('fills external_refs of an index an older extractor built, without --force', async () => {
@@ -281,7 +298,7 @@ describe.each([
     store.raw.exec('DELETE FROM external_ref_candidates');
     store.setMeta(extractorVersionKey(store.getRepoNames()[0]!), '8');
     await p.sync(store, full);
-    expect(dumpRefs(store)).toEqual(dumpRefs(await p.forced()));
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
     expect(dumpRefs(store).length).toBeGreaterThan(0);
   }, 120000);
 
@@ -295,7 +312,7 @@ describe.each([
     store.raw.prepare('DELETE FROM files WHERE path = ?').run('src/gone.ts');
     expect(dumpRefs(store)).toContain('src/gone.ts:1 null node:fs * import npm');
     await p.sync(store, full);
-    expect(dumpRefs(store)).toEqual(dumpRefs(await p.forced()));
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
   }, 120000);
 });
 
@@ -392,8 +409,9 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a
       git(p.root, 'commit', '-qm', 'change');
     }
     await p.sync(store);
-    const forced = dumpRefs(await p.forced());
-    expect(dumpRefs(store)).toEqual(forced);
+    const fresh = await p.forced();
+    const forced = dumpRefs(fresh);
+    expect(dumpAll(store)).toEqual(dumpAll(fresh));
     if (gone) expect(forced).not.toContain(gone);
     if (appears ?? stays) expect(forced).toContain(appears ?? stays);
   }, 120000);
@@ -446,5 +464,592 @@ describe('a scan decides', () => {
       'routes/web.php:5 null Illuminate\\Support\\Facades\\DB DB call composer',
       'src/deno.ts:2 null node:fs * import npm',
     ]);
+  }, 120000);
+});
+
+// ─── M5-20: npm package attribution and Node built-ins ──────────────────────────────────────
+
+describe('Node built-ins and npm package names', () => {
+  it('lists every built-in of the running Node, with and without the node: prefix', () => {
+    for (const m of builtinModules) {
+      if (m.startsWith('node:')) expect(NODE_PREFIX_ONLY_BUILTINS.has(m.slice(5)), m).toBe(true);
+      else expect(NODE_BUILTINS.has(m), m).toBe(true);
+    }
+  });
+
+  it('names the built-in module, node: or not, subpaths included; never a node:-only name without the prefix', () => {
+    expect(['fs', 'node:fs', 'fs/promises', 'node:fs/promises', 'path/posix', 'node:test', 'node:test/reporters', 'node:sqlite', 'events', 'punycode']
+      .map(nodeBuiltin)).toEqual(['node:fs', 'node:fs', 'node:fs', 'node:fs', 'node:path', 'node:test', 'node:test', 'node:sqlite', 'node:events', 'node:punycode']);
+    expect(['test', 'sqlite', 'sea', 'fs/whatever', 'punycode/', 'lodash', '@types/node'].map(nodeBuiltin)).toEqual([null, null, null, null, null, null, null]);
+  });
+
+  it('attributes scoped and deep imports to their package', () => {
+    expect(['@scope/pkg/sub/path', '@scope/pkg', 'lodash/get', 'lodash', 'pg'].map(npmPackageName)).toEqual(['@scope/pkg', '@scope/pkg', 'lodash', 'lodash', 'pg']);
+  });
+});
+
+describe('npm lockfiles', () => {
+  const sorted = (m: Map<string, boolean | null>) => [...m].sort(([a], [b]) => a.localeCompare(b));
+
+  it('package-lock v3: dev flags, nested copies (production wins), no workspace folders or links', () => {
+    const lock = parsePackageLock(JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        '': { name: 'root' },
+        'apps/web': { name: 'web' },
+        'node_modules/web': { resolved: 'apps/web', link: true },
+        'node_modules/a': { version: '1.0.0' },
+        'node_modules/b': { version: '1.0.0', dev: true },
+        'node_modules/b/node_modules/a': { version: '2.0.0', dev: true },
+        'node_modules/@s/c': { version: '1.0.0', dev: true },
+        'node_modules/@s/c/node_modules/d': { version: '1.0.0', dev: true },
+        'node_modules/x/node_modules/d': { version: '2.0.0' },
+        'node_modules/o': { version: '1.0.0', devOptional: true },
+      },
+    }));
+    expect(sorted(lock.dev)).toEqual([['@s/c', true], ['a', false], ['b', true], ['d', false], ['o', false]]);
+  });
+
+  it('package-lock v1: the dependencies tree', () => {
+    const lock = parsePackageLock(JSON.stringify({
+      lockfileVersion: 1,
+      dependencies: { a: { version: '1', requires: { b: '1' } }, b: { version: '1' }, t: { version: '1', dev: true, dependencies: { u: { version: '1', dev: true } } } },
+    }));
+    expect(sorted(lock.dev)).toEqual([['a', false], ['b', false], ['t', true], ['u', true]]);
+  });
+
+  it('pnpm v9: importers are the roots, snapshots the edges', () => {
+    const lock = parsePnpmLock([
+      "lockfileVersion: '9.0'",
+      'importers:',
+      '  .:',
+      '    dependencies:',
+      '      express:',
+      '        specifier: ^4.0.0',
+      '        version: 4.19.2',
+      '    devDependencies:',
+      "      '@acme/lint':",
+      '        specifier: ^1.0.0',
+      '        version: 1.0.0',
+      '  packages/app:',
+      '    devDependencies:',
+      '      express:',
+      '        specifier: ^4.0.0',
+      '        version: 4.19.2',
+      'packages:',
+      '  express@4.19.2:',
+      '    resolution: {integrity: sha512-x}',
+      "  '@acme/lint@1.0.0':",
+      '    resolution: {integrity: sha512-y}',
+      '  debug@2.6.9:',
+      '    resolution: {integrity: sha512-z}',
+      '  semver@7.6.3:',
+      '    resolution: {integrity: sha512-w}',
+      '  orphan@1.0.0:',
+      '    resolution: {integrity: sha512-v}',
+      'snapshots:',
+      '  express@4.19.2:',
+      '    dependencies:',
+      '      debug: 2.6.9',
+      "  '@acme/lint@1.0.0(express@4.19.2)':",
+      '    dependencies:',
+      '      semver: 7.6.3',
+      '      debug: 2.6.9',
+      '  debug@2.6.9: {}',
+      '  semver@7.6.3: {}',
+    ].join('\n'));
+    expect(sorted(lock.dev)).toEqual([['@acme/lint', true], ['debug', false], ['express', false], ['orphan', null], ['semver', true]]);
+  });
+
+  it('pnpm v6 and v5: top-level sections of a single project, `/name@v` and `/name/v` keys', () => {
+    const v6 = parsePnpmLock([
+      "lockfileVersion: '6.0'",
+      'dependencies:',
+      '  pg:',
+      '    specifier: ^8.0.0',
+      '    version: 8.11.3',
+      'devDependencies:',
+      '  vitest:',
+      '    specifier: ^1.0.0',
+      '    version: 1.0.0(@types/node@20.0.0)',
+      'packages:',
+      '  /pg@8.11.3:',
+      '    dependencies:',
+      '      pg-pool: 3.6.0(pg@8.11.3)',
+      '    dev: false',
+      '  /pg-pool@3.6.0(pg@8.11.3):',
+      '    dev: false',
+      '  /vitest@1.0.0(@types/node@20.0.0):',
+      '    dependencies:',
+      "      '@vitest/runner': 1.0.0",
+      '    dev: true',
+      '  /@vitest/runner@1.0.0:',
+      '    dev: true',
+    ].join('\n'));
+    expect(sorted(v6.dev)).toEqual([['@vitest/runner', true], ['pg', false], ['pg-pool', false], ['vitest', true]]);
+    const v5 = parsePnpmLock([
+      'lockfileVersion: 5.4',
+      'specifiers:',
+      '  pg: ^8.0.0',
+      'dependencies:',
+      '  pg: 8.11.3',
+      'devDependencies:',
+      '  jest: 29.0.0',
+      'packages:',
+      '  /pg/8.11.3:',
+      '    dependencies:',
+      '      pg-pool: 3.6.0_pg@8.11.3',
+      '  /pg-pool/3.6.0_pg@8.11.3:',
+      '    dev: false',
+      '  /jest/29.0.0:',
+      '    dependencies:',
+      '      \'@jest/core\': 29.0.0',
+      '  /@jest/core/29.0.0:',
+      '    dev: true',
+    ].join('\n'));
+    expect(sorted(v5.dev)).toEqual([['@jest/core', true], ['jest', true], ['pg', false], ['pg-pool', false]]);
+  });
+
+  it('yarn v1 and Berry: the graph rooted at the manifests; workspace entries are no packages', () => {
+    const roots = [{ prod: new Set(['express']), dev: new Set(['eslint']) }];
+    const v1 = parseYarnLock([
+      '# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.',
+      '# yarn lockfile v1',
+      '',
+      'express@^4.0.0, express@^4.19.0:',
+      '  version "4.19.2"',
+      '  dependencies:',
+      '    debug "2.6.9"',
+      '',
+      '"@acme/x@^1.0.0":',
+      '  version "1.0.0"',
+      '',
+      'debug@2.6.9:',
+      '  version "2.6.9"',
+      '',
+      'eslint@^8.0.0:',
+      '  version "8.57.0"',
+      '  dependencies:',
+      '    "@acme/x" "^1.0.0"',
+      '    semver "^7.6.0"',
+      '',
+      'semver@^7.6.0:',
+      '  version "7.6.3"',
+    ].join('\n'), roots);
+    expect(sorted(v1.dev)).toEqual([['@acme/x', true], ['debug', false], ['eslint', true], ['express', false], ['semver', true]]);
+    const berry = parseYarnLock([
+      '__metadata:',
+      '  version: 8',
+      '',
+      '"express@npm:^4.0.0":',
+      '  version: 4.19.2',
+      '  dependencies:',
+      '    debug: "npm:2.6.9"',
+      '',
+      '"debug@npm:2.6.9":',
+      '  version: 2.6.9',
+      '',
+      '"eslint@npm:^8.0.0":',
+      '  version: 8.57.0',
+      '  dependencies:',
+      '    "@acme/x": "npm:^1.0.0"',
+      '',
+      '"@acme/x@npm:^1.0.0":',
+      '  version: 1.0.0',
+      '',
+      '"root@workspace:.":',
+      '  version: 0.0.0-use.local',
+      '  dependencies:',
+      '    express: "npm:^4.0.0"',
+    ].join('\n'), roots);
+    expect(sorted(berry.dev)).toEqual([['@acme/x', true], ['debug', false], ['eslint', true], ['express', false]]);
+  });
+
+  // Review of M5-20: an `npm:` alias stands for its real package in the roots and the edges.
+  it('pnpm: an npm: alias is its real package, in an importer (v9, v5) and as a dependency', () => {
+    const v9 = parsePnpmLock([
+      "lockfileVersion: '9.0'",
+      'importers:',
+      '  .:',
+      '    dependencies:',
+      '      alias:',
+      '        specifier: npm:real@^1',
+      '        version: real@1.0.0',
+      '    devDependencies:',
+      '      tool:',
+      '        specifier: ^1.0.0',
+      '        version: 1.0.0',
+      'packages:',
+      '  real@1.0.0:',
+      '    resolution: {integrity: a}',
+      '  realdep@1.0.0:',
+      '    resolution: {integrity: b}',
+      '  tool@1.0.0:',
+      '    resolution: {integrity: c}',
+      '  inner@2.0.0:',
+      '    resolution: {integrity: d}',
+      'snapshots:',
+      '  real@1.0.0:',
+      '    dependencies:',
+      '      realdep: 1.0.0',
+      '  realdep@1.0.0: {}',
+      '  tool@1.0.0:',
+      '    dependencies:',
+      '      dalias: inner@2.0.0',
+      '  inner@2.0.0: {}',
+    ].join('\n'));
+    expect(sorted(v9.dev)).toEqual([['inner', true], ['real', false], ['realdep', false], ['tool', true]]);
+    const v5 = parsePnpmLock(['lockfileVersion: 5.4', 'dependencies:', '  alias: /real/1.0.0', 'packages:', '  /real/1.0.0:', '    dev: false'].join('\n'));
+    expect(sorted(v5.dev)).toEqual([['real', false]]);
+  });
+
+  it('throws on text that is no lockfile (read as unreadable)', () => {
+    expect(() => parsePackageLock('{not json')).toThrow();
+    expect(() => parsePackageLock('[]')).toThrow();
+    expect(() => parsePnpmLock('{{{ garbage')).toThrow();
+    expect(() => parseYarnLock('garbage', [])).toThrow();
+  });
+});
+
+/** The attribution of each npm row: `file:line specifier symbol kind → package origin direct dev attribution`. */
+const npmAttribution = (store: Store) => store.getExternalRefs().filter((r) => r.ecosystem === 'npm')
+  .map((r) => `${r.file_path}:${r.line} ${r.specifier} ${r.symbol} ${r.kind} → ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`).sort();
+
+// The importing file and its manifests: `pg` a dependency, `vitest` a dev dependency, `debug` reached
+// through express (production), `semver` through vitest (dev), `left-pad` nowhere.
+const NPM_SOURCE = [
+  "import { Pool } from 'pg';",
+  "import { describe } from 'vitest';",
+  "import debug from 'debug';",
+  "import { satisfies } from 'semver';",
+  "import pad from 'left-pad';",
+  "import { readFile } from 'node:fs/promises';",
+  'export const run = () => 1;',
+  '',
+].join('\n');
+const NPM_MANIFEST = JSON.stringify({ name: 'app', dependencies: { pg: '^8.0.0', express: '^4.0.0' }, devDependencies: { vitest: '^1.0.0' } });
+const PACKAGE_LOCK = JSON.stringify({
+  name: 'app', lockfileVersion: 3,
+  packages: {
+    '': { name: 'app' },
+    'node_modules/pg': { version: '8.11.3' },
+    'node_modules/express': { version: '4.19.2' },
+    'node_modules/debug': { version: '2.6.9' },
+    'node_modules/vitest': { version: '1.0.0', dev: true },
+    'node_modules/semver': { version: '7.6.3', dev: true },
+  },
+});
+/** The rows of NPM_SOURCE at `file`, attributed with or without a lockfile. */
+const attributed = (file: string, by: 'lock' | 'manifest') => [
+  `${file}:1 pg Pool import → pg package 1 0 ${by}`,
+  `${file}:2 vitest describe import → vitest package 1 1 ${by}`,
+  `${file}:3 debug default import → debug package 0 ${by === 'lock' ? 0 : null} ${by}`,
+  `${file}:4 semver satisfies import → semver package 0 ${by === 'lock' ? 1 : null} ${by}`,
+  `${file}:5 left-pad default import → left-pad package 0 null ${by}`,
+  `${file}:6 node:fs/promises readFile import → node:fs builtin null null null`,
+];
+
+describe('npm attribution of a scan', () => {
+  const p = project(false);
+  afterEach(() => p.remove());
+  const scan = async (files: Record<string, string>) => {
+    p.create(files);
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    return npmAttribution(store);
+  };
+
+  it('a package-lock: direct, transitive, dev-only, unlisted and built-in', async () => {
+    expect(await scan({ 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE })).toEqual(attributed('src/a.ts', 'lock'));
+  }, 120000);
+
+  it('a pnpm monorepo: the package manifest, the root manifest and the root lockfile', async () => {
+    const refs = await scan({
+      'package.json': JSON.stringify({ name: 'root', private: true, devDependencies: { vitest: '^1.0.0' } }),
+      'pnpm-workspace.yaml': "packages:\n  - 'packages/*'\n",
+      'pnpm-lock.yaml': [
+        "lockfileVersion: '9.0'",
+        'importers:',
+        '  .:',
+        '    devDependencies:',
+        '      vitest:',
+        '        specifier: ^1.0.0',
+        '        version: 1.0.0',
+        '  packages/app:',
+        '    dependencies:',
+        '      pg:',
+        '        specifier: ^8.0.0',
+        '        version: 8.11.3',
+        '      express:',
+        '        specifier: ^4.0.0',
+        '        version: 4.19.2',
+        'packages:',
+        '  pg@8.11.3:',
+        '    resolution: {integrity: a}',
+        '  express@4.19.2:',
+        '    resolution: {integrity: b}',
+        '  debug@2.6.9:',
+        '    resolution: {integrity: c}',
+        '  vitest@1.0.0:',
+        '    resolution: {integrity: d}',
+        '  semver@7.6.3:',
+        '    resolution: {integrity: e}',
+        'snapshots:',
+        '  pg@8.11.3: {}',
+        '  express@4.19.2:',
+        '    dependencies:',
+        '      debug: 2.6.9',
+        '  debug@2.6.9: {}',
+        '  vitest@1.0.0:',
+        '    dependencies:',
+        '      semver: 7.6.3',
+        '  semver@7.6.3: {}',
+      ].join('\n'),
+      'packages/app/package.json': JSON.stringify({ name: 'app', dependencies: { pg: '^8.0.0', express: '^4.0.0' } }),
+      'packages/app/src/a.ts': NPM_SOURCE,
+    });
+    expect(refs).toEqual(attributed('packages/app/src/a.ts', 'lock'));
+  }, 120000);
+
+  it('a yarn lock: transitive dev-ness from the workspace manifests', async () => {
+    const lock = [
+      '# yarn lockfile v1',
+      '',
+      'pg@^8.0.0:',
+      '  version "8.11.3"',
+      'express@^4.0.0:',
+      '  version "4.19.2"',
+      '  dependencies:',
+      '    debug "2.6.9"',
+      'debug@2.6.9:',
+      '  version "2.6.9"',
+      'vitest@^1.0.0:',
+      '  version "1.0.0"',
+      '  dependencies:',
+      '    semver "^7.6.0"',
+      'semver@^7.6.0:',
+      '  version "7.6.3"',
+    ].join('\n');
+    expect(await scan({ 'package.json': NPM_MANIFEST, 'yarn.lock': lock, 'src/a.ts': NPM_SOURCE })).toEqual(attributed('src/a.ts', 'lock'));
+  }, 120000);
+
+  it('no lockfile: direct from the manifest only, flagged manifest', async () => {
+    expect(await scan({ 'package.json': NPM_MANIFEST, 'src/a.ts': NPM_SOURCE })).toEqual(attributed('src/a.ts', 'manifest'));
+  }, 120000);
+
+  it.each([
+    ['a corrupt package-lock.json', { 'package-lock.json': '{"lockfileVersion": 3, "packages": {' }],
+    ['a corrupt pnpm-lock.yaml', { 'pnpm-lock.yaml': '\u0000\u0001 not yaml {{{' }],
+    ['a package-lock.json that is a folder', { 'package-lock.json/x.txt': 'x' }],
+  ])('%s: direct from the manifest only, flagged manifest, no crash', async (_name, extra) => {
+    expect(await scan({ 'package.json': NPM_MANIFEST, 'src/a.ts': NPM_SOURCE, ...extra })).toEqual(attributed('src/a.ts', 'manifest'));
+  }, 120000);
+
+  // Review of M5-20: with a lockfile, so the result shows the corrupt manifest is skipped and the
+  // higher manifest and the lockfile still answer.
+  it('a corrupt package.json nearer the file: skipped; the higher manifest and the lockfile answer', async () => {
+    expect(await scan({ 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/package.json': '{ broken', 'src/a.ts': NPM_SOURCE }))
+      .toEqual(attributed('src/a.ts', 'lock'));
+  }, 120000);
+
+  // Review of M5-20 (owner's decision): a bare built-in name the nearest manifest lists is that npm
+  // package (a polyfill); a `node:` specifier is always the built-in.
+  it('a polyfill the nearest manifest lists is the npm package; node: and unlisted names are built-ins', async () => {
+    expect(await scan({
+      'package.json': JSON.stringify({ name: 'app', dependencies: { buffer: '^6.0.0', events: '^3.0.0' }, devDependencies: { util: '^0.12.0' } }),
+      'src/a.ts': "import 'buffer';\nimport 'node:buffer';\nimport 'events';\nimport 'util';\nimport 'fs';\nimport 'node:events';\n",
+      'lib/package.json': JSON.stringify({ name: 'lib' }),
+      'lib/b.ts': "import 'buffer';\n",
+    })).toEqual([
+      'lib/b.ts:1 buffer null import → node:buffer builtin null null null',
+      'src/a.ts:1 buffer null import → buffer package 1 0 manifest',
+      'src/a.ts:2 node:buffer null import → node:buffer builtin null null null',
+      'src/a.ts:3 events null import → events package 1 0 manifest',
+      'src/a.ts:4 util null import → util package 1 1 manifest',
+      'src/a.ts:5 fs null import → node:fs builtin null null null',
+      'src/a.ts:6 node:events null import → node:events builtin null null null',
+    ]);
+  }, 120000);
+
+  it('attributes nothing for a row the workspace satisfies, and only npm rows', async () => {
+    const refs = await scan({
+      'package.json': NPM_MANIFEST,
+      'package-lock.json': PACKAGE_LOCK,
+      'src/a.ts': "import { Pool } from 'pg';\nexport const p = () => new Pool();\n",
+      'main.py': 'import os\n',
+    });
+    expect(refs).toEqual([
+      'src/a.ts:1 pg Pool import → pg package 1 0 lock',
+      'src/a.ts:2 pg Pool instantiation → pg package 1 0 lock',
+    ]);
+  }, 120000);
+});
+
+// Sync = scan --force when what attributes changes: manifests and lockfiles are read again by every run.
+const ATTRIBUTION_CHANGES: Array<{ name: string; change: Record<string, string | null>; expect: string }> = [
+  {
+    name: 'a dependency moves to devDependencies',
+    change: { 'package.json': JSON.stringify({ name: 'app', dependencies: { express: '^4.0.0' }, devDependencies: { vitest: '^1.0.0', pg: '^8.0.0' } }) },
+    expect: 'src/a.ts:1 pg Pool import → pg package 1 1 lock',
+  },
+  {
+    name: 'the lockfile is deleted',
+    change: { 'package-lock.json': null },
+    expect: 'src/a.ts:3 debug default import → debug package 0 null manifest',
+  },
+  {
+    name: 'the lockfile is edited: a transitive package becomes dev-only',
+    change: { 'package-lock.json': PACKAGE_LOCK.replace('"node_modules/debug":{"version":"2.6.9"}', '"node_modules/debug":{"version":"2.6.9","dev":true}') },
+    expect: 'src/a.ts:3 debug default import → debug package 0 1 lock',
+  },
+  {
+    name: 'the lockfile is corrupted',
+    change: { 'package-lock.json': '{ corrupt' },
+    expect: 'src/a.ts:4 semver satisfies import → semver package 0 null manifest',
+  },
+  {
+    name: 'a nearer package.json lists a transitive package',
+    change: { 'src/package.json': JSON.stringify({ name: 'inner', devDependencies: { debug: '^2.0.0' } }) },
+    expect: 'src/a.ts:3 debug default import → debug package 1 1 lock',
+  },
+];
+
+describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a manifest or lockfile changes', (_name, withGit) => {
+  const p = project(withGit);
+  afterEach(() => p.remove());
+
+  it.each(ATTRIBUTION_CHANGES)('$name: equal to scan --force', async ({ change, expect: expected }) => {
+    p.create({ 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    expect(npmAttribution(store)).toEqual(attributed('src/a.ts', 'lock'));
+    write(p.root, change);
+    if (withGit) {
+      git(p.root, 'add', '-A');
+      git(p.root, 'commit', '-qm', 'change');
+    }
+    await p.sync(store);
+    const forced = await p.forced();
+    expect(dumpAll(store)).toEqual(dumpAll(forced));
+    expect(npmAttribution(forced)).toContain(expected);
+  }, 120000);
+
+  it('fills the attribution of an index M5-19 built (null columns), without --force', async () => {
+    p.create({ 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    store.raw.exec('UPDATE external_ref_candidates SET package = NULL, origin = NULL, direct = NULL, dev = NULL, attribution = NULL');
+    await p.sync(store);
+    expect(npmAttribution(store)).toEqual(attributed('src/a.ts', 'lock'));
+  }, 120000);
+});
+
+// ─── Review of M5-20 ────────────────────────────────────────────────────────────────────────
+
+/** The npm import rows of a CLI-scanned index, with their attribution. */
+const cliAttribution = (root: string) => query<{ file_path: string; specifier: string; package: string; origin: string; direct: number | null; dev: number | null; attribution: string | null }>(
+  root, "SELECT file_path, specifier, package, origin, direct, dev, attribution FROM external_refs WHERE ecosystem = 'npm' AND kind = 'import'")
+  .map((r) => `${r.file_path} ${r.specifier} → ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`).sort();
+
+describe('npm attribution of a sibling repo (review of M5-20, P1)', () => {
+  it('reads only its own repo\'s manifests and lockfile: never the primary repo\'s or a parent folder\'s', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'mapx-extrefs-repos-'));
+    try {
+      write(parent, {
+        // The folder above both repos lists `fromparent`; the primary repo W lists `pg` as dev and
+        // locks `pg` and `fromparent`; the sibling R lists `express`, has no lockfile, and imports all three.
+        'package.json': JSON.stringify({ name: 'parent', dependencies: { fromparent: '^1.0.0' } }),
+        'W/package.json': JSON.stringify({ name: 'w', devDependencies: { pg: '^8.0.0' } }),
+        'W/package-lock.json': JSON.stringify({ lockfileVersion: 3, packages: {
+          '': { name: 'w' }, 'node_modules/pg': { version: '8.11.3', dev: true }, 'node_modules/fromparent': { version: '1.0.0' },
+        } }),
+        'W/src/w.ts': "import { Pool } from 'pg';\nexport const w = () => new Pool();\n",
+        'R/package.json': JSON.stringify({ name: 'r', dependencies: { express: '^4.0.0' } }),
+        'R/src/x.ts': "import { Pool } from 'pg';\nimport express from 'express';\nimport fromparent from 'fromparent';\nexport const x = () => [Pool, express, fromparent];\n",
+      });
+      const w = join(parent, 'W');
+      execFileSync('git', ['init', '-q', w]);
+      execFileSync('git', ['init', '-q', join(parent, 'R')]);
+      init(w);
+      mapx(w, 'workspaces', 'add', '../R');
+      mapx(w, 'scan');
+      expect(cliAttribution(w)).toEqual([
+        '../R/src/x.ts express → express package 1 0 manifest',
+        '../R/src/x.ts fromparent → fromparent package 0 null manifest',
+        '../R/src/x.ts pg → pg package 0 null manifest',
+        'src/w.ts pg → pg package 1 1 lock',
+      ]);
+    } finally {
+      cleanup(parent);
+    }
+  }, 180000);
+});
+
+describe('a manifest or lockfile change makes the index stale (review of M5-20, P2)', () => {
+  it('mapx status reports it, check refuses it, check --sync re-attributes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mapx-extrefs-stale-'));
+    try {
+      write(root, { 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE });
+      init(root);
+      write(root, { '.mapx/architecture.jsonc': JSON.stringify({ layers: [{ name: 'App', selectors: [{ path: 'src/**' }] }], rules: { App: [] } }) });
+      mapx(root, 'scan');
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+      expect(cliAttribution(root)).toContain('src/a.ts debug → debug package 0 0 lock');
+      // Only the lockfile changes: debug becomes dev-only.
+      write(root, { 'package-lock.json': PACKAGE_LOCK.replace('"node_modules/debug":{"version":"2.6.9"}', '"node_modules/debug":{"version":"2.6.9","dev":true}') });
+      const status = mapx(root, 'status');
+      expect(status).toContain('Index is stale');
+      expect(status).toContain('package-lock.json');
+      const refused = mapxResult(root, 'check');
+      expect(refused.status).toBe(4);
+      expect(refused.stderr).toContain('package-lock.json');
+      expect(mapxResult(root, 'check', '--sync').status).toBe(0);
+      expect(cliAttribution(root)).toContain('src/a.ts debug → debug package 0 1 lock');
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+      // A manifest that appears nearer the file counts too.
+      write(root, { 'src/package.json': JSON.stringify({ name: 'inner', dependencies: { debug: '^2.0.0' } }) });
+      expect(mapx(root, 'status')).toContain('src/package.json');
+      mapx(root, 'sync');
+      expect(cliAttribution(root)).toContain('src/a.ts debug → debug package 1 0 lock');
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+    } finally {
+      cleanup(root);
+    }
+  }, 180000);
+});
+
+describe('a sync that changes nothing attribution reads (review of M5-20, P2)', () => {
+  const p = project(false);
+  afterEach(() => p.remove());
+
+  it('keeps the stored attribution without reading a lockfile; attributes only new rows', async () => {
+    p.create({ 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    // A marker in the stored attribution survives a sync that changes no manifest or lockfile.
+    store.raw.exec("UPDATE external_ref_candidates SET attribution = 'kept' WHERE specifier = 'debug'");
+    write(p.root, { 'src/b.ts': "import { Pool } from 'pg';\nexport const b = () => new Pool();\n" });
+    await p.sync(store);
+    const rows = npmAttribution(store);
+    expect(rows).toContain('src/a.ts:3 debug default import → debug package 0 0 kept');
+    expect(rows).toContain('src/b.ts:1 pg Pool import → pg package 1 0 lock');
+    // A changed input (here only whitespace: its content hash differs) re-attributes all.
+    write(p.root, { 'package.json': `${NPM_MANIFEST}\n` });
+    await p.sync(store);
+    expect(npmAttribution(store)).toEqual(npmAttribution(await p.forced()));
+    expect(npmAttribution(store)).toContain('src/a.ts:3 debug default import → debug package 0 0 lock');
+  }, 120000);
+
+  it('re-attributes when a newly indexed folder adds a yarn lock\'s root, though no file it read changed', async () => {
+    const lock = ['# yarn lockfile v1', '', 'pg@^8.0.0:', '  version "8.11.3"', 'vitest@^1.0.0:', '  version "1.0.0"', '  dependencies:', '    semver "^7.6.0"', 'semver@^7.6.0:', '  version "7.6.3"'].join('\n');
+    p.create({ 'package.json': JSON.stringify({ name: 'app', dependencies: { pg: '^8.0.0' } }), 'yarn.lock': lock, 'src/a.ts': "import { satisfies } from 'semver';\nexport const s = () => satisfies('1.0.0', '^1');\n" });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    expect(npmAttribution(store)).toContain('src/a.ts:1 semver satisfies import → semver package 0 null lock');
+    // packages/tool's manifest becomes a root once one of its files is indexed: semver is then dev-only.
+    write(p.root, { 'packages/tool/package.json': JSON.stringify({ name: 'tool', devDependencies: { vitest: '^1.0.0' } }), 'packages/tool/index.ts': 'export const t = 1;\n' });
+    await p.sync(store);
+    expect(npmAttribution(store)).toEqual(npmAttribution(await p.forced()));
+    expect(npmAttribution(store)).toContain('src/a.ts:1 semver satisfies import → semver package 0 1 lock');
   }, 120000);
 });

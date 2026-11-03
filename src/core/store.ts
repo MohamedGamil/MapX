@@ -7,6 +7,24 @@ import { BunStore } from './store-bun.js';
 import { NodeStore } from './store-node.js';
 import type { ExternalRefRow } from './external-refs.js';
 
+/** A stored external-reference candidate with its decision (M5-19) and attribution (M5-20); 0/1 for booleans. */
+export interface ExternalCandidate {
+  id: number;
+  file_path: string;
+  specifier: string;
+  ecosystem: string;
+  external: number;
+  metadata: string | null;
+  package: string | null;
+  origin: string | null;
+  direct: number | null;
+  dev: number | null;
+  attribution: string | null;
+}
+
+/** A candidate's decision as the end of a run writes it. */
+export type ExternalDecision = Omit<ExternalCandidate, 'file_path' | 'specifier' | 'ecosystem' | 'metadata'>;
+
 const CURRENT_SCHEMA_VERSION = 10;
 
 function parseSearchPattern(pattern: string): { scopeLike: string | null; namePattern: string } {
@@ -561,16 +579,21 @@ export class Store {
     }
   }
 
-  /** Every candidate with what decides it, for the decision at the end of a scan (M5-19). */
-  getExternalCandidates(): Array<{ id: number; file_path: string; specifier: string; ecosystem: string; external: number; metadata: string | null }> {
-    return this.backend.prepare('SELECT id, file_path, specifier, ecosystem, external, metadata FROM external_ref_candidates')
-      .all() as Array<{ id: number; file_path: string; specifier: string; ecosystem: string; external: number; metadata: string | null }>;
+  /** Every candidate with what decides it and its decision, for the decision at the end of a scan (M5-19, M5-20). */
+  getExternalCandidates(): ExternalCandidate[] {
+    return this.backend.prepare(
+      'SELECT id, file_path, specifier, ecosystem, external, metadata, package, origin, direct, dev, attribution FROM external_ref_candidates'
+    ).all() as unknown as ExternalCandidate[];
   }
 
-  /** Records candidates' decisions: [external (0 or 1), id] (M5-19). */
-  setExternalDecisions(decisions: Array<[number, number]>): void {
-    const update = this.backend.prepare('UPDATE external_ref_candidates SET external = ? WHERE id = ?');
-    this.inTransaction(() => { for (const [external, id] of decisions) update.run(external, id); });
+  /** Records candidates' decisions: external (0 or 1) and the attribution, by id (M5-19, M5-20). */
+  setExternalDecisions(decisions: ExternalDecision[]): void {
+    const update = this.backend.prepare(
+      'UPDATE external_ref_candidates SET external = ?, package = ?, origin = ?, direct = ?, dev = ?, attribution = ? WHERE id = ?'
+    );
+    this.inTransaction(() => {
+      for (const d of decisions) update.run(d.external, d.package, d.origin, d.direct, d.dev, d.attribution, d.id);
+    });
   }
 
   /** Drops the candidates of files no longer indexed (an index an older MapX synced) (M5-19). */
