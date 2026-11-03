@@ -17281,14 +17281,27 @@
         "npm run build:npm"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-F2",
       "actualHours": null,
       "startedAt": "2026-11-03T23:16:06.765Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T23:36:44.828Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-18-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/dogfood-architecture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-18-R1.md"
+        },
+        {
+          "command": "npm run build:npm",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-18-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T21:39:05.182Z",
@@ -17301,6 +17314,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:36:44.396Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:36:44.828Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/dogfood-architecture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-18-R1.md"
+            },
+            {
+              "command": "npm run build:npm",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-18-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -30393,14 +30429,27 @@
         "docs/baton/reports/M5-17-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-F",
       "actualHours": null,
       "startedAt": "2026-11-03T21:39:05.668Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T23:36:43.997Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-20.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/commonjs-require.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-20.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-20.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T21:39:04.687Z",
@@ -30413,6 +30462,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:36:43.580Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:36:43.997Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/commonjs-require.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-20.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-20.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

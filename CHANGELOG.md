@@ -69,6 +69,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The README gives an overview of every feature with links to its documentation and a quick start that runs as written; `tests/docs-surface.test.ts` keeps docs/cli-reference.md and docs/mcp-integration.md equal to the CLI and MCP surface (every command, flag, tool and parameter), the stated tool, framework and preset counts equal to the code, and every relative link and anchor in the docs resolving (M4-28).
 
 ### Changed
+- MapX's own architecture check now judges calls, instantiations, inheritance and type references as well as imports (M5-18-R1).
 - `mapx check` no longer reports packages that no layer covers as uncovered unless the configuration opts in (`policy.uncovered.externals: true`, or a positive `package` selector in a non-overlay layer), so `--fail-on-uncovered` ignores them by default; this reverses 0.3.9 (M5-24-R4).
 
 #### Architecture rules
@@ -80,6 +81,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
+- A CommonJS `require('./x')` of a project module is now an import edge, and the functions it binds (`const { f } = require(…)`, `const X = require(…)`, `require('./x').f()`) link the module's `module.exports` / `exports.f` declarations, through `module.exports = require(…)` barrels; a package require stays external (M2-20).
 - When a go.mod exists but cannot be read, imports of the module's own packages are still resolved to their folders, so they keep their import edges and are no longer listed as unknown external packages (M5-23-R1).
 - The CI formats of `mapx check` no longer name a file outside the repository as a location: a stale entry of a baseline outside the repository is located on the configuration file (at its `"baseline"` line), with the baseline named in the message and in SARIF's `properties.outsideRoot`, so code scanning accepts the SARIF (M5-07-R2).
 - A method called on a new instance (`new Order().total()`, `(new Order())->total()`, Python `Order().total()`) now links the method that class declares, or one of its bases, in TS/JS, PHP, Java, C# and Python, instead of no edge or a same-named method of another class; PHP methods in a file of several classes now carry their own class (M2-12).

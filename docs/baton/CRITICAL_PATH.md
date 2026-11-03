@@ -6,14 +6,13 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **133 / 235 / 352h**. Capacity: 1 engineer(s) × 20 h/week → **11.8 weeks**, conditional finish **2027-01-24** (as of 2026-11-03).
+Remaining effort min/expected/max: **129 / 226 / 336h**. Capacity: 1 engineer(s) × 20 h/week → **11.3 weeks**, conditional finish **2027-01-21** (as of 2026-11-03).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R2 (BACKLOG): prerequisites satisfied
-- M5-18-R1 (IN_PROGRESS): prerequisites satisfied
-- M5-18-R2 (BACKLOG): M5-18-R1; M2-25; M2-26
+- M5-18-R2 (BACKLOG): M2-25; M2-26
 - M5-98 (BACKLOG): prerequisites satisfied
 - M5-19-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-22-R1 (BACKLOG): prerequisites satisfied
@@ -34,8 +33,7 @@ Remaining effort min/expected/max: **133 / 235 / 352h**. Capacity: 1 engineer(s)
 - M2-17 (BACKLOG): prerequisites satisfied
 - M2-18 (BACKLOG): prerequisites satisfied
 - M2-19 (BACKLOG): prerequisites satisfied
-- M2-20 (IN_PROGRESS): prerequisites satisfied
-- M2-20-R1 (BACKLOG): M2-20
+- M2-20-R1 (BACKLOG): prerequisites satisfied
 - M2-21 (BACKLOG): prerequisites satisfied
 - M2-22 (BACKLOG): prerequisites satisfied
 - M2-23 (BACKLOG): prerequisites satisfied
@@ -62,7 +60,6 @@ Remaining effort min/expected/max: **133 / 235 / 352h**. Capacity: 1 engineer(s)
 | M5-15-R1 | 0 | 8 | 43 | 51 | 43 |
 | M5-16-R1 | 0 | 4 | 47 | 51 | 47 |
 | M5-16-R2 | 0 | 4 | 47 | 51 | 47 |
-| M5-18-R1 | 0 | 3 | 46 | 49 | 46 |
 | M2-25 | 0 | 4 | 45 | 49 | 45 |
 | M2-26 | 0 | 4 | 45 | 49 | 45 |
 | M5-18-R2 | 4 | 6 | 49 | 51 | 45 |
@@ -86,8 +83,7 @@ Remaining effort min/expected/max: **133 / 235 / 352h**. Capacity: 1 engineer(s)
 | M2-17 | 0 | 3 | 48 | 51 | 48 |
 | M2-18 | 0 | 3 | 48 | 51 | 48 |
 | M2-19 | 0 | 3 | 48 | 51 | 48 |
-| M2-20 | 0 | 6 | 40 | 46 | 40 |
-| M2-20-R1 | 6 | 11 | 46 | 51 | 40 |
+| M2-20-R1 | 0 | 5 | 46 | 51 | 46 |
 | M2-21 | 0 | 6 | 45 | 51 | 45 |
 | M2-22 | 0 | 3 | 48 | 51 | 48 |
 | M2-23 | 0 | 4 | 47 | 51 | 47 |
