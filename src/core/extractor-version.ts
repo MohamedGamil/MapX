@@ -26,8 +26,11 @@ import type { Store } from './store.js';
  *   trait uses in `metadata.mixins`).
  * - 12: M5-21 review (PHP `use function` / `use const` imports and a facade's named class, `\Cache`
  *   in a namespaced file, in external-reference candidates).
+ * - 13: M5-25-R2 (Go methods with a generic receiver, `func (p *Pair[K, V]) Set()`, are symbols; a
+ *   Go method called on a variable or parameter of a written type links that type's method, and a
+ *   by-name match stays in the caller's package or a package its file imports).
  */
-export const EXTRACTOR_VERSION = 12;
+export const EXTRACTOR_VERSION = 13;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

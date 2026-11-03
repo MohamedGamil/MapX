@@ -295,3 +295,202 @@ describe('Go package-qualified calls and wrapped literals (M5-25-R1)', () => {
     expect(from(noMod, 'app/use.go', 'Use', 'call')).toEqual(['domain/order.go#NewOrder', 'domain/order.go#Only', 'domain/order.go#Run']);
   });
 });
+
+// M5-25-R2: a method whose receiver is a generic type (`Pair[K, V]`, `*Pair[K, V]`) is a symbol
+// scoped to the type, so a call on a qualified generic literal links it. Synthetic, labelled:
+//   gen/pair.go     the generic Pair and its methods Swap (value), Set (pointer), Len (unnamed)
+//   legacy/pair.go  a homonym, non-generic Pair with its own Swap
+//   app/local.go    a function Swap in the calling package
+describe('Go methods with a generic receiver (M5-25-R2)', () => {
+  let generic = '';
+  beforeAll(() => {
+    generic = scanned({
+      'go.mod': 'module example.com/shop\n',
+      'gen/pair.go': [
+        'package gen',
+        '',
+        'type Pair[K comparable, V any] struct {',
+        '\tk K',
+        '\tv V',
+        '}',
+        '',
+        'func (p Pair[K, V]) Swap() {}',
+        '',
+        'func (p *Pair[K, V]) Set(k K, v V) { p.k, p.v = k, v }',
+        '',
+        'func (Pair[K, V]) Len() int { return 2 }',
+        '',
+      ].join('\n'),
+      'legacy/pair.go': 'package legacy\n\ntype Pair struct{}\n\nfunc (p Pair) Swap() {}\n',
+      'app/local.go': 'package app\n\nfunc Swap() {}\n',
+      'app/use.go': [
+        'package app',
+        '',
+        'import "example.com/shop/gen"',
+        '',
+        'func Use() {',
+        '\tgen.Pair[int, string]{}.Swap()',
+        '\t(&gen.Pair[int, string]{}).Set(1, "a")',
+        '}',
+        '',
+      ].join('\n'),
+    });
+  }, 120_000);
+  afterAll(() => cleanup(generic));
+
+  it('methods of a generic type are symbols scoped to it, and a qualified generic literal\'s call links them', () => {
+    const methods = query<{ name: string; kind: string; scope: string | null }>(generic,
+      "SELECT name, kind, scope FROM symbols WHERE file_path = 'gen/pair.go' AND kind = 'method' ORDER BY name");
+    expect(methods).toEqual([
+      { name: 'Len', kind: 'method', scope: 'Pair' },
+      { name: 'Set', kind: 'method', scope: 'Pair' },
+      { name: 'Swap', kind: 'method', scope: 'Pair' },
+    ]);
+    // Never legacy/pair.go's Swap or app/local.go's function Swap.
+    const calls = query<Edge>(generic,
+      "SELECT target_file, target_symbol FROM edges WHERE source_file = 'app/use.go' AND source_symbol = 'Use' AND edge_type = 'call' ORDER BY target_file, target_symbol")
+      .map((e) => `${e.target_file}#${e.target_symbol}`);
+    expect(calls).toEqual(['gen/pair.go#Set', 'gen/pair.go#Swap']);
+  });
+});
+
+// Review of M5-25-R2 (P1): with more methods indexed, calls on a Go variable or parameter, which
+// resolved by name alone, linked homonyms in packages the caller does not import (`var x
+// legacy.Pair; x.Swap()` → gen's Swap). Synthetic, labelled (the target is file#Scope.method):
+//   gen/        generic Pair (Swap) and Box (Close, Ping); not imported by app/typed.go
+//   legacy/     Pair (Swap), Conn (*Close), the interface Store (Save) and DB (Save)
+//   other/      Thing (Save, Ping): imported by nobody
+//   app/        a function Swap (app/local.go); app/typed.go imports legacy only, app/generic.go gen only
+describe('Go method calls on variables and parameters (M5-25-R2, review)', () => {
+  let typed = '';
+  beforeAll(() => {
+    typed = scanned({
+      'go.mod': 'module example.com/shop\n',
+      'gen/pair.go': [
+        'package gen',
+        '',
+        'type Pair[K comparable, V any] struct{ k K }',
+        '',
+        'func (p Pair[K, V]) Swap() {}',
+        '',
+        'func (p *Pair[K, V]) Set(k K) { p.k = k; p.Swap() }',
+        '',
+        'type Box[T any] struct{ t T }',
+        '',
+        'func (b Box[T]) Close() {}',
+        '',
+        'func (b Box[T]) Ping() {}',
+        '',
+        'func UseLocal() {',
+        '\tb := Box[int]{}',
+        '\tb.Close()',
+        '\tvar p Pair[int, string]',
+        '\tp.Swap()',
+        '}',
+        '',
+      ].join('\n'),
+      'legacy/pair.go': [
+        'package legacy',
+        '',
+        'type Pair struct{}',
+        '',
+        'func (p Pair) Swap() {}',
+        '',
+        'type Conn struct{}',
+        '',
+        'func (c *Conn) Close() {}',
+        '',
+        'type Store interface{ Save() }',
+        '',
+        'type DB struct{}',
+        '',
+        'func (d DB) Save() {}',
+        '',
+      ].join('\n'),
+      'other/thing.go': 'package other\n\ntype Thing struct{}\n\nfunc (t Thing) Save() {}\n\nfunc (t Thing) Ping() {}\n',
+      'app/local.go': 'package app\n\nfunc Swap() {}\n',
+      'app/typed.go': [
+        'package app',
+        '',
+        'import "example.com/shop/legacy"',
+        '',
+        'var shared legacy.Pair',
+        '',
+        'func ViaVar() {',
+        '\tvar x legacy.Pair',
+        '\tx.Swap()',
+        '}',
+        '',
+        'func ViaParam(c *legacy.Conn) {',
+        '\tc.Close()',
+        '}',
+        '',
+        'func ViaShort() {',
+        '\tx := legacy.Pair{}',
+        '\tx.Swap()',
+        '\tc := &legacy.Conn{}',
+        '\tc.Close()',
+        '}',
+        '',
+        'func ViaPackageVar() {',
+        '\tshared.Swap()',
+        '}',
+        '',
+        'func ViaInterface(s legacy.Store) {',
+        '\ts.Save()',
+        '}',
+        '',
+        'func Untyped(conns []*legacy.Conn, ping func() any) {',
+        '\tfor _, c := range conns {',
+        '\t\tc.Close()',
+        '\t}',
+        '\tt := ping()',
+        '\tt.Ping()',
+        '}',
+        '',
+      ].join('\n'),
+      'app/generic.go': [
+        'package app',
+        '',
+        'import "example.com/shop/gen"',
+        '',
+        'func ViaGenVar() {',
+        '\tp := gen.Pair[int, string]{}',
+        '\tp.Swap()',
+        '\tvar q *gen.Pair[int, string]',
+        '\tq.Set(1)',
+        '}',
+        '',
+      ].join('\n'),
+    });
+  }, 120_000);
+  afterAll(() => cleanup(typed));
+
+  /** The call edges of a function: `file#Scope.method` (or `file#name`), and how they were found. */
+  const callsOf = (file: string, fn: string) => query<{ target_file: string; target_symbol: string; verifiability: string }>(typed,
+    'SELECT target_file, target_symbol, verifiability FROM edges WHERE source_file = ? AND source_symbol = ? AND edge_type = ? ORDER BY target_file, target_symbol',
+    file, fn, 'call').map((e) => {
+    const scopes = query<{ scope: string | null }>(typed, 'SELECT scope FROM symbols WHERE file_path = ? AND name = ?', e.target_file, e.target_symbol);
+    expect(scopes, `${e.target_file}#${e.target_symbol} is one declaration`).toHaveLength(1);
+    return `${e.target_file}#${scopes[0]!.scope ? `${scopes[0]!.scope}.` : ''}${e.target_symbol} ${e.verifiability}`;
+  });
+
+  it('a variable or parameter of a written type, qualified or local, links that type\'s method in its package', () => {
+    expect(callsOf('app/typed.go', 'ViaVar')).toEqual(['legacy/pair.go#Pair.Swap verified']);
+    expect(callsOf('app/typed.go', 'ViaParam')).toEqual(['legacy/pair.go#Conn.Close verified']);
+    expect(callsOf('app/typed.go', 'ViaShort')).toEqual(['legacy/pair.go#Conn.Close verified', 'legacy/pair.go#Pair.Swap verified']);
+    expect(callsOf('app/typed.go', 'ViaPackageVar')).toEqual(['legacy/pair.go#Pair.Swap verified']);
+    expect(callsOf('app/generic.go', 'ViaGenVar')).toEqual(['gen/pair.go#Pair.Set verified', 'gen/pair.go#Pair.Swap verified']);
+    // Local generic types, and a method's own receiver (`p *Pair[K, V]` in Set).
+    expect(callsOf('gen/pair.go', 'UseLocal')).toEqual(['gen/pair.go#Box.Close verified', 'gen/pair.go#Pair.Swap verified']);
+    expect(callsOf('gen/pair.go', 'Pair::Set')).toEqual(['gen/pair.go#Pair.Swap verified']);
+  });
+
+  it('a value of an interface or of no written type resolves by name only within the caller\'s package and its imports', () => {
+    // Store is an interface: its implementation in the imported package, inferred; never other/'s Save.
+    expect(callsOf('app/typed.go', 'ViaInterface')).toEqual(['legacy/pair.go#DB.Save inferred']);
+    // A range variable: legacy's Close (imported), never gen's Box.Close; `t.Ping()` has no
+    // candidate within reach (gen and other declare Ping, app/typed.go imports neither).
+    expect(callsOf('app/typed.go', 'Untyped')).toEqual(['legacy/pair.go#Conn.Close inferred']);
+  });
+});

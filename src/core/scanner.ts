@@ -1721,6 +1721,7 @@ export class Scanner {
     // Simple names this file uses (C# picks, among the files declaring a namespace, those whose types it uses).
     let referencedNames: Set<string> | undefined;
     let jsBindings: { packages: Set<string>; local: Set<string> } | undefined;
+    let goReach: ((dir: string) => boolean) | undefined;
     let innermost: any[] | undefined;
     const usedNames = () => (referencedNames ??= new Set(refs
       .filter(r => r.referenceType !== 'import' && r.referenceType !== 'require' && typeof r.targetName === 'string')
@@ -1782,11 +1783,13 @@ export class Scanner {
       } else if (ref.phpFunction) {
         // A PHP function call: the first candidate declared as a function in its namespace (M0-04-R5).
         targets = this.resolvePhpFunction(ref.phpFunction, sourcePath);
-      } else if (sourceLanguage === 'go' && ref.metadata && 'goPackage' in ref.metadata) {
+      } else if (sourceLanguage === 'go' && resolver && ref.metadata && ('goPackage' in ref.metadata || 'goReceiver' in ref.metadata)) {
         // Go `struct { log.Logger }`, `domain.NewOrder()`: the declaration in the imported project
         // package, never a homonym elsewhere; a standard-library or third-party package links nothing
-        // (M0-17-R5, M5-25-R1).
-        targets = this.resolveGoQualifiedType(ref, resolver, sourcePath, fileMap, usedNames);
+        // (M0-17-R5, M5-25-R1). A method call on a value of a written type (`c *legacy.Conn`) is that
+        // type's method; on another value, a method by name in a package the file reaches (M5-25-R2).
+        targets = this.resolveGoQualifiedType(ref, resolver, sourcePath, fileMap, usedNames)
+          ?? this.resolveGoMethodByName(ref, (goReach ??= this.goReach(refs, resolver, sourcePath, fileMap, usedNames)), sourcePath);
       } else if (sourceLanguage === 'lua' && ref.referenceType === 'call' && ref.targetName.includes(':')) {
         // Lua `obj:m()`: the method of the receiver's table, never a homonym in another table (M2-10).
         targets = this.resolveLuaMethodCall(ref, sourcePath, repoName, fileMap);
@@ -1830,7 +1833,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, luaTable: _luaTable, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -3037,17 +3040,17 @@ export class Scanner {
     sourcePath: string,
     fileMap: Map<string, string>,
     referencedNames: () => Set<string>,
-  ): { file: string; symbol: string }[] {
+  ): { file: string; symbol: string }[] | undefined {
     const goPackage = ref.metadata?.goPackage;
     const goType = typeof ref.metadata?.goType === 'string' ? ref.metadata.goType : null;
+    // A method call on a value (`x.Swap()`, M5-25-R2), not on a package.
+    const onValue = typeof ref.metadata?.goReceiver === 'string';
     if (!resolver) return [];
     // A string is the import that names the qualifier; an array holds unaliased candidates whose
     // package name could not be told from the path: exactly one of them must declare the type.
     const exact = typeof goPackage === 'string';
     const paths = exact ? [goPackage] : Array.isArray(goPackage) ? goPackage.filter((p): p is string => typeof p === 'string') : [];
-    if (!paths.length) return [];
-    const declared = (name: string): { name: string; file: string; kind?: string; scope?: string | null }[] => this.symbolIndex?.get(name.toLowerCase())
-      ?? this.store.searchSymbols(name).map((m: any) => ({ name: m.name, file: m.file_path, kind: m.kind, scope: m.scope }));
+    const declared = (name: string) => this.goDeclared(name);
     const entries = declared(ref.targetName);
     const typeIn = (name: string, dir: string) => declared(name).filter(e => e.name === name && TYPE_KINDS.has(e.kind ?? '') && dirname(e.file) === dir);
     // The files of `dir` declaring what the reference names: a method of the literal's type (or of
@@ -3076,7 +3079,19 @@ export class Scanner {
       }
       return [];
     };
+    // A value's declared type that `dir` does not declare as a struct or the like (an interface,
+    // whose methods are no declarations; an alias): the call resolves by name, within reach.
+    const opaque = (dir: string) => !typeIn(goType!, dir).some(e => e.kind !== 'interface');
+    if (onValue && !('goPackage' in ref.metadata!)) {
+      // A value of no written type, or of a type of the calling package (`p Pair[K, V]`, `Box[int]{}`).
+      const dir = dirname(sourcePath);
+      if (!goType || opaque(dir)) return undefined;
+      const files = inDir(dir);
+      return files.length ? [{ file: files.includes(sourcePath) ? sourcePath : files[0]!, symbol: ref.targetName }] : [];
+    }
+    if (!paths.length) return [];
     const found: string[][] = [];
+    let interfaceType = false;
     // Import paths that resolve to no package yet may be the project's own (no go.mod tells).
     const unknown: string[] = [];
     for (const importPath of paths) {
@@ -3087,8 +3102,11 @@ export class Scanner {
       }
       const files = inDir(dirname(hit.file));
       if (files.length) found.push(files);
+      else if (onValue && goType && typeIn(goType, dirname(hit.file)).length && opaque(dirname(hit.file))) interfaceType = true;
     }
     if (found.length === 1) return [{ file: found[0]![0]!, symbol: ref.targetName }];
+    // `var s legacy.Store; s.Save()` on an interface: by name, within reach.
+    if (!found.length && interfaceType) return undefined;
     if (found.length || !unknown.length) return [];
     // By name, as before go.mod resolution, but never in the calling package (a qualified name is
     // another package's): the one folder that declares it, else the one whose path ends the import
@@ -3100,6 +3118,49 @@ export class Scanner {
     const suffix = byDir.filter(d => unknown.some(p => p === d.dir || p.endsWith(`/${d.dir}`)));
     const pick = byDir.length === 1 ? byDir[0] : suffix.length === 1 ? suffix[0] : undefined;
     return pick ? [{ file: pick.files[0]!, symbol: ref.targetName }] : [];
+  }
+
+  /** The declarations named `name` (any case): the phase's symbol index, else the store. */
+  private goDeclared(name: string): { name: string; file: string; kind?: string; scope?: string | null }[] {
+    return this.symbolIndex?.get(name.toLowerCase())
+      ?? this.store.searchSymbols(name).map((m: any) => ({ name: m.name, file: m.file_path, kind: m.kind, scope: m.scope }));
+  }
+
+  /**
+   * The project packages a Go file reaches (M5-25-R2): its own folder, the folder of each import
+   * that resolves to a project package, and the import paths that may be the project's own (no
+   * go.mod tells), which a folder reaches when its path ends them, as resolveGoQualifiedType does.
+   */
+  private goReach(refs: ExtractedReference[], resolver: NonNullable<ReturnType<typeof importResolverFor>>, sourcePath: string,
+    fileMap: Map<string, string>, referencedNames: () => Set<string>): (dir: string) => boolean {
+    const dirs = new Set([dirname(sourcePath)]);
+    const unknown: string[] = [];
+    for (const r of refs) {
+      if (r.referenceType !== 'import' || typeof r.targetName !== 'string') continue;
+      const hits = this.resolveModuleImport(resolver, r.targetName, sourcePath, fileMap, referencedNames);
+      for (const hit of hits) dirs.add(dirname(hit.file));
+      if (!hits.length && !goImportOutsideProject(r.targetName, sourcePath, (p) => this.readWorkspaceText(p))) unknown.push(r.targetName);
+    }
+    return (dir) => dirs.has(dir) || unknown.some(p => p === dir || p.endsWith(`/${dir}`));
+  }
+
+  /**
+   * A Go method call on a value whose type the code does not write (`svc := build(); svc.Run()`,
+   * a range variable) or an interface (M5-25-R2): by name, but only a method declared in a package
+   * the file reaches, never one in a package it does not import. A bare identifier that may be a
+   * package (`database.Connect()` for an import `internal/db`) also reaches the package-level
+   * functions of the imported packages. Inferred: the name alone chose it. The file nearest the
+   * caller wins, as by-name resolution does.
+   */
+  private resolveGoMethodByName(ref: ExtractedReference, reach: (dir: string) => boolean, sourcePath: string): { file: string; symbol: string; verifiability: 'inferred' }[] {
+    const own = dirname(sourcePath);
+    const maybePackage = ref.metadata?.goMaybePackage === true;
+    const files = [...new Set(this.goDeclared(ref.targetName)
+      .filter(e => e.name === ref.targetName && this.languageOf(e.file) === 'go' && reach(dirname(e.file))
+        && (e.kind === 'method' || (maybePackage && e.kind === 'function' && !e.scope && dirname(e.file) !== own)))
+      .map(e => e.file))].sort();
+    if (!files.length) return [];
+    return [{ file: files.includes(sourcePath) ? sourcePath : closest(files, sourcePath), symbol: ref.targetName, verifiability: 'inferred' }];
   }
 
   /**

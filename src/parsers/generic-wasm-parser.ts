@@ -332,27 +332,104 @@ function goLiteralElement(type: any): any {
   return null;
 }
 
+/** A Go named type: `goType`, with the import path of its package when qualified (`*legacy.Conn`, `Pair[K, V]`). */
+interface GoNamedType { goType?: string; goPackage?: string | string[] | null }
+
+/** The named type a Go type node denotes through pointers and generic arguments; {} for a predeclared type, a type parameter or a type literal. */
+function goNamedType(type: any): GoNamedType {
+  for (let n = type; n; ) {
+    switch (n.type) {
+      case 'pointer_type': case 'parenthesized_type': n = n.namedChildren[0]; break;
+      case 'generic_type': n = n.childForFieldName('type'); break;
+      case 'qualified_type': return { goType: n.childForFieldName('name')?.text, goPackage: goImportPath(n) };
+      case 'type_identifier': return GO_PREDECLARED_TYPES.has(n.text) || goTypeParameter(n, n.text) ? {} : { goType: n.text };
+      default: return {};
+    }
+  }
+  return {};
+}
+
+/** The named type of a Go composite literal, through `&` and parentheses (`&legacy.Pair{}`, `Box[int]{}`). */
+function goLiteralType(expr: any): GoNamedType {
+  let n = expr;
+  while (n?.type === 'parenthesized_expression' || (n?.type === 'unary_expression' && n.childForFieldName('operator')?.text === '&')) {
+    n = n.type === 'parenthesized_expression' ? n.namedChild(0) : n.childForFieldName('operand');
+  }
+  return n?.type === 'composite_literal' ? goNamedType(n.childForFieldName('type')) : {};
+}
+
+/** The type `name` gets from a declaration that declares it: `var x T`, `var x = T{}`, `x := &pkg.T{}`. */
+function goDeclarationType(decl: any, name: string): GoNamedType {
+  switch (decl?.type) {
+    case 'parameter_declaration': case 'variadic_parameter_declaration':
+      return decl.type === 'parameter_declaration' ? goNamedType(decl.childForFieldName('type')) : {};
+    case 'var_declaration': case 'var_spec_list': {
+      const spec = decl.namedChildren.find((c: any) => goDeclaredNames(c).includes(name));
+      return spec ? goDeclarationType(spec, name) : {};
+    }
+    case 'var_spec': {
+      if (decl.childForFieldName('type')) return goNamedType(decl.childForFieldName('type'));
+      const i = goDeclaredNames(decl).indexOf(name);
+      return goLiteralType(decl.childForFieldName('value')?.namedChildren[i]);
+    }
+    case 'short_var_declaration': {
+      const i = goDeclaredNames(decl).indexOf(name);
+      return goLiteralType(decl.childForFieldName('right')?.namedChildren[i]);
+    }
+    default: return {};
+  }
+}
+
+/**
+ * The type the Go variable or parameter `name` at `node` is declared with (M5-25-R2): the nearest
+ * declaration as goBoundLocally finds it (a receiver, parameter or result, or a variable declared
+ * before it in an enclosing block), else a package-level `var` of the file. {} when the type is
+ * not written: a call's result, a range variable, a type switch alias.
+ */
+function goVariableType(node: any, name: string): GoNamedType {
+  let curr = node.parent;
+  for (; curr && curr.type !== 'source_file'; curr = curr.parent) {
+    if (curr.type === 'function_declaration' || curr.type === 'method_declaration' || curr.type === 'func_literal') {
+      for (const field of ['receiver', 'parameters', 'result']) {
+        const decl = (curr.childForFieldName(field)?.namedChildren ?? []).find((d: any) => goDeclaredNames(d).includes(name));
+        if (decl) return goDeclarationType(decl, name);
+      }
+      if (curr.type !== 'func_literal') {
+        while (curr.parent) curr = curr.parent;
+        break;
+      }
+    }
+    if (curr.type === 'type_switch_statement' && (curr.childForFieldName('alias')?.namedChildren ?? []).some((c: any) => c.text === name)) return {};
+    // The last declaration before the use, in this block or statement header.
+    let decl: any = null;
+    for (const s of curr.namedChildren) if (s.endIndex <= node.startIndex && goDeclaredNames(s).includes(name)) decl = s;
+    if (decl) return goDeclarationType(decl, name);
+  }
+  // Package level: declared anywhere in the file.
+  const decl = (curr?.namedChildren ?? []).find((s: any) => s.type === 'var_declaration' && goDeclaredNames(s).includes(name));
+  return decl ? goDeclarationType(decl, name) : {};
+}
+
 /**
  * Go `pkg.F()` and `pkg.T{}.M()`: the package (and, on a literal, the type) a selector call reaches
  * (M5-25-R1). An identifier qualifier counts only when an import of the file is named by it and no
- * local (parameter, variable) shadows it, so a method call on a variable stays a by-name call.
+ * local (parameter, variable) shadows it. Any other selector call is a method call on a value
+ * (`goReceiver`, M5-25-R2), with the type the value is declared with when the code writes it
+ * (`var x legacy.Pair`, `c *legacy.Conn`, `p Pair[K, V]`, `x := legacy.Pair{}`, `Box[int]{}`);
+ * `goMaybePackage` marks a bare identifier that is no local, which may still name a package.
  */
-function goSelectorCall(selector: any): { goPackage: string | string[] | null; goType?: string } | null {
-  let operand = selector.childForFieldName('operand');
+function goSelectorCall(selector: any): Record<string, unknown> {
+  const operand = selector.childForFieldName('operand');
   if (operand?.type === 'identifier') {
     const path = goImportPath(selector, operand.text);
-    return typeof path === 'string' && !goBoundLocally(operand, operand.text) ? { goPackage: path } : null;
+    const local = goBoundLocally(operand, operand.text);
+    if (typeof path === 'string' && !local) return { goPackage: path };
+    const declared = goVariableType(operand, operand.text);
+    return { goReceiver: operand.text, ...declared, ...(!local && !declared.goType ? { goMaybePackage: true } : {}) };
   }
-  // `(&pkg.T{}).M()`
-  while (operand?.type === 'parenthesized_expression' || (operand?.type === 'unary_expression' && operand.childForFieldName('operator')?.text === '&')) {
-    operand = operand.type === 'parenthesized_expression' ? operand.namedChild(0) : operand.childForFieldName('operand');
-  }
-  // `pkg.T{}` or `pkg.Pair[K, V]{}`
-  let type = operand?.type === 'composite_literal' ? operand.childForFieldName('type') : null;
-  if (type?.type === 'generic_type') type = type.childForFieldName('type');
-  return type?.type === 'qualified_type'
-    ? { goPackage: goImportPath(type), goType: type.childForFieldName('name')?.text }
-    : null;
+  // `pkg.T{}`, `(&pkg.T{}).M()`, `pkg.Pair[K, V]{}`, and a local type's literal `Box[int]{}`
+  const literal = goLiteralType(operand);
+  return literal.goType ? { goReceiver: `<${operand.type}>`, ...literal } : { goReceiver: `<${operand?.type}>` };
 }
 
 export class GenericWasmParser implements LanguageParser {

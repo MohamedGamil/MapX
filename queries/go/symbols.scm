@@ -27,13 +27,16 @@
 (function_declaration
   name: (identifier) @symbol.name) @symbol.kind_function
 
-; Method declarations (with receiver)
+; Method declarations (with receiver); a generic receiver (`Pair[K, V]`, `*Pair[K, V]`) is scoped to
+; its type (M5-25-R2)
 (method_declaration
   receiver: (parameter_list
     (parameter_declaration
       type: [
         (pointer_type (type_identifier) @symbol.scope)
         (type_identifier) @symbol.scope
+        (generic_type type: (type_identifier) @symbol.scope)
+        (pointer_type (generic_type type: (type_identifier) @symbol.scope))
       ]
     )
   )
