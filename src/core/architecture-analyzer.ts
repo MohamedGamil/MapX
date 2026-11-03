@@ -3,6 +3,11 @@ import type { CodebaseProfile, FileRole, CodebaseArchetype } from '../types.js';
 import { FlowValidator, LayerViolation } from './flow-validator.js';
 import { calculateClusterMetrics } from './metrics.js';
 import * as path from 'node:path';
+import { ConfigError } from '../arch/config.js';
+import { openArchitecture, type ArchContext } from '../arch/introspect.js';
+import { loadBaseline } from '../arch/baseline.js';
+import { buildReport } from '../arch/report.js';
+import { edgeKey, ruledEdges, ruleSmells } from '../arch/smells.js';
 
 export interface ArchSmell {
   type: string;
@@ -11,6 +16,70 @@ export interface ArchSmell {
   involvedFiles: string[];
   involvedClusters?: string[];
   suggestion: string;
+  /**
+   * Where a smell shown with an architecture configuration comes from (M5-16; deptrac §3.3, AR-18):
+   * `rules`, derived from `.mapx/architecture.jsonc`, or `inferred-roles`, a role-order layer
+   * violation kept by `policy.alsoInferred`. Absent without a configuration, as before.
+   */
+  source?: 'rules' | 'inferred-roles';
+  /** The layers a rule-derived smell is about (a layer cycle, an allowance …). */
+  involvedLayers?: string[];
+}
+
+/** A smell as `Store.getArchSmells` returns it (the row, with its parsed lists), or a rule-derived one. */
+export type SmellRow = Record<string, any>;
+
+/**
+ * The smells `mapx_smells`, `mapx arch` and the dashboard show for `repos` (M5-16; deptrac §3.3,
+ * one source of truth). Without `.mapx/architecture.jsonc`, the smells the last scan stored, as
+ * they are. With one, layer violations come from the rule evaluator (`mapx check`'s report, its
+ * baseline applied) instead of the role order, and the AR-18 smells are appended, marked
+ * `source: "rules"`, with the report's exit-3 errors (a stale baseline entry …) as
+ * `architecture-config` smells. `policy.alsoInferred` keeps the role-order violations too, marked
+ * `inferred-roles`, but only on edges the rules decide in no way (`ruledEdges`: a source in no
+ * layer). The edges are evaluated once per call. Composed when read, so an edited configuration
+ * applies without a rescan. A configuration or baseline that cannot be loaded keeps the role-order
+ * violations and adds an `architecture-config` smell saying so. Layer-level smells belong to
+ * `primary`, the workspace's repo; the others to their source's repo. A command that lists smells
+ * twice calls this once.
+ */
+export function currentSmells(store: Store, dir: string, repos: string[], options: { primary: string; repoPaths?: Record<string, string> }): SmellRow[] {
+  const stored = repos.flatMap((r) => store.getArchSmells(r));
+  const inferred = (s: SmellRow): SmellRow => (s.type === 'layer-violation' ? { ...s, source: 'inferred-roles' } : s);
+  let ctx: ArchContext | null;
+  let report;
+  try {
+    ctx = openArchitecture(dir, store, { repoPaths: options.repoPaths });
+    if (!ctx) return stored;
+    // One evaluation: the report decides on the context's, which the smells reuse.
+    report = buildReport(store, ctx.config, ctx.membership, { baseline: loadBaseline(dir, ctx.config), repoPaths: options.repoPaths, evaluation: ctx.evaluation() });
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+    const first = err.issues[0];
+    const where = first ? `${first.file}${first.pointer ? `#${first.pointer}` : ''}: ${first.message}` : err.message;
+    const more = err.issues.length > 1 ? ` (and ${err.issues.length - 1} more)` : '';
+    return [...stored.map(inferred), smellRow(options.primary, {
+      type: 'architecture-config', severity: 'critical', source: 'rules', involvedFiles: [],
+      description: `The architecture configuration cannot be evaluated: ${where}${more}`,
+      suggestion: 'Fix it (`mapx arch validate-config` lists every problem); until then layer violations come from the inferred file roles.',
+    })].filter((s) => repos.includes(s.repo));
+  }
+  const rules = ruleSmells(ctx, report).filter((s) => repos.includes(s.repo ?? options.primary));
+  const ruled = ctx.config.policy.alsoInferred ? ruledEdges(ctx) : null;
+  const kept = stored
+    .filter((s) => s.type !== 'layer-violation' || (ruled !== null && !ruled.has(edgeKey(s.involvedFiles?.[0], s.involvedFiles?.[1]))))
+    .map(inferred);
+  return [...kept, ...rules.map(({ repo, ...s }) => smellRow(repo ?? options.primary, s))];
+}
+
+/** A computed smell in the shape of a stored row, so every reader (the dashboard too) takes both. */
+function smellRow(repo: string, s: ArchSmell): SmellRow {
+  const involvedClusters = s.involvedClusters ?? [];
+  return {
+    repo, type: s.type, severity: s.severity, description: s.description,
+    involved_files: JSON.stringify(s.involvedFiles), involved_clusters: JSON.stringify(involvedClusters), suggestion: s.suggestion,
+    involvedFiles: s.involvedFiles, involvedClusters, ...(s.involvedLayers ? { involvedLayers: s.involvedLayers } : {}), ...(s.source ? { source: s.source } : {}),
+  };
 }
 
 export class ArchitectureAnalyzer {
@@ -305,7 +374,7 @@ export function stronglyConnectedComponents(adj: Map<string, string[]>, order: I
  * The shortest cycle from `start` back to itself through `members`, breadth-first in adjacency
  * order (`[start, ..., start]`), or null if there is none.
  */
-function shortestCycleThrough(start: string, adj: Map<string, string[]>, members: Set<string>): string[] | null {
+export function shortestCycleThrough(start: string, adj: Map<string, string[]>, members: Set<string>): string[] | null {
   const parent = new Map<string, string>();
   const queue: string[] = [start];
   for (let head = 0; head < queue.length; head++) {

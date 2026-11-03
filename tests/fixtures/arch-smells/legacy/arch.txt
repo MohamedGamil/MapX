@@ -1,0 +1,64 @@
+
+── Architectural Smells & Violations (4) ─────────────────
+
+  [CRITICAL] cyclic-dependency
+    Description: Cyclic dependency detected: Money.ts -> Order.ts -> Money.ts
+    Files:       src/shared/Money.ts, src/domain/Order.ts
+    Suggestion:  Break the cycle by extracting shared logic into interfaces or utilities.
+
+  [WARNING] layer-violation
+    Description: Layer violation: 'data' depends on 'service' (src/repository/SqlOrderRepository.ts -> src/domain/Order.ts)
+    Files:       src/repository/SqlOrderRepository.ts, src/domain/Order.ts
+    Suggestion:  Avoid letting lower layer component 'data' import upper layer component 'service'.
+
+  [CRITICAL] layer-violation
+    Description: Layer violation: 'shared' depends on 'service' (src/shared/Money.ts -> src/domain/Order.ts)
+    Files:       src/shared/Money.ts, src/domain/Order.ts
+    Suggestion:  Avoid letting lower layer component 'shared' import upper layer component 'service'.
+
+  [INFO] orphan-cluster
+    Description: Orphan cluster: 'src.repository' has only 2 file(s)
+    Clusters:    src.repository
+    Suggestion:  Consider merging 'src.repository' into a larger related module or community.
+
+
+── Dependency Structure Matrix (DSM) ──────────────────
+                 C1   C2   C3   C4   C5   C6   C7   C8   C9  C10  C11
+---------------------------------------------------------------------
+C1 community_1    *    .    .    .    .    .    .    .    .    .    .
+C2 community_2    .    *    .    .    .    .    .    .    .    .    .
+C3 community_3    .    .    *    .    .    .    .    .    .    .    .
+C4 layer:api      .    .    .    *    .    .    .    .    .    .    .
+C5 layer:data     .    .    .    .    *    .    .    .    .    .    .
+C6 layer:service    .    .    .    .    .    *    .    .    .    .    .
+C7 layer:shared    .    .    .    .    .    .    *    .    .    .    .
+C8 src            .    .    .    .    .    .    .    *    2    3    6
+C9 src.repository    .    .    .    .    .    .    .    3    *    .    .
+C10 src.service    .    .    .    .    .    .    .    6    5    *    2
+C11 src.shared    .    .    .    .    .    .    .    1    .    .    *
+
+Legend:
+  * = self
+  . = no dependency
+  number = edge count from row cluster to column cluster
+
+Cluster Key:
+  C1: community_1
+  C2: community_2
+  C3: community_3
+  C4: layer:api
+  C5: layer:data
+  C6: layer:service
+  C7: layer:shared
+  C8: src
+  C9: src.repository
+  C10: src.service
+  C11: src.shared
+
+── Codebase Profile Summary ───────────────────────────
+  Archetype:  web-api (confidence: 0.85)
+  Languages:  typescript
+
+── Architecture Health ────────────────────────────────
+⚠️  Detected 4 architectural smell(s). Run 'mapx arch --smells' for details.
+

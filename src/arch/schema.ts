@@ -104,6 +104,8 @@ export interface ArchitectureDocument {
     inheritDependencies?: boolean;
     uncovered?: { externals?: boolean; builtins?: boolean };
     strictLayers?: boolean;
+    /** Keep the role-order layer violations in `mapx_smells` beside the rules' own (M5-16, §3.3). */
+    alsoInferred?: boolean;
   };
   visibility?: { internalTags?: string[]; nativeMarkers?: boolean };
   layers?: Layer[];
@@ -127,7 +129,7 @@ export type CodeClimateSeverityMap = Partial<Record<typeof CODECLIMATE_KEYS[numb
 
 export const TOP_LEVEL_KEYS = ['$schema', 'extends', 'parameters', 'scope', 'policy', 'visibility', 'layers', 'rules', 'baseline', 'report'] as const;
 export const SCOPE_KEYS = ['types', 'include', 'exclude'] as const;
-export const POLICY_KEYS = ['inferred', 'inheritDependencies', 'uncovered', 'strictLayers'] as const;
+export const POLICY_KEYS = ['inferred', 'inheritDependencies', 'uncovered', 'strictLayers', 'alsoInferred'] as const;
 export const UNCOVERED_KEYS = ['externals', 'builtins'] as const;
 export const VISIBILITY_KEYS = ['internalTags', 'nativeMarkers'] as const;
 export const LAYER_KEYS = ['name', 'description', 'selectors', 'private', 'overlay', 'group', 'color'] as const;
@@ -141,7 +143,7 @@ export interface ArchitectureConfig {
   view: string | null;
   parameters: Record<string, string>;
   scope: { types: ReferenceType[]; include: string[]; exclude: string[] };
-  policy: { inferred: 'error' | 'warn' | 'ignore'; inheritDependencies: boolean; uncovered: { externals: boolean; builtins: boolean }; strictLayers: boolean };
+  policy: { inferred: 'error' | 'warn' | 'ignore'; inheritDependencies: boolean; uncovered: { externals: boolean; builtins: boolean }; strictLayers: boolean; alsoInferred: boolean };
   visibility: { internalTags: string[]; nativeMarkers: boolean };
   layers: Layer[];
   rules: Record<string, Allowance[]>;
@@ -150,6 +152,6 @@ export interface ArchitectureConfig {
 }
 
 export const DEFAULTS = {
-  policy: { inferred: 'warn' as const, inheritDependencies: false, uncovered: { externals: true, builtins: false }, strictLayers: false },
+  policy: { inferred: 'warn' as const, inheritDependencies: false, uncovered: { externals: true, builtins: false }, strictLayers: false, alsoInferred: false },
   visibility: { internalTags: ['@internal', '@mapx-internal'], nativeMarkers: false },
 };

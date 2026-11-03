@@ -1,0 +1,13 @@
+
+── Architectural Smells & Violations (2) ─────────────────
+
+  [WARNING] layer-violation
+    Description: Layer violation: 'data' depends on 'service' (src/repository/SqlOrderRepository.ts -> src/domain/Order.ts)
+    Files:       src/repository/SqlOrderRepository.ts, src/domain/Order.ts
+    Suggestion:  Avoid letting lower layer component 'data' import upper layer component 'service'.
+
+  [CRITICAL] layer-violation
+    Description: Layer violation: 'shared' depends on 'service' (src/shared/Money.ts -> src/domain/Order.ts)
+    Files:       src/shared/Money.ts, src/domain/Order.ts
+    Suggestion:  Avoid letting lower layer component 'shared' import upper layer component 'service'.
+

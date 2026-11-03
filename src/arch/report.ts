@@ -10,7 +10,7 @@ import { ConfigError, loadArchitectureConfig, type LoadOptions } from './config.
 import type { ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership } from './membership.js';
 import { expandPolicy } from './policy.js';
-import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Finding, type FindingKind, type FindingSeverity } from './evaluate.js';
+import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Evaluation, type Finding, type FindingKind, type FindingSeverity } from './evaluate.js';
 import { BaselineMatcher, fingerprint, loadBaseline, repoKey, type Baseline } from './baseline.js';
 
 export type { Finding, FindingKind } from './evaluate.js';
@@ -44,6 +44,11 @@ export { fingerprint };
 export interface SkipOptions {
   /** Violations this baseline lists become skipped; its unmatched entries become errors. */
   baseline?: Baseline | null;
+  /**
+   * The evaluation of `config` over `membership`, when the caller already has it (`ArchContext`'s):
+   * the edges are then decided once per command (M5-16 review).
+   */
+  evaluation?: Evaluation;
   /** Fingerprints of a base revision's report (`--compare`): violations among them become skipped. */
   known?: Set<string>;
   /** Repo name → workspace-relative path, for the repos fingerprints name (`.` is the root repo). */
@@ -67,7 +72,7 @@ export function sortFindings(findings: Finding[]): Finding[] {
 export function buildReport(store: Store, config: ArchitectureConfig, membership: LayerMembership, skip: SkipOptions = {}): ArchReport {
   const view = membership.view;
   const policy = expandPolicy(config);
-  const { dependencies: deps, endFiles } = evaluateEdges(store, config, membership, policy);
+  const { dependencies: deps, endFiles } = skip.evaluation ?? evaluateEdges(store, config, membership, policy);
   const layerOrder = new Map(config.layers.map((l, i) => [l.name, i]));
   const byOrder = (a: string, b: string) => (layerOrder.get(a) ?? 0) - (layerOrder.get(b) ?? 0);
 

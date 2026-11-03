@@ -161,6 +161,7 @@ export function validateDocument(doc: unknown, file: string): ConfigIssue[] {
         if ('inferred' in value && !['error', 'warn', 'ignore'].includes(value['inferred'] as string)) issue(at(p, 'inferred'), 'expected "error", "warn" or "ignore"');
         if ('inheritDependencies' in value) bool(value['inheritDependencies'], at(p, 'inheritDependencies'));
         if ('strictLayers' in value) bool(value['strictLayers'], at(p, 'strictLayers'));
+        if ('alsoInferred' in value) bool(value['alsoInferred'], at(p, 'alsoInferred'));
         if ('uncovered' in value) {
           const u = value['uncovered'];
           if (!isObject(u)) issue(at(p, 'uncovered'), 'expected an object');
@@ -549,6 +550,7 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
       if (['error', 'warn', 'ignore'].includes(p.inferred as string)) policy.inferred = p.inferred!;
       if (typeof p.inheritDependencies === 'boolean') policy.inheritDependencies = p.inheritDependencies;
       if (typeof p.strictLayers === 'boolean') policy.strictLayers = p.strictLayers;
+      if (typeof p.alsoInferred === 'boolean') policy.alsoInferred = p.alsoInferred;
       if (isObject(p.uncovered)) {
         if (typeof p.uncovered.externals === 'boolean') policy.uncovered.externals = p.uncovered.externals;
         if (typeof p.uncovered.builtins === 'boolean') policy.uncovered.builtins = p.uncovered.builtins;

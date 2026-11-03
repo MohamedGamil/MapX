@@ -117,6 +117,10 @@
         "strictLayers": {
           "type": "boolean",
           "description": "An element in several layers is an error, not a warning. Default: false."
+        },
+        "alsoInferred": {
+          "type": "boolean",
+          "description": "mapx_smells and mapx arch keep the layer violations inferred from file roles beside the rules' own (marked source inferred-roles); an edge the rules report is reported once. Default: false."
         }
       }
     },

@@ -21,6 +21,7 @@ import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatDsmText, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
+import { currentSmells } from './core/architecture-analyzer.js';
 import { getChangedFiles, isGitRepo, type GitFileStatus } from './core/git-tracker.js';
 import { findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
 import { outdatedIndexWarning } from './core/extractor-version.js';
@@ -2494,9 +2495,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const repo = config.repo.name;
 
       const showAll = !opts.smells && !opts.dsm && !opts.violations;
+      // With .mapx/architecture.jsonc, layer violations come from the rules (M5-16). Computed once
+      // per command: the list and the health line share it.
+      let smellList: ReturnType<typeof currentSmells> | undefined;
+      const smellsNow = () => (smellList ??= currentSmells(store, dir, [repo], { primary: repo, repoPaths: Object.fromEntries(config.repos.map((r) => [r.name, r.path])) }));
 
       if (showAll || opts.smells || opts.violations) {
-        const smells = store.getArchSmells(repo);
+        const smells = smellsNow();
         const filtered = opts.violations ? smells.filter((s: any) => s.type === 'layer-violation') : smells;
         
         console.log(`\n── Architectural Smells & Violations (${filtered.length}) ─────────────────`);
@@ -2512,7 +2517,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             if (s.involvedClusters && s.involvedClusters.length > 0) {
               console.log(`    Clusters:    ${s.involvedClusters.join(', ')}`);
             }
+            if (s.involvedLayers && s.involvedLayers.length > 0) {
+              console.log(`    Layers:      ${s.involvedLayers.join(', ')}`);
+            }
             console.log(`    Suggestion:  ${s.suggestion}`);
+            if (s.source) console.log(`    Source:      ${s.source}`);
           }
         }
         console.log('');
@@ -2545,7 +2554,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           console.log('');
         }
 
-        const smells = store.getArchSmells(repo);
+        const smells = smellsNow();
         console.log('── Architecture Health ────────────────────────────────');
         if (smells.length === 0) {
           console.log('🟢 Clean! No smells detected.');

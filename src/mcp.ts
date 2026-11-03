@@ -23,6 +23,7 @@ import { GraphExporter } from './exporters/graph-exporter.js';
 import { DotExporter } from './exporters/dot-exporter.js';
 import { SvgExporter } from './exporters/svg-exporter.js';
 import { calculateClusterMetrics, calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop } from './core/metrics.js';
+import { currentSmells } from './core/architecture-analyzer.js';
 import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
@@ -2415,7 +2416,8 @@ Callees: ${callees.length}`;
         if ('error' in ctx) return { content: [{ type: 'text', text: ctx.error }] };
 
         const repo = (args as any)?.repo || ctx.config.repo.name;
-        const smells = ctx.store.getArchSmells(repo);
+        // With .mapx/architecture.jsonc, layer violations come from the rules (M5-16).
+        const smells = currentSmells(ctx.store, dir, [repo], { primary: ctx.config.repo.name, repoPaths: Object.fromEntries(ctx.config.repos.map((r: { name: string; path: string }) => [r.name, r.path])) });
 
         if (smells.length === 0) {
           return { content: [{ type: 'text', text: `🟢 Clean! No architectural smells detected for repo "${repo}".` }] };
@@ -2426,7 +2428,9 @@ Callees: ${callees.length}`;
           ...smells.map((s: any) => {
             const filesStr = s.involvedFiles.length > 0 ? `\n    Files: ${s.involvedFiles.join(', ')}` : '';
             const clustersStr = s.involvedClusters && s.involvedClusters.length > 0 ? `\n    Clusters: ${s.involvedClusters.join(', ')}` : '';
-            return `\n  [${s.severity.toUpperCase()}] ${s.type}\n    Description: ${s.description}${filesStr}${clustersStr}\n    Suggestion: ${s.suggestion}`;
+            const layersStr = s.involvedLayers && s.involvedLayers.length > 0 ? `\n    Layers: ${s.involvedLayers.join(', ')}` : '';
+            const sourceStr = s.source ? `\n    Source: ${s.source}` : '';
+            return `\n  [${s.severity.toUpperCase()}] ${s.type}\n    Description: ${s.description}${filesStr}${clustersStr}${layersStr}\n    Suggestion: ${s.suggestion}${sourceStr}`;
           }),
         ].join('\n');
 

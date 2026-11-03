@@ -179,7 +179,7 @@ describe('the AR-11 example document', () => {
     expect(config.layers[0]!.selectors).toEqual([{ path: 'app/Http/**' }]); // the example overrides the base's Http
     expect(config.layers.find((l) => l.name === 'Domain')!.selectors[0]).toEqual({ name: '^App\\\\Domain\\\\', kind: ['class', 'interface', 'enum'] });
     expect(config.scope).toEqual({ types: ['import', 'extends', 'implements', 'call', 'instantiation', 'param_type', 'return_type'], include: [], exclude: ['tests/**', 'database/migrations/**'] });
-    expect(config.policy).toEqual({ inferred: 'warn', inheritDependencies: false, uncovered: { externals: true, builtins: false }, strictLayers: false });
+    expect(config.policy).toEqual({ inferred: 'warn', inheritDependencies: false, uncovered: { externals: true, builtins: false }, strictLayers: false, alsoInferred: false });
     expect(config.rules['Frontend']).toEqual([{ allow: ['PublicApi'], types: ['http'] }]);
     expect(config.rules['*']).toEqual(['!Deprecated', '!DevOnly']);
     expect(config.baseline).toBe('.mapx/architecture.baseline.json');

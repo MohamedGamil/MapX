@@ -1,0 +1,6 @@
+{
+  "name": "arch-smells-fixture",
+  "private": true,
+  "version": "0.0.0",
+  "description": "M5-16 synthetic fixture: rule-derived architecture smells (not a real project)"
+}

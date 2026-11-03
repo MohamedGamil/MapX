@@ -443,8 +443,9 @@ Explain file architectural role classification details and signal weights.
 - `dir` (string, optional): Target project directory
 
 #### `mapx_smells`
-Detect design smells and potential architectural violations.
+Detect design smells and potential architectural violations. With `.mapx/architecture.jsonc`, layer violations come from the rules instead of the file roles, and the rule-derived smells join them, each with a `Source:` line and, for layer-level ones, a `Layers:` line, as `mapx arch --smells` prints them. Without one, the output is unchanged. See [architecture-rules.md](architecture-rules.md#smells).
 - `dir` (string, optional): Target project directory
+- `repo` (string, optional): The repo whose smells to list (default: the workspace's)
 
 #### `mapx_dsm`
 Generate the cluster-level Dependency Structure Matrix (DSM).

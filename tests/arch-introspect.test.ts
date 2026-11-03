@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -415,14 +415,27 @@ describe('allowed agrees with mapx check (property, in process)', CLI, () => {
 
 describe('mapx arch: legacy flags and the exit contract', CLI, () => {
   it('`mapx arch` with only legacy flags prints exactly what it printed before M5-08', () => {
-    for (const [args, golden] of [[[], 'arch.txt'], [['--smells'], 'arch-smells.txt'], [['--dsm'], 'arch-dsm.txt'], [['--violations'], 'arch-violations.txt']] as const) {
-      const r = mapxResult(root, 'arch', ...args);
-      expect(r.status, args.join(' ')).toBe(0);
-      expect(r.stdout, args.join(' ')).toBe(readFileSync(join(LEGACY, golden), 'utf8'));
+    // Since M5-16 the configuration replaces the role-order layer violations in these listings, so
+    // the goldens (captured before either task) are compared with the configuration moved aside.
+    const cfg = join(root, '.mapx/architecture.jsonc');
+    const withRules = mapxResult(root, 'arch', '--violations').stdout;
+    renameSync(cfg, `${cfg}.aside`);
+    try {
+      for (const [args, golden] of [[[], 'arch.txt'], [['--smells'], 'arch-smells.txt'], [['--dsm'], 'arch-dsm.txt'], [['--violations'], 'arch-violations.txt']] as const) {
+        const r = mapxResult(root, 'arch', ...args);
+        expect(r.status, args.join(' ')).toBe(0);
+        expect(r.stdout, args.join(' ')).toBe(readFileSync(join(LEGACY, golden), 'utf8'));
+      }
+      // The path argument and --dir still select the workspace from anywhere.
+      expect(mapxResult(tmpdir(), 'arch', root, '--violations').stdout).toBe(readFileSync(join(LEGACY, 'arch-violations.txt'), 'utf8'));
+      expect(mapxResult(tmpdir(), 'arch', '--dsm', '-d', root).stdout).toBe(readFileSync(join(LEGACY, 'arch-dsm.txt'), 'utf8'));
+    } finally {
+      renameSync(`${cfg}.aside`, cfg);
     }
-    // The path argument and --dir still select the workspace from anywhere.
-    expect(mapxResult(tmpdir(), 'arch', root, '--violations').stdout).toBe(readFileSync(join(LEGACY, 'arch-violations.txt'), 'utf8'));
-    expect(mapxResult(tmpdir(), 'arch', '--dsm', '-d', root).stdout).toBe(readFileSync(join(LEGACY, 'arch-dsm.txt'), 'utf8'));
+    // With the configuration, the violations are the rules' (M5-16), and the DSM is unchanged.
+    expect(withRules).not.toBe(readFileSync(join(LEGACY, 'arch-violations.txt'), 'utf8'));
+    expect(withRules).toContain('    Source:      rules\n');
+    expect(mapxResult(root, 'arch', '--dsm').stdout).toBe(readFileSync(join(LEGACY, 'arch-dsm.txt'), 'utf8'));
   });
 
   it('no configuration or no such view is exit 3; no index is exit 4', () => {

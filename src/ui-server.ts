@@ -12,6 +12,7 @@ import { applyCollapsedRepos, crossRepoPairs, summarizeRepos } from './core/work
 import { indexableChanges } from './core/staleness.js';
 import { MapxGraph } from './core/graph.js';
 import { buildMetricsReport, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
+import { currentSmells } from './core/architecture-analyzer.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
@@ -545,7 +546,8 @@ export function startUiServer(opts: ServerOpts) {
           const config = await loadConfig(dir, store);
           const scope = scopeOf(config, 'primary');
           if (!scope) return;
-          const smells = scope.all ? config.repos.flatMap((r) => store.getArchSmells(r.name)) : store.getArchSmells(scope.name);
+          // With .mapx/architecture.jsonc, layer violations come from the rules (M5-16).
+          const smells = currentSmells(store, dir, scope.all ? config.repos.map((r) => r.name) : [scope.name], { primary: config.repo.name, repoPaths: Object.fromEntries(config.repos.map((r) => [r.name, r.path])) });
           json(200, { smells });
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }

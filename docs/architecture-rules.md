@@ -15,6 +15,7 @@ What exists so far:
 - **MCP tools** (M5-14, AR-19): `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed`, `mapx_arch_explain` and `mapx_arch_init` wrap `mapx check` and the introspection functions. See [mcp-integration.md](mcp-integration.md#architecture-rules-ar-19).
 - **Layer graphs** (M5-13): `mapx arch graph --format dot|svg|mermaid|dsm|json`. See [Layer graphs](#layer-graphs). CLI only: no MCP tool draws the graph yet.
 - **Hierarchy and member selectors, and inherited dependencies** (M5-09): `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`, and `policy.inheritDependencies`. See [Type hierarchy and members](#type-hierarchy-and-members).
+- **Smells from the rules** (M5-16, AR-18): with a configuration, `mapx_smells`, `mapx arch` and the dashboard take their layer violations from the rules and gain the smells the rules make possible. See [Smells](#smells).
 
 `@internal` markers come in M5-09 to M5-11.
 
@@ -385,6 +386,35 @@ A GitHub Actions job, as an example:
 ```
 
 `uncovered` counts the source layer's dependencies on elements in no layer, which have no edge to draw (the report's `layers[].uncovered`). `pointTo` is the layer whose incoming edges point at the group, or null.
+
+## Smells
+
+`mapx_smells`, `mapx arch` (with `--smells` and `--violations`) and the dashboard's `/api/smells` list the smells the last scan found: cycles, hubs, cluster smells, and layer violations inferred from file roles (the role order of the codebase's archetype). Without `.mapx/architecture.jsonc`, that list is exactly as before. With one, the configuration is the one source of layer violations (`docs/research/deptrac/03-mapx-gap-and-integration.md` §3.3):
+
+- **`layer-violation`** smells come from `mapx check`'s report, its baseline applied, one per source file → target file. Each line names the elements, the layers, the rule and the edge types. A violation of severity `error` is `CRITICAL`, a `warn` one `WARNING`.
+- **The role-order violations are dropped,** so an edge is never reported twice. With `"policy": { "alsoInferred": true }` they are kept too, marked `Source: inferred-roles`, but only on edges the rules decide in no way: from a file in no layer, outside the paths the scope excludes. An edge the rules allow, report, baseline or exclude is theirs, and never comes back as inferred.
+- **Errors that make `mapx check` exit 3** (a stale baseline entry, a `+` cycle …) are `architecture-config` smells (`CRITICAL`).
+- **The rules add these smells,** each marked `Source: rules`:
+
+| Smell | When |
+| --- | --- |
+| `layer-cycle` | Layers form a cycle in the observed layer graph: every pair with an allowed or a reported violating dependency, after the baseline. `CRITICAL`. |
+| `layer-skip` | AR-18: in a strictly ordered chain, a layer bypasses the next one down. The chain is written with `+`: each layer's one `+` names the next layer down (`Controller: ["+Service"]`, `Service: ["+Repository"]`). A dependency on a layer of the source's chain past its next one skips the layers between that have elements, and the message names them all (`bypassing Service, Repository`). A layer the source's own rules or the `*` defaults name is no skip. A layer off the chain is no skip either, such as a shared kernel some layer allows plainly and the source reaches through `+`. A layer with several `+` ends the chain. One per source file → target file. |
+| `dead-allowance` | An allowance the rules write for the pair (explicit, or the layer a `+` names) that no dependency uses, as `mapx arch unused` counts uses. Inherited grants and the `*` wildcard are not reported. A `"*"` default (`"*": ["Util"]`) is dead only when no layer uses it, and is then reported once, as `* → Util`. |
+| `weak-allowance` | The same, used by only 1 or 2 stored edges (`mapx arch unused --limit 2`; a `"*"` default, by all layers together): a candidate for removing the coupling. |
+| `unstable-layer-dependency` | Martin's Stable Dependencies Principle per layer pair: the source layer is more stable than its target, I(source) < I(target). |
+| `abstractness-distance` | A layer with types and dependencies is far from the main sequence: D = \|A + I − 1\| > 0.7, in the zone of pain (concrete and stable) or of uselessness (abstract and unstable). |
+| `deprecated-usage` | An edge in the configuration's scope into an element tagged `@deprecated` (a Python `@deprecated` decorator counts), or a member of one, from outside it. Deprecated code using deprecated code is not reported. |
+
+Instability is I = Ce / (Ca + Ce) per layer, counted in files. Ca counts the files outside the layer with a dependency on it, and Ce the files of the layer with a dependency outside it, allowed or violating. A file counts once, whatever it declares. Abstractness A is the share of interfaces and traits among the layer's top-level types.
+
+**The baseline.** The layer graph (cycles, instability, distance) is the one after the baseline. A baselined violation is acknowledged debt: it is neither a smell nor a coupling, so it makes no cycle. Tracking that debt is a separate smell (`baseline-debt`, not built yet).
+
+**Composed when read.** Rule smells are computed each time they are listed, from the index and the configuration as they are, so an edited configuration applies without a rescan. The edges are evaluated once per listing. In a multi-repo workspace, layer-level smells (cycles, allowances, stability, distance) belong to the workspace's primary repo, and the others to their source file's repo.
+
+**A configuration that cannot be loaded** (or an invalid baseline) keeps the role-order violations, marked `inferred-roles`, and adds an `architecture-config` smell naming the first problem. `mapx arch validate-config` lists them all.
+
+Package-based smells (`vendor-leak`, `undeclared-dependency`, `dev-dependency-in-prod`) wait for package selectors (M5-24).
 
 ## Baselines and the ratchet
 
