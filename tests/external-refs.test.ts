@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import Database from 'better-sqlite3';
@@ -2895,6 +2895,124 @@ describe('Go modules attribution of a scan', () => {
       'cmd/main.go:5 github.com/x/z → github.com/x/z package 1 0 lock',
     ]);
   }, 120000);
+
+  // M5-25-R3: a local replacement folder outside the MapX workspace is no package of the workspace.
+  // Synthetic, labelled: svc/go.mod replaces out (unversioned) and pinned (v1.2.0, the required
+  // version) by folders outside the workspace, lib by ../lib (outside the module, inside the
+  // workspace) and inlib v0.1.0 by ./inlib; the root go.work replaces wk by a folder outside.
+  it('a local replace outside the workspace makes the module external; one inside stays internal', async () => {
+    p.create({
+      'go.work': 'go 1.22\n\nuse ./svc\n\nreplace github.com/x/wk => ../outside/wk\n',
+      'svc/go.mod': [
+        'module example.com/svc', '', 'go 1.22', '', 'require (', '\tgithub.com/google/uuid v1.6.0', '\tgithub.com/x/out v1.0.0',
+        '\tgithub.com/x/pinned v1.2.0', '\tgithub.com/x/wk v1.0.0', '\texample.com/lib v0.0.0', '\texample.com/inlib v0.1.0', ')', '',
+        'replace github.com/x/out => ../../outside/out', 'replace github.com/x/pinned v1.2.0 => ../../outside/pinned',
+        'replace example.com/lib => ../lib', 'replace example.com/inlib v0.1.0 => ./inlib', '',
+      ].join('\n'),
+      // go.sum holds no hash of a directory replacement, and complete without one.
+      'svc/go.sum': sumLines('github.com/google/uuid v1.6.0'),
+      'lib/go.mod': 'module example.com/lib\n\ngo 1.22\n',
+      'lib/lib.go': 'package lib\n\nfunc Lib() {}\n',
+      'svc/inlib/inlib.go': 'package inlib\n\nfunc In() {}\n',
+      'svc/cmd/main.go': [
+        'package main', '', 'import (', '\t"example.com/inlib"', '\t"example.com/lib"', '\t"github.com/google/uuid"', '\t"github.com/x/out"',
+        '\t"github.com/x/out/sub"', '\t"github.com/x/pinned"', '\t"github.com/x/wk"', ')', '',
+        'func main() { inlib.In(); lib.Lib(); uuid.New(); out.F(); sub.G(); pinned.P(); wk.W() }', '',
+      ].join('\n'),
+    });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    // Attributed to the replaced module, `manifest`: no lock vouches for a directory (review).
+    expect(goAttribution(store)).toEqual([
+      'svc/cmd/main.go:10 github.com/x/wk → github.com/x/wk package 1 0 manifest',
+      'svc/cmd/main.go:6 github.com/google/uuid → github.com/google/uuid package 1 0 lock',
+      'svc/cmd/main.go:7 github.com/x/out → github.com/x/out package 1 0 manifest',
+      'svc/cmd/main.go:8 github.com/x/out/sub → github.com/x/out package 1 0 manifest',
+      'svc/cmd/main.go:9 github.com/x/pinned → github.com/x/pinned package 1 0 manifest',
+    ]);
+    // ../lib and ./inlib are workspace folders: import edges, no rows.
+    expect(store.getAllEdges().filter((e) => e.edge_type === 'import').map((e) => `${e.source_file} → ${e.target_file}`).sort())
+      .toEqual(['svc/cmd/main.go → lib/lib.go', 'svc/cmd/main.go → svc/inlib/inlib.go']);
+  }, 120000);
+
+  // Review of M5-25-R3 (P2): the attribution of a directory replacement does not depend on go.sum.
+  it('a directory replacement is `manifest` with a go.sum, with an unrelated one and with none', async () => {
+    const files = (sum: string | null) => present({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n\nrequire github.com/x/out v1.0.0\n\nreplace github.com/x/out => ../outside/out\n',
+      'go.sum': sum,
+      'cmd/main.go': 'package main\n\nimport "github.com/x/out"\n\nfunc main() { out.F() }\n',
+    });
+    for (const sum of [sumLines('github.com/x/out v1.0.0'), sumLines('github.com/google/uuid v1.6.0'), null]) {
+      expect(await scan(files(sum)), String(sum)).toEqual(['cmd/main.go:3 github.com/x/out → github.com/x/out package 1 0 manifest']);
+    }
+  }, 120000);
+
+  // Review of M5-25-R3 (P1, P2): a replace target is judged by its real path and the registered
+  // repos. Layout (base/): ws/ is the workspace root, holding app/ (a repo) and lib/; ext/ is a repo
+  // registered at ../ext; outside/y is registered nowhere; base/link-to-lib -> ws/lib; ws/link-out ->
+  // ../outside/y; ws/link-ext -> ../ext.
+  describe('where a replace target lies', () => {
+    const layout = (registerExt: boolean) => {
+      const base = tempDir('replace-');
+      write(base, {
+        'ws/app/go.mod': [
+          'module example.com/app', '', 'go 1.22', '', 'require (', '\texample.com/ext v0.0.0', '\texample.com/lib v0.0.0', '\texample.com/y v0.0.0',
+          '\texample.com/out v0.0.0', '\texample.com/ext2 v0.0.0', ')', '',
+          'replace example.com/ext => ../../ext', 'replace example.com/lib => ../../link-to-lib', 'replace example.com/y => ../../outside/y',
+          'replace example.com/out => ../link-out', 'replace example.com/ext2 => ../link-ext', '',
+        ].join('\n'),
+        'ws/app/main.go': [
+          'package main', '', 'import (', '\t"example.com/ext/pkg"', '\t"example.com/ext2/pkg"', '\t"example.com/lib"', '\t"example.com/out"', '\t"example.com/y"', ')', '',
+          'func main() { pkg.A(); lib.L(); out.O(); y.Y() }', '',
+        ].join('\n'),
+        'ws/lib/lib.go': 'package lib\n\nfunc L() {}\n',
+        'ext/go.mod': 'module example.com/ext\n\ngo 1.22\n',
+        'ext/pkg/p.go': 'package pkg\n\nfunc A() {}\n',
+        'outside/y/y.go': 'package y\n\nfunc Y() {}\n',
+        'outside/o/o.go': 'package o\n\nfunc O() {}\n',
+      });
+      // The real `init` writes the defaults; the repos are then the layout's.
+      init(join(base, 'ws'));
+      const configPath = join(base, 'ws/.mapx/config.json');
+      const config = JSON.parse(readFileSync(configPath, 'utf8'));
+      config.repos = [{ name: 'app', path: 'app' }, ...(registerExt ? [{ name: 'ext', path: '../ext' }] : []), { name: 'lib', path: 'lib' }];
+      writeFileSync(configPath, JSON.stringify(config));
+      symlinkSync(join(base, 'ws/lib'), join(base, 'link-to-lib'));
+      symlinkSync('../outside/o', join(base, 'ws/link-out'));
+      symlinkSync('../ext', join(base, 'ws/link-ext'));
+      return base;
+    };
+    const scanned = async (base: string) => {
+      const config = await Config.load(join(base, 'ws'));
+      const store = new Store(':memory:');
+      await new Scanner(store, config, new MapxGraph(config.repos[0]!.name)).scanFull();
+      return store;
+    };
+    const imports = (store: Store) => store.getAllEdges().filter((e) => e.edge_type === 'import' && e.source_file === 'app/main.go')
+      .map((e) => e.target_file).sort();
+
+    it('a folder in a registered repo above the root is internal; a link to the workspace is internal; a folder or link out of every repo is external', async () => {
+      const store = await scanned(layout(true));
+      // ext (replace to the registered ../ext), ext2 (a link to it) and lib (a link from outside to ws/lib).
+      expect(imports(store)).toEqual(['../ext/pkg/p.go', '../ext/pkg/p.go', 'lib/lib.go']);
+      // y and out (a link to a folder no repo holds) are external, attributed to their module.
+      expect(goAttribution(store)).toEqual([
+        'app/main.go:7 example.com/out → example.com/out package 1 0 manifest',
+        'app/main.go:8 example.com/y → example.com/y package 1 0 manifest',
+      ]);
+    }, 120000);
+
+    it('the same folder is external once no repo holds it', async () => {
+      const store = await scanned(layout(false));
+      expect(imports(store)).toEqual(['lib/lib.go']);
+      expect(goAttribution(store)).toEqual([
+        'app/main.go:4 example.com/ext/pkg → example.com/ext package 1 0 manifest',
+        'app/main.go:5 example.com/ext2/pkg → example.com/ext2 package 1 0 manifest',
+        'app/main.go:7 example.com/out → example.com/out package 1 0 manifest',
+        'app/main.go:8 example.com/y → example.com/y package 1 0 manifest',
+      ]);
+    }, 120000);
+  });
 
   it('a replacement go.sum lacks makes it stale; a go.work replace overrides go.mod\'s; a required replacement target stays a module', async () => {
     expect(await scan({

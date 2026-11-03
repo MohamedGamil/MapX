@@ -234,7 +234,8 @@ export function goModuleOf(path: string, candidates: Iterable<string>): string |
  *   every version; go.work's directives override the modules'.
  * - `attribution` is `lock` when a readable go.sum holds the module (or its replacement), else
  *   `manifest`: no go.sum, an unreadable one, or a stale one that lacks a module go.mod requires
- *   (one replaced by a local directory needs no hash).
+ *   (one replaced by a local directory needs no hash). A module replaced by a directory outside the
+ *   workspace is always `manifest`: go.sum holds no hash of a directory (M5-25-R3).
  * - No module: the package is unknown (null). Not in the build list (`direct` 0) when a complete
  *   go.sum was read and the path has a dot; else `direct` null.
  * - `dev` is set by the caller from the code (`goTestOnlyModules`); Go has no dev requirements.
@@ -277,8 +278,11 @@ export class GoAttributor {
     // From go 1.17 a module no go.mod requires provides no package of the build (review of M5-23).
     if (ctx.pruned && !ctx.required.has(module)) return { package: module, origin: 'package', direct: null, dev: null, attribution: 'lock' };
     // go.sum holds a replaced module's hash under its replacement. A module replaced by a local
-    // directory is the workspace's (M5-25-R1) and has no row.
-    const locked = ctx.sum !== null && ctx.sum.has(ctx.replacement(module)?.path ?? module);
+    // directory has a row only when the directory is outside the workspace (M5-25-R1, M5-25-R3).
+    // go.sum never holds a directory's hash, so no lock vouches for it: `manifest`, whether or not a
+    // go.sum exists (review of M5-25-R3).
+    const replacement = ctx.replacement(module);
+    const locked = ctx.sum !== null && !replacement?.local && ctx.sum.has(replacement?.path ?? module);
     const required = ctx.mod?.requires.get(module);
     return { package: module, origin: 'package', direct: !!required && !required.indirect, dev: false, attribution: locked ? 'lock' : 'manifest' };
   }

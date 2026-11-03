@@ -12,6 +12,12 @@ export interface ImportContext {
   readText(path: string): string | null;
   /** True when a workspace-relative path is there, readable or not (a go.mod without permission, M5-23-R1). */
   exists?(path: string): boolean;
+  /**
+   * Where a local Go `replace` or go.work `use` folder lies, as a workspace-relative path with
+   * symlinks resolved, or null when it is outside the workspace and every registered repo. Without
+   * it a folder is judged by its path alone (M5-25-R3).
+   */
+  localDir?(path: string): string | null;
   /** Files declaring a namespace (C#), from the symbol index. */
   namespaceFiles?(namespace: string): string[];
   /** Files declaring a type (class, struct, interface, enum, record) named `name` (C#). */
@@ -186,21 +192,30 @@ export function resolveRustImport(target: string, sourcePath: string, ctx: Impor
   return null;
 }
 
+/** A workspace-relative path that climbs out of the workspace (`..`, `../x`). */
+const outsideWorkspace = (path: string) => path === '..' || path.startsWith('../');
+
+/** The workspace-relative folder a local replace or `use` names, or null when it is outside the workspace and its repos (M5-25-R3). */
+const goLocalDir = (path: string, ctx: ImportContext): string | null => ctx.localDir ? ctx.localDir(path) : outsideWorkspace(path) ? null : path;
+
 // The module path may be quoted: `module "example.com/m"` (or a raw string in backquotes).
 const goModulePath = (gomod: string | null | undefined) => gomod?.match(/^module\s+["`]?([^\s"`]+)/m)?.[1];
 
 /**
  * `replace M [v] => ./dir` directives of a go.mod or go.work naming a local directory: [module, dir]
  * (M5-25-R1). In a go.mod, a directive that names a version applies only when go.mod requires
- * that version of M (review of M5-23).
+ * that version of M (review of M5-23). A directory outside the workspace (`../../outside/y`) holds
+ * no package of it, so its module stays external (M5-25-R3).
  */
-function goLocalReplaces(text: string, dir: string): [string, string][] {
+function goLocalReplaces(text: string, dir: string, ctx: ImportContext): [string, string][] {
   let requires: ReturnType<typeof parseGoMod>['requires'] | null = null;
   try { requires = parseGoMod(text).requires; } catch { /* a go.work: no requirements */ }
   const out: [string, string][] = [];
   for (const line of text.replace(/\/\/.*$/gm, '').split('\n')) {
     const m = line.match(/^\s*(?:replace\s+)?([^\s()]+)(?:\s+(v\S+))?\s*=>\s*(\.\.?(?:\/\S*)?)\s*$/);
-    if (m && !(m[2] && requires && requires.get(m[1]!)?.version !== m[2])) out.push([m[1]!, join(dir, m[3]!)]);
+    if (!m || (m[2] && requires && requires.get(m[1]!)?.version !== m[2])) continue;
+    const local = goLocalDir(join(dir, m[3]!), ctx);
+    if (local !== null) out.push([m[1]!, local]);
   }
   return out;
 }
@@ -216,14 +231,14 @@ function goWorkModules(sourcePath: string, ctx: ImportContext): [string, string]
         .map((u) => u.replace(/^["`]|["`]$/g, '')).filter(Boolean);
       const modules: [string, string][] = [];
       for (const use of uses) {
-        const moduleDir = join(dir, use);
-        // Nothing outside the workspace is read.
-        if (moduleDir === '..' || moduleDir.startsWith('../')) continue;
+        // Nothing outside the workspace and its repos is read.
+        const moduleDir = goLocalDir(join(dir, use), ctx);
+        if (moduleDir === null) continue;
         // A member whose go.mod cannot be read: its folder layout (review of M5-23-R1).
         const module = goModuleIn(moduleDir, ctx)?.module;
         if (module) modules.push([module, moduleDir]);
       }
-      return [...goLocalReplaces(text, dir), ...modules];
+      return [...goLocalReplaces(text, dir, ctx), ...modules];
     }
     if (!dir) return [];
   }
@@ -299,7 +314,7 @@ export function resolveGoImport(target: string, sourcePath: string, ctx: ImportC
     if (module) {
       const hit = inModule(module, dir);
       if (hit !== undefined) return hit;
-      for (const [replaced, local] of found?.gomod ? goLocalReplaces(found.gomod, dir) : []) {
+      for (const [replaced, local] of found?.gomod ? goLocalReplaces(found.gomod, dir, ctx) : []) {
         const viaReplace = inModule(replaced, local);
         if (viaReplace !== undefined) return viaReplace;
       }
@@ -323,7 +338,7 @@ export function goImportInWorkspaceModule(target: string, sourcePath: string, ct
   const within = (module: string) => path === module || path.startsWith(`${module}/`);
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
     const found = goModuleIn(dir, ctx);
-    if (found && (within(found.module) || (found.gomod !== null && goLocalReplaces(found.gomod, dir).some(([replaced]) => within(replaced))))) return true;
+    if (found && (within(found.module) || (found.gomod !== null && goLocalReplaces(found.gomod, dir, ctx).some(([replaced]) => within(replaced))))) return true;
     if (!dir) break;
   }
   return goWorkModules(sourcePath, ctx).some(([module]) => within(module));

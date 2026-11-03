@@ -1,5 +1,5 @@
 import { readFile, writeFile, unlink, stat, lstat, readdir, open } from 'node:fs/promises';
-import { accessSync, constants as fsConstants, existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { accessSync, constants as fsConstants, existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { resolve, relative, extname, join, basename, dirname, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { cpus } from 'node:os';
@@ -2693,6 +2693,7 @@ export class Scanner {
     this.importFiles = null;
     this.importTextCache.clear();
     this.importPresentCache.clear();
+    this.goLocalDirCache.clear();
     this.languageCache.clear();
     this.npmWorkspaceNames = null;
     this.phpDeclared = null;
@@ -2821,7 +2822,36 @@ export class Scanner {
   /** The import resolvers' context over this phase's file set. */
   private importContext(fileMap: Map<string, string>): ImportContext {
     if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
-    return { files: this.importFiles.files, readText: (path) => this.readWorkspaceText(path), exists: (path) => this.workspaceExists(path) };
+    return { files: this.importFiles.files, readText: (path) => this.readWorkspaceText(path), exists: (path) => this.workspaceExists(path), localDir: (path) => this.goLocalDir(path) };
+  }
+
+  /**
+   * Where a Go `replace` / `use` folder lies (M5-25-R3 and its review): its real path, symlinks
+   * resolved, as a workspace-relative path, or null when it is outside the workspace root and every
+   * registered repo (a repo may be registered above the root, `../ext`). A link into the workspace
+   * gives the folder it points at; a link out of it is outside, as the walk never follows symlinks,
+   * so nothing under it is indexed. A folder that is not there is judged by its nearest folder that is.
+   */
+  private goLocalDir(path: string): string | null {
+    const cached = this.goLocalDirCache.get(path);
+    if (cached !== undefined) return cached;
+    const root = this.config.getWorkspaceRoot();
+    const real = (p: string): string | null => { try { return realpathSync(p); } catch { return null; } };
+    let existing = resolve(root, path);
+    let rest = '';
+    let base = real(existing);
+    while (base === null && existing !== dirname(existing)) {
+      rest = join(basename(existing), rest);
+      existing = dirname(existing);
+      base = real(existing);
+    }
+    const realRoot = real(root) ?? root;
+    const target = base === null ? resolve(root, path) : join(base, rest);
+    const inside = [realRoot, ...this.config.repos.map(r => real(resolve(root, r.path)) ?? resolve(root, r.path))]
+      .some(r => target === r || target.startsWith(r.endsWith(sep) ? r : r + sep));
+    const found = inside ? relative(realRoot, target).split(sep).join('/') : null;
+    this.goLocalDirCache.set(path, found);
+    return found;
   }
 
   /** A JS/TS file's import, export-from and require statements, for one resolution phase (M5-19). */
@@ -3394,6 +3424,7 @@ export class Scanner {
     this.vueImporters.clear();
     this.importTextCache.clear();
     this.importPresentCache.clear();
+    this.goLocalDirCache.clear();
     const key = 'vue_dir_scopes:' + repoName;
     const gone = new Set(deleted);
     const indexed = [...new Set([...this.store.getAllFiles(repoName).map(f => f.path as string), ...files.map(f => f.path)])]
@@ -3492,6 +3523,7 @@ export class Scanner {
   private importFiles: { map: Map<string, string>; files: Set<string> } | null = null;
   private importTextCache = new Map<string, string | null>();
   private importPresentCache = new Map<string, boolean>();
+  private goLocalDirCache = new Map<string, string | null>();
   private languageCache = new Map<string, string | null>();
   // PHP file → the namespace it declares ('' for none), built with the symbol index (M0-04-R2).
   private phpNamespaces = new Map<string, string>();
@@ -3716,6 +3748,7 @@ export class Scanner {
       files,
       readText: (path) => this.readWorkspaceText(path),
       exists: (path) => this.workspaceExists(path),
+      localDir: (path) => this.goLocalDir(path),
       namespaceFiles: (namespace) => declaring(namespace, NAMESPACE_KINDS),
       typeFiles: (name) => declaring(name, TYPE_KINDS),
       fileNamespace: (file) => this.phpNamespaces.get(file) ?? null,
@@ -4980,6 +5013,7 @@ export class Scanner {
     this.importFiles = null;
     this.importTextCache.clear();
     this.importPresentCache.clear();
+    this.goLocalDirCache.clear();
     this.importBindingsCache.clear();
     this.exportCache.clear();
     this.lineCache.clear();
