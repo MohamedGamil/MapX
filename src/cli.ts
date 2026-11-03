@@ -23,7 +23,8 @@ import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { getChangedFiles, isGitRepo, type GitFileStatus } from './core/git-tracker.js';
 import { findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
-import { outdatedIndexWarning, outdatedRepos } from './core/extractor-version.js';
+import { outdatedIndexWarning } from './core/extractor-version.js';
+import { indexGate } from './arch/index-gate.js';
 import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
@@ -2748,6 +2749,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       for (const d of r.decisions) lines.push(`  ${d.allowed ? '✔' : '✖'} ${d.edgeType ?? ''}${d.sourceLayer ? ` [${d.sourceLayer}]` : ''} ${d.rule} (${d.severity})${d.observed ? `, in the index (${d.verifiability})` : ''}`);
     }
     if (!r.allowed && r.from.layers.length) lines.push(`${r.from.layers.join(', ')} may depend on: ${r.allowedLayers.join(', ') || 'no other layer'}`);
+    // AR-19 alternatives (M5-14): symbols in those layers that match the target.
+    for (const a of r.alternatives) lines.push(`  instead, in ${a.layer}: ${a.symbols.map((s) => `${s.element} (${s.match})`).join(', ')}${a.total > a.symbols.length ? `, and ${a.total - a.symbols.length} more` : ''}`);
     return { json: r, text: lines.join('\n'), exit: r.exitCode ? EXIT.violations : EXIT.ok };
   }, { configure: (c) => c.argument('<from>', 'Source layer, file or symbol').argument('<to>', 'Target layer, file or symbol').option('--type <edgeType>', 'Decide for this edge type only (default: the types the index has between the two, else every type in scope)') });
 
@@ -3723,55 +3726,23 @@ export async function loadContext(dir: string): Promise<{
 }
 
 /**
- * The index gate of `mapx check` and the `mapx arch` introspection subcommands (AR-17, exit 4): an
- * index exists, every registered repo has a completed scan, no file changed since it (unless `sync`
- * brings the index up to date first, or `allowStale`), and no older MapX built it. Prints why and
- * sets exit 4, returning null, when the index cannot be used; `problems` collects the messages
- * for a caller that also reports them in JSON.
+ * The index gate of `mapx check` and the `mapx arch` introspection subcommands (AR-17, exit 4; see
+ * src/arch/index-gate.ts, shared with the mapx_arch_* MCP tools). Prints why and sets exit 4,
+ * returning null, when the index cannot be used; `problems` collects the messages for a caller that
+ * also reports them in JSON.
  */
 async function openCurrentIndex(dir: string, options: { sync?: boolean; command: string; allowStale?: boolean; problems?: string[] }): Promise<Awaited<ReturnType<typeof loadContext>> | null> {
-  const report = (message: string) => { console.error(message); options.problems?.push(message); };
-  if (!existsSync(resolve(dir, '.mapx', 'config.json')) || !existsSync(resolve(dir, '.mapx', 'mapx.db'))) {
-    report(`No MapX index in ${dir}: run \`mapx init\` and \`mapx scan\` first.`);
-    process.exitCode = EXIT.index;
-    return null;
-  }
-  const context = await loadContext(dir);
-  const { config, store, graph } = context;
-  // An index file exists as soon as any command opens it: only a finished scan of every
-  // registered repo counts (review of M5-05: an unscanned index passed as clean).
-  const unscanned = config.repos.filter((r) => !store.getMeta(`last_scan_time:${r.name}`)).map((r) => r.name);
-  if (unscanned.length) {
-    report(`The index has no completed scan of ${unscanned.join(', ')}: run \`mapx scan\` first.`);
-    process.exitCode = EXIT.index;
-    return null;
-  }
-  // A walk of the workspace: new files count in a non-git workspace and in nested repos too.
-  const stale = options.allowStale ? null : findStaleFiles(store, dir);
-  // An index an older extractor built is stale too: its edges may predate a fix (M5-26).
-  const outdated = outdatedRepos(store, config.repos.map((r) => r.name));
-  const staleFiles = stale ? staleCount(stale) : 0;
-  if (staleFiles > 0 || outdated.length) {
-    if (!options.sync) {
-      if (staleFiles > 0) {
-        const names = staleNames(stale!, 5);
-        report(`The index is stale: ${staleFiles} file(s) changed since the last scan (${names.join(', ')}${staleFiles > names.length ? ', …' : ''}). Run \`mapx update\`, or \`${options.command} --sync\`.`);
-      }
-      if (outdated.length) report(`The index of ${outdated.join(', ')} was built by an older MapX: run \`mapx scan\`${options.allowStale ? '' : `, or \`${options.command} --sync\`,`} to rebuild it.`);
-      process.exitCode = EXIT.index;
-      return null;
-    }
-    // The sync re-parses every file of an outdated repo. One it could not rebuild (a missing
-    // folder, an interrupted sync) is still outdated: the gate holds (review of M5-26).
-    await new Scanner(store, config, graph).scanIncremental();
-    const still = outdatedRepos(store, config.repos.map((r) => r.name));
-    if (still.length) {
-      report(`The index of ${still.join(', ')} was built by an older MapX and the sync could not rebuild it: run \`mapx scan\`.`);
-      process.exitCode = EXIT.index;
-      return null;
-    }
-  }
-  return context;
+  const gate = await indexGate(dir, () => loadContext(dir), {
+    allowStale: options.allowStale,
+    sync: options.sync ? ({ store, config, graph }) => new Scanner(store, config, graph).scanIncremental() : undefined,
+    syncAdvice: `\`${options.command} --sync\``,
+    updateAdvice: '`mapx update`',
+  });
+  if ('context' in gate) return gate.context;
+  for (const message of gate.problems) console.error(message);
+  options.problems?.push(...gate.problems);
+  process.exitCode = EXIT.index;
+  return null;
 }
 
 export function getStaleFilesCount(store: Store, dir: string): number {

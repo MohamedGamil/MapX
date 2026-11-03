@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
  * tool count, new feature references, and structural integrity.
  */
 describe('Agent Templates', () => {
-  const EXPECTED_TOOL_COUNT = 34;
+  const EXPECTED_TOOL_COUNT = 39;
 
   describe('Template registry', () => {
     it('should have all expected templates', () => {
@@ -94,6 +94,22 @@ describe('Agent Templates', () => {
     it('instructions should reference format parameter', () => {
       expect(TEMPLATES.instructions.content).toContain('format');
     });
+  });
+
+  // M5-14 (AR-19): the architecture tools, and checking a dependency before writing it.
+  describe('Architecture rules', () => {
+    const ARCH_TOOLS = ['mapx_arch_check', 'mapx_arch_layers', 'mapx_arch_allowed', 'mapx_arch_explain', 'mapx_arch_init', 'mapx_arch_validate_config'];
+    for (const key of ['generic', 'claude', 'cursor', 'antigravity', 'instructions']) {
+      it(`${key} lists every architecture tool and says to call mapx_arch_allowed before a cross-module import`, () => {
+        for (const tool of ARCH_TOOLS) expect(TEMPLATES[key].content).toContain(`\`${tool}\``);
+        expect(TEMPLATES[key].content).toContain('Before adding an import across modules, call `mapx_arch_allowed`');
+      });
+    }
+    for (const key of ['windsurf', 'cline']) {
+      it(`${key} names mapx_arch_allowed for imports across modules`, () => {
+        expect(TEMPLATES[key].content).toMatch(/mapx_arch_allowed.*before adding an import across modules|Before adding an import across modules/i);
+      });
+    }
   });
 
   describe('Essential tool references', () => {

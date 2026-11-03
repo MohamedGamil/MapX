@@ -9,9 +9,10 @@ What exists so far:
 - **Rule evaluation and the report** (M5-04): policy expansion, the evaluation chain, findings with fingerprints, and the layer matrix.
 - **`mapx check`** (M5-05): the table and JSON reporters, and the exit contract. See [cli-reference.md](cli-reference.md#mapx-check).
 - **`mapx arch validate-config`** and the MCP tool `mapx_arch_validate_config` (M5-02-R1): validate the configuration alone, without an index.
-- **Baselines and the `--compare` ratchet** (M5-06): see [Baselines and the ratchet](#baselines-and-the-ratchet). These are CLI only for now: `mapx check` has no MCP tool yet (M5-14).
-- **Introspection** (M5-08): `mapx arch layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed`. See [Introspection](#introspection). They are CLI only until M5-14.
+- **Baselines and the `--compare` ratchet** (M5-06): see [Baselines and the ratchet](#baselines-and-the-ratchet). They are CLI only: `mapx_arch_check` applies the configuration's baseline but cannot generate one or compare.
+- **Introspection** (M5-08): `mapx arch layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed`. See [Introspection](#introspection).
 - **CI reports** (M5-07): `--format sarif`, `github` (automatic inside GitHub Actions), `codeclimate` and `junit`. See [CI reports](#ci-reports).
+- **MCP tools** (M5-14, AR-19): `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed`, `mapx_arch_explain` and `mapx_arch_init` wrap `mapx check` and the introspection functions. See [mcp-integration.md](mcp-integration.md#architecture-rules-ar-19).
 
 `@internal` markers come in M5-09 to M5-11.
 
@@ -376,7 +377,7 @@ mapx check --compare /tmp/base.json
 
 ## Introspection
 
-The `mapx arch` subcommands answer questions about the configuration from the index (AR-13, Deptrac's `debug:*` commands). Their options and exit codes are in [cli-reference.md](cli-reference.md#mapx-arch-introspection-subcommands). With `--format json` each prints the object the matching function of `src/arch/introspect.ts` returns, which the MCP tools will share (M5-14).
+The `mapx arch` subcommands answer questions about the configuration from the index (AR-13, Deptrac's `debug:*` commands). Their options and exit codes are in [cli-reference.md](cli-reference.md#mapx-arch-introspection-subcommands). With `--format json` each prints the object the matching function of `src/arch/introspect.ts` returns. The `mapx_arch_layers`, `mapx_arch_allowed` and `mapx_arch_explain` MCP tools return the same objects (M5-14).
 
 - **Elements.** An element is `{ element, kind, symbolKind?, file }`: `element` is a symbol's qualified name or a file's path, and `kind` is `file` or `symbol`.
 - **Errors.** Every failure prints `{ "error": "…" }` on stdout in JSON, whatever its exit code. An ambiguous name or an unknown layer adds `candidates`, and an invalid configuration adds `issues: [{ file, pointer, message }]`.
@@ -430,7 +431,8 @@ The `mapx arch` subcommands answer questions about the configuration from the in
 ```
 { from, to, edgeType, allowed, rule, severity, reason, exitCode,
   decisions: [{ edgeType, observed, verifiability, sourceLayer, allowed, rule, severity, via?, violatedLayers?, reason }],
-  allowedTypes, allowedLayers }
+  allowedTypes, allowedLayers,
+  alternatives: [{ layer, total, symbols: [{ element, kind, symbolKind?, file, match: supertype|name }] }] }
 ```
 
 - **`from`, `to`:** `{ query, kind: layer|file|symbol, element?, file?, layers, overlays, private, inScope }`.
@@ -447,7 +449,12 @@ The `mapx arch` subcommands answer questions about the configuration from the in
   - `edgeType`, `verifiability` and `sourceLayer` are null only for an answer that involves no edge type (`unassigned-source`, or an end out of scope).
   - `observed` is true when the decision is on edges the index has.
 - **`allowedTypes`:** the edge types decided without any violation.
-- **`allowedLayers`:** the layers every source layer may depend on, through full (non-advisory) allowances for `--type`. These are the alternatives.
+- **`allowedLayers`:** the layers every source layer may depend on, through full (non-advisory) allowances for `--type`.
+- **`alternatives`** (M5-14, AR-19): for a refused dependency on a file or symbol, the layers that already expose a matching symbol, in configuration order. The layers are the source's own layers and `allowedLayers`. A file target stands for its top-level symbols, and a member for its type.
+  - **Matches.** A symbol matches as a `supertype` (a class or interface the target extends or implements, transitively, through stored edges) or by `name`. A name match is a top-level symbol with the target's name, or with the end of it, at least 4 characters long: `OrderRepository` for `SqlOrderRepository`.
+  - **Eligible symbols.** A symbol is listed only when `allowed` from the same source to it (for `--type`, or every type in scope) is itself allowed: layers, private parts, `@internal` markers and scope all apply.
+  - **The cap.** At most 10 symbols per layer are listed; `total` counts them all.
+  - **When it is empty.** An allowed answer, or a layer target, has none. The text output prints them as `instead, in <layer>: …`.
 - **No baseline.** No baseline applies: a baselined violation is still reported.
 - **Elements must be in the index.** A file that does not exist yet cannot be named, so name its layer instead.
 

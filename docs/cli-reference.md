@@ -881,6 +881,12 @@ $ mapx arch allowed OrderController Order
   ✖ import [Controller] disallowed-layer (error), in the index (verified)
   ✖ instantiation [Controller] disallowed-layer (error), in the index (verified)
 Controller may depend on: Application
+$ mapx arch allowed PlaceOrder SqlOrderRepository          # AR-19 alternatives (M5-14)
+✖ not allowed (disallowed-layer, error): Application may not depend on Infrastructure over import: no rule allows it
+  ✖ import [Application] disallowed-layer (error), in the index (verified)
+  ✖ instantiation [Application] disallowed-layer (error), in the index (verified)
+Application may depend on: Domain
+  instead, in Domain: src/domain/OrderRepository.ts#OrderRepository (supertype)
 $ mapx arch changed --since origin/main --with-dependents --json   # selective CI
 $ mapx arch unassigned --kind class                                # coverage gate: exit 2 if any
 ```

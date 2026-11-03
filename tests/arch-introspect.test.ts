@@ -229,6 +229,7 @@ describe('mapx arch allowed (AR-13g)', CLI, () => {
       from: layer('Controller'), to: layer('Domain'), edgeType: null, allowed: false, rule: 'disallowed-layer', severity: 'error',
       reason: 'Controller may not depend on Domain over import: no rule allows it', exitCode: 1,
       decisions: hypothetical('Controller', refused), allowedTypes: [], allowedLayers: ['Application'],
+      alternatives: [], // a layer target has none (M5-14)
     } });
   });
 
@@ -240,6 +241,7 @@ describe('mapx arch allowed (AR-13g)', CLI, () => {
       to: { query: 'PricingRules', kind: 'symbol', element: 'src/application/internal/PricingRules.ts#PricingRules', file: 'src/application/internal/PricingRules.ts', layers: ['Application'], overlays: [], private: ['Application'], inScope: true },
       edgeType: null, allowed: false, rule: 'private-layer', severity: 'error', reason, exitCode: 1,
       decisions: [decision('import'), decision('instantiation')], allowedTypes: [], allowedLayers: ['Application'],
+      alternatives: [], // nothing in Controller or Application is named like PricingRules but itself (M5-14)
     } });
   });
 

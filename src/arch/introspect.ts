@@ -20,7 +20,7 @@ import { SYMBOL_KINDS, type ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership, type TraceEntry } from './membership.js';
 import { decide, expandPolicy, type ExpandedPolicy } from './policy.js';
 import {
-  decideEdge, edgeScope, elementName, evaluateEdges, reportElement,
+  decideEdge, edgeScope, elementName, endResolver, evaluateEdges, reportElement,
   type Dependency, type EdgeScope, type Evaluation, type FindingSeverity, type TargetLayers,
 } from './evaluate.js';
 import type { Element } from './elements.js';
@@ -481,7 +481,26 @@ export interface AllowedAnswer {
   allowedTypes: string[];
   /** Layers every source layer may depend on (full, non-advisory grants, for `--type`): where to look instead. */
   allowedLayers: string[];
+  /**
+   * For a refused dependency on an element (AR-19): the source's own and allowed layers that
+   * already expose a matching symbol, in configuration order. Empty otherwise.
+   */
+  alternatives: Alternative[];
 }
+
+/**
+ * A layer to depend on instead (AR-19). `supertype`: a class or interface the target extends or
+ * implements (transitively); `name`: a top-level symbol named like the target, or like the end of
+ * its name (`OrderRepository` for `SqlOrderRepository`). At most ALTERNATIVES_PER_LAYER symbols;
+ * `total` counts them all.
+ */
+export interface Alternative {
+  layer: string;
+  total: number;
+  symbols: Array<ElementRef & { match: 'supertype' | 'name' }>;
+}
+
+export const ALTERNATIVES_PER_LAYER = 10;
 
 function end(ctx: ArchContext, query: string, role: 'source' | 'target'): { end: AllowedEnd; element: Element | null } {
   const layer = ctx.config.layers.find((l) => l.name === query);
@@ -534,6 +553,11 @@ type Draft = Omit<AllowedDecision, 'reason' | 'via'> & { advisory: boolean; targ
  * No baseline applies: the answer is what a check without one reports.
  */
 export function isAllowed(ctx: ArchContext, from: string, to: string, options: { edgeType?: string } = {}): AllowedAnswer {
+  return answer(ctx, from, to, options, true);
+}
+
+/** isAllowed; `withAlternatives` false for the check of an alternative itself (no recursion). */
+function answer(ctx: ArchContext, from: string, to: string, options: { edgeType?: string }, withAlternatives: boolean): AllowedAnswer {
   const { end: source, element: sourceEl } = end(ctx, from, 'source');
   const { end: target, element: targetEl } = end(ctx, to, 'target');
   const edgeType = options.edgeType ?? null;
@@ -595,7 +619,67 @@ export function isAllowed(ctx: ArchContext, from: string, to: string, options: {
     from: source, to: target, edgeType, allowed: decisions.every((d) => d.allowed), rule: worst.rule, severity: worst.severity, reason: worst.reason,
     exitCode: decisions.some((d) => !d.allowed && d.severity === 'error') ? 1 : 0,
     decisions, allowedTypes: typed.filter((t) => decisions.every((d) => d.edgeType !== t || d.allowed)), allowedLayers,
+    alternatives: !withAlternatives || decisions.every((d) => d.allowed) || !targetEl ? [] : alternatives(ctx, from, source, targetEl, allowedLayers, options),
   };
+}
+
+/**
+ * Where a refused dependency on `target` could go instead: symbols in the source's own layers or in
+ * `allowedLayers` (and in no other) that are not private to another layer, matching the target as
+ * a supertype or by name. A file target stands for its top-level symbols, a member for its type.
+ * Each candidate must itself be allowed from `from` through the whole decision chain (layers,
+ * private parts, internal markers, scope), for `options.edgeType` or every type in scope (review
+ * of M5-14: an `@internal` interface was suggested).
+ */
+function alternatives(ctx: ArchContext, from: string, source: AllowedEnd, target: Element, allowedLayers: string[], options: { edgeType?: string }): Alternative[] {
+  const view = ctx.membership.view;
+  const m = ctx.membership;
+  const targets = target.kind === 'file'
+    ? view.ofFile(target.file.path).filter((e) => e.kind === 'symbol' && e.topLevel)
+    : [reportElement(view, target)].filter((e) => e.kind === 'symbol');
+  if (!targets.length) return [];
+  const usable = new Set([...source.layers, ...allowedLayers]);
+  const eligible = (e: Element) => {
+    const layers = m.primaryOf(e);
+    return e.kind === 'symbol' && e.topLevel && layers.length > 0 && layers.every((l) => usable.has(l))
+      && m.privateIn(e).every((l) => source.layers.includes(l)) && ctx.scope.path(e.file.path)
+      && answer(ctx, from, e.id, options, false).allowed;
+  };
+  const found = new Map<string, { el: Element; match: 'supertype' | 'name' }>();
+  const skip = new Set(targets.map((t) => t.id));
+  // Supertypes, transitively: the stored extends/implements edges from each target.
+  const resolveEnd = endResolver(view);
+  const supers = ctx.store.raw.prepare("SELECT target_file, target_symbol FROM edges WHERE source_file = ? AND source_symbol IN (?, ?) AND edge_type IN ('extends', 'implements')");
+  const queue = [...targets];
+  const seen = new Set(queue.map((t) => t.id));
+  while (queue.length) {
+    const t = queue.shift()!;
+    for (const row of supers.all(t.file.path, t.name ?? null, t.qualifiedName) as Array<{ target_file: string; target_symbol: string | null }>) {
+      const s = resolveEnd(row.target_file, row.target_symbol);
+      if (!s || s.kind !== 'symbol' || seen.has(s.id)) continue;
+      seen.add(s.id);
+      queue.push(s);
+      if (!skip.has(s.id) && eligible(s)) found.set(s.id, { el: s, match: 'supertype' });
+    }
+  }
+  // Names: the same name, or a name the target's ends with (at least 4 characters).
+  const names = targets.map((t) => (t.name ?? '').toLowerCase()).filter(Boolean);
+  for (const e of view.elements) {
+    if (found.has(e.id) || skip.has(e.id) || e.kind !== 'symbol' || !e.topLevel || !e.name) continue;
+    const n = e.name.toLowerCase();
+    if (names.some((t) => t === n || (n.length >= 4 && t.endsWith(n))) && eligible(e)) found.set(e.id, { el: e, match: 'name' });
+  }
+  const byLayer = new Map<string, Array<{ el: Element; match: 'supertype' | 'name' }>>();
+  for (const f of found.values()) {
+    const layer = m.primaryOf(f.el)[0]!;
+    const list = byLayer.get(layer);
+    if (list) list.push(f); else byLayer.set(layer, [f]);
+  }
+  const rank = { supertype: 0, name: 1 };
+  return [...byLayer.keys()].sort(layerOrder(ctx)).map((layer) => {
+    const list = byLayer.get(layer)!.sort((a, b) => rank[a.match] - rank[b.match] || byFile(a.el, b.el));
+    return { layer, total: list.length, symbols: list.slice(0, ALTERNATIVES_PER_LAYER).map((f) => ({ ...elementRef(f.el), match: f.match })) };
+  });
 }
 
 /** The reason of one decision, and for an allowed one the grants. */

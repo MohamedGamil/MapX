@@ -296,7 +296,7 @@ When active, the MCP server prints all incoming JSON-RPC calls and their outcome
 
 This is highly useful when debugging integrations with clients like Claude Desktop, Cursor, or custom LLM frameworks.
 
-## Available Tools (34 total)
+## Available Tools (39 total)
 
 ### Graph Building
 
@@ -459,6 +459,82 @@ Validate the [architecture rules](architecture-rules.md) configuration, `.mapx/a
 - `view` (string, optional): Validate `.mapx/architecture/<view>.jsonc`
 - `format` (string, optional): `json` (default) or `text`, one `file#pointer: message` line per problem, as the CLI prints
 - `dir` (string, optional): Target project directory
+
+### Architecture Rules (AR-19)
+
+These five tools answer from the same library functions as `mapx check` and the `mapx arch` subcommands, so the CLI and MCP give the same answers. The JSON shapes are in [architecture-rules.md](architecture-rules.md#introspection). Every tool returns JSON by default, and lists are capped by `limit` with the total reported.
+
+**Errors.** A failure is a tool result with `isError: true`, never a JSON-RPC error. Its JSON is `{ error, exitCode, issues?, candidates? }`, where `exitCode` has its [AR-17 meaning](cli-reference.md#mapx-check):
+- `3`: a configuration or usage error. Examples: no or an invalid `.mapx/architecture.jsonc`, an unknown layer, an element no query resolves, a bad `type`, `limit` or `since`.
+- `4`: the index is missing, unscanned, stale or built by an older MapX. `sync: true` brings a stale index up to date first.
+
+A violation, or a refused dependency, is an answer rather than an error: it carries `exitCode: 1` in a normal result.
+
+**Arguments are checked before the index**, as the CLI parses its options first. A bad `format`, `failOn`, `type`, `limit` or `since` is therefore exit 3, even on a stale index. A non-string `dir` is exit 3 too.
+
+**The agent workflow.** Before adding an import across modules, an agent calls `mapx_arch_allowed`. If the answer is `allowed: false`, it may use one of the `alternatives`, each of which the rules allow. After editing, it calls `mapx_arch_check` with `sync: true`, narrowed with `file` or `since`. Without `sync: true`, every architecture tool refuses an index older than the edits (exit 4).
+
+**What the server writes.** The server logs tool calls to `.mapx/tool-calls.jsonl` of the first workspace it is called on that already has a `.mapx/` folder. It never creates a workspace or a `.mapx/` folder. `mapx_arch_init` without `write: true` is never logged, so its workspace stays byte-identical.
+
+#### `mapx_arch_check`
+Checks the rules against the index, as `mapx check --format json` does. The result is the report: `{ version, counts, findings, layers, layerEdges, configErrors, selection }`. Four fields are added:
+- `exitCode`: 0, 1 for violations, or 2 for uncovered dependencies with `failOnUncovered`;
+- `total`: the findings shown before the cap;
+- `limit`;
+- `truncated`.
+
+A configuration or baseline error is a tool error carrying the report of errors, with `exitCode: 3`.
+- `layer`, `rule` (string, optional): As `--layer` and `--rule`.
+- `file` (string, optional): Keep only the findings with an end under this path, or matching this glob. A path that matches no indexed file is an error.
+- `since` (string, optional): Keep only the findings with an end in a file changed since this git revision (committed, staged, unstaged and untracked), as `mapx arch changed --since` lists them. It is refused (exit 3) when it is not a revision of the repository, or when it starts with `-` or contains whitespace, quotes or shell characters.
+- `failOn` (`error`|`warn`), `reportUncovered`, `failOnUncovered`, `reportSkipped`, `reportAllowed` (optional): As the CLI options.
+- `limit` (number, optional): The most findings to return (default 50; 0 returns all of them). Counts always cover every finding.
+- `format` (string, optional): `json` (default), or `text` for the whole table `mapx check` prints. `limit` does not apply to `text`.
+- `view`, `sync`, `dir` (optional).
+
+#### `mapx_arch_layers`
+Answers what `mapx arch layers` and `mapx arch unassigned` answer (AR-13a–c):
+- **Without arguments:** `{ layers: [{ name, overlay, elements, files }] }`.
+- **With `layer`:** the layer's files and top-level symbols, `{ name, overlay, elements, files, total, members, truncated }`. `why: true` names the selector that matched each member, and `nested: true` adds the members of types.
+- **With `unassigned: true`:** the elements in no layer, `{ total, elements, truncated }`, narrowed by `kind` and `path`.
+
+Parameters:
+- `layer`, `why`, `nested`, `unassigned`, `kind`, `path` (optional).
+- `limit` (number, optional): Default 100; 0 returns every item.
+- `view`, `sync`, `dir` (optional).
+
+#### `mapx_arch_allowed`
+The pre-flight check: may `from` depend on `to`? Each end is a layer, a file or a symbol. The answer is `mapx arch allowed --json`:
+
+`{ from, to, edgeType, allowed, rule, severity, reason, exitCode, decisions, allowedTypes, allowedLayers, alternatives }`
+
+- **`alternatives`:** for a refused dependency on a file or symbol, the source's own and allowed layers that already expose a matching symbol. Each entry is `{ layer, total, symbols: [{ element, kind, symbolKind, file, match }] }`. `match` is `supertype` (a class or interface the target extends or implements) or `name` (a symbol named like the target, or like the end of its name). Every symbol listed is itself allowed from `from`, through the whole decision chain: layers, private parts, `@internal` markers and scope.
+
+Parameters:
+- `from`, `to` (string, required).
+- `type` (string, optional): Decide for this edge type only.
+- `view`, `sync`, `dir` (optional).
+
+#### `mapx_arch_explain`
+Explains why an element is in its layers, and why a dependency is allowed or a violation. The result is `{ element, layer?, dependency? }`:
+- `element` is `mapx arch which <element> --json`, the selector trace of every match.
+- `layer` is `{ name, matches: [{ element, inLayer, selector?, via? }] }`.
+- `dependency` is the `mapx_arch_allowed` answer for `element` → `to`, the rule trace.
+
+Parameters:
+- `element` (string, required).
+- `layer`, `to`, `type` (optional).
+- `view`, `sync`, `dir` (optional).
+
+#### `mapx_arch_init`
+Proposes a configuration from the index (AR-15). There is one layer per MapX role, selected with `{ "role": … }`, in the order of the archetype's `LAYER_ORDER`. Each layer may depend on the layers below it. The proposal is validated, and roles with no place in the order are listed as `unplaced`.
+
+The result is `{ path, view, exists, written, archetype, layers: [{ name, role, files }], unplaced, issues, config }`, where `config` is the JSONC text.
+
+**It writes nothing unless `write: true`**, and never over an existing file (a tool error, `exitCode: 3`). The proposal is a starting point to review. `mapx arch init` (M5-17) will infer more: clusters, frameworks, the observed layer graph, presets and a baseline.
+- `write` (boolean, optional): Write `.mapx/architecture.jsonc`, or the view.
+- `view` (string, optional): Propose `.mapx/architecture/<view>.jsonc` instead.
+- `dir` (string, optional).
 
 ### Export & LLM Prompts
 

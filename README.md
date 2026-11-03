@@ -38,7 +38,7 @@
 * **~80% LLM Cost Reduction** - Feeds exact signatures and dependency pathways to LLM agents rather than raw files, slashing context window costs.
 * **Deep Symbol & Semantics Mapping** - Automatically extracts classes, methods, functions, interfaces, traits, structs, modules, and namespaces along with call graphs.
 * **Framework Intelligent** - Maps out routing paths and hook bindings for 22 frameworks (Laravel, Next.js, Spring, Flutter, and more).
-* **34 MCP tools** - Seamlessly feeds structured code graph intelligence to LLMs across Claude Desktop, Cursor, VS Code, and other MCP clients.
+* **39 MCP tools** - Seamlessly feeds structured code graph intelligence to LLMs across Claude Desktop, Cursor, VS Code, and other MCP clients.
 * **Zero Cloud** - Keeps all metadata, graphs, and schemas fully offline and local in `.mapx/`.
 
 <br>
@@ -60,7 +60,7 @@
 - [MCP Integration](#mcp-integration)
   - [Claude Desktop](#claude-desktop-claude_desktop_configjson)
   - [Cursor / VS Code](#cursor--vs-code-cursor-mcpjson)
-  - [Available MCP tools (34 total)](#available-mcp-tools-34-total)
+  - [Available MCP tools (39 total)](#available-mcp-tools-39-total)
 - [Programmatic Usage](#programmatic-usage)
 - [Supported Languages](#supported-languages)
   - [Built-in (Tier 1) — Dedicated Parsers](#built-in-tier-1--dedicated-parsers)
@@ -90,7 +90,7 @@
 - **Git & Content Hash Sync** — Git-aware change tracker for repo files and hash-based delta-checks for non-git workspaces.
 - **Resumable Batch checkpoints** — Checklist states are persisted; interrupted scans pick up exactly where they stopped.
 - **Deep symbol extraction** — Classes, methods, functions, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces.
-- **34 MCP tools** — Scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and language management.
+- **39 MCP tools** — Scan, query, search, trace, callers, callees, impact, export, context, batch, workspaces, and language management.
 - **Flexible search** — Wildcard (`*`), glob patterns (`*Service`, `get?`), fuzzy suggestions, auto-expand, and JSON formats.
 - **Data flow tracing** — Upstream/downstream trace routes, source/sink identification, and change blast radius analysis.
 - **Framework detection** — Parses routing routes, middleware, and hooks across 22 backend, frontend, and mobile frameworks.
@@ -313,14 +313,15 @@ On startup mapx prints ready-to-copy configuration for Claude Desktop, Cursor, a
 }
 ```
 
-### Available MCP tools (34 total)
+### Available MCP tools (39 total)
 
 | Category | Tools |
 |----------|-------|
 | **Graph Building** | `mapx_scan`, `mapx_sync` |
 | **Symbol Discovery** | `mapx_query`, `mapx_search`, `mapx_node`, `mapx_files` |
 | **Dependencies & Flow** | `mapx_dependencies`, `mapx_callers`, `mapx_callees`, `mapx_trace`, `mapx_sources`, `mapx_sinks`, `mapx_routes`, `mapx_hooks`, `mapx_edges` |
-| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics`, `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers`, `mapx_arch_validate_config` |
+| **Analysis** | `mapx_impact`, `mapx_clusters`, `mapx_status`, `mapx_metrics`, `mapx_profile`, `mapx_explain`, `mapx_smells`, `mapx_dsm`, `mapx_layers` |
+| **Architecture rules** | `mapx_arch_allowed` (call it before adding an import across modules), `mapx_arch_check`, `mapx_arch_explain`, `mapx_arch_layers`, `mapx_arch_init`, `mapx_arch_validate_config` |
 | **Export** | `mapx_export`, `mapx_context` |
 | **Orchestration** | `mapx_batch`, `mapx_agents_generate` |
 | **Workspaces** | `mapx_workspaces` |
@@ -528,7 +529,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | [Getting Started](docs/getting-started.md) | Installation, quick start, supported languages |
 | [Programmatic Usage](docs/programmatic-usage.md) | Detailed TypeScript/JavaScript API integration guide |
 | [CLI Reference](docs/cli-reference.md) | All commands and their flags |
-| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 34 tools |
+| [MCP Integration](docs/mcp-integration.md) | MCP server setup and all 39 tools |
 | [Configuration](docs/configuration.md) | Config file, workspace setup, settings |
 | [Benchmarking](docs/benchmarking.md) | Token cost analysis vs baseline LLM usage |
 | [Adding Languages](docs/adding-languages.md) | Extend mapx with new tree-sitter grammars |

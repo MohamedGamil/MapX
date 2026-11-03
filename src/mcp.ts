@@ -6,7 +6,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { existsSync, statSync, readFileSync } from 'node:fs';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { Store } from './core/store.js';
@@ -39,6 +39,7 @@ import { applyCollapsedRepos, codeWorkspaceFiles, crossRepoDependencies, crossRe
 import { findSimilarSymbols } from './core/fuzzy-matcher.js';
 import { describeBinding, describeRelation, fileBindings, modelRelations } from './core/relations.js';
 import { formatValidation, validateArchitectureConfig } from './arch/config.js';
+import { ARCH_TOOLS, runArchTool, type ArchToolName } from './arch/mcp-tools.js';
 
 // defaultDir is set by startMcpServer(); null means not yet configured.
 let defaultDir: string | null = null;
@@ -351,6 +352,8 @@ Returns JSON { valid, view, files, issues: [{ file, pointer, message }] }: every
           },
         },
       },
+      // mapx_arch_check, _layers, _allowed, _explain, _init (M5-14, AR-19): src/arch/mcp-tools.ts.
+      ...ARCH_TOOLS,
       {
         name: 'mapx_trace',
         description: 'Trace data flow paths from a starting symbol or file. Returns upstream callers (up), downstream callees (down), or both. Use this to understand how data moves through the codebase.',
@@ -729,9 +732,10 @@ EXAMPLE:
     const resolveOrFail = (a: Record<string, unknown>): { dir: string } | { error: string } => {
       const dir = resolveDir(a);
       if (!dir) return { error: 'No project directory set. Either pass a "dir" argument or start the server with --dir /path/to/project.' };
-      // Lazily enable cross-process tool call logging if not already set
+      // Lazily enable cross-process tool call logging if not already set, in an existing .mapx/
+      // only: a call never creates a workspace or its .mapx/ folder (review of M5-14).
       const eventBus = UiEventBus.getInstance();
-      if (!(eventBus as any).mapxDir) eventBus.setMapxDir(dir);
+      if (!(eventBus as any).mapxDir && existsSync(join(dir, '.mapx'))) eventBus.setMapxDir(dir);
       return { dir };
     };
     const loadCtx = async (dir: string) => {
@@ -2512,6 +2516,32 @@ Callees: ${callees.length}`;
         return report.valid ? { content: [{ type: 'text', text }] } : { content: [{ type: 'text', text }], isError: true };
       }
 
+      // Thin wrappers over `mapx check` and `mapx arch …` (M5-14): failures are tool errors with
+      // the AR-17 exit code in their JSON.
+      case 'mapx_arch_check':
+      case 'mapx_arch_layers':
+      case 'mapx_arch_allowed':
+      case 'mapx_arch_explain':
+      case 'mapx_arch_init': {
+        // A non-string dir is a usage error, not a JSON-RPC error (resolveDir's schema throws).
+        let resolved: ReturnType<typeof resolveOrFail>;
+        try {
+          resolved = resolveOrFail(args || {});
+        } catch {
+          return { content: [{ type: 'text', text: JSON.stringify({ error: '"dir" must be a string', exitCode: 3 }, null, 2) }], isError: true };
+        }
+        if ('error' in resolved) return { content: [{ type: 'text', text: JSON.stringify({ error: resolved.error, exitCode: 3 }, null, 2) }], isError: true };
+        // Awaited, so the finally below closes the store the call opened.
+        return await runArchTool(name as ArchToolName, (args ?? {}) as Record<string, unknown>, resolved.dir, {
+          load: async () => {
+            const ctx = await loadCtx(resolved.dir);
+            if ('error' in ctx) throw new Error(ctx.error);
+            return ctx;
+          },
+          sync: (ctx) => new Scanner(ctx.store, ctx.config, ctx.graph, undefined, { pool: mcpParsePool() }).scanIncremental(),
+        });
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
     }
@@ -2547,8 +2577,10 @@ Callees: ${callees.length}`;
       if (options?.debug) {
         process.stderr.write(`[mapx debug] Completed tool call: ${request.params.name} in ${durationMs}ms (success: ${isSuccess})${errorMsg ? `, error: ${errorMsg}` : ''}\n`);
       }
+      // A mapx_arch_init dry run promises the workspace stays byte-identical: it is not logged.
+      const dryRun = request.params.name === 'mapx_arch_init' && (request.params.arguments as Record<string, unknown> | undefined)?.write !== true;
       const eventBus = UiEventBus.getInstance();
-      eventBus.emitToolCall({
+      if (!dryRun) eventBus.emitToolCall({
         tool: request.params.name,
         input: request.params.arguments || {},
         timestamp: new Date().toISOString(),
@@ -2642,7 +2674,9 @@ function generateConfigs(dir: string, transport: 'stdio' | 'sse', port?: number)
     '  Available tools: mapx_scan, mapx_sync, mapx_query, mapx_dependencies, mapx_export, mapx_status, mapx_metrics, mapx_edges,',
     '                    mapx_clusters, mapx_trace, mapx_sources, mapx_sinks, mapx_search, mapx_context, mapx_callers, mapx_callees,',
     '                    mapx_impact, mapx_node, mapx_files, mapx_routes, mapx_hooks, mapx_workspaces, mapx_agents_generate,',
-    '                    mapx_lang_list, mapx_lang_info, mapx_lang_install, mapx_lang_uninstall, mapx_arch_validate_config',
+    '                    mapx_profile, mapx_explain, mapx_smells, mapx_dsm, mapx_layers, mapx_batch,',
+    '                    mapx_lang_list, mapx_lang_info, mapx_lang_install, mapx_lang_uninstall, mapx_arch_validate_config,',
+    '                    mapx_arch_check, mapx_arch_layers, mapx_arch_allowed, mapx_arch_explain, mapx_arch_init',
     '',
   );
 
@@ -2665,8 +2699,8 @@ export async function startMcpServer(dir?: string, options?: ServeOptions): Prom
 
   if (defaultDir) {
     process.stderr.write(`[mapx] Default project directory: ${defaultDir}\n`);
-    // Enable cross-process tool call logging for the UI dashboard
-    UiEventBus.getInstance().setMapxDir(defaultDir);
+    // Enable cross-process tool call logging for the UI dashboard, in an existing .mapx/ only.
+    if (existsSync(join(defaultDir, '.mapx'))) UiEventBus.getInstance().setMapxDir(defaultDir);
   } else {
     process.stderr.write(`[mapx] No default project directory set. Pass --dir /path/to/project or include "dir" in each tool call.\n`);
   }
