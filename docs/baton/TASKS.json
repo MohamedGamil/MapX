@@ -20522,14 +20522,27 @@
         "docs/baton/reports/M5-21.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-pip",
       "actualHours": null,
       "startedAt": "2026-11-03T05:52:24.264Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T08:30:05.939Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-20-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-20-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-20-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T05:52:22.829Z",
@@ -20542,6 +20555,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T08:30:05.452Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T08:30:05.939Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-20-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-20-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -20746,14 +20782,27 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-pip2",
       "actualHours": null,
       "startedAt": "2026-11-03T07:12:47.723Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T08:30:06.876Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-22.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-22.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-22.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T05:52:23.290Z",
@@ -20766,6 +20815,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T08:30:06.381Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T08:30:06.876Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-22.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-22.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

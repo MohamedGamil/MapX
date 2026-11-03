@@ -257,9 +257,9 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
-- **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — IN_PROGRESS, P2, 1.5h; depends on M5-20.
+- **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — DONE, P2, 1.5h; depends on M5-20.
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-22** External references: pip/Poetry/uv package attribution and builtins — IN_PROGRESS, P2, 5h; depends on M5-19, M5-01.
+- **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
 - **M5-23** External references: Go modules package attribution and builtins — IN_PROGRESS, P2, 4h; depends on M5-19, M5-01.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — BACKLOG, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
