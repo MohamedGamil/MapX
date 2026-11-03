@@ -1,0 +1,50 @@
+// M5-24 fixture: vendor confinement. Only Infrastructure may use the Database layer (a package selector); DevOnly (an overlay of dev-only packages) is denied to every layer; other packages are in no layer (uncovered). Go has no dev requirements: testify is dev-only because only _test.go files use it, and the Domain layer's test uses it.
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "path": "domain/**"
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "selectors": [
+        {
+          "path": "infrastructure/**"
+        }
+      ]
+    },
+    {
+      "name": "Database",
+      "selectors": [
+        {
+          "package": "github.com/jmoiron/sqlx"
+        }
+      ]
+    },
+    {
+      "name": "DevOnly",
+      "overlay": true,
+      "selectors": [
+        {
+          "package": "*",
+          "dev": true
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "*": [
+      "!DevOnly"
+    ],
+    "Domain": [],
+    "Infrastructure": [
+      "Domain",
+      "Database"
+    ]
+  }
+}

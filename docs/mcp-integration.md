@@ -507,7 +507,7 @@ Parameters:
 - `view`, `sync`, `dir` (optional).
 
 #### `mapx_arch_allowed`
-The pre-flight check: may `from` depend on `to`? Each end is a layer, a file or a symbol. The answer is `mapx arch allowed --json`:
+The pre-flight check: may `from` depend on `to`? Each end is a layer, a file or a symbol. `to` can also be a package or built-in outside the workspace, by name or as `<ecosystem>:<name>` (`npm:pg`; M5-24). The answer is `mapx arch allowed --json`:
 
 `{ from, to, edgeType, allowed, rule, severity, reason, exitCode, decisions, allowedTypes, allowedLayers, alternatives }`
 

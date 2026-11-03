@@ -17,6 +17,12 @@
 //                              Dependencies Principle, per layer)
 //   abstractness-distance      D = |A + I − 1| > DISTANCE_THRESHOLD for a coupled layer with types
 //   deprecated-usage           an edge in scope into an element tagged @deprecated, or its member
+//   vendor-leak                a private-layer violation on an external package: a package a layer's
+//                              `private` selectors confine to it, used from another layer (M5-24)
+//   undeclared-dependency      code in scope uses a named package its manifest does not list directly:
+//                              a transitive or unlisted one (package known, direct false)
+//   dev-dependency-in-prod     code in scope that is not a test, configuration or script (file role,
+//                              or a conventional config file name) uses a dev-only package
 //
 // The observed layer graph is the report's, after the baseline: a baselined violation is
 // acknowledged debt (baseline-debt is its own concern), so it makes no cycle and no coupling.
@@ -45,7 +51,8 @@ export const DISTANCE_THRESHOLD = 0.7;
 /** Rule-derived smell types, in the order they are listed. */
 export const RULE_SMELL_TYPES = [
   'architecture-config', 'layer-violation', 'layer-cycle', 'layer-skip', 'dead-allowance', 'weak-allowance',
-  'unstable-layer-dependency', 'abstractness-distance', 'deprecated-usage',
+  'unstable-layer-dependency', 'abstractness-distance', 'deprecated-usage', 'vendor-leak', 'undeclared-dependency',
+  'dev-dependency-in-prod',
 ] as const;
 
 const TYPE_KINDS = new Set(['class', 'interface', 'trait', 'struct', 'enum']);
@@ -64,6 +71,7 @@ export function ruleSmells(ctx: ArchContext, report: ArchReport): RuleSmell[] {
     ...layerSkipSmells(ctx),
     ...allowanceSmells(ctx),
     ...deprecatedUsageSmells(ctx),
+    ...packageSmells(ctx),
   ];
   const order = new Map<string, number>(RULE_SMELL_TYPES.map((t, i) => [t, i]));
   return smells.sort((a, b) => (order.get(a.type)! - order.get(b.type)!) || (a.description < b.description ? -1 : a.description > b.description ? 1 : 0));
@@ -94,7 +102,8 @@ function violationSmells(report: ArchReport): RuleSmell[] {
   const groups = new Map<string, Finding[]>();
   for (const f of report.findings) {
     if (f.kind !== 'violation' || !f.source || !f.target) continue;
-    const key = JSON.stringify([f.source.repo ?? null, f.source.file, f.target.file]);
+    // An external target has no file: its name stands for it (M5-24).
+    const key = JSON.stringify([f.source.repo ?? null, f.source.file, f.target.external ? f.target.element : f.target.file]);
     groups.set(key, [...(groups.get(key) ?? []), f]);
   }
   return [...groups.values()].map((fs) => {
@@ -108,12 +117,16 @@ function violationSmells(report: ArchReport): RuleSmell[] {
     const rule = first.rule ?? 'disallowed-layer';
     const target = first.message.match(/\(([^()]*) on ([^()]*)\)$/);
     const [srcLayer, tgtLayer] = target ? [target[1]!, target[2]!] : [first.source!.layer ?? '', first.target!.layer ?? ''];
+    // A package a layer keeps private, used from another layer, is a vendor leak (AR-18, M5-24).
+    const leak = rule === 'private-layer' && !!first.target!.external;
     return smell({
-      type: 'layer-violation',
+      type: leak ? 'vendor-leak' : 'layer-violation',
       severity: fs.some((f) => f.severity === 'error') ? 'critical' : 'warning',
-      description: `Layer violation: ${[...lines].map(([k, types]) => `${k}: ${[...new Set(types)].join(', ')}]`).join('; ')}`,
-      involvedFiles: [first.source!.file, first.target!.file],
-      suggestion: rule === 'private-layer'
+      description: `${leak ? 'Vendor leak' : 'Layer violation'}: ${[...lines].map(([k, types]) => `${k}: ${[...new Set(types)].join(', ')}]`).join('; ')}`,
+      involvedFiles: [first.source!.file, first.target!.file].filter(Boolean),
+      suggestion: leak
+        ? `Use ${first.target!.element} only from ${tgtLayer}, through what ${tgtLayer} exposes.`
+        : rule === 'private-layer'
         ? `Depend on what ${tgtLayer} exposes, not on its private elements.`
         : rule === 'internal-element'
           ? `Use ${tgtLayer}'s public API: the target is internal to it.`
@@ -277,14 +290,14 @@ function layerSkipSmells(ctx: ArchContext): RuleSmell[] {
       if (k < 1 || own.has(t) || defaults.has(t)) continue;
       const bypassed = chain.slice(0, k).filter((l) => ctx.membership.members(l).length > 0);
       if (!bypassed.length) continue;
-      const src = d.source.file.path, tgt = d.targetPackage ? d.targetPackage.dir : d.target.file.path;
+      const src = d.source.file.path, tgt = d.targetPackage ? d.targetPackage.dir : d.target.kind === 'external' ? d.target.qualifiedName : d.target.file.path;
       const key = JSON.stringify([d.sourceLayer, t, src, tgt]);
       if (groups.has(key)) continue;
       groups.set(key, smell({
         type: 'layer-skip',
         severity: 'warning',
         description: `Layer skip: ${src} (${d.sourceLayer}) depends on ${tgt} (${t}), bypassing ${bypassed.join(', ')}`,
-        involvedFiles: [src, tgt],
+        involvedFiles: d.target.kind === 'external' ? [src] : [src, tgt],
         involvedLayers: [d.sourceLayer, ...bypassed, t],
         suggestion: `Go through ${bypassed[0]}, or allow ${t} explicitly in the rules of ${d.sourceLayer} if it may use it directly.`,
         repo: d.source.file.repo,
@@ -379,6 +392,53 @@ function deprecatedUsageSmells(ctx: ArchContext): RuleSmell[] {
       suggestion: `Replace the use of ${elementName(dep)}${note ? `: ${note}` : ''}.`,
       repo: source.file.repo,
     }));
+  }
+  return [...groups.values()];
+}
+
+// ─── undeclared-dependency, dev-dependency-in-prod ────────────────────────────────────────────
+
+/** File roles whose code is not shipped production code: tests, configuration, scripts and tooling. */
+const NOT_PRODUCTION_ROLES = new Set(['test', 'config', 'scripts', 'script', 'tooling']);
+/**
+ * Conventional names of configuration and tooling files that may carry another role: `vite.config.ts`,
+ * `jest.config.js`, `.eslintrc.cjs`, `webpack.config.mjs`, `karma.conf.js`, `conftest.py`, `setup.py`,
+ * `noxfile.py`, `gulpfile.js`, `Gruntfile.js`, `magefile.go`.
+ */
+const CONFIG_FILE_NAME = /(^|\/)([^/]*[.\-_](config|conf)\.[cm]?[jt]sx?|\.[^/]*rc(\.[cm]?[jt]s|\.json|\.ya?ml)?|conftest\.py|setup\.py|noxfile\.py|fabfile\.py|tasks\.py|gulpfile\.[cm]?[jt]s|gruntfile\.[cm]?[jt]s|magefile\.go)$/i;
+
+/**
+ * Package hygiene (AR-18, M5-24) from the stored references outside the workspace, in the scope's
+ * types and paths, whatever the layers: one smell per source file and package.
+ * - Undeclared: a named package a readable manifest positively does not list directly (`direct`
+ *   false: a transitive or unlisted one). The rule is the same in every ecosystem: a package no
+ *   input names (package null) is never one, since there is no name the manifest could lack (review
+ *   of M5-24: Go stored `direct` false for those, pypi and Composer null).
+ * - Dev dependency in production: a dev-only package (`dev` true) used by a file that is not a test,
+ *   configuration, script or tooling file (role, or a conventional config file name).
+ * A package whose direct or dev status is unknown is neither.
+ */
+function packageSmells(ctx: ArchContext): RuleSmell[] {
+  const view = ctx.membership.view;
+  const groups = new Map<string, RuleSmell>();
+  for (const ref of view.externalRefs ?? []) {
+    const ext = ref.target.external!;
+    if (ext.origin !== 'package' || !ctx.scope.types.has(ref.kind) || !ctx.scope.path(ref.file)) continue;
+    const file = view.files.get(ref.file);
+    const add = (type: 'undeclared-dependency' | 'dev-dependency-in-prod', description: string, suggestion: string) => {
+      const key = JSON.stringify([type, ref.file, ext.ecosystem, ext.name]);
+      if (!groups.has(key)) groups.set(key, smell({ type, severity: 'warning', description, involvedFiles: [ref.file], suggestion, repo: file?.repo ?? null }));
+    };
+    if (ext.package !== null && ext.direct === false) {
+      add('undeclared-dependency',
+        `Undeclared dependency: ${ref.file} uses ${ext.name} (${ext.ecosystem}), which its manifest does not list as a direct dependency`,
+        `Add ${ext.name} to the manifest's dependencies, or stop using it directly.`);
+    }
+    if (ext.dev === true && !NOT_PRODUCTION_ROLES.has(file?.role ?? '') && !CONFIG_FILE_NAME.test(ref.file)) {
+      add('dev-dependency-in-prod',
+        `Dev dependency in production code: ${ref.file} uses ${ext.name} (${ext.ecosystem}), which only the manifest's development dependencies hold`,
+        `Move ${ext.name} to the production dependencies, or keep it to tests and tooling.`);
+    }
   }
   return [...groups.values()];
 }

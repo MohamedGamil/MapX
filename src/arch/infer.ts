@@ -126,7 +126,8 @@ interface Draft {
   extends?: string;
   parameters?: Record<string, string>;
   layers?: Array<{ comment: string[]; layer: Layer }>;
-  rules?: Array<{ source: string; list: string[] }>;
+  /** A rule's comment is `comment` when given, else the observed dependencies of its source. */
+  rules?: Array<{ source: string; list: string[]; comment?: string[] }>;
 }
 
 /** The document as JSONC: the header, then one line per layer and rule, each after its comments. */
@@ -140,7 +141,7 @@ function renderDraft(d: Draft, ruleComment: (source: string) => string[] = () =>
     sections.push(items.length ? `  "layers": [\n${items.join(',\n')}\n  ]` : '  "layers": []');
   }
   if (d.rules) {
-    const items = d.rules.map((r) => `${comments(ruleComment(r.source))}    ${JSON.stringify(r.source)}: ${inline(r.list)}`);
+    const items = d.rules.map((r) => `${comments(r.comment ?? ruleComment(r.source))}    ${JSON.stringify(r.source)}: ${inline(r.list)}`);
     sections.push(items.length ? `  "rules": {\n${items.join(',\n')}\n  }` : '  "rules": {}');
   }
   return `${d.header.map((l) => `// ${commentText(l)}`).join('\n')}\n{\n${sections.join(',\n')}\n}\n`;
@@ -161,9 +162,37 @@ function evaluate(store: Store, workspace: string, text: string, options: InitOp
   return { report: buildReport(store, config, membership, { repoPaths: options.repoPaths }), issues: [] };
 }
 
-/** Dependencies per layer pair (the report's layer matrix), in its order. */
-function observedOf(report: ArchReport | null): ObservedPair[] {
-  return (report?.layerEdges ?? []).map((e) => ({ from: e.from, to: e.to, dependencies: e.allowed + e.violations + e.skipped, violations: e.violations }));
+/** Dependencies per layer pair (the report's layer matrix), in its order; none on the `skip` layer. */
+function observedOf(report: ArchReport | null, skip?: string): ObservedPair[] {
+  return (report?.layerEdges ?? []).filter((e) => e.to !== skip)
+    .map((e) => ({ from: e.from, to: e.to, dependencies: e.allowed + e.violations + e.skipped, violations: e.violations }));
+}
+
+/**
+ * The layer of packages outside the workspace every proposal gets when the index has package
+ * references (review of M5-24): without it `mapx check` reports each dependency on a package as
+ * uncovered (`policy.uncovered.externals`), which `--fail-on-uncovered` fails on and no baseline can
+ * skip. `Packages` holds every package, dev-only and unattributed ones included, and every layer may
+ * use it (`"*"`); a dev-only package in production code is the `dev-dependency-in-prod` smell's.
+ * Returns its name, or undefined when none was added.
+ */
+function addPackagesLayer(store: Store, draft: Draft, reserved: string[] = []): string | undefined {
+  // An index with no package references gets none: the layer would only be an empty-layer warning.
+  let any = false;
+  try { any = !!store.raw.prepare("SELECT 1 FROM external_refs WHERE origin IS NULL OR origin = 'package' LIMIT 1").get(); } catch { /* an index before M5-19 */ }
+  if (!any) return undefined;
+  const taken = new Set([...reserved, ...(draft.layers ?? []).map((l) => l.layer.name)]);
+  let packages = 'Packages';
+  for (let i = 2; taken.has(packages); i++) packages = `Packages${i}`;
+  draft.layers = [...(draft.layers ?? []), {
+    comment: [
+      'every package outside the workspace (npm, Composer, pypi, Go modules), which every layer may use:',
+      'without it `mapx check` reports each one as uncovered (policy.uncovered.externals)',
+    ],
+    layer: { name: packages, selectors: [{ package: '*' }] },
+  }];
+  draft.rules = [{ source: '*', list: [packages], comment: [`every layer may use ${packages}`] }, ...(draft.rules ?? [])];
+  return packages;
 }
 
 /** `Data 3, Shared 1` for the pairs out of `layer`, and those against the rules. */
@@ -269,8 +298,9 @@ function fromRoles(store: Store, workspace: string, archetype: CodebaseArchetype
     const issues = [{ file: '.mapx/architecture.jsonc', pointer: '/layers', message: 'no role the index assigns has a place in the layer order: nothing to propose' }];
     return { source: 'roles', preset: null, parameters: {}, layers, unplaced, observed: [], text: renderDraft(draft), issues, notes: [], report: null };
   }
+  const packages = addPackagesLayer(store, draft);
   const { report, issues } = evaluate(store, workspace, draftText(draft), options);
-  const observed = observedOf(report);
+  const observed = observedOf(report, packages);
   draft.header = [
     `Proposed by \`mapx arch init\` from MapX roles and the "${archetype}" layer order (AR-15).`,
     'Review it before relying on it: rename layers, replace role selectors with paths, tighten rules.',
@@ -311,15 +341,18 @@ function fromClusters(store: Store, workspace: string, options: InitOptions): In
     const issues = [{ file: '.mapx/architecture.jsonc', pointer: '/layers', message: 'the index has no primary clusters: run `mapx scan`, or propose from roles' }];
     return { source: 'clusters', preset: null, parameters: {}, layers, unplaced: [], observed: [], text: renderDraft(draft), issues, notes, report: null };
   }
+  const packages = addPackagesLayer(store, draft);
   // The observed cluster graph, from the layers with no allowance: every dependency between two of
-  // them is a violation, counted per pair. The rules then allow exactly those pairs.
+  // them is a violation, counted per pair. The rules then allow exactly those pairs (packages are
+  // every layer's through "*").
   const first = evaluate(store, workspace, draftText(draft), options);
   const order = new Map(layers.map((l, i) => [l.name, i]));
   for (const rule of draft.rules!) {
-    rule.list = observedOf(first.report).filter((o) => o.from === rule.source && o.dependencies > 0).map((o) => o.to).sort((a, b) => order.get(a)! - order.get(b)!);
+    if (rule.source === '*') continue;
+    rule.list = observedOf(first.report, packages).filter((o) => o.from === rule.source && o.dependencies > 0).map((o) => o.to).sort((a, b) => order.get(a)! - order.get(b)!);
   }
   const { report, issues } = first.report ? evaluate(store, workspace, draftText(draft), options) : first;
-  const observed = observedOf(report);
+  const observed = observedOf(report, packages);
   draft.header = [
     'Proposed by `mapx arch init --from clusters` (AR-15): one layer per primary MapX cluster (see `mapx clusters`).',
     'The rules allow exactly the dependencies between clusters the index has today, so a new one fails `mapx check`.',
@@ -430,10 +463,13 @@ function fromPreset(store: Store, workspace: string, id: string, options: InitOp
     });
     if (!draft.layers.length) notes.push(`No context folder under ${JSON.stringify(root)}: declare the contexts as layers here.`);
   }
+  // The packages layer is this configuration's, merged over the preset's layers and "*" rule.
+  const packages = addPackagesLayer(store, draft, (doc.layers ?? []).map((l) => l.name));
   const { report, issues } = evaluate(store, workspace, draftText(draft), options);
   const observed = observedOf(report);
   const files = new Map((report?.layers ?? []).map((l) => [l.name, l.files]));
-  const layerNames = report ? report.layers.map((l) => l.name) : [];
+  // The proposal's layers are the preset's and the contexts: the packages layer holds no file.
+  const layerNames = report ? report.layers.map((l) => l.name).filter((n) => n !== packages) : [];
   const layers: ProposedLayer[] = layerNames.map((name) => {
     const own = draft.layers?.find((l) => l.layer.name === name);
     return { name, files: files.get(name) ?? 0, ...(own ? { path: own.layer.selectors[0]!.path } : {}) };

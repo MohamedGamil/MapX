@@ -290,6 +290,262 @@
   {
     "type": "issue",
     "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on Acme\\Missing\\Widget, which is in no layer [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "8d51cf93e75fc4e2",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 31
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on Illuminate\\Support\\Str, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "a79f9ccba4c9db61",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 32
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on collect, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "5c914023f095b42e",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 30
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on doctrine/event-manager, which is in no layer [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "00872c4cb4b3a851",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 33
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on doctrine/instantiator, which is in no layer [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "283f78108b2a973f",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 29
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on fakerphp/faker, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "6f5da671365d2521",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 26
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "fb67b81140c73b51",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 8
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "728793322bcc30fa",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on guzzlehttp/psr7, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "bf8d825ef85be0d2",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 25
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on illuminate/routing, which is in no layer [extends]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "008d7a6666f06e63",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 12
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on mustache/mustache, which is in no layer [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "ced3ba608ae6e245",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 24
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on myclabs/deep-copy, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "b23d3516b05e97de",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 28
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on nesbot/carbon, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "4649e40537c4c489",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 18
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on phpunit/phpunit, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "3fd0652f5b5bb26a",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 27
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on psr/log, which is in no layer [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "7664901427ff6769",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 9
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\HttpGateway depends on psr/log, which is in no layer [param_type]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "fafe8ccd9f0a80a3",
+    "location": {
+      "path": "app/Infrastructure/HttpGateway.php",
+      "lines": {
+        "begin": 14
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
     "description": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [import]",
     "categories": [
       "Complexity"

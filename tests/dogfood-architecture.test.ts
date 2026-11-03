@@ -15,8 +15,11 @@ describe("MapX's own architecture configuration", () => {
     const { report, config } = validateArchitectureConfig(ROOT);
     expect(report.issues).toEqual([]);
     expect(config!.layers.map((l) => l.name)).toEqual([
-      'Entry', 'UI', 'Agents', 'Arch', 'Exporters', 'Core', 'Frameworks', 'Parsers', 'Languages', 'Shared', 'Outside',
+      'Entry', 'UI', 'Agents', 'Arch', 'Exporters', 'Core', 'Frameworks', 'Parsers', 'Languages', 'Shared', 'Packages', 'Outside',
     ]);
+    // M5-24: runtime npm packages are a layer every layer may use; a dev-only one is uncovered.
+    expect(config!.layers.find((l) => l.name === 'Packages')!.selectors).toEqual([{ package: '*', dev: false }]);
+    expect(config!.rules['*']).toContain('Packages');
     // Tests and scripts are in scope only as targets: an overlay every layer denies, so production code
     // may not import them, while their own imports (sources in no layer) are never judged.
     expect(config!.scope.include).toEqual(['src/**', 'tests/**', 'scripts/**']);

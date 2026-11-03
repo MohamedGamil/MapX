@@ -418,3 +418,42 @@ describe('mapx arch init: dry run by default, no silent overwrite, stable bytes,
     expect(r.body).toMatchObject({ source: 'preset', preset: 'nestjs', notes: [] });
   });
 });
+
+// Review of M5-24: dependencies on packages outside the workspace are uncovered unless a layer
+// holds them, and no baseline skips an uncovered dependency. So every proposal on an index with
+// package references gets a Packages layer every layer may use, and `check --fail-on-uncovered`
+// passes on the day the configuration is written. tests/fixtures/arch-init/packages: express and
+// pg (production), left-pad (in no manifest: its dev status is unknown, so `{ package: "*", dev: false }`
+// would leave it uncovered), node:crypto (built in, never reported by default).
+describe('mapx arch init on a project with packages: check --fail-on-uncovered passes on day one (review of M5-24)', SLOW, () => {
+  const PACKAGES = join(FIXTURES, 'packages');
+  for (const [name, args] of [['roles', ['--from', 'roles']], ['clusters', ['--from', 'clusters']], ['preset layered', ['--preset', 'layered']]] as const) {
+    it(`${name}: a Packages layer every layer may use; --baseline then check --fail-on-uncovered exits 0`, () => {
+      const root = scanned(`packages-${name.replace(/\W+/g, '-')}`, PACKAGES);
+      const written = run(root, 'arch', 'init', ...args, '--baseline', '--write');
+      expect(written.status, written.stderr).toBe(0);
+      const config = JSON.parse(stripJsonc(readFileSync(join(root, '.mapx/architecture.jsonc'), 'utf8')));
+      expect(config.layers.find((l: { name: string }) => l.name === 'Packages')).toEqual({ name: 'Packages', selectors: [{ package: '*' }] });
+      expect(config.rules['*']).toEqual(['Packages']);
+      expect(readFileSync(join(root, '.mapx/architecture.jsonc'), 'utf8')).toContain('policy.uncovered.externals');
+      const check = run(root, 'check', '--fail-on-uncovered', '--format', 'json', '--report-uncovered');
+      const report = JSON.parse(check.stdout);
+      expect(report.findings.filter((f: { kind: string }) => f.kind === 'uncovered')).toEqual([]);
+      expect(check.status, check.stdout).toBe(0);
+    });
+  }
+
+  it('without the Packages layer, the same check fails on uncovered packages (exit 2)', () => {
+    const root = scanned('packages-without', PACKAGES);
+    expect(run(root, 'arch', 'init', '--preset', 'layered', '--baseline', '--write').status).toBe(0);
+    const path = join(root, '.mapx/architecture.jsonc');
+    const config = JSON.parse(stripJsonc(readFileSync(path, 'utf8')));
+    delete config.rules;
+    config.layers = config.layers.filter((l: { name: string }) => l.name !== 'Packages');
+    writeFileSync(path, JSON.stringify(config));
+    const check = run(root, 'check', '--fail-on-uncovered', '--format', 'json', '--report-uncovered');
+    expect(check.status).toBe(2);
+    expect(JSON.parse(check.stdout).findings.filter((f: { kind: string }) => f.kind === 'uncovered').map((f: { target: { element: string } }) => f.target.element).sort())
+      .toEqual(['express', 'express', 'left-pad', 'left-pad', 'pg', 'pg']);
+  });
+});

@@ -23,9 +23,12 @@ export interface FileInfo {
 }
 
 export interface Element {
-  /** `file:<path>`, or `symbol:<path>#<qualifiedName>#<kind>` (overloads share one element). */
+  /**
+   * `file:<path>`, `symbol:<path>#<qualifiedName>#<kind>` (overloads share one element), or for
+   * something outside the workspace `external:<ecosystem>:<origin>:<name>:<direct>:<dev>` (M5-24).
+   */
   id: string;
-  kind: 'file' | 'symbol';
+  kind: 'file' | 'symbol' | 'external';
   qualifiedName: string;
   file: FileInfo;
   /** The symbol's own name, kind and enclosing scope; absent for files. */
@@ -43,6 +46,34 @@ export interface Element {
   signature?: string;
   /** The traits a PHP type uses, fully qualified (`metadata.mixins`; M5-09). */
   mixins?: string[];
+  /** For an external element (M5-24): what the scan attributed its references to. */
+  external?: ExternalInfo;
+}
+
+/**
+ * An external element (M5-24): a package, a built-in or ambient access, as the `external_refs`
+ * view attributes it (M5-19 to M5-23). Its name is the package (`pg`, `guzzlehttp/guzzle`), a
+ * built-in's package (`node:fs`, `ext-pdo`, `python:os`, `net/http`), or for a package no input
+ * names (`package` null) the specifier as written. `direct` and `dev` are per reference: one
+ * package used as a direct dependency here and a transitive one there is two elements.
+ */
+export interface ExternalInfo {
+  ecosystem: string;
+  origin: 'package' | 'builtin' | 'ambient';
+  name: string;
+  package: string | null;
+  direct: boolean | null;
+  dev: boolean | null;
+}
+
+/** One stored reference to an external element (an `external_refs` row). */
+export interface ExternalRef {
+  file: string;
+  line: number;
+  sourceSymbol: string | null;
+  /** The reference kind, used as the edge type: import, require, call, instantiation, extends … */
+  kind: string;
+  target: Element;
 }
 
 /** What the index records of inheritance (M5-09): the stored edges, and the references outside it. */
@@ -70,6 +101,13 @@ export interface ElementView {
   scanStamp: string;
   /** Inheritance as stored, for the hierarchy selectors and inherited dependencies (M5-09). */
   inheritance: InheritanceRecords;
+  /**
+   * External elements (M5-24), apart from `elements`: what file and symbol consumers iterate never
+   * includes them. Layer membership and the evaluator read them. Absent in a synthetic view.
+   */
+  externals?: Element[];
+  /** The stored references to them, in `external_refs` order. */
+  externalRefs?: ExternalRef[];
 }
 
 // ─── Qualified names (AR-01) ─────────────────────────────────────────────────────────────────
@@ -479,5 +517,40 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
       : [],
   };
 
-  return { root: dir, elements, files, byId, ofFile: (p) => byFile.get(p) ?? [], workspacePackage, scanStamp: stamp, inheritance };
+  const { externals, externalRefs } = externalElements(store);
+  return { root: dir, elements, files, byId, ofFile: (p) => byFile.get(p) ?? [], workspacePackage, scanStamp: stamp, inheritance, externals, externalRefs };
+}
+
+/** The file an external element is judged by: none. File and symbol selectors never apply to it. */
+const NO_FILE: FileInfo = { path: '', repo: '', language: '', role: null, roleConfidence: 0, clusters: [], frameworkParts: new Set(), namespace: null };
+
+/** The ecosystem-qualified name `mapx arch allowed` accepts for an external: `npm:pg`, `go:fmt`. */
+export const externalKey = (e: ExternalInfo) => `${e.ecosystem}:${e.name}`;
+
+/** External elements and their references, from the `external_refs` view (M5-19; M5-24). */
+function externalElements(store: Store): { externals: Element[]; externalRefs: ExternalRef[] } {
+  const db = store.raw;
+  const has = !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'view' AND name = 'external_refs'").get();
+  if (!has) return { externals: [], externalRefs: [] };
+  const rows = db.prepare('SELECT file_path, line, source_symbol, specifier, kind, ecosystem, package, origin, direct, dev FROM external_refs ORDER BY id').all() as Array<{
+    file_path: string; line: number; source_symbol: string | null; specifier: string; kind: string; ecosystem: string;
+    package: string | null; origin: string | null; direct: number | null; dev: number | null;
+  }>;
+  const byId = new Map<string, Element>();
+  const externalRefs: ExternalRef[] = [];
+  const flag = (n: number | null) => (n === null || n === undefined ? null : n === 1);
+  for (const r of rows) {
+    // A row M5-19 stored before attribution (origin null) is a package no input names yet.
+    const origin = r.origin === 'builtin' || r.origin === 'ambient' ? r.origin : 'package';
+    const name = r.package ?? r.specifier;
+    const info: ExternalInfo = { ecosystem: r.ecosystem, origin, name, package: r.package, direct: flag(r.direct), dev: flag(r.dev) };
+    const id = `external:${info.ecosystem}:${origin}:${name}:${info.direct}:${info.dev}`;
+    let el = byId.get(id);
+    if (!el) {
+      el = { id, kind: 'external', qualifiedName: name, file: NO_FILE, topLevel: true, external: info };
+      byId.set(id, el);
+    }
+    externalRefs.push({ file: r.file_path, line: r.line, sourceSymbol: r.source_symbol, kind: r.kind, target: el });
+  }
+  return { externals: [...byId.values()], externalRefs };
 }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="mapx check" tests="23" failures="14" errors="1">
+<testsuites name="mapx check" tests="39" failures="14" errors="1">
   <testsuite name="Controller" tests="8" failures="8" errors="0" skipped="0">
     <testcase name="App\Controller\OrderController → App\Domain\Order (import)" classname="disallowed-layer">
       <failure type="disallowed-layer" message="App\Controller\OrderController must not depend on App\Domain\Order (Controller on Domain) [import]">app/Controller/OrderController.php:6
@@ -100,7 +100,87 @@ App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [instan
 fingerprint: ee1b92af1c89c8e1</failure>
     </testcase>
   </testsuite>
-  <testsuite name="Infrastructure" tests="2" failures="0" errors="0" skipped="0">
+  <testsuite name="Infrastructure" tests="18" failures="0" errors="0" skipped="0">
+    <testcase name="App\Infrastructure\HttpGateway → Acme\Missing\Widget (instantiation)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:31
+App\Infrastructure\HttpGateway depends on Acme\Missing\Widget, which is in no layer [instantiation]
+fingerprint: 98fdefc2bf5713a0</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → Illuminate\Support\Str (call)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:32
+App\Infrastructure\HttpGateway depends on Illuminate\Support\Str, which is in no layer [call]
+fingerprint: 2c2fad1932a85f3e</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → collect (call)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:30
+App\Infrastructure\HttpGateway depends on collect, which is in no layer [call]
+fingerprint: 161ea090398d3dbb</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → doctrine/event-manager (instantiation)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:33
+App\Infrastructure\HttpGateway depends on doctrine/event-manager, which is in no layer [instantiation]
+fingerprint: d4555ab6b8d00e42</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → doctrine/instantiator (instantiation)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:29
+App\Infrastructure\HttpGateway depends on doctrine/instantiator, which is in no layer [instantiation]
+fingerprint: 102055b2a545b305</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → fakerphp/faker (call)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:26
+App\Infrastructure\HttpGateway depends on fakerphp/faker, which is in no layer [call]
+fingerprint: 91482e534d7d56c9</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → guzzlehttp/guzzle (import)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:8
+App\Infrastructure\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [import]
+fingerprint: b9df34e0659f92fd</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → guzzlehttp/guzzle (instantiation)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:16
+App\Infrastructure\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [instantiation]
+fingerprint: d7905700203929c9</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → guzzlehttp/psr7 (call)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:25
+App\Infrastructure\HttpGateway depends on guzzlehttp/psr7, which is in no layer [call]
+fingerprint: ccccb98e99bae2d9</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → illuminate/routing (extends)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:12
+App\Infrastructure\HttpGateway depends on illuminate/routing, which is in no layer [extends]
+fingerprint: 7ac40d4c7c93032f</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → mustache/mustache (instantiation)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:24
+App\Infrastructure\HttpGateway depends on mustache/mustache, which is in no layer [instantiation]
+fingerprint: 94ee3a29f425251d</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → myclabs/deep-copy (call)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:28
+App\Infrastructure\HttpGateway depends on myclabs/deep-copy, which is in no layer [call]
+fingerprint: ac72e92e93d5b6af</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → nesbot/carbon (call)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:18
+App\Infrastructure\HttpGateway depends on nesbot/carbon, which is in no layer [call]
+fingerprint: c702818d675a9a11</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → phpunit/phpunit (call)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:27
+App\Infrastructure\HttpGateway depends on phpunit/phpunit, which is in no layer [call]
+fingerprint: f0c823d1875aa82f</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → psr/log (import)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:9
+App\Infrastructure\HttpGateway depends on psr/log, which is in no layer [import]
+fingerprint: 97ac7e500af4fc00</system-out>
+    </testcase>
+    <testcase name="App\Infrastructure\HttpGateway → psr/log (param_type)" classname="uncovered">
+      <system-out>uncovered (warn): app/Infrastructure/HttpGateway.php:14
+App\Infrastructure\HttpGateway depends on psr/log, which is in no layer [param_type]
+fingerprint: a99842ab7c06c051</system-out>
+    </testcase>
     <testcase name="App\Infrastructure\MailGateway → App\Support\Uuid (import)" classname="uncovered">
       <system-out>uncovered (warn): app/Infrastructure/MailGateway.php:6
 App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [import]

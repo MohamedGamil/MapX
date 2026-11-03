@@ -3,12 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ConfigError, loadArchitectureConfig } from '../src/arch/config.js';
-import { combine, elementMatches, loadExpected, rowMatches, scoreApp, type ExpectedRow, type ReportedFinding } from '../scripts/eval/score-arch.js';
+import { combine, elementMatches, loadExpected, loadExpectedExternals, rowMatches, scoreApp, type ExpectedRow, type ReportedFinding } from '../scripts/eval/score-arch.js';
 
 // M5-01: the labelled architecture-rules fixture and its scorer (AR-08 chain, AR-09 kinds, AR-10 baseline).
 const FIXTURE = resolve(__dirname, 'fixtures/arch-rules');
 const expected = loadExpected(FIXTURE);
 const rows = expected.rows;
+const externals = loadExpectedExternals(FIXTURE);
 const LANGUAGES = { php: 'php', ts: 'typescript', python: 'python', go: 'go' } as const;
 
 describe('the fixture', () => {
@@ -19,7 +20,13 @@ describe('the fixture', () => {
       expect(Object.keys(expected.apps), r.id).toContain(r.app);
       for (const end of [r.from, r.to]) {
         if (!end) continue;
-        const path = join(FIXTURE, r.app, end.file);
+        // An external target (M5-24) has no file: it names `<ecosystem>:<name>`, a labelled external of the app.
+        if (end.external !== undefined) {
+          expect(end.file, r.id).toBeUndefined();
+          expect(externals.some((x) => x.app === r.app && `${x.ecosystem}:${x.package ?? x.specifier}` === end.external), `${r.id}: ${end.external}`).toBe(true);
+          continue;
+        }
+        const path = join(FIXTURE, r.app, end.file!);
         expect(existsSync(path), `${r.id}: ${end.file}`).toBe(true);
         if (end.symbol) expect(readFileSync(path, 'utf8'), `${r.id}: ${end.symbol} in ${end.file}`).toMatch(new RegExp(`\\b${end.symbol}\\b`));
       }
@@ -61,7 +68,8 @@ describe('the fixture', () => {
     expect(baseline.entries[0].source.endsWith(stale[0]!.from!.symbol!)).toBe(true);
     const ws = rows.filter((r) => r.app === 'workspace');
     // workspace-03 was added by M5-04: the route file's import of the API controller (Backend → PublicApi).
-    expect(ws.map((r) => [r.kind, r.edgeType])).toEqual([['allowed', 'http'], ['violation', 'http'], ['violation', 'import']]);
+    // workspace-x01 and x02 (M5-24): the route files use the Route facade, a package in no layer.
+    expect(ws.map((r) => [r.kind, r.edgeType])).toEqual([['allowed', 'http'], ['violation', 'http'], ['violation', 'import'], ['uncovered', 'import'], ['uncovered', 'import']]);
     expect(expected.apps['workspace']!.repos).toEqual(['frontend', 'backend']);
   });
 
@@ -87,7 +95,9 @@ describe('the scorer', () => {
   const asFinding = (r: ExpectedRow, over: Partial<ReportedFinding> = {}): ReportedFinding => ({
     kind: r.kind, rule: r.rule, edgeType: r.edgeType, layer: r.layer,
     source: r.from && { file: r.from.file, element: r.from.symbol && `App\\X\\${r.from.symbol}` },
-    target: r.to && { file: r.to.file, element: r.to.symbol && `App\\Y\\${r.to.symbol}` },
+    target: r.to && (r.to.external !== undefined
+      ? { file: '', element: r.to.external.slice(r.to.external.indexOf(':') + 1), external: { ecosystem: r.to.external.slice(0, r.to.external.indexOf(':')) } }
+      : { file: r.to.file, element: r.to.symbol && `App\\Y\\${r.to.symbol}` }),
     ...over,
   });
 
@@ -167,6 +177,16 @@ describe('the real-scan score (`mapx check`, M5-04 evaluator, M5-06 baseline, M5
     const violation = score.kinds.violation;
     expect(violation.reported).toBe(violation.matched);
     expect(violation.expected).toBe(rows.filter((r) => r.kind === 'violation').length);
+    // M5-24: findings on packages outside the workspace, per ecosystem: uncovered, vendor-confinement
+    // and dev-dependency rows all found, nothing else reported.
+    for (const eco of ['npm', 'composer', 'pypi', 'go']) {
+      const k = score.externalFindings[eco];
+      expect(k, eco).toMatchObject({ recall: 1, precision: 1 });
+      for (const category of ['uncovered', 'vendor-confinement', 'dev-dependency']) {
+        expect(k.categories[category].expected, `${eco} ${category}`).toBeGreaterThan(0);
+        expect(k.categories[category].matched, `${eco} ${category}`).toBe(k.categories[category].expected);
+      }
+    }
     expect(score.failures).toEqual([]);
   }, 300_000);
 });

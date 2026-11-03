@@ -35,7 +35,7 @@ export interface LayerMembership {
   explain(element: Element | string): TraceEntry[];
   /** Non-overlay layers no element is in (the empty-layer warning). */
   emptyLayers: string[];
-  /** Elements in more than one non-overlay layer. */
+  /** Elements of the workspace (files and symbols, not externals) in more than one non-overlay layer. */
   multiLayer: Element[];
   /** Selectors this version cannot evaluate, by layer and position: they match nothing. */
   unsupported: Array<{ layer: string; selector: string; key: string; task: string }>;
@@ -98,7 +98,8 @@ export function computeMembership(view: ElementView, config: Pick<ArchitectureCo
   const traces = new Map<string, TraceEntry[]>();
   const privateTraces = new Map<string, string[]>();
   const members = new Map<string, Element[]>(layers.map((l) => [l.name, []]));
-  for (const el of view.elements) {
+  // External elements (M5-24) are members too: a vendor layer is not empty, and `private` applies.
+  for (const el of [...view.elements, ...(view.externals ?? [])]) {
     const entries: TraceEntry[] = [];
     for (const layer of layers) {
       const hit = membership(el, layer.name);

@@ -96,7 +96,7 @@ Separately from token savings, MapX measures its own extraction accuracy on thre
 | `scripts/eval/score-routes.ts` | `tests/fixtures/laravel-routes` | Laravel route URI, handler and attribute recall, precision, false positives |
 | `scripts/eval/score-http.ts` | `tests/fixtures/vue-http` | HTTP call-site and URL recall, frontend → backend pairing recall and precision |
 | `scripts/eval/score-edges.ts` | `tests/fixtures/vue-sfc` | Vue SFC edge and symbol recall per pattern, precision, false positives on negatives |
-| `scripts/eval/score-arch.ts` | `tests/fixtures/arch-rules` | Architecture-rule findings (violation, skipped, uncovered, warning, error) per kind: recall and precision against `expected-findings.json`. Findings on `allowed` and same-layer rows are false positives. Five apps (PHP, TypeScript, Python, Go, a PHP copy with a `+` cycle) plus a two-repo workspace. Not yet in `npm run eval`: there is no engine until M5-04 |
+| `scripts/eval/score-arch.ts` | `tests/fixtures/arch-rules` | Architecture-rule findings (violation, skipped, uncovered, warning, error) per kind: recall and precision against `expected-findings.json`. Findings on `allowed` and same-layer rows are false positives. Five apps (PHP, TypeScript, Python, Go, a PHP copy with a `+` cycle), a two-repo workspace, and four vendor apps (M5-24: npm, Composer, pypi, Go). Findings on packages outside the workspace are also scored per ecosystem (`externalFindings`: uncovered, vendor-confinement and dev-dependency rows). Not yet in `npm run eval`: there is no engine until M5-04 |
 
 The floors each score must hold are recorded in `scripts/eval/floors.json`. The fixture tests read the same file. `npm run eval` runs all three scorers and checks every floor. CI runs it as the `Eval` job.
 

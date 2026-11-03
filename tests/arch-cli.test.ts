@@ -216,12 +216,13 @@ describe('mapx check --format json', () => {
     const report = JSON.parse(a.stdout);
     expect(validate(report), JSON.stringify(validate.errors)).toBe(true);
     // M5-11: php-19 and php-20 (@internal, import and instantiation each) are violations, no longer allowed.
-    expect(report.counts).toMatchObject({ violation: 14, skipped: 2, error: 1, uncovered: 4, allowed: 16, warning: 2 });
+    // M5-24: 16 of the uncovered are HttpGateway's dependencies on packages in no layer.
+    expect(report.counts).toMatchObject({ violation: 14, skipped: 2, error: 1, uncovered: 20, allowed: 16, warning: 2 });
     expect(report.findings.filter((f: any) => f.kind === 'allowed')).toHaveLength(16);
     // Without --report-*: allowed and uncovered are counted, not listed.
     const plain = JSON.parse(run(php, 'check', '--format', 'json').stdout);
     expect(validate(plain)).toBe(true);
-    expect(plain.counts.uncovered).toBe(4);
+    expect(plain.counts.uncovered).toBe(20);
     expect(plain.findings.some((f: any) => f.kind === 'uncovered' || f.kind === 'allowed')).toBe(false);
   }, 120_000);
 

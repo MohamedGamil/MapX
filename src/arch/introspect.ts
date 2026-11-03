@@ -23,7 +23,7 @@ import {
   decideEdge, edgeScope, elementName, endResolver, evaluateEdges, reportElement,
   type Dependency, type EdgeScope, type Evaluation, type FindingSeverity, type TargetLayers,
 } from './evaluate.js';
-import type { Element } from './elements.js';
+import { externalKey, type Element } from './elements.js';
 import { globOrRegex } from './selectors/index.js';
 import { internalMarkers } from './visibility.js';
 
@@ -68,7 +68,8 @@ export function openArchitecture(dir: string, store: Store, options: LoadOptions
 /** An element as introspection names it: a symbol's qualified name or a file's path. */
 export interface ElementRef {
   element: string;
-  kind: 'file' | 'symbol';
+  /** `external`: a package, built-in or ambient access outside the workspace (M5-24); its file is empty. */
+  kind: 'file' | 'symbol' | 'external';
   /** class, method, function … (symbols only). */
   symbolKind?: string;
   file: string;
@@ -131,13 +132,19 @@ export function resolveElements(ctx: ArchContext, query: string): Element[] {
     }
     nameIndexes.set(view, idx);
   }
-  return idx.byQn.get(query) ?? idx.byScoped.get(query) ?? idx.byName.get(query) ?? idx.byMember.get(query) ?? [];
+  const found = idx.byQn.get(query) ?? idx.byScoped.get(query) ?? idx.byName.get(query) ?? idx.byMember.get(query) ?? [];
+  if (found.length) return found;
+  // An external element (M5-24): by name (`pg`, `node:fs`) or ecosystem and name (`npm:pg`).
+  return (view.externals ?? []).filter((e) => e.qualifiedName === query || externalKey(e.external!) === query);
 }
 
 /** The one element a query names; an IntrospectError when it names none or several. */
 export function resolveElement(ctx: ArchContext, query: string): Element {
   const found = resolveElements(ctx, query);
-  if (!found.length) throw new IntrospectError(`"${query}" is not an indexed file or symbol, nor a layer`);
+  if (!found.length) throw new IntrospectError(`"${query}" is not an indexed file or symbol, an external package, nor a layer`);
+  // One package attributed as direct in one file and transitive in another is several elements:
+  // the first stands for them.
+  if (found.every((e) => e.kind === 'external' && externalKey(e.external!) === externalKey(found[0]!.external!))) return found[0]!;
   if (found.length > 1) {
     const candidates = found.map((e) => elementName(e)).sort();
     throw new IntrospectError(`"${query}" names ${found.length} elements; use one of: ${candidates.join(', ')}`, candidates);
@@ -156,7 +163,7 @@ export function layerSummaries(ctx: ArchContext): { layers: LayerSummary[] } {
   const m = ctx.membership;
   return {
     layers: m.layers.map((l) => ({
-      name: l.name, overlay: !!l.overlay, elements: m.members(l.name).length, files: new Set(m.members(l.name).map((e) => e.file.path)).size,
+      name: l.name, overlay: !!l.overlay, elements: m.members(l.name).length, files: new Set(m.members(l.name).filter((e) => e.kind !== 'external').map((e) => e.file.path)).size,
     })),
   };
 }
@@ -198,7 +205,7 @@ export function whichLayers(ctx: ArchContext, query: string): { query: string; m
   return {
     query,
     matches: found.sort(byFile).map((e) => ({
-      ...elementRef(e), layers: ctx.membership.of(e), private: ctx.membership.privateIn(e), trace: ctx.membership.explain(e), inScope: ctx.scope.path(e.file.path),
+      ...elementRef(e), layers: ctx.membership.of(e), private: ctx.membership.privateIn(e), trace: ctx.membership.explain(e), inScope: e.kind === 'external' || ctx.scope.path(e.file.path),
     })),
   };
 }
@@ -447,7 +454,7 @@ export type AllowedRule = 'allowed' | 'same-layer' | 'uncovered' | 'overlay' | '
 
 export interface AllowedEnd {
   query: string;
-  kind: 'layer' | 'file' | 'symbol';
+  kind: 'layer' | 'file' | 'symbol' | 'external';
   element?: string;
   file?: string;
   /** Non-overlay layers (a layer query: the layer itself, unless it is an overlay). */
@@ -528,8 +535,10 @@ function end(ctx: ArchContext, query: string, role: 'source' | 'target'): { end:
   const primary = ctx.membership.primaryOf(el);
   return {
     end: {
-      query, kind: el.kind, element: elementName(el), file: el.file.path, layers: primary,
-      overlays: all.filter((l) => !primary.includes(l)), private: role === 'target' ? ctx.membership.privateIn(el) : [], inScope: ctx.scope.path(el.file.path),
+      query, kind: el.kind, element: elementName(el), ...(el.kind === 'external' ? {} : { file: el.file.path }), layers: primary,
+      overlays: all.filter((l) => !primary.includes(l)), private: role === 'target' ? ctx.membership.privateIn(el) : [],
+      // An external has no path for scope.include/exclude to judge: its source's path decides (M5-24).
+      inScope: el.kind === 'external' || ctx.scope.path(el.file.path),
     },
     element: el,
   };
@@ -598,7 +607,7 @@ function answer(ctx: ArchContext, from: string, to: string, options: { edgeType?
     const observed = sourceEl && targetEl ? observedDependencies(ctx, sourceEl, targetEl) : [];
     const types = edgeType !== null ? [edgeType] : observed.length ? scopeTypes.filter((t) => observed.some((d) => d.edgeType === t)) : scopeTypes;
     // A hypothetical dependency between two elements: the target's internal markers apply (M5-11).
-    const markers = sourceEl && targetEl ? internalMarkers(ctx.membership.view, ctx.config.visibility, (el) => reportElement(ctx.membership.view, el)) : null;
+    const markers = sourceEl && targetEl && targetEl.kind !== 'external' ? internalMarkers(ctx.membership.view, ctx.config.visibility, (el) => reportElement(ctx.membership.view, el)) : null;
     for (const type of types) {
       const targetSide: TargetLayers = {
         layers: target.layers, overlays: target.overlays, privateIn: target.private,
@@ -615,6 +624,20 @@ function answer(ctx: ArchContext, from: string, to: string, options: { edgeType?
       }
       if (stored.length) continue;
       for (const d of decideEdge(ctx.config, ctx.policy, source.layers, targetSide, type, 'verified')) {
+        // An external in no layer is reported only as `policy.uncovered` says, as the evaluator does
+        // (M5-24 review): packages under `externals`, built-ins and ambient access under `builtins`.
+        const ext = targetEl?.external;
+        if (d.kind === 'uncovered' && ext && !(ext.origin === 'package' ? ctx.config.policy.uncovered.externals : ctx.config.policy.uncovered.builtins)) {
+          const key = JSON.stringify([type, d.sourceLayer, 'unreported-external']);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const flag = ext.origin === 'package' ? 'externals' : 'builtins';
+          decisions.push({
+            edgeType: type, observed: false, verifiability: 'verified', sourceLayer: d.sourceLayer, allowed: true, rule: 'out-of-scope', severity: 'info',
+            reason: `${label(target)} is in no layer and policy.uncovered.${flag} is false: \`mapx check\` does not report the dependency`,
+          });
+          continue;
+        }
         // An overlay layer as the target decides only where a source layer denies it.
         const overlay = target.kind === 'layer' && target.overlays.length > 0 && d.kind === 'uncovered';
         add({

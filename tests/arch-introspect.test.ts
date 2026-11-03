@@ -165,8 +165,13 @@ describe('mapx arch deps (AR-13d)', CLI, () => {
 
   it('without a target layer: every decided edge of the layer, uncovered ones included', () => {
     const r = json('deps', 'Infrastructure').body;
-    expect(r.counts).toEqual({ allowed: 4, violation: 0, uncovered: 2 });
-    expect(r.dependencies.filter((d: { kind: string }) => d.kind === 'uncovered')).toEqual([
+    // M5-24: 20 of the uncovered are dependencies on packages in no layer (HttpGateway.ts, Tooling.ts).
+    expect(r.counts).toEqual({ allowed: 4, violation: 0, uncovered: 22 });
+    expect(r.dependencies.find((d: any) => d.target.kind === 'external' && d.target.element === 'left-pad')).toEqual({
+      source: { ...file('src/infrastructure/Tooling.ts'), line: 11 },
+      target: { element: 'left-pad', kind: 'external', file: '' }, targetLayers: [], edgeType: 'import', verifiability: 'verified', kind: 'uncovered', rule: 'uncovered', severity: 'warn',
+    });
+    expect(r.dependencies.filter((d: any) => d.kind === 'uncovered' && d.target.kind !== 'external')).toEqual([
       { source: { ...file('src/infrastructure/MailGateway.ts'), line: 2 }, target: file('src/support/Uuid.ts'), targetLayers: [], edgeType: 'import', verifiability: 'verified', kind: 'uncovered', rule: 'uncovered', severity: 'warn' },
       { source: { element: 'src/infrastructure/MailGateway.ts#MailGateway.run', kind: 'symbol', symbolKind: 'method', file: 'src/infrastructure/MailGateway.ts', line: 7 }, target: cls('src/support/Uuid.ts', 'Uuid'), targetLayers: [], edgeType: 'instantiation', verifiability: 'verified', kind: 'uncovered', rule: 'uncovered', severity: 'warn' },
     ]);

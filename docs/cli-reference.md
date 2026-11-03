@@ -825,7 +825,7 @@ Options:
 - `--violations` — Show only layer dependency flow violations
 - `--json` — Output the architecture report as structured JSON
 
-Without `.mapx/architecture.jsonc`, layer violations come from the file roles. With one, they come from the rules, as `mapx check` reports them (its baseline applied), and the rule-derived smells (`layer-cycle`, `layer-skip`, `dead-allowance`, `weak-allowance`, `unstable-layer-dependency`, `abstractness-distance`, `deprecated-usage`) join the list. Those smells print a `Source:` line (`rules`, or `inferred-roles` for the role-order violations `policy.alsoInferred` keeps), and layer-level ones a `Layers:` line. See [architecture-rules.md](architecture-rules.md#smells).
+Without `.mapx/architecture.jsonc`, layer violations come from the file roles. With one, they come from the rules, as `mapx check` reports them (its baseline applied), and the rule-derived smells (`layer-cycle`, `layer-skip`, `dead-allowance`, `weak-allowance`, `unstable-layer-dependency`, `abstractness-distance`, `deprecated-usage`, and M5-24's `vendor-leak`, `undeclared-dependency`, `dev-dependency-in-prod`) join the list. Those smells print a `Source:` line (`rules`, or `inferred-roles` for the role-order violations `policy.alsoInferred` keeps), and layer-level ones a `Layers:` line. See [architecture-rules.md](architecture-rules.md#smells).
 
 Examples:
 ```bash
@@ -848,6 +848,8 @@ Where the layers come from:
 - `--from clusters`: one layer per primary cluster (`mapx clusters`, `{ "cluster": … }` selectors). The rules allow exactly the dependencies between clusters the index has today, so a new one fails `mapx check`.
 - `--from framework`: the preset of the framework the scan detected (`laravel`, `nestjs` or `django`). Exit 3 when none is detected.
 - `--preset <id>`: a configuration that `extends` the shipped preset `mapx:preset/<id>` (see [architecture-rules.md](architecture-rules.md#presets)). The preset's folder parameter (`root`) is inferred: the folder, up to three levels down, under which the most of the preset's layers have files. For `ddd-contexts`, every folder under `root` becomes a context layer. `--preset` and `--from` exclude each other.
+
+Whatever the source, when the index has references to packages outside the workspace, the proposal also declares a `Packages` layer, `{ "package": "*" }`, that every layer may use (`"*": ["Packages"]`), so that `mapx check --fail-on-uncovered` passes on the proposal's first day (M5-24). That layer is left out of `layers` in the JSON output and of the empty-layer warnings.
 
 Options:
 - `--baseline`: also propose `.mapx/architecture.baseline.json` (the view's own baseline file for a view), listing the proposal's violations on today's index, so `mapx check` exits 0 until a new violation appears. It needs a current index: on a stale one it exits 4 (`--sync` syncs first). Without `--baseline`, a stale index is accepted, since roles and paths are what a proposal reads.
@@ -933,7 +935,7 @@ Every subcommand takes:
 - `--format text|json` (default `text`), or `--json`.
 - `--sync`: when files changed since the last scan, sync the index first (not on `changed`).
 
-Elements (`which`, `allowed`) are named by an indexed file path, a qualified name (`App\Domain\Order`, `src/domain/Order.ts#Order`), a scoped name (`Order::run`, `Order.run`), or a bare symbol name, top-level symbols first. A name that matches several elements is an error that lists them (`candidates` in JSON). `allowed` also takes layer names.
+Elements (`which`, `allowed`) are named by an indexed file path, a qualified name (`App\Domain\Order`, `src/domain/Order.ts#Order`), a scoped name (`Order::run`, `Order.run`), a bare symbol name (top-level symbols first), or, when none of these matches, an external package or built-in by name or by ecosystem and name (`pg`, `npm:pg`, `node:fs`; M5-24). A name that matches several elements is an error that lists them (`candidates` in JSON). `allowed` also takes layer names.
 
 Exit codes follow `mapx check`:
 

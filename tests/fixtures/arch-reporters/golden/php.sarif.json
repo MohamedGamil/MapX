@@ -819,6 +819,598 @@
           "ruleIndex": 6,
           "level": "note",
           "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on Acme\\Missing\\Widget, which is in no layer [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 31
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "98fdefc2bf5713a0"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "Acme\\Missing\\Widget",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on Illuminate\\Support\\Str, which is in no layer [call]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 32
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "2c2fad1932a85f3e"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "Illuminate\\Support\\Str",
+            "edgeType": "call",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on collect, which is in no layer [call]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 30
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "161ea090398d3dbb"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "collect",
+            "edgeType": "call",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on doctrine/event-manager, which is in no layer [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 33
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "d4555ab6b8d00e42"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "doctrine/event-manager",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on doctrine/instantiator, which is in no layer [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 29
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "102055b2a545b305"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "doctrine/instantiator",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on fakerphp/faker, which is in no layer [call]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 26
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "91482e534d7d56c9"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "fakerphp/faker",
+            "edgeType": "call",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 8
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "b9df34e0659f92fd"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "guzzlehttp/guzzle",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 16
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "d7905700203929c9"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "guzzlehttp/guzzle",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on guzzlehttp/psr7, which is in no layer [call]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 25
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "ccccb98e99bae2d9"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "guzzlehttp/psr7",
+            "edgeType": "call",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on illuminate/routing, which is in no layer [extends]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 12
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "7ac40d4c7c93032f"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "illuminate/routing",
+            "edgeType": "extends",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on mustache/mustache, which is in no layer [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 24
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "94ee3a29f425251d"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "mustache/mustache",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on myclabs/deep-copy, which is in no layer [call]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 28
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "ac72e92e93d5b6af"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "myclabs/deep-copy",
+            "edgeType": "call",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on nesbot/carbon, which is in no layer [call]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 18
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "c702818d675a9a11"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "nesbot/carbon",
+            "edgeType": "call",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on phpunit/phpunit, which is in no layer [call]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 27
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "f0c823d1875aa82f"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "phpunit/phpunit",
+            "edgeType": "call",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on psr/log, which is in no layer [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 9
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "97ac7e500af4fc00"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "psr/log",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
+            "text": "App\\Infrastructure\\HttpGateway depends on psr/log, which is in no layer [param_type]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Infrastructure/HttpGateway.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 14
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Infrastructure\\HttpGateway"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "a99842ab7c06c051"
+          },
+          "properties": {
+            "kind": "uncovered",
+            "sourceLayer": "Infrastructure",
+            "target": "psr/log",
+            "edgeType": "param_type",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "uncovered",
+          "ruleIndex": 6,
+          "level": "note",
+          "message": {
             "text": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [import]"
           },
           "locations": [

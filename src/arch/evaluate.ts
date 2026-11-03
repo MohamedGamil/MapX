@@ -24,6 +24,9 @@
 // Two exceptions: the target of an `http` or `route` edge stays the handler (the endpoint is the
 // dependency), and a Go import names a package, so its target is the package (its directory's
 // files' layers), not whichever file of it the edge was stored against.
+//
+// References outside the workspace (`external_refs`, M5-24) are decided by the same chain, their
+// target the external element: a package, a built-in or ambient access.
 import { posix } from 'node:path';
 import type { Store } from '../core/store.js';
 import type { ArchitectureConfig } from './schema.js';
@@ -39,6 +42,7 @@ export type FindingSeverity = 'error' | 'warn' | 'info';
 
 export interface FindingEnd {
   element: string;
+  /** Workspace-relative; empty for an external target (M5-24). */
   file: string;
   /** The end's layers, joined with ", " for display. */
   layer?: string;
@@ -46,6 +50,8 @@ export interface FindingEnd {
   layers?: string[];
   repo?: string;
   line?: number;
+  /** An external target (M5-24, AR-09): what the scan attributed the reference to. */
+  external?: { ecosystem: string; origin: 'package' | 'builtin' | 'ambient'; package: string | null; direct: boolean | null; dev: boolean | null };
 }
 
 export interface Finding {
@@ -171,8 +177,8 @@ function typesOf(view: ElementView): Map<string, Element[]> {
   return index;
 }
 
-/** The name a finding shows for an element: a symbol's qualified name, a file's path. */
-export const elementName = (el: Element) => (el.kind === 'symbol' ? el.qualifiedName : el.file.path);
+/** The name a finding shows for an element: a file's path, a symbol's qualified name, an external's name (M5-24). */
+export const elementName = (el: Element) => (el.kind === 'file' ? el.file.path : el.qualifiedName);
 
 /** Edge types whose target is an endpoint: the handler method, not its class, is the dependency. */
 export const ENDPOINT_EDGES = new Set(['http', 'route']);
@@ -299,6 +305,30 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
       own.add(ownKey(source, target, r.edge_type));
     }
     evaluate(r, source, target, verifiability);
+  }
+
+  // External dependencies (M5-24): each stored reference outside the workspace (`external_refs`)
+  // from a source in scope is decided like an edge whose target is the external element, its kind
+  // as the edge type. A target in no layer is uncovered only as `policy.uncovered` says (AR-08):
+  // packages under `externals`, built-ins and ambient access under `builtins`.
+  for (const ref of view.externalRefs ?? []) {
+    if (!scope.types.has(ref.kind) || !inScopePath(ref.file)) continue;
+    const source = resolve(ref.file, ref.sourceSymbol);
+    if (!source) continue;
+    const sourceLayers = membership.primaryOf(source);
+    if (!sourceLayers.length) continue;
+    const target = ref.target;
+    const reportUncovered = target.external!.origin === 'package' ? config.policy.uncovered.externals : config.policy.uncovered.builtins;
+    const targetLayers = membership.primaryOf(target);
+    const targetSide: TargetLayers = { layers: targetLayers, overlays: membership.of(target).filter((l) => overlays.has(l)), privateIn: membership.privateIn(target) };
+    endFiles.add(source.file.path);
+    for (const d of decideEdge(config, policy, sourceLayers, targetSide, ref.kind, 'verified')) {
+      if (d.kind === 'same-layer' || (d.kind === 'uncovered' && !reportUncovered)) continue;
+      out.push({
+        source, target, targetLayers, edgeType: ref.kind, verifiability: 'verified', line: ref.line, kind: d.kind, ...(d.rule ? { rule: d.rule } : {}),
+        severity: d.severity, sourceLayer: d.sourceLayer, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}),
+      });
+    }
   }
 
   // Inherited dependencies (AR-02): each type with workspace ancestors answers for theirs, once per

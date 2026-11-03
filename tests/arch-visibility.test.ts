@@ -167,7 +167,8 @@ describe('native markers (visibility.nativeMarkers)', () => {
   });
 
   it('M5-11\'s rows hold for every edge type that carries them, with native markers off and on', () => {
-    const mine = expected.rows.filter((r) => r.edgeTypes);
+    // Rows on workspace targets: M5-24's rows on packages outside it list their edge types too.
+    const mine = expected.rows.filter((r) => r.edgeTypes && !r.to?.external);
     expect(mine.map((r) => r.id).sort()).toEqual(['go-26', 'go-27', 'go-28', 'python-26', 'python-27', 'python-28']);
     for (const app of ['go', 'python']) {
       const off = reportOf(app);

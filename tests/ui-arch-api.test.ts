@@ -133,8 +133,10 @@ describe('/api/arch on the arch-rules fixture (M5-15)', () => {
     const warnLevel = check.findings.filter((f) => f.kind === 'violation' && f.severity === 'warn').length;
     expect(body.health).toEqual({
       violations: check.counts.violation, warnLevelViolations: warnLevel, warnings: check.counts.warning, baselineDebt: check.counts.skipped,
-      uncovered: 4, unassigned: unassigned.total, configErrors: 0, ruleSmells: expect.any(Number), trend: null,
+      uncovered: check.counts.uncovered, unassigned: unassigned.total, configErrors: 0, ruleSmells: expect.any(Number), trend: null,
     });
+    // M5-24: 19 of the uncovered are HttpGateway's and toolingCheck's dependencies on packages in no layer.
+    expect(check.counts.uncovered).toBe(23);
     // Review of M5-15: the Warnings tile is check's "Warnings" (the multi-layer OrderId), not warn-level violations.
     expect(check.counts.warning).toBeGreaterThan(0);
     expect(check.counts.skipped).toBe(3); // Result → Money twice, and the payload's first

@@ -119,7 +119,8 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
   it('reports each dependency once per edge type at the class level, with the AR-08 rule', () => {
     // The evaluator alone: the fixture's baseline (php-07, php-26) is M5-06's, tested in arch-baseline.
     const r = runArchitecture(roots['php']!, { baseline: false })!;
-    const shown = r.findings.filter((f) => f.kind !== 'allowed' && f.edgeType === 'instantiation').map(key);
+    // Workspace targets: the dependencies on packages outside it are tests/external-refs.test.ts's (M5-24).
+    const shown = r.findings.filter((f) => f.kind !== 'allowed' && f.edgeType === 'instantiation' && !f.target?.external).map(key);
     expect(shown).toEqual([
       'violation disallowed-layer App\\Controller\\OrderController -> App\\Domain\\Order instantiation',
       'violation disallowed-layer App\\Controller\\ReportController -> App\\Infrastructure\\SqlOrderRepository instantiation',
@@ -145,7 +146,8 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
     // only when every target layer is the source's), and Domain may use Shared.
     expect(r.findings.find((f) => f.source?.element === 'App\\Domain\\Order' && f.target?.element === 'App\\Domain\\Ids\\OrderId' && f.edgeType === 'instantiation')?.kind).toBe('allowed');
     // M5-11: the two @internal dependencies (import and instantiation each) are violations, no longer allowed.
-    expect(r.counts).toEqual({ violation: 16, skipped: 0, uncovered: 4, allowed: 16, warning: 2, error: 0 });
+    // M5-24: 16 more uncovered, HttpGateway's dependencies on packages in no layer (php-x01 … php-x14).
+    expect(r.counts).toEqual({ violation: 16, skipped: 0, uncovered: 20, allowed: 16, warning: 2, error: 0 });
     // Unique fingerprints within a report.
     expect(new Set(r.findings.map((f) => f.fingerprint)).size).toBe(r.findings.length);
   });
@@ -315,8 +317,8 @@ describe('review of M5-04: overlays, several target layers, Go packages, homonym
     } finally { rmSync(bare, { recursive: true, force: true }); }
   });
 
-  it('an unsupported selector is reported as a warning', () => {
+  it('a package selector is evaluated since M5-24: no unsupported-selector warning', () => {
     const r = reportWith('php', (c) => ({ ...c, layers: [...c.layers, { name: 'Old', overlay: true, selectors: [{ package: 'monolog/*' }] }] }));
-    expect(r.findings.filter((f) => f.rule === 'unsupported-selector').map((f) => [f.kind, f.layer])).toEqual([['warning', 'Old']]);
+    expect(r.findings.filter((f) => f.rule === 'unsupported-selector')).toEqual([]);
   });
 });

@@ -467,7 +467,8 @@ describe('golden files on the PHP fixture (the real CLI)', () => {
     expect(errors).toHaveLength(10);
     expect(parseCommand(errors[0]!).props.title).toBe('stale-baseline');
     expect(parseCommand(errors[0]!).message).toMatch(/^\.mapx\/architecture\.baseline\.json#\/entries\/0: the baseline entry /);
-    expect(lines.at(-2)).toMatch(/Errors: 1   5 more not annotated \(GitHub shows 10 per level in a step\); see the log lines above or --format sarif$/);
+    // 5 errors and (M5-24: HttpGateway's dependencies on packages in no layer) 12 notices past the 10 shown.
+    expect(lines.at(-2)).toMatch(/Errors: 1   17 more not annotated \(GitHub shows 10 per level in a step\); see the log lines above or --format sarif$/);
     const json: ArchReport = JSON.parse(mapxResult(root, 'check', '--format', 'json', ...ARGS).stdout);
     const logged = lines.filter((l) => /^\[(error|warning|notice)\] /.test(l));
     expect(logged).toHaveLength(json.findings.filter((f) => f.kind !== 'allowed').length);

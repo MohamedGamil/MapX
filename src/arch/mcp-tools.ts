@@ -80,7 +80,7 @@ export const ARCH_TOOLS = [
       type: 'object',
       properties: {
         from: { type: 'string', description: 'Source: a layer, file or symbol' },
-        to: { type: 'string', description: 'Target: a layer, file or symbol' },
+        to: { type: 'string', description: 'Target: a layer, file or symbol, or a package or built-in outside the workspace (pg, npm:pg)' },
         type: { type: 'string', enum: [...EDGE_TYPES], description: 'Decide for this edge type only (default: the types the index has between the two, else every type in scope)' },
         view,
         sync,

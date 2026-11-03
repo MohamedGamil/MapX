@@ -29,9 +29,9 @@
 
   "layers": [
     // The process entry points and the surfaces they expose: the CLI (cli.ts, its logo in branding.ts),
-    // the MCP server (mcp.ts), the dashboard server (ui-server.ts, ui-events.ts), the binary (main.ts)
+    // the MCP server (mcp.ts), the dashboard server (ui-server.ts, ui-events.ts, ui-arch.ts), the binary (main.ts)
     // and the programmatic API (index.ts). They wire the layers below together.
-    { "name": "Entry", "selectors": [{ "path": "src/{main,index,cli,mcp,ui-server,ui-events,branding}.ts" }] },
+    { "name": "Entry", "selectors": [{ "path": "src/{main,index,cli,mcp,ui-server,ui-events,ui-arch,branding}.ts" }] },
 
     // The dashboard's browser client, bundled on its own by scripts/build-ui.ts. It talks to ui-server
     // over HTTP only, never by import.
@@ -62,14 +62,19 @@
     // Leaf modules every layer may use: the shared types and the version.
     { "name": "Shared", "selectors": [{ "path": "src/{types,version}.ts" }] },
 
+    // npm packages package.json lists for production (M5-24), which every layer may use. A dev-only package
+    // is in no layer, so production code that imports one fails the check as uncovered (--fail-on-uncovered).
+    // Node built-ins (node:fs …) are not reported (policy.uncovered.builtins is false).
+    { "name": "Packages", "selectors": [{ "package": "*", "dev": false }] },
+
     // Tests, fixtures and maintenance scripts. An overlay is only ever a rule target: production code that
     // imports one of them is a violation ("!Outside" below), and their own imports are not checked.
     { "name": "Outside", "selectors": [{ "path": "{tests,scripts}/**" }], "overlay": true }
   ],
 
   "rules": {
-    // Every layer may use the shared types and the version, and none may import tests or scripts.
-    "*": ["Shared", "!Outside"],
+    // Every layer may use the shared types, the version and runtime packages, and none may import tests or scripts.
+    "*": ["Shared", "Packages", "!Outside"],
 
     // Entry points use every layer but the browser client: Core, and through "+Core" everything Core may use.
     "Entry": ["Agents", "Arch", "Exporters", "+Core"],

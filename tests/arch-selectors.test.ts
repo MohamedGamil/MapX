@@ -188,13 +188,10 @@ describe('layer membership on the fixture apps', () => {
     expect(m.explain(el('php', 'App\\Domain\\Ids\\OrderId')).map((t) => [t.layer, t.selector])).toEqual([['Domain', 'selectors[0].name'], ['Shared', 'selectors[1].path']]);
   });
 
-  it('reports selectors later tasks evaluate, and they match nothing', () => {
+  it('evaluates every selector key: package and builtin select external elements (M5-24)', () => {
     const m = computeMembership(apps['ts']!.view, { layers: [{ name: 'Old', overlay: true, selectors: [{ package: 'lodash' }, { any: [{ builtin: true }] }] }] });
-    expect(m.unsupported).toEqual([
-      { layer: 'Old', selector: 'selectors[0]', key: 'package', task: 'M5-24' },
-      { layer: 'Old', selector: 'selectors[1]', key: 'builtin', task: 'M5-24' },
-    ]);
-    expect(m.members('Old')).toEqual([]);
+    expect(m.unsupported).toEqual([]);
+    expect([...new Set(m.members('Old').map((e) => `${e.kind} ${e.qualifiedName}`))].sort()).toEqual(['external lodash', 'external node:events', 'external node:fs', 'external node:test']);
     expect(m.emptyLayers).toEqual([]); // an overlay is never "empty-layer"
   });
 

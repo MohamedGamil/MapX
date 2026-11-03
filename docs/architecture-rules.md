@@ -70,7 +70,7 @@ The features, by the task that delivered them:
 - **Decorators and doc tags** (M5-10): the `decorator` and `docTag` selectors. See [Decorators and doc tags](#decorators-and-doc-tags).
 - **Private parts and internal elements** (M5-11): `private` selectors, `@internal` doc tags and native module visibility. See [Visibility](#visibility).
 
-Not there yet: the `package`, `builtin` and `ambient` selectors (M5-24) and the dashboard's Architecture view (M5-15).
+Not there yet: the dashboard's Architecture view (M5-15), and ambient access other than Go's cgo `C` (see [External dependencies](#external-dependencies-packages-built-ins-ambient-access)).
 
 Where to look up each part:
 
@@ -96,6 +96,7 @@ Where to look up each part:
 2. **Or start from a preset** (`--preset <id>`, or `--from framework` for the detected framework's preset). The configuration `extends` the preset and sets its folder parameter, inferred from the indexed paths.
 3. **Read the observed layer graph** in the comments: for each layer, its files and the dependencies on other layers the index has today, and which of them the rules refuse. With `--from clusters`, the rules allow exactly today's graph.
 4. **Make day one green** with `--baseline`: today's violations go to `.mapx/architecture.baseline.json`, so `mapx check` exits 0 until a new one appears (see [Baselines and the ratchet](#baselines-and-the-ratchet)).
+5. **Packages are covered.** When the index has references to packages outside the workspace, every proposal (every `--from` source and every preset) adds a `Packages` layer, `{ "package": "*" }`, which every layer may use (`"*": ["Packages"]`). Without it, `mapx check` reports each dependency on a package as uncovered (`policy.uncovered.externals`), and a baseline cannot skip an uncovered dependency, so `--fail-on-uncovered` would fail on day one. The layer holds dev-only and unattributed packages too; the `dev-dependency-in-prod` smell reports production code that uses a dev-only one. Narrow it, or split it into vendor layers, as the rules tighten (see [External dependencies](#external-dependencies-packages-built-ins-ambient-access)).
 
 ```bash
 mapx arch init --preset laravel            # look at the proposal
@@ -251,21 +252,7 @@ A selector object has exactly one primary key, plus the modifiers that refine it
 
 **Symbol-level selectors on files.** A `name`, `decorator`, `docTag` or hierarchy selector does not apply to a file. It is not a match, and neither is `not` of it, so `{ "all": [{ "path": "app/**" }, { "not": { "name": "Controller$" } }] }` never puts a file in a layer by itself. The file joins the layer only through a top-level symbol that is in it (see Membership). `all`, `any` and `not` use three-valued logic. `all` is inapplicable when no branch fails and one is inapplicable. `any` is inapplicable when no branch matches and one is inapplicable. So `{ "not": { "any": [{ "name": "Controller$" }, { "path": "app/Legacy/**" }] } }` does not select a file either.
 
-Not evaluated yet: these never match, `not` of them never matches either, and membership lists them as unsupported.
-
-| Selectors | Task that adds them | Accepted form |
-| --- | --- | --- |
-| `package` (+ `dev`, `direct`) | M5-24 (attribution M5-20 … M5-23) | `{ "package": "lodash*", "dev": false, "direct": true }` |
-| `builtin` | M5-24 | `{ "builtin": true }` |
-| `ambient` | M5-24 | `{ "ambient": "process.env" }` |
-
-The configuration validates, and `mapx check` names each such selector in an `unsupported-selector` warning:
-
-```
-  ! unsupported-selector  layer Env: selectors[0] uses "ambient", which this version cannot evaluate yet (M5-24); it matches nothing
-  ! unsupported-selector  layer Stdlib: selectors[0] uses "builtin", which this version cannot evaluate yet (M5-24); it matches nothing
-  ! unsupported-selector  layer Vendor: selectors[0] uses "package", which this version cannot evaluate yet (M5-24); it matches nothing
-```
+The `package`, `builtin` and `ambient` selectors select what the workspace uses from outside itself: see [External dependencies](#external-dependencies-packages-built-ins-ambient-access).
 
 One example of each selector, on the shop. The decorator, doc tag and hierarchy selectors have their own examples below. All of these are layers of one valid configuration, here the view `.mapx/architecture/selectors.jsonc`; `mapx arch which <element>` shows which of them an element is in, and why:
 
@@ -385,6 +372,51 @@ The base list is read for PHP, TypeScript and JavaScript, Python, Java, Kotlin, 
 
 **Inherited dependencies (AR-02).** With `"policy": { "inheritDependencies": true }`, a type also answers for the dependencies of its workspace ancestors, through every kind of hop. Each is decided again with the type as source, by the same [evaluation](#evaluation) chain and the type's own layers. Its finding carries `via`, the inheritance path from the type to the ancestor that has the dependency, and its message ends `inherited via App\Domain\Order → App\Support\BaseModel`. A dependency is derived once per type, target and edge type, through the shortest path. It is not derived when the type has it itself, or the type's file does (an import in a file with several types belongs to the file; that finding has no `via`), nor when its target is the type or one of its own ancestors (that is the inheritance itself, decided where it is declared). An inherited finding has no line: its edge is in the ancestor's file. A `via` longer than eight names shows the first five and the last two around one `… N more …` entry. The default, `false`, derives nothing.
 
+<!-- M5-24: external dependencies. A section of its own. -->
+## External dependencies: packages, built-ins, ambient access
+
+A scan records every reference to something outside the workspace (the `external_refs` view). It also records what each reference belongs to: a package of npm, Composer, pypi or Go modules, the language's standard library or runtime (a built-in), or ambient access. For each package it records whether the manifest lists it directly and whether it is dev-only. The rules see these as **external elements**. There is one per ecosystem and name: the package (`pg`, `guzzlehttp/guzzle`, `golang.org/x/sys`), a built-in's package (`node:fs`, `ext-pdo`, `python:os`, `net/http`), or for a package no manifest or lockfile provides, the name as written (`Acme\Missing\Widget`). A package that is a direct dependency for one file and a transitive one for another is two elements of the same name.
+
+| Selector | Matches |
+| --- | --- |
+| `package` (+ `dev`, `direct`) | A package by name: `"pg"`, `"guzzlehttp/*"`, `"@acme/*"`, `"*"`. A package no manifest or lockfile provides is matched by its name as written (`github.com/pkg/errors`), so `"*"` covers every package. With `dev: true`, only dev-only packages; with `dev: false`, only production ones. With `direct: true`, only packages a manifest lists directly; with `direct: false`, only transitive ones and those no manifest lists. A package whose status is unknown (no lockfile says) matches neither value. |
+| `builtin` | A built-in: `true`, or a name such as `"node:*"`, `"ext-pdo"`, `"python:os"`, `"net/http"` |
+| `ambient` | Ambient access: `true`, or a name. Today the scan records only Go's cgo `C`. Process-global access such as `process.env`, `$_GET` or `os.environ` is not extracted yet. |
+
+- **Names.** In these names `*` matches any run of characters, `/` included, because package names are not paths. `/regex/flags` is a regular expression. Names compare as their ecosystem compares them: npm, Composer, built-ins and ambient names ignore case; a pypi package name is normalised as PEP 503 says (case, and each run of `-`, `_` and `.` as one `-`), so `"Flask_SQLAlchemy"` and `"zope.interface"` match `flask-sqlalchemy` and `zope-interface`; a Go module or package path is exact.
+- **Where they apply.** These selectors match external elements only. On a file or symbol they are inapplicable, like `name` on a file. Conversely, nothing but these selectors and `layer` applies to an external element. So `{ "not": { "path": "src/**" } }` never selects a package, and `{ "not": { "package": "*" } }` never selects a file.
+- **Membership.** An external element is a member of the layers whose selectors match it. A vendor layer is therefore not an `empty-layer`, and its `files` count is 0. A layer's `private` selectors can name packages, which makes a package private to that layer.
+- **No multi-layer warning.** An external element in several layers gets no `multi-layer` warning. Each of its layers is decided, as for any target.
+
+**Evaluation.** Each recorded reference whose source file is in scope (`scope.include`, `scope.exclude`) and of a type in `scope.types` is decided like an edge whose target is the external element (the [evaluation](#evaluation) chain). The reference kind (`import`, `require`, `call`, `instantiation`, `extends`, `param_type` …) is the edge type. A target in no non-overlay layer is uncovered only as `policy.uncovered` says:
+- `externals` (default `true`) for packages, including those no input provides;
+- `builtins` (default `false`) for built-ins and ambient access.
+
+A finding's target names the external (`"element": "pg"`, an empty `file`) and carries `external`: `{ ecosystem, origin, package, direct, dev }`. `origin` is `package`, `builtin` or `ambient`. External dependencies are not inherited under `policy.inheritDependencies`.
+
+**Vendor confinement.** A layer of a package, and rules that let only some layers use it:
+
+```jsonc
+{
+  "layers": [
+    { "name": "Domain", "selectors": [{ "path": "src/domain/**" }] },
+    { "name": "Infrastructure", "selectors": [{ "path": "src/infrastructure/**" }] },
+    { "name": "Database", "selectors": [{ "package": "pg" }] },
+    // Every dev-only package, denied to every layer: production code must not use them.
+    { "name": "DevOnly", "overlay": true, "selectors": [{ "package": "*", "dev": true }] }
+  ],
+  "rules": { "*": ["!DevOnly"], "Domain": [], "Infrastructure": ["Domain", "Database"] }
+}
+```
+
+Here `src/domain/Order.ts` importing `pg` is a `disallowed-layer` violation (`Domain on Database`), and importing `lodash` (a dev dependency) is one on `DevOnly`. A package used from Infrastructure but in no layer, such as `express`, is uncovered. A built-in is uncovered only under `uncovered.builtins`. Alternatively, `private: [{ "package": "pg" }]` on a layer that also selects `pg` lets other layers use the layer, but not `pg` (a `private-layer` violation, and a `vendor-leak` smell).
+
+**Go and dev.** Go has no dev requirements: a module is dev-only when only `_test.go` files use it. A test file inside a layer's path is that layer's code, so with the `DevOnly` overlay above, its use of `testify` is a violation. Leave tests out of the layer (`{ "not": { "path": "**/*_test.go" } }`) if they may use test-only modules.
+
+**Introspection.** `mapx arch which` and `mapx arch allowed` accept an external by name (`pg`, `node:fs`) or by ecosystem and name (`npm:pg`, `go:fmt`). `allowed` decides as `check` does: an external in no layer that `policy.uncovered` does not report (a built-in, by default) is `out-of-scope`, allowed, at `info`. `mapx arch layer` lists a layer's externals with `kind: "external"` and an empty `file`. `mapx arch unassigned` lists files and symbols only.
+
+<!-- End of M5-24's section. -->
+
 ## Membership
 
 - **Symbols.** A symbol is in the layers whose selectors match it. File-level selectors (`path`, `repo` and the like) judge a symbol by its file, so a `path` layer covers every symbol under its directory.
@@ -461,7 +493,7 @@ Violations: 8 (5 error, 3 warn)   Uncovered: 0   Skipped: 0   Allowed: 14   Warn
 | `policy.inheritDependencies` | `false` | A type answers for its workspace ancestors' dependencies too (see [Type hierarchy and members](#type-hierarchy-and-members)) |
 | `policy.strictLayers` | `false` | An element in several non-overlay layers is an error (`multi-layer`), not a warning |
 | `policy.alsoInferred` | `false` | Keep the role-order layer violations in the smells beside the rules' own (see [Smells](#smells)) |
-| `policy.uncovered` | `{ "externals": true, "builtins": false }` | Whether dependencies on packages and on the standard library count as uncovered. Accepted and validated; it takes effect with the package and builtin selectors (M5-24) |
+| `policy.uncovered` | `{ "externals": true, "builtins": false }` | Whether dependencies on packages and on the standard library count as uncovered. Packages under `externals`; built-ins and ambient access under `builtins` (see [External dependencies](#external-dependencies-packages-built-ins-ambient-access)) |
 
 ```jsonc
 "scope": { "types": ["import", "extends", "implements", "instantiation"], "exclude": ["src/legacy/**"] },
@@ -917,7 +949,15 @@ The baselined Controller → Infrastructure violations are neither a `layer-viol
 
 **A configuration that cannot be loaded** (or an invalid baseline) keeps the role-order violations, marked `inferred-roles`, and adds an `architecture-config` smell naming the first problem. `mapx arch validate-config` lists them all.
 
-Package-based smells (`vendor-leak`, `undeclared-dependency`, `dev-dependency-in-prod`) wait for package selectors (M5-24).
+Package smells (M5-24), also marked `Source: rules`:
+
+| Smell | When |
+| --- | --- |
+| `vendor-leak` | A `private-layer` violation on an external package: a package a layer's `private` selectors confine to it is used from another layer. It replaces the `layer-violation` smell for that pair. |
+| `undeclared-dependency` | Code in scope (any layer, or none) uses a known package that a readable manifest positively does not list directly: a transitive one, or one in no manifest (`direct` false). The rule is the same for npm, Composer, pypi and Go: a package no input provides is never one, since there is no name the manifest could lack. One per source file and package. |
+| `dev-dependency-in-prod` | Code in scope uses a dev-only package from a file that is not a test, configuration, script or tooling file: by its role (`test`, `config`, `scripts`), or by a conventional name (`*.config.ts`, `*.conf.js`, `.eslintrc.cjs`, `conftest.py`, `setup.py`, `noxfile.py`, `gulpfile.js` …). One per source file and package. |
+
+A package whose direct or dev status is unknown gives neither of the last two.
 
 ## Baselines and the ratchet
 
@@ -1122,7 +1162,7 @@ MapX checks its own `src/` in CI (M5-18). The configuration is [`.mapx/architect
 
 | Layer | Path | May use |
 | --- | --- | --- |
-| Entry | `src/{main,index,cli,mcp,ui-server,ui-events,branding}.ts` | Agents, Arch, Exporters, `+Core` |
+| Entry | `src/{main,index,cli,mcp,ui-server,ui-events,ui-arch,branding}.ts` | Agents, Arch, Exporters, `+Core` |
 | UI | `src/ui/**` (the dashboard's browser client) | nothing |
 | Agents | `src/agents/**` | Languages |
 | Arch | `src/arch/**` | `+Core`, Exporters |
@@ -1131,7 +1171,8 @@ MapX checks its own `src/` in CI (M5-18). The configuration is [`.mapx/architect
 | Frameworks | `src/frameworks/**` | nothing |
 | Parsers | `src/parsers/**` | Languages |
 | Languages | `src/languages/**` | nothing |
-| Shared | `src/{types,version}.ts` | every layer may use it (`"*": ["Shared", "!Outside"]`) |
+| Shared | `src/{types,version}.ts` | every layer may use it (`"*": ["Shared", "Packages", "!Outside"]`) |
+| Packages | `{ "package": "*", "dev": false }`: npm packages `package.json` lists for production (M5-24) | every layer may use it; a dev-only package is in no layer, so importing one from `src/` is uncovered and fails the check |
 | Outside (overlay) | `{tests,scripts}/**` | no layer may use it: production code never imports tests, fixtures or scripts |
 
 - **Scope:** `src/**`, plus `tests/**` and `scripts/**` as targets only (the `Outside` overlay, which every layer denies; a file in no other layer is never a source, so tests' and scripts' own imports are not judged), imports only (`"types": ["import", "require"]`), and `policy.inferred: "ignore"`. In TypeScript every dependency on another module starts with an import, and imports are resolved by module path, so they are exact. Calls and type references are resolved by name, and some resolve to the wrong symbol (`join` from `node:path` to a private `join` in `src/core/import-resolvers.ts`), which would fail CI on code that imports nothing new.

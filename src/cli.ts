@@ -2829,7 +2829,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     // AR-19 alternatives (M5-14): symbols in those layers that match the target.
     for (const a of r.alternatives) lines.push(`  instead, in ${a.layer}: ${a.symbols.map((s) => `${s.element} (${s.match})`).join(', ')}${a.total > a.symbols.length ? `, and ${a.total - a.symbols.length} more` : ''}`);
     return { json: r, text: lines.join('\n'), exit: r.exitCode ? EXIT.violations : EXIT.ok };
-  }, { configure: (c) => c.argument('<from>', 'Source layer, file or symbol').argument('<to>', 'Target layer, file or symbol').option('--type <edgeType>', 'Decide for this edge type only (default: the types the index has between the two, else every type in scope)') });
+  }, { configure: (c) => c.argument('<from>', 'Source layer, file or symbol').argument('<to>', 'Target layer, file or symbol, or an external package or built-in (pg, npm:pg)').option('--type <edgeType>', 'Decide for this edge type only (default: the types the index has between the two, else every type in scope)') });
 
   // The layer graph (M5-13, AR-16; docs/architecture-rules.md#layer-graphs): the dependencies
   // `mapx check` counts per layer pair, drawn. The baseline applies as in `mapx check`, so its

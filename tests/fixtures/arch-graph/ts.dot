@@ -1,5 +1,5 @@
 digraph "MapX layers" {
-  graph [compound=true, rankdir=TB, label="Dependencies: 16 allowed, 18 violations (2 at warn), 2 skipped, 4 uncovered; 1 hidden layer counted, not drawn", labelloc=b, fontname="Helvetica", fontsize=10];
+  graph [compound=true, rankdir=TB, label="Dependencies: 16 allowed, 18 violations (2 at warn), 2 skipped, 23 uncovered; 1 hidden layer counted, not drawn", labelloc=b, fontname="Helvetica", fontsize=10];
   node [shape=box, style="rounded,filled", fillcolor="#f8fafc", color="#475569", fontname="Helvetica"];
   edge [color="#64748b", fontcolor="#475569", fontname="Helvetica", fontsize=10];
 

@@ -4,6 +4,8 @@
 // CLI has it, M5-05; until then the evaluator in-process, M5-04) and reads the findings report at .mapx/architecture-report.json (AR-09's
 // ArchReport). A missing report means no findings: recall 0, not an error.
 //   npx tsx scripts/eval/score-arch.ts <fixture> [--json] [--app <name>] [--min-recall R] [--min-precision P]
+// Findings on targets outside the workspace (M5-24) are also scored per ecosystem (`externalFindings`):
+// uncovered, vendor-confinement and dev-dependency rows.
 // Exit code 1 when a threshold is missed; 2 on usage or scan errors.
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -18,7 +20,12 @@ import { Store } from '../../src/core/store.ts';
 export const SCORED_KINDS = ['violation', 'skipped', 'uncovered', 'warning', 'error'] as const;
 export type ScoredKind = typeof SCORED_KINDS[number];
 
-export interface End { file: string; symbol?: string }
+export interface End {
+  file?: string;
+  symbol?: string;
+  /** An external target (M5-24): `<ecosystem>:<name>`, as `npm:pg`, `composer:ext-pdo` or `go:C`; no file. */
+  external?: string;
+}
 export interface ExpectedRow {
   id: string;
   app: string;
@@ -37,6 +44,8 @@ export interface ExpectedRow {
   native?: { kind: ScoredKind | 'allowed' | 'none'; rule?: string; edgeTypes?: string[] };
   /** Every edge type that carries the dependency, where labelled (M5-11); `edgeType` is the one matched. */
   edgeTypes?: string[];
+  /** For a row on an external target (M5-24): `vendor-confinement` or `dev-dependency`; an uncovered row is `uncovered`. */
+  category?: string;
   note?: string;
 }
 export interface ExpectedFindings {
@@ -50,7 +59,7 @@ export interface ReportedFinding {
   kind: string;
   rule?: string;
   source?: { element?: string; file?: string; layer?: string };
-  target?: { element?: string; file?: string; layer?: string };
+  target?: { element?: string; file?: string; layer?: string; external?: { ecosystem: string } };
   edgeType?: string;
   /** Layer-level findings may name their layer here instead of in `source.layer`. */
   layer?: string;
@@ -58,10 +67,14 @@ export interface ReportedFinding {
 export interface ArchReport { findings?: ReportedFinding[] }
 
 export interface KindScore { expected: number; reported: number; matched: number; recall: number; precision: number | null }
+/** Findings on external targets (M5-24) of one ecosystem: matched rows per category. */
+export interface ExternalFindingScore { expected: number; reported: number; matched: number; categories: Record<string, { expected: number; matched: number }> }
 export interface AppScore {
   app: string;
   report: boolean;
   kinds: Record<ScoredKind, KindScore>;
+  /** Findings on targets outside the workspace (M5-24), per ecosystem. */
+  external: Record<string, ExternalFindingScore>;
   /** Reported findings on rows labelled allowed or none (each also a false positive of its kind). */
   negativeHits: string[];
   misses: string[];
@@ -78,8 +91,10 @@ export function elementMatches(element: string | undefined, symbol: string | und
   return new RegExp(`(^|[\\\\./#:@])${symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(::\\w+|\\.\\w+\\(?\\)?)?$`).test(element);
 }
 
-const endMatches = (end: End | undefined, side: ReportedFinding['source']) =>
-  !end || (side?.file === end.file && elementMatches(side?.element, end.symbol));
+const endMatches = (end: End | undefined, side: ReportedFinding['target']) =>
+  !end || (end.external !== undefined
+    ? !!side?.external && `${side.external.ecosystem}:${side.element}` === end.external
+    : side?.file === end.file && elementMatches(side?.element, end.symbol));
 
 /**
  * Does a reported finding match a labelled row? Kind and rule match exactly; the files (and the
@@ -119,17 +134,27 @@ export function scoreApp(app: string, rows: ExpectedRow[], report: ArchReport | 
   const negativeHits: string[] = [];
   const misses: string[] = [];
   const used = new Set<ReportedFinding[]>();
+  const external: Record<string, ExternalFindingScore> = {};
+  const eco = (name: string) => (external[name] ??= { expected: 0, reported: 0, matched: 0, categories: {} });
   for (const row of rows) {
     if (row.kind === 'allowed' || row.kind === 'none') continue;
     const k = kinds[row.kind];
     k.expected++;
     const hit = groups.find((g) => !used.has(g) && g.some((f) => rowMatches(row, f)));
     if (hit) { used.add(hit); k.matched++; } else misses.push(row.id);
+    if (row.to?.external !== undefined) {
+      const e = eco(row.to.external.split(':')[0]!);
+      const c = (e.categories[row.category ?? row.kind] ??= { expected: 0, matched: 0 });
+      e.expected++;
+      c.expected++;
+      if (hit) { e.matched++; c.matched++; }
+    }
   }
   for (const g of groups) {
     const f = g[0]!;
     if (!(SCORED_KINDS as readonly string[]).includes(f.kind)) continue;
     kinds[f.kind as ScoredKind].reported++;
+    if (f.target?.external) eco(f.target.external.ecosystem).reported++;
     if (used.has(g)) continue;
     // A finding on a negative row: the dependency is allowed (or same-layer), whatever the rule says.
     const negative = rows.find((r) => (r.kind === 'allowed' || r.kind === 'none') && endMatches(r.from, f.source) && endMatches(r.to, f.target));
@@ -139,12 +164,14 @@ export function scoreApp(app: string, rows: ExpectedRow[], report: ArchReport | 
     k.recall = k.expected ? k.matched / k.expected : 1;
     k.precision = k.reported ? k.matched / k.reported : null;
   }
-  return { app, report: !!report, kinds, negativeHits, misses };
+  return { app, report: !!report, kinds, external, negativeHits, misses };
 }
 
 export interface ArchScore {
   apps: AppScore[];
   kinds: Record<ScoredKind, KindScore>;
+  /** Findings on external targets (M5-24) per ecosystem, every app together, with recall and precision. */
+  externalFindings: Record<string, ExternalFindingScore & { recall: number; precision: number | null }>;
 }
 
 // ─── External-reference attribution (M5-20 npm, M5-21 Composer; M5-22, M5-23 add their rows) ──
@@ -240,7 +267,22 @@ export function combine(apps: AppScore[]): ArchScore {
     const matched = apps.reduce((n, a) => n + a.kinds[k].matched, 0);
     return [k, { expected, reported, matched, recall: expected ? matched / expected : 1, precision: reported ? matched / reported : null }];
   })) as Record<ScoredKind, KindScore>;
-  return { apps, kinds };
+  const externalFindings: ArchScore['externalFindings'] = {};
+  for (const a of apps) {
+    for (const [name, e] of Object.entries(a.external ?? {})) {
+      const t = (externalFindings[name] ??= { expected: 0, reported: 0, matched: 0, categories: {}, recall: 1, precision: null });
+      t.expected += e.expected; t.reported += e.reported; t.matched += e.matched;
+      for (const [c, n] of Object.entries(e.categories)) {
+        const tc = (t.categories[c] ??= { expected: 0, matched: 0 });
+        tc.expected += n.expected; tc.matched += n.matched;
+      }
+    }
+  }
+  for (const t of Object.values(externalFindings)) {
+    t.recall = t.expected ? t.matched / t.expected : 1;
+    t.precision = t.reported ? t.matched / t.reported : null;
+  }
+  return { apps, kinds, externalFindings };
 }
 
 // ─── Running the CLI on the fixture ─────────────────────────────────────────────────────────
@@ -327,6 +369,10 @@ async function main() {
     if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`${kind} recall ${k.recall.toFixed(3)} < ${minRecall}`);
     if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`${kind} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
   }
+  for (const [eco, k] of Object.entries(score.externalFindings)) {
+    if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`findings on externals ${eco} recall ${k.recall.toFixed(3)} < ${minRecall}`);
+    if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`findings on externals ${eco} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
+  }
   for (const [eco, k] of Object.entries(externals)) {
     if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`externals ${eco} recall ${k.recall.toFixed(3)} < ${minRecall}`);
     if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`externals ${eco} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
@@ -341,6 +387,10 @@ async function main() {
       console.log(`  ${kind.padEnd(10)}  ${String(k.expected).padStart(8)}  ${String(k.reported).padStart(8)}  ${String(k.matched).padStart(7)}  ${pct(k.recall).padStart(6)}  ${pct(k.precision).padStart(9)}`);
     }
     for (const s of scores) if (s.negativeHits.length) console.log(`  ${s.app}: findings on allowed or same-layer rows ${s.negativeHits.join(', ')}`);
+    for (const [eco, k] of Object.entries(score.externalFindings)) {
+      const categories = Object.entries(k.categories).map(([c, n]) => `${c} ${n.matched}/${n.expected}`).join(', ');
+      console.log(`  findings on ${eco.padEnd(9)} ${String(k.expected).padStart(4)}  ${String(k.reported).padStart(8)}  ${String(k.matched).padStart(7)}  ${pct(k.recall).padStart(6)}  ${pct(k.precision).padStart(9)}  (${categories})`);
+    }
     for (const [eco, k] of Object.entries(externals)) {
       const classes = Object.entries(k.classes).map(([c, n]) => `${c} ${n.matched}/${n.expected}`).join(', ');
       console.log(`  externals ${eco.padEnd(8)}  ${String(k.expected).padStart(4)}  ${String(k.reported).padStart(8)}  ${String(k.matched).padStart(7)}  ${pct(k.recall).padStart(6)}  ${pct(k.precision).padStart(9)}  (${classes})`);

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive. A row with \"native\" is labelled for the default configuration; \"native\" gives its kind, rule and (where they differ) edge types when visibility.nativeMarkers is true. \"edgeTypes\", where given, lists every edge type that carries the dependency; \"edgeType\" is the one the scorer matches (M5-11).",
+  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive. A row with \"native\" is labelled for the default configuration; \"native\" gives its kind, rule and (where they differ) edge types when visibility.nativeMarkers is true. \"edgeTypes\", where given, lists every edge type that carries the dependency; \"edgeType\" is the one the scorer matches (M5-11). M5-24: a row whose \"to\" names \"external\" (\"<ecosystem>:<name>\", as npm:pg) is a dependency on something outside the workspace (src/arch/elements.ts): the existing apps report every external package their layered code uses as uncovered (policy.uncovered.externals defaults to true; built-ins are not reported), derived from expected-externals.json by the granularity rules; the ts-vendor, python-vendor, php-vendor and go-vendor apps confine a package to the layer that may use it (a package selector) and deny an overlay of dev-only packages.",
   "apps": {
     "php": {
       "language": "php",
@@ -28,6 +28,22 @@
         "frontend",
         "backend"
       ]
+    },
+    "ts-vendor": {
+      "language": "typescript",
+      "repos": null
+    },
+    "python-vendor": {
+      "language": "python",
+      "repos": null
+    },
+    "php-vendor": {
+      "language": "php",
+      "repos": null
+    },
+    "go-vendor": {
+      "language": "go",
+      "repos": null
     }
   },
   "rows": [
@@ -1836,6 +1852,1286 @@
       },
       "edgeType": "import",
       "note": "Backend \u2192 PublicApi: the route file imports the API controller, and Backend may use nothing. Added by M5-04 (2026-11-02): a true dependency the M5-01 labels missed; the configuration is unchanged"
+    },
+    {
+      "id": "go-x01",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/http_gateway.go",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/google/uuid"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: github.com/google/uuid is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "go-x02",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/http_gateway.go",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/sirupsen/logrus"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: github.com/sirupsen/logrus is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "go-x03",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/http_gateway_test.go",
+        "symbol": "TestHttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/google/uuid"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: github.com/google/uuid is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "go-x04",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/http_gateway_test.go",
+        "symbol": "TestHttpGateway"
+      },
+      "to": {
+        "external": "go:github.com/stretchr/testify"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: github.com/stretchr/testify is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "go-x05",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/http_gateway_test.go",
+        "symbol": "TestHttpGateway"
+      },
+      "to": {
+        "external": "go:gopkg.in/yaml.v3"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "M5-24: gopkg.in/yaml.v3 is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "go-x06",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/system_probe.go",
+        "symbol": "SystemProbe"
+      },
+      "to": {
+        "external": "go:github.com/pkg/errors"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: github.com/pkg/errors is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "go-x07",
+      "app": "go",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/system_probe.go",
+        "symbol": "SystemProbe"
+      },
+      "to": {
+        "external": "go:golang.org/x/sys"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: golang.org/x/sys is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x01",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:Acme\\Missing\\Widget"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24: Acme\\Missing\\Widget is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "php-x02",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:Illuminate\\Support\\Str"
+      },
+      "edgeType": "call",
+      "note": "M5-24: Illuminate\\Support\\Str is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "php-x03",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:collect"
+      },
+      "edgeType": "call",
+      "note": "M5-24: collect is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "php-x04",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:doctrine/event-manager"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24: doctrine/event-manager is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x05",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:doctrine/instantiator"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24: doctrine/instantiator is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x06",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:fakerphp/faker"
+      },
+      "edgeType": "call",
+      "note": "M5-24: fakerphp/faker is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x07",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:guzzlehttp/guzzle"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "M5-24: guzzlehttp/guzzle is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x08",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:guzzlehttp/psr7"
+      },
+      "edgeType": "call",
+      "note": "M5-24: guzzlehttp/psr7 is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x09",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:illuminate/routing"
+      },
+      "edgeType": "extends",
+      "note": "M5-24: illuminate/routing is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x10",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:mustache/mustache"
+      },
+      "edgeType": "instantiation",
+      "note": "M5-24: mustache/mustache is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x11",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:myclabs/deep-copy"
+      },
+      "edgeType": "call",
+      "note": "M5-24: myclabs/deep-copy is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x12",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:nesbot/carbon"
+      },
+      "edgeType": "call",
+      "note": "M5-24: nesbot/carbon is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x13",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:phpunit/phpunit"
+      },
+      "edgeType": "call",
+      "note": "M5-24: phpunit/phpunit is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "php-x14",
+      "app": "php",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/HttpGateway.php",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "composer:psr/log"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "param_type"
+      ],
+      "note": "M5-24: psr/log is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x01",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:acme_missing"
+      },
+      "edgeType": "import",
+      "note": "M5-24: acme_missing is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "python-x02",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:flask"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "extends"
+      ],
+      "note": "M5-24: flask is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x03",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:jinja2"
+      },
+      "edgeType": "import",
+      "note": "M5-24: jinja2 is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x04",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:markupsafe"
+      },
+      "edgeType": "import",
+      "note": "M5-24: markupsafe is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x05",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pillow"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: pillow is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x06",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pluggy"
+      },
+      "edgeType": "import",
+      "note": "M5-24: pluggy is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x07",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pysocks"
+      },
+      "edgeType": "import",
+      "note": "M5-24: pysocks is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x08",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pytest"
+      },
+      "edgeType": "import",
+      "note": "M5-24: pytest is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x09",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:pyyaml"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: pyyaml is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x10",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:requests"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "M5-24: requests is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x11",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:sklearn"
+      },
+      "edgeType": "import",
+      "note": "M5-24: sklearn is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "python-x12",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:sqlalchemy"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: sqlalchemy is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "python-x13",
+      "app": "python",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/http_gateway.py",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "pypi:urllib3"
+      },
+      "edgeType": "import",
+      "note": "M5-24: urllib3 is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x01",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:@acme/logging"
+      },
+      "edgeType": "import",
+      "note": "M5-24: @acme/logging is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x02",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:express"
+      },
+      "edgeType": "import",
+      "note": "M5-24: express is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x03",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:js-yaml"
+      },
+      "edgeType": "require",
+      "note": "M5-24: js-yaml is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x04",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "import",
+      "note": "M5-24: pg is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x05",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:react"
+      },
+      "edgeType": "import",
+      "note": "M5-24: react is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x06",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts"
+      },
+      "to": {
+        "external": "npm:reflect-metadata"
+      },
+      "edgeType": "import",
+      "note": "M5-24: reflect-metadata is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x07",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:@acme/logging"
+      },
+      "edgeType": "param_type",
+      "note": "M5-24: @acme/logging is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x08",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:express"
+      },
+      "edgeType": "call",
+      "note": "M5-24: express is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x09",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:js-yaml"
+      },
+      "edgeType": "call",
+      "note": "M5-24: js-yaml is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x10",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "instantiation",
+      "edgeTypes": [
+        "instantiation",
+        "call"
+      ],
+      "note": "M5-24: pg is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x11",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/HttpGateway.ts",
+        "symbol": "HttpGateway"
+      },
+      "to": {
+        "external": "npm:react"
+      },
+      "edgeType": "extends",
+      "note": "M5-24: react is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x12",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:debug"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: debug is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x13",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:left-pad"
+      },
+      "edgeType": "import",
+      "note": "M5-24: left-pad is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x14",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:lodash"
+      },
+      "edgeType": "import",
+      "note": "M5-24: lodash is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x15",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:semver"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: semver is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-x16",
+      "app": "ts",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/Tooling.ts",
+        "symbol": "toolingCheck"
+      },
+      "to": {
+        "external": "npm:sqlite"
+      },
+      "edgeType": "import",
+      "note": "M5-24: sqlite is in no layer (the default policy.uncovered.externals)"
+    },
+    {
+      "id": "workspace-x01",
+      "app": "workspace",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "backend/routes/api.php"
+      },
+      "to": {
+        "external": "composer:Illuminate\\Support\\Facades\\Route"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: Illuminate\\Support\\Facades\\Route is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "workspace-x02",
+      "app": "workspace",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "backend/routes/web.php"
+      },
+      "to": {
+        "external": "composer:Illuminate\\Support\\Facades\\Route"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "M5-24: Illuminate\\Support\\Facades\\Route is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+    },
+    {
+      "id": "ts-vendor-01",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: pg is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "ts-vendor-02",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "npm:lodash"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "dev-dependency",
+      "note": "dev dependency: lodash is a development dependency, and every layer denies the DevOnly overlay"
+    },
+    {
+      "id": "ts-vendor-03",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "src/infrastructure/Server.ts",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "npm:express"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "express is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "ts-vendor-04",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/Database.ts",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "npm:pg"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "ts-vendor-05",
+      "app": "ts-vendor",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Server.ts",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "npm:node:fs"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "python-vendor-01",
+      "app": "python-vendor",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "pypi:sqlalchemy"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: sqlalchemy is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "python-vendor-02",
+      "app": "python-vendor",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "pypi:pytest"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "dev-dependency",
+      "note": "dev dependency: pytest is a development dependency, and every layer denies the DevOnly overlay"
+    },
+    {
+      "id": "python-vendor-03",
+      "app": "python-vendor",
+      "language": "python",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/infrastructure/server.py",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "pypi:flask"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "flask is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "python-vendor-04",
+      "app": "python-vendor",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/database.py",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "pypi:sqlalchemy"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "python-vendor-05",
+      "app": "python-vendor",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/server.py",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "pypi:python:os"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "php-vendor-01",
+      "app": "php-vendor",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "composer:doctrine/dbal"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "param_type"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: doctrine/dbal is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "php-vendor-02",
+      "app": "php-vendor",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "composer:fakerphp/faker"
+      },
+      "edgeType": "call",
+      "category": "dev-dependency",
+      "note": "dev dependency: fakerphp/faker is a development dependency, and every layer denies the DevOnly overlay"
+    },
+    {
+      "id": "php-vendor-03",
+      "app": "php-vendor",
+      "language": "php",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "app/Infrastructure/Server.php",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "composer:guzzlehttp/guzzle"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "instantiation"
+      ],
+      "note": "guzzlehttp/guzzle is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "php-vendor-04",
+      "app": "php-vendor",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/Database.php",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "composer:doctrine/dbal"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "php-vendor-05",
+      "app": "php-vendor",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/Server.php",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "composer:ext-core"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "go-vendor-01",
+      "app": "go-vendor",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "go:github.com/jmoiron/sqlx"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "vendor-confinement",
+      "note": "vendor confinement: github.com/jmoiron/sqlx is the Database layer (a package selector), which only Infrastructure may use"
+    },
+    {
+      "id": "go-vendor-02",
+      "app": "go-vendor",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order_test.go",
+        "symbol": "TestOrder"
+      },
+      "to": {
+        "external": "go:github.com/stretchr/testify"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "category": "dev-dependency",
+      "note": "dev dependency: testify is dev-only (only _test.go files use it), and every layer denies the DevOnly overlay; this test is in the Domain layer's path"
+    },
+    {
+      "id": "go-vendor-03",
+      "app": "go-vendor",
+      "language": "go",
+      "rule": "uncovered",
+      "kind": "uncovered",
+      "from": {
+        "file": "infrastructure/server.go",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "go:github.com/sirupsen/logrus"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "github.com/sirupsen/logrus is in no layer (policy.uncovered.externals)"
+    },
+    {
+      "id": "go-vendor-04",
+      "app": "go-vendor",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/database.go",
+        "symbol": "Database"
+      },
+      "to": {
+        "external": "go:github.com/jmoiron/sqlx"
+      },
+      "edgeType": "import",
+      "edgeTypes": [
+        "import",
+        "call"
+      ],
+      "note": "Infrastructure may use the Database layer"
+    },
+    {
+      "id": "go-vendor-05",
+      "app": "go-vendor",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/server.go",
+        "symbol": "Server"
+      },
+      "to": {
+        "external": "go:fmt"
+      },
+      "edgeType": "call",
+      "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
     }
   ]
 }

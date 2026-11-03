@@ -1,0 +1,50 @@
+// M5-24 fixture: vendor confinement. Only Infrastructure may use the Database layer (a package selector); DevOnly (an overlay of dev-only packages) is denied to every layer; other packages are in no layer (uncovered).
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "path": "src/domain/**"
+        }
+      ]
+    },
+    {
+      "name": "Infrastructure",
+      "selectors": [
+        {
+          "path": "src/infrastructure/**"
+        }
+      ]
+    },
+    {
+      "name": "Database",
+      "selectors": [
+        {
+          "package": "pg"
+        }
+      ]
+    },
+    {
+      "name": "DevOnly",
+      "overlay": true,
+      "selectors": [
+        {
+          "package": "*",
+          "dev": true
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "*": [
+      "!DevOnly"
+    ],
+    "Domain": [],
+    "Infrastructure": [
+      "Domain",
+      "Database"
+    ]
+  }
+}

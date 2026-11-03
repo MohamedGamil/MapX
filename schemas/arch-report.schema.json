@@ -74,12 +74,25 @@
       "additionalProperties": false,
       "required": ["element", "file"],
       "properties": {
-        "element": { "description": "A symbol's qualified name, a file's path, or a Go package's import path.", "type": "string" },
-        "file": { "description": "Workspace-relative file (a directory for a package).", "type": "string" },
+        "element": { "description": "A symbol's qualified name, a file's path, a Go package's import path, or an external's name (a package, or a built-in such as node:fs).", "type": "string" },
+        "file": { "description": "Workspace-relative file (a directory for a package); empty for an external target.", "type": "string" },
         "layer": { "description": "Layers, comma-separated.", "type": "string" },
         "layers": { "description": "The same layers as a list (a layer name may contain a comma).", "type": "array", "items": { "type": "string" } },
         "repo": { "type": "string" },
-        "line": { "description": "First line of the dependency in the source file.", "type": "integer", "minimum": 1 }
+        "line": { "description": "First line of the dependency in the source file.", "type": "integer", "minimum": 1 },
+        "external": {
+          "description": "An external target (M5-24): what the scan attributed the reference outside the workspace to.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ecosystem", "origin", "package", "direct", "dev"],
+          "properties": {
+            "ecosystem": { "type": "string" },
+            "origin": { "enum": ["package", "builtin", "ambient"] },
+            "package": { "type": ["string", "null"] },
+            "direct": { "type": ["boolean", "null"] },
+            "dev": { "type": ["boolean", "null"] }
+          }
+        }
       }
     },
     "finding": {

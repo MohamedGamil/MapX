@@ -118,7 +118,9 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
       finding = {
         kind: d.kind, rule: d.rule, severity: d.severity,
         source: { element: s, file: src.file.path, layer: d.sourceLayer, layers: [d.sourceLayer], repo: src.file.repo, ...(d.line !== undefined ? { line: d.line } : {}) },
-        target: { element: t, file: targetFile, ...(targetLayer ? { layer: targetLayer, layers: [...d.targetLayers] } : {}), repo: tgt.file.repo },
+        target: tgt.external
+          ? { element: t, file: '', ...(targetLayer ? { layer: targetLayer, layers: [...d.targetLayers] } : {}), external: { ecosystem: tgt.external.ecosystem, origin: tgt.external.origin, package: tgt.external.package, direct: tgt.external.direct, dev: tgt.external.dev } }
+          : { element: t, file: targetFile, ...(targetLayer ? { layer: targetLayer, layers: [...d.targetLayers] } : {}), repo: tgt.file.repo },
         edgeType: d.edgeType, verifiability: d.verifiability, edges: 0,
         fingerprint: fingerprint(rule, idS, idT, d.edgeType, sRepo, tRepo), message: '',
         ...(d.via ? { via: d.via } : {}),
@@ -173,7 +175,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
   const finer = new Set<string>();
   const anyFiner = new Set<string>();
   for (const [f, m] of meta) {
-    if (m.packageDir !== undefined) continue;
+    if (m.packageDir !== undefined || f.target!.external) continue; // an external target has no directory
     for (const file of m.sourceFiles) {
       finer.add(JSON.stringify([f.kind, f.rule ?? '', file, posix.dirname(f.target!.file)]));
       anyFiner.add(JSON.stringify([file, posix.dirname(f.target!.file)]));
@@ -241,7 +243,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     });
   }
 
-  const filesIn = (layer: string) => new Set(membership.members(layer).map((e) => e.file.path)).size;
+  const filesIn = (layer: string) => new Set(membership.members(layer).filter((e) => e.kind !== 'external').map((e) => e.file.path)).size;
   const report: ArchReport = {
     version: 1,
     counts: Object.fromEntries(KINDS.map((k) => [k, 0])) as Record<FindingKind, number>,

@@ -3,7 +3,9 @@
 // `explain` shows). Symbol-level selectors (`name`, `kind`, `decorator`, `docTag`, and M5-09's
 // `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`) never match a file element; file-level
 // ones (`path`, `repo`, `language`, `role`, `cluster`, `workspacePackage`, `framework`) judge a
-// symbol by its file. Selectors that need data later tasks add never match here and are reported.
+// symbol by its file. M5-24's `package`, `builtin` and `ambient` match external elements only, and
+// on an external element only they and `layer` apply. Selectors that need data later tasks add
+// never match here and are reported.
 import type { Selector } from '../schema.js';
 import type { Element, ElementView } from '../elements.js';
 import { globOrRegex, nameOrGlob, regex } from './patterns.js';
@@ -11,13 +13,12 @@ import { hasDecorator } from './decorator.js';
 import { hasDocTag } from './doc-tag.js';
 import { hierarchyMatch, hierarchyOf, isType, type HierarchyKey } from './hierarchy.js';
 import { matchingMember } from './member.js';
+import { externalMatch } from './external.js';
 
 export { globOrRegex, regex } from './patterns.js';
 
-/** Selector keys this version cannot evaluate yet, with the task that adds them. */
-export const UNSUPPORTED_SELECTORS: Record<string, string> = {
-  package: 'M5-24', builtin: 'M5-24', ambient: 'M5-24',
-};
+/** Selector keys this version cannot evaluate yet, with the task that adds them (none since M5-24). */
+export const UNSUPPORTED_SELECTORS: Record<string, string> = {};
 
 export interface SelectorContext {
   view: ElementView;
@@ -86,6 +87,17 @@ export function matchSelector(selector: Selector, element: Element, ctx: Selecto
   if (selector.not) {
     const m = matchSelector(selector.not, element, ctx);
     return m.inapplicable ? inapplicable : m.matched ? no : yes('not');
+  }
+  // Packages, built-ins and ambient access (M5-24, ./external.ts): external elements only. Nothing
+  // else applies to an external element but `layer`, so `{not: {path: …}}` never selects one.
+  for (const key of ['package', 'builtin', 'ambient'] as const) {
+    if (selector[key] === undefined) continue;
+    if (element.kind !== 'external') return inapplicable;
+    return externalMatch(selector, key, element) ? yes(key) : no;
+  }
+  if (element.kind === 'external') {
+    if (selector.layer === undefined) return inapplicable;
+    return ctx.inLayer(element, selector.layer) ? yes('layer') : no;
   }
   if (selector.path !== undefined) return globOrRegex(selector.path)(file.path) ? yes('path') : no;
   if (selector.name !== undefined) {

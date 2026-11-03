@@ -21,6 +21,13 @@ import { parseToml } from '../src/core/manifests/toml.js';
 import { GoAttributor, goBuiltin, goIndirectComment, goModuleOf, goReplacement, goTestOnlyModules, parseGoMod, parseGoSum, parseGoWork } from '../src/core/manifests/go.js';
 import { GO_STDLIB, GO_STDLIB_SOURCE } from '../src/core/manifests/go-stdlib.js';
 import { cleanup, init, mapx, mapxResult, query } from './helpers/e2e';
+import { buildElementView, type Element } from '../src/arch/elements.js';
+import { computeMembership } from '../src/arch/membership.js';
+import type { Layer } from '../src/arch/schema.js';
+import { runArchitecture } from '../src/arch/report.js';
+import { isAllowed, openArchitecture } from '../src/arch/introspect.js';
+import { ruleSmells } from '../src/arch/smells.js';
+import { namePattern } from '../src/arch/selectors/external.js';
 
 // M5-19: references to modules, packages, classes and functions outside the workspace are kept apart
 // from edges; whether a candidate is external is decided again at the end of every scan and sync, so
@@ -2723,5 +2730,207 @@ describe('Go modules attribution through the CLI', () => {
     } finally {
       cleanup(root);
     }
+  }, 180000);
+});
+
+// ─── M5-24: package, builtin and ambient selectors; external dependencies in the rules ─────────
+
+/** A scanned copy of a fixture app (removed after the test), with its configuration replaced when given. */
+function scannedApp(app: string, config?: object, extra: Record<string, string> = {}): string {
+  const root = join(tempDir('arch-'), app);
+  cpSync(join(FIXTURE, app), root, { recursive: true });
+  write(root, extra);
+  init(root);
+  for (const repo of REPOS[app] ?? []) {
+    execFileSync('git', ['init', '-q', join(root, repo)]);
+    mapx(root, 'workspaces', 'add', repo);
+  }
+  mapx(root, 'scan');
+  if (config) writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify(config));
+  return root;
+}
+
+/** An external element as the labels name it: ecosystem, origin, name (package, else specifier), direct, dev. */
+const externalId = (r: { ecosystem: string; origin?: string | null; package?: string | null; specifier: string; direct?: boolean | null; dev?: boolean | null }) =>
+  `${r.ecosystem} ${r.origin} ${r.package ?? r.specifier} direct=${r.direct} dev=${r.dev}`;
+const memberId = (e: Element) => externalId({ ...e.external!, specifier: e.external!.name });
+
+describe('the package, builtin and ambient selectors (M5-24)', () => {
+  // Each selector, and which labelled rows it must select: its definition, restated on the labels.
+  // Every package, one no input provides (package null) by its name as written (review of M5-24:
+  // `"*"` must cover it, or nothing could, and `--fail-on-uncovered` would fail on it for good).
+  const named = (l: Label) => l.origin === 'package';
+  const SELECTORS: Array<[string, Layer['selectors'][number], (l: Label) => boolean]> = [
+    ['package *', { package: '*' }, named],
+    ['package * dev', { package: '*', dev: true }, (l) => named(l) && l.dev === true],
+    ['package * production', { package: '*', dev: false }, (l) => named(l) && l.dev === false],
+    ['package * direct', { package: '*', direct: true }, (l) => named(l) && l.direct === true],
+    ['package * not direct', { package: '*', direct: false }, (l) => named(l) && l.direct === false],
+    ['package guzzlehttp/*', { package: 'guzzlehttp/*' }, (l) => named(l) && /^guzzlehttp\//i.test(l.package ?? l.specifier)],
+    ['package PyYAML (pypi: PEP 503)', { package: 'PyYAML' }, (l) => named(l) && l.package === 'pyyaml'],
+    ['package golang.org/x/* (a / in the name)', { package: 'golang.org/x/*' }, (l) => named(l) && /^golang\.org\/x\//.test(l.package ?? l.specifier)],
+    ['package github.com/pkg/* (an unattributed Go import, by its path)', { package: 'github.com/pkg/*' }, (l) => named(l) && /^github\.com\/pkg\//.test(l.package ?? l.specifier)],
+    ['package PG (case-insensitive)', { package: 'PG' }, (l) => named(l) && l.package === 'pg'],
+    ['builtin', { builtin: true }, (l) => l.origin === 'builtin'],
+    ['builtin node:*', { builtin: 'node:*' }, (l) => l.origin === 'builtin' && /^node:/.test(l.package!)],
+    ['builtin /^ext-/', { builtin: '/^ext-/' }, (l) => l.origin === 'builtin' && /^ext-/.test(l.package!)],
+    ['ambient', { ambient: true }, (l) => l.origin === 'ambient'],
+    ['ambient C', { ambient: 'C' }, (l) => l.origin === 'ambient' && l.package === 'C'],
+  ];
+
+  it.each(labels.apps)('select exactly the labelled external elements of %s, and never a file or symbol', (app) => {
+    const root = scannedApp(app);
+    const store = new Store(join(root, '.mapx/mapx.db'));
+    try {
+      const view = buildElementView(store, root);
+      const layers: Layer[] = [
+        ...SELECTORS.map(([name, selector]) => ({ name, selectors: [selector] })),
+        // Nothing but an external selector applies to an external, and none applies to anything else.
+        { name: 'not package', selectors: [{ not: { package: '*' } }] },
+        { name: 'not path', selectors: [{ not: { path: 'nothing/**' } }] },
+      ];
+      const membership = computeMembership(view, { layers });
+      const rows = labels.rows.filter((l) => l.app === app);
+      const ids = (els: Element[]) => [...new Set(els.map((e) => (e.kind === 'external' ? memberId(e) : e.id)))].sort();
+      const want = (pred: (l: Label) => boolean) => [...new Set(rows.filter(pred).map(externalId))].sort();
+      for (const [name, , selects] of SELECTORS) expect(ids(membership.members(name)), `${app}: ${name}`).toEqual(want(selects));
+      // `not package`: every external but a package (built-ins, ambient), and no file.
+      expect(ids(membership.members('not package'))).toEqual(want((l) => !named(l)));
+      // `not path` is no match on an external: every file and symbol, no external.
+      expect(membership.members('not path').filter((e) => e.kind === 'external')).toEqual([]);
+      expect(membership.members('not path').length).toBe(view.elements.length);
+    } finally {
+      store.close();
+    }
+  }, 180000);
+});
+
+describe('package names compare as each ecosystem compares them (review of M5-24)', () => {
+  it('pypi: PEP 503; npm and Composer: case; Go: exact', () => {
+    expect(namePattern('zope.interface', 'pypi')('zope-interface')).toBe(true);
+    expect(namePattern('Flask_SQLAlchemy', 'pypi')('flask-sqlalchemy')).toBe(true);
+    expect(namePattern('flask-*', 'pypi')('Flask_SQLAlchemy')).toBe(true);
+    expect(namePattern('Flask_SQLAlchemy', 'npm')('flask-sqlalchemy')).toBe(false);
+    expect(namePattern('@Acme/*', 'npm')('@acme/logging')).toBe(true);
+    expect(namePattern('Monolog/Monolog', 'composer')('monolog/monolog')).toBe(true);
+    expect(namePattern('github.com/Masterminds/*', 'go')('github.com/masterminds/semver')).toBe(false);
+    expect(namePattern('github.com/Masterminds/*', 'go')('github.com/Masterminds/semver')).toBe(true);
+  });
+});
+
+describe('external dependencies in the rules (M5-24)', () => {
+  const shown = (r: ReturnType<typeof runArchitecture>) => r!.findings.filter((f) => f.target?.external)
+    .map((f) => `${f.kind} ${f.rule} ${f.source!.element} -> ${f.target!.element} ${f.edgeType} [${f.target!.layer ?? ''}] ${f.target!.external!.origin}`).sort();
+
+  it('decides each external reference like an edge; uncovered packages by default, built-ins only with uncovered.builtins', () => {
+    const root = scannedApp('ts-vendor');
+    const report = runArchitecture(root)!;
+    expect(shown(report)).toEqual([
+      'allowed undefined src/infrastructure/Database.ts#Database -> pg import [Database] package',
+      'allowed undefined src/infrastructure/Database.ts#Database -> pg instantiation [Database] package',
+      'uncovered uncovered src/infrastructure/Server.ts#Server -> express call [] package',
+      'uncovered uncovered src/infrastructure/Server.ts#Server -> express import [] package',
+      'violation disallowed-layer src/domain/Order.ts#Order -> lodash call [] package',
+      'violation disallowed-layer src/domain/Order.ts#Order -> lodash import [] package',
+      'violation disallowed-layer src/domain/Order.ts#Order -> pg import [Database] package',
+      'violation disallowed-layer src/domain/Order.ts#Order -> pg instantiation [Database] package',
+    ]);
+    const pg = report.findings.find((f) => f.kind === 'violation' && f.target?.element === 'pg' && f.edgeType === 'import')!;
+    expect(pg.target).toEqual({ element: 'pg', file: '', layer: 'Database', layers: ['Database'], external: { ecosystem: 'npm', origin: 'package', package: 'pg', direct: true, dev: false } });
+    expect(pg.message).toBe('src/domain/Order.ts#Order must not depend on pg (Domain on Database)');
+    // A vendor layer has elements, so no empty-layer warning; it has no files.
+    expect(report.layers.find((l) => l.name === 'Database')).toMatchObject({ elements: 1, files: 0 });
+    expect(report.findings.filter((f) => f.rule === 'empty-layer' || f.rule === 'unsupported-selector')).toEqual([]);
+
+    const config = JSON.parse(readFileSync(join(root, '.mapx/architecture.jsonc'), 'utf8').replace(/^\/\/.*\n/, ''));
+    writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify({ ...config, policy: { uncovered: { externals: false, builtins: true } } }));
+    expect(shown(runArchitecture(root)).filter((f) => f.startsWith('uncovered'))).toEqual([
+      'uncovered uncovered src/infrastructure/Server.ts#Server -> node:fs call [] builtin',
+      'uncovered uncovered src/infrastructure/Server.ts#Server -> node:fs import [] builtin',
+    ]);
+  }, 180000);
+
+  it('a private package selector confines a package to its layer: a vendor-leak smell elsewhere', () => {
+    const root = scannedApp('ts-vendor', {
+      layers: [
+        { name: 'Domain', selectors: [{ path: 'src/domain/**' }] },
+        { name: 'Infrastructure', selectors: [{ path: 'src/infrastructure/**' }, { package: 'pg' }], private: [{ package: 'pg' }] },
+      ],
+      rules: { Domain: ['Infrastructure'], Infrastructure: ['Domain'] },
+    });
+    expect(shown(runArchitecture(root)).filter((f) => f.startsWith('violation'))).toEqual([
+      'violation private-layer src/domain/Order.ts#Order -> pg import [Infrastructure] package',
+      'violation private-layer src/domain/Order.ts#Order -> pg instantiation [Infrastructure] package',
+    ]);
+    const store = new Store(join(root, '.mapx/mapx.db'));
+    try {
+      const ctx = openArchitecture(root, store)!;
+      const smells = ruleSmells(ctx, runArchitecture(root, { store })!).filter((s) => s.type === 'vendor-leak' || s.type === 'layer-violation');
+      expect(smells.map((s) => `${s.type} ${s.involvedFiles.join(' ')}`)).toEqual(['vendor-leak src/domain/Order.ts']);
+    } finally {
+      store.close();
+    }
+  }, 180000);
+
+  it('mapx arch allowed answers for an external by name, or by ecosystem and name', () => {
+    const root = scannedApp('ts-vendor');
+    const store = new Store(join(root, '.mapx/mapx.db'));
+    try {
+      const ctx = openArchitecture(root, store)!;
+      const a = isAllowed(ctx, 'src/domain/Order.ts', 'npm:pg');
+      expect({ allowed: a.allowed, rule: a.rule, to: a.to }).toEqual({
+        allowed: false, rule: 'disallowed-layer',
+        to: { query: 'npm:pg', kind: 'external', element: 'pg', layers: ['Database'], overlays: [], private: [], inScope: true },
+      });
+      expect(isAllowed(ctx, 'src/infrastructure/Database.ts', 'pg', { edgeType: 'import' }).allowed).toBe(true);
+      expect(isAllowed(ctx, 'Infrastructure', 'lodash').rule).toBe('disallowed-layer'); // the DevOnly overlay
+      // Review of M5-24: a built-in in no layer is not reported (uncovered.builtins false), as check decides.
+      const fs = isAllowed(ctx, 'src/infrastructure/Server.ts', 'node:fs');
+      expect({ allowed: fs.allowed, rule: fs.rule, severity: fs.severity }).toEqual({ allowed: true, rule: 'out-of-scope', severity: 'info' });
+      expect(fs.reason).toContain('policy.uncovered.builtins is false');
+      expect(isAllowed(ctx, 'src/infrastructure/Server.ts', 'express').rule).toBe('uncovered');
+    } finally {
+      store.close();
+    }
+  }, 180000);
+
+  const smellsOf = (app: string, extra: Record<string, string> = {}) => {
+    const root = scannedApp(app, undefined, extra);
+    const store = new Store(join(root, '.mapx/mapx.db'));
+    try {
+      const ctx = openArchitecture(root, store)!;
+      return ruleSmells(ctx, runArchitecture(root, { store })!)
+        .filter((s) => s.type === 'dev-dependency-in-prod' || s.type === 'undeclared-dependency').map((s) => s.description).sort();
+    } finally {
+      store.close();
+    }
+  };
+  const dev = (file: string, pkg: string, eco = 'npm') => `Dev dependency in production code: ${file} uses ${pkg} (${eco}), which only the manifest's development dependencies hold`;
+  const undeclared = (file: string, pkg: string, eco: string) => `Undeclared dependency: ${file} uses ${pkg} (${eco}), which its manifest does not list as a direct dependency`;
+
+  it('dev-dependency-in-prod: a dev-only package in production code; configuration files are not production code', () => {
+    // vitest.config.ts (role config) and .eslintrc.cjs (a conventional name) use dev packages: no smell.
+    expect(smellsOf('ts-vendor', {
+      'vitest.config.ts': "import get from 'lodash/get';\nexport default get({}, 'a');\n",
+      'src/.eslintrc.cjs': "const get = require('lodash/get');\nmodule.exports = get({}, 'a');\n",
+    })).toEqual([dev('src/domain/Order.ts', 'lodash')]);
+  }, 180000);
+
+  // Review of M5-24: one rule for the four ecosystems. The smell fires only for a named package a
+  // readable manifest positively does not list directly (package known, direct false): never for one
+  // no input provides, though Go stores direct false for those and pypi and Composer null.
+  it.each([
+    ['ts', 'npm', [['src/infrastructure/HttpGateway.ts', 'js-yaml'], ['src/infrastructure/Tooling.ts', 'debug'], ['src/infrastructure/Tooling.ts', 'left-pad'], ['src/infrastructure/Tooling.ts', 'semver']]],
+    ['php', 'composer', [['app/Infrastructure/HttpGateway.php', 'doctrine/instantiator'], ['app/Infrastructure/HttpGateway.php', 'guzzlehttp/psr7'], ['app/Infrastructure/HttpGateway.php', 'myclabs/deep-copy'], ['app/Infrastructure/HttpGateway.php', 'nesbot/carbon'], ['app/Infrastructure/HttpGateway.php', 'psr/log']]],
+    ['python', 'pypi', [['app/infrastructure/http_gateway.py', 'jinja2'], ['app/infrastructure/http_gateway.py', 'markupsafe'], ['app/infrastructure/http_gateway.py', 'pluggy'], ['app/infrastructure/http_gateway.py', 'pysocks'], ['app/infrastructure/http_gateway.py', 'urllib3']]],
+    ['go', 'go', [['infrastructure/http_gateway_test.go', 'gopkg.in/yaml.v3'], ['infrastructure/system_probe.go', 'golang.org/x/sys']]],
+  ] as const)('undeclared-dependency in %s (%s): the labelled transitive and unlisted packages, never an unattributed one', (app, eco, rows) => {
+    const got = smellsOf(app).filter((d) => d.startsWith('Undeclared'));
+    expect(got).toEqual(rows.map(([file, pkg]) => undeclared(file, pkg, eco)).sort());
+    // The definition, on the labels: a known package, direct false.
+    expect(rows.map(([file, pkg]) => `${file} ${pkg}`).sort()).toEqual([...new Set(labels.rows
+      .filter((l) => l.app === app && l.origin === 'package' && l.package !== null && l.direct === false).map((l) => `${l.file} ${l.package}`))].sort());
+    // Unattributed: Go's github.com/pkg/errors (direct false), pypi's sklearn, Composer's Illuminate\Support\Str (direct null).
+    expect(got.some((d) => /pkg\/errors|sklearn|acme_missing|Illuminate|collect|Acme/.test(d))).toBe(false);
   }, 180000);
 });
