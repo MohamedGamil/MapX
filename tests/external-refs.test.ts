@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import Database from 'better-sqlite3';
@@ -35,9 +35,44 @@ const REPOS: Record<string, string[]> = { workspace: ['frontend', 'backend'] };
 
 const key = (r: Omit<Label, 'app'>) => [r.file, r.line, r.sourceSymbol, r.specifier, r.symbol, r.kind, r.ecosystem].join(' | ');
 
+// M4-09-R3: every temp workspace of this file is named for this run and removed after its test, once
+// every path a test made unreadable is readable again; the run fails if it leaves one in tmpdir().
+const RUN = `mapx-extrefs-${process.pid}-`;
+const runEntries = () => readdirSync(tmpdir()).filter((name) => name.startsWith(RUN)).sort();
+const temps: string[] = [];
+const locked = new Map<string, number>();
+const tempDir = (kind = ''): string => {
+  const dir = mkdtempSync(join(tmpdir(), `${RUN}${kind}`));
+  temps.push(dir);
+  return dir;
+};
+/** Takes every permission off a file or folder; `restore` or the afterEach gives them back. */
+const unreadable = (path: string) => {
+  if (!locked.has(path)) locked.set(path, statSync(path).mode & 0o7777);
+  chmodSync(path, 0o000);
+};
+const restore = (path: string) => {
+  const mode = locked.get(path);
+  if (mode !== undefined && existsSync(path)) chmodSync(path, mode);
+};
+let before: string[] = [];
+beforeAll(() => { before = runEntries(); });
+afterEach(() => {
+  for (const path of locked.keys()) restore(path);
+  const still = [...locked.keys()].filter((path) => existsSync(path) && (statSync(path).mode & 0o777) === 0);
+  locked.clear();
+  for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
+  expect(still, 'still unreadable before removal').toEqual([]);
+});
+afterAll(() => {
+  const left = runEntries().filter((name) => !before.includes(name));
+  for (const name of left) rmSync(join(tmpdir(), name), { recursive: true, force: true });
+  expect(left, 'temp workspaces this run left in tmpdir()').toEqual([]);
+});
+
 describe('the external_refs store', () => {
   it('is added by migration 10 to an index at schema 9: the candidates table and the external_refs view', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'mapx-extrefs-'));
+    const dir = tempDir();
     try {
       const path = join(dir, 'mapx.db');
       new Store(path).close();
@@ -68,7 +103,7 @@ const scanned = new Map<string, Array<Omit<Label, 'app'>>>();
 function scanApp(app: string): Array<Omit<Label, 'app'>> {
   const cached = scanned.get(app);
   if (cached) return cached;
-  const root = join(mkdtempSync(join(tmpdir(), 'mapx-extrefs-')), app);
+  const root = join(tempDir(), app);
   try {
     cpSync(join(FIXTURE, app), root, { recursive: true });
     init(root);
@@ -201,7 +236,7 @@ function project(withGit: boolean) {
   return {
     get root() { return root; },
     create(files: Record<string, string>) {
-      root = mkdtempSync(join(tmpdir(), 'mapx-extrefs-sync-'));
+      root = tempDir('sync-');
       write(root, files);
       if (withGit) {
         git(root, 'init', '-q');
@@ -209,7 +244,6 @@ function project(withGit: boolean) {
         git(root, 'commit', '-qm', 'init');
       }
     },
-    remove() { if (root) rmSync(root, { recursive: true, force: true }); },
     scanner,
     sync: async (store: Store, full = false) => full ? (await scanner(store)).scanFull() : (await scanner(store)).scanIncremental(),
     forced: async () => {
@@ -242,7 +276,6 @@ describe.each([
 ] as const)('a %s', (_name, withGit, full) => {
   const p = project(withGit);
   beforeEach(() => p.create(FILES));
-  afterEach(() => p.remove());
 
   const edit = () => {
     // Edited: one external import added, one removed; deleted; renamed; added.
@@ -404,7 +437,6 @@ const DECIDED_ELSEWHERE: Array<{ name: string; before: Record<string, string>; c
 
 describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when another file decides', (_name, withGit) => {
   const p = project(withGit);
-  afterEach(() => p.remove());
 
   it.each(DECIDED_ELSEWHERE)('$name: equal to scan --force', async ({ before, change, gone, appears, stays }) => {
     p.create(before);
@@ -429,7 +461,6 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a
 // Review of M5-19 (P2): what is, and is not, an external reference.
 describe('a scan decides', () => {
   const p = project(false);
-  afterEach(() => p.remove());
   const refsOf = async (files: Record<string, string>) => {
     p.create(files);
     const store = new Store(':memory:');
@@ -760,7 +791,6 @@ const attributed = (file: string, by: 'lock' | 'manifest') => [
 
 describe('npm attribution of a scan', () => {
   const p = project(false);
-  afterEach(() => p.remove());
   const scan = async (files: Record<string, string>) => {
     p.create(files);
     const store = new Store(':memory:');
@@ -871,13 +901,13 @@ describe('npm attribution of a scan', () => {
     // Root can read a file without permission: the case holds only for another user.
     if (name !== 'a folder' && process.getuid?.() === 0) return;
     p.create({ ...NESTED, ...extra });
-    if (name !== 'a folder') chmodSync(join(p.root, 'packages/app/package-lock.json'), 0o000);
+    if (name !== 'a folder') unreadable(join(p.root, 'packages/app/package-lock.json'));
     try {
       const store = new Store(':memory:');
       await (await p.scanner(store)).scanFull();
       expect(npmAttribution(store)).toEqual(attributed('packages/app/src/a.ts', 'manifest'));
     } finally {
-      if (name !== 'a folder') chmodSync(join(p.root, 'packages/app/package-lock.json'), 0o644);
+      if (name !== 'a folder') restore(join(p.root, 'packages/app/package-lock.json'));
     }
   }, 120000);
 
@@ -949,7 +979,6 @@ const ATTRIBUTION_CHANGES: Array<{ name: string; change: Record<string, string |
 
 describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a manifest or lockfile changes', (_name, withGit) => {
   const p = project(withGit);
-  afterEach(() => p.remove());
 
   it.each(ATTRIBUTION_CHANGES)('$name: equal to scan --force', async ({ change, expect: expected }) => {
     p.create({ 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE });
@@ -973,7 +1002,7 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a
     const lock = 'packages/app/package-lock.json';
     const nested = { 'package.json': JSON.stringify({ name: 'root', private: true }), 'package-lock.json': PACKAGE_LOCK, 'packages/app/package.json': NPM_MANIFEST, 'packages/app/src/a.ts': NPM_SOURCE };
     p.create({ ...nested, ...(name === 'a folder' ? { [`${lock}/x.txt`]: 'x' } : { [lock]: PACKAGE_LOCK }) });
-    if (name !== 'a folder') chmodSync(join(p.root, lock), 0o000);
+    if (name !== 'a folder') unreadable(join(p.root, lock));
     const store = new Store(':memory:');
     try {
       await (await p.scanner(store)).scanFull();
@@ -981,7 +1010,7 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a
       // Left as it is, the unreadable lock is no change.
       expect(changedInputFiles(p.root, parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY))!)).toEqual([]);
     } finally {
-      if (name !== 'a folder') chmodSync(join(p.root, lock), 0o644);
+      if (name !== 'a folder') restore(join(p.root, lock));
     }
     rmSync(join(p.root, lock), { recursive: true, force: true });
     if (withGit) {
@@ -1012,7 +1041,7 @@ const cliAttribution = (root: string) => query<{ file_path: string; specifier: s
 
 describe('npm attribution of a sibling repo (review of M5-20, P1)', () => {
   it('reads only its own repo\'s manifests and lockfile: never the primary repo\'s or a parent folder\'s', () => {
-    const parent = mkdtempSync(join(tmpdir(), 'mapx-extrefs-repos-'));
+    const parent = tempDir('repos-');
     try {
       write(parent, {
         // The folder above both repos lists `fromparent`; the primary repo W lists `pg` as dev and
@@ -1046,7 +1075,7 @@ describe('npm attribution of a sibling repo (review of M5-20, P1)', () => {
 
 describe('a manifest or lockfile change makes the index stale (review of M5-20, P2)', () => {
   it('mapx status reports it, check refuses it, check --sync re-attributes', () => {
-    const root = mkdtempSync(join(tmpdir(), 'mapx-extrefs-stale-'));
+    const root = tempDir('stale-');
     try {
       write(root, { 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE });
       init(root);
@@ -1079,7 +1108,6 @@ describe('a manifest or lockfile change makes the index stale (review of M5-20, 
 
 describe('a sync that changes nothing attribution reads (review of M5-20, P2)', () => {
   const p = project(false);
-  afterEach(() => p.remove());
 
   it('keeps the stored attribution without reading a lockfile; attributes only new rows', async () => {
     p.create({ 'package.json': NPM_MANIFEST, 'package-lock.json': PACKAGE_LOCK, 'src/a.ts': NPM_SOURCE });
@@ -1168,7 +1196,7 @@ describe('PHP built-ins and Composer names', () => {
   // The generator reads php-src stubs with PHP's tokenizer: namespaces (braced or not), top-level
   // declarations only.
   it.skipIf(!php)('reads stub declarations: namespaced and braced blocks, never methods or ::class', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'mapx-php-stubs-'));
+    const dir = tempDir('php-stubs-');
     try {
       write(dir, {
         'ext/dom/php_dom.stub.php': '<?php\nnamespace {\n  /** @var int */\n  const XML_ELEMENT_NODE = UNKNOWN;\n  class DOMNode { public function appendChild() {} const X = 1; }\n  function dom_import_simplexml(object $node): DOMElement {}\n  $x = DOMNode::class;\n}\nnamespace Dom {\n  final class HTMLDocument {}\n  enum AdjacentPosition: string {}\n  function import_simplexml(object $node): Element {}\n}\n',
@@ -1338,7 +1366,6 @@ const composerAttributed = (file: string, by: 'lock' | 'manifest') => {
 
 describe('Composer attribution of a scan', () => {
   const p = project(false);
-  afterEach(() => p.remove());
   const scan = async (files: Record<string, string>) => {
     p.create(files);
     const store = new Store(':memory:');
@@ -1426,13 +1453,13 @@ describe('Composer attribution of a scan', () => {
     // Root can read a file without permission: the case holds only for another user.
     if (name !== 'a folder' && process.getuid?.() === 0) return;
     p.create({ 'composer.json': COMPOSER_MANIFEST, 'composer.lock': COMPOSER_LOCK, 'app/Gateway.php': PHP_SOURCE, ...extra });
-    if (name !== 'a folder') chmodSync(join(p.root, 'app/composer.lock'), 0o000);
+    if (name !== 'a folder') unreadable(join(p.root, 'app/composer.lock'));
     try {
       const store = new Store(':memory:');
       await (await p.scanner(store)).scanFull();
       expect(composerAttribution(store)).toEqual(composerAttributed('app/Gateway.php', 'manifest'));
     } finally {
-      if (name !== 'a folder') chmodSync(join(p.root, 'app/composer.lock'), 0o644);
+      if (name !== 'a folder') restore(join(p.root, 'app/composer.lock'));
     }
   }, 120000);
 
@@ -1520,7 +1547,6 @@ const COMPOSER_CHANGES: Array<{ name: string; change: Record<string, string | nu
 
 describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when composer.json or composer.lock changes', (_name, withGit) => {
   const p = project(withGit);
-  afterEach(() => p.remove());
   const commit = (message: string) => {
     if (!withGit) return;
     git(p.root, 'add', '-A');
@@ -1545,14 +1571,14 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when c
     if (name !== 'a folder' && process.getuid?.() === 0) return;
     const lock = 'app/composer.lock';
     p.create({ 'composer.json': COMPOSER_MANIFEST, 'composer.lock': COMPOSER_LOCK, 'app/Gateway.php': PHP_SOURCE, ...(name === 'a folder' ? { [`${lock}/x.txt`]: 'x' } : { [lock]: COMPOSER_LOCK }) });
-    if (name !== 'a folder') chmodSync(join(p.root, lock), 0o000);
+    if (name !== 'a folder') unreadable(join(p.root, lock));
     const store = new Store(':memory:');
     try {
       await (await p.scanner(store)).scanFull();
       expect(composerAttribution(store)).toEqual(composerAttributed('app/Gateway.php', 'manifest'));
       expect(changedInputFiles(p.root, parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY))!)).toEqual([]);
     } finally {
-      if (name !== 'a folder') chmodSync(join(p.root, lock), 0o644);
+      if (name !== 'a folder') restore(join(p.root, lock));
     }
     rmSync(join(p.root, lock), { recursive: true, force: true });
     commit('remove');
@@ -1581,7 +1607,7 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when c
 
 describe('Composer attribution through the CLI', () => {
   it('a sibling repo reads only its own composer.json and lock; a lock-only change makes the index stale', () => {
-    const parent = mkdtempSync(join(tmpdir(), 'mapx-extrefs-composer-'));
+    const parent = tempDir('composer-');
     try {
       write(parent, {
         // Above both repos: a composer.json requiring nesbot/carbon. W locks psr/log and carbon; R
@@ -1852,7 +1878,6 @@ const pyAttributed = (file: string, by: 'lock' | 'manifest') => [
 
 describe('pypi attribution of a scan', () => {
   const p = project(false);
-  afterEach(() => p.remove());
   const scan = async (files: Record<string, string>) => {
     p.create(files);
     const store = new Store(':memory:');
@@ -1913,13 +1938,13 @@ describe('pypi attribution of a scan', () => {
     // Root can read a file without permission: the case holds only for another user.
     if (name !== 'a folder' && process.getuid?.() === 0) return;
     p.create({ ...PY_NESTED, ...extra });
-    if (name !== 'a folder') chmodSync(join(p.root, 'svc/uv.lock'), 0o000);
+    if (name !== 'a folder') unreadable(join(p.root, 'svc/uv.lock'));
     try {
       const store = new Store(':memory:');
       await (await p.scanner(store)).scanFull();
       expect(pypiAttribution(store)).toEqual(pyAttributed('svc/a.py', 'manifest'));
     } finally {
-      if (name !== 'a folder') chmodSync(join(p.root, 'svc/uv.lock'), 0o644);
+      if (name !== 'a folder') restore(join(p.root, 'svc/uv.lock'));
     }
   }, 120000);
 
@@ -2136,7 +2161,6 @@ const PY_CHANGES: Array<{ name: string; change: Record<string, string | null>; e
 
 describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a Python manifest or lockfile changes', (_name, withGit) => {
   const p = project(withGit);
-  afterEach(() => p.remove());
   const commit = (message: string) => {
     if (!withGit) return;
     git(p.root, 'add', '-A');
@@ -2179,14 +2203,14 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a
     if (name !== 'a folder' && process.getuid?.() === 0) return;
     const lock = 'svc/uv.lock';
     p.create({ 'pyproject.toml': '[project]\nname = "root"\nversion = "0"\n', 'uv.lock': UV_LOCK, 'svc/pyproject.toml': PYPROJECT, 'svc/a.py': PY_SOURCE, ...(name === 'a folder' ? { [`${lock}/x.txt`]: 'x' } : { [lock]: UV_LOCK }) });
-    if (name !== 'a folder') chmodSync(join(p.root, lock), 0o000);
+    if (name !== 'a folder') unreadable(join(p.root, lock));
     const store = new Store(':memory:');
     try {
       await (await p.scanner(store)).scanFull();
       expect(pypiAttribution(store)).toEqual(pyAttributed('svc/a.py', 'manifest'));
       expect(changedInputFiles(p.root, parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY))!)).toEqual([]);
     } finally {
-      if (name !== 'a folder') chmodSync(join(p.root, lock), 0o644);
+      if (name !== 'a folder') restore(join(p.root, lock));
     }
     rmSync(join(p.root, lock), { recursive: true, force: true });
     commit('remove');
@@ -2207,7 +2231,7 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a
 
 describe('pypi attribution through the CLI', () => {
   it('a lock-only change or a new requirements file makes the index stale; sync re-attributes', () => {
-    const root = mkdtempSync(join(tmpdir(), 'mapx-extrefs-pypi-'));
+    const root = tempDir('pypi-');
     try {
       write(root, { 'pyproject.toml': PYPROJECT, 'uv.lock': UV_LOCK, 'src/a.py': PY_SOURCE });
       init(root);
@@ -2400,7 +2424,6 @@ const present = (files: Record<string, string | null>) =>
 
 describe('Go modules attribution of a scan', () => {
   const p = project(false);
-  afterEach(() => p.remove());
   const scan = async (files: Record<string, string>, kind?: string) => {
     p.create(files);
     const store = new Store(':memory:');
@@ -2447,7 +2470,7 @@ describe('Go modules attribution of a scan', () => {
       'go.mod': GO_MOD, 'go.sum': GO_SUM, 'svc/go.mod': GO_MOD.replace('example.com/app', 'example.com/svc'),
       'svc/cmd/main.go': GO_MAIN, 'svc/cmd/main_test.go': GO_TEST, ...extra,
     }));
-    if (chmod) chmodSync(join(p.root, 'svc', chmod), 0o000);
+    if (chmod) unreadable(join(p.root, 'svc', chmod));
     try {
       const store = new Store(':memory:');
       await (await p.scanner(store)).scanFull();
@@ -2456,7 +2479,7 @@ describe('Go modules attribution of a scan', () => {
       // No readable go.mod: no build list, every module unknown; built-ins stand.
       else expect(rows).toEqual(goAttributed('svc/cmd', 'manifest').map((r) => (r.includes('builtin') ? r : r.replace(/→ .*$/, '→ null package null null manifest'))));
     } finally {
-      if (chmod) chmodSync(join(p.root, 'svc', chmod), 0o644);
+      if (chmod) restore(join(p.root, 'svc', chmod));
     }
   }, 120000);
 
@@ -2528,13 +2551,13 @@ describe('Go modules attribution of a scan', () => {
     // Root can read a file without permission: the case holds only for another user.
     if (chmod && process.getuid?.() === 0) return;
     p.create(present({ ...GO_FILES, ...extra }));
-    if (chmod) chmodSync(join(p.root, 'go.mod'), 0o000);
+    if (chmod) unreadable(join(p.root, 'go.mod'));
     try {
       const store = new Store(':memory:');
       await (await p.scanner(store)).scanFull();
       expect(goAttribution(store)).toEqual(goAttributed('cmd', 'manifest').map((r) => (r.includes('builtin') ? r : r.replace(/→ .*$/, '→ null package null null manifest'))));
     } finally {
-      if (chmod) chmodSync(join(p.root, 'go.mod'), 0o644);
+      if (chmod) restore(join(p.root, 'go.mod'));
     }
   }, 120000);
 
@@ -2646,7 +2669,6 @@ const GO_MAIN_YAML = GO_MAIN.replace('"golang.org/x/sys/unix"', '"golang.org/x/s
 
 describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when go.mod, go.sum or a module\'s test-only use changes', (_name, withGit) => {
   const p = project(withGit);
-  afterEach(() => p.remove());
 
   it.each(GO_CHANGES)('$name: equal to scan --force', async ({ name, change, expect: expected }) => {
     const before = name.startsWith('the only') ? GO_MAIN_YAML : GO_MAIN;
@@ -2678,7 +2700,7 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when g
 
 describe('Go modules attribution through the CLI', () => {
   it('a go.sum-only change makes the index stale; sync re-attributes', () => {
-    const root = mkdtempSync(join(tmpdir(), 'mapx-extrefs-go-'));
+    const root = tempDir('go-');
     try {
       write(root, GO_FILES);
       git(root, 'init', '-q');
