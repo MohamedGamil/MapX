@@ -1,6 +1,20 @@
 # MapX project state
 
-Updated 2026-11-03, consolidation under claude-ff. The owner closed the other sessions; claude-ff runs every lane (one worktree per task, an independent review per commit, P0/P1 fixed before DONE, a clean-clone `npm run check` before each closure). `EXTRACTOR_VERSION` is 13. Commits are local on `develop`; nothing is pushed or published.
+Updated 2026-11-03 (release). Version 0.3.9, tagged `v0.3.9` and installed as the Linux binary in `~/.local/bin` (D037); nothing is published or pushed. `EXTRACTOR_VERSION` is 15.
+
+- **M5:** every implementation task is DONE (M5-01 to M5-26 and their remediation, M5-15 to M5-24 included). Only M5-98 (acceptance re-score) is left, held by D035.
+- **Defects closed since the morning update:**
+  - M2-08-R3 (P1: external imports linking to project symbols);
+  - M4-12-R1 (D034, grammar-steal cap);
+  - M4-24-R1 (closed on a quiet machine);
+  - M3-05-R3, M5-20-R1, M5-25-R2, M5-07-R1 and M4-09-R3/R4.
+- **Documentation:** refreshed for the release by M4-28 (D036), and guarded by tests/docs-surface.test.ts.
+- **Held:** M4-13-R1 and M5-98 (D035).
+- **Follow-ups registered as BACKLOG, not started:**
+  - M5: M5-18-R1, M5-24-R1/R2/R3, M5-17-R1, M5-15-R1, M5-25-R3, M5-07-R2, M5-16-R1/R2 and M5-21-R1;
+  - defects: M0-02-R13, M2-08-R4, M4-12-R2, M4-28-R1/R2, M4-22-R1 and M2-12.
+
+Earlier: Updated 2026-11-03, consolidation under claude-ff. The owner closed the other sessions; claude-ff runs every lane (one worktree per task, an independent review per commit, P0/P1 fixed before DONE, a clean-clone `npm run check` before each closure). `EXTRACTOR_VERSION` is 13. Commits are local on `develop`; nothing is pushed or published.
 
 Done since the last update:
 - **M5:**

@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.3.9] — 2026-11-03
+
 ### Added
 
 #### Architecture rules
@@ -963,7 +965,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.8...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.9...HEAD
+[0.3.9]: https://github.com/MohamedGamil/mapx/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/MohamedGamil/mapx/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/MohamedGamil/mapx/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/MohamedGamil/mapx/compare/v0.3.5...v0.3.6

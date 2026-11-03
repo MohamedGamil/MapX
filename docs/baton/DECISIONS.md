@@ -342,3 +342,27 @@ Answers M4-12-R1's blocking condition. Under CPU load, idle lanes steal new gram
 ## D036 — Release documentation before the v0.3.9 tag (owner, 2026-11-03)
 
 Before the 0.3.9 version is pinned, the owner asked for all changes since 0.3.5 to be documented, every doc brought up to date, and the root README to reflect the features MapX provides now. Registered as M4-28 (P1). The bump and tag of D035 wait for it.
+
+## D037 — Version 0.3.9: tagged, packaged and installed for the user (owner, 2026-11-03)
+
+As asked in D035, after the remaining work and M4-28's documentation (D036):
+- VERSION, package.json, scripts/templates/VERSION and the lockfile root are at 0.3.9;
+- the changelog's Unreleased entries are under `[0.3.9] — 2026-11-03`;
+- `v0.3.9` is an annotated local tag;
+- the Linux binary is packaged with `make package-linux` and installed with the installer's `--local` mode, as for v0.3.7 (D023) and v0.3.8 (D029).
+
+The release holds everything since v0.3.8:
+- **M5 architecture rules:**
+  - `mapx check` with baselines, CI reporters, hierarchy and package/builtin/ambient selectors, internal and visibility rules;
+  - `mapx arch init` with presets, `mapx arch graph`, rule-derived smells;
+  - the MCP architecture tools;
+  - the dashboard Architecture view;
+  - MapX checking itself in CI.
+- **External references** with npm, Composer, pip/Poetry/uv and Go attribution.
+- **The M2/M3/M4/M5 remediation:**
+  - Lua grammar repair (M4-27) and Go generic receivers;
+  - import-bound externals (M2-08-R3), and the git-ref shell-injection fix (M5-08-R1);
+  - the worker-pool grammar cap (M4-12-R1, D034);
+  - the documentation refresh (M4-28).
+
+Nothing is published or pushed. M4-13-R1 and M5-98 stay on hold (D035).
