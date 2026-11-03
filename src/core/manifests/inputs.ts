@@ -25,6 +25,19 @@ export const contentHash = (text: string | null): string | null => (text === nul
  * as, so removing or fixing it is a change (M5-20-R1 review): it ends a lockfile walk, absence does not.
  */
 export const UNREADABLE_INPUT = '\u0000unreadable';
+
+/**
+ * Composer's generated autoload metadata under a Composer root's `vendor/` (M5-21-R1), read as data
+ * (never executed) and never a package's sources: the classmap (class → file), the `files` autoload
+ * (the files each package loads) and installed.json (each package's install path). The attributor
+ * records each one it reads, or probes and finds absent, with the other inputs, so a sync and the
+ * stale check notice `composer install` or `composer dump-autoload` rewriting them.
+ */
+export const COMPOSER_VENDOR_INPUTS = {
+  classmap: 'vendor/composer/autoload_classmap.php',
+  files: 'vendor/composer/autoload_files.php',
+  installed: 'vendor/composer/installed.json',
+} as const;
 const UNREADABLE_HASH = contentHash(UNREADABLE_INPUT);
 
 export function parseExternalInputs(value: string | null | undefined): ExternalInputs | null {

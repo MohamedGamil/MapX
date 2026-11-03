@@ -2584,6 +2584,8 @@ export class Scanner {
       readText: (path: string) => { try { return this.readWorkspaceText(path); } catch { return null; } },
       // Present though unreadable (a folder, no permission): a lock that stops the walk (M5-21 review).
       exists: (path: string) => existsSync(resolve(workspaceRoot, path)),
+      // vendor/composer files over the size cap are skipped (review of M5-21-R1).
+      size: (path: string) => { try { const st = statSync(resolve(workspaceRoot, path)); return st.isFile() ? st.size : null; } catch { return null; } },
       // A folder's names: its requirements*.txt files (M5-22).
       listDir: (dir: string) => { try { return readdirSync(resolve(workspaceRoot, dir || '.')); } catch { return null; } },
       repoRootOf,
@@ -4373,8 +4375,6 @@ export class Scanner {
         if (any) signatures['^' + relative(workspaceRoot, dir).replace(/\\/g, '/')] = hash.digest('hex');
       }
     }
-    // go.mod / composer.json in every folder above a Go / PHP file (M0-02-R9).
-    for (const family of families) {
     // The module path an unreadable go.mod's folder layout gives, over the Go files as they stand.
     let layoutCtx: ImportContext | null = null;
     const goLayout = (dir: string) => {
@@ -4389,6 +4389,8 @@ export class Scanner {
       }
       return goLayoutModule(dir, layoutCtx);
     };
+    // go.mod / composer.json in every folder above a Go / PHP file (M0-02-R9).
+    for (const family of families) {
       const above = new Set<string>(['']);
       for (const p of family.sources) {
         for (let dir = p; dir.includes('/');) {
@@ -4404,11 +4406,11 @@ export class Scanner {
           manifest = statSync(abs).isFile() ? readFileSync(abs) : null;
         } catch { /* none here, or unreadable */ }
         if (manifest) signatures[family.prefix + dir] = createHash('md5').update(manifest).digest('hex');
-      }
-    }
         else if (family.manifest === 'go.mod' && existsSync(abs)) {
           signatures[family.prefix + dir] = createHash('md5').update(`\0unreadable\0${goLayout(dir) ?? ''}`).digest('hex');
         }
+      }
+    }
     signatures['#families'] = MANIFEST_FAMILIES.map(f => f.prefix).join(',');
     let before: Record<string, string> | null = null;
     try { before = JSON.parse(this.store.getMeta(key) ?? 'null'); } catch { /* recorded below */ }

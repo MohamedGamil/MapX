@@ -41,8 +41,11 @@ import type { Store } from './store.js';
  *   statement in force where they are written).
  * - 18: M5-23-R1 (under a go.mod that is there but cannot be read, imports of the module's own
  *   packages resolve by the folder layout: import edges, no external rows).
+ * - 19: M5-21-R1 (PHP names of PECL extensions are ambient; with vendor/composer metadata, classmap
+ *   and files names are attributed to their installed package. The stored attribution of an index
+ *   built before is skipped while its recorded inputs stand, so it is rebuilt once).
  */
-export const EXTRACTOR_VERSION = 18;
+export const EXTRACTOR_VERSION = 19;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

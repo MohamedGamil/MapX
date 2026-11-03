@@ -12,7 +12,8 @@ import { extractorVersionKey } from '../src/core/extractor-version.js';
 import { jsImports } from '../src/core/external-refs.js';
 import { builtinModules } from 'node:module';
 import { NODE_BUILTINS, NODE_PREFIX_ONLY_BUILTINS, nodeBuiltin, npmPackageName, parsePackageLock, parsePnpmLock, parseYarnLock } from '../src/core/manifests/npm.js';
-import { ComposerAttributor, composerRoots, lockPackagesOf, packageByConvention, parseComposerLock, phpBuiltin } from '../src/core/manifests/composer.js';
+import { COMPOSER_VENDOR_MAX_BYTES, ComposerAttributor, composerRoots, lockPackagesOf, packageByConvention, parseAutoloadMap, parseComposerLock, parseInstalledJson, phpBuiltin, phpPecl, type PhpKind } from '../src/core/manifests/composer.js';
+import { PHP_PECL, PHP_PECL_SOURCE } from '../src/core/manifests/php-pecl.js';
 import { PHP_BUILTINS_SOURCE } from '../src/core/manifests/php-builtins.js';
 import { EXTERNAL_INPUTS_KEY, changedInputFiles, matchGlob, parseExternalInputs } from '../src/core/manifests/inputs.js';
 import { IMPORT_DISTRIBUTIONS, normalizeDist, parsePoetryLock, parseRequirement, parseRequirementsTxt, parseUvLock, pyprojectRoots, pythonBuiltin, PYTHON_STDLIB, requirementsFileIsDev } from '../src/core/manifests/pypi.js';
@@ -1317,7 +1318,159 @@ describe('composer.lock', () => {
     expect(a.attribute('Illuminate\\Support\\Facades\\DB', 'routes/web.php', { facadeTarget: target })).toEqual({ package: 'illuminate/support', origin: 'package', direct: true, dev: false, attribution: 'lock' });
     expect(a.attribute('DB', 'routes/web.php', { facadeTarget: target })).toEqual({ package: 'illuminate/database', origin: 'package', direct: true, dev: false, attribution: 'lock' });
     expect(a.attribute('DB', 'routes/web.php')).toEqual({ package: null, origin: 'package', direct: false, dev: null, attribution: 'lock' });
-    expect([...a.reads.keys()].sort()).toEqual(['composer.json', 'composer.lock', 'routes/composer.json', 'routes/composer.lock']);
+    // The Composer root's classmap is probed for a class (absent here: recorded so its creation is a change, M5-21-R1).
+    expect([...a.reads.keys()].sort()).toEqual(['composer.json', 'composer.lock', 'routes/composer.json', 'routes/composer.lock', 'vendor/composer/autoload_classmap.php']);
+  });
+
+  // ─── M5-21-R1 ───
+
+  it('reads Composer\'s generated autoload maps as data: escapes, $vendorDir and $baseDir; throws on other text', () => {
+    expect(parseAutoloadMap(VENDOR_APP['vendor/composer/autoload_classmap.php']!)).toEqual([
+      { key: 'App\\U', path: 'app/U.php' },
+      { key: 'Composer\\InstalledVersions', path: 'vendor/composer/InstalledVersions.php' },
+      { key: 'Illuminate\\Support\\Collection', path: 'vendor/illuminate/collections/Collection.php' },
+      { key: 'Illuminate\\Support\\Str', path: 'vendor/illuminate/support/Str.php' },
+      { key: 'LegacyMailer', path: 'lib/legacy/Mailer.php' },
+      { key: 'SebastianBergmann\\Diff\\Differ', path: 'vendor/sebastian/diff/src/Differ.php' },
+    ]);
+    // Short array syntax, a quote in a path, a path above vendor/ (a custom vendor-dir layout).
+    expect(parseAutoloadMap("<?php\nreturn [\n  'A\\\\B' => $vendorDir . '/x/y/it\\'s.php',\n  'C' => $vendorDir . '/../lib/C.php',\n];\n")).toEqual([
+      { key: 'A\\B', path: "vendor/x/y/it's.php" },
+      { key: 'C', path: 'lib/C.php' },
+    ]);
+    for (const text of ['', '{"packages": []}', "<?php\necho 'x';\n"]) expect(() => parseAutoloadMap(text), text).toThrow();
+    // Review of M5-21-R1: double quotes, __DIR__ and joined literals (autoload_static's form), a plain
+    // absolute path (kept: it maps to no package), comments; an entry of another form is skipped.
+    expect(parseAutoloadMap('<?php\n// \'X\' => $vendorDir . \'/no.php\',\nreturn array(\n  "D\\\\E" => $vendorDir . "/d/e/\\$x.php",\n  \'F\' => __DIR__ . \'/..\' . \'/f/g/F.php\',\n  \'G\' => \'/abs/g.php\',\n  \'H\' => dirname(__FILE__),\n);\n')).toEqual([
+      { key: 'D\\E', path: 'vendor/d/e/$x.php' },
+      { key: 'F', path: 'vendor/f/g/F.php' },
+      { key: 'G', path: '/abs/g.php' },
+    ]);
+  });
+
+  it('parses a pathological autoload map in linear time (review of M5-21-R1: no backtracking regex)', () => {
+    const started = performance.now();
+    expect(parseAutoloadMap(`return [${"\\'".repeat(512 * 1024)}`)).toEqual([]);
+    expect(parseAutoloadMap(`return [${"'a' => ".repeat(150_000)}`)).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+
+  it('skips a vendor/composer file over the size cap, with one warning, and records it as an input', () => {
+    const warnings: string[] = [];
+    const a = new ComposerAttributor({
+      readText: (p) => VENDOR_APP[p] ?? null, repoRootOf: () => '',
+      size: (p) => (p === 'vendor/composer/autoload_classmap.php' ? COMPOSER_VENDOR_MAX_BYTES + 1 : VENDOR_APP[p]?.length ?? null),
+      warn: (m) => warnings.push(m),
+    });
+    // The lock alone answers, as without vendor/.
+    expect(a.attribute('SebastianBergmann\\Diff\\Differ', 'app/U.php').package).toBeNull();
+    expect(a.attribute('Illuminate\\Support\\Str', 'app/U.php').package).toBeNull();
+    expect(warnings).toEqual([`[mapx] Skipped vendor/composer/autoload_classmap.php (${COMPOSER_VENDOR_MAX_BYTES + 1} bytes, over ${COMPOSER_VENDOR_MAX_BYTES}): its Composer classmap or files autoload is not read for attribution.`]);
+    expect(a.reads.get('vendor/composer/autoload_classmap.php')).toMatch(/too-large/);
+  });
+
+  it('one package loading `files` never claims a global function: unknown, as before (review of M5-21-R1)', () => {
+    const a = new ComposerAttributor({ readText: (p) => VENDOR_APP[p] ?? null, repoRootOf: () => '' });
+    for (const fn of ['add_action', 'acme_helper']) {
+      expect(a.attribute(fn, 'app/U.php', { kind: 'function' }), fn).toEqual({ package: null, origin: 'package', direct: null, dev: null, attribution: 'lock' });
+    }
+    // A namespaced one still follows the naming convention among the files packages.
+    expect(a.attribute('Acme\\Helpers\\slug', 'app/U.php', { kind: 'function' }).package).toBe('acme/helpers');
+  });
+
+  it('a file under a nested composer.json (a path package) reads the vendor/ beside the project\'s lock', () => {
+    const files: Record<string, string> = {
+      ...VENDOR_APP,
+      'pkgs/helpers/composer.json': JSON.stringify({ name: 'acme/helpers', autoload: { files: ['helpers.php'] } }),
+    };
+    const a = new ComposerAttributor({ readText: (p) => files[p] ?? null, repoRootOf: () => '' });
+    expect(a.attribute('SebastianBergmann\\Diff\\Differ', 'pkgs/helpers/x.php').package).toBe('sebastian/diff');
+    expect([...a.reads.keys()].filter((k) => k.includes('vendor/'))).not.toContain('pkgs/helpers/vendor/composer/autoload_classmap.php');
+  });
+
+  it('reads installed.json of Composer 2 (install-path, dev-package-names) and Composer 1 (a list, vendor/<name>)', () => {
+    expect(parseInstalledJson(VENDOR_APP['vendor/composer/installed.json']!)).toEqual({
+      packages: [
+        { name: 'acme/helpers', path: 'vendor/acme/helpers' },
+        { name: 'acme/legacy', path: 'lib/legacy' },
+        { name: 'illuminate/collections', path: 'vendor/illuminate/collections' },
+        { name: 'illuminate/support', path: 'vendor/illuminate/support' },
+        { name: 'sebastian/diff', path: 'vendor/sebastian/diff' },
+      ],
+      dev: new Set(['sebastian/diff']),
+    });
+    expect(parseInstalledJson(JSON.stringify([{ name: 'Psr/Log' }, { name: 'acme/meta', 'install-path': null }]))).toEqual({
+      packages: [{ name: 'psr/log', path: 'vendor/psr/log' }, { name: 'acme/meta', path: null }],
+      dev: null,
+    });
+    // An absolute install path (outside the project, another drive) holds no root-relative file (review of M5-21-R1).
+    expect(parseInstalledJson(JSON.stringify({ packages: [
+      { name: 'c/d', 'install-path': '/abs/c/d' }, { name: 'e/f', 'install-path': 'D:\\pkgs\\e' }, { name: 'g/h', 'install-path': '../../packages/g' },
+    ] })).packages).toEqual([{ name: 'c/d', path: null }, { name: 'e/f', path: null }, { name: 'g/h', path: 'packages/g' }]);
+    for (const text of ['{ broken', '{}', '"x"']) expect(() => parseInstalledJson(text), text).toThrow();
+  });
+
+  it('PECL extensions: their classes, functions and constants, ambient; never a bundled extension\'s', () => {
+    expect(PHP_PECL_SOURCE).toMatch(/^reflection of PHP 8\.\d+\.\d+ with apcu .*redis/);
+    expect(phpPecl('Redis')).toBe('ext-redis');
+    expect(phpPecl('\\imagick')).toBe('ext-imagick');
+    expect(phpPecl('apcu_fetch', 'function')).toBe('ext-apcu');
+    expect(phpPecl('igbinary_serialize', 'function')).toBe('ext-igbinary');
+    expect(phpPecl('Memcached')).toBe('ext-memcached');
+    expect(phpPecl('DateTime')).toBeNull();
+    expect(phpPecl('strlen', 'function')).toBeNull();
+    expect(phpPecl('apcu_fetch')).toBeNull();
+    // No name is both: a bundled extension's name is a built-in only.
+    for (const ext of Object.values(PHP_PECL)) for (const c of ext.classes.split(' ').filter(Boolean)) expect(phpBuiltin(c), c).toBeNull();
+    const a = new ComposerAttributor({ readText: () => null, repoRootOf: () => '' });
+    expect(a.attribute('Redis', 'app/x.php')).toEqual({ package: 'ext-redis', origin: 'ambient', direct: null, dev: null, attribution: null });
+    expect(a.attribute('apcu_fetch', 'app/x.php', { kind: 'function' })).toEqual({ package: 'ext-apcu', origin: 'ambient', direct: null, dev: null, attribution: null });
+  });
+
+  it('reads vendor/composer files only when a name reaches them, once per pass, and never a package\'s sources', () => {
+    const read: string[] = [];
+    const a = new ComposerAttributor({ readText: (p) => { read.push(p); return VENDOR_APP[p] ?? null; }, repoRootOf: () => '' });
+    expect(a.attribute('DateTime', 'app/U.php')).toMatchObject({ origin: 'builtin' });
+    expect(read.filter((p) => p.startsWith('vendor/'))).toEqual([]);
+    expect(a.attribute('SebastianBergmann\\Diff\\Differ', 'app/U.php')).toMatchObject({ package: 'sebastian/diff', dev: true });
+    expect(a.attribute('Illuminate\\Support\\Str', 'app/U.php')).toMatchObject({ package: 'illuminate/support' });
+    expect(a.attribute('Acme\\Helpers\\slug', 'app/U.php', { kind: 'function' })).toMatchObject({ package: 'acme/helpers' });
+    expect(read.filter((p) => p.startsWith('vendor/'))).toEqual(['vendor/composer/autoload_classmap.php', 'vendor/composer/installed.json', 'vendor/composer/autoload_files.php']);
+    // No composer.lock: installed.json answers dev-ness, and its reading flags the answer `lock`.
+    const unlocked = new ComposerAttributor({ readText: (p) => (p === 'composer.lock' ? null : VENDOR_APP[p] ?? null), repoRootOf: () => '' });
+    expect(unlocked.attribute('SebastianBergmann\\Diff\\Differ', 'app/U.php')).toEqual({ package: 'sebastian/diff', origin: 'package', direct: false, dev: true, attribution: 'lock' });
+    expect(unlocked.attribute('Illuminate\\Support\\Str', 'app/U.php')).toEqual({ package: 'illuminate/support', origin: 'package', direct: false, dev: false, attribution: 'lock' });
+  });
+
+  it('vendor/composer of the nearest Composer root; the longest install path; several files packages: by convention, else unknown', () => {
+    const map = (entries: string[]) => `<?php\n\n$vendorDir = dirname(__DIR__);\n$baseDir = dirname($vendorDir);\n\nreturn array(\n${entries.map((e) => `    ${e},\n`).join('')});\n`;
+    const files: Record<string, string> = {
+      'composer.json': JSON.stringify({ require: {} }),
+      'svc/composer.json': JSON.stringify({ require: {} }),
+      'svc/vendor/composer/autoload_classmap.php': map([
+        "'Acme\\\\Mono\\\\A' => $vendorDir . '/acme/monorepo/src/A.php'",
+        "'Acme\\\\Sub\\\\B' => $vendorDir . '/acme/monorepo/packages/sub/src/B.php'",
+      ]),
+      'svc/vendor/composer/autoload_files.php': map([
+        "'aaaa' => $vendorDir . '/acme/helpers/src/helpers.php'",
+        "'bbbb' => $vendorDir . '/acme/strings/src/functions.php'",
+      ]),
+      'svc/vendor/composer/installed.json': JSON.stringify({ packages: [
+        { name: 'acme/monorepo', 'install-path': '../acme/monorepo' },
+        // A package inside another's folder (a path repository): the longest install path holds the file.
+        { name: 'acme/sub', 'install-path': '../acme/monorepo/packages/sub' },
+        { name: 'acme/helpers', 'install-path': '../acme/helpers' },
+        { name: 'acme/strings', 'install-path': '../acme/strings' },
+      ] }),
+    };
+    const a = new ComposerAttributor({ readText: (p) => files[p] ?? null, repoRootOf: () => '' });
+    const pkg = (name: string, kind?: PhpKind) => a.attribute(name, 'svc/src/X.php', { kind }).package;
+    expect(pkg('Acme\\Mono\\A')).toBe('acme/monorepo');
+    expect(pkg('Acme\\Sub\\B')).toBe('acme/sub');
+    expect(pkg('Acme\\Strings\\slug', 'function')).toBe('acme/strings');
+    expect(pkg('helper', 'function')).toBeNull();
+    // The repo root's composer.json has no vendor/: a file there reads none.
+    expect(a.attribute('Acme\\Mono\\A', 'src/Y.php').package).toBeNull();
   });
 });
 
@@ -1369,6 +1522,60 @@ const composerAttributed = (file: string, by: 'lock' | 'manifest') => {
     `${file}:5 Psr\\Log\\LoggerInterface import → psr/log package 1 0 ${by}`,
     `${file}:9 Psr\\Log\\LoggerInterface param_type → psr/log package 1 0 ${by}`,
   ];
+};
+
+// M5-21-R1: Composer's generated autoload metadata, synthetic, as `composer install -o` writes it.
+// illuminate/support and illuminate/collections share Illuminate\Support\ (real siblings); acme/legacy
+// is installed by a custom installer at lib/legacy; sebastian/diff (real) loads by classmap.
+const VENDOR_APP: Record<string, string> = {
+  'composer.json': JSON.stringify({ require: { 'acme/legacy': '^1.0' }, 'require-dev': {}, autoload: { 'psr-4': { 'App\\': 'app/' } } }),
+  'composer.lock': JSON.stringify({
+    packages: [
+      { name: 'acme/helpers', autoload: { files: ['src/helpers.php'] } },
+      { name: 'acme/legacy', type: 'legacy-plugin', autoload: { classmap: ['./'] } },
+      { name: 'illuminate/collections', autoload: { 'psr-4': { 'Illuminate\\Support\\': '' } } },
+      { name: 'illuminate/support', autoload: { 'psr-4': { 'Illuminate\\Support\\': '' } } },
+    ],
+    'packages-dev': [{ name: 'sebastian/diff', autoload: { classmap: ['src/'] } }],
+  }),
+  'vendor/composer/autoload_classmap.php': [
+    '<?php', '', '// autoload_classmap.php @generated by Composer', '', '$vendorDir = dirname(__DIR__);', '$baseDir = dirname($vendorDir);', '', 'return array(',
+    "    'App\\\\U' => $baseDir . '/app/U.php',",
+    "    'Composer\\\\InstalledVersions' => $vendorDir . '/composer/InstalledVersions.php',",
+    "    'Illuminate\\\\Support\\\\Collection' => $vendorDir . '/illuminate/collections/Collection.php',",
+    "    'Illuminate\\\\Support\\\\Str' => $vendorDir . '/illuminate/support/Str.php',",
+    "    'LegacyMailer' => $baseDir . '/lib/legacy/Mailer.php',",
+    "    'SebastianBergmann\\\\Diff\\\\Differ' => $vendorDir . '/sebastian/diff/src/Differ.php',",
+    ');', '',
+  ].join('\n'),
+  'vendor/composer/autoload_files.php': [
+    '<?php', '', '// autoload_files.php @generated by Composer', '', '$vendorDir = dirname(__DIR__);', '$baseDir = dirname($vendorDir);', '', 'return array(',
+    "    '0e6d7bf4a5811bfa5cf40c5ccd6fae6a' => $vendorDir . '/acme/helpers/src/helpers.php',",
+    ');', '',
+  ].join('\n'),
+  'vendor/composer/installed.json': JSON.stringify({
+    packages: [
+      { name: 'acme/helpers', 'install-path': '../acme/helpers' },
+      { name: 'acme/legacy', 'install-path': '../../lib/legacy' },
+      { name: 'illuminate/collections', 'install-path': '../illuminate/collections' },
+      { name: 'illuminate/support', 'install-path': '../illuminate/support' },
+      { name: 'sebastian/diff', 'install-path': '../sebastian/diff' },
+    ],
+    dev: true,
+    'dev-package-names': ['sebastian/diff'],
+  }),
+  'app/U.php': [
+    '<?php', 'namespace App;', '', 'use Illuminate\\Support\\Collection;', '', 'class U', '{', '    public function u()', '    {',
+    '        new Collection();',
+    "        \\Illuminate\\Support\\Str::of('x');",
+    '        new \\LegacyMailer();',
+    '        new \\SebastianBergmann\\Diff\\Differ();',
+    '        acme_helper();',
+    '        new \\Redis();',
+    "        apcu_fetch('k');",
+    "        \\Composer\\InstalledVersions::isInstalled('x');",
+    '    }', '}', '',
+  ].join('\n'),
 };
 
 describe('Composer attribution of a scan', () => {
@@ -1512,6 +1719,48 @@ describe('Composer attribution of a scan', () => {
       'routes/web.php:6 Illuminate\\Support\\Facades\\Cache call → laravel/framework package 1 0 lock',
     ]);
   }, 120000);
+
+  // ─── M5-21-R1: classmap and files from vendor/composer, PECL extensions ───
+
+  it('vendor/composer: a classmap class is its installed package, a files function the one files package; PECL names are ambient; without vendor/ as before', async () => {
+    expect(await scan(VENDOR_APP)).toEqual([
+      // Optimised classmap: the sibling packages sharing Illuminate\Support\ are told apart by the file.
+      'app/U.php:10 Illuminate\\Support\\Collection instantiation → illuminate/collections package 0 0 lock',
+      'app/U.php:11 Illuminate\\Support\\Str call → illuminate/support package 0 0 lock',
+      // Installed outside vendor/ (a custom installer): installed.json's install-path, from $baseDir.
+      'app/U.php:12 LegacyMailer instantiation → acme/legacy package 1 0 lock',
+      // No naming convention ties SebastianBergmann\ to sebastian/diff; the classmap does. Dev from the lock.
+      'app/U.php:13 SebastianBergmann\\Diff\\Differ instantiation → sebastian/diff package 0 1 lock',
+      // acme/helpers is the only package whose files autoload loads, yet nothing shows it defines the
+      // global function: unknown (review of M5-21-R1).
+      'app/U.php:14 acme_helper call → null package null null lock',
+      'app/U.php:15 Redis instantiation → ext-redis ambient null null null',
+      'app/U.php:16 apcu_fetch call → ext-apcu ambient null null null',
+      // Composer's own runtime class is in no installed package: unknown, as before.
+      'app/U.php:17 Composer\\InstalledVersions call → null package null null lock',
+      'app/U.php:4 Illuminate\\Support\\Collection import → illuminate/collections package 0 0 lock',
+    ]);
+    // Without vendor/: the lock alone, as M5-21 attributes (PECL names stay ambient).
+    expect(await scan(present({ ...VENDOR_APP, 'vendor/composer/autoload_classmap.php': null, 'vendor/composer/autoload_files.php': null, 'vendor/composer/installed.json': null }))).toEqual([
+      'app/U.php:10 Illuminate\\Support\\Collection instantiation → null package null null lock',
+      'app/U.php:11 Illuminate\\Support\\Str call → null package null null lock',
+      'app/U.php:12 LegacyMailer instantiation → null package null null lock',
+      'app/U.php:13 SebastianBergmann\\Diff\\Differ instantiation → null package null null lock',
+      'app/U.php:14 acme_helper call → null package null null lock',
+      'app/U.php:15 Redis instantiation → ext-redis ambient null null null',
+      'app/U.php:16 apcu_fetch call → ext-apcu ambient null null null',
+      'app/U.php:17 Composer\\InstalledVersions call → null package null null lock',
+      'app/U.php:4 Illuminate\\Support\\Collection import → null package null null lock',
+    ]);
+  }, 120000);
+
+  it('vendor/composer without installed.json: a classmap file under vendor/ is the package of its two folders; without a lock, flagged manifest', async () => {
+    expect(await scan(present({ ...VENDOR_APP, 'composer.lock': null, 'vendor/composer/installed.json': null }))).toEqual(expect.arrayContaining([
+      'app/U.php:10 Illuminate\\Support\\Collection instantiation → illuminate/collections package 0 null manifest',
+      'app/U.php:12 LegacyMailer instantiation → null package null null manifest',
+      'app/U.php:13 SebastianBergmann\\Diff\\Differ instantiation → sebastian/diff package 0 null manifest',
+    ]));
+  }, 120000);
 });
 
 // Sync = scan --force when composer.json or composer.lock changes.
@@ -1592,6 +1841,29 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when c
     await p.sync(store);
     expect(composerAttribution(store)).toEqual(composerAttributed('app/Gateway.php', 'lock'));
     expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
+  }, 120000);
+
+  // M5-21-R1: Composer's vendor metadata is an input; vendor/ is no indexed file, so no git change shows it.
+  it.each([
+    ['the classmap drops a class', { 'vendor/composer/autoload_classmap.php': VENDOR_APP['vendor/composer/autoload_classmap.php']!.replace(/^.*Collection.*\n/m, '') },
+      'app/U.php:10 Illuminate\\Support\\Collection instantiation → null package null null lock'],
+    ['installed.json moves a package', { 'vendor/composer/installed.json': VENDOR_APP['vendor/composer/installed.json']!.replace('"../sebastian/diff"', '"../acme/helpers/diff"') },
+      'app/U.php:13 SebastianBergmann\\Diff\\Differ instantiation → null package null null lock'],
+    // autoload_files.php is read for no name here (acme_helper is global): no input, so its removal is no change.
+    ['vendor/ is removed', { 'vendor/composer/autoload_classmap.php': null, 'vendor/composer/autoload_files.php': null, 'vendor/composer/installed.json': null },
+      'app/U.php:13 SebastianBergmann\\Diff\\Differ instantiation → null package null null lock'],
+  ] as const)('vendor/composer: %s: the stale check sees it, sync equals scan --force', async (_name, change, expected) => {
+    p.create(VENDOR_APP);
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    for (const [path, text] of Object.entries(change)) {
+      if (text === null) rmSync(join(p.root, path));
+      else writeFileSync(join(p.root, path), text);
+    }
+    expect(changedInputFiles(p.root, parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY))!).sort()).toEqual(Object.keys(change).filter((k) => !k.endsWith('autoload_files.php')).sort());
+    await p.sync(store);
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
+    expect(composerAttribution(store)).toContain(expected);
   }, 120000);
 
   it('keeps the stored Composer attribution when nothing it read changed; a lock edit re-attributes', async () => {
@@ -2694,59 +2966,6 @@ describe('Go modules attribution of a scan', () => {
     } finally {
       if (chmod) restore(join(p.root, 'go.mod'));
     }
-  }, 120000);
-});
-
-// Sync = scan --force when go.mod, go.sum or the test-only use of a module changes.
-const GO_CHANGES: Array<{ name: string; change: Record<string, string | null>; expect: string }> = [
-  {
-    name: 'a module go.mod marked // indirect becomes direct',
-    change: { 'go.mod': GO_MOD.replace(' // indirect', '') },
-    expect: 'cmd/main.go:9 golang.org/x/sys/unix → golang.org/x/sys package 1 0 lock',
-  },
-  { name: 'go.sum is deleted', change: { 'go.sum': null }, expect: 'cmd/main.go:7 github.com/google/uuid → github.com/google/uuid package 1 0 manifest' },
-  { name: 'go.sum is corrupted', change: { 'go.sum': 'corrupt' }, expect: 'cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 manifest' },
-  {
-    name: 'go.sum gains a module',
-    change: { 'go.sum': GO_SUM + sumLines('github.com/pkg/errors v0.9.1') },
-    // go 1.22: a module go.mod does not require is not listed (review of M5-23).
-    expect: 'cmd/main.go:8 github.com/pkg/errors → github.com/pkg/errors package null null lock',
-  },
-  {
-    // Nothing attribution reads changes: an edited file of another package of the module decides,
-    // and the test file is not re-parsed (its stored rows stand, and their dev changes).
-    name: 'a non-test file starts using a test-only module',
-    change: { 'tools/check.go': 'package tools\n\nimport "github.com/stretchr/testify/assert"\n\nvar _ = assert.True\n' },
-    expect: 'cmd/main_test.go:6 github.com/stretchr/testify/require → github.com/stretchr/testify package 1 0 lock',
-  },
-  {
-    name: 'the only non-test file using a module stops using it',
-    change: { 'cmd/main.go': GO_MAIN },
-    expect: 'cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 lock',
-  },
-];
-// main.go also uses yaml.v3, for the last change.
-const GO_MAIN_YAML = GO_MAIN.replace('"golang.org/x/sys/unix"', '"golang.org/x/sys/unix"\n\t"gopkg.in/yaml.v3"').replace('chi.NewRouter()', 'chi.NewRouter()\n\t_ = yaml.Node{}');
-
-describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when go.mod, go.sum or a module\'s test-only use changes', (_name, withGit) => {
-  const p = project(withGit);
-
-  it.each(GO_CHANGES)('$name: equal to scan --force', async ({ name, change, expect: expected }) => {
-    const before = name.startsWith('the only') ? GO_MAIN_YAML : GO_MAIN;
-    p.create({ ...GO_FILES, 'cmd/main.go': before, 'tools/check.go': 'package tools\n\nvar X = 1\n' });
-    const store = new Store(':memory:');
-    await (await p.scanner(store)).scanFull();
-    if (before === GO_MAIN) expect(goAttribution(store)).toEqual(goAttributed('cmd', 'lock'));
-    else expect(goAttribution(store)).toContain('cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 0 lock');
-    write(p.root, change);
-    if (withGit) {
-      git(p.root, 'add', '-A');
-      git(p.root, 'commit', '-qm', 'change');
-    }
-    await p.sync(store);
-    const forced = await p.forced();
-    expect(dumpAll(store)).toEqual(dumpAll(forced));
-    expect(goAttribution(store)).toContain(expected);
   };
   const HOW = [['cannot be read', true], ['is a folder', false]] as const;
   // Root can read a file without permission: those cases hold only for another user.
@@ -2815,6 +3034,90 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when g
     expect(goAttribution(store)).toEqual([]);
     expect(ownEdges(store)).toEqual(['a/a.go → b/x/x.go', 'b/x/x.go → b/y/y.go']);
   }, 120000);
+});
+
+// Sync = scan --force when go.mod, go.sum or the test-only use of a module changes.
+const GO_CHANGES: Array<{ name: string; change: Record<string, string | null>; expect: string }> = [
+  {
+    name: 'a module go.mod marked // indirect becomes direct',
+    change: { 'go.mod': GO_MOD.replace(' // indirect', '') },
+    expect: 'cmd/main.go:9 golang.org/x/sys/unix → golang.org/x/sys package 1 0 lock',
+  },
+  { name: 'go.sum is deleted', change: { 'go.sum': null }, expect: 'cmd/main.go:7 github.com/google/uuid → github.com/google/uuid package 1 0 manifest' },
+  { name: 'go.sum is corrupted', change: { 'go.sum': 'corrupt' }, expect: 'cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 manifest' },
+  {
+    name: 'go.sum gains a module',
+    change: { 'go.sum': GO_SUM + sumLines('github.com/pkg/errors v0.9.1') },
+    // go 1.22: a module go.mod does not require is not listed (review of M5-23).
+    expect: 'cmd/main.go:8 github.com/pkg/errors → github.com/pkg/errors package null null lock',
+  },
+  {
+    // Nothing attribution reads changes: an edited file of another package of the module decides,
+    // and the test file is not re-parsed (its stored rows stand, and their dev changes).
+    name: 'a non-test file starts using a test-only module',
+    change: { 'tools/check.go': 'package tools\n\nimport "github.com/stretchr/testify/assert"\n\nvar _ = assert.True\n' },
+    expect: 'cmd/main_test.go:6 github.com/stretchr/testify/require → github.com/stretchr/testify package 1 0 lock',
+  },
+  {
+    name: 'the only non-test file using a module stops using it',
+    change: { 'cmd/main.go': GO_MAIN },
+    expect: 'cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 lock',
+  },
+];
+// main.go also uses yaml.v3, for the last change.
+const GO_MAIN_YAML = GO_MAIN.replace('"golang.org/x/sys/unix"', '"golang.org/x/sys/unix"\n\t"gopkg.in/yaml.v3"').replace('chi.NewRouter()', 'chi.NewRouter()\n\t_ = yaml.Node{}');
+
+describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when go.mod, go.sum or a module\'s test-only use changes', (_name, withGit) => {
+  const p = project(withGit);
+
+  it.each(GO_CHANGES)('$name: equal to scan --force', async ({ name, change, expect: expected }) => {
+    const before = name.startsWith('the only') ? GO_MAIN_YAML : GO_MAIN;
+    p.create({ ...GO_FILES, 'cmd/main.go': before, 'tools/check.go': 'package tools\n\nvar X = 1\n' });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    if (before === GO_MAIN) expect(goAttribution(store)).toEqual(goAttributed('cmd', 'lock'));
+    else expect(goAttribution(store)).toContain('cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 0 lock');
+    write(p.root, change);
+    if (withGit) {
+      git(p.root, 'add', '-A');
+      git(p.root, 'commit', '-qm', 'change');
+    }
+    await p.sync(store);
+    const forced = await p.forced();
+    expect(dumpAll(store)).toEqual(dumpAll(forced));
+    expect(goAttribution(store)).toContain(expected);
+  }, 120000);
+
+  // Review of M5-23-R1 (P2): the module path an unreadable go.mod's layout gives is a sync input.
+  it.each([
+    ['a second own folder imported: the module path is inferred', 'tool/t.go', 'package tool\n\nimport "example.com/app/internal/store"\n\nfunc T() { store.Open() }\n', 'cmd/main.go → pkg/log/log.go'],
+    ['a competing third-party prefix imported: the module path is no longer inferred', 'tool/t.go', 'package tool\n\nimport "github.com/google/uuid"\n\nfunc T() { uuid.New() }\n', null],
+  ] as const)('go.mod is a folder, %s; unchanged files follow, as scan --force', async (_name, path, text, edge) => {
+    // Inferred at first in the second case: pkg/log imports internal/store, a second own folder.
+    const second: Record<string, string> = edge ? {} : { 'pkg/log/log2.go': 'package log\n\nimport "example.com/app/internal/store"\n\nfunc L() { store.Open() }\n' };
+    p.create({
+      'go.mod/x.txt': 'x',
+      'cmd/main.go': 'package main\n\nimport "example.com/app/pkg/log"\n\nfunc main() { log.Info() }\n',
+      'pkg/log/log.go': 'package log\n\nfunc Info() {}\n',
+      'internal/store/store.go': 'package store\n\nfunc Open() {}\n',
+      'uuid/uuid.go': 'package uuid\n\nfunc New() {}\n',
+      ...second,
+    });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    const linked = () => store.getAllEdges().some((e) => e.edge_type === 'import' && e.source_file === 'cmd/main.go' && e.target_file === 'pkg/log/log.go');
+    expect(linked()).toBe(!edge);
+    write(p.root, { [path]: text });
+    if (withGit) {
+      git(p.root, 'add', '-A');
+      git(p.root, 'commit', '-qm', 'change');
+    }
+    await p.sync(store);
+    const forced = await p.forced();
+    expect(dumpEdges(store)).toEqual(dumpEdges(forced));
+    expect(dumpAll(store)).toEqual(dumpAll(forced));
+    expect(linked()).toBe(!!edge);
+  }, 120000);
 
   it('fills the Go attribution of an index built before (null columns), without --force', async () => {
     p.create(GO_FILES);
@@ -2869,37 +3172,6 @@ function scannedApp(app: string, config?: object, extra: Record<string, string> 
   }
   mapx(root, 'scan');
   if (config) writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify(config));
-  // Review of M5-23-R1 (P2): the module path an unreadable go.mod's layout gives is a sync input.
-  it.each([
-    ['a second own folder imported: the module path is inferred', 'tool/t.go', 'package tool\n\nimport "example.com/app/internal/store"\n\nfunc T() { store.Open() }\n', 'cmd/main.go → pkg/log/log.go'],
-    ['a competing third-party prefix imported: the module path is no longer inferred', 'tool/t.go', 'package tool\n\nimport "github.com/google/uuid"\n\nfunc T() { uuid.New() }\n', null],
-  ] as const)('go.mod is a folder, %s; unchanged files follow, as scan --force', async (_name, path, text, edge) => {
-    // Inferred at first in the second case: pkg/log imports internal/store, a second own folder.
-    const second: Record<string, string> = edge ? {} : { 'pkg/log/log2.go': 'package log\n\nimport "example.com/app/internal/store"\n\nfunc L() { store.Open() }\n' };
-    p.create({
-      'go.mod/x.txt': 'x',
-      'cmd/main.go': 'package main\n\nimport "example.com/app/pkg/log"\n\nfunc main() { log.Info() }\n',
-      'pkg/log/log.go': 'package log\n\nfunc Info() {}\n',
-      'internal/store/store.go': 'package store\n\nfunc Open() {}\n',
-      'uuid/uuid.go': 'package uuid\n\nfunc New() {}\n',
-      ...second,
-    });
-    const store = new Store(':memory:');
-    await (await p.scanner(store)).scanFull();
-    const linked = () => store.getAllEdges().some((e) => e.edge_type === 'import' && e.source_file === 'cmd/main.go' && e.target_file === 'pkg/log/log.go');
-    expect(linked()).toBe(!edge);
-    write(p.root, { [path]: text });
-    if (withGit) {
-      git(p.root, 'add', '-A');
-      git(p.root, 'commit', '-qm', 'change');
-    }
-    await p.sync(store);
-    const forced = await p.forced();
-    expect(dumpEdges(store)).toEqual(dumpEdges(forced));
-    expect(dumpAll(store)).toEqual(dumpAll(forced));
-    expect(linked()).toBe(!!edge);
-  }, 120000);
-
   return root;
 }
 
