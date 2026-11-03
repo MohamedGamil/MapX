@@ -16447,15 +16447,28 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-15",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T08:30:23.276Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T08:30:22.807Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T08:30:23.276Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
@@ -16833,7 +16846,7 @@
         "docs/architecture-rules.md documents every selector, rule, reporter and exit code with an example."
       ],
       "verificationCommands": [
-        "npm run build",
+        "npm run build:npm",
         "node dist/main.js check --format json"
       ],
       "description": "Commit .mapx/architecture.jsonc for MapX itself (with baseline for the Languages→Parsers and Agents→Parsers findings or fixes), add `mapx check --format sarif` to CI, write docs/architecture-rules.md and update cli-reference and mcp-integration. Interface dependency M4-01: M4-01 owns the CI scoring step in .github/workflows/ci.yml; the arch-check step is added to that layout."
@@ -20901,14 +20914,27 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-23",
       "actualHours": null,
       "startedAt": "2026-11-03T05:52:24.725Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T09:10:29.950Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-23.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-23.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-23.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T05:52:23.784Z",
@@ -20921,6 +20947,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T09:10:29.444Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T09:10:29.950Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-23.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-23.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -25800,6 +25849,84 @@
         "npx vitest run tests/import-bound-calls.test.ts",
         "npm run check"
       ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R1.md",
+        "docs/baton/reports/M2-08-R2.md",
+        "docs/baton/reports/M5-18.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M2-08-R3",
+      "actualHours": null,
+      "startedAt": "2026-11-03T09:07:26.864Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-03T09:07:25.329Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T09:07:26.864Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "rollback": "Revert the task commit.",
+      "id": "M2-08-R3",
+      "title": "Names imported from an external module never link to a same-named project symbol",
+      "objective": "In JS/TS, a call or reference to a name bound by an import from a package or builtin module (`import { join } from \"node:path\"`) gets no edge to a same-named project symbol, and a name neither imported nor declared in an ES module (a global such as the DOM `Node`) does not link by name to an exported symbol of another project module.",
+      "description": "Found by M5-18 (2026-11-03) while dogfooding: `join`/`resolve` from node:path resolve as verified calls to src/core/import-resolvers.ts#join and LuaScopes, and `Node` to src/core/manifests/pypi.ts#Node, giving 36 false layer violations in MapX itself. Reproduced on a 2-file probe: src/a.ts imports {join, resolve} from node:path; src/b.ts exports join/resolve; edges run→b.ts#join and run→b.ts#resolve, verified.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R3.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "src/core/extractor-version.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "Two-file workspace (e2e, real scan): a.ts imports {join, resolve} from \"node:path\" (and from \"lodash\") and calls them; b.ts exports join/resolve: no edge from a.ts to b.ts (test).",
+        "A TS module referencing an undeclared, un-imported global (`Node`, `Element`, `Request`) gets no edge to a project class of that name in another module; the same name imported from that module still links (test).",
+        "`npm run eval` holds every floor and the edges scorer precision does not drop; MapX self-scan: the count of edges whose target symbol is join/resolve/Node from files that import them from node: modules is 0 (recorded in the report)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run eval",
+        "npm run check"
+      ],
+      "kind": "iteration"
     },
     {
       "milestone": "M5",

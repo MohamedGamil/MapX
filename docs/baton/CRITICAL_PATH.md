@@ -6,16 +6,16 @@ Remaining longest dependency path: **12h** (full-plan path: 214h).
 
 M5-15
 
-Remaining effort min/expected/max: **25.5 / 38 / 57h**. Capacity: 1 engineer(s) × 20 h/week → **1.9 weeks**, conditional finish **2026-11-16** (as of 2026-11-03).
+Remaining effort min/expected/max: **24.5 / 38 / 58h**. Capacity: 1 engineer(s) × 20 h/week → **1.9 weeks**, conditional finish **2026-11-16** (as of 2026-11-03).
 
 ## Open items and blockers
-- M5-15 (BACKLOG): prerequisites satisfied
+- M5-15 (IN_PROGRESS): prerequisites satisfied
 - M5-18 (IN_PROGRESS): prerequisites satisfied
 - M5-98 (BACKLOG): prerequisites satisfied
-- M5-23 (IN_PROGRESS): prerequisites satisfied
-- M5-24 (BACKLOG): M5-23
+- M5-24 (BACKLOG): prerequisites satisfied
 - M4-13-R1 (BACKLOG): prerequisites satisfied
 - M4-24-R1 (IN_PROGRESS): prerequisites satisfied
+- M2-08-R3 (IN_PROGRESS): prerequisites satisfied
 - M4-09-R3 (BACKLOG): prerequisites satisfied
 - M4-12-R1 (BLOCKED): Owner decision: under CPU load, idle lanes steal new grammars more often, so M4-12 AC1 (grammar loads at most languages + workers) and AC2 (no worker idles while files remain) conflict. Either cap new-grammar steals per batch (AC1 holds; a lane may end while another still has files) or restate AC1 as plan + up to (workers - 1) steals (AC2 holds).
 
@@ -25,9 +25,9 @@ Remaining effort min/expected/max: **25.5 / 38 / 57h**. Capacity: 1 engineer(s) 
 | M5-15 | 0 | 12 | 0 | 12 | 0 |
 | M5-18 | 0 | 6 | 6 | 12 | 6 |
 | M5-98 | 0 | 2 | 10 | 12 | 10 |
-| M5-23 | 0 | 4 | 2 | 6 | 2 |
-| M5-24 | 4 | 10 | 6 | 12 | 2 |
+| M5-24 | 0 | 6 | 6 | 12 | 6 |
 | M4-13-R1 | 0 | 2 | 10 | 12 | 10 |
 | M4-24-R1 | 0 | 2 | 10 | 12 | 10 |
+| M2-08-R3 | 0 | 4 | 8 | 12 | 8 |
 | M4-09-R3 | 0 | 1 | 11 | 12 | 11 |
 | M4-12-R1 | 0 | 3 | 9 | 12 | 9 |
