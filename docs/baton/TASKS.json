@@ -17416,15 +17416,28 @@
       ],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-98",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T23:37:12.549Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T23:37:12.162Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:37:12.549Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
