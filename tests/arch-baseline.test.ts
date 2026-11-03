@@ -3,7 +3,7 @@ import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, w
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import Ajv from 'ajv';
-import { cleanup, init, mapx, mapxResult, workspace } from './helpers/e2e';
+import { cleanup, init, mapx, mapxResult, useBuiltCli, workspace } from './helpers/e2e';
 import { fingerprint, loadCompareReport, normalizeElement, parseBaseline, renderBaseline } from '../src/arch/baseline';
 import { ConfigError } from '../src/arch/config';
 import { exitCode } from '../src/arch/check';
@@ -58,6 +58,18 @@ function scanned(files: Record<string, string>): string {
   mapx(root, 'scan');
   return root;
 }
+/**
+ * A scanned copy of APP. One scan serves the file (M4-30): the describes that mutate their
+ * workspace each get their own copy of it.
+ */
+let pristine = '';
+function scannedApp(): string {
+  pristine ||= scanned(APP);
+  const root = mkdtempSync(join(tmpdir(), 'mapx-arch-baseline-'));
+  temps.push(root);
+  cpSync(pristine, root, { recursive: true });
+  return root;
+}
 /** A folder outside every workspace, for base reports and baselines given on the command line. */
 const outside = mkdtempSync(join(tmpdir(), 'mapx-arch-baseline-out-'));
 temps.push(outside);
@@ -75,10 +87,13 @@ const of = (report: ArchReport, kind: Finding['kind']) => report.findings.filter
 const fps = (findings: Finding[]) => findings.map((f) => f.fingerprint).sort();
 
 afterAll(() => { for (const t of temps) cleanup(t); });
+useBuiltCli(); // ~170 ms a CLI start instead of ~600 ms under tsx (M4-30)
+// M4-30, timeouts: with 16 busy loops (load 18–26, 10 runs), the slowest test on the default 30 s
+// took 5.1 s ("exit 3: a missing or invalid baseline"; 1.6 s quiet, 6.4 s before M4-30). The default stands.
 
 describe('baseline: generate, match, stale entries (AR-10)', () => {
   let root = '';
-  beforeAll(() => { root = scanned(APP); }, 120_000);
+  beforeAll(() => { root = scannedApp(); }, 120_000);
 
   it('generate → re-run: 0 violations and N skipped, the same fingerprints', () => {
     const before = check(root);
@@ -249,7 +264,7 @@ describe('--compare <base report>: the ratchet without a committed baseline', ()
   let root = '';
   let base = '';
   beforeAll(() => {
-    root = scanned(APP);
+    root = scannedApp();
     base = join(outside, 'base.json');
     // CI on the merge base: the JSON report, with every kind a later run may need to forgive.
     const r = mapxResult(root, 'check', '--format', 'json', '-o', base, '--report-uncovered', '--report-skipped');

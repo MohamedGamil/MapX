@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join, posix, resolve } from 'node:path';
 import Ajv from 'ajv';
-import { cleanup, init, mapx, mapxResult, mapxResultEnv, workspace } from './helpers/e2e';
+import { cleanup, init, mapx, mapxResult, mapxResultEnv, useBuiltCli, workspace } from './helpers/e2e';
 import type { ArchReport, Finding } from '../src/arch/report';
 import { configErrorReport } from '../src/arch/report';
 import { ConfigError } from '../src/arch/config';
@@ -200,6 +200,10 @@ const ctx: ReportContext = { configFile: '.mapx/architecture.jsonc', check: {}, 
 
 const temps: string[] = [];
 afterAll(() => { for (const t of temps) cleanup(t); });
+useBuiltCli(); // ~170 ms a CLI start instead of ~600 ms under tsx (M4-30)
+// M4-30, timeouts: with 16 busy loops (load 18–26, 10 runs), the slowest test on the default 30 s
+// took 4.9 s ("a stale entry in a baseline outside the workspace"; 1.7 s quiet, 6.3 s before
+// M4-30). The default stands; the tests with their own timeouts are unchanged.
 
 describe('reporters on hostile text (unit)', () => {
   it('SARIF validates against the official 2.1.0 schema; paths are relative URI references; skipped is suppressed', () => {
@@ -530,10 +534,11 @@ describe('severities follow the configuration (CodeClimate) and the exit rule (J
   });
 
   it('an invalid report.codeclimate is a configuration error (exit 3)', () => {
-    const bad = workspace({ ...APP, '.mapx/architecture.jsonc': JSON.stringify({ layers, rules, report: { codeclimate: { error: 'severe', fatal: 'major' } } }) });
+    // The scanned workspace with the invalid configuration: check reads it, the scan does not (M4-30).
+    const bad = mkdtempSync(join(tmpdir(), 'mapx-reporters-'));
     temps.push(bad);
-    init(bad);
-    mapx(bad, 'scan');
+    cpSync(root, bad, { recursive: true });
+    writeFileSync(join(bad, '.mapx/architecture.jsonc'), JSON.stringify({ layers, rules, report: { codeclimate: { error: 'severe', fatal: 'major' } } }));
     const r = mapxResult(bad, 'check', '--format', 'json');
     expect(r.status).toBe(3);
     const messages = (JSON.parse(r.stdout) as ArchReport).findings.map((f) => f.message);

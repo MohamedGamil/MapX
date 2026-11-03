@@ -6,10 +6,32 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
 import { afterAll, beforeAll } from 'vitest';
+import { buildCli } from './built-cli';
 
 const MAIN = resolve(__dirname, '../../src/main.ts');
 // Absolute loader URL: the temp workspace has no node_modules to resolve `tsx` from.
 const TSX = pathToFileURL(resolve(__dirname, '../../node_modules/tsx/dist/loader.mjs')).href;
+
+/** The transpiled CLI of `useBuiltCli`, while a test file uses it. */
+let built: string | undefined;
+
+/** The node arguments that start the CLI: the sources under tsx, or the transpiled copy. */
+function cli(): string[] {
+  return built ? [join(built, 'src', 'main.js')] : ['--import', TSX, MAIN];
+}
+
+/**
+ * Makes this test file's CLI calls run a copy of src/ transpiled once for the file (built-cli.ts)
+ * instead of the sources under tsx: ~170 ms a start instead of ~600 ms. For files that spawn the CLI
+ * dozens of times (M4-30); the copy is removed after the file.
+ */
+export function useBuiltCli(): void {
+  beforeAll(() => { built = buildCli(); });
+  afterAll(() => {
+    if (built) rmSync(built, { recursive: true, force: true });
+    built = undefined;
+  });
+}
 
 /**
  * The CLI's environment: this process's, without GITHUB_ACTIONS, which a GitHub runner sets and
@@ -32,7 +54,7 @@ export function workspace(files: Record<string, string>, gitDirs: string[] = [])
 }
 
 export function mapx(cwd: string, ...args: string[]): string {
-  return execFileSync(process.execPath, ['--import', TSX, MAIN, ...args], {
+  return execFileSync(process.execPath, [...cli(), ...args], {
     cwd,
     encoding: 'utf8',
     env: baseEnv(),
@@ -42,7 +64,7 @@ export function mapx(cwd: string, ...args: string[]): string {
 
 /** Like `mapx`, with extra environment variables (e.g. NODE_OPTIONS for a test preload). */
 export function mapxEnv(cwd: string, env: Record<string, string>, ...args: string[]): string {
-  return execFileSync(process.execPath, ['--import', TSX, MAIN, ...args], {
+  return execFileSync(process.execPath, [...cli(), ...args], {
     cwd,
     encoding: 'utf8',
     env: { ...baseEnv(), ...env },
@@ -52,7 +74,7 @@ export function mapxEnv(cwd: string, env: Record<string, string>, ...args: strin
 
 /** Like `mapx`, but returns stderr too (for asserting warnings). */
 export function mapxWithStderr(cwd: string, ...args: string[]): { stdout: string; stderr: string } {
-  const r = spawnSync(process.execPath, ['--import', TSX, MAIN, ...args], {
+  const r = spawnSync(process.execPath, [...cli(), ...args], {
     cwd,
     encoding: 'utf8',
     env: baseEnv(),
@@ -68,7 +90,7 @@ export function mapxResult(cwd: string, ...args: string[]): { status: number | n
 
 /** Like `mapxResult`, with extra environment variables (GITHUB_ACTIONS, say). */
 export function mapxResultEnv(cwd: string, env: Record<string, string>, ...args: string[]): { status: number | null; stdout: string; stderr: string } {
-  const r = spawnSync(process.execPath, ['--import', TSX, MAIN, ...args], {
+  const r = spawnSync(process.execPath, [...cli(), ...args], {
     cwd,
     encoding: 'utf8',
     env: { ...baseEnv(), ...env },

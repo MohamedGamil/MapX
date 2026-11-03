@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildServer } from '../src/mcp.js';
-import { cleanup, init, mapx, mapxResult, query, workspace } from './helpers/e2e.js';
+import { cleanup, init, mapx, mapxResult, query, useBuiltCli, workspace } from './helpers/e2e.js';
 
 // M0-03-R2 / M0-03-R3: the metrics / edges surface (F02, F04) in the output contract of D012:
 // spec structures with camelCase keys. Real CLI and a real MCP client on scanned workspaces.
@@ -14,6 +14,10 @@ type Report = { dir: string; generatedAt: string; summary: { files: number; edge
 type In = { sourceFile: string; sourceRepo: string | null; type: string; sourceSymbol: string | null; targetSymbol: string | null; verifiability: string; weight: number; line: number | null };
 type Out = Omit<In, 'sourceFile' | 'sourceRepo'> & { targetFile: string; targetRepo: string | null };
 type Neighbourhood = { file: string; direction: string; incoming: In[]; outgoing: Out[] };
+
+useBuiltCli(); // ~170 ms a CLI start instead of ~600 ms under tsx (M4-30)
+// M4-30, timeouts: with 16 busy loops (load 18–26, 10 runs), the slowest test on the default 30 s
+// took 3.7 s ("invalid --top / --format values"; 1.1 s quiet, 5.1 s before M4-30). The default stands.
 
 async function mcpClient(): Promise<Client> {
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
