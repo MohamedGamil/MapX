@@ -36,8 +36,11 @@ import type { Store } from './store.js';
  *   imports resolve under a tsconfig/jsconfig `baseUrl`; files record their global scope).
  * - 16: M2-12 (a method called on a new instance, `new X().m()`, `(new X())->m()`, Python `X().m()`,
  *   links the method class X declares, in JS/TS, PHP, Java, C# and Python).
+ * - 17: M2-13 (a PHP reference inside a one-line declaration comes from it, and one in no
+ *   declaration from the file, by the syntax tree; PHP names resolve in the namespace block or
+ *   statement in force where they are written).
  */
-export const EXTRACTOR_VERSION = 16;
+export const EXTRACTOR_VERSION = 17;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

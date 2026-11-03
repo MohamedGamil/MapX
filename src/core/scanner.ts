@@ -60,9 +60,10 @@ const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 's
  * The type facts a new-instance call walks (M2-12 reviews): `bases`, a class's traits (PHP, first)
  * then base class and interfaces, as its parser names them (`?` for one it cannot name); `partial`,
  * the namespace-qualified name of a C# partial class; `extensionOf`, the type a C# extension method
- * extends.
+ * extends; `namespace`, the namespace a PHP type or function is declared in (M2-13 re-review: a file
+ * can declare several).
  */
-type TypeFacts = { bases?: string[]; partial?: string; extensionOf?: string };
+type TypeFacts = { bases?: string[]; partial?: string; extensionOf?: string; namespace?: string };
 type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string; assigned?: boolean } & TypeFacts;
 /**
  * A symbol's type facts from its metadata, or undefined: PHP traits before the base class (a
@@ -74,9 +75,10 @@ function typeFacts(metadata: Record<string, unknown> | undefined): TypeFacts | u
   if (names.length) facts.bases = names;
   if (metadata?.['partial'] === true) facts.partial = `${metadata['namespace'] ?? ''}`;
   if (typeof metadata?.['extensionOf'] === 'string') facts.extensionOf = metadata['extensionOf'];
+  if (typeof metadata?.['namespace'] === 'string') facts.namespace = metadata['namespace'];
   return Object.keys(facts).length ? facts : undefined;
 }
-const TYPE_FACT_KEYS = /"(?:bases|mixins|partial|extensionOf)"/;
+const TYPE_FACT_KEYS = /"(?:bases|mixins|partial|extensionOf|namespace)"/;
 
 /**
  * Per line, the smallest symbol enclosing it (the first of equal spans): a reference's source symbol.
@@ -1755,7 +1757,8 @@ export class Scanner {
       .map(r => r.targetName.replace(/<[\s\S]*$/, '').split(/\.|::/).pop()!)));
     // The symbol a reference sits in: the narrowest enclosing one.
     const enclosingSymbol = (ref: ExtractedReference): string | null => {
-      if (ref.sourceSymbol || !symbols) return ref.sourceSymbol;
+      // A PHP reference in no declaration is the file's, whatever shares its line (M2-13 review).
+      if (ref.sourceSymbol || !symbols || ref.metadata?.fileLevel) return ref.sourceSymbol;
       innermost ??= innermostByLine(symbols);
       const bestSym = innermost[ref.startLine];
       return bestSym ? (bestSym.scope ? `${bestSym.scope}::${bestSym.name}` : bestSym.name) : null;
@@ -1878,7 +1881,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, fileLevel: _fileLevel, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -3786,7 +3789,7 @@ export class Scanner {
       const namespace = parts.join('\\').toLowerCase();
       const files = (this.symbolIndex?.get(name) ?? [])
         .filter(e => e.kind === 'function' && e.name.toLowerCase() === name
-          && this.phpNamespaces.has(e.file) && this.phpNamespaces.get(e.file)!.toLowerCase() === namespace)
+          && (e.namespace ?? this.phpNamespaces.get(e.file))?.toLowerCase() === namespace)
         .map(e => e.file)
         .sort();
       if (files.length) return [{ file: files.includes(sourcePath) ? sourcePath : closest(files, sourcePath), symbol: fqn }];
@@ -3922,7 +3925,7 @@ export class Scanner {
         const namespace = symbolName.replace(/^\\/, '').split('\\').slice(0, -1).join('\\').toLowerCase();
         const declared = [...new Set(found.compatible.filter(m => m.name.toLowerCase() === shortName.toLowerCase()
           && (TYPE_KINDS.has(m.kind ?? '') || m.kind === 'function')
-          && this.phpNamespaces.get(m.file)?.toLowerCase() === namespace).map(m => m.file as string))].sort();
+          && (m.namespace ?? this.phpNamespaces.get(m.file))?.toLowerCase() === namespace).map(m => m.file as string))].sort();
         if (!declared.length) return null;
         return declared.includes(sourcePath ?? '') ? sourcePath! : closest(declared, sourcePath ?? '');
       }

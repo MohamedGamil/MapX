@@ -61,7 +61,8 @@ const PROTOTYPE_CALLS = {
 };
 const prototypeCallEdges = (root: string) => query(root, `SELECT source_symbol, target_file, target_symbol FROM edges
   WHERE source_file = 'app/Runner.php' AND edge_type = 'call' ORDER BY target_symbol`);
-const EXPECTED_PROTOTYPE_CALLS = ['constructor', 'toString', 'valueOf'].map((name) => ({ source_symbol: 'Runner', target_file: 'app/Text.php', target_symbol: name }));
+// The one-line method is the calls' source, not its class (M2-13).
+const EXPECTED_PROTOTYPE_CALLS = ['constructor', 'toString', 'valueOf'].map((name) => ({ source_symbol: 'Runner::run', target_file: 'app/Text.php', target_symbol: name }));
 
 describe('parallel scans of PHP calls named after Object.prototype members (real CLI)', () => {
   let root: string;

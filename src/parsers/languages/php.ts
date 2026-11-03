@@ -39,6 +39,7 @@ export const LARAVEL_FACADE_MAP: Record<string, string> = {
   View:          'Illuminate\\View\\Factory',
 };
 
+const PHP_NAMESPACED_KINDS = new Set(['class', 'interface', 'trait', 'enum', 'function']);
 const PHP_TYPE_DECLARATIONS = new Set(['class_declaration', 'interface_declaration', 'trait_declaration', 'enum_declaration']);
 
 /** The class, interface, trait or enum declaration a node sits in, or null. */
@@ -112,6 +113,24 @@ export class PhpParser extends GenericWasmParser {
         }
       }
 
+      // Each declaration by its node, labelled as the scanner names a source symbol (M2-13).
+      const symbolByNodeId = new Map(declarations.map(([s, node]) => [node.id, s]));
+      /**
+       * Where a reference sits, from the syntax tree (M2-13): in a declaration on one line, that
+       * declaration (`class User { public function name() { … } … }`: the method; `class B extends A`
+       * beside `class A`: B), which the scanner's line ranges cannot tell from the others on the line,
+       * as for C++ in M5-03-R2; in no declaration (`<?php echo tplf(); ?>` beside `function tplf()`),
+       * the file, marked `fileLevel` so the line rule does not pick a declaration on its line. A
+       * multi-line declaration is left to the line rule, which picks it.
+       */
+      const sourceOf = (node: any): { sourceSymbol: string | null; metadata?: Record<string, unknown> } => {
+        for (let p = node.parent; p; p = p.parent) {
+          const s = symbolByNodeId.get(p.id);
+          if (s) return { sourceSymbol: s.startLine === s.endLine ? (s.scope ? `${s.scope}::${s.name}` : s.name) : null };
+        }
+        return { sourceSymbol: null, metadata: { fileLevel: true } };
+      };
+
       // F05: Build UseImportTable
       const useTable = new Map<string, string>();
       // `use function App\fmt [as f]`: lower-cased local name → function FQN (M0-04-R5).
@@ -184,19 +203,43 @@ export class PhpParser extends GenericWasmParser {
       ]);
 
       // PHP name resolution: `\X` is fully qualified; a first segment imported by `use` expands
-      // (aliases and partial names like Contracts\Foo); anything else is relative to the file's
-      // namespace. self/static/parent are never qualified.
-      const currentNamespace = source.match(/^\s*namespace\s+([\w\\]+)\s*[;{]/m)?.[1] ?? '';
-      const resolveToFqn = (name: string): string => {
+      // (aliases and partial names like Contracts\Foo); anything else is relative to the namespace
+      // in force where it is written. self/static/parent are never qualified.
+      /**
+       * The namespace in force at a node (M2-13 review): its enclosing `namespace X { … }` block,
+       * else the last `namespace X;` statement before it, else the global one. Several blocks or
+       * statements in one file, on one line or not, each name their own declarations.
+       */
+      let statements: Array<{ at: number; name: string }> | undefined;
+      const namespaceAt = (node: any): string => {
+        let root = node;
+        for (let p = node.parent; p; p = p.parent) {
+          if (p.type === 'namespace_definition' && p.childForFieldName('body')) return p.childForFieldName('name')?.text ?? '';
+          root = p;
+        }
+        statements ??= (root.namedChildren ?? [])
+          .filter((c: any) => c.type === 'namespace_definition' && !c.childForFieldName('body'))
+          .map((c: any) => ({ at: c.startIndex, name: c.childForFieldName('name')?.text ?? '' }));
+        let found = '';
+        for (const s of statements!) if (s.at < node.startIndex) found = s.name;
+        return found;
+      };
+      const resolveToFqn = (name: string, at: any): string => {
         if (name.startsWith('\\')) return name.substring(1);
         const [head, ...rest] = name.split('\\');
         if (useTable.has(head!)) return [useTable.get(head!)!, ...rest].join('\\');
         if (['self', 'static', 'parent'].includes(name.toLowerCase())) return name;
-        return currentNamespace ? `${currentNamespace}\\${name}` : name;
+        const namespace = namespaceAt(at);
+        return namespace ? `${namespace}\\${name}` : name;
       };
 
       // Attributes, named like classes, and PHPDoc tags (M5-10).
-      for (const [symbol, node] of declarations) Object.assign(symbol.metadata, symbolAnnotations('php', node, resolveToFqn));
+      for (const [symbol, node] of declarations) Object.assign(symbol.metadata, symbolAnnotations('php', node, (n: string) => resolveToFqn(n, node)));
+      // A type or function's own namespace (M2-13 re-review): a file of several blocks or statements
+      // declares in each, not in the file's last.
+      for (const [symbol, node] of declarations) {
+        if (PHP_NAMESPACED_KINDS.has(symbol.kind)) symbol.metadata.namespace = namespaceAt(node);
+      }
 
       // The traits a class, trait or enum uses (`use HasUuid, \App\Logs;`), resolved like class
       // names: the architecture `mixes` selector reads them (M5-09).
@@ -205,11 +248,11 @@ export class PhpParser extends GenericWasmParser {
         const body = node.childForFieldName?.('body');
         const mixins = (body?.namedChildren ?? [])
           .filter((c: any) => c.type === 'use_declaration')
-          .flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'name' || n.type === 'qualified_name').map((n: any) => resolveToFqn(n.text)));
+          .flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'name' || n.type === 'qualified_name').map((n: any) => resolveToFqn(n.text, node)));
         if (mixins.length) symbol.metadata.mixins = mixins;
         // The class it extends, fully qualified: a method called on a new instance may be inherited (M2-12 review).
         const base = node.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name');
-        if (base && symbol.kind === 'class') symbol.metadata.bases = [resolveToFqn(base.text)];
+        if (base && symbol.kind === 'class') symbol.metadata.bases = [resolveToFqn(base.text, node)];
       }
 
       // Process standard captures (extends, implements, calls, instantiations)
@@ -261,7 +304,7 @@ export class PhpParser extends GenericWasmParser {
               referenceType === 'instantiation' ||
               (referenceType === 'call' && capture.node.parent?.type === 'scoped_call_expression')
             ) {
-              resolvedTarget = resolveToFqn(cleaned);
+              resolvedTarget = resolveToFqn(cleaned, capture.node);
             }
 
             // `(new Order())->total()`: the class whose method the scanner links (M2-12).
@@ -280,19 +323,20 @@ export class PhpParser extends GenericWasmParser {
                 : owner?.childForFieldName('name')?.text;
               // `new parent()` in a class that extends nothing names no class either.
               if (created && owner && !ownerName && owner.type === 'class_declaration') continue;
-              if (created) newClass = owner ? (ownerName ? resolveToFqn(ownerName) : null) : resolveToFqn(created.text);
+              if (created) newClass = owner ? (ownerName ? resolveToFqn(ownerName, created) : null) : resolveToFqn(created.text, created);
               // `(new $cls())->m()`, `(new class { … })->m()`: a class the syntax does not name, so no
               // class to link and never a same-named method by name (review of M2-12).
               else if (object?.type === 'object_creation_expression') continue;
             }
 
+            const source = sourceOf(capture.node);
             references.push({
-              sourceSymbol: null,
+              sourceSymbol: source.sourceSymbol,
               targetName: resolvedTarget,
               referenceType,
               startLine,
               verifiability,
-              ...(newClass ? { metadata: { newClass } } : {}),
+              ...(newClass || source.metadata ? { metadata: { ...source.metadata, ...(newClass ? { newClass } : {}) } } : {}),
             });
           }
         }
@@ -302,27 +346,30 @@ export class PhpParser extends GenericWasmParser {
       // qualified; `use function` names the function; a qualified name expands its first segment
       // through `use` or the current namespace; an unqualified name tries the current namespace,
       // then the global function (M0-04-R5).
-      const functionCandidates = (raw: string): string[] => {
+      const functionCandidates = (raw: string, at: any): string[] => {
+        const namespace = namespaceAt(at);
         if (raw.startsWith('\\')) return [raw.substring(1)];
         const relative = raw.match(/^namespace\\(.+)$/i)?.[1];
-        if (relative) return [currentNamespace ? `${currentNamespace}\\${relative}` : relative];
-        if (raw.includes('\\')) return [resolveToFqn(raw)];
+        if (relative) return [namespace ? `${namespace}\\${relative}` : relative];
+        if (raw.includes('\\')) return [resolveToFqn(raw, at)];
         const imported = useFunctions.get(raw.toLowerCase());
         if (imported) return [imported];
-        return currentNamespace ? [`${currentNamespace}\\${raw}`, raw] : [raw];
+        return namespace ? [`${namespace}\\${raw}`, raw] : [raw];
       };
       for (const capture of refCaptures.get('ref.target_function_call') || []) {
         const raw = capture.node.text;
         if (!raw) continue;
-        const candidates = functionCandidates(raw);
+        const candidates = functionCandidates(raw, capture.node);
         const shortName = raw.split('\\').at(-1)!;
+        const { sourceSymbol, metadata } = sourceOf(capture.node);
         references.push({
-          sourceSymbol: null,
+          sourceSymbol,
           targetName: candidates[0]!,
           referenceType: 'call',
           startLine: capture.node.startPosition.row + 1,
           verifiability: COMMON_FRAMEWORK_METHODS.has(shortName) ? 'inferred' : 'verified',
           phpFunction: candidates,
+          ...(metadata ? { metadata } : {}),
         });
       }
 
@@ -429,7 +476,7 @@ export class PhpParser extends GenericWasmParser {
             if (SCALAR_TYPES.has(typeText.toLowerCase())) continue;
             // Framework types (Illuminate\Http\Request, …) are external; app types named Request or
             // Response are not, so filter on the resolved name, not the short one.
-            const resolved = resolveToFqn(typeText);
+            const resolved = resolveToFqn(typeText, typeNode);
             if (resolved.startsWith('Illuminate\\')) continue;
             references.push({
               sourceSymbol,
@@ -519,7 +566,7 @@ export class PhpParser extends GenericWasmParser {
         if (!argsNode) continue;
         const targetArgText = getArgText(argsNode, 0);
         if (targetArgText) {
-          const targetFqn = resolveToFqn(targetArgText);
+          const targetFqn = resolveToFqn(targetArgText, cap.node);
           const startLine = cap.node.startPosition.row + 1;
           const isClassConst = argValue(argsNode, 0)?.type === 'class_constant_access_expression';
 
@@ -565,12 +612,12 @@ export class PhpParser extends GenericWasmParser {
         const abstractVal = getArgText(argsNode, 0);
         if (abstractVal) {
           const concreteVal = getArgText(argsNode, 1);
-          const abstractFqn = resolveToFqn(abstractVal);
+          const abstractFqn = resolveToFqn(abstractVal, cap.node);
           // Only a class constant (Concrete::class) or a class-name string names a concrete class;
           // a closure or factory is not one.
           const valNode1 = argValue(argsNode, 1);
           const namesClass = !!valNode1 && classNameOf(valNode1) !== null;
-          const concreteFqn = concreteVal && namesClass ? resolveToFqn(concreteVal) : null;
+          const concreteFqn = concreteVal && namesClass ? resolveToFqn(concreteVal, cap.node) : null;
           const startLine = cap.node.startPosition.row + 1;
           const isAbstractClassConst = argValue(argsNode, 0)?.type === 'class_constant_access_expression';
 
@@ -593,7 +640,7 @@ export class PhpParser extends GenericWasmParser {
       const targetDispatchCaptures = refCaptures.get('ref.target_dispatch') || [];
       for (const cap of targetDispatchCaptures) {
         const targetRaw = cap.node.text;
-        const targetFqn = resolveToFqn(targetRaw);
+        const targetFqn = resolveToFqn(targetRaw, cap.node);
         const startLine = cap.node.startPosition.row + 1;
         const { methodName } = getEnclosingScope(cap.node);
         
@@ -625,7 +672,7 @@ export class PhpParser extends GenericWasmParser {
       const targetDispatchStaticCaptures = refCaptures.get('ref.target_dispatch_static') || [];
       for (const cap of targetDispatchStaticCaptures) {
         const targetRaw = cap.node.text;
-        const targetFqn = resolveToFqn(targetRaw);
+        const targetFqn = resolveToFqn(targetRaw, cap.node);
         const startLine = cap.node.startPosition.row + 1;
         const { methodName } = getEnclosingScope(cap.node);
 
@@ -649,7 +696,7 @@ export class PhpParser extends GenericWasmParser {
           if (!createdName) continue;
           references.push({
             sourceSymbol: methodName,
-            targetName: resolveToFqn(createdName),
+            targetName: resolveToFqn(createdName, cap.node),
             referenceType: 'dispatch',
             startLine,
             verifiability: 'verified',
@@ -697,11 +744,11 @@ export class PhpParser extends GenericWasmParser {
             if (!listener) continue;
             references.push({
               sourceSymbol: null,
-              targetName: resolveToFqn(listener),
+              targetName: resolveToFqn(listener, key),
               referenceType: 'binding',
               startLine: key.startPosition.row + 1,
               verifiability: listenerNode.type === 'class_constant_access_expression' ? 'verified' : 'inferred',
-              metadata: { bindingType: 'listen', event: resolveToFqn(event) },
+              metadata: { bindingType: 'listen', event: resolveToFqn(event, key) },
             });
           }
         }
@@ -710,7 +757,7 @@ export class PhpParser extends GenericWasmParser {
       const targetNotifyCaptures = refCaptures.get('ref.target_notify') || [];
       for (const cap of targetNotifyCaptures) {
         const targetRaw = cap.node.text;
-        const targetFqn = resolveToFqn(targetRaw);
+        const targetFqn = resolveToFqn(targetRaw, cap.node);
         const startLine = cap.node.startPosition.row + 1;
         const { methodName } = getEnclosingScope(cap.node);
 
