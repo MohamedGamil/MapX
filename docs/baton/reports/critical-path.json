@@ -1825,9 +1825,9 @@
         "duration": 2,
         "earliestStart": 0,
         "earliestFinish": 2,
-        "latestStart": 208,
-        "latestFinish": 210,
-        "slack": 208
+        "latestStart": 207.5,
+        "latestFinish": 209.5,
+        "slack": 207.5
       },
       {
         "id": "M5-19",
@@ -1942,9 +1942,9 @@
         "duration": 2,
         "earliestStart": 2,
         "earliestFinish": 4,
-        "latestStart": 210,
-        "latestFinish": 212,
-        "slack": 208
+        "latestStart": 209.5,
+        "latestFinish": 211.5,
+        "slack": 207.5
       },
       {
         "id": "M5-02-R2",
@@ -2113,18 +2113,27 @@
         "duration": 1,
         "earliestStart": 4,
         "earliestFinish": 5,
-        "latestStart": 212,
-        "latestFinish": 213,
-        "slack": 208
+        "latestStart": 211.5,
+        "latestFinish": 212.5,
+        "slack": 207.5
       },
       {
         "id": "M4-09-R3",
         "duration": 1,
         "earliestStart": 5,
         "earliestFinish": 6,
-        "latestStart": 213,
+        "latestStart": 212.5,
+        "latestFinish": 213.5,
+        "slack": 207.5
+      },
+      {
+        "id": "M4-09-R4",
+        "duration": 0.5,
+        "earliestStart": 6,
+        "earliestFinish": 6.5,
+        "latestStart": 213.5,
         "latestFinish": 214,
-        "slack": 208
+        "slack": 207.5
       },
       {
         "id": "M4-26",
@@ -2217,7 +2226,7 @@
         "slack": 9
       }
     ],
-    "totalEffort": 1317.5
+    "totalEffort": 1318
   },
   "remaining": {
     "duration": 3,
@@ -4323,6 +4332,15 @@
         "slack": 3
       },
       {
+        "id": "M4-09-R4",
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 3,
+        "latestFinish": 3,
+        "slack": 3
+      },
+      {
         "id": "M4-26",
         "duration": 0,
         "earliestStart": 0,
@@ -5815,6 +5833,12 @@
       },
       {
         "id": "M4-09-R3",
+        "worker": 0,
+        "start": 6,
+        "finish": 6
+      },
+      {
+        "id": "M4-09-R4",
         "worker": 0,
         "start": 6,
         "finish": 6

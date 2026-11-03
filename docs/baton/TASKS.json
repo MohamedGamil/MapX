@@ -26669,6 +26669,102 @@
       "milestone": "M4",
       "priority": "P2",
       "estimate": {
+        "min": 0.25,
+        "expected": 0.5,
+        "max": 1
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-09-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-09-R2.md",
+        "docs/baton/reports/M5-24.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude-ff",
+      "actualHours": null,
+      "startedAt": "2026-11-03T12:49:49.909Z",
+      "completedAt": "2026-11-03T12:51:22.538Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M4-09-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/store-coverage.test.ts tests/fixtures-tracked.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09-R4.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-03T12:49:49.473Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T12:49:49.909Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T12:51:22.024Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T12:51:22.538Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/store-coverage.test.ts tests/fixtures-tracked.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09-R4.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-09-R4",
+      "title": "store-coverage tests keep their databases out of tests/",
+      "objective": "tests/store-coverage.test.ts writes its SQLite databases (and -wal/-shm files) under os.tmpdir(), never under tests/, so tests/fixtures-tracked.test.ts cannot see them when the two run concurrently.",
+      "description": "Found 2026-11-03 verifying M5-24: `npm run check` failed once on fixtures-tracked (`tests/store-coverage-temp.db`, `-wal` listed as ignored files under tests/). store-coverage (since f91f005) writes store-coverage-temp.db and store-bun-temp.db next to the test file, and its cleanup leaves -wal/-shm files.",
+      "outputs": [
+        "tests/store-coverage.test.ts",
+        "reports/M4-09-R4.md"
+      ],
+      "affectedFiles": [
+        "tests/store-coverage.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "tests/store-coverage.test.ts creates no file under tests/ (asserted in the file: no store-*-temp.db* entry in its own folder after its tests) and removes its temp folder, -wal/-shm included.",
+        "`npx vitest run tests/store-coverage.test.ts tests/fixtures-tracked.test.ts` passes, and a mutation putting the database back next to the test file fails the new assertion."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/store-coverage.test.ts tests/fixtures-tracked.test.ts"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
         "min": 1,
         "expected": 2,
         "max": 3
