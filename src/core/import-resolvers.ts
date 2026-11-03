@@ -3,6 +3,7 @@
 // it refers to, or null for standard-library and third-party imports. `resolveImports` turns that
 // into edge hits: a file plus the module/namespace the edge names (M0-12-R4).
 import { posix } from 'node:path';
+import { parseGoMod } from './manifests/go.js';
 
 export interface ImportContext {
   /** Every indexed workspace-relative path. */
@@ -186,12 +187,18 @@ export function resolveRustImport(target: string, sourcePath: string, ctx: Impor
 // The module path may be quoted: `module "example.com/m"` (or a raw string in backquotes).
 const goModulePath = (gomod: string | null | undefined) => gomod?.match(/^module\s+["`]?([^\s"`]+)/m)?.[1];
 
-/** `replace M [v] => ./dir` directives of a go.mod or go.work naming a local directory: [module, dir] (M5-25-R1). */
+/**
+ * `replace M [v] => ./dir` directives of a go.mod or go.work naming a local directory: [module, dir]
+ * (M5-25-R1). In a go.mod, a directive that names a version applies only when go.mod requires
+ * that version of M (review of M5-23).
+ */
 function goLocalReplaces(text: string, dir: string): [string, string][] {
+  let requires: ReturnType<typeof parseGoMod>['requires'] | null = null;
+  try { requires = parseGoMod(text).requires; } catch { /* a go.work: no requirements */ }
   const out: [string, string][] = [];
   for (const line of text.replace(/\/\/.*$/gm, '').split('\n')) {
-    const m = line.match(/^\s*(?:replace\s+)?([^\s()]+)(?:\s+v\S+)?\s*=>\s*(\.\.?(?:\/\S*)?)\s*$/);
-    if (m) out.push([m[1]!, join(dir, m[2]!)]);
+    const m = line.match(/^\s*(?:replace\s+)?([^\s()]+)(?:\s+(v\S+))?\s*=>\s*(\.\.?(?:\/\S*)?)\s*$/);
+    if (m && !(m[2] && requires && requires.get(m[1]!)?.version !== m[2])) out.push([m[1]!, join(dir, m[3]!)]);
   }
   return out;
 }
@@ -273,13 +280,15 @@ export function goImportInWorkspaceModule(target: string, sourcePath: string, ct
  * True when a Go import that resolves to no project package is known to be outside the project: a
  * standard-library path (no dot in its first element, `C` included), or any path once a go.mod or
  * go.work at or above the importer's folder is in the workspace. Otherwise (no go.mod, or the
- * workspace root below it) the import may name the project's own package (M5-25-R1).
+ * workspace root below it) the import may name the project's own package (M5-25-R1). `exists`
+ * counts a go.mod or go.work that is there but cannot be read (review of M5-23).
  */
-export function goImportOutsideProject(target: string, sourcePath: string, readText: (path: string) => string | null): boolean {
+export function goImportOutsideProject(target: string, sourcePath: string, readText: (path: string) => string | null, exists?: (path: string) => boolean): boolean {
   const path = target.replace(/^"|"$/g, '');
   if (!path.split('/')[0]!.includes('.')) return true;
+  const present = (p: string) => readText(p) !== null || !!exists?.(p);
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
-    if (readText(join(dir, 'go.mod')) !== null || readText(join(dir, 'go.work')) !== null) return true;
+    if (present(join(dir, 'go.mod')) || present(join(dir, 'go.work'))) return true;
     if (!dir) return false;
   }
 }

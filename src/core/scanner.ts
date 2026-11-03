@@ -44,9 +44,10 @@ import { NpmAttributor, repoParentDirs, yarnRootDirs } from './manifests/npm.js'
 import { EXTERNAL_INPUTS_KEY, changedInputFiles, contentHash, parseExternalInputs } from './manifests/inputs.js';
 import { ComposerAttributor, type PhpName } from './manifests/composer.js';
 import { PypiAttributor } from './manifests/pypi.js';
+import { GoAttributor, goTestOnlyModules } from './manifests/go.js';
 
-/** The ecosystems whose external rows the decision pass attributes (M5-20 npm, M5-21 Composer, M5-22 pypi). */
-const ATTRIBUTED_ECOSYSTEMS = new Set(['npm', 'composer', 'pypi']);
+/** The ecosystems whose external rows the decision pass attributes (M5-20 npm, M5-21 Composer, M5-22 pypi, M5-23 Go). */
+const ATTRIBUTED_ECOSYSTEMS = new Set(['npm', 'composer', 'pypi', 'go']);
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
@@ -2362,7 +2363,8 @@ export class Scanner {
       external = this.pythonModuleCandidate(specifier, sourcePath, fileMap) && pythonImportOutsideProject(specifier, sourcePath, ctx);
     } else if (ecosystem === 'go') {
       const resolver = importResolverFor('go');
-      external = goImportOutsideProject(specifier, sourcePath, (p) => this.readWorkspaceText(p))
+      // A go.mod there but unreadable still puts dotted paths outside (review of M5-23).
+      external = goImportOutsideProject(specifier, sourcePath, (p) => this.readWorkspaceText(p), (p) => existsSync(resolve(this.config.getWorkspaceRoot(), p)))
         && !goImportInWorkspaceModule(specifier, sourcePath, ctx)
         && !(resolver && this.resolveModuleImport(resolver, specifier, sourcePath, fileMap, () => new Set()).length);
     } else {
@@ -2426,7 +2428,17 @@ export class Scanner {
     // pip, Poetry, uv (M5-22): pyproject.toml, requirements files, uv.lock and poetry.lock, the same way.
     const pypi = new PypiAttributor(workspace);
     const attributions = new Map<string, ExternalAttribution>();
+    // ── Go modules (M5-23): go.mod, go.sum and go.work as they stand; `dev` is set below, from the code.
+    const go = new GoAttributor(workspace);
+    const goRows: Array<{ r: (typeof rows)[number]; d: ExternalDecision | null }> = [];
+    // ── end Go modules
     const attribute = (ecosystem: string, specifier: string, sourcePath: string, php: PhpName, symbol: string | null): ExternalAttribution => {
+      if (ecosystem === 'go') {
+        const key = ['go', dirname(sourcePath), specifier].join('\0');
+        let a = attributions.get(key);
+        if (!a) attributions.set(key, (a = go.attribute(specifier, sourcePath)));
+        return a;
+      }
       if (ecosystem !== 'npm' && ecosystem !== 'composer' && ecosystem !== 'pypi') return NO_ATTRIBUTION;
       // A Python name may be a submodule (`from google.cloud import storage`): its first part is asked too.
       const sub = ecosystem === 'pypi' ? symbol?.split('.')[0] ?? '' : '';
@@ -2455,15 +2467,37 @@ export class Scanner {
         } catch { /* none */ }
       }
       const external = this.decideExternal(r.ecosystem as Ecosystem, r.specifier, r.file_path, this.workspaceFileMap, phpCandidates);
-      if (unchanged && external && r.external === 1 && (!ATTRIBUTED_ECOSYSTEMS.has(r.ecosystem) || r.origin !== null)) continue;
+      if (unchanged && external && r.external === 1 && (!ATTRIBUTED_ECOSYSTEMS.has(r.ecosystem) || r.origin !== null)) {
+        if (r.ecosystem === 'go') goRows.push({ r, d: null });
+        continue;
+      }
       const a = external ? attribute(r.ecosystem, r.specifier, r.file_path, { kind: phpCandidates ? 'function' : phpConst ? 'const' : 'class', facadeTarget }, r.symbol) : NO_ATTRIBUTION;
       const d: ExternalDecision = { id: r.id, external: external ? 1 : 0, package: a.package, origin: a.origin, direct: flag(a.direct), dev: flag(a.dev), attribution: a.attribution };
+      if (r.ecosystem === 'go' && external) {
+        goRows.push({ r, d });
+        continue;
+      }
       if (d.external !== r.external || d.package !== r.package || d.origin !== r.origin || d.direct !== r.direct || d.dev !== r.dev || d.attribution !== r.attribution) changed.push(d);
     }
+    // ── Go modules (M5-23): a module only `_test.go` files of a Go module use is dev-only there. Every
+    // Go row counts, stored or attributed now, so a file added or removed changes it with no input changed.
+    const goScope = (path: string) => `${repoRootOf(path)}\0${go.moduleDirOf(path) ?? ''}`;
+    const goModuleRows = goRows.flatMap(({ r, d }) => {
+      const pkg = d ? d.package : r.package;
+      return (d ? d.origin : r.origin) === 'package' && pkg ? [{ file: r.file_path, scope: goScope(r.file_path), module: pkg }] : [];
+    });
+    const testOnly = goTestOnlyModules(goModuleRows);
+    for (const { r, d: attributed } of goRows) {
+      const d: ExternalDecision = attributed ?? { id: r.id, external: 1, package: r.package, origin: r.origin as ExternalDecision['origin'], direct: r.direct, dev: r.dev, attribution: r.attribution as ExternalDecision['attribution'] };
+      // A module go.mod does not list (dev null) stays unknown.
+      if (d.origin === 'package' && d.package && d.dev !== null) d.dev = testOnly.has(`${goScope(r.file_path)}\0${d.package}`) ? 1 : 0;
+      if (d.external !== r.external || d.package !== r.package || d.origin !== r.origin || d.direct !== r.direct || d.dev !== r.dev || d.attribution !== r.attribution) changed.push(d);
+    }
+    // ── end Go modules
     if (changed.length) this.store.setExternalDecisions(changed);
     // What this pass read, added to what the last one read when that still stands.
     const files: Record<string, string | null> = unchanged ? { ...recorded!.files } : {};
-    for (const [path, text] of [...npm.reads, ...composer.reads, ...pypi.reads]) files[path] = contentHash(text);
+    for (const [path, text] of [...npm.reads, ...composer.reads, ...pypi.reads, ...go.reads]) files[path] = contentHash(text);
     const yarnRoots = unchanged ? [...recorded!.yarnRoots] : [];
     for (const y of npm.yarnRoots) if (!yarnRoots.some((o) => o.repo === y.repo && o.lock === y.lock)) yarnRoots.push(y);
     this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at, files, yarnRoots }));
@@ -2959,7 +2993,10 @@ export class Scanner {
   private readWorkspaceText(path: string): string | null {
     if (!this.importTextCache.has(path)) {
       const abs = resolve(this.config.getWorkspaceRoot(), path);
-      this.importTextCache.set(path, existsSync(abs) ? readFileSync(abs, 'utf-8') : null);
+      // A file that cannot be read (a folder, no permission) is absent, never a crash (M5-23: go.mod).
+      let text: string | null = null;
+      try { text = existsSync(abs) ? readFileSync(abs, 'utf-8') : null; } catch { /* unreadable */ }
+      this.importTextCache.set(path, text);
     }
     return this.importTextCache.get(path)!;
   }

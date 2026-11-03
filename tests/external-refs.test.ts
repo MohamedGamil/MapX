@@ -18,6 +18,8 @@ import { EXTERNAL_INPUTS_KEY, changedInputFiles, matchGlob, parseExternalInputs 
 import { IMPORT_DISTRIBUTIONS, normalizeDist, parsePoetryLock, parseRequirement, parseRequirementsTxt, parseUvLock, pyprojectRoots, pythonBuiltin, PYTHON_STDLIB, requirementsFileIsDev } from '../src/core/manifests/pypi.js';
 import { PYTHON_STDLIB_SOURCE } from '../src/core/manifests/python-stdlib.js';
 import { parseToml } from '../src/core/manifests/toml.js';
+import { GoAttributor, goBuiltin, goIndirectComment, goModuleOf, goReplacement, goTestOnlyModules, parseGoMod, parseGoSum, parseGoWork } from '../src/core/manifests/go.js';
+import { GO_STDLIB, GO_STDLIB_SOURCE } from '../src/core/manifests/go-stdlib.js';
 import { cleanup, init, mapx, mapxResult, query } from './helpers/e2e';
 
 // M5-19: references to modules, packages, classes and functions outside the workspace are kept apart
@@ -133,10 +135,10 @@ describe('a scan of the arch-rules fixture', () => {
     expect(scanApp(app).map(key).sort()).toEqual(labels.rows.filter((l) => l.app === app).map(key).sort());
   }, 120000);
 
-  // M5-20 (npm), M5-21 (Composer), M5-22 (pypi): every row carries the labelled package, origin, direct, dev and attribution.
-  it.each(labels.apps)('attributes every npm, Composer and pypi row of %s as labelled: package or built-in, direct or transitive, dev or production', (app) => {
+  // M5-20 (npm), M5-21 (Composer), M5-22 (pypi), M5-23 (Go): every row carries the labelled package, origin, direct, dev and attribution.
+  it.each(labels.apps)('attributes every npm, Composer, pypi and Go row of %s as labelled: package or built-in, direct or transitive, dev or production', (app) => {
     const attributed = (r: Omit<Label, 'app'>) => `${key(r)} | ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`;
-    const ecosystems = new Set(['npm', 'composer', 'pypi']);
+    const ecosystems = new Set(['npm', 'composer', 'pypi', 'go']);
     expect(scanApp(app).filter((r) => ecosystems.has(r.ecosystem)).map(attributed).sort())
       .toEqual(labels.rows.filter((l) => l.app === app && ecosystems.has(l.ecosystem)).map(attributed).sort());
   }, 120000);
@@ -2228,6 +2230,473 @@ describe('pypi attribution through the CLI', () => {
       expect(status).toContain('requirements');
       mapx(root, 'sync');
       expect(rows()).toContain('urllib3 → urllib3 1 1 lock');
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+    } finally {
+      cleanup(root);
+    }
+  }, 180000);
+});
+
+// ─── Go modules (M5-23) ─────────────────────────────────────────────────────────────────────
+// go.mod and go.sum attribution: the module of the build list whose path is the longest prefix of
+// the import, direct unless `// indirect`, dev when only `_test.go` files use it, and the standard
+// library as built-ins (docs/baton/iterations/M5-23.md).
+
+describe('Go standard library and go.mod, go.sum, go.work', () => {
+  it('lists the importable standard library of Go 1.22 to 1.27: builtin; cgo\'s C is ambient; modules and internal packages are not', () => {
+    expect(GO_STDLIB_SOURCE).toMatch(/^go1\.22\.\d+, go1\.23\.\d+, go1\.24\.\d+, go1\.25\.\d+, go1\.26\.\d+, go1\.27\.\d+$/);
+    expect(['fmt', 'net/http', 'testing', 'unsafe', 'log/slog', 'iter', 'encoding/json/v2'].map(goBuiltin)).toEqual(Array(7).fill('builtin'));
+    expect(goBuiltin('C')).toBe('ambient');
+    // Packages that build only for one target or with cgo (review of M5-23): syscall/js (js/wasm), runtime/cgo.
+    expect(['syscall/js', 'runtime/cgo'].map(goBuiltin)).toEqual(['builtin', 'builtin']);
+    expect(['github.com/google/uuid', 'internal/abi', 'net/http/internal', 'vendor/golang.org/x/net/idna', 'cmd/go', 'mylib', 'fmt/x'].map(goBuiltin)).toEqual(Array(7).fill(null));
+    // Every entry is a dotless path, without vendored or internal packages.
+    expect(GO_STDLIB.filter((p) => p.split('/')[0]!.includes('.') || p.startsWith('vendor/') || /(^|\/)internal(\/|$)/.test(p))).toEqual([]);
+    expect([...GO_STDLIB].sort()).toEqual(GO_STDLIB);
+  });
+
+  // The list is static; when a Go toolchain runs here, its importable standard library must all be in it.
+  const go = (() => { try { execFileSync('go', ['version'], { stdio: 'pipe' }); return true; } catch { return false; } })();
+  it.skipIf(!go)('lists every importable package of the running Go\'s standard library', () => {
+    const std = execFileSync('go', ['list', 'std'], { encoding: 'utf8' }).split('\n')
+      .filter((p) => p && !p.startsWith('vendor/') && !/(^|\/)internal(\/|$)/.test(p));
+    expect(std.filter((p) => goBuiltin(p) !== 'builtin')).toEqual([]);
+  });
+
+  it('go.mod: require blocks and lines with // indirect, replace (module or local), tool; exclude and retract change nothing', () => {
+    const mod = parseGoMod([
+      'module "example.com/app"', '', 'go 1.24', 'toolchain go1.24.1', '',
+      'require github.com/google/uuid v1.6.0', 'require (',
+      '\tgithub.com/go-chi/chi/v5 v5.0.12 // a comment', '\tgolang.org/x/sys v0.20.0 // indirect', '\t"gopkg.in/yaml.v3" v3.0.1 //indirect; used by testify', ')',
+      'exclude github.com/google/uuid v1.5.0', 'retract v0.1.0',
+      'replace github.com/a/b v1.0.0 => github.com/me/b v1.0.1', 'replace (', '\texample.com/lib => ../lib', ')',
+      'tool golang.org/x/tools/cmd/stringer', '',
+    ].join('\n'));
+    expect(mod.module).toBe('example.com/app');
+    expect(mod.go).toBe('1.24');
+    expect([...mod.requires].map(([m, r]) => `${m} ${r.version} ${r.indirect}`)).toEqual([
+      'github.com/google/uuid v1.6.0 false', 'github.com/go-chi/chi/v5 v5.0.12 false', 'golang.org/x/sys v0.20.0 true', 'gopkg.in/yaml.v3 v3.0.1 true',
+    ]);
+    expect(mod.replaces).toEqual([
+      { module: 'github.com/a/b', version: 'v1.0.0', path: 'github.com/me/b', local: false },
+      { module: 'example.com/lib', version: null, path: '../lib', local: true },
+    ]);
+    expect(mod.tools).toEqual(['golang.org/x/tools/cmd/stringer']);
+    expect(parseGoMod('module m\n').go).toBeNull();
+    expect(() => parseGoMod('go 1.22\nrequire x v1\n')).toThrow();
+  });
+
+  // Review of M5-23 (X5): Go's own rule, modfile.isIndirect.
+  it('// indirect: the comment is exactly `indirect`, or starts with `indirect;`', () => {
+    expect(['// indirect', '//indirect', '//  indirect  ', '// indirect; used by testify'].map(goIndirectComment)).toEqual([true, true, true, true]);
+    expect(['// not indirect', '// indirect dependency', '// indirect;', '// direct', '// indirectly', ''].map(goIndirectComment)).toEqual([false, false, false, false, false, false]);
+    const mod = parseGoMod('module m\n\nrequire (\n\ta v1.0.0 // not indirect\n\tb v1.0.0 // indirect dependency\n\tc v1.0.0 // indirect\n)\n');
+    expect([...mod.requires].map(([m, r]) => `${m} ${r.indirect}`)).toEqual(['a false', 'b false', 'c true']);
+  });
+
+  // Review of M5-23 (P2): a versioned replace applies to that version only.
+  it('replace: the directive of the required version, else the one of all versions', () => {
+    const replaces = parseGoMod([
+      'module m', 'replace example.com/y v0.9.0 => ../outside/y', 'replace example.com/y v1.0.0 => example.com/fork/y v1.0.1',
+      'replace example.com/z => example.com/fork/z v2.0.0', 'replace example.com/z v1.2.0 => example.com/pin/z v1.2.1',
+    ].join('\n')).replaces;
+    expect(goReplacement(replaces, 'example.com/y', 'v1.0.0')?.path).toBe('example.com/fork/y');
+    expect(goReplacement(replaces, 'example.com/y', 'v0.9.0')?.path).toBe('../outside/y');
+    expect(goReplacement(replaces, 'example.com/y', 'v1.1.0')).toBeNull();
+    expect(goReplacement(replaces, 'example.com/z', 'v1.2.0')?.path).toBe('example.com/pin/z');
+    expect(goReplacement(replaces, 'example.com/z', 'v1.3.0')?.path).toBe('example.com/fork/z');
+    expect(goReplacement(replaces, 'example.com/w', 'v1.0.0')).toBeNull();
+  });
+
+  it('go.sum: the modules it holds hashes for, of content or go.mod only; throws on text that is no go.sum', () => {
+    expect([...parseGoSum('github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=\ngithub.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=\n\n')])
+      .toEqual(['github.com/google/uuid', 'github.com/stretchr/objx']);
+    expect(parseGoSum('').size).toBe(0);
+    expect(() => parseGoSum('module example.com/app\n')).toThrow();
+    expect(() => parseGoSum('{"packages": []}')).toThrow();
+  });
+
+  it('go.work: use directories (block or line) and replace directives', () => {
+    expect(parseGoWork('go 1.22\n\nuse (\n\t./app\n\t"./lib" // the library\n)\nuse ./tools\nreplace example.com/x => example.com/y v1.0.0\n'))
+      .toEqual({ uses: ['./app', './lib', './tools'], replaces: [{ module: 'example.com/x', version: null, path: 'example.com/y', local: false }] });
+  });
+
+  it('the module of an import: the longest module path prefix, at a / boundary; /vN names another module', () => {
+    const modules = ['cloud.google.com/go', 'cloud.google.com/go/storage', 'github.com/a/b', 'github.com/go-chi/chi', 'github.com/go-chi/chi/v5', 'gopkg.in/yaml.v3'];
+    expect(goModuleOf('cloud.google.com/go/storage', modules)).toBe('cloud.google.com/go/storage');
+    expect(goModuleOf('cloud.google.com/go/storage/internal/x', modules)).toBe('cloud.google.com/go/storage');
+    expect(goModuleOf('cloud.google.com/go/pubsub', modules)).toBe('cloud.google.com/go');
+    expect(goModuleOf('github.com/a/bc', modules)).toBeNull();
+    expect(goModuleOf('github.com/a/b/c', modules)).toBe('github.com/a/b');
+    expect(goModuleOf('github.com/go-chi/chi/v5/middleware', modules)).toBe('github.com/go-chi/chi/v5');
+    expect(goModuleOf('github.com/go-chi/chi/middleware', modules)).toBe('github.com/go-chi/chi');
+    // A major version the build list lacks is not a folder of v1.
+    expect(goModuleOf('github.com/go-chi/chi/v4', modules)).toBeNull();
+    expect(goModuleOf('github.com/a/b/v2/x', modules)).toBeNull();
+    expect(goModuleOf('github.com/a/b/v1/x', modules)).toBe('github.com/a/b');
+    expect(goModuleOf('gopkg.in/yaml.v3', modules)).toBe('gopkg.in/yaml.v3');
+    expect(goModuleOf('gopkg.in/yaml.v2', modules)).toBeNull();
+  });
+
+  it('dev-only: a module only _test.go files of a Go module use, per go.mod scope', () => {
+    expect([...goTestOnlyModules([
+      { file: 'a/x_test.go', scope: '', module: 'testify' },
+      { file: 'a/y_test.go', scope: '', module: 'testify' },
+      { file: 'a/x_test.go', scope: '', module: 'uuid' },
+      { file: 'a/x.go', scope: '', module: 'uuid' },
+      { file: 'svc/x.go', scope: 'svc', module: 'testify' },
+      { file: 'svc/x_test.go', scope: 'svc', module: 'uuid' },
+    ])].sort()).toEqual(['\0testify', 'svc\0uuid']);
+  });
+
+  it('reads go.mod, go.sum and go.work only between the file and its repo\'s root', () => {
+    const files: Record<string, string> = {
+      'go.mod': 'module example.com/outer\n\nrequire github.com/outer/x v1.0.0\n',
+      'R/go.mod': 'module example.com/r\n\nrequire github.com/google/uuid v1.6.0\n',
+    };
+    const a = new GoAttributor({ readText: (p) => files[p] ?? null, repoRootOf: (p) => (p.startsWith('R/') ? 'R' : '') });
+    expect(a.attribute('github.com/outer/x', 'R/cmd/main.go')).toEqual({ package: null, origin: 'package', direct: null, dev: null, attribution: 'manifest' });
+    expect(a.attribute('github.com/google/uuid', 'R/cmd/main.go')).toEqual({ package: 'github.com/google/uuid', origin: 'package', direct: true, dev: false, attribution: 'manifest' });
+    expect([...a.reads.keys()].sort()).toEqual(['R/cmd/go.mod', 'R/go.mod', 'R/go.sum', 'R/go.work']);
+  });
+});
+
+const goAttribution = (store: Store, kind = 'import') => store.getExternalRefs().filter((r) => r.ecosystem === 'go' && r.kind === kind)
+  .map((r) => `${r.file_path}:${r.line} ${r.specifier} → ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`).sort();
+
+// Real module paths; go.sum hashes are placeholders in go.sum's format.
+const GO_MOD = [
+  'module example.com/app', '', 'go 1.22', '',
+  'require (', '\tgithub.com/go-chi/chi/v5 v5.0.12', '\tgithub.com/google/uuid v1.6.0', '\tgithub.com/stretchr/testify v1.9.0', ')', '',
+  'require golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect', 'require gopkg.in/yaml.v3 v3.0.1 // indirect', '',
+].join('\n');
+const sumLines = (...modules: string[]) => modules.map((m) => `${m} h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n${m}/go.mod h1:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=\n`).join('');
+const GO_SUM = sumLines('github.com/go-chi/chi v1.5.5', 'github.com/go-chi/chi/v5 v5.0.12', 'github.com/google/uuid v1.6.0', 'github.com/stretchr/testify v1.9.0',
+  'golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8', 'gopkg.in/yaml.v3 v3.0.1');
+const GO_MAIN = [
+  'package main', '', 'import (', '\t"fmt"', '',
+  '\t"github.com/go-chi/chi/v5"', '\t"github.com/google/uuid"', '\t"github.com/pkg/errors"', '\t"golang.org/x/sys/unix"', ')', '',
+  'func main() {', '\tfmt.Println(uuid.New(), unix.Getpid(), errors.New("x"))', '\tchi.NewRouter()', '}', '',
+].join('\n');
+const GO_TEST = 'package main\n\nimport (\n\t"testing"\n\n\t"github.com/stretchr/testify/require"\n\t"gopkg.in/yaml.v3"\n)\n\nfunc TestMain(t *testing.T) { require.NotNil(t, yaml.Node{}) }\n';
+const GO_FILES: Record<string, string> = { 'go.mod': GO_MOD, 'go.sum': GO_SUM, 'cmd/main.go': GO_MAIN, 'cmd/main_test.go': GO_TEST };
+/** The import rows of GO_MAIN and GO_TEST under `dir`, attributed with or without a readable go.sum. */
+const goAttributed = (dir: string, by: 'lock' | 'manifest') => {
+  const lock = by === 'lock';
+  return [
+    `${dir}/main.go:4 fmt → fmt builtin null null null`,
+    `${dir}/main.go:6 github.com/go-chi/chi/v5 → github.com/go-chi/chi/v5 package 1 0 ${by}`,
+    `${dir}/main.go:7 github.com/google/uuid → github.com/google/uuid package 1 0 ${by}`,
+    `${dir}/main.go:8 github.com/pkg/errors → null package ${lock ? '0' : 'null'} null ${by}`,
+    `${dir}/main.go:9 golang.org/x/sys/unix → golang.org/x/sys package 0 0 ${by}`,
+    `${dir}/main_test.go:4 testing → testing builtin null null null`,
+    `${dir}/main_test.go:6 github.com/stretchr/testify/require → github.com/stretchr/testify package 1 1 ${by}`,
+    `${dir}/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 ${by}`,
+  ];
+};
+/** Files without the entries set to null (a null entry removes a file another entry would add). */
+const present = (files: Record<string, string | null>) =>
+  Object.fromEntries(Object.entries(files).filter(([, v]) => v !== null)) as Record<string, string>;
+
+describe('Go modules attribution of a scan', () => {
+  const p = project(false);
+  afterEach(() => p.remove());
+  const scan = async (files: Record<string, string>, kind?: string) => {
+    p.create(files);
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    return goAttribution(store, kind);
+  };
+
+  it('go.mod and go.sum: direct, // indirect, test-only, a major version, not in the build list, built-in', async () => {
+    expect(await scan(GO_FILES)).toEqual(goAttributed('cmd', 'lock'));
+  }, 120000);
+
+  it('calls and literals are attributed as their import', async () => {
+    expect(await scan(GO_FILES, 'call')).toEqual([
+      'cmd/main.go:13 fmt → fmt builtin null null null',
+      'cmd/main.go:13 github.com/google/uuid → github.com/google/uuid package 1 0 lock',
+      'cmd/main.go:13 github.com/pkg/errors → null package 0 null lock',
+      'cmd/main.go:13 golang.org/x/sys/unix → golang.org/x/sys package 0 0 lock',
+      'cmd/main.go:14 github.com/go-chi/chi/v5 → github.com/go-chi/chi/v5 package 1 0 lock',
+      'cmd/main_test.go:10 github.com/stretchr/testify/require → github.com/stretchr/testify package 1 1 lock',
+    ]);
+  }, 120000);
+
+  it('no go.sum: direct and // indirect from go.mod only, flagged manifest', async () => {
+    expect(await scan(present({ ...GO_FILES, 'go.sum': null }))).toEqual(goAttributed('cmd', 'manifest'));
+  }, 120000);
+
+  it.each([
+    ['a corrupt go.sum', { 'go.sum': '{"packages": [' }],
+    ['a go.sum that is a go.mod', { 'go.sum': GO_MOD }],
+    ['a go.sum that is a folder', { 'go.sum': null, 'go.sum/x.txt': 'x' }],
+  ])('%s: direct from go.mod only, flagged manifest, no crash', async (_name, extra) => {
+    expect(await scan(present({ ...GO_FILES, ...extra }))).toEqual(goAttributed('cmd', 'manifest'));
+  }, 120000);
+
+  it.each([
+    ['go.sum is a folder', { 'svc/go.sum/x.txt': 'x' }, null, 'manifest'],
+    ['go.sum cannot be read', { 'svc/go.sum': GO_SUM }, 'go.sum', 'manifest'],
+    ['go.mod is a folder', { 'svc/go.mod': null, 'svc/go.mod/x.txt': 'x', 'svc/go.sum': GO_SUM }, null, 'unknown'],
+    ['go.mod cannot be read', { 'svc/go.sum': GO_SUM }, 'go.mod', 'unknown'],
+  ] as const)('a nested module whose %s: never the parent module\'s go.mod or go.sum', async (_name, extra, chmod, expected) => {
+    // Root can read a file without permission: the case holds only for another user.
+    if (chmod && process.getuid?.() === 0) return;
+    p.create(present({
+      'go.mod': GO_MOD, 'go.sum': GO_SUM, 'svc/go.mod': GO_MOD.replace('example.com/app', 'example.com/svc'),
+      'svc/cmd/main.go': GO_MAIN, 'svc/cmd/main_test.go': GO_TEST, ...extra,
+    }));
+    if (chmod) chmodSync(join(p.root, 'svc', chmod), 0o000);
+    try {
+      const store = new Store(':memory:');
+      await (await p.scanner(store)).scanFull();
+      const rows = goAttribution(store);
+      if (expected === 'manifest') expect(rows).toEqual(goAttributed('svc/cmd', 'manifest'));
+      // No readable go.mod: no build list, every module unknown; built-ins stand.
+      else expect(rows).toEqual(goAttributed('svc/cmd', 'manifest').map((r) => (r.includes('builtin') ? r : r.replace(/→ .*$/, '→ null package null null manifest'))));
+    } finally {
+      if (chmod) chmodSync(join(p.root, 'svc', chmod), 0o644);
+    }
+  }, 120000);
+
+  it('a stale go.sum that lacks a module go.mod requires: that module from go.mod, flagged manifest', async () => {
+    expect(await scan({ ...GO_FILES, 'go.sum': GO_SUM.split('\n').filter((l) => !l.startsWith('github.com/google/uuid')).join('\n') })).toEqual([
+      'cmd/main.go:4 fmt → fmt builtin null null null',
+      'cmd/main.go:6 github.com/go-chi/chi/v5 → github.com/go-chi/chi/v5 package 1 0 lock',
+      'cmd/main.go:7 github.com/google/uuid → github.com/google/uuid package 1 0 manifest',
+      // The build list is incomplete: not "not in the build list".
+      'cmd/main.go:8 github.com/pkg/errors → null package null null manifest',
+      'cmd/main.go:9 golang.org/x/sys/unix → golang.org/x/sys package 0 0 lock',
+      'cmd/main_test.go:4 testing → testing builtin null null null',
+      'cmd/main_test.go:6 github.com/stretchr/testify/require → github.com/stretchr/testify package 1 1 lock',
+      'cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 lock',
+    ]);
+  }, 120000);
+
+  it('replace: the required path is the package; go.sum holds the replacement; a local replacement needs no hash', async () => {
+    expect(await scan({
+      'go.mod': 'module example.com/app\n\ngo 1.22\n\nrequire (\n\tgithub.com/google/uuid v1.6.0\n\texample.com/lib v0.0.0\n)\n\nreplace github.com/google/uuid => github.com/acme/uuid v1.6.1\nreplace example.com/lib => ./lib\n',
+      'go.sum': sumLines('github.com/acme/uuid v1.6.1'),
+      'lib/lib.go': 'package lib\n\nfunc Lib() {}\n',
+      'cmd/main.go': 'package main\n\nimport (\n\t"example.com/lib"\n\t"github.com/acme/uuid"\n\t"github.com/google/uuid"\n\t"github.com/pkg/errors"\n)\n\nfunc main() { lib.Lib(); uuid.New(); errors.New("x") }\n',
+    })).toEqual([
+      // A replacement is no import path of the build list.
+      'cmd/main.go:5 github.com/acme/uuid → null package 0 null lock',
+      'cmd/main.go:6 github.com/google/uuid → github.com/google/uuid package 1 0 lock',
+      // example.com/lib, replaced by ./lib, is the workspace's (no row); go.sum is complete.
+      'cmd/main.go:7 github.com/pkg/errors → null package 0 null lock',
+    ]);
+  }, 120000);
+
+  it('a dotless module path a go.mod requires is that module; another dotless path no standard package has is unknown', async () => {
+    expect(await scan({
+      // A local replacement would make mylib the workspace's (M5-25-R1): replaced by a module here.
+      'go.mod': 'module example.com/app\n\ngo 1.22\n\nrequire mylib v0.0.0\n\nreplace mylib => github.com/acme/mylib v1.0.0\n',
+      'go.sum': sumLines('github.com/acme/mylib v1.0.0'),
+      'cmd/main.go': 'package main\n\nimport (\n\t"mylib/x"\n\t"otherlib"\n\t"strings"\n)\n\nfunc main() { x.X(); otherlib.Y(); strings.ToUpper("") }\n',
+    })).toEqual([
+      'cmd/main.go:4 mylib/x → mylib package 1 0 lock',
+      'cmd/main.go:5 otherlib → null package null null lock',
+      'cmd/main.go:6 strings → strings builtin null null null',
+    ]);
+  }, 120000);
+
+  it('a go.work: the other modules\' requirements and sums join the build list, transitive for this module', async () => {
+    expect(await scan({
+      'go.work': 'go 1.22\n\nuse (\n\t./app\n\t./lib\n)\n',
+      'app/go.mod': 'module example.com/app\n\ngo 1.22\n\nrequire github.com/google/uuid v1.6.0\n',
+      'app/go.sum': sumLines('github.com/google/uuid v1.6.0'),
+      'lib/go.mod': 'module example.com/lib\n\ngo 1.22\n\nrequire github.com/sirupsen/logrus v1.9.3\n',
+      'lib/go.sum': sumLines('github.com/sirupsen/logrus v1.9.3'),
+      'go.work.sum': sumLines('golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8'),
+      'app/main.go': 'package main\n\nimport (\n\t"github.com/google/uuid"\n\t"github.com/sirupsen/logrus"\n\t"golang.org/x/sys/unix"\n)\n\nfunc main() { uuid.New(); logrus.Info(); unix.Getpid() }\n',
+    })).toEqual([
+      'app/main.go:4 github.com/google/uuid → github.com/google/uuid package 1 0 lock',
+      'app/main.go:5 github.com/sirupsen/logrus → github.com/sirupsen/logrus package 0 0 lock',
+      // Only go.work.sum holds x/sys: no go.mod requires it, so it is not listed (go 1.22).
+      'app/main.go:6 golang.org/x/sys/unix → golang.org/x/sys package null null lock',
+    ]);
+  }, 120000);
+
+  // ─── Review of M5-23 ───
+
+  it.each([
+    ['a folder', { 'go.mod': null, 'go.mod/x.txt': 'x' }, false],
+    ['a file it cannot read', {}, true],
+  ] as const)('the only go.mod is %s: module imports are unknown, flagged manifest, never dropped', async (_name, extra, chmod) => {
+    // Root can read a file without permission: the case holds only for another user.
+    if (chmod && process.getuid?.() === 0) return;
+    p.create(present({ ...GO_FILES, ...extra }));
+    if (chmod) chmodSync(join(p.root, 'go.mod'), 0o000);
+    try {
+      const store = new Store(':memory:');
+      await (await p.scanner(store)).scanFull();
+      expect(goAttribution(store)).toEqual(goAttributed('cmd', 'manifest').map((r) => (r.includes('builtin') ? r : r.replace(/→ .*$/, '→ null package null null manifest'))));
+    } finally {
+      if (chmod) chmodSync(join(p.root, 'go.mod'), 0o644);
+    }
+  }, 120000);
+
+  it.each([
+    ['1.17', 'github.com/stretchr/objx package null null lock'],
+    ['1.21', 'github.com/stretchr/objx package null null lock'],
+    ['1.16', 'github.com/stretchr/objx package 0 0 lock'],
+  ])('a module only go.sum holds, with go %s: not listed from 1.17 (graph pruning), transitive before', async (go, expected) => {
+    expect(await scan({
+      'go.mod': `module example.com/app\n\ngo ${go}\n\nrequire github.com/stretchr/testify v1.9.0\n`,
+      'go.sum': sumLines('github.com/stretchr/testify v1.9.0') + 'github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=\n',
+      'cmd/main.go': 'package main\n\nimport (\n\t"github.com/stretchr/objx"\n\t"github.com/stretchr/testify/assert"\n)\n\nfunc main() { objx.New(nil); assert.True(nil, true) }\n',
+    })).toEqual([
+      `cmd/main.go:4 github.com/stretchr/objx → ${expected}`,
+      'cmd/main.go:5 github.com/stretchr/testify/assert → github.com/stretchr/testify package 1 0 lock',
+    ]);
+  }, 120000);
+
+  it('a versioned replace applies to its version only; a local one of another version leaves the module external', async () => {
+    expect(await scan({
+      'go.mod': [
+        'module example.com/app', '', 'go 1.22', '', 'require (', '\tgithub.com/x/y v1.0.0', '\tgithub.com/x/z v1.2.0', ')', '',
+        'replace github.com/x/y v1.0.0 => github.com/fork/y v1.0.1', 'replace github.com/x/y v0.9.0 => ../../outside/y',
+        'replace github.com/x/z v1.1.0 => github.com/fork/z v1.1.1', '',
+      ].join('\n'),
+      'go.sum': sumLines('github.com/fork/y v1.0.1', 'github.com/x/z v1.2.0', 'github.com/fork/z v1.1.1'),
+      'cmd/main.go': 'package main\n\nimport (\n\t"github.com/x/y"\n\t"github.com/x/z"\n)\n\nfunc main() { y.Y(); z.Z() }\n',
+    })).toEqual([
+      // y v1.0.0 is the fork, whose hash go.sum holds; the v0.9.0 directory does not make y the workspace's (M5-25-R1).
+      'cmd/main.go:4 github.com/x/y → github.com/x/y package 1 0 lock',
+      // z v1.2.0 is not replaced: go.sum holds its own hash.
+      'cmd/main.go:5 github.com/x/z → github.com/x/z package 1 0 lock',
+    ]);
+  }, 120000);
+
+  it('a replacement go.sum lacks makes it stale; a go.work replace overrides go.mod\'s; a required replacement target stays a module', async () => {
+    expect(await scan({
+      'go.work': 'go 1.22\n\nuse ./app\n\nreplace github.com/x/w => github.com/work/w v1.0.0\n',
+      'go.work.sum': sumLines('github.com/work/w v1.0.0'),
+      'app/go.mod': [
+        'module example.com/app', '', 'go 1.22', '', 'require (', '\tgithub.com/x/v v1.0.0', '\tgithub.com/x/w v1.0.0', '\tgithub.com/x/t v1.0.0', '\tgithub.com/x/u v1.0.0', ')', '',
+        // v's replacement has no hash: go.sum is stale. w: go.work's directive wins. t => u, which is required too.
+        'replace github.com/x/v => github.com/fork/v v1.0.0', 'replace github.com/x/w => github.com/mod/w v1.0.0', 'replace github.com/x/t => github.com/x/u v1.0.0', '',
+      ].join('\n'),
+      // Only go.work.sum holds w's replacement: go.mod's directive would leave it unhashed.
+      'app/go.sum': sumLines('github.com/x/u v1.0.0'),
+      'app/main.go': 'package main\n\nimport (\n\t"github.com/x/t"\n\t"github.com/x/u"\n\t"github.com/x/v"\n\t"github.com/x/w"\n\t"github.com/pkg/errors"\n)\n\nfunc main() { t.T(); u.U(); v.V(); w.W(); errors.New("x") }\n',
+    })).toEqual([
+      'app/main.go:4 github.com/x/t → github.com/x/t package 1 0 lock',
+      'app/main.go:5 github.com/x/u → github.com/x/u package 1 0 lock',
+      'app/main.go:6 github.com/x/v → github.com/x/v package 1 0 manifest',
+      'app/main.go:7 github.com/x/w → github.com/x/w package 1 0 lock',
+      // go.sum is stale (v's replacement unhashed): an import no module provides is unknown, never "not in the build list".
+      'app/main.go:8 github.com/pkg/errors → null package null null manifest',
+    ]);
+  }, 120000);
+
+  it('dev-only per Go module: a nested go.mod whose tests alone use a module the parent module uses in production', async () => {
+    expect(await scan({
+      'go.mod': GO_MOD, 'go.sum': GO_SUM,
+      'lib/use.go': 'package lib\n\nimport "github.com/stretchr/testify/assert"\n\nvar _ = assert.True\n',
+      'svc/go.mod': GO_MOD.replace('example.com/app', 'example.com/svc'), 'svc/go.sum': GO_SUM,
+      'svc/x_test.go': 'package svc\n\nimport (\n\t"testing"\n\n\t"github.com/stretchr/testify/assert"\n)\n\nfunc TestX(t *testing.T) { assert.True(t, true) }\n',
+    })).toEqual([
+      'lib/use.go:3 github.com/stretchr/testify/assert → github.com/stretchr/testify package 1 0 lock',
+      'svc/x_test.go:4 testing → testing builtin null null null',
+      'svc/x_test.go:6 github.com/stretchr/testify/assert → github.com/stretchr/testify package 1 1 lock',
+    ]);
+  }, 120000);
+
+  it('cgo\'s C is ambient; no go.mod: built-ins only', async () => {
+    expect(await scan({ 'main.go': 'package main\n\n// #include <stdio.h>\nimport "C"\n\nimport "os"\n\nfunc main() { os.Exit(0) }\n' })).toEqual([
+      'main.go:4 C → C ambient null null null',
+      'main.go:6 os → os builtin null null null',
+    ]);
+  }, 120000);
+});
+
+// Sync = scan --force when go.mod, go.sum or the test-only use of a module changes.
+const GO_CHANGES: Array<{ name: string; change: Record<string, string | null>; expect: string }> = [
+  {
+    name: 'a module go.mod marked // indirect becomes direct',
+    change: { 'go.mod': GO_MOD.replace(' // indirect', '') },
+    expect: 'cmd/main.go:9 golang.org/x/sys/unix → golang.org/x/sys package 1 0 lock',
+  },
+  { name: 'go.sum is deleted', change: { 'go.sum': null }, expect: 'cmd/main.go:7 github.com/google/uuid → github.com/google/uuid package 1 0 manifest' },
+  { name: 'go.sum is corrupted', change: { 'go.sum': 'corrupt' }, expect: 'cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 manifest' },
+  {
+    name: 'go.sum gains a module',
+    change: { 'go.sum': GO_SUM + sumLines('github.com/pkg/errors v0.9.1') },
+    // go 1.22: a module go.mod does not require is not listed (review of M5-23).
+    expect: 'cmd/main.go:8 github.com/pkg/errors → github.com/pkg/errors package null null lock',
+  },
+  {
+    // Nothing attribution reads changes: an edited file of another package of the module decides,
+    // and the test file is not re-parsed (its stored rows stand, and their dev changes).
+    name: 'a non-test file starts using a test-only module',
+    change: { 'tools/check.go': 'package tools\n\nimport "github.com/stretchr/testify/assert"\n\nvar _ = assert.True\n' },
+    expect: 'cmd/main_test.go:6 github.com/stretchr/testify/require → github.com/stretchr/testify package 1 0 lock',
+  },
+  {
+    name: 'the only non-test file using a module stops using it',
+    change: { 'cmd/main.go': GO_MAIN },
+    expect: 'cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 1 lock',
+  },
+];
+// main.go also uses yaml.v3, for the last change.
+const GO_MAIN_YAML = GO_MAIN.replace('"golang.org/x/sys/unix"', '"golang.org/x/sys/unix"\n\t"gopkg.in/yaml.v3"').replace('chi.NewRouter()', 'chi.NewRouter()\n\t_ = yaml.Node{}');
+
+describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when go.mod, go.sum or a module\'s test-only use changes', (_name, withGit) => {
+  const p = project(withGit);
+  afterEach(() => p.remove());
+
+  it.each(GO_CHANGES)('$name: equal to scan --force', async ({ name, change, expect: expected }) => {
+    const before = name.startsWith('the only') ? GO_MAIN_YAML : GO_MAIN;
+    p.create({ ...GO_FILES, 'cmd/main.go': before, 'tools/check.go': 'package tools\n\nvar X = 1\n' });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    if (before === GO_MAIN) expect(goAttribution(store)).toEqual(goAttributed('cmd', 'lock'));
+    else expect(goAttribution(store)).toContain('cmd/main_test.go:7 gopkg.in/yaml.v3 → gopkg.in/yaml.v3 package 0 0 lock');
+    write(p.root, change);
+    if (withGit) {
+      git(p.root, 'add', '-A');
+      git(p.root, 'commit', '-qm', 'change');
+    }
+    await p.sync(store);
+    const forced = await p.forced();
+    expect(dumpAll(store)).toEqual(dumpAll(forced));
+    expect(goAttribution(store)).toContain(expected);
+  }, 120000);
+
+  it('fills the Go attribution of an index built before (null columns), without --force', async () => {
+    p.create(GO_FILES);
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    store.raw.exec("UPDATE external_ref_candidates SET package = NULL, origin = NULL, direct = NULL, dev = NULL, attribution = NULL WHERE ecosystem = 'go'");
+    await p.sync(store);
+    expect(goAttribution(store)).toEqual(goAttributed('cmd', 'lock'));
+  }, 120000);
+});
+
+describe('Go modules attribution through the CLI', () => {
+  it('a go.sum-only change makes the index stale; sync re-attributes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mapx-extrefs-go-'));
+    try {
+      write(root, GO_FILES);
+      git(root, 'init', '-q');
+      init(root);
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+      mapx(root, 'scan');
+      const errors = () => query<{ file_path: string; specifier: string; package: string | null; direct: number | null; dev: number | null; attribution: string | null }>(
+        root, "SELECT file_path, specifier, package, direct, dev, attribution FROM external_refs WHERE ecosystem = 'go' AND kind = 'import' AND specifier = 'github.com/pkg/errors'")
+        .map((r) => `${r.file_path} ${r.specifier} → ${r.package} ${r.direct} ${r.dev} ${r.attribution}`);
+      expect(errors()).toEqual(['cmd/main.go github.com/pkg/errors → null 0 null lock']);
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+      write(root, { 'go.sum': GO_SUM + sumLines('github.com/pkg/errors v0.9.1') });
+      const status = mapx(root, 'status');
+      expect(status).toContain('Index is stale');
+      expect(status).toContain('go.sum');
+      mapx(root, 'sync');
+      expect(errors()).toEqual(['cmd/main.go github.com/pkg/errors → github.com/pkg/errors null null lock']);
       expect(mapx(root, 'status')).toContain('Index is up to date');
     } finally {
       cleanup(root);

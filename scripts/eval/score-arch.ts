@@ -161,7 +161,8 @@ export interface ExternalScore {
   /**
    * Expected and matched rows per class: builtin, direct-prod, direct-dev, transitive-prod,
    * transitive-dev, unlisted (in no manifest, dev unknown: no lockfile, or none holds it), unknown
-   * (no input names the package: a PHP name no autoload prefix or naming convention covers, M5-21).
+   * (no input names the package: a PHP name no autoload prefix or naming convention covers, M5-21;
+   * a Go import no module of the build list provides, M5-23), ambient (Go's cgo `C`, M5-23).
    */
   classes: Record<string, { expected: number; matched: number }>;
   misses: string[];
