@@ -130,7 +130,7 @@ Show scan metrics, collected data, graph statistics, and git changes since the l
 mapx status [/path] [--all] [--exclude <glob>] [--include <glob>]
 ```
 
-`--exclude` and `--include` add patterns to the configured ones in the **Scan info** lines (`Excludes:`, `Includes:`); they do not change the counts or the changed files. `--all` prints one row per registered repository (Repo, Files, Symbols, Edges, HEAD, Last scan, Changed), the totals, and the cross-repo edge count per repo pair. Changed reads `unscanned` for a repo that is registered but has never been scanned, `clean` when nothing indexed has changed, and otherwise the number of changed files.
+`--exclude` and `--include` narrow the changed files reported: a changed file an `--exclude` glob matches is left out, and with `--include` only the changed files it matches are listed (an exclude wins). Empty globs (`--include ''`, a trailing comma) are ignored, here and in `scan`/`update`. They are shown, with the configured patterns, in the **Scan info** lines (`Excludes:`, `Includes:`), and do not change the indexed counts. MCP `mapx_status` takes the same patterns and lists the same files. `--all` ignores them. `--all` prints one row per registered repository (Repo, Files, Symbols, Edges, HEAD, Last scan, Changed), the totals, and the cross-repo edge count per repo pair. Changed reads `unscanned` for a repo that is registered but has never been scanned, `clean` when nothing indexed has changed, and otherwise the number of changed files.
 
 Outputs:
 - **Scan info**: project name, directory, last scan time, last git commit, schema version

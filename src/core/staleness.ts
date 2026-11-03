@@ -8,7 +8,7 @@ import type { Store } from './store.js';
 import { EXTERNAL_INPUTS_KEY, changedInputFiles, parseExternalInputs } from './manifests/inputs.js';
 import type { MapxConfig, RepoConfig } from '../types.js';
 import { getBuiltinLanguages, getLanguageForFile } from '../languages/registry.js';
-import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isScannablePath, shebangLanguage } from './file-rules.js';
+import { DEFAULT_IGNORE, buildMatcher, buildPathFilter, effectiveExcludesFor, isExcludedDir, isScannablePath, shebangLanguage } from './file-rules.js';
 
 export interface StaleReport {
   changed: string[];
@@ -257,4 +257,19 @@ export function unlistedStale(
     ...stale.deleted.map(path => ({ path, status: 'removed' as const })),
     ...stale.added.map(path => ({ path, status: 'added' as const })),
   ].filter(c => !listed.has(c.path));
+}
+
+/**
+ * The changes a status narrowed with exclude/include patterns reports (`mapx status --exclude`,
+ * `mapx_status`; M4-28-R2): those whose workspace path the patterns keep, matched as an export
+ * matches indexed paths (an exclude wins; with includes, only the paths they match). `changes`
+ * are relative to `repoRoot`.
+ */
+export function filterChanges<T extends { path: string }>(
+  changes: T[], dir: string, repoRoot: string, excludes: string[], includes: string[],
+): T[] {
+  if (!excludes.length && !includes.length) return changes;
+  const keep = buildPathFilter(excludes, includes);
+  const prefix = relative(dir, repoRoot).replace(/\\/g, '/');
+  return changes.filter(c => keep(prefix ? `${prefix}/${c.path}` : c.path));
 }

@@ -23,7 +23,7 @@ import { ToonExporter } from './exporters/toon-exporter.js';
 import { calculateDSM, buildMetricsReport, formatDsmText, formatMetricsText, parseFormat, parseTop, METRICS_DEFAULT_TOP } from './core/metrics.js';
 import { currentSmells } from './core/architecture-analyzer.js';
 import { getChangedFiles, isGitRepo, type GitFileStatus } from './core/git-tracker.js';
-import { findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
+import { filterChanges, findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
 import { outdatedIndexWarning } from './core/extractor-version.js';
 import { indexGate } from './arch/index-gate.js';
 import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
@@ -49,7 +49,8 @@ import * as clack from '@clack/prompts';
 const dynamicRequire = createRequire(import.meta.url);
 
 function collectPatterns(val: string, memo: string[]): string[] {
-  return memo.concat(val.split(',').map(s => s.trim()));
+  // An empty pattern (`--include ''`, `--exclude 'src/**,'`) names nothing; picomatch throws on one.
+  return memo.concat(val.split(',').map(s => s.trim()).filter(Boolean));
 }
 
 function resolveDir(cmdOpts: Record<string, unknown>, programOpts: Record<string, unknown>): string {
@@ -915,6 +916,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // is not a git repository or in a nested repo, come from it.
       const stale = findStaleFiles(store, dir);
       const git = isGitRepo(repoRoot);
+      // --exclude/--include narrow the changed files reported, as in mapx_status (M4-28-R2).
+      const cliExcludes = (opts.exclude as string[]) ?? [];
+      const cliIncludes = (opts.include as string[]) ?? [];
       let gitChanges: GitFileStatus[] = [];
       if (!git) {
         console.log('\n── Git ──────────────────────────────────────────────');
@@ -923,15 +927,16 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
         // Only the changes a scan would index, or that touch an indexed file: git also lists dotfiles,
         // excluded and non-source files (M0-11-R3).
         gitChanges = indexableChanges(store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), config.repo.name, stale);
+        const shown = filterChanges(gitChanges, dir, repoRoot, cliExcludes, cliIncludes);
         console.log('\n── Git changes since last scan ──────────────────────');
-        if (gitChanges.length === 0) {
+        if (shown.length === 0) {
           console.log('  No changes since last scan  (✓ index is current)');
         } else {
           isStale = true;
-          printChanges(gitChanges);
+          printChanges(shown);
         }
       }
-      const others = unlistedStale(stale, dir, repoRoot, gitChanges);
+      const others = filterChanges(unlistedStale(stale, dir, repoRoot, gitChanges), dir, dir, cliExcludes, cliIncludes);
       if (others.length) {
         isStale = true;
         console.log(git ? '\n── Other changes since last scan ────────────────────' : '\n── Changes since last scan ──────────────────────────');

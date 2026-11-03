@@ -434,7 +434,9 @@ List detected code clusters/modules.
 
 #### `mapx_status`
 Check scan status, language breakdown, PageRank rankings, and index recommendations. The changed-file count is the git changes plus the stale files git does not list, such as a new file in a nested repo or in a workspace that is not a git repository; the other tools' `Index is stale` warning names them too (see [Staleness warning](cli-reference.md#staleness-warning)).
-- `exclude`, `include` (string, optional): Accepted, but they do not change the result yet (`mapx status --exclude` / `--include` only print them)
+- `exclude` (string array, optional): Globs; the changed files they match are not reported or counted, e.g. `["src/**"]`. A comma-separated string also works
+- `include` (string array, optional): Globs; only the changed files they match are reported. An exclude wins over an include. In both, a comma inside an element splits it (`["a/**,b/**"]` is two globs) and empty globs are ignored, as in the CLI. The result lists the changed files (`+` added, `~` modified, `-` removed, `>` renamed) as `mapx status` does, and equals `mapx status --exclude … --include …` with the same patterns
+- `limit` (number, optional): Max changed files listed (default 50; `0` lists every one). The count line is always the total, and a cut list ends with `… N more (showing L of T; pass limit: 0 to list all)`
 - `dir` (string, optional): Target project directory
 
 #### `mapx_metrics`

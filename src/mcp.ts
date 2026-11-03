@@ -28,7 +28,7 @@ import { fileNotFoundMessage, resolveFilePaths } from './core/file-resolve.js';
 import { calleeScopeHints, directionError, edgeView, fileEdges, formatFileEdgesText, indexedPath, notIndexedMessage, type EdgeDirection } from './core/edge-view.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { getChangedFiles, isGitRepo } from './core/git-tracker.js';
-import { findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
+import { filterChanges, findStaleFiles, indexableChanges, staleCount, staleNames, unlistedStale } from './core/staleness.js';
 import { outdatedIndexWarning } from './core/extractor-version.js';
 import { ImpactAnalyzer, checkTryCatch as coreCheckTryCatch } from './core/impact-analyzer.js';
 import { formatLanguageInfo, formatLanguageList, installLanguage, uninstallLanguage } from './languages/installer.js';
@@ -234,8 +234,9 @@ EXAMPLES:
         inputSchema: {
           type: 'object',
           properties: {
-            exclude: { type: 'string', description: 'Comma-separated list of exclude glob patterns to append' },
-            include: { type: 'string', description: 'Comma-separated list of include glob patterns to append' },
+            exclude: { type: 'array', items: { type: 'string' }, description: 'Globs: changed files they match are not reported, e.g. ["src/**"] (a comma-separated string also works)' },
+            include: { type: 'array', items: { type: 'string' }, description: 'Globs: only the changed files they match are reported (a comma-separated string also works)' },
+            limit: { type: 'number', description: 'Max changed files to list (the count is the total); 0 lists every one', default: 50 },
             ...dirProperty,
           },
         },
@@ -990,23 +991,43 @@ EXAMPLE:
         // As `mapx status`: one walk, then the git changes plus the stale files git does not list,
         // such as a new file in a non-git workspace or in a nested repo (M5-05-R1).
         const stale = findStaleFiles(ctx.store, dir);
+        // exclude/include narrow the changed files reported, as `mapx status --exclude/--include`
+        // do (M4-28-R2): an array of globs or a comma-separated string, commas inside an element
+        // splitting it as the CLI splits `--exclude 'a/**,b/**'`; empty patterns are dropped.
+        const patterns = (v: unknown): string[] =>
+          (Array.isArray(v) ? v.map(String) : [String(v ?? '')]).flatMap(s => s.split(',')).map(s => s.trim()).filter(Boolean);
+        const excludes = patterns((args as any)?.exclude);
+        const includes = patterns((args as any)?.include);
         let isStale = false;
         let gitInfo = '';
+        let listed: Array<{ path: string; status: string }> = [];
         if (isGitRepo(repoRoot)) {
           // Only changes a scan would index or that touch an indexed file (M0-11-R3).
           const changes = indexableChanges(ctx.store, dir, repoRoot, getChangedFiles(repoRoot, lastCommit || undefined), ctx.config.repo.name, stale);
-          const count = changes.length + unlistedStale(stale, dir, repoRoot, changes).length;
-          if (count === 0) {
+          listed = [
+            ...filterChanges(changes, dir, repoRoot, excludes, includes),
+            ...filterChanges(unlistedStale(stale, dir, repoRoot, changes), dir, dir, excludes, includes),
+          ];
+          if (listed.length === 0) {
             gitInfo = 'No changes since last scan  (✓ index is current)';
           } else {
             isStale = true;
-            gitInfo = `${count} changed files  (⚠ stale)`;
+            gitInfo = `${listed.length} changed files  (⚠ stale)`;
           }
         } else {
-          const count = unlistedStale(stale, dir, repoRoot).length;
+          listed = filterChanges(unlistedStale(stale, dir, repoRoot), dir, dir, excludes, includes);
+          const count = listed.length;
           isStale = count > 0;
           gitInfo = count ? `Not a git repository; ${count} changed files since last scan  (⚠ stale)` : 'Not a git repository  (✓ index is current)';
         }
+        // The changed files, one per line, as `mapx status` lists them: at most `limit` (default 50,
+        // 0 lists every one); the count above is the total.
+        const rawLimit = Number((args as any)?.limit ?? 50);
+        const limit = Number.isFinite(rawLimit) && rawLimit >= 0 ? Math.floor(rawLimit) : 50;
+        const shown = limit === 0 ? listed : listed.slice(0, limit);
+        const icon: Record<string, string> = { added: '+', modified: '~', removed: '-', renamed: '>', unchanged: '=' };
+        for (const c of shown) gitInfo += `\n    ${icon[c.status] ?? '~'} ${c.path}`;
+        if (shown.length < listed.length) gitInfo += `\n    … ${listed.length - shown.length} more (showing ${shown.length} of ${listed.length}; pass limit: 0 to list all)`;
 
         const recommendations = isStale
           ? '⚠ Index is stale. Run `mapx sync` or `mapx update` to bring it up to date.'
