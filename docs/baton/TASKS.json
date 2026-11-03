@@ -26207,6 +26207,63 @@
       "milestone": "M4",
       "priority": "P2",
       "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-09-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-09-R2.md",
+        "docs/baton/reports/M5-22.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-09-R3",
+      "title": "external-refs tests remove every temp workspace, including unreadable ones",
+      "objective": "tests/external-refs.test.ts leaves no mapx-extrefs-* directory in the temp folder after a run, including the cases that make a lockfile or manifest unreadable (chmod 000 or a folder) and the per-app fixture copies.",
+      "description": "Found 2026-11-03 integrating M5-22: 18 /tmp/mapx-extrefs-sync-* and -repos-* folders were left after lane runs; the chmod 000 cases block rmSync and scanApp copies are never removed. Same class as M4-09-R2.",
+      "outputs": [
+        "tests/external-refs.test.ts",
+        "reports/M4-09-R3.md"
+      ],
+      "affectedFiles": [
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "After `npx vitest run tests/external-refs.test.ts`, no new mapx-extrefs-* entry exists in os.tmpdir() (asserted by a test-run check or a globalTeardown, counting entries before and after).",
+        "A test that makes a file or folder unreadable restores its permissions in a finally/afterEach before removal (test fails if the restore is removed)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
         "min": 1,
         "expected": 2,
         "max": 3
@@ -26336,14 +26393,27 @@
         "docs/baton/reports/M3-05-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M3-05-R3",
       "actualHours": null,
       "startedAt": "2026-11-03T05:49:38.041Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T08:17:04.672Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M3-05-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/vue-stores.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-05-R3.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M3-05-R3.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T05:49:36.388Z",
@@ -26356,6 +26426,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T08:17:04.189Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T08:17:04.672Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/vue-stores.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-05-R3.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M3-05-R3.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

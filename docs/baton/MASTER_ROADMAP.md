@@ -192,7 +192,7 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-11-R1** More Vue Router navigation and route-table forms — DONE, P2, 4h; depends on M3-11, M3-08-R1.
 - **M3-07-R1** Framework detection keeps its folder scope when package.json files are indexed — DONE, P2, 2h; depends on M3-07.
 - **M3-05-R2** Pinia hooks of any name in plain modules; Vuex arrow members in imported objects — DONE, P2, 2h; depends on M3-05-R1.
-- **M3-05-R3** Store-library gate follows package.json changes and monorepo roots — IN_PROGRESS, P2, 3h; depends on M3-05-R2.
+- **M3-05-R3** Store-library gate follows package.json changes and monorepo roots — DONE, P2, 3h; depends on M3-05-R2.
 
 ## M4 — Measurement and developer experience
 
@@ -227,6 +227,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — IN_PROGRESS, P2, 2h; depends on M4-24.
 - **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
+- **M4-09-R3** external-refs tests remove every temp workspace, including unreadable ones — BACKLOG, P2, 1h; depends on M4-09-R2.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — BLOCKED, P2, 3h; depends on M4-12.
@@ -252,7 +253,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-15** Dashboard Architecture view and /api/arch endpoints — BACKLOG, P3, 12h; depends on M5-05, M5-13.
 - **M5-16** Rule-derived smells and single-source layer violations — DONE, P2, 8h; depends on M5-04, M5-08.
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — DONE, P2, 12h; depends on M5-04, M5-06.
-- **M5-18** Dogfood: MapX architecture config, CI step and user docs — BACKLOG, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
+- **M5-18** Dogfood: MapX architecture config, CI step and user docs — IN_PROGRESS, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
