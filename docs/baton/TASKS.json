@@ -17245,10 +17245,10 @@
         "npm run build:npm"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-F2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T23:16:06.765Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -17259,12 +17259,84 @@
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:16:06.765Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
         }
       ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
+    },
+    {
+      "milestone": "M5",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-18-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M2-25",
+          "type": "hard"
+        },
+        {
+          "id": "M2-26",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-18-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-18-R2",
+      "title": "MapX's own check covers tests/fixtures again",
+      "objective": "Remove the `tests/fixtures/**` scope exclusion M5-18-R1 added to .mapx/architecture.jsonc once M2-25 and M2-26 remove the false edges, so production code importing a fixture is judged again.",
+      "description": "M5-18-R1 excluded tests/fixtures/** because of two resolver bugs (M2-25, M2-26).",
+      "outputs": [
+        ".mapx/architecture.jsonc",
+        "reports/M5-18-R2.md"
+      ],
+      "affectedFiles": [
+        ".mapx/architecture.jsonc",
+        ".mapx/architecture.baseline.json",
+        "tests/dogfood-architecture.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Without the exclusion, `check --fail-on-uncovered` exits 0 after a scan; a src → tests/fixtures import probe exits 1 (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/dogfood-architecture.test.ts",
+        "npm run build:npm"
+      ]
     },
     {
       "optionalDependencies": [
@@ -30361,6 +30433,239 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/php-one-line.test.ts"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-17-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-23",
+      "title": "Laravel database/ and resources/views/ PHP files get edges",
+      "objective": "PHP files under database/ (migrations, seeders, factories) and resources/views/ (plain PHP and Blade-compiled PHP blocks) are indexed with their symbols and edges, or their exclusion is a documented, configurable default.",
+      "description": "Found by M5-17-R1 (2026-11-03): PHP files under database/ and resources/views/ get no edges at all, so the laravel preset's Database and Views rules cannot be exercised.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/laravel-dirs.test.ts",
+        "reports/M2-23.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/file-rules.ts",
+        "src/parsers/languages/php.ts",
+        "tests/laravel-dirs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A migration calling a model and a seeder calling a factory give their edges (e2e test); a Blade view is either parsed for its PHP blocks or documented as excluded."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/laravel-dirs.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P3",
+      "estimate": {
+        "min": 3,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-17-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-24",
+      "title": "Ruby method calls resolve on the receiver's class",
+      "objective": "Ruby calls on `X.new.m`, `self.m` and typed receivers resolve to that class's method (walking superclasses and included modules), not a same-named method by bare name.",
+      "description": "Found by M5-17-R1 (2026-11-03): Ruby calls resolve by method name, which gives false layer violations in the rails preset fixture.",
+      "outputs": [
+        "src/parsers/**",
+        "tests/ruby-calls.test.ts",
+        "reports/M2-24.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/**",
+        "queries/ruby/**",
+        "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
+        "tests/ruby-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Two Ruby classes with a same-named method: `A.new.m` links A#m only (e2e test); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ruby-calls.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-18-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-25",
+      "title": "A called loop variable never links a same-named function elsewhere",
+      "objective": "A call through a local binding (for-of / for-in loop variable, parameter, destructured local) gets no by-name edge to a same-named function in another file, including a Vue SFC `<script setup>` function.",
+      "description": "Found by M5-18-R1 (2026-11-03): `for (const step of steps) step(x)` links a same-named function in a Vue SFC <script setup> (repro in reports/M5-18-R1.md).",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/local-binding-calls.test.ts",
+        "reports/M2-25.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/**",
+        "tests/local-binding-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The M5-18-R1 repro gives no edge (e2e test); a real call to the SFC function still links; `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/local-binding-calls.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-18-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-26",
+      "title": "A class destructured from a call result never links a same-named class elsewhere",
+      "objective": "`const { Database } = load('bun:sqlite'); new Database()` (a binding from a call result, not an import) gets no edge to a same-named project class.",
+      "description": "Found by M5-18-R1 (2026-11-03): such a destructured class links a same-named fixture class.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/local-binding-calls.test.ts",
+        "reports/M2-26.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/local-binding-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The repro gives no edge (e2e test); an imported class of that name still links; `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/local-binding-calls.test.ts",
+        "npm run eval"
       ]
     },
     {
