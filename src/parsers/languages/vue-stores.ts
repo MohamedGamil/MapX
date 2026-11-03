@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
+import picomatch from 'picomatch';
 import type { Node } from 'web-tree-sitter';
 import type { ExtractedReference, ParseResult, VueStoreTarget, VuexKind } from '../../types.js';
 import { FUNCTION_VALUES, importSources, isFunctionMember, keyOf, objectOf, optionsObject, stringValue, topLevelDeclarator, valueOf, withScriptTree } from './vue-ast.js';
@@ -228,35 +229,138 @@ export function mapHelperEntries(call: Node | null, imports: Map<string, string>
 }
 
 interface StoreDeps { vuex: boolean; pinia: boolean }
-/** The store libraries a package lists (null: no dependencies), by package.json path, with its mtime. */
-const manifestStores = new Map<string, { mtimeMs: number; stores: StoreDeps | null }>();
+/**
+ * What a package.json says for the gate: the store libraries it lists (null: no dependencies) and
+ * its workspace globs (null: none). A `pnpm-workspace.yaml` gives globs only.
+ */
+interface ManifestFacts { stores: StoreDeps | null; workspaces: string[] | null }
+/** Facts by manifest path, with its mtime. */
+const manifestFacts = new Map<string, { mtimeMs: number; facts: ManifestFacts | null }>();
 const NO_STORES: StoreDeps = { vuex: false, pinia: false };
+
+/** A manifest's facts, read again when its mtime moves; null when absent or unreadable. */
+function readFacts(path: string, parse: (text: string) => ManifestFacts): ManifestFacts | null {
+  if (!existsSync(path)) return null;
+  try {
+    const mtimeMs = statSync(path).mtimeMs;
+    let cached = manifestFacts.get(path);
+    if (cached?.mtimeMs !== mtimeMs) {
+      let facts: ManifestFacts | null = null;
+      try { facts = parse(readFileSync(path, 'utf8')); } catch { /* unreadable: decides nothing */ }
+      manifestFacts.set(path, (cached = { mtimeMs, facts }));
+    }
+    return cached.facts;
+  } catch {
+    return null;
+  }
+}
+
+const packageFacts = (text: string): ManifestFacts => {
+  const pkg = JSON.parse(text);
+  const fields = [pkg?.dependencies, pkg?.devDependencies, pkg?.peerDependencies].filter((d) => d && typeof d === 'object');
+  const stores = fields.length === 0 ? null : { vuex: fields.some((d) => Object.hasOwn(d, 'vuex')), pinia: fields.some((d) => Object.hasOwn(d, 'pinia')) };
+  // npm and yarn: `workspaces: [...]`; yarn also `workspaces: { packages: [...] }`.
+  const ws = Array.isArray(pkg?.workspaces) ? pkg.workspaces : pkg?.workspaces?.packages;
+  return { stores, workspaces: Array.isArray(ws) ? ws.filter((g: unknown) => typeof g === 'string') : null };
+};
+
+/**
+ * pnpm-workspace.yaml: the items of its top-level `packages` key (quoted or not), as a block list
+ * (`- packages/*`, indented or not) or a flow sequence (`['packages/*']`, over one line or more);
+ * comments and quotes are dropped. No `packages` key: no workspace globs (settings or catalogs only).
+ */
+const pnpmFacts = (text: string): ManifestFacts => {
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/(^|\s)#.*$/, '').trimEnd());
+  const unquote = (item: string) => item.trim().replace(/^(['"])(.*)\1$/, '$2');
+  const start = lines.findIndex((line) => /^(['"]?)packages\1\s*:/.test(line));
+  if (start < 0) return { stores: null, workspaces: null };
+  let rest = lines[start]!.replace(/^(['"]?)packages\1\s*:/, '').trim();
+  const globs: string[] = [];
+  for (let i = start + 1; !rest && i < lines.length; i++) {
+    const line = lines[i]!;
+    if (!line.trim()) continue;
+    const item = line.match(/^\s*-\s*(.*)$/);
+    if (item) globs.push(unquote(item[1]!));
+    else if (/^\s+\[/.test(line) && globs.length === 0) rest = lines.slice(i).join('\n').trim();
+    else break;
+  }
+  // A flow sequence: everything up to its closing bracket.
+  if (rest.startsWith('[')) {
+    if (!rest.includes(']')) rest += '\n' + lines.slice(start + 1).join('\n');
+    globs.push(...rest.slice(1, rest.indexOf(']') < 0 ? undefined : rest.indexOf(']')).split(',').map(unquote));
+  }
+  return { stores: null, workspaces: globs.filter(Boolean) };
+};
+
+/** Workspace globs compiled once per list: true when they list a folder (`/`-separated, relative to the root). */
+const globMatchers = new Map<string, (folder: string) => boolean>();
+function listedBy(globs: string[], folder: string): boolean {
+  const key = globs.join('\0');
+  let match = globMatchers.get(key);
+  if (!match) {
+    const clean = (g: string) => g.replace(/^\.\//, '').replace(/\/+$/, '');
+    const positive = globs.filter((g) => !g.startsWith('!')).map(clean);
+    const negative = globs.filter((g) => g.startsWith('!')).map((g) => clean(g.slice(1)));
+    const listed = positive.length ? picomatch(positive, { dot: true }) : () => false;
+    const excluded = negative.length ? picomatch(negative, { dot: true }) : () => false;
+    globMatchers.set(key, (match = (f) => listed(f) && !excluded(f)));
+  }
+  return match(folder);
+}
+
+/** The nearest folder at or above `dir` holding `name`, or null: one check per folder per process. */
+const holders = new Map<string, string | null>();
+function nearestHolding(name: string, dir: string): string | null {
+  const key = `${name}\0${dir}`;
+  let found = holders.get(key);
+  if (found === undefined) {
+    const parent = dirname(dir);
+    found = existsSync(join(dir, name)) ? dir : parent === dir ? null : nearestHolding(name, parent);
+    holders.set(key, found);
+  }
+  return found;
+}
+
+/**
+ * The folder the search for a package's workspace root ends at: its repository's root (a folder
+ * holding `.git`), else the MapX workspace's (`.mapx`), else the package itself. The scanner tracks
+ * the manifests above its workspace root up to the same repository root (`configReferrers`).
+ */
+export function workspaceSearchEnd(packageDir: string): string {
+  return nearestHolding('.git', packageDir) ?? nearestHolding('.mapx', packageDir) ?? packageDir;
+}
 
 /**
  * Whether the package of a file lists `vuex` or `pinia`: the nearest package.json above it that
- * declares dependencies (a `{"type": "module"}` marker is skipped). Unknown without a path.
+ * declares dependencies (a `{"type": "module"}` marker is skipped). A library that package lacks
+ * counts when its workspace root declares it: the first folder above the package whose package.json
+ * `workspaces` or pnpm-workspace.yaml `packages` globs list the package's folder (a monorepo hoists
+ * it there, M3-05-R3). Roots that do not list it are passed; the search ends at `workspaceSearchEnd`.
+ * Unknown without a path. Sync re-parses the files below a changed package.json or
+ * pnpm-workspace.yaml (the scanner's `configReferrers`), so a changed gate is followed.
  */
 export function storeDependencies(absolutePath: string | undefined): StoreDeps {
   if (!absolutePath) return NO_STORES;
   for (let dir = dirname(absolutePath); ; dir = dirname(dir)) {
-    const manifest = join(dir, 'package.json');
-    if (existsSync(manifest)) {
-      try {
-        const mtimeMs = statSync(manifest).mtimeMs;
-        let cached = manifestStores.get(manifest);
-        if (cached?.mtimeMs !== mtimeMs) {
-          const pkg = JSON.parse(readFileSync(manifest, 'utf8'));
-          const fields = [pkg?.dependencies, pkg?.devDependencies, pkg?.peerDependencies].filter((d) => d && typeof d === 'object');
-          const stores = fields.length === 0 ? null : { vuex: fields.some((d) => Object.hasOwn(d, 'vuex')), pinia: fields.some((d) => Object.hasOwn(d, 'pinia')) };
-          manifestStores.set(manifest, (cached = { mtimeMs, stores }));
-        }
-        if (cached.stores) return cached.stores;
-      } catch {
-        // An unreadable manifest decides nothing; look further up.
-      }
-    }
+    const own = readFacts(join(dir, 'package.json'), packageFacts)?.stores;
+    if (own) return own.vuex && own.pinia ? own : withWorkspaceRoot(own, dir);
     if (dirname(dir) === dir) return NO_STORES;
   }
+}
+
+function withWorkspaceRoot(own: StoreDeps, packageDir: string): StoreDeps {
+  const end = workspaceSearchEnd(packageDir);
+  for (let dir = packageDir; dir !== end;) {
+    dir = dirname(dir);
+    const folder = relative(dir, packageDir).split(sep).join('/');
+    const pkg = readFacts(join(dir, 'package.json'), packageFacts);
+    const pnpm = readFacts(join(dir, 'pnpm-workspace.yaml'), pnpmFacts)?.workspaces;
+    if ((pkg?.workspaces && listedBy(pkg.workspaces, folder)) || (pnpm && listedBy(pnpm, folder))) {
+      const root = pkg?.stores;
+      return root ? { vuex: own.vuex || root.vuex, pinia: own.pinia || root.pinia } : own;
+    }
+  }
+  return own;
 }
 
 /**

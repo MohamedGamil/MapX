@@ -29,8 +29,10 @@ import type { Store } from './store.js';
  * - 13: M5-25-R2 (Go methods with a generic receiver, `func (p *Pair[K, V]) Set()`, are symbols; a
  *   Go method called on a variable or parameter of a written type links that type's method, and a
  *   by-name match stays in the caller's package or a package its file imports).
+ * - 14: M3-05-R3 (a Pinia/Vuex library declared at a monorepo root counts for the packages its
+ *   workspace globs list, up to the repository root).
  */
-export const EXTRACTOR_VERSION = 13;
+export const EXTRACTOR_VERSION = 14;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

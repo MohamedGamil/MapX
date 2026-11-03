@@ -32,7 +32,7 @@ import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS, JS_GLOBAL_FUNCTIONS } from '../parsers/common-methods.js';
 import { resolveThisMember } from '../parsers/languages/vue-options.js';
-import { collectVuexFiles, resolveStoreTarget, storeCallOrPlain, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
+import { collectVuexFiles, resolveStoreTarget, storeCallOrPlain, workspaceSearchEnd, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vueGlobFiles, type GlobalRegistrations, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
@@ -3882,7 +3882,8 @@ export class Scanner {
 
   /**
    * JS/TS/Vue/Python files below a folder whose resolution configs changed since the last scan: a
-   * package.json (npm packages, app roots: M0-17-R4, M3-09-R1), tsconfig/jsconfig (with the configs
+   * package.json (npm packages, app roots: M0-17-R4, M3-09-R1; the Pinia/Vuex gate, M3-05-R3) or
+   * pnpm-workspace.yaml (the workspace globs that gate reads), tsconfig/jsconfig (with the configs
    * their relative `extends` / `references` reach) or bundler config added, removed or edited, or an
    * `__init__.py` added or removed (Python import roots, M0-12-R9). Folders up to the workspace root
    * count, as alias lookup walks that far. No scan parses those files, so the files they govern are re-parsed,
@@ -3908,7 +3909,7 @@ export class Scanner {
         dirs.add(dir);
       }
     }
-    const names = ['package.json', ...BUNDLER_CONFIGS];
+    const names = ['package.json', 'pnpm-workspace.yaml', ...BUNDLER_CONFIGS];
     // A tsconfig/jsconfig and every config its relative `extends` / `references` reach, recursively
     // (`.svelte-kit/tsconfig.json`, `tsconfig.app.json`, `tsconfig.base.json`): a missing one counts.
     const tsConfigTree = (file: string, hash: ReturnType<typeof createHash>, seen: Set<string>) => {
@@ -3950,6 +3951,24 @@ export class Scanner {
       }
       if (any) signatures[dir] = hash.digest('hex');
     }
+    // Folders above the workspace root, up to its repository's root: the Pinia/Vuex gate reads their
+    // package.json and pnpm-workspace.yaml for a monorepo root (M3-05-R3). Keyed `^<relative path>`;
+    // a change re-parses every source.
+    if (sources.length > 0) {
+      const end = workspaceSearchEnd(workspaceRoot);
+      for (let dir = workspaceRoot; dir !== end;) {
+        dir = dirname(dir);
+        const hash = createHash('md5');
+        let any = false;
+        for (const name of ['package.json', 'pnpm-workspace.yaml']) {
+          const abs = join(dir, name);
+          if (!existsSync(abs)) continue;
+          any = true;
+          hash.update(name).update('\0').update(readFileSync(abs));
+        }
+        if (any) signatures['^' + relative(workspaceRoot, dir).replace(/\\/g, '/')] = hash.digest('hex');
+      }
+    }
     // go.mod / composer.json in every folder above a Go / PHP file (M0-02-R9).
     for (const family of families) {
       const above = new Set<string>(['']);
@@ -3984,7 +4003,7 @@ export class Scanner {
         && (!isFamilyKey(k) || MANIFEST_FAMILIES.some(f => k.startsWith(f.prefix) && recorded.has(f.prefix))));
     if (changed.length === 0) return new Set();
     const under = (p: string, dir: string) => dir === '' || p.startsWith(`${dir}/`);
-    const referrers = new Set(sources.filter(p => changed.some(dir => !isFamilyKey(dir) && under(p, dir))));
+    const referrers = new Set(sources.filter(p => changed.some(dir => !isFamilyKey(dir) && (dir.startsWith('^') || under(p, dir)))));
     for (const family of families) {
       const dirs = changed.filter(k => k.startsWith(family.prefix)).map(k => k.slice(family.prefix.length));
       for (const p of family.sources) if (dirs.some(dir => under(p, dir))) referrers.add(p);

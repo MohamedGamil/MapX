@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, init, mapx, mapxEnv, query, workspace } from './helpers/e2e.js';
-import { storePass } from '../src/parsers/languages/vue-stores.js';
+import { isGitRepo } from '../src/core/git-tracker.js';
+import { storeDependencies, storePass } from '../src/parsers/languages/vue-stores.js';
 
 // M3-05: Vuex and Pinia references resolve to the member in the right store file, by namespace or
 // store import, never to a same-named function elsewhere or to the caller (edge contract rules 7
@@ -937,4 +940,278 @@ function remove() { return 0; }
     expect(local).toEqual([{ source_file: ROUTES, source_symbol: 'local', target_file: 'src/services/users.js', target_symbol: 'show' }]);
     expect(edgesFrom(plain, [LIST]).filter((e) => e.target_file === REDUCERS)).toEqual([]);
   });
+});
+
+// M3-05-R3: the store-library gate (the package.json that decides, read at parse time) is an input
+// of the parse. Adding or removing pinia there makes sync re-parse the modules it governs, as
+// scan --force would, on the git and the hash sync paths; a store library a monorepo root declares
+// counts for its packages.
+const git = (root: string, ...args: string[]) =>
+  execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], { cwd: root, stdio: 'pipe' });
+
+const PINIA_STORE = `import { defineStore } from 'pinia';
+import { ref } from 'vue';
+
+export const useWish = defineStore('wish', () => {
+  const items = ref<string[]>([]);
+  function add(item: string) { items.value.push(item); }
+  return { items, add };
+});
+`;
+// Imports only the hook: the store pass runs on it only in a package listing pinia.
+const HOOK_USER = `import { useWish } from '../stores/wish';
+
+export function useWishAdd() {
+  const w = useWish();
+  function addOne(item: string) {
+    w.add(item);
+  }
+  return { addOne };
+}
+`;
+
+describe.each([['git sync', true], ['hash sync', false]] as const)('a %s after pinia is added to or removed from package.json', (_name, withGit) => {
+  const USE_WISH_ADD = 'src/composables/useWishAdd.ts';
+  const NESTED_USER = 'packages/admin/src/composables/useWishAdd.ts';
+  const withPinia = JSON.stringify({ name: 'shop', dependencies: { vue: '^3.4.0', pinia: '^2.1.0' } });
+  const withoutPinia = JSON.stringify({ name: 'shop', dependencies: { vue: '^3.4.0' } });
+  let root: string;
+  beforeEach(() => {
+    root = workspace({
+      'package.json': withoutPinia,
+      'src/stores/wish.ts': PINIA_STORE,
+      // Same name, not a store.
+      'src/api/orders.ts': 'export function add(x: string) { return x; }\n',
+      [USE_WISH_ADD]: HOOK_USER,
+      // A nested package with its own dependencies: the root's package.json does not govern it.
+      'packages/admin/package.json': JSON.stringify({ name: 'admin', dependencies: { vue: '^3.4.0' } }),
+      'packages/admin/src/stores/wish.ts': PINIA_STORE,
+      [NESTED_USER]: HOOK_USER,
+    });
+    if (withGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    }
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterEach(() => cleanup(root));
+
+  const edges = () => query(root, 'SELECT source_file, source_symbol, edge_type, target_file, target_symbol FROM edges ORDER BY 1, 2, 3, 4, 5');
+  const addOne = (file: string) => query<{ t: string }>(root,
+    `SELECT target_file || '#' || target_symbol AS t FROM edges WHERE edge_type = 'call' AND source_file = ? AND source_symbol = 'addOne' ORDER BY 1`, file).map((e) => e.t);
+  const scannedAt = () => Object.fromEntries(query<{ path: string; last_scanned: string }>(root, 'SELECT path, last_scanned FROM files').map((f) => [f.path, f.last_scanned]));
+  const setManifest = (text: string) => {
+    writeFileSync(join(root, 'package.json'), text);
+    if (withGit) git(root, 'commit', '-qam', 'manifest');
+  };
+  const syncEqualsForce = () => {
+    mapx(root, 'sync', '.');
+    const synced = edges();
+    mapx(root, 'scan', '.', '--force');
+    expect(synced).toEqual(edges());
+  };
+
+  it('links the hook call once pinia is listed, and drops it once it is removed, as scan --force does', () => {
+    expect(addOne(USE_WISH_ADD)).not.toContain('src/stores/wish.ts#add');
+    setManifest(withPinia);
+    syncEqualsForce();
+    expect(addOne(USE_WISH_ADD)).toEqual(['src/stores/wish.ts#add']);
+    // The nested package lists its own dependencies, without pinia.
+    expect(addOne(NESTED_USER)).not.toContain('packages/admin/src/stores/wish.ts#add');
+    setManifest(withoutPinia);
+    syncEqualsForce();
+    expect(addOne(USE_WISH_ADD)).not.toContain('src/stores/wish.ts#add');
+  }, 180000);
+
+  it('lends the root store library to a package once pnpm-workspace.yaml lists it, as scan --force does', () => {
+    const before = scannedAt();
+    setManifest(withPinia);
+    mapx(root, 'sync', '.');
+    expect(scannedAt()[USE_WISH_ADD]).not.toBe(before[USE_WISH_ADD]);
+    expect(addOne(NESTED_USER)).not.toContain('packages/admin/src/stores/wish.ts#add');
+    // The root becomes a pnpm workspace root listing the nested package: its hoisted pinia counts there.
+    writeFileSync(join(root, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n");
+    if (withGit) {
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'workspace');
+    }
+    syncEqualsForce();
+    expect(addOne(NESTED_USER)).toEqual(['packages/admin/src/stores/wish.ts#add']);
+  }, 180000);
+});
+
+describe('a store library declared at a monorepo root', () => {
+  const APP_USER = 'packages/app/src/composables/useWishAdd.ts';
+  const APP_STORE = 'packages/app/src/stores/wish.ts';
+  let root: string;
+
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'mono', private: true, workspaces: ['packages/*', '!packages/legacy'], dependencies: { pinia: '^2.1.0' } }),
+      // The package lists other dependencies, not pinia: the root's (hoisted) one counts for it.
+      'packages/app/package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^3.4.0' } }),
+      [APP_STORE]: PINIA_STORE,
+      'packages/app/src/api/orders.ts': 'export function add(x: string) { return x; }\n',
+      [APP_USER]: HOOK_USER,
+      // Packages the workspace globs do not list (outside them, or excluded): the root lends them nothing.
+      'tools/cli/package.json': JSON.stringify({ name: 'cli', dependencies: { vue: '^3.4.0' } }),
+      'packages/legacy/package.json': JSON.stringify({ name: 'legacy', dependencies: { vue: '^3.4.0' } }),
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 90000);
+  afterAll(() => cleanup(root));
+
+  it('gives a workspace package the Pinia handling', () => {
+    const targets = query<{ t: string }>(root,
+      `SELECT target_file || '#' || target_symbol AS t FROM edges WHERE edge_type = 'call' AND source_file = ? AND source_symbol = 'addOne'`, APP_USER).map((e) => e.t);
+    expect(targets).toEqual([`${APP_STORE}#add`]);
+    expect(storeDependencies(join(root, APP_USER))).toEqual({ vuex: false, pinia: true });
+  });
+
+  it('lends nothing to a package the workspace globs do not list', () => {
+    expect(storeDependencies(join(root, 'tools/cli/src/a.ts'))).toEqual({ vuex: false, pinia: false });
+    expect(storeDependencies(join(root, 'packages/legacy/src/a.ts'))).toEqual({ vuex: false, pinia: false });
+  });
+
+  it('looks for the workspace root only up to the repository root', () => {
+    const nested = workspace({
+      'package.json': JSON.stringify({ private: true, workspaces: ['packages/*'], dependencies: { pinia: '^2.1.0' } }),
+      'packages/app/package.json': JSON.stringify({ name: 'app', dependencies: { vue: '^3.4.0' } }),
+      'packages/app/.git/HEAD': 'ref: refs/heads/main\n',
+    });
+    try {
+      expect(storeDependencies(join(nested, 'packages/app/src/a.ts'))).toEqual({ vuex: false, pinia: false });
+    } finally {
+      cleanup(nested);
+    }
+  });
+
+  it("reads yarn's workspaces.packages and a root's devDependencies", () => {
+    const yarn = workspace({
+      'package.json': JSON.stringify({ private: true, workspaces: { packages: ['apps/*'] }, devDependencies: { vuex: '^4.1.0' } }),
+      'apps/web/package.json': JSON.stringify({ name: 'web', dependencies: { vue: '^3.4.0', pinia: '^2.1.0' } }),
+      '.git/HEAD': 'ref: refs/heads/main\n',
+    });
+    try {
+      expect(storeDependencies(join(yarn, 'apps/web/src/store/actions.js'))).toEqual({ vuex: true, pinia: true });
+    } finally {
+      cleanup(yarn);
+    }
+  });
+
+  // storeDependencies of packages/a/src/x.ts in a repository (`.git` at its root) holding these files.
+  const PIN_ROOT = JSON.stringify({ private: true, dependencies: { pinia: '^2.1.0' } });
+  const APP = JSON.stringify({ name: 'a', dependencies: { vue: '^3.4.0' } });
+  const piniaOf = (files: Record<string, string>, file = 'packages/a/src/x.ts') => {
+    const dir = workspace({ '.git/HEAD': 'ref: refs/heads/main\n', ...files });
+    try {
+      return storeDependencies(join(dir, file)).pinia;
+    } finally {
+      cleanup(dir);
+    }
+  };
+
+  it('reads pnpm-workspace.yaml in flow and block style, quoted or not, with comments', () => {
+    for (const yaml of [
+      "packages: ['packages/*']\n",
+      'packages: [ "apps/*", packages/* ] # all\n',
+      'packages:\n  [\n    "packages/*",\n  ]\n',
+      '"packages":\n  - "packages/*"\n',
+      "'packages':\n- 'packages/*'\n",
+      'packages:\n  # apps\n\n  - packages/*  # all\n',
+      'catalog:\n  pinia: ^2.1.0\npackages:\n  - packages/*\nonlyBuiltDependencies:\n  - esbuild\n',
+    ]) expect(piniaOf({ 'package.json': PIN_ROOT, 'pnpm-workspace.yaml': yaml, 'packages/a/package.json': APP }), yaml).toBe(true);
+    expect(piniaOf({ 'package.json': PIN_ROOT, 'pnpm-workspace.yaml': "packages: ['apps/*']\n", 'packages/a/package.json': APP })).toBe(false);
+  });
+
+  it('walks past a workspace root that does not list the package, to the root that does', () => {
+    const npmRoot = JSON.stringify({ private: true, workspaces: ['packages/*'], dependencies: { pinia: '^2.1.0' } });
+    // A pnpm-workspace.yaml with settings only, no packages.
+    expect(piniaOf({ 'package.json': npmRoot, 'pnpm-workspace.yaml': 'onlyBuiltDependencies:\n  - esbuild\n', 'packages/a/package.json': APP })).toBe(true);
+    expect(piniaOf({ 'package.json': npmRoot, 'packages/pnpm-workspace.yaml': 'catalog:\n  x: 1\n', 'packages/a/package.json': APP })).toBe(true);
+    // A nested workspace root whose globs list other folders.
+    expect(piniaOf({
+      'package.json': JSON.stringify({ private: true, workspaces: ['packages/group/*'], dependencies: { pinia: '^2.1.0' } }),
+      'packages/group/package.json': JSON.stringify({ private: true, workspaces: ['other/*'] }),
+      'packages/group/a/package.json': APP,
+    }, 'packages/group/a/src/x.ts')).toBe(true);
+    // The root that lists the package decides, even without the library.
+    expect(piniaOf({
+      'package.json': npmRoot,
+      'packages/package.json': JSON.stringify({ private: true, workspaces: ['a'], dependencies: { lodash: '^4.0.0' } }),
+      'packages/a/package.json': APP,
+    })).toBe(false);
+  });
+
+  it('looks for the workspace root only up to the MapX workspace when no repository holds it', () => {
+    const files = { 'package.json': JSON.stringify({ private: true, workspaces: ['packages/*'], dependencies: { pinia: '^2.1.0' } }), 'packages/a/package.json': APP };
+    const outside = workspace({ ...files, 'packages/a/.mapx/config.json': '{}' });
+    const inside = workspace({ ...files, '.mapx/config.json': '{}' });
+    const none = workspace(files);
+    try {
+      expect(storeDependencies(join(outside, 'packages/a/src/x.ts')).pinia).toBe(false);
+      expect(storeDependencies(join(inside, 'packages/a/src/x.ts')).pinia).toBe(true);
+      expect(storeDependencies(join(none, 'packages/a/src/x.ts')).pinia).toBe(false);
+    } finally {
+      for (const dir of [outside, inside, none]) cleanup(dir);
+    }
+  });
+});
+
+// Review of M3-05-R3: the monorepo root is above the MapX workspace (MapX initialised in a package).
+// Its package.json is an input of the parse there too, so sync follows it as scan --force does. The
+// hash variant's `.git` is a folder git does not read, so sync takes the hash path while the
+// repository root still bounds the walk.
+describe.each([['git sync', true], ['hash sync', false]] as const)('a %s of a package below its monorepo root', (_name, withGit) => {
+  const USER = 'src/composables/useWishAdd.ts';
+  const rootManifest = (stores: Record<string, string>) => JSON.stringify({ private: true, workspaces: ['packages/*'], dependencies: { vue: '^3.4.0', ...stores } });
+  let root: string;
+  let app: string;
+  beforeEach(() => {
+    root = workspace({
+      'package.json': rootManifest({ pinia: '^2.1.0' }),
+      'packages/app/package.json': JSON.stringify({ name: 'app', dependencies: { lodash: '^4.0.0' } }),
+      'packages/app/src/stores/wish.ts': PINIA_STORE,
+      [`packages/app/${USER}`]: HOOK_USER,
+    });
+    if (withGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    } else {
+      mkdirSync(join(root, '.git'));
+    }
+    app = join(root, 'packages/app');
+    init(app);
+    mapx(app, 'scan', '.');
+  }, 120000);
+  afterEach(() => cleanup(root));
+
+  const edges = () => query(app, 'SELECT source_file, source_symbol, edge_type, target_file, target_symbol FROM edges ORDER BY 1, 2, 3, 4, 5');
+  const addOne = () => query<{ t: string }>(app,
+    `SELECT target_file || '#' || target_symbol AS t FROM edges WHERE edge_type = 'call' AND source_file = ? AND source_symbol = 'addOne'`, USER).map((e) => e.t);
+  const setRoot = (text: string) => {
+    writeFileSync(join(root, 'package.json'), text);
+    if (withGit) git(root, 'commit', '-qam', 'root');
+  };
+  const syncEqualsForce = () => {
+    mapx(app, 'sync', '.');
+    const synced = edges();
+    mapx(app, 'scan', '.', '--force');
+    expect(synced).toEqual(edges());
+  };
+
+  it('follows the root gaining and losing pinia, as scan --force does', () => {
+    expect(isGitRepo(app)).toBe(withGit);
+    expect(addOne()).toEqual(['src/stores/wish.ts#add']);
+    setRoot(rootManifest({}));
+    syncEqualsForce();
+    expect(addOne()).toEqual([]);
+    setRoot(rootManifest({ pinia: '^2.1.0' }));
+    syncEqualsForce();
+    expect(addOne()).toEqual(['src/stores/wish.ts#add']);
+  }, 180000);
 });
