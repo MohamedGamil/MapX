@@ -192,7 +192,7 @@ Templates, Options/Composition API, state stores and router navigation in Vue 2.
 - **M3-11-R1** More Vue Router navigation and route-table forms — DONE, P2, 4h; depends on M3-11, M3-08-R1.
 - **M3-07-R1** Framework detection keeps its folder scope when package.json files are indexed — DONE, P2, 2h; depends on M3-07.
 - **M3-05-R2** Pinia hooks of any name in plain modules; Vuex arrow members in imported objects — DONE, P2, 2h; depends on M3-05-R1.
-- **M3-05-R3** Store-library gate follows package.json changes and monorepo roots — BACKLOG, P2, 3h; depends on M3-05-R2.
+- **M3-05-R3** Store-library gate follows package.json changes and monorepo roots — IN_PROGRESS, P2, 3h; depends on M3-05-R2.
 
 ## M4 — Measurement and developer experience
 
@@ -256,7 +256,8 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
-- **M5-21** External references: Composer package attribution and builtins — IN_PROGRESS, P2, 4h; depends on M5-19, M5-01.
+- **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — BACKLOG, P2, 1.5h; depends on M5-20.
+- **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — BACKLOG, P2, 5h; depends on M5-19, M5-01.
 - **M5-23** External references: Go modules package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — BACKLOG, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.

@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- External references to PHP classes and functions now record their Composer package, whether it is a direct or transitive dependency and dev-only, from composer.json and composer.lock autoload sections, and PHP built-ins (`DateTime`, `PDO`, `str_contains`, `use const PHP_EOL`) are classified as built-ins of their extension (M5-21).
 - Architecture layers can select types by ancestry and members (`extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`), transitively and across languages, including framework bases outside the workspace, and `policy.inheritDependencies` makes a subclass answer for its bases' dependencies, each finding naming the inheritance path in `via` (M5-09).
 - `mapx arch graph` draws the layer graph as Graphviz DOT, SVG (no Graphviz needed), Mermaid, a layer DSM or JSON, with dependency counts per layer pair, violations in red, skipped ones dashed, groups as subgraphs, hidden layers and point-to-group (M5-13).
 - Five MCP tools give agents the architecture rules: `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed` (a pre-flight check that names allowed alternatives), `mapx_arch_explain` and `mapx_arch_init` (a role-based proposal that writes only with `write: true`). They answer as `mapx check` and `mapx arch …` do, and the generated agent instructions say to call `mapx_arch_allowed` before adding an import across modules. MCP now has 39 tools (M5-14).

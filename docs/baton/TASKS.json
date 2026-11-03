@@ -20413,6 +20413,67 @@
       "rollback": "Revert the task commit."
     },
     {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 1.5,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-20",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-20.md",
+        "docs/baton/reports/M5-21.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-20-R1",
+      "title": "npm attribution: a nested lockfile that cannot be read gives manifest-only attribution",
+      "objective": "A nested package-lock.json (or yarn/pnpm lock) that exists but cannot be read stops the lockfile walk, so the nearest package.json answers (flagged manifest) instead of a parent folder's lockfile, as the Composer attributor does since the M5-21 review.",
+      "description": "Found by M5-21 (2026-11-03): NpmAttributor.lockFor treats an unreadable lockfile (a folder, no permission) as absent and falls through to a parent lock, attributing with the wrong lock.",
+      "outputs": [
+        "src/core/manifests/npm.ts",
+        "tests/external-refs.test.ts",
+        "reports/M5-20-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/npm.ts",
+        "tests/external-refs.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A nested package-lock.json that is a folder or chmod 000, below a readable root lock: the nested package's externals are attributed from its package.json, flagged manifest, never from the root lock (test).",
+        "A missing nested lock still falls through to the parent lock, as before (test); the externals scorer npm rows hold 26/26."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ]
+    },
+    {
       "id": "M5-21",
       "milestone": "M5",
       "title": "External references: Composer package attribution and builtins",
@@ -20468,14 +20529,27 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-21",
       "actualHours": null,
       "startedAt": "2026-11-03T02:36:31.810Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T05:52:11.311Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-21.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-21.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-21.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T02:36:31.259Z",
@@ -20488,6 +20562,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T05:52:10.837Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T05:52:11.311Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-21.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-21.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -26115,15 +26212,28 @@
         "docs/baton/reports/M3-05-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M3-05-R3",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T05:49:38.041Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T05:49:36.388Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T05:49:38.041Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

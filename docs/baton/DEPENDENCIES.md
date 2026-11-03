@@ -206,6 +206,7 @@ flowchart LR
 - M0-17-R6 ← M4-01 (hard), M4-03 (hard), M4-04 (hard), M4-05 (hard), M4-08 (hard), M0-02-R8 (hard), M3-11-R1 (hard), M3-09-R1 (hard), M0-17-R5 (hard)
 - M5-19 ← M5-03 (hard), M5-01 (fixture), M4-03 (interface), M5-03-R1 (hard)
 - M5-20 ← M5-19 (hard), M5-01 (fixture)
+- M5-20-R1 ← M5-20 (hard)
 - M5-21 ← M5-19 (hard), M5-01 (fixture)
 - M5-22 ← M5-19 (hard), M5-01 (fixture)
 - M5-23 ← M5-19 (hard), M5-01 (fixture)
