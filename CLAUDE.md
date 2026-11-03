@@ -1,4 +1,4 @@
-<!-- mapx v0.3.9 #95e4591ebb1c -->
+<!-- mapx v0.3.9 #468280ca0228 -->
 # MapxGraph - Claude Integration Guide
 
 This project is configured with **MapxGraph** for codebase navigation and graph query support across **23 languages**.
@@ -65,7 +65,7 @@ To share one long-running server between clients, start it with `mapx serve --ss
 
 When the project has `.mapx/architecture.jsonc` (`mapx_arch_init` proposes one, and writes it only with `write: true`):
 
-1. **Before adding an import across modules, call `mapx_arch_allowed`** with `from` (the file or symbol you are editing) and `to` (what you want to use). If `allowed` is false, read `reason`. `alternatives` lists matching symbols (a supertype, or a similar name) that the rules let `from` use; check that one fits before switching to it.
+1. **Before adding an import across modules, call `mapx_arch_allowed`** with `from` (the file or symbol you are editing) and `to` (what you want to use: a layer `Domain`, a file `src/domain/Order.ts`, a symbol `Order::total`, a package `npm:express` or `express`, or a built-in `node:fs`). If `allowed` is false, read `reason`. `alternatives` lists matching symbols (a supertype, or a similar name) that the rules let `from` use; check that one fits before switching to it.
 2. Call `mapx_arch_explain` to see why an element is in a layer, or why a dependency is refused.
 3. After editing, call `mapx_arch_check` with `sync: true` (narrow it with `file` or `since`): `exitCode` 1 means a violation to fix. Without `sync: true`, every architecture tool refuses an index older than your edits (`exitCode` 4); pass it to `mapx_arch_allowed` too once you have edited files.
 <!-- /mapx -->
