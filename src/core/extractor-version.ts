@@ -39,8 +39,10 @@ import type { Store } from './store.js';
  * - 17: M2-13 (a PHP reference inside a one-line declaration comes from it, and one in no
  *   declaration from the file, by the syntax tree; PHP names resolve in the namespace block or
  *   statement in force where they are written).
+ * - 18: M5-23-R1 (under a go.mod that is there but cannot be read, imports of the module's own
+ *   packages resolve by the folder layout: import edges, no external rows).
  */
-export const EXTRACTOR_VERSION = 17;
+export const EXTRACTOR_VERSION = 18;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

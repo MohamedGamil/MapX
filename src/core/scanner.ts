@@ -26,7 +26,7 @@ import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isSc
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, routeDomainHosts, urlHost } from '../frameworks/http/pairing.js';
-import { closest, goImportInWorkspaceModule, goImportOutsideProject, importResolverFor, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportHit } from './import-resolvers.js';
+import { closest, goImportInWorkspaceModule, goImportOutsideProject, goLayoutModule, importResolverFor, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -664,7 +664,7 @@ export class Scanner {
         ...this.movedReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.removedSymbolReferrers(repo.name, changedFiles.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.vanishedNameReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
-        ...this.configReferrers(repo.name, deletedPaths),
+        ...this.configReferrers(repo.name, deletedPaths, false, [...newFiles, ...changedFiles].map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.vueRegistryReferrers(repo.name, candidateTexts, deletedPaths),
       ]),
     ]);
@@ -1109,7 +1109,7 @@ export class Scanner {
     // holds (M0-02-R4), and those using a Vue tag whose global registration changed (M3-08).
     const reindexed = new Set(toReindex.map(r => r.path));
     const listedTexts = [...contents].map(([path, content]) => ({ path, content }));
-    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove), ...this.importerReferrers(listedTexts), ...this.newModuleReferrers(listedTexts.map(t => t.path))];
+    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove, false, listedTexts), ...this.importerReferrers(listedTexts), ...this.newModuleReferrers(listedTexts.map(t => t.path))];
     const vueUsers = this.vueRegistryReferrers(repo.name, listedTexts, toRemove);
     // Taken again: removeFiles queued the importers of the removed modules (M2-08-R1).
     const queued = toRemove.length ? this.takePendingReferrers(repo.name) : [];
@@ -2566,6 +2566,7 @@ export class Scanner {
     for (const f of this.store.getAllFiles()) this.workspaceFileMap.set(f.path as string, f.repo as string);
     this.importFiles = null;
     this.importTextCache.clear();
+    this.importPresentCache.clear();
     this.languageCache.clear();
     this.npmWorkspaceNames = null;
     this.phpDeclared = null;
@@ -2692,7 +2693,7 @@ export class Scanner {
   /** The import resolvers' context over this phase's file set. */
   private importContext(fileMap: Map<string, string>): ImportContext {
     if (this.importFiles?.map !== fileMap) this.importFiles = { map: fileMap, files: new Set(fileMap.keys()) };
-    return { files: this.importFiles.files, readText: (path) => this.readWorkspaceText(path) };
+    return { files: this.importFiles.files, readText: (path) => this.readWorkspaceText(path), exists: (path) => this.workspaceExists(path) };
   }
 
   /** A JS/TS file's import, export-from and require statements, for one resolution phase (M5-19). */
@@ -3264,6 +3265,7 @@ export class Scanner {
     this.vueScopes.clear();
     this.vueImporters.clear();
     this.importTextCache.clear();
+    this.importPresentCache.clear();
     const key = 'vue_dir_scopes:' + repoName;
     const gone = new Set(deleted);
     const indexed = [...new Set([...this.store.getAllFiles(repoName).map(f => f.path as string), ...files.map(f => f.path)])]
@@ -3303,6 +3305,13 @@ export class Scanner {
     if (!next) return;
     this.pendingVueRegistry.delete(repoName);
     this.store.setMeta('vue_registry:' + repoName, JSON.stringify(next));
+  }
+
+  /** True when a workspace path is there, readable or not (an unreadable go.mod, M5-23-R1). */
+  private workspaceExists(path: string): boolean {
+    let present = this.importPresentCache.get(path);
+    if (present === undefined) this.importPresentCache.set(path, (present = existsSync(resolve(this.config.getWorkspaceRoot(), path))));
+    return present;
   }
 
   /** A workspace file's text, cached for the resolution phase (null when it does not exist). */
@@ -3354,6 +3363,7 @@ export class Scanner {
   // (M0-12-R3), go.mod texts, and each path's language.
   private importFiles: { map: Map<string, string>; files: Set<string> } | null = null;
   private importTextCache = new Map<string, string | null>();
+  private importPresentCache = new Map<string, boolean>();
   private languageCache = new Map<string, string | null>();
   // PHP file → the namespace it declares ('' for none), built with the symbol index (M0-04-R2).
   private phpNamespaces = new Map<string, string>();
@@ -3577,6 +3587,7 @@ export class Scanner {
     return resolver(target, sourcePath, {
       files,
       readText: (path) => this.readWorkspaceText(path),
+      exists: (path) => this.workspaceExists(path),
       namespaceFiles: (namespace) => declaring(namespace, NAMESPACE_KINDS),
       typeFiles: (name) => declaring(name, TYPE_KINDS),
       fileNamespace: (file) => this.phpNamespaces.get(file) ?? null,
@@ -4280,9 +4291,12 @@ export class Scanner {
    * as `scan --force` would resolve them (M0-02-R8). Likewise Go files below a changed go.mod (the
    * module path) and PHP files below a changed composer.json (PSR-4 roots) (M0-02-R9). Signatures
    * live in `meta js_configs:<repo>`: folder keys for JS/TS/Python, NUL-prefixed `go:`/`php:` folder
-   * keys for the others, and `#families`, the families the record holds.
+   * keys for the others, and `#families`, the families the record holds. A go.mod that is there but
+   * cannot be read is signed by the module path its folder layout gives, over the Go files as they
+   * stand (`texts`: the new and changed ones), so an import that changes it re-parses the module's
+   * files as `scan --force` would (review of M5-23-R1).
    */
-  private configReferrers(repoName: string, deleted: string[] = [], dryRun = false): Set<string> {
+  private configReferrers(repoName: string, deleted: string[] = [], dryRun = false, texts: Array<{ path: string; content?: string }> = []): Set<string> {
     const key = 'js_configs:' + repoName;
     const gone = new Set(deleted);
     const indexed = this.store.getAllFiles(repoName).map(f => f.path as string).filter(p => !gone.has(p));
@@ -4361,6 +4375,20 @@ export class Scanner {
     }
     // go.mod / composer.json in every folder above a Go / PHP file (M0-02-R9).
     for (const family of families) {
+    // The module path an unreadable go.mod's folder layout gives, over the Go files as they stand.
+    let layoutCtx: ImportContext | null = null;
+    const goLayout = (dir: string) => {
+      if (!layoutCtx) {
+        const given = new Map(texts.filter((t) => t.content !== undefined && t.path.endsWith('.go')).map((t) => [t.path, t.content!]));
+        const goFiles = new Set([...families.find((f) => f.manifest === 'go.mod')!.sources, ...given.keys()]);
+        const readText = (path: string) => {
+          if (given.has(path)) return given.get(path)!;
+          try { return readFileSync(resolve(workspaceRoot, path), 'utf-8'); } catch { return null; }
+        };
+        layoutCtx = { files: goFiles, readText, exists: (path) => existsSync(resolve(workspaceRoot, path)) };
+      }
+      return goLayoutModule(dir, layoutCtx);
+    };
       const above = new Set<string>(['']);
       for (const p of family.sources) {
         for (let dir = p; dir.includes('/');) {
@@ -4374,10 +4402,13 @@ export class Scanner {
         let manifest: Buffer | null = null;
         try {
           manifest = statSync(abs).isFile() ? readFileSync(abs) : null;
-        } catch { /* none here */ }
+        } catch { /* none here, or unreadable */ }
         if (manifest) signatures[family.prefix + dir] = createHash('md5').update(manifest).digest('hex');
       }
     }
+        else if (family.manifest === 'go.mod' && existsSync(abs)) {
+          signatures[family.prefix + dir] = createHash('md5').update(`\0unreadable\0${goLayout(dir) ?? ''}`).digest('hex');
+        }
     signatures['#families'] = MANIFEST_FAMILIES.map(f => f.prefix).join(',');
     let before: Record<string, string> | null = null;
     try { before = JSON.parse(this.store.getMeta(key) ?? 'null'); } catch { /* recorded below */ }
@@ -4820,6 +4851,7 @@ export class Scanner {
     // may have changed since the last one (long-lived scanners: watch, MCP).
     this.importFiles = null;
     this.importTextCache.clear();
+    this.importPresentCache.clear();
     this.importBindingsCache.clear();
     this.exportCache.clear();
     this.lineCache.clear();
@@ -5336,7 +5368,7 @@ export class Scanner {
         ...this.movedReferrers(repo.name, changedTexts),
         ...this.removedSymbolReferrers(repo.name, changedTexts),
         ...this.vanishedNameReferrers(repo.name, changedTexts),
-        ...this.configReferrers(repo.name, toRemove),
+        ...this.configReferrers(repo.name, toRemove, false, changedTexts),
         ...this.vueRegistryReferrers(repo.name, changedTexts, toRemove),
       ]),
     ]);

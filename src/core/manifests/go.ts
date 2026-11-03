@@ -362,3 +362,80 @@ export function goTestOnlyModules(rows: Iterable<{ file: string; scope: string; 
   }
   return new Set([...used].filter(([, testOnly]) => testOnly).map(([key]) => key));
 }
+
+// ─── An unreadable go.mod (M5-23-R1) ────────────────────────────────────────────────────────
+
+/**
+ * The import paths a Go file's text names: `import "p"`, `import x "p"` and `import ( … )` blocks,
+ * read with a small tokenizer (comments, interpreted and raw strings, runes), so a string or comment
+ * that looks like an import is none (an `import` keyword is a token only outside them).
+ */
+export function goImportPaths(text: string): string[] {
+  const tokens: string[] = [];
+  const n = text.length;
+  for (let i = 0; i < n;) {
+    const c = text[i]!;
+    if (c === '/' && text[i + 1] === '/') { const e = text.indexOf('\n', i); i = e < 0 ? n : e; continue; }
+    if (c === '/' && text[i + 1] === '*') { const e = text.indexOf('*/', i + 2); i = e < 0 ? n : e + 2; continue; }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < n && text[j] !== c && text[j] !== '\n') j += text[j] === '\\' ? 2 : 1;
+      tokens.push(c === '"' ? `"${text.slice(i + 1, j)}` : "'");
+      i = j + 1;
+      continue;
+    }
+    if (c === '`') { const e = text.indexOf('`', i + 1); tokens.push(`"${text.slice(i + 1, e < 0 ? n : e)}`); i = e < 0 ? n : e + 1; continue; }
+    const word = /^[A-Za-z_][\w]*/.exec(text.slice(i, i + 64))?.[0];
+    if (word) { tokens.push(word); i += word.length; continue; }
+    if (!/\s/.test(c)) tokens.push(c);
+    i++;
+  }
+  const out: string[] = [];
+  const path = (t: string | undefined) => (t?.startsWith('"') ? t.slice(1) : null);
+  for (let k = 0; k < tokens.length; k++) {
+    const t = tokens[k]!;
+    if (t !== 'import') continue;
+    const spec = (at: number): number => {
+      // [name | . | _] "path"
+      const named = path(tokens[at]) === null && path(tokens[at + 1]) !== null;
+      const p = path(tokens[named ? at + 1 : at]);
+      if (p) out.push(p);
+      return named ? at + 2 : at + 1;
+    };
+    if (tokens[k + 1] === '(') {
+      let j = k + 2;
+      while (j < tokens.length && tokens[j] !== ')') j = tokens[j] === ';' ? j + 1 : spec(j);
+      k = j;
+    } else {
+      k = spec(k + 1) - 1;
+    }
+  }
+  return out;
+}
+
+/**
+ * The module path of a go.mod MapX cannot read, from the folder layout (M5-23-R1 and its review):
+ * an import path `M/rel` whose `rel` is a package folder of the module (relative to the go.mod's
+ * folder) votes for `M`. A path is inferred only on strong evidence: one candidate alone, voted for
+ * by imports of at least two distinct folders. Any competing candidate, a single folder, or no vote
+ * gives null, and the module's imports stay unknown rows as before. So a third-party import whose
+ * last element matches a folder (`github.com/google/uuid` and `uuid/`, `k8s.io/api` and `api/`)
+ * never makes its prefix the module. A standard-library path never votes.
+ */
+export function goModuleByLayout(imports: Iterable<string>, packageDirs: Iterable<string>): string | null {
+  const dirs = [...new Set(packageDirs)].filter(Boolean);
+  const votes = new Map<string, Set<string>>();
+  for (const path of new Set(imports)) {
+    if (goBuiltin(path)) continue;
+    for (const rel of dirs) {
+      if (path.length <= rel.length + 1 || !path.endsWith(`/${rel}`)) continue;
+      const module = path.slice(0, -rel.length - 1);
+      let voters = votes.get(module);
+      if (!voters) votes.set(module, (voters = new Set()));
+      voters.add(rel);
+    }
+  }
+  if (votes.size !== 1) return null;
+  const [[module, voters]] = [...votes];
+  return voters!.size >= 2 ? module! : null;
+}

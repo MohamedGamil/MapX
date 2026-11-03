@@ -18,7 +18,7 @@ import { EXTERNAL_INPUTS_KEY, changedInputFiles, matchGlob, parseExternalInputs 
 import { IMPORT_DISTRIBUTIONS, normalizeDist, parsePoetryLock, parseRequirement, parseRequirementsTxt, parseUvLock, pyprojectRoots, pythonBuiltin, PYTHON_STDLIB, requirementsFileIsDev } from '../src/core/manifests/pypi.js';
 import { PYTHON_STDLIB_SOURCE } from '../src/core/manifests/python-stdlib.js';
 import { parseToml } from '../src/core/manifests/toml.js';
-import { GoAttributor, goBuiltin, goIndirectComment, goModuleOf, goReplacement, goTestOnlyModules, parseGoMod, parseGoSum, parseGoWork } from '../src/core/manifests/go.js';
+import { GoAttributor, goBuiltin, goImportPaths, goIndirectComment, goModuleByLayout, goModuleOf, goReplacement, goTestOnlyModules, parseGoMod, parseGoSum, parseGoWork } from '../src/core/manifests/go.js';
 import { GO_STDLIB, GO_STDLIB_SOURCE } from '../src/core/manifests/go-stdlib.js';
 import { cleanup, init, mapx, mapxResult, query } from './helpers/e2e';
 import { buildElementView, type Element } from '../src/arch/elements.js';
@@ -2390,6 +2390,30 @@ describe('Go standard library and go.mod, go.sum, go.work', () => {
     expect(a.attribute('github.com/google/uuid', 'R/cmd/main.go')).toEqual({ package: 'github.com/google/uuid', origin: 'package', direct: true, dev: false, attribution: 'manifest' });
     expect([...a.reads.keys()].sort()).toEqual(['R/cmd/go.mod', 'R/go.mod', 'R/go.sum', 'R/go.work']);
   });
+
+  it('the module path of an unreadable go.mod, from the folder layout (M5-23-R1)', () => {
+    expect(goImportPaths('package x\n\nimport "fmt"\nimport u "github.com/google/uuid"\n// import "no/comment"\nimport (\n\t"example.com/app/a"\n\t. "example.com/app/b/c" // trailing\n\t_ "embed"\n)\n'))
+      .toEqual(['fmt', 'github.com/google/uuid', 'example.com/app/a', 'example.com/app/b/c', 'embed']);
+    // A tokenizer, not lines: strings and comments that look like imports are none (review of M5-23-R1).
+    expect(goImportPaths('package x\nimport (\n\t"a/b"\n\t"c)d"\n\t"e/f"\n)\n')).toEqual(['a/b', 'c)d', 'e/f']);
+    expect(goImportPaths('package x\nimport "real/x"\nvar s = "/* "\nvar t = "*/"\n')).toEqual(['real/x']);
+    expect(goImportPaths('package x\n\nimport (\n\t"x/a"\n)\nvar s = `\nimport "fake/z"\n`\n')).toEqual(['x/a']);
+    expect(goImportPaths('package x\n/* import "no/block" */ import ( "p/q"; m "r/s" )\n')).toEqual(['p/q', 'r/s']);
+    // A raw-string path, and a comment holding a quote.
+    expect(goImportPaths('package x\nimport (\n\t`x/raw` // it\'s "fake"\n\t"y/b"\n)\n')).toEqual(['x/raw', 'y/b']);
+    // Strong evidence only: one candidate, voted for by imports of two folders or more.
+    expect(goModuleByLayout(['example.com/app/a', 'example.com/app/b/c'], ['a', 'b/c'])).toBe('example.com/app');
+    // A dotless module path is a module too; a standard-library path never votes.
+    expect(goModuleByLayout(['app/store', 'app/log', 'net/http'], ['store', 'log', 'http'])).toBe('app');
+    // One folder is no evidence: a lone third-party prefix never wins (review P1), nor one own folder.
+    expect(goModuleByLayout(['github.com/google/uuid', 'github.com/google/go-cmp/cmp'], ['uuid'])).toBeNull();
+    expect(goModuleByLayout(['k8s.io/api', 'k8s.io/client-go/kubernetes'], ['api'])).toBeNull();
+    expect(goModuleByLayout(['example.com/app/a'], ['a'])).toBeNull();
+    // A competing candidate, however strong either is: unknown.
+    expect(goModuleByLayout(['example.com/app/a', 'github.com/acme/foo', 'github.com/acme/bar'], ['a', 'foo', 'bar'])).toBeNull();
+    expect(goModuleByLayout(['example.com/app/a', 'example.com/app/b/c', 'github.com/google/uuid'], ['a', 'b/c', 'uuid'])).toBeNull();
+    expect(goModuleByLayout(['github.com/google/uuid'], ['a'])).toBeNull();
+  });
 });
 
 const goAttribution = (store: Store, kind = 'import') => store.getExternalRefs().filter((r) => r.ecosystem === 'go' && r.kind === kind)
@@ -2641,6 +2665,36 @@ describe('Go modules attribution of a scan', () => {
       'main.go:6 os → os builtin null null null',
     ]);
   }, 120000);
+
+  // ─── M5-23-R1: an unreadable go.mod keeps the module's own imports internal ───
+
+  const OWN = {
+    'go.mod': GO_MOD,
+    // internal/gone is no package: still the module's own, never a row.
+    'cmd/main.go': 'package main\n\nimport (\n\t"example.com/app/internal/gone"\n\t"example.com/app/internal/store"\n\t"example.com/app/pkg/log"\n\t"github.com/google/uuid"\n)\n\nfunc main() { gone.X(); store.Open(); log.Info(); uuid.New() }\n',
+    'internal/store/store.go': 'package store\n\nimport "example.com/app/pkg/log"\n\nfunc Open() { log.Info() }\n',
+    'pkg/log/log.go': 'package log\n\nfunc Info() {}\n',
+    // A nested module's imports never vote for the root module's path as its folders.
+    'svc/go.mod': 'module example.com/svc\n\ngo 1.22\n',
+    'svc/a/a.go': 'package a\n\nimport (\n\t"example.com/svc/b"\n\t"example.com/svc/c"\n\t"example.com/svc/d"\n)\n\nfunc A() { b.B(); c.C(); d.D() }\n',
+    'svc/b/b.go': 'package b\n\nfunc B() {}\n',
+    'svc/c/c.go': 'package c\n\nfunc C() {}\n',
+    'svc/d/d.go': 'package d\n\nfunc D() {}\n',
+  };
+  const ownEdges = (store: Store) => store.getAllEdges().filter((e) => e.edge_type === 'import')
+    .map((e) => `${e.source_file} → ${e.target_file}`).sort();
+  /** Scans `files` with go.mod made unreadable (chmod 000) or given as a folder. */
+  const scanUnreadable = async (files: Record<string, string | null>, chmod: boolean) => {
+    p.create(present(chmod ? files : { ...files, 'go.mod': null, 'go.mod/x.txt': 'x' }));
+    if (chmod) unreadable(join(p.root, 'go.mod'));
+    try {
+      const store = new Store(':memory:');
+      await (await p.scanner(store)).scanFull();
+      return store;
+    } finally {
+      if (chmod) restore(join(p.root, 'go.mod'));
+    }
+  }, 120000);
 });
 
 // Sync = scan --force when go.mod, go.sum or the test-only use of a module changes.
@@ -2693,6 +2747,73 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when g
     const forced = await p.forced();
     expect(dumpAll(store)).toEqual(dumpAll(forced));
     expect(goAttribution(store)).toContain(expected);
+  };
+  const HOW = [['cannot be read', true], ['is a folder', false]] as const;
+  // Root can read a file without permission: those cases hold only for another user.
+  const skip = (chmod: boolean) => chmod && process.getuid?.() === 0;
+
+  it.each(HOW)('go.mod %s: sibling packages of the module stay internal, with their edges; a module import is unknown, flagged manifest', async (_name, chmod) => {
+    if (skip(chmod)) return;
+    // The same tree with a readable go.mod: the import edges the unreadable one must keep.
+    const readable = new Store(':memory:');
+    const q = project(false);
+    q.create(OWN);
+    await (await q.scanner(readable)).scanFull();
+    const store = await scanUnreadable(OWN, chmod);
+    expect(goAttribution(store)).toEqual(['cmd/main.go:7 github.com/google/uuid → null package null null manifest']);
+    expect(ownEdges(store)).toEqual(expect.arrayContaining([
+      'cmd/main.go → internal/store/store.go',
+      'cmd/main.go → pkg/log/log.go',
+      'internal/store/store.go → pkg/log/log.go',
+      'svc/a/a.go → svc/b/b.go',
+    ]));
+    expect(ownEdges(store)).toEqual(ownEdges(readable));
+  }, 120000);
+
+  // Review of M5-23-R1 (P1): weak or competing evidence infers nothing; the module's imports stay unknown, as before.
+  const UNKNOWN = (r: string) => `${r} → null package null null manifest`;
+  it.each(HOW)('go.mod %s: a lone third-party prefix matching one folder is never the module (no false edge)', async (_name, chmod) => {
+    if (skip(chmod)) return;
+    const store = await scanUnreadable({
+      'go.mod': GO_MOD,
+      'cmd/main.go': 'package main\n\nimport (\n\t"github.com/google/go-cmp/cmp"\n\t"github.com/google/uuid"\n\t"k8s.io/api"\n)\n\nfunc main() { cmp.Diff(1, 2); uuid.New(); api.X() }\n',
+      'uuid/uuid.go': 'package uuid\n\nfunc New() {}\n',
+      'api/api.go': 'package api\n\nfunc X() {}\n',
+    }, chmod);
+    expect(goAttribution(store)).toEqual(['cmd/main.go:4 github.com/google/go-cmp/cmp', 'cmd/main.go:5 github.com/google/uuid', 'cmd/main.go:6 k8s.io/api'].map(UNKNOWN));
+    expect(ownEdges(store)).toEqual([]);
+  }, 120000);
+
+  it.each(HOW)('go.mod %s: a competing prefix (a uuid/ folder beside own folders, or two folders of a third party) infers nothing', async (_name, chmod) => {
+    if (skip(chmod)) return;
+    const store = await scanUnreadable({
+      'go.mod': GO_MOD,
+      'cmd/main.go': 'package main\n\nimport (\n\t"example.com/app/a"\n\t"example.com/app/b"\n\t"github.com/acme/bar"\n\t"github.com/acme/foo"\n\t"github.com/google/uuid"\n)\n\nfunc main() { a.A(); b.B(); bar.X(); foo.X(); uuid.New() }\n',
+      'a/a.go': 'package a\n\nfunc A() {}\n',
+      'b/b.go': 'package b\n\nfunc B() {}\n',
+      'foo/foo.go': 'package foo\n\nfunc X() {}\n',
+      'bar/bar.go': 'package bar\n\nfunc X() {}\n',
+      'uuid/uuid.go': 'package uuid\n\nfunc New() {}\n',
+    }, chmod);
+    expect(goAttribution(store)).toEqual([
+      'cmd/main.go:4 example.com/app/a', 'cmd/main.go:5 example.com/app/b', 'cmd/main.go:6 github.com/acme/bar', 'cmd/main.go:7 github.com/acme/foo', 'cmd/main.go:8 github.com/google/uuid',
+    ].map(UNKNOWN));
+    expect(ownEdges(store)).toEqual([]);
+  }, 120000);
+
+  it('a go.work member whose go.mod is a folder: its folder layout, voted for by the other members that import it (review P2)', async () => {
+    p.create({
+      'go.work': 'go 1.22\n\nuse (\n\t./a\n\t./b\n)\n',
+      'a/go.mod': 'module example.com/a\n\ngo 1.22\n',
+      'a/a.go': 'package a\n\nimport "example.com/b/x"\n\nfunc A() { x.X() }\n',
+      'b/go.mod/x.txt': 'x',
+      'b/x/x.go': 'package x\n\nimport "example.com/b/y"\n\nfunc X() { y.Y() }\n',
+      'b/y/y.go': 'package y\n\nfunc Y() {}\n',
+    });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    expect(goAttribution(store)).toEqual([]);
+    expect(ownEdges(store)).toEqual(['a/a.go → b/x/x.go', 'b/x/x.go → b/y/y.go']);
   }, 120000);
 
   it('fills the Go attribution of an index built before (null columns), without --force', async () => {
@@ -2703,6 +2824,7 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when g
     await p.sync(store);
     expect(goAttribution(store)).toEqual(goAttributed('cmd', 'lock'));
   }, 120000);
+
 });
 
 describe('Go modules attribution through the CLI', () => {
@@ -2747,6 +2869,37 @@ function scannedApp(app: string, config?: object, extra: Record<string, string> 
   }
   mapx(root, 'scan');
   if (config) writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify(config));
+  // Review of M5-23-R1 (P2): the module path an unreadable go.mod's layout gives is a sync input.
+  it.each([
+    ['a second own folder imported: the module path is inferred', 'tool/t.go', 'package tool\n\nimport "example.com/app/internal/store"\n\nfunc T() { store.Open() }\n', 'cmd/main.go → pkg/log/log.go'],
+    ['a competing third-party prefix imported: the module path is no longer inferred', 'tool/t.go', 'package tool\n\nimport "github.com/google/uuid"\n\nfunc T() { uuid.New() }\n', null],
+  ] as const)('go.mod is a folder, %s; unchanged files follow, as scan --force', async (_name, path, text, edge) => {
+    // Inferred at first in the second case: pkg/log imports internal/store, a second own folder.
+    const second: Record<string, string> = edge ? {} : { 'pkg/log/log2.go': 'package log\n\nimport "example.com/app/internal/store"\n\nfunc L() { store.Open() }\n' };
+    p.create({
+      'go.mod/x.txt': 'x',
+      'cmd/main.go': 'package main\n\nimport "example.com/app/pkg/log"\n\nfunc main() { log.Info() }\n',
+      'pkg/log/log.go': 'package log\n\nfunc Info() {}\n',
+      'internal/store/store.go': 'package store\n\nfunc Open() {}\n',
+      'uuid/uuid.go': 'package uuid\n\nfunc New() {}\n',
+      ...second,
+    });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    const linked = () => store.getAllEdges().some((e) => e.edge_type === 'import' && e.source_file === 'cmd/main.go' && e.target_file === 'pkg/log/log.go');
+    expect(linked()).toBe(!edge);
+    write(p.root, { [path]: text });
+    if (withGit) {
+      git(p.root, 'add', '-A');
+      git(p.root, 'commit', '-qm', 'change');
+    }
+    await p.sync(store);
+    const forced = await p.forced();
+    expect(dumpEdges(store)).toEqual(dumpEdges(forced));
+    expect(dumpAll(store)).toEqual(dumpAll(forced));
+    expect(linked()).toBe(!!edge);
+  }, 120000);
+
   return root;
 }
 

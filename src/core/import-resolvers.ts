@@ -3,13 +3,15 @@
 // it refers to, or null for standard-library and third-party imports. `resolveImports` turns that
 // into edge hits: a file plus the module/namespace the edge names (M0-12-R4).
 import { posix } from 'node:path';
-import { parseGoMod } from './manifests/go.js';
+import { goImportPaths, goModuleByLayout, parseGoMod } from './manifests/go.js';
 
 export interface ImportContext {
   /** Every indexed workspace-relative path. */
   files: Set<string>;
   /** Reads a workspace-relative file that may not be indexed (go.mod); null when absent. */
   readText(path: string): string | null;
+  /** True when a workspace-relative path is there, readable or not (a go.mod without permission, M5-23-R1). */
+  exists?(path: string): boolean;
   /** Files declaring a namespace (C#), from the symbol index. */
   namespaceFiles?(namespace: string): string[];
   /** Files declaring a type (class, struct, interface, enum, record) named `name` (C#). */
@@ -217,13 +219,65 @@ function goWorkModules(sourcePath: string, ctx: ImportContext): [string, string]
         const moduleDir = join(dir, use);
         // Nothing outside the workspace is read.
         if (moduleDir === '..' || moduleDir.startsWith('../')) continue;
-        const module = goModulePath(ctx.readText(join(moduleDir, 'go.mod')));
+        // A member whose go.mod cannot be read: its folder layout (review of M5-23-R1).
+        const module = goModuleIn(moduleDir, ctx)?.module;
         if (module) modules.push([module, moduleDir]);
       }
       return [...goLocalReplaces(text, dir), ...modules];
     }
     if (!dir) return [];
   }
+}
+
+/** Per file set: a go.mod folder → the module path its folder layout gives (M5-23-R1). */
+const goLayoutModules = new WeakMap<Set<string>, Map<string, string | null>>();
+
+/**
+ * The module path the folder layout gives a go.mod in `dir` that is there but cannot be read
+ * (`goModuleByLayout`; M5-23-R1 and its review). The package folders are the module's own (a folder
+ * below with its own go.mod is another module); the imports are those of every non-test Go file of
+ * the file set, so a go.work member's packages are voted for by the members that import them, and
+ * any third-party prefix a folder matches competes. Null when the layout does not tell. Uncached:
+ * the scanner records it as a sync input.
+ */
+export function goLayoutModule(dir: string, ctx: ImportContext): string | null {
+  const present = (p: string) => ctx.readText(p) !== null || !!ctx.exists?.(p);
+  const nested = new Map<string, boolean>();
+  const inModule = (folder: string): boolean => {
+    if (folder === dir) return true;
+    let own = nested.get(folder);
+    if (own === undefined) nested.set(folder, (own = !present(join(folder, 'go.mod')) && inModule(dirOf(folder))));
+    return own;
+  };
+  const below = (folder: string) => !dir || folder === dir || folder.startsWith(`${dir}/`);
+  const packageDirs: string[] = [];
+  const imports: string[] = [];
+  for (const [folder, files] of indexOf(ctx).goByDir) {
+    if (folder !== dir && below(folder) && inModule(folder)) packageDirs.push(dir ? folder.slice(dir.length + 1) : folder);
+    for (const f of files) imports.push(...goImportPaths(ctx.readText(f) ?? ''));
+  }
+  return goModuleByLayout(imports, packageDirs);
+}
+
+/**
+ * The module path of the go.mod in `dir`: its `module` line, or, when the go.mod is there but cannot
+ * be read (a folder, no permission), the path the module's folder layout gives (`goLayoutModule`),
+ * so its own packages stay internal (M5-23-R1). Undefined when there is no go.mod, or the layout
+ * does not tell.
+ */
+function goModuleIn(dir: string, ctx: ImportContext): { module: string; gomod: string | null } | undefined {
+  const goModPath = join(dir, 'go.mod');
+  const gomod = ctx.readText(goModPath);
+  if (gomod !== null) {
+    const module = goModulePath(gomod);
+    return module ? { module, gomod } : undefined;
+  }
+  if (!ctx.exists?.(goModPath)) return undefined;
+  let cache = goLayoutModules.get(ctx.files);
+  if (!cache) goLayoutModules.set(ctx.files, (cache = new Map()));
+  if (!cache.has(dir)) cache.set(dir, goLayoutModule(dir, ctx));
+  const module = cache.get(dir);
+  return module ? { module, gomod: null } : undefined;
 }
 
 /**
@@ -238,14 +292,14 @@ export function resolveGoImport(target: string, sourcePath: string, ctx: ImportC
     ? indexOf(ctx).goByDir.get(join(dir, path.slice(module.length + 1)))?.[0] ?? null
     : undefined;
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
-    const gomod = ctx.readText(join(dir, 'go.mod'));
-    const module = goModulePath(gomod);
+    const found = goModuleIn(dir, ctx);
+    const module = found?.module;
     // A nested module may import its parent module's packages: keep walking up until a go.mod's
     // module path, or one of its local replaces, prefixes the import.
     if (module) {
       const hit = inModule(module, dir);
       if (hit !== undefined) return hit;
-      for (const [replaced, local] of goLocalReplaces(gomod!, dir)) {
+      for (const [replaced, local] of found?.gomod ? goLocalReplaces(found.gomod, dir) : []) {
         const viaReplace = inModule(replaced, local);
         if (viaReplace !== undefined) return viaReplace;
       }
@@ -268,9 +322,8 @@ export function goImportInWorkspaceModule(target: string, sourcePath: string, ct
   const path = target.replace(/^"|"$/g, '');
   const within = (module: string) => path === module || path.startsWith(`${module}/`);
   for (let dir = dirOf(sourcePath); ; dir = dirOf(dir)) {
-    const gomod = ctx.readText(join(dir, 'go.mod'));
-    const module = goModulePath(gomod);
-    if (module && (within(module) || goLocalReplaces(gomod!, dir).some(([replaced]) => within(replaced)))) return true;
+    const found = goModuleIn(dir, ctx);
+    if (found && (within(found.module) || (found.gomod !== null && goLocalReplaces(found.gomod, dir).some(([replaced]) => within(replaced))))) return true;
     if (!dir) break;
   }
   return goWorkModules(sourcePath, ctx).some(([module]) => within(module));
