@@ -463,7 +463,9 @@ Validate the [architecture rules](architecture-rules.md) configuration, `.mapx/a
 
 ### Architecture Rules (AR-19)
 
-These five tools answer from the same library functions as `mapx check` and the `mapx arch` subcommands, so the CLI and MCP give the same answers. The JSON shapes are in [architecture-rules.md](architecture-rules.md#introspection). Every tool returns JSON by default, and lists are capped by `limit` with the total reported.
+These five tools answer from the same library functions as `mapx check` and the `mapx arch` subcommands, so the CLI and MCP give the same answers. The JSON shapes are in [architecture-rules.md](architecture-rules.md#introspection), and [its MCP section](architecture-rules.md#mcp-tools) maps each tool to its CLI command, with example calls on a sample project. Every tool returns JSON by default, and lists are capped by `limit` with the total reported: `mapx_arch_check` with `{ "rule": "disallowed-layer", "limit": 1 }` returns one finding and `"exitCode": 1, "total": 4, "limit": 1, "truncated": true` when there are four.
+
+The configuration the tools read is described in [architecture-rules.md](architecture-rules.md); MapX's own, `.mapx/architecture.jsonc` in this repository, is a worked example ([MapX's own rules](architecture-rules.md#mapxs-own-rules)).
 
 **Errors.** A failure is a tool result with `isError: true`, never a JSON-RPC error. Its JSON is `{ error, exitCode, issues?, candidates? }`, where `exitCode` has its [AR-17 meaning](cli-reference.md#mapx-check):
 - `3`: a configuration or usage error. Examples: no or an invalid `.mapx/architecture.jsonc`, an unknown layer, an element no query resolves, a bad `type`, `limit` or `since`.

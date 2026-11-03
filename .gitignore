@@ -48,6 +48,12 @@ scratch/
 .continue/
 
 .mapx/
+# MapX's own architecture rules and their baseline are committed for the CI check (M5-18, D030);
+# the index (mapx.db) and everything else a scan writes in .mapx/ stay ignored.
+!/.mapx/
+/.mapx/*
+!/.mapx/architecture.jsonc
+!/.mapx/architecture.baseline.json
 # Fixture architecture configs live in .mapx/ and must be committed (M5-01/M5-02);
 # anything a scan writes there (mapx.db, caches) stays ignored.
 !tests/fixtures/**/.mapx/

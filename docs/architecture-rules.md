@@ -1,8 +1,58 @@
-# Architecture rules (in progress)
+# Architecture rules
 
-MapX is gaining Deptrac-style architecture rules for every language it indexes (milestone M5). You declare **layers** with **selectors**, and a **policy** of which layers may depend on which. `mapx check` will then report every dependency that breaks the policy. The design is in `docs/research/deptrac/02-abstract-feature-model.md`.
+MapX checks Deptrac-style architecture rules for every language it indexes (milestone M5). You declare **layers** with **selectors**, and a **policy** of which layers may depend on which. `mapx check` reports every dependency that breaks the policy, in a format your CI reads, and exits non-zero when one does. The design is in `docs/research/deptrac/02-abstract-feature-model.md`. MapX checks its own source this way: see [MapX's own rules](#mapxs-own-rules).
 
-What exists so far:
+## Quick start
+
+Take a small TypeScript shop with four folders under `src/`: `controller`, `domain`, `infra` and `shared`. Declare one layer per folder and what each may use, in `.mapx/architecture.jsonc`:
+
+```jsonc
+{
+  "layers": [
+    { "name": "Controller", "selectors": [{ "path": "src/controller/**" }] },
+    { "name": "Domain", "selectors": [{ "path": "src/domain/**" }] },
+    { "name": "Infrastructure", "selectors": [{ "path": "src/infra/**" }] },
+    { "name": "Shared", "selectors": [{ "path": "src/shared/**" }] }
+  ],
+  "rules": {
+    "*": ["Shared"],                     // every layer may use Shared
+    "Controller": ["+Domain"],           // Domain, and whatever Domain may use
+    "Infrastructure": ["Domain"],
+    "Domain": []
+  }
+}
+```
+
+Index the code, then check it:
+
+```
+$ mapx init && mapx scan
+$ mapx check
+Controller
+  ✖ disallowed-layer [error]  src/controller/OrderController.ts#OrderController → src/infra/SqlOrderRepository.ts#SqlOrderRepository (import)
+      src/controller/OrderController.ts:2  src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure)
+  ✖ disallowed-layer [error]  src/controller/OrderController.ts#OrderController → src/infra/SqlOrderRepository.ts#SqlOrderRepository (instantiation)
+      src/controller/OrderController.ts:7  src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure)
+
+Violations: 2 (2 error, 0 warn)   Uncovered: 0   Skipped: 0   Allowed: 12   Warnings: 0   Errors: 0
+$ echo $?
+1
+```
+
+To adopt the rules on code that already breaks them, freeze today's violations in a baseline; only new ones fail from then on:
+
+```
+$ mapx check --generate-baseline
+Wrote 2 baseline entries to .mapx/architecture.baseline.json.
+$ mapx check
+Violations: 0 (0 error, 0 warn)   Uncovered: 0   Skipped: 2   Allowed: 12   Warnings: 0   Errors: 0
+```
+
+`mapx arch init` writes a first configuration for you (see [Getting started](#getting-started-mapx-arch-init)). The examples on this page use this shop; each was run against the CLI.
+
+## What is in it
+
+The features, by the task that delivered them:
 
 - **The configuration document** (M5-02): its schema, loading, `extends`, parameters, views and validation.
 - **The element view, the core selectors and layer membership** (M5-03).
@@ -17,8 +67,26 @@ What exists so far:
 - **Hierarchy and member selectors, and inherited dependencies** (M5-09): `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`, and `policy.inheritDependencies`. See [Type hierarchy and members](#type-hierarchy-and-members).
 - **Smells from the rules** (M5-16, AR-18): with a configuration, `mapx_smells`, `mapx arch` and the dashboard take their layer violations from the rules and gain the smells the rules make possible. See [Smells](#smells).
 - **`mapx arch init` and the first presets** (M5-17, AR-15): a starting configuration inferred from roles or clusters, or from a shipped preset, with an optional baseline. See [Getting started: `mapx arch init`](#getting-started-mapx-arch-init) and [Presets](#presets).
+- **Decorators and doc tags** (M5-10): the `decorator` and `docTag` selectors. See [Decorators and doc tags](#decorators-and-doc-tags).
+- **Private parts and internal elements** (M5-11): `private` selectors, `@internal` doc tags and native module visibility. See [Visibility](#visibility).
 
-`@internal` markers come in M5-09 to M5-11.
+Not there yet: the `package`, `builtin` and `ambient` selectors (M5-24) and the dashboard's Architecture view (M5-15).
+
+Where to look up each part:
+
+| Part | Section |
+| --- | --- |
+| Selectors | [Selectors](#selectors) |
+| Rules | [Rules](#rules) |
+| Scope and policy | [Scope and policy](#scope-and-policy) |
+| Private parts and `@internal` | [Visibility](#visibility) |
+| Reporters | [Reporters](#reporters) and [CI reports](#ci-reports) |
+| Exit codes | [Exit codes](#exit-codes) |
+| Baselines and `--compare` | [Baselines and the ratchet](#baselines-and-the-ratchet) |
+| Layer graphs | [Layer graphs](#layer-graphs) |
+| Smells | [Smells](#smells) |
+| Questions about the configuration | [Introspection](#introspection) |
+| MCP tools | [MCP tools](#mcp-tools) |
 
 ## Getting started: `mapx arch init`
 
@@ -37,7 +105,30 @@ mapx check                                 # exit 0; new violations fail
 
 ## Presets
 
-A preset is a shipped document, `mapx:preset/<id>`, that a configuration extends. Its source is `src/arch/presets/<id>.jsonc`, with a comment on each layer. A configuration that extends a preset can override its parameters, replace a layer by declaring one of the same name, and add layers and rules.
+A preset is a shipped document, `mapx:preset/<id>`, that a configuration extends. Its source is `src/arch/presets/<id>.jsonc`, with a comment on each layer. A configuration that extends a preset can override its parameters, replace a layer by declaring one of the same name, and add layers and rules:
+
+```jsonc
+{
+  "extends": "mapx:preset/clean",
+  "parameters": { "root": "src/" },
+  "layers": [
+    // replaces the preset's Infrastructure layer: this codebase calls the folder infra/
+    { "name": "Infrastructure", "selectors": [{ "path": "src/infra/**" }] },
+    { "name": "Shared", "selectors": [{ "path": "src/shared/**" }] }
+  ],
+  "rules": { "*": ["Shared"] }
+}
+```
+
+```
+$ mapx arch layers
+Layer           Elements  Files
+Domain                20      7
+Application            0      0
+Adapters               3      1
+Infrastructure         6      2
+Shared                 9      3
+```
 
 | Preset | Layers | Rules | Parameter |
 |---|---|---|---|
@@ -162,11 +253,57 @@ A selector object has exactly one primary key, plus the modifiers that refine it
 
 Not evaluated yet: these never match, `not` of them never matches either, and membership lists them as unsupported.
 
-| Selectors | Task that adds them |
-| --- | --- |
-| `package` | M5-24 (attribution M5-20 … M5-23) |
-| `builtin` | M5-24 |
-| `ambient` | M5-24 |
+| Selectors | Task that adds them | Accepted form |
+| --- | --- | --- |
+| `package` (+ `dev`, `direct`) | M5-24 (attribution M5-20 … M5-23) | `{ "package": "lodash*", "dev": false, "direct": true }` |
+| `builtin` | M5-24 | `{ "builtin": true }` |
+| `ambient` | M5-24 | `{ "ambient": "process.env" }` |
+
+The configuration validates, and `mapx check` names each such selector in an `unsupported-selector` warning:
+
+```
+  ! unsupported-selector  layer Env: selectors[0] uses "ambient", which this version cannot evaluate yet (M5-24); it matches nothing
+  ! unsupported-selector  layer Stdlib: selectors[0] uses "builtin", which this version cannot evaluate yet (M5-24); it matches nothing
+  ! unsupported-selector  layer Vendor: selectors[0] uses "package", which this version cannot evaluate yet (M5-24); it matches nothing
+```
+
+One example of each selector, on the shop. The decorator, doc tag and hierarchy selectors have their own examples below. All of these are layers of one valid configuration, here the view `.mapx/architecture/selectors.jsonc`; `mapx arch which <element>` shows which of them an element is in, and why:
+
+```jsonc
+"parameters": { "src": "src" },
+"layers": [
+  { "name": "Http",        "selectors": [{ "path": "%src%/controller/**" }] },                // a glob, with a parameter
+  { "name": "Infra",       "selectors": [{ "path": "/^src\\/infra\\//" }] },                  // a /regex/ on the path
+  { "name": "Ports",       "selectors": [{ "name": "Repository$", "kind": ["interface"] }] }, // interfaces named …Repository
+  { "name": "Backend",     "selectors": [{ "repo": "backend-*" }] },                          // a registered repo, by glob
+  { "name": "TypeScript",  "selectors": [{ "language": "ts" }] },
+  { "name": "Data",        "selectors": [{ "role": "data", "confidence": 0.2 }] },           // MapX role, at least 20% confident
+  { "name": "DomainPkg",   "selectors": [{ "cluster": "src.domain" }] },                      // a cluster from `mapx clusters`
+  { "name": "Shop",        "selectors": [{ "workspacePackage": "shop" }] },                   // "name" in the nearest package.json
+  { "name": "Handlers",    "selectors": [{ "framework": "route-handler" }] },                // route targets (none in the shop)
+  { "name": "NotShared",   "selectors": [{ "all": [{ "path": "src/**" }, { "not": { "path": "src/shared/**" } }] }] },
+  { "name": "Either",      "selectors": [{ "any": [{ "path": "src/shared/**" }, { "name": "^src/domain/Clock" }] }] },
+  { "name": "AlsoInfra",   "selectors": [{ "layer": "Infra" }], "overlay": true }             // whatever is in Infra
+]
+```
+
+```
+$ mapx arch which SqlOrderRepository --view selectors      # the shop is the repo "backend-shop"
+src/infra/SqlOrderRepository.ts#SqlOrderRepository (class, src/infra/SqlOrderRepository.ts)
+  Infra  ← selectors[0].path
+  Backend  ← selectors[0].repo
+  TypeScript  ← selectors[0].language
+  Data  ← selectors[0].role
+  Shop  ← selectors[0].workspacePackage
+  NotShared  ← selectors[0].all
+  AlsoInfra  ← selectors[0].layer
+```
+
+**Layer keys.** Besides `name` and `selectors`, a layer takes `private` (see [Visibility](#visibility)), `overlay` (a layer that is only ever a rule target, such as `Deprecated`; it never makes an element `multi-layer` or covered), `description`, and `group` and `color` for [layer graphs](#layer-graphs):
+
+```jsonc
+{ "name": "Deprecated", "description": "Code on its way out", "overlay": true, "color": "#f59e0b", "selectors": [{ "docTag": "@deprecated" }] }
+```
 
 ### Decorators and doc tags
 
@@ -276,6 +413,83 @@ A `"*"` key gives defaults to every source layer: `"*": ["Shared", "!Legacy"]`.
 
 **Precedence.** `!` beats explicit allowances, which beat what `+` brings, which beats `*`. For one target, only the strongest form's allowances count, so an explicit `{ "to": "C", "types": ["import"] }` limits C to imports even if a `+` would bring C for calls. Allowances brought through `+` keep that `+`'s edge types and advisory severity. Each `+` path counts on its own, so the order of rules never matters.
 
+Every form, on the shop, with a `Deprecated` overlay (`{ "docTag": "@deprecated" }`) added to the quick-start layers:
+
+```jsonc
+"rules": {
+  "*": ["Shared", "!Deprecated"],                                            // defaults for every layer
+  "Controller": ["+Infrastructure"],                                         // Infrastructure, and what it may use
+  "Infrastructure": [{ "to": "Domain", "types": ["import", "implements"] }], // only these edge types
+  "Domain": [{ "allow": ["Infrastructure"], "severity": "warn" }],           // advisory
+  "Shared": ["*"]                                                            // every non-overlay layer
+}
+```
+
+```
+$ mapx check --view rules
+Controller
+  ✖ disallowed-layer [error]  src/controller/OrderController.ts#OrderController → src/domain/LegacyPricing.ts#LegacyPricing (import)
+      src/controller/OrderController.ts:3  … must not depend on src/domain/LegacyPricing.ts#LegacyPricing (Controller on Deprecated)
+  ✖ disallowed-layer [error]  src/controller/OrderController.ts#OrderController → src/domain/Order.ts#Order (instantiation)
+      src/controller/OrderController.ts:8  … must not depend on src/domain/Order.ts#Order (Controller on Domain)
+  ✖ disallowed-layer [warn]  src/controller/OrderController.ts#OrderController → src/domain/OrderRepository.ts#OrderRepository (call, inferred)
+      src/controller/OrderController.ts:8  … must not depend on src/domain/OrderRepository.ts#OrderRepository (Controller on Domain)
+
+Domain
+  ✖ disallowed-layer [warn]  src/domain/Audit.ts#Audit → src/infra/SqlOrderRepository.ts#SqlOrderRepository (import)
+      src/domain/Audit.ts:1  … must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Domain on Infrastructure)
+…
+Violations: 8 (5 error, 3 warn)   Uncovered: 0   Skipped: 0   Allowed: 14   Warnings: 0   Errors: 0
+```
+
+- `!Deprecated` refuses the deprecated `LegacyPricing`, although `+Infrastructure` brings Domain.
+- `+Infrastructure` brings Domain only over `import` and `implements`, Infrastructure's own types, so the controller's `new Order()` (an `instantiation`) is refused; its `import` of `Order` is allowed.
+- The inferred call is a `warn` (see [`policy.inferred`](#scope-and-policy)).
+- Domain on Infrastructure is advisory: `warn`, which fails only under `--fail-on warn`.
+- `"Shared": ["*"]` lets Shared use every layer; the shop's `Auditable` (Shared) on `LedgerWriter` (Infrastructure) is allowed.
+
+## Scope and policy
+
+`scope` says which dependencies are checked; `policy` says how they are judged. Every key is optional:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `scope.types` | `import`, `require`, `extends`, `implements`, `call`, `instantiation`, `param_type`, `return_type` | The edge types checked. The framework edges (`route`, `http`, `dispatch`, `render` …) are opt-in |
+| `scope.include` | everything | Globs: an edge is checked only when both its ends are in a matching file |
+| `scope.exclude` | nothing | Globs: an edge with an end in a matching file is never checked |
+| `policy.inferred` | `"warn"` | Edges MapX matched by name alone: `"error"` judges them like verified ones, `"warn"` reports their violations as `warn`, `"ignore"` skips them |
+| `policy.inheritDependencies` | `false` | A type answers for its workspace ancestors' dependencies too (see [Type hierarchy and members](#type-hierarchy-and-members)) |
+| `policy.strictLayers` | `false` | An element in several non-overlay layers is an error (`multi-layer`), not a warning |
+| `policy.alsoInferred` | `false` | Keep the role-order layer violations in the smells beside the rules' own (see [Smells](#smells)) |
+| `policy.uncovered` | `{ "externals": true, "builtins": false }` | Whether dependencies on packages and on the standard library count as uncovered. Accepted and validated; it takes effect with the package and builtin selectors (M5-24) |
+
+```jsonc
+"scope": { "types": ["import", "extends", "implements", "instantiation"], "exclude": ["src/legacy/**"] },
+"policy": {
+  "inferred": "ignore",
+  "inheritDependencies": true,
+  "strictLayers": true,
+  "alsoInferred": true,
+  "uncovered": { "externals": true, "builtins": false }
+}
+```
+
+With these, and a `Models` layer (`{ "extends": "BaseModel" }`) that overlaps Domain, the shop reports an inherited dependency and a strict `multi-layer` error. `Invoice` extends the Shared class `Auditable`, which uses Infrastructure:
+
+```
+$ mapx check --view policy
+Domain
+  …
+  ✖ disallowed-layer [error]  src/domain/Invoice.ts#Invoice → src/infra/LedgerWriter.ts#LedgerWriter (import)
+      src/domain/Invoice.ts  src/domain/Invoice.ts#Invoice must not depend on src/infra/LedgerWriter.ts#LedgerWriter (Domain on Infrastructure), inherited via src/domain/Invoice.ts#Invoice → src/shared/Auditable.ts#Auditable
+…
+Domain, Models
+  ✖ multi-layer  src/domain/Order.ts#Order is in 2 layers: Domain, Models
+      src/domain/Order.ts
+
+Violations: 7 (7 error, 0 warn)   Uncovered: 0   Skipped: 0   Allowed: 11   Warnings: 0   Errors: 1
+```
+
 ## Visibility
 
 Two mechanisms hide a layer's implementation from other layers, even ones its rules allow (AR-07). Both apply only after the rules allow a dependency, so a forbidden one stays a `disallowed-layer` violation.
@@ -309,6 +523,28 @@ The scan stores the Kotlin, C#, Java and Rust visibility on each symbol as `meta
 
 A finding names the marker: `App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain)`. When a member carries the marker, the finding (reported on its type) names the member: `… Account: core/Ledger.kt#Account.audit is internal to Core (Kotlin internal) …`.
 
+On the shop, `LegacyPricing` is private to Domain and `Ledger` is marked `/** @internal */`. The rules allow Controller and Infrastructure to use Domain:
+
+```jsonc
+"visibility": { "internalTags": ["@internal"], "nativeMarkers": false },
+"layers": [
+  { "name": "Domain", "selectors": [{ "path": "src/domain/**" }], "private": [{ "path": "src/domain/LegacyPricing.ts" }] },
+  …
+]
+```
+
+```
+$ mapx check --view visibility
+Infrastructure
+  ✖ internal-element [error]  src/infra/LedgerWriter.ts#LedgerWriter → src/domain/Ledger.ts#Ledger (import)
+      src/infra/LedgerWriter.ts:1  src/infra/LedgerWriter.ts#LedgerWriter must not depend on src/domain/Ledger.ts#Ledger: it is internal to Domain (@internal) (Infrastructure on Domain)
+…
+Controller
+  ✖ private-layer [error]  src/controller/OrderController.ts#OrderController → src/domain/LegacyPricing.ts#LegacyPricing (import)
+      src/controller/OrderController.ts:3  src/controller/OrderController.ts#OrderController must not depend on src/domain/LegacyPricing.ts#LegacyPricing: it is private to Domain (Controller on Domain)
+…
+```
+
 ## Evaluation
 
 Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `implements`, `call`, `instantiation`, `param_type`, `return_type`) is checked in this order. The first step that applies decides:
@@ -330,6 +566,44 @@ Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `imp
 - the target of an `http` or `route` edge stays the handler method;
 - a Go import names a package, so its target is the package (its import path, with the layers of its directory's in-scope files). It is dropped when every importing file already has a finding of the same kind and rule on a type of that package. An allowed import is also dropped when every importing file has a finding of any kind on a type of that package: when that type is internal, the import is how the violation is reached.
 
+## Reporters
+
+`mapx check --format <format>` picks the reporter; `-o <file>` writes it to a file. All six list the same findings, in the same order, and each is deterministic: the same findings give the same bytes.
+
+| Format | For | Example |
+| --- | --- | --- |
+| `table` (default) | people, in a terminal | [Quick start](#quick-start) |
+| `json` | tools, `--compare`, the dashboard | [The report](#the-report) |
+| `sarif` | GitHub code scanning, IDE SARIF viewers | [CI reports](#ci-reports) |
+| `github` | GitHub Actions annotations (the default inside GitHub Actions) | [CI reports](#ci-reports) |
+| `codeclimate` | GitLab Code Quality | [CI reports](#ci-reports) |
+| `junit` | GitLab and Jenkins test reports | [CI reports](#ci-reports) |
+
+`--report-uncovered`, `--report-skipped` and `--report-allowed` add those findings to every format; they are always counted. The table marks each finding by kind: `✖` a violation or an error, `!` a warning, `?` an uncovered dependency, `-` a skipped violation (`[baseline]` or `[compare]`), `✓` an allowed dependency:
+
+```
+$ mapx check --report-skipped --report-allowed       # after --generate-baseline
+Controller
+  - disallowed-layer [baseline]  src/controller/OrderController.ts#OrderController → src/infra/SqlOrderRepository.ts#SqlOrderRepository (import)
+      src/controller/OrderController.ts:2  src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure)
+  - disallowed-layer [baseline]  src/controller/OrderController.ts#OrderController → src/infra/SqlOrderRepository.ts#SqlOrderRepository (instantiation)
+      …
+  ✓ allowed  src/controller/OrderController.ts#OrderController → src/domain/LegacyPricing.ts#LegacyPricing (import)
+      src/controller/OrderController.ts:3  src/controller/OrderController.ts#OrderController may depend on src/domain/LegacyPricing.ts#LegacyPricing (Controller on Domain)
+…
+```
+
+Warnings (`!`) and uncovered dependencies (`?`) look like this:
+
+```
+layer Empty
+  ! empty-layer  layer Empty matches no element
+
+Domain
+  ? uncovered  src/domain/Order.ts#Order → src/shared/BaseModel.ts#BaseModel (extends)
+      src/domain/Order.ts:4  src/domain/Order.ts#Order depends on src/shared/BaseModel.ts#BaseModel, which is in no layer
+```
+
 ## The report
 
 `mapx check --format json` prints this report, described by `schemas/arch-report.schema.json`. It comes from `runArchitecture(dir)` in `src/arch/report.ts`. Uncovered, skipped and allowed findings are listed only with `--report-uncovered`, `--report-skipped` or `--report-allowed`; `counts` always includes them:
@@ -348,6 +622,36 @@ Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `imp
 
 A workspace with a configuration but no index is an error (`run mapx scan first`), never an empty report.
 
+The quick-start violation, as JSON (one finding, `layers` and `layerEdges` shortened):
+
+```
+$ mapx check --format json --rule disallowed-layer
+{
+  "version": 1,
+  "counts": { "violation": 2, "skipped": 0, "uncovered": 0, "allowed": 0, "warning": 0, "error": 0 },
+  "findings": [
+    {
+      "kind": "violation",
+      "rule": "disallowed-layer",
+      "severity": "error",
+      "source": { "element": "src/controller/OrderController.ts#OrderController", "file": "src/controller/OrderController.ts", "layer": "Controller", "repo": "backend-shop", "line": 2 },
+      "target": { "element": "src/infra/SqlOrderRepository.ts#SqlOrderRepository", "file": "src/infra/SqlOrderRepository.ts", "layer": "Infrastructure", "repo": "backend-shop" },
+      "edgeType": "import",
+      "verifiability": "verified",
+      "edges": 1,
+      "fingerprint": "d9471194ce2c8212",
+      "message": "src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure)",
+      "identity": { "source": "src/controller/OrderController.ts", "target": "src/infra/SqlOrderRepository.ts" }
+    },
+    …
+  ],
+  "layers": [{ "name": "Controller", "elements": 3, "files": 1, "overlay": false, "uncovered": 0 }, …],
+  "layerEdges": [{ "from": "Controller", "to": "Infrastructure", "allowed": 0, "violations": 2, "warnings": 0, "skipped": 0 }, …],
+  "configErrors": [],
+  "selection": { "view": null, "layer": null, "rule": "disallowed-layer" }
+}
+```
+
 ## CI reports
 
 `mapx check --format` also writes the formats CI systems read natively. The code is in `src/arch/reporters/`; the mapping of every finding kind is in [cli-reference.md](cli-reference.md#ci-formats).
@@ -364,6 +668,66 @@ A workspace with a configuration but no index is an error (`run mapx scan first`
 - **Determinism:** the same findings give the same bytes: no timestamps, durations, host names or absolute paths. Only SARIF's `tool.driver.version` changes with the MapX version.
 - **Baselines and `--compare`:** a skipped violation is a SARIF suppression, a `::notice`, a CodeClimate issue at the `skipped` severity and a JUnit `<skipped>`, listed only with `--report-skipped`. A stale baseline entry is an error located on the baseline file (relative to the workspace, never absolute), its message naming the entry by JSON pointer (`.mapx/architecture.baseline.json#/entries/0`); the report gives it as `location`.
 
+The quick-start violation (the `import`; the `instantiation` is alike) in each CI format:
+
+```
+$ mapx check --format github
+[error] src/controller/OrderController.ts:2 disallowed-layer: src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure) [import]
+…
+::error file=src/controller/OrderController.ts,line=2,title=disallowed-layer::src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure) [import]
+…
+Violations: 2 (2 error, 0 warn)   Uncovered: 0   Skipped: 0   Allowed: 12   Warnings: 0   Errors: 0
+```
+
+```
+$ mapx check --format sarif          # one result of runs[0].results
+{
+  "ruleId": "disallowed-layer",
+  "ruleIndex": 0,
+  "level": "error",
+  "message": { "text": "src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure) [import]" },
+  "locations": [{
+    "physicalLocation": { "artifactLocation": { "uri": "src/controller/OrderController.ts", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 2 } },
+    "logicalLocations": [{ "fullyQualifiedName": "src/controller/OrderController.ts#OrderController" }]
+  }],
+  "partialFingerprints": { "mapx/v1": "d9471194ce2c8212" },
+  "properties": { "kind": "violation", "sourceLayer": "Controller", "target": "src/infra/SqlOrderRepository.ts#SqlOrderRepository",
+                  "targetFile": "src/infra/SqlOrderRepository.ts", "targetLayer": "Infrastructure", "edgeType": "import", "verifiability": "verified", "edges": 1 }
+}
+```
+
+```
+$ mapx check --format codeclimate    # one issue of the array
+{
+  "type": "issue",
+  "check_name": "disallowed-layer",
+  "description": "src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure) [import]",
+  "categories": ["Complexity"],
+  "severity": "major",
+  "fingerprint": "d9471194ce2c8212",
+  "location": { "path": "src/controller/OrderController.ts", "lines": { "begin": 2 } }
+}
+```
+
+```
+$ mapx check --format junit
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="mapx check" tests="5" failures="2" errors="0">
+  <testsuite name="Controller" tests="2" failures="2" errors="0" skipped="0">
+    <testcase name="src/controller/OrderController.ts#OrderController → src/infra/SqlOrderRepository.ts#SqlOrderRepository (import)" classname="disallowed-layer">
+      <failure type="disallowed-layer" message="src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure) [import]">src/controller/OrderController.ts:2
+src/controller/OrderController.ts#OrderController must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Controller on Infrastructure) [import]
+fingerprint: d9471194ce2c8212</failure>
+    </testcase>
+    …
+  </testsuite>
+  <testsuite name="Domain" tests="1" failures="0" errors="0" skipped="0">
+    <testcase name="no findings" classname="layer"/>
+  </testsuite>
+  …
+</testsuites>
+```
+
 **The CodeClimate severity map.** `report.codeclimate` maps what a finding is to a CodeClimate severity (`info`, `minor`, `major`, `critical`, `blocker`). `error` is for the findings that fail the run. Other violations and warnings (an advisory rule, `"severity": "warn"`, or an inferred edge under `policy.inferred: "warn"`, without `--fail-on warn`) are `warn`; uncovered dependencies (without `--fail-on-uncovered`) and skipped violations are keyed by kind. Keys left out keep the defaults below, and an `extends` chain merges the map key by key. An unknown key or severity is a configuration error (exit 3).
 
 ```jsonc
@@ -375,10 +739,11 @@ A workspace with a configuration but no index is an error (`run mapx scan first`
 }
 ```
 
-A GitHub Actions job, as an example:
+A GitHub Actions job, as an example. The index is not committed, so the job scans first:
 
 ```yaml
-- run: npx @mgamil/mapx scan && npx @mgamil/mapx check   # annotations, since GITHUB_ACTIONS is set
+- run: npx @mgamil/mapx init . --no-agents --no-suggestions --no-mcp-configs && npx @mgamil/mapx scan .
+- run: npx @mgamil/mapx check            # annotations, since GITHUB_ACTIONS is set
 - run: npx @mgamil/mapx check --format sarif -o mapx.sarif
   if: always()
 - uses: github/codeql-action/upload-sarif@v3
@@ -386,6 +751,52 @@ A GitHub Actions job, as an example:
   with:
     sarif_file: mapx.sarif
 ```
+
+Uploading to code scanning needs `permissions: security-events: write`, which a pull request from a fork never gets, so on a public repository that takes fork PRs, keep the annotations as the gate and the SARIF file as a build artifact (`actions/upload-artifact`) instead, as [MapX's own CI](#mapxs-own-rules) does. Write reports outside the workspace or under `.mapx/` when another `mapx` command runs after them in the same job: a new file of a type MapX indexes (`.json`, `.md` …) elsewhere in the workspace makes the index stale (exit 4); `.sarif`, `.xml` and `.txt` files are not indexed.
+
+## Exit codes
+
+`mapx check` exits with the most basic problem it found. When several apply, 4 wins over 3, 3 over 1, and 1 over 2:
+
+| Code | Meaning | Example on the shop |
+| --- | --- | --- |
+| 0 | No finding fails the run. Skipped (baselined) violations, warnings, uncovered dependencies and `warn`-level violations do not fail it by default | `mapx check` after `--generate-baseline` |
+| 1 | A violation of severity `error`; with `--fail-on warn`, also a `warn`-level violation or a warning; under `policy.strictLayers`, a `multi-layer` error | the [quick start](#quick-start); an advisory rule with `--fail-on warn` |
+| 2 | An uncovered dependency, with `--fail-on-uncovered` | below |
+| 3 | A configuration, usage or baseline error: an invalid document, a `+` cycle, no configuration or no such view, an unknown option, `--layer` or `--rule`, a stale baseline entry, a missing or invalid baseline or `--compare` report | below |
+| 4 | No index, a repo never scanned, an index older than the files (pass `--sync`) or than this MapX, or an internal error | below |
+
+```
+$ mapx check --view core --fail-on-uncovered       # a view without the Shared and Infrastructure layers
+…
+Violations: 0 (0 error, 0 warn)   Uncovered: 6   Skipped: 0   Allowed: 5   Warnings: 0   Errors: 0
+$ echo $?
+2
+
+$ mapx check --view broken                         # "paht" and "Servce" are typos
+configuration
+  ✖ config  .mapx/architecture/broken.jsonc#/layers/0/selectors/0/paht: unknown selector key "paht"; expected one of path, name, …
+  ✖ config  .mapx/architecture/broken.jsonc#/rules/Http/0: unknown layer "Servce"; did you mean "Service"?
+
+Violations: 0 (0 error, 0 warn)   Uncovered: 0   Skipped: 0   Allowed: 0   Warnings: 0   Errors: 2
+$ echo $?
+3
+
+$ mapx check --baseline ../stale.json --rule stale-baseline
+configuration
+  ✖ stale-baseline  src/domain/Order.ts#Order → src/infra/SqlOrderRepository.ts#SqlOrderRepository
+      src/domain/Order.ts  ../stale.json#/skip_violations/src~1domain~1Order.ts#Order/0: skip_violations src/domain/Order.ts#Order → src/infra/SqlOrderRepository.ts#SqlOrderRepository matches no violation; delete it
+…
+$ echo $?
+3
+
+$ touch src/domain/Discount.ts && mapx check       # a new file the index does not have
+The index is stale: 1 file(s) changed since the last scan (src/domain/Discount.ts (new)). Run `mapx update`, or `mapx check --sync`.
+$ echo $?
+4
+```
+
+The `mapx arch` subcommands follow the same codes: `arch allowed` exits 1 when `mapx check` would fail on the dependency, `arch unassigned` exits 2 when an element is in no layer, `arch validate-config` and `arch init` exit 3 on a configuration or usage error, and every subcommand exits 4 on an index problem. `arch graph` is not a gate: it exits 0 whatever the graph shows. The MCP tools return the same code as `exitCode` (see [MCP tools](#mcp-tools)).
 
 ## Layer graphs
 
@@ -425,6 +836,35 @@ A GitHub Actions job, as an example:
 
 `uncovered` counts the source layer's dependencies on elements in no layer, which have no edge to draw (the report's `layers[].uncovered`). `pointTo` is the layer whose incoming edges point at the group, or null.
 
+The shop's graph, with the baselined Controller → Infrastructure dependencies (dashed) and the new Domain → Infrastructure violation (red):
+
+```
+$ mapx arch graph --format mermaid
+flowchart TB
+  %% Dependencies: 12 allowed, 2 violations (0 at warn), 2 skipped, 0 uncovered
+  layer_Controller["Controller"]
+  layer_Domain["Domain"]
+  layer_Infrastructure["Infrastructure"]
+  layer_Shared["Shared"]
+  layer_Controller -->|5| layer_Domain
+  layer_Controller -.->|2| layer_Infrastructure
+  layer_Domain -->|2| layer_Infrastructure
+  layer_Domain -->|4| layer_Shared
+  layer_Infrastructure -->|3| layer_Domain
+  linkStyle 1 stroke:#94a3b8,color:#94a3b8
+  linkStyle 2 stroke:#dc2626,stroke-width:2px,color:#dc2626
+
+$ mapx arch graph --format dsm
+── Layer Dependency Structure Matrix (DSM) ────────────
+                    L1   L2   L3   L4
+-------------------------------------
+L1 Controller        *    5   2s    .
+L2 Domain            .    *   2!    4
+L3 Infrastructure    .    3    *    .
+L4 Shared            .    .    .    *
+…
+```
+
 ## Smells
 
 `mapx_smells`, `mapx arch` (with `--smells` and `--violations`) and the dashboard's `/api/smells` list the smells the last scan found: cycles, hubs, cluster smells, and layer violations inferred from file roles (the role order of the codebase's archetype). Without `.mapx/architecture.jsonc`, that list is exactly as before. With one, the configuration is the one source of layer violations (`docs/research/deptrac/03-mapx-gap-and-integration.md` §3.3):
@@ -445,6 +885,31 @@ A GitHub Actions job, as an example:
 | `deprecated-usage` | An edge in the configuration's scope into an element tagged `@deprecated` (a Python `@deprecated` decorator counts), or a member of one, from outside it. Deprecated code using deprecated code is not reported. |
 
 Instability is I = Ce / (Ca + Ce) per layer, counted in files. Ca counts the files outside the layer with a dependency on it, and Ce the files of the layer with a dependency outside it, allowed or violating. A file counts once, whatever it declares. Abstractness A is the share of interfaces and traits among the layer's top-level types.
+
+On the shop with the quick-start rules, its baseline, and a new `Audit` class in Domain that uses `SqlOrderRepository`:
+
+```
+$ mapx arch --smells
+── Architectural Smells & Violations (5) ─────────────────
+
+  [CRITICAL] layer-violation
+    Description: Layer violation: src/domain/Audit.ts#Audit must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Domain on Infrastructure) [disallowed-layer: import, instantiation]
+    Files:       src/domain/Audit.ts, src/infra/SqlOrderRepository.ts
+    Suggestion:  Remove the dependency, or allow Domain → Infrastructure in .mapx/architecture.jsonc if it is intended (`mapx arch allowed` explains the decision).
+    Source:      rules
+
+  [CRITICAL] layer-cycle
+    Description: Layer cycle: Domain -> Infrastructure -> Domain
+    Layers:      Domain, Infrastructure
+    …
+    Source:      rules
+
+  [WARNING] deprecated-usage
+    Description: Deprecated usage: src/controller/OrderController.ts#OrderController uses src/domain/LegacyPricing.ts#LegacyPricing, which is deprecated (use Money)
+    …
+```
+
+The baselined Controller → Infrastructure violations are neither a `layer-violation` nor part of a cycle. With `"policy": { "alsoInferred": true }`, role-order violations on edges the rules do not decide join the list, marked `Source: inferred-roles`.
 
 **The baseline.** The layer graph (cycles, instability, distance) is the one after the baseline. A baselined violation is acknowledged debt: it is neither a smell nor a coupling, so it makes no cycle. Tracking that debt is a separate smell (`baseline-debt`, not built yet).
 
@@ -521,6 +986,22 @@ mapx check --compare /tmp/base.json
 - **Fixed violations** are not errors: paying debt off is the point.
 - **Producing the base report:** produce it with `--report-skipped` and `--report-uncovered`, because hidden findings are not in the report and so cannot be recognised. A baseline still applies under `--compare`.
 - **Like with like:** the report records its `selection`. A base report of another view, or one narrowed by a `--layer` or `--rule` that the head does not share, is refused (exit 3). Its missing findings would look new, or one view's findings would excuse another's. A narrower head against a whole base is fine.
+
+On the shop, the base report holds the two baselined Controller violations; the head adds `Audit`, a Domain class that uses `SqlOrderRepository`:
+
+```
+$ mapx check --format json --report-skipped --report-uncovered -o ../base.json
+$ mapx check --sync --compare ../base.json
+Domain
+  ✖ disallowed-layer [error]  src/domain/Audit.ts#Audit → src/infra/SqlOrderRepository.ts#SqlOrderRepository (import)
+      src/domain/Audit.ts:1  src/domain/Audit.ts#Audit must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Domain on Infrastructure)
+  ✖ disallowed-layer [error]  src/domain/Audit.ts#Audit → src/infra/SqlOrderRepository.ts#SqlOrderRepository (instantiation)
+      src/domain/Audit.ts:4  src/domain/Audit.ts#Audit must not depend on src/infra/SqlOrderRepository.ts#SqlOrderRepository (Domain on Infrastructure)
+
+Violations: 2 (2 error, 0 warn)   Uncovered: 0   Skipped: 2   Allowed: 12   Warnings: 0   Errors: 0
+$ echo $?
+1
+```
 
 `--since <git-ref>`, which would scan the ref itself, is deferred (REQ-ARCH-021).
 
@@ -607,3 +1088,79 @@ The `mapx arch` subcommands answer questions about the configuration from the in
 - **No baseline.** No baseline applies: a baselined violation is still reported.
 - **Elements must be in the index.** A file that does not exist yet cannot be named, so name its layer instead.
 
+
+## MCP tools
+
+An agent reaches the same engine through the MCP server (`mapx serve`, AR-19). Each tool answers from the functions `mapx check` and `mapx arch` use, so the CLI and MCP agree. The arguments and result shapes are in [mcp-integration.md](mcp-integration.md#architecture-rules-ar-19).
+
+| Tool | CLI equivalent | Example arguments |
+| --- | --- | --- |
+| `mapx_arch_check` | `mapx check --format json` | `{ "rule": "disallowed-layer", "limit": 1 }` |
+| `mapx_arch_layers` | `mapx arch layers`, `mapx arch unassigned` | `{}`, `{ "layer": "Domain", "why": true }`, `{ "unassigned": true }` |
+| `mapx_arch_allowed` | `mapx arch allowed` | `{ "from": "OrderController", "to": "SqlOrderRepository" }` |
+| `mapx_arch_explain` | `mapx arch which` (and `allowed` with `to`) | `{ "element": "Order", "layer": "Domain" }` |
+| `mapx_arch_init` | `mapx arch init --json` | `{ "preset": "clean" }` (a dry run unless `write: true`) |
+| `mapx_arch_validate_config` | `mapx arch validate-config --format json` | `{}` |
+
+Results are JSON. A list is capped by `limit`, and the result says so: `mapx_arch_check` with `{ "rule": "disallowed-layer", "limit": 1 }` on the shop returns one finding with `"exitCode": 1, "total": 4, "limit": 1, "truncated": true`. A failure is a tool result with `isError: true` and the [exit code](#exit-codes) as `exitCode` (3 for a configuration or usage error, 4 for an index problem), never a JSON-RPC error.
+
+The pre-flight check an agent runs before adding an import:
+
+```
+mapx_arch_allowed { "from": "OrderController", "to": "SqlOrderRepository" }
+→ { "allowed": false, "rule": "disallowed-layer", "severity": "error", "exitCode": 1,
+    "reason": "Controller may not depend on Infrastructure over import: no rule allows it",
+    "allowedLayers": ["Domain", "Shared"],
+    "alternatives": [{ "layer": "Domain", "total": 1, "symbols": [{ "element": "src/domain/OrderRepository.ts#OrderRepository", "symbolKind": "interface", "match": "supertype", … }] }], … }
+```
+
+The answer names what the rules allow instead: the `OrderRepository` interface in Domain, which `SqlOrderRepository` implements.
+
+## MapX's own rules
+
+MapX checks its own `src/` in CI (M5-18). The configuration is [`.mapx/architecture.jsonc`](../.mapx/architecture.jsonc), with a comment on each layer and rule. It is the module map of `docs/research/deptrac/03-mapx-gap-and-integration.md` §3.9, with the `Arch` layer added:
+
+| Layer | Path | May use |
+| --- | --- | --- |
+| Entry | `src/{main,index,cli,mcp,ui-server,ui-events,branding}.ts` | Agents, Arch, Exporters, `+Core` |
+| UI | `src/ui/**` (the dashboard's browser client) | nothing |
+| Agents | `src/agents/**` | Languages |
+| Arch | `src/arch/**` | `+Core`, Exporters |
+| Exporters | `src/exporters/**` | Core |
+| Core | `src/core/**` | Frameworks, Parsers, Languages, Arch |
+| Frameworks | `src/frameworks/**` | nothing |
+| Parsers | `src/parsers/**` | Languages |
+| Languages | `src/languages/**` | nothing |
+| Shared | `src/{types,version}.ts` | every layer may use it (`"*": ["Shared", "!Outside"]`) |
+| Outside (overlay) | `{tests,scripts}/**` | no layer may use it: production code never imports tests, fixtures or scripts |
+
+- **Scope:** `src/**`, plus `tests/**` and `scripts/**` as targets only (the `Outside` overlay, which every layer denies; a file in no other layer is never a source, so tests' and scripts' own imports are not judged), imports only (`"types": ["import", "require"]`), and `policy.inferred: "ignore"`. In TypeScript every dependency on another module starts with an import, and imports are resolved by module path, so they are exact. Calls and type references are resolved by name, and some resolve to the wrong symbol (`join` from `node:path` to a private `join` in `src/core/import-resolvers.ts`), which would fail CI on code that imports nothing new.
+- **Core and Arch depend on each other on purpose:** with a configuration, `core/architecture-analyzer.ts` takes its layer violations from the rules (see [Smells](#smells)). `mapx arch --smells` reports this as a `layer-cycle`.
+- **The baseline,** [`.mapx/architecture.baseline.json`](../.mapx/architecture.baseline.json), holds the 8 imports that broke the rules when they were written, so CI fails only on new ones: Languages → Parsers (`languages/installer.ts` imports `parsers/assets.ts`), Agents → Parsers (`agents/generator.ts` imports `parsers/static-file-parser.ts`), Parsers ↔ Frameworks (the Vue extractors import `maskCode` and `matchBracket` from `frameworks/http/client-calls.ts`, and `frameworks/detectors/vue-router.ts` imports the Vue extractors), Frameworks → Core (`client-calls.ts` imports `core/js-aliases.ts`) and Core → Exporters (`core/workspace-summary.ts` imports the `LLMExporter` type). Fixing one leaves a stale entry, and the check fails until the baseline is regenerated: `mapx check --generate-baseline`.
+- **Only the configuration and the baseline are tracked.** The rest of `.mapx/`, the index included, stays ignored (D030) through a narrow negation in `.gitignore`.
+
+The CI job (`Architecture` in `.github/workflows/ci.yml`) builds MapX, indexes the checkout and runs the check:
+
+```yaml
+- run: npm run build:npm
+- run: |
+    node dist/main.js init . --no-agents --no-suggestions --no-mcp-configs
+    node dist/main.js scan .
+- run: node dist/main.js check --fail-on-uncovered --format github
+- run: node dist/main.js check --fail-on-uncovered --report-skipped --format sarif -o mapx-architecture.sarif
+  continue-on-error: true
+- uses: actions/upload-artifact@v4
+  with:
+    name: architecture-sarif
+    path: mapx-architecture.sarif
+```
+
+`--format github` annotates a new violation on the pull request, and `--fail-on-uncovered` also fails a dependency on `src/` code in no layer (a new top-level folder, say), so the layers keep covering the source. The SARIF report is kept as an artifact rather than uploaded to code scanning, which would need `security-events: write`, a permission pull requests from forks never get. A forbidden import fails the job:
+
+```
+[error] src/frameworks/utils.ts:3 disallowed-layer: src/frameworks/utils.ts must not depend on src/exporters/llm-exporter.ts (Frameworks on Exporters) [import]
+::error file=src/frameworks/utils.ts,line=3,title=disallowed-layer::src/frameworks/utils.ts must not depend on src/exporters/llm-exporter.ts (Frameworks on Exporters) [import]
+Violations: 1 (1 error, 0 warn)   Uncovered: 0   Skipped: 8   Allowed: 227   Warnings: 0   Errors: 0
+```
+
+To run it locally: `npm run build:npm`, `node dist/main.js init . --no-agents --no-suggestions --no-mcp-configs`, `node dist/main.js scan .`, then `node dist/main.js check` (or `check --sync` after editing).

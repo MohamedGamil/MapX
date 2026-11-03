@@ -982,7 +982,7 @@ L1 Controller        *   8!   2~    .
 
 ## `mapx check`
 
-Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, private parts and internal elements. See [architecture-rules.md](architecture-rules.md) for the configuration. It is meant for CI, so it never prints the logo and its exit code says what it found.
+Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, private parts and internal elements. See [architecture-rules.md](architecture-rules.md) for the configuration, with an example of every selector, rule, reporter and exit code. It is meant for CI, so it never prints the logo and its exit code says what it found. MapX runs it on its own source in CI ([MapX's own rules](architecture-rules.md#mapxs-own-rules)).
 
 ```bash
 mapx check [path] [--view <name>] [--format table|json|sarif|github|codeclimate|junit] [--output <file>]
@@ -1008,7 +1008,7 @@ Options:
 - An inherited dependency (`policy.inheritDependencies`) has `via`, the inheritance path from the source type to the ancestor whose dependency it is, and its message ends `inherited via …`. See [architecture-rules.md](architecture-rules.md#type-hierarchy-and-members).
 - `--fail-on warn`: warn-level violations (advisory rules, inferred edges) and warnings (`multi-layer`, `empty-layer`, `unsupported-selector`) also fail the run.
 - `--layer <name>`: only findings whose source or target layer is `<name>`, or that are about that layer. A name that is not a layer of the configuration is an error (exit 3), so a typo cannot turn the check off.
-- `--rule <rule>`: only findings of one rule: `disallowed-layer`, `internal-element`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`. An unknown rule is an error (exit 3).
+- `--rule <rule>`: only findings of one rule: `disallowed-layer`, `internal-element`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`, or the errors `plus-cycle`, `config` and `stale-baseline`. An unknown rule is an error (exit 3).
 - `--sync`: when files changed since the last scan, sync the index first instead of failing.
 - `--baseline <file>`: use this baseline instead of the configuration's `baseline`. The path is relative to the current directory.
 - `--generate-baseline [file]`: write every current violation to the baseline and exit 0.
@@ -1020,7 +1020,7 @@ Options:
   - A file in the workspace outside `.mapx/` gets a warning with a `.mapx/` path to use instead: it would make the index stale (exit 4).
 - `--compare <report.json>`: the ratchet without a committed baseline. A violation whose fingerprint is in this report (`mapx check --format json` on the base revision) is skipped. Only new violations fail. Warnings under `--fail-on warn`, uncovered dependencies under `--fail-on-uncovered` and strict `multi-layer` errors whose fingerprints the report has do not fail either. Configuration errors and stale baseline entries always fail. A base report of another `--view`, or narrowed by a `--layer` or `--rule` the check does not share, is refused (exit 3): each report records them as `selection`.
 
-Baselines are described in [architecture-rules.md](architecture-rules.md#baselines-and-the-ratchet). Keep baselines and base reports under `.mapx/` or outside the workspace. MapX indexes JSON files, so a new one anywhere else makes the index stale (exit 4) until the next scan.
+Baselines are described in [architecture-rules.md](architecture-rules.md#baselines-and-the-ratchet). Keep baselines and base reports under `.mapx/` or outside the workspace. MapX indexes JSON files, so a new one anywhere else makes the index stale (exit 4) until the next scan. The same holds for a report written into the workspace (`-o`) when another `mapx` command runs after it in the same CI job, whatever its format, if MapX indexes its file type: `-o report.json` and `-o report.md` (a table) make the index stale, while `.sarif`, `.xml` and `.txt` files are not indexed.
 
 Before checking, `mapx check` makes sure the index is current. Every registered repo must have a completed scan, and no indexed file may have changed or been deleted. No new file a scan would index may be missing, in a git workspace or not, in nested repos too.
 

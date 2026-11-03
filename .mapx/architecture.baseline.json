@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "fingerprint": "00f7647c06553ff7",
+      "rule": "disallowed-layer",
+      "source": "src/agents/generator.ts",
+      "target": "src/parsers/static-file-parser.ts",
+      "edgeType": "import"
+    },
+    {
+      "fingerprint": "71e03f28581d2b27",
+      "rule": "disallowed-layer",
+      "source": "src/core/workspace-summary.ts",
+      "target": "src/exporters/llm-exporter.ts",
+      "edgeType": "import"
+    },
+    {
+      "fingerprint": "7087e80f5abaeb54",
+      "rule": "disallowed-layer",
+      "source": "src/frameworks/detectors/vue-router.ts",
+      "target": "src/parsers/languages/vue-navigation.ts",
+      "edgeType": "import"
+    },
+    {
+      "fingerprint": "3ffd8642f0d17aaf",
+      "rule": "disallowed-layer",
+      "source": "src/frameworks/detectors/vue-router.ts",
+      "target": "src/parsers/languages/vue-template.ts",
+      "edgeType": "import"
+    },
+    {
+      "fingerprint": "16aa1e363f7e1dcd",
+      "rule": "disallowed-layer",
+      "source": "src/frameworks/http/client-calls.ts",
+      "target": "src/core/js-aliases.ts",
+      "edgeType": "import"
+    },
+    {
+      "fingerprint": "8e7741854ef44b49",
+      "rule": "disallowed-layer",
+      "source": "src/languages/installer.ts",
+      "target": "src/parsers/assets.ts",
+      "edgeType": "import"
+    },
+    {
+      "fingerprint": "928ce6ba85a8ce9f",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts",
+      "target": "src/frameworks/http/client-calls.ts",
+      "edgeType": "import"
+    },
+    {
+      "fingerprint": "3c50b43790b48fb2",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts",
+      "target": "src/frameworks/http/client-calls.ts",
+      "edgeType": "import"
+    }
+  ]
+}

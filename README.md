@@ -536,6 +536,7 @@ See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of eac
 | [Framework Integration](docs/framework-integration.md) | Heuristics and routing/hook extraction for 21 frameworks |
 | [Agent Best Practices](docs/agent-best-practices.md) | Prompting guidelines and tool selection cheat sheet for LLM agents |
 | [Architecture](docs/architecture.md) | Internals and component overview |
+| [Architecture Rules](docs/architecture-rules.md) | Layers, rules and `mapx check` in CI: selectors, reporters, baselines, exit codes |
 
 ---
 
