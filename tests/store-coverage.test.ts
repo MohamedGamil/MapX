@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { Store } from '../src/core/store.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
 import { vi } from 'vitest';
 
 vi.mock('node:module', async (importOriginal) => {
@@ -33,7 +34,19 @@ vi.mock('node:module', async (importOriginal) => {
 
 describe('Store Coverage Boost', () => {
   let store: Store;
-  const dbPath = path.join(__dirname, 'store-coverage-temp.db');
+  // Databases live in a temp folder, never under tests/: fixtures-tracked.test.ts fails on any
+  // ignored file there, and SQLite leaves -wal/-shm files beside the database (M4-09-R4).
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mapx-store-coverage-'));
+  const dbPath = path.join(tempDir, 'store-coverage-temp.db');
+
+  const bunDbPath = path.join(tempDir, 'store-bun-temp.db');
+
+  afterAll(() => fs.rmSync(tempDir, { recursive: true, force: true }));
+
+  it('keeps its databases and their -wal/-shm files out of tests/', () => {
+    for (const db of [dbPath, bunDbPath]) expect(path.relative(__dirname, db).startsWith('..')).toBe(true);
+    expect(fs.readdirSync(__dirname).filter((f) => /^store-.*-temp\.db/.test(f))).toEqual([]);
+  });
 
   beforeEach(() => {
     store = new Store(dbPath);
@@ -225,7 +238,7 @@ describe('Store Coverage Boost', () => {
     const oldBun = (globalThis as any).Bun;
     (globalThis as any).Bun = {};
     try {
-      const tempDb = path.join(__dirname, 'store-bun-temp.db');
+      const tempDb = bunDbPath;
       const tempStore = new Store(tempDb);
       tempStore.close();
       if (fs.existsSync(tempDb)) fs.unlinkSync(tempDb);
