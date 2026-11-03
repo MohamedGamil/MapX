@@ -21191,10 +21191,10 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-E2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T20:47:13.662Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -21205,12 +21205,78 @@
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T20:47:13.662Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
         }
       ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-19",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-21-R1.md",
+        "docs/baton/reports/M5-19.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-19-R1",
+      "title": "An attribution-rules version re-decides external references without a re-parse",
+      "objective": "External-reference attribution records the version of its rules; when MapX's attribution code changes (a new ecosystem rule, a builtin list), the next sync re-decides every repo's external references from the stored candidates without re-parsing files or bumping EXTRACTOR_VERSION.",
+      "description": "Found by M5-21-R1 (2026-11-03): once its recorded manifest inputs are unchanged, a pass keeps the stored attribution, so a change to the attribution rules alone never reaches an existing index without `scan --force` or an extractor-version bump.",
+      "outputs": [
+        "src/core/external-refs.ts",
+        "tests/external-refs.test.ts",
+        "reports/M5-19-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/external-refs.ts",
+        "src/core/manifests/**",
+        "src/core/extractor-version.ts",
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Bumping only the attribution-rules version makes the next sync re-decide attribution (rows change as the new rules say) with 0 files re-parsed (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts"
+      ]
     },
     {
       "id": "M5-22",
@@ -30650,10 +30716,10 @@
         "npx vitest run tests/arch-reporters.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-E3",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T20:47:14.147Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -30663,6 +30729,12 @@
           "at": "2026-11-03T18:55:32.071Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T20:47:14.147Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
