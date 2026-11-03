@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 import type { ArchReport, Finding } from '../report.js';
 import { CONFIG_RULES, failsRun, type CheckOptions } from '../check.js';
 import type { CodeClimateSeverity, CodeClimateSeverityMap } from '../schema.js';
-import { describeFinding, locate, ruleOf, type ReportContext } from './context.js';
+import { locate, messageOf, ruleOf, type ReportContext } from './context.js';
 
 export const CODECLIMATE_DEFAULTS: Required<CodeClimateSeverityMap> = { error: 'major', warn: 'minor', uncovered: 'info', skipped: 'minor' };
 
@@ -42,7 +42,7 @@ export function renderCodeclimate(report: ArchReport, ctx: ReportContext): strin
     return {
       type: 'issue',
       check_name: ruleOf(f),
-      description: describeFinding(f),
+      description: messageOf(f, ctx),
       // Configuration and baseline errors are mistakes in the rules, not coupling in the code.
       categories: [f.kind === 'error' && CONFIG_RULES.has(f.rule ?? '') ? 'Bug Risk' : 'Complexity'],
       severity: codeclimateSeverity(f, ctx.codeclimate, ctx.check),

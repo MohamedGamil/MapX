@@ -30,6 +30,17 @@ export interface ReportContext {
    * absent at the top level or outside git: paths stay workspace-relative.
    */
   pathPrefix?: string;
+  /**
+   * The line of the configuration file that names the baseline (`"baseline": …`), when it does: a
+   * finding located on a file outside the repository is located there instead (review of M5-07-R2).
+   */
+  baselineLine?: number;
+}
+
+/** The 1-based line of a JSON(C) text on which `"key":` first appears, or undefined (review of M5-07-R2). */
+export function keyLine(text: string, key: string): number | undefined {
+  const at = text.search(new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*:`));
+  return at < 0 ? undefined : text.slice(0, at).split('\n').length;
 }
 
 /**
@@ -49,20 +60,47 @@ export function reportPathPrefix(format: ReportFormat, dir: string, warn: (messa
 /** A path as every CI format wants it: relative, with `/` (the store already records `/`). */
 export const posixPath = (p: string) => p.replace(/\\/g, '/').replace(/^\.\//, '');
 
-/** A workspace-relative path from the repository root (`sub/../bl.json` is `bl.json`). */
+/**
+ * A workspace-relative path from the repository root (`sub/../bl.json` is `bl.json`). An absolute
+ * path (on Windows, a file on another drive) stays as it is: no prefix makes it relative (M5-07-R2).
+ */
 export function repoPath(p: string, ctx: ReportContext): string {
   const path = posixPath(p);
-  return ctx.pathPrefix ? posix.normalize(`${posixPath(ctx.pathPrefix)}${path}`) : path;
+  return ctx.pathPrefix && !absolute(path) ? posix.normalize(`${posixPath(ctx.pathPrefix)}${path}`) : path;
 }
+
+const absolute = (path: string) => posix.isAbsolute(path) || /^[A-Za-z]:/.test(path);
+
+/**
+ * Whether a path from the repository root (the workspace, outside git) leaves it: `..`, `../…`, or
+ * absolute (another drive). A baseline or configuration given outside the repository is one; code
+ * scanning cannot show such a file, and SARIF would name it outside %SRCROOT% (M5-07-R2).
+ */
+export const outsideRoot = (path: string): boolean => path === '..' || path.startsWith('../') || absolute(path);
 
 /**
  * Where a finding is fixed, from the repository root: its `location` (a stale entry: the baseline
- * file), else its source file and first line, else the configuration file.
+ * file), else its source file and first line, else the configuration file. Every CI format gets a
+ * file inside the repository (review of M5-07-R2): a location outside it (`--baseline
+ * ../../outside/bl.json`) is replaced by the configuration file, at the line that names the
+ * baseline (`baselineLine`, else 1), and `outside` keeps the file for the message (`messageOf`).
  */
-export function locate(f: Finding, ctx: ReportContext): { path: string; line?: number } {
-  if (f.location) return { path: repoPath(f.location.file, ctx) };
-  if (f.source?.file) return { path: repoPath(f.source.file, ctx), ...(f.source.line !== undefined ? { line: f.source.line } : {}) };
-  return { path: repoPath(ctx.configFile, ctx) };
+export function locate(f: Finding, ctx: ReportContext): { path: string; line?: number; outside?: string } {
+  const at = f.location ? { path: repoPath(f.location.file, ctx) }
+    : f.source?.file ? { path: repoPath(f.source.file, ctx), ...(f.source.line !== undefined ? { line: f.source.line } : {}) }
+    : { path: repoPath(ctx.configFile, ctx) };
+  if (!outsideRoot(at.path)) return at;
+  return { path: repoPath(ctx.configFile, ctx), line: ctx.baselineLine ?? 1, outside: at.path };
+}
+
+/**
+ * The finding's text in a CI format: `describeFinding`, and for a file outside the repository, which
+ * no CI format can locate, that file (review of M5-07-R2). The only place such a path appears, with
+ * SARIF's `properties.outsideRoot`.
+ */
+export function messageOf(f: Finding, ctx: ReportContext): string {
+  const outside = locate(f, ctx).outside;
+  return outside === undefined ? describeFinding(f) : `${describeFinding(f)} (in ${outside}, outside the repository)`;
 }
 
 /**

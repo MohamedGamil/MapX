@@ -11,13 +11,17 @@
 //                subfolder prefixes its paths, M5-07-R1) and first line, 1 when the
 //                finding has none (GitHub requires a start line), and the element as a logical
 //                location. A stale baseline entry is located on the baseline file; a finding
-//                without a file (a configuration error, `empty-layer`) on the configuration file
+//                without a file (a configuration error, `empty-layer`) on the configuration file.
+//                A file outside the repository (`--baseline ../../outside/bl.json`) would leave
+//                %SRCROOT%, and GitHub requires a location in the repository: the result is
+//                located on the configuration file, at the line naming the baseline (else 1), and
+//                its message and `properties.outsideRoot` name the file (M5-07-R2 and its review)
 //   partialFingerprints  `mapx/v1`: the finding's fingerprint, which survives moved lines
 //   suppressions a skipped violation (baseline or --compare) is suppressed `external`, accepted
 // `automationDetails.id` is `mapx-check/` (or `mapx-check/<view>/`), so code scanning keeps views
 // apart. No timestamps, durations or absolute paths: the output is byte-stable.
 import type { ArchReport, Finding } from '../report.js';
-import { describeFinding, fails, locate, repoPath, ruleOf, RULE_DESCRIPTIONS, type ReportContext } from './context.js';
+import { fails, locate, messageOf, repoPath, ruleOf, RULE_DESCRIPTIONS, type ReportContext } from './context.js';
 
 export const SARIF_SCHEMA = 'https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json';
 const INFO_URI = 'https://github.com/MohamedGamil/mapx';
@@ -44,6 +48,7 @@ export function renderSarif(report: ArchReport, ctx: ReportContext): string {
   const results = report.findings.map((f) => {
     const where = locate(f, ctx);
     const properties: Record<string, unknown> = { kind: f.kind };
+    if (where.outside !== undefined) properties.outsideRoot = where.outside;
     if (f.source?.layer) properties.sourceLayer = f.source.layer;
     if (f.target) properties.target = f.target.element;
     if (f.target?.file) properties.targetFile = repoPath(f.target.file, ctx);
@@ -57,7 +62,7 @@ export function renderSarif(report: ArchReport, ctx: ReportContext): string {
       ruleIndex: index.get(ruleOf(f))!,
       ...(f.kind === 'allowed' ? { kind: 'pass' } : {}),
       level: level(f, ctx),
-      message: { text: describeFinding(f) },
+      message: { text: messageOf(f, ctx) },
       locations: [{
         physicalLocation: {
           artifactLocation: { uri: encodeUri(where.path), uriBaseId: '%SRCROOT%' },

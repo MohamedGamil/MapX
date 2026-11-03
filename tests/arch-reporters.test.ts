@@ -10,7 +10,7 @@ import { configErrorReport } from '../src/arch/report';
 import { ConfigError } from '../src/arch/config';
 import { exitCode, failsRun, CONFIG_RULES, type CheckOptions } from '../src/arch/check';
 import { renderReport, defaultFormat, type ReportContext } from '../src/arch/reporters/index';
-import { ruleOf } from '../src/arch/reporters/context';
+import { keyLine, ruleOf } from '../src/arch/reporters/context';
 import { escapeData, escapeProperty, renderGithub } from '../src/arch/reporters/github';
 import { escapeXml, escapeXmlAttribute, renderJunit } from '../src/arch/reporters/junit';
 import { codeclimateFingerprint, codeclimateSeverity, renderCodeclimate } from '../src/arch/reporters/codeclimate';
@@ -233,6 +233,46 @@ describe('reporters on hostile text (unit)', () => {
     expect(run.results.map((r: { locations: Array<{ physicalLocation: { region: { startLine: number } } }> }) => r.locations[0]!.physicalLocation.region.startLine)).toEqual([3, 9, 1, 2, 2, 1, 1]);
     expect(r6.ruleIndex).toBe(1);
     expect(encodeUri('../peer/a b.ts')).toBe('../peer/a%20b.ts');
+  });
+
+  it('a file outside the repository is located on the configuration file, in every CI format; the message names it (review of M5-07-R2)', () => {
+    const stale = (file: string, n: number) => finding({ kind: 'error', rule: 'stale-baseline', message: `${file}#/entries/0: stale`, location: { file, pointer: '/entries/0' }, fingerprint: `${n}`.padStart(16, '0') });
+    const files = ['../../outside/bl.json', '../bl.json', '..bl/x.json', '/abs/bl.json', 'C:/ci/bl.json', 'D:/ci/bl.json'];
+    const inSub: ReportContext = { ...ctx, pathPrefix: 'sub/', baselineLine: 4 };
+    const report: ArchReport = { ...hostile, findings: files.map(stale) };
+    const text = renderSarif(report, inSub);
+    expectValidSarif(text);
+    const results = JSON.parse(text).runs[0].results as Array<{ locations: Array<{ physicalLocation: { artifactLocation: { uri: string }; region: { startLine: number } } }>; message: { text: string }; properties: { outsideRoot?: string } }>;
+    // Every result has a physical location in the repository (GitHub requires one): an outside file
+    // is replaced by the configuration file, at the line naming the baseline. `..bl/` is a workspace folder.
+    expect(results.map((r) => `${r.locations[0]!.physicalLocation.artifactLocation.uri}:${r.locations[0]!.physicalLocation.region.startLine}`))
+      .toEqual(['sub/.mapx/architecture.jsonc:4', 'bl.json:1', 'sub/..bl/x.json:1', 'sub/.mapx/architecture.jsonc:4', 'sub/.mapx/architecture.jsonc:4', 'sub/.mapx/architecture.jsonc:4']);
+    // An absolute path (another drive) is never put under the prefix.
+    expect(results.map((r) => r.properties.outsideRoot ?? null)).toEqual(['../outside/bl.json', null, null, '/abs/bl.json', 'C:/ci/bl.json', 'D:/ci/bl.json']);
+    expect(results[0]!.message.text).toBe('../../outside/bl.json#/entries/0: stale (in ../outside/bl.json, outside the repository)');
+    // The other formats: the same location, the outside file only in the message.
+    const gh = renderGithub(report, inSub).split('\n').filter((l) => l.startsWith('::')).map(parseCommand);
+    expect(gh.map((c) => `${c.props.file}:${c.props.line}`)).toEqual(['sub/.mapx/architecture.jsonc:4', 'bl.json:undefined', 'sub/..bl/x.json:undefined', 'sub/.mapx/architecture.jsonc:4', 'sub/.mapx/architecture.jsonc:4', 'sub/.mapx/architecture.jsonc:4']);
+    expect(gh[5]!.message).toBe('D:/ci/bl.json#/entries/0: stale (in D:/ci/bl.json, outside the repository)');
+    const cc = JSON.parse(renderCodeclimate(report, inSub)) as Array<{ location: { path: string; lines: { begin: number } }; description: string }>;
+    expect(cc.map((i) => i.location.path)).toEqual(['sub/.mapx/architecture.jsonc', 'bl.json', 'sub/..bl/x.json', 'sub/.mapx/architecture.jsonc', 'sub/.mapx/architecture.jsonc', 'sub/.mapx/architecture.jsonc']);
+    expect(cc[0]!.location.lines.begin).toBe(4);
+    const junit = renderJunit(report, inSub);
+    expect(junit).toContain('sub/.mapx/architecture.jsonc:4\nD:/ci/bl.json#/entries/0: stale (in D:/ci/bl.json, outside the repository)');
+    // No location in any CI format leaves the repository or is absolute.
+    for (const path of [...results.map((r) => r.locations[0]!.physicalLocation.artifactLocation.uri), ...gh.map((c) => c.props.file!), ...cc.map((i) => i.location.path)]) {
+      expect(path.startsWith('..') && !path.startsWith('..bl') || /^[A-Za-z]:|^\//.test(path), path).toBe(false);
+    }
+    // At the top level, or with no repository, the workspace is %SRCROOT%; with no line named, line 1.
+    const top = JSON.parse(renderSarif({ ...hostile, findings: ['..', '../bl.json', 'bl.json', '..bl/x.json'].map(stale) }, ctx)).runs[0].results as typeof results;
+    expect(top.map((r) => r.properties.outsideRoot ?? null)).toEqual(['..', '../bl.json', null, null]);
+    expect(top.map((r) => `${r.locations[0]!.physicalLocation.artifactLocation.uri}:${r.locations[0]!.physicalLocation.region.startLine}`))
+      .toEqual(['.mapx/architecture.jsonc:1', '.mapx/architecture.jsonc:1', 'bl.json:1', '..bl/x.json:1']);
+    // A finding with an element keeps its logical location.
+    const sourced = JSON.parse(renderSarif({ ...hostile, findings: [{ ...stale('../x.json', 9), source: { element: 'App\\X', file: '', layer: 'App' } }] }, ctx)).runs[0].results[0];
+    expect(sourced.locations[0].logicalLocations).toEqual([{ fullyQualifiedName: 'App\\X' }]);
+    expect(keyLine('{\n  "layers": [],\n  "baseline": "../bl.json"\n}\n', 'baseline')).toBe(3);
+    expect(keyLine('{ "layers": [] }', 'baseline')).toBeUndefined();
   });
 
   it('GitHub: one command per finding, escaped as the toolkit does, so each parses back to the original text', () => {
@@ -623,9 +663,16 @@ describe('severities follow the configuration (CodeClimate) and the exit rule (J
     const stale = (JSON.parse(json.stdout) as ArchReport).findings.filter((f) => f.rule === 'stale-baseline');
     expect(stale).toEqual([expect.objectContaining({ location: { file: `../${name}`, pointer: '/entries/0' }, message: `../${name}#/entries/0: the baseline entry 0123456789abcdef matches no violation; delete it` })]);
     for (const format of ['json', 'table', 'sarif', 'github', 'codeclimate', 'junit']) expect(run(format).stdout, format).not.toContain(root);
-    expect(JSON.parse(run('sarif').stdout).runs[0].results.find((r: { ruleId: string }) => r.ruleId === 'stale-baseline').locations[0].physicalLocation).toEqual({ artifactLocation: { uri: `../${name}`, uriBaseId: '%SRCROOT%' }, region: { startLine: 1 } });
-    expect(run('github').stdout.split('\n').filter((l) => l.startsWith('::error')).map((l) => parseCommand(l).props)).toContainEqual({ file: `../${name}`, title: 'stale-baseline' });
-    expect((JSON.parse(run('codeclimate').stdout) as Array<{ check_name: string; location: { path: string } }>).find((i) => i.check_name === 'stale-baseline')!.location.path).toBe(`../${name}`);
+    // Outside %SRCROOT% (here the workspace, outside git): every CI format locates it on the view's
+    // configuration, line 1 (--baseline names it, no line does); the message names the file (M5-07-R2 review).
+    const staleResult = JSON.parse(run('sarif').stdout).runs[0].results.find((r: { ruleId: string }) => r.ruleId === 'stale-baseline');
+    const config = staleResult.locations[0].physicalLocation.artifactLocation.uri;
+    expect(config).toMatch(/^\.mapx\/architecture.*\.jsonc$/);
+    expect(staleResult.locations[0].physicalLocation.region).toEqual({ startLine: 1 });
+    expect(staleResult.properties.outsideRoot).toBe(`../${name}`);
+    expect(staleResult.message.text).toContain(`../${name}#/entries/0`);
+    expect(run('github').stdout.split('\n').filter((l) => l.startsWith('::error')).map((l) => parseCommand(l).props)).toContainEqual({ file: config, line: '1', title: 'stale-baseline' });
+    expect((JSON.parse(run('codeclimate').stdout) as Array<{ check_name: string; location: { path: string } }>).find((i) => i.check_name === 'stale-baseline')!.location.path).toBe(config);
   });
 
   it('a missing configuration still writes a SARIF report with one config error (exit 3)', () => {
@@ -696,7 +743,9 @@ describe('paths from the repository root when the workspace is a subfolder (M5-0
     // A testcase's body starts with `path:line` (after `kind (severity): ` when it passes).
     const junit = all(parseXml(run('junit')), 'testcase').filter((t) => t.attrs.name !== 'no findings')
       .map((t) => t.children.map((c) => c.text).join('').split('\n')[0]!.replace(/^\w+ \(\w+\): /, '').replace(/:\d+$/, ''));
-    return { workspacePaths, sarif: sarif.sort(), github: github.sort(), codeclimate: codeclimate.sort(), junit: junit.sort(), stdout, stderr };
+    // What every CI format names: a file outside %SRCROOT% (the workspace here) is located on the configuration (M5-07-R2 review).
+    const ciPaths = workspacePaths.map((p) => (p.startsWith('../') ? '.mapx/architecture.jsonc' : p)).sort();
+    return { workspacePaths, ciPaths, sarif: sarif.sort(), github: github.sort(), codeclimate: codeclimate.sort(), junit: junit.sort(), stdout, stderr };
   }
 
   it('a workspace at repo/sub: the SARIF uri, ::error file=, the CodeClimate path and the JUnit locations are sub/…', () => {
@@ -712,6 +761,85 @@ describe('paths from the repository root when the workspace is a subfolder (M5-0
     expect(sarif.runs[0].results.map((r: { properties: { targetFile?: string } }) => r.properties.targetFile).filter(Boolean)).toContain('sub/app/Infra/Repo.php');
   }, 120_000);
 
+  /** Every `uri` anywhere in a SARIF log. */
+  const urisOf = (node: unknown): string[] => !node || typeof node !== 'object' ? []
+    : Object.entries(node as Record<string, unknown>).flatMap(([k, v]) => (k === 'uri' && typeof v === 'string' ? [v] : urisOf(v)));
+
+  it('a baseline outside the repository: the SARIF validates, no uri leaves %SRCROOT%, and the stale result is located on the configuration, naming the file (M5-07-R2)', () => {
+    // repo/sub, with --baseline ../../<elsewhere>/outside/bl.json: outside the repository.
+    const elsewhere = workspace({ 'outside/bl.json': STALE });
+    temps.push(elsewhere);
+    const baseline = posix.relative(join(repo, 'sub'), join(elsewhere, 'outside', 'bl.json'));
+    expect(baseline).toMatch(/^\.\.\/\.\.\/[^/]+\/outside\/bl\.json$/);
+    const r = mapxResult(join(repo, 'sub'), 'check', '--format', 'sarif', '--report-uncovered', '--baseline', baseline);
+    expect(r.status, r.stderr).toBe(3);
+    expectValidSarif(r.stdout);
+    const sarif = JSON.parse(r.stdout);
+    const uris = urisOf(sarif.runs);
+    expect(uris.length).toBeGreaterThan(0);
+    expect(uris.filter((u) => decodeURIComponent(u).split('/').includes('..') || /^[a-z]+:|^\//i.test(u)), 'uris leaving %SRCROOT%').toEqual([]);
+    // The workspace's own files keep their sub/ locations.
+    expect(uris).toEqual(expect.arrayContaining(['sub/app/Domain/Order.php', 'sub/.mapx/architecture.jsonc']));
+    // GitHub requires a location in the repository on every result (review of M5-07-R2).
+    expect(sarif.runs[0].results.every((x: { locations?: Array<{ physicalLocation?: object }> }) => !!x.locations?.[0]?.physicalLocation)).toBe(true);
+    const stale = sarif.runs[0].results.filter((x: { ruleId: string }) => x.ruleId === 'stale-baseline');
+    expect(stale).toHaveLength(1);
+    // --baseline names it, no line of the configuration does: line 1 of the configuration.
+    expect(stale[0].locations[0].physicalLocation).toEqual({ artifactLocation: { uri: 'sub/.mapx/architecture.jsonc', uriBaseId: '%SRCROOT%' }, region: { startLine: 1 } });
+    // From the repository root, the file is one folder up: named in a property and in the message, never as a uri.
+    const fromRoot = posix.normalize(`sub/${baseline}`);
+    expect(fromRoot).toMatch(/^\.\.\/[^/]+\/outside\/bl\.json$/);
+    expect(stale[0].properties.outsideRoot).toBe(fromRoot);
+    expect(stale[0].message.text).toContain(`${baseline}#/entries/0`);
+    expect(stale[0].message.text).toContain('outside the repository');
+    expect(r.stdout).not.toContain(elsewhere);
+    for (const format of ['github', 'codeclimate', 'junit']) {
+      const out = mapxResult(join(repo, 'sub'), 'check', '--format', format, '--report-uncovered', '--baseline', baseline).stdout;
+      expect(out, format).not.toContain(elsewhere);
+      expect(out, format).toContain(`${baseline}#/entries/0`);
+    }
+  }, 120_000);
+
+  it('a configuration naming a baseline outside the repository: the stale result is located on that line of the configuration (review of M5-07-R2)', () => {
+    const elsewhere = workspace({ 'outside/bl.json': STALE });
+    temps.push(elsewhere);
+    const named = workspace(under('sub'), ['.']);
+    temps.push(named);
+    const ws = join(named, 'sub');
+    const baseline = posix.relative(ws, join(elsewhere, 'outside', 'bl.json'));
+    const config = JSON.stringify({ layers, rules: { App: ['Domain'], Domain: [], Infra: ['Domain'], Empty: [] }, baseline }, null, 2);
+    writeFileSync(join(ws, '.mapx', 'architecture.jsonc'), config);
+    init(ws);
+    mapx(ws, 'scan');
+    const r = mapxResult(ws, 'check', '--format', 'sarif');
+    expect(r.status, r.stderr).toBe(3);
+    expectValidSarif(r.stdout);
+    const line = config.split('\n').findIndex((l) => l.includes('"baseline"')) + 1;
+    expect(line).toBeGreaterThan(1);
+    const stale = JSON.parse(r.stdout).runs[0].results.find((x: { ruleId: string }) => x.ruleId === 'stale-baseline');
+    expect(stale.locations[0].physicalLocation).toEqual({ artifactLocation: { uri: 'sub/.mapx/architecture.jsonc', uriBaseId: '%SRCROOT%' }, region: { startLine: line } });
+    expect(stale.properties.outsideRoot).toBe(posix.normalize(`sub/${baseline}`));
+  }, 120_000);
+
+  it('a workspace in a git submodule: paths are relative to the submodule, the repository its files belong to (M5-07-R2 decision)', () => {
+    // lib is a repository with the workspace in sub/; super checks it out as the submodule mods/lib.
+    const base = workspace({ ...under('lib/sub'), 'lib/README': 'lib\n' }, ['lib', 'super']);
+    temps.push(base);
+    const g = (cwd: string, ...args: string[]) => spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', '-c', 'protocol.file.allow=always', ...args], { cwd, encoding: 'utf8' });
+    expect(g(join(base, 'lib'), 'add', '-A').status).toBe(0);
+    expect(g(join(base, 'lib'), 'commit', '-qm', 'lib').status).toBe(0);
+    const added = g(join(base, 'super'), 'submodule', 'add', '-q', join(base, 'lib'), 'mods/lib');
+    expect(added.status, added.stderr).toBe(0);
+    const ws = join(base, 'super', 'mods', 'lib', 'sub');
+    init(ws);
+    mapx(ws, 'scan');
+    const uris = JSON.parse(mapxResult(ws, 'check', '--format', 'sarif').stdout).runs[0].results
+      .flatMap((x: { locations?: Array<{ physicalLocation: { artifactLocation: { uri: string } } }> }) => (x.locations ?? []).map((l) => l.physicalLocation.artifactLocation.uri));
+    // git's view: the submodule's own top level. Code scanning and GitLab place these files in lib, not super.
+    expect(uris).toContain('sub/app/Domain/Order.php');
+    expect(uris.filter((u: string) => u.startsWith('mods/'))).toEqual([]);
+  }, 120_000);
+
   const WARNING = /^Warning: git could not locate .* in its repository \(git rev-parse --show-prefix failed\), so report paths are relative to the workspace, not the repository root\.$/m;
 
   it('a workspace at a repository root, or outside git, is unchanged: workspace-relative paths, no warning', () => {
@@ -719,7 +847,7 @@ describe('paths from the repository root when the workspace is a subfolder (M5-0
     const outside = located(join(top, 'plain'));
     for (const got of [atRoot, outside]) {
       expect(got.workspacePaths).toEqual(expect.arrayContaining(['app/Domain/Order.php', '.mapx/architecture.jsonc', '../bl.json']));
-      for (const format of ['sarif', 'github', 'codeclimate', 'junit'] as const) expect(got[format], format).toEqual(got.workspacePaths);
+      for (const format of ['sarif', 'github', 'codeclimate', 'junit'] as const) expect(got[format], format).toEqual(got.ciPaths);
       for (const [format, err] of Object.entries(got.stderr)) expect(err, format).not.toMatch(WARNING);
     }
     // The same files give the same bytes in every CI format, in a repository or not (json names the
@@ -733,7 +861,7 @@ describe('paths from the repository root when the workspace is a subfolder (M5-0
     const refused = located(join(repo, 'sub'), { GIT_DIR: join(repo, 'no-such-git-dir') });
     const atRoot = located(join(top, 'top'));
     for (const format of ['sarif', 'github', 'codeclimate', 'junit'] as const) {
-      expect(refused[format], format).toEqual(refused.workspacePaths);
+      expect(refused[format], format).toEqual(refused.ciPaths);
       // stdout is the report alone: byte for byte what a workspace at a repository root writes.
       expect(refused.stdout[format], format).toBe(atRoot.stdout[format]);
       expect(refused.stderr[format]!.match(new RegExp(WARNING.source, 'gm')), format).toHaveLength(1);

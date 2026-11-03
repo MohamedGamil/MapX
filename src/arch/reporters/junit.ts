@@ -17,7 +17,7 @@
 // of passing tests, never an empty one. No timestamps, durations or host names: byte-stable.
 import type { ArchReport, Finding } from '../report.js';
 import { CONFIG_RULES, failsRun } from '../check.js';
-import { describeFinding, locate, ruleOf, type ReportContext } from './context.js';
+import { locate, messageOf, ruleOf, type ReportContext } from './context.js';
 
 /**
  * Escapes text for XML 1.0 content: the five special characters, and CR as a reference (a parser
@@ -47,13 +47,13 @@ interface Case { xml: string; failure: boolean; error: boolean; skipped: boolean
 function testcase(f: Finding, ctx: ReportContext): Case {
   const where = locate(f, ctx);
   const at = `${where.path}${where.line !== undefined ? `:${where.line}` : ''}`;
-  const body = `${at}\n${describeFinding(f)}\nfingerprint: ${f.fingerprint}`;
+  const body = `${at}\n${messageOf(f, ctx)}\nfingerprint: ${f.fingerprint}`;
   const head = `    <testcase${attrs({ name: caseName(f), classname: ruleOf(f) })}>`;
   const tail = '    </testcase>';
   if (f.kind === 'skipped') return { xml: `${head}\n      <skipped${attrs({ message: `skipped by ${f.skippedBy === 'compare' ? '--compare' : 'the baseline'}` })}/>\n      <system-out>${escapeXml(body)}</system-out>\n${tail}`, failure: false, error: false, skipped: true };
   if (failsRun(f, ctx.check ?? {})) {
     const tag = f.kind === 'error' && CONFIG_RULES.has(f.rule ?? '') ? 'error' : 'failure';
-    return { xml: `${head}\n      <${tag}${attrs({ type: ruleOf(f), message: describeFinding(f) })}>${escapeXml(body)}</${tag}>\n${tail}`, failure: tag === 'failure', error: tag === 'error', skipped: false };
+    return { xml: `${head}\n      <${tag}${attrs({ type: ruleOf(f), message: messageOf(f, ctx) })}>${escapeXml(body)}</${tag}>\n${tail}`, failure: tag === 'failure', error: tag === 'error', skipped: false };
   }
   return { xml: `${head}\n      <system-out>${escapeXml(`${f.kind} (${f.severity}): ${body}`)}</system-out>\n${tail}`, failure: false, error: false, skipped: false };
 }

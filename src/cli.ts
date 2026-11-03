@@ -42,6 +42,10 @@ import { buildReport, configErrorReport, runArchitecture, type ArchReport } from
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
 import { baselineLocation, displayPath, loadBaseline, loadCompareReport, renderBaseline } from './arch/baseline.js';
 import { defaultFormat, FORMATS, GRAPH_FORMATS, layerGraph, renderLayerGraph, renderReport, reportPathPrefix, type GraphFormat, type ReportContext, type ReportFormat } from './arch/reporters/index.js';
+import { keyLine } from './arch/reporters/context.js';
+
+/** The line of a configuration file naming `key`, or undefined (an unreadable file, or none). */
+const configKeyLine = (file: string, key: string) => { try { return keyLine(readFileSync(file, 'utf8'), key); } catch { return undefined; } };
 import { changedLayers, changedSince, IntrospectError, isAllowed, layerDependencies, layerMembers, layerSummaries, openArchitecture, unassignedElements, unusedAllowances, whichLayers, type ArchContext } from './arch/introspect.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
@@ -2920,6 +2924,8 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       const reportContext: ReportContext = {
         configFile: relative(dir, architectureConfigPath(dir, selection.view)).split(sep).join('/'),
         pathPrefix: reportPathPrefix(format, dir), // CI tools read paths from the repository root (M5-07-R1)
+        // A baseline outside the repository is located where the configuration names it (review of M5-07-R2).
+        baselineLine: opts.baseline ? undefined : configKeyLine(architectureConfigPath(dir, selection.view), 'baseline'),
         check: options,
         version: VERSION,
       };

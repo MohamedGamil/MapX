@@ -19,7 +19,7 @@
 // with `::`. So one finding is always one line, and no text from the code can start a command.
 import type { ArchReport, Finding } from '../report.js';
 import { countsLine } from './table.js';
-import { describeFinding, fails, locate, ruleOf, type ReportContext } from './context.js';
+import { fails, locate, messageOf, ruleOf, type ReportContext } from './context.js';
 
 /** GitHub's limit of annotations per level (error, warning, notice) in one step. */
 export const ANNOTATION_CAP = 10;
@@ -51,7 +51,7 @@ export function renderGithub(report: ArchReport, ctx: ReportContext): string {
     const where = locate(f, ctx);
     return `${where.path}${where.line !== undefined ? `:${where.line}` : ''}`;
   };
-  const log = shown.map((f) => `[${command(f, ctx)}] ${at(f)} ${ruleOf(f)}: ${describeFinding(f).replace(/\r\n|\r|\n/g, ' ')}`);
+  const log = shown.map((f) => `[${command(f, ctx)}] ${at(f)} ${ruleOf(f)}: ${messageOf(f, ctx).replace(/\r\n|\r|\n/g, ' ')}`);
 
   const ordered = shown.map((f, i) => ({ f, i, r: rank(f, ctx) })).sort((a, b) => a.r - b.r || a.i - b.i).map((x) => x.f);
   const used: Record<Command, number> = { error: 0, warning: 0, notice: 0 };
@@ -65,7 +65,7 @@ export function renderGithub(report: ArchReport, ctx: ReportContext): string {
     const props = [`file=${escapeProperty(where.path)}`];
     if (where.line !== undefined) props.push(`line=${where.line}`);
     props.push(`title=${escapeProperty(ruleOf(f))}`);
-    annotations.push(`::${cmd} ${props.join(',')}::${escapeData(describeFinding(f))}`);
+    annotations.push(`::${cmd} ${props.join(',')}::${escapeData(messageOf(f, ctx))}`);
   }
   const cut = omitted ? `   ${omitted} more not annotated (GitHub shows ${ANNOTATION_CAP} per level in a step); see the log lines above or --format sarif` : '';
   return `${[...log, ...annotations, `${countsLine(report)}${cut}`].join('\n')}\n`;
