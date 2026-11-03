@@ -10,6 +10,7 @@ import {
   SELECTOR_KEYS, SELECTOR_MODIFIERS, SELECTOR_PRIMARY_KEYS, SYMBOL_KINDS, TOP_LEVEL_KEYS, UNCOVERED_KEYS, VISIBILITY_KEYS,
   type Allowance, type ArchitectureConfig, type ArchitectureDocument, type Layer, type Selector,
 } from './schema.js';
+import { PRESET_TEXTS } from './presets/index.js';
 
 export interface ConfigIssue {
   /** The document, relative to the workspace when inside it (`mapx:preset/<id>` for presets). */
@@ -27,10 +28,11 @@ export class ConfigError extends Error {
   }
 }
 
-/** Built-in presets by id (`mapx:preset/<id>`), as JSONC text or a document. M5-17 fills it. */
+/** Built-in presets by id (`mapx:preset/<id>`), as JSONC text or a document. */
 export type PresetRegistry = Record<string, string | ArchitectureDocument>;
-export const PRESETS: PresetRegistry = {};
-const PRESET_PREFIX = 'mapx:preset/';
+/** The shipped presets (M5-17): src/arch/presets/*.jsonc, embedded by scripts/gen-arch-presets.ts. */
+export const PRESETS: PresetRegistry = { ...PRESET_TEXTS };
+export const PRESET_PREFIX = 'mapx:preset/';
 
 export interface LoadOptions {
   /** A view: `.mapx/architecture/<view>.jsonc` instead of `.mapx/architecture.jsonc` (AR-14). */
@@ -53,7 +55,7 @@ function isInside(base: string, path: string): boolean {
  * Why `view` cannot name a view: it is empty, or its file lies outside `.mapx/architecture/`,
  * by name (`../../x`) or through a symlink. A path that cannot be resolved is left to the loader.
  */
-function viewProblem(dir: string, view: string): ConfigIssue | null {
+export function viewProblem(dir: string, view: string): ConfigIssue | null {
   const where = { file: '.mapx/architecture', pointer: '' };
   if (!view.trim()) return { ...where, message: 'empty view name: a view is a file name in .mapx/architecture/, such as "contexts" for .mapx/architecture/contexts.jsonc' };
   const views = join(dir, '.mapx', 'architecture');
@@ -336,7 +338,8 @@ class Loader {
   readonly issues: ConfigIssue[] = [];
   private readonly done = new Set<string>();
 
-  constructor(private readonly workspace: string, private readonly presets: PresetRegistry) {}
+  /** `texts`: documents given as text instead of read from disk (a proposal not yet written, M5-17). */
+  constructor(private readonly workspace: string, private readonly presets: PresetRegistry, private readonly texts: Map<string, string> = new Map()) {}
 
   display(file: string) {
     if (file.startsWith(PRESET_PREFIX)) return file;
@@ -353,6 +356,8 @@ class Loader {
       const preset = this.presets[file.slice(PRESET_PREFIX.length)];
       if (preset === undefined) return; // reported by the extending document
       text = preset;
+    } else if (this.texts.has(file)) {
+      text = this.texts.get(file)!;
     } else {
       // A directory or an unreadable file is a problem to report, not an EISDIR crash (M5-02-R1).
       try {
@@ -485,6 +490,21 @@ export function formatValidation(report: ValidationReport, config?: Pick<Archite
   const files = [...new Set(report.issues.map((i) => i.file))];
   lines.push(`${report.issues.length} problem${report.issues.length === 1 ? '' : 's'} in ${files.join(', ')}.`);
   return lines.join('\n');
+}
+
+/**
+ * Loads `text` as the configuration of the workspace at `dir` (or of a view) without reading that
+ * file: a proposal `mapx arch init` has not written yet (M5-17). `extends` and presets resolve as
+ * for the file; `config` is null when there is any issue.
+ */
+export function loadArchitectureText(dir: string, text: string, options: LoadOptions = {}): { config: ArchitectureConfig | null; issues: ConfigIssue[] } {
+  const workspace = resolve(dir);
+  const path = architectureConfigPath(workspace, options.view);
+  const loader = new Loader(workspace, options.presets ?? PRESETS, new Map([[path, text]]));
+  loader.load(path, []);
+  const { config, issues } = mergeAndValidate(loader.docs, options.view ?? null);
+  const all = sortIssues([...loader.issues, ...issues], loader.docs);
+  return { config: all.length ? null : config, issues: all };
 }
 
 /** Validates one document as a whole configuration (no `extends` resolution): the issues, or none. */

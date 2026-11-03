@@ -1,0 +1,22 @@
+// mapx:preset/clean: Clean Architecture, dependencies pointing inward.
+// AR-15. Infrastructure → Adapters → Application → Domain; the Domain depends on nothing (builtins aside).
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // Enterprise rules: entities and value objects.
+    { "name": "Domain", "selectors": [{ "path": "%root%{domain,entities,entity}/**" }] },
+    // Application rules: use cases and the ports they need.
+    { "name": "Application", "selectors": [{ "path": "%root%{application,usecases,use-cases,use_cases}/**" }] },
+    // Interface adapters: controllers, presenters, gateways.
+    { "name": "Adapters", "selectors": [{ "path": "%root%{adapters,interface-adapters,controllers,controller,presenters,gateways,presentation,interfaces,api,web,ui}/**" }] },
+    // Frameworks and drivers: the database, external services, the web framework.
+    { "name": "Infrastructure", "selectors": [{ "path": "%root%{infrastructure,infra,frameworks,drivers,persistence,db,database,external}/**" }] }
+  ],
+  "rules": {
+    "Infrastructure": ["Adapters", "Application", "Domain"],
+    "Adapters": ["Application", "Domain"],
+    "Application": ["Domain"],
+    "Domain": []
+  }
+}

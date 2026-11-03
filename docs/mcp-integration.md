@@ -528,14 +528,27 @@ Parameters:
 - `view`, `sync`, `dir` (optional).
 
 #### `mapx_arch_init`
-Proposes a configuration from the index (AR-15). There is one layer per MapX role, selected with `{ "role": … }`, in the order of the archetype's `LAYER_ORDER`. Each layer may depend on the layers below it. The proposal is validated, and roles with no place in the order are listed as `unplaced`.
+Proposes a configuration from the index (AR-15), as `mapx arch init --json` does: the same engine (`src/arch/infer.ts`), the same bytes. See [cli-reference.md](cli-reference.md#mapx-arch-init) for the sources and the JSONC it writes.
+- By default, one layer per MapX role (`{ "role": … }`), in the order of the archetype's `LAYER_ORDER`. Each layer may depend on the layers below it. Roles with no place in the order are listed as `unplaced`.
+- `from: "clusters"`: one layer per primary cluster; the rules allow the dependencies between clusters the index has today.
+- `from: "framework"`, or `preset`: a configuration that extends a shipped preset (`mapx:preset/<id>`), its folder parameter inferred from the indexed paths. `from: "framework"` takes the preset of the detected framework (laravel, nestjs or django) and is an error (`exitCode: 3`) when none is detected.
+- The JSONC comments give each layer's files and the observed layer graph; `observed` has the same as data.
 
-The result is `{ path, view, exists, written, archetype, layers: [{ name, role, files }], unplaced, issues, config }`, where `config` is the JSONC text.
+The result is `{ path, view, exists, written, source, preset, archetype, parameters, layers: [{ name, files, role?, cluster?, path? }], unplaced, observed: [{ from, to, dependencies, violations }], violations, baseline: { path, entries, exists, written } | null, issues, notes, warnings, config }`, where `config` is the JSONC text.
 
-**It writes nothing unless `write: true`**, and never over an existing file (a tool error, `exitCode: 3`). The proposal is a starting point to review. `mapx arch init` (M5-17) will infer more: clusters, frameworks, the observed layer graph, presets and a baseline.
+**It writes nothing unless `write: true`.** Each of these is refused as a tool error (`exitCode: 3`) that writes nothing:
+- an existing configuration or baseline, unless `force: true`;
+- a proposal whose every layer is empty, unless `force: true` (`warnings` says so in a dry run);
+- a target that is a symlink, or that resolves outside the workspace, even with `force`.
+
+The files are staged and replaced together, so a failed write is also `exitCode: 3` and leaves the configuration and baseline as they were. A proposal reads roles and paths, so a stale index is accepted, except with `baseline: true`, which lists today's violations and needs a current index (`exitCode: 4`, or `sync: true`). The proposal is a starting point to review.
+- `from` (string, optional): `roles` (default), `clusters` or `framework`.
+- `preset` (string, optional): `clean`, `ddd-contexts`, `django`, `feature-sliced`, `hexagonal`, `laravel`, `layered` or `nestjs`. It excludes `from`.
+- `baseline` (boolean, optional): Also propose, and with `write` write, the baseline of today's violations (`.mapx/architecture.baseline.json`, or the view's), so `mapx check` passes on day one.
 - `write` (boolean, optional): Write `.mapx/architecture.jsonc`, or the view.
-- `view` (string, optional): Propose `.mapx/architecture/<view>.jsonc` instead.
-- `dir` (string, optional).
+- `force` (boolean, optional): With `write`, overwrite an existing configuration and baseline.
+- `view` (string, optional): Propose `.mapx/architecture/<view>.jsonc` instead. A view that leads outside `.mapx/architecture/` is refused.
+- `sync`, `dir` (optional).
 
 ### Export & LLM Prompts
 

@@ -3,11 +3,9 @@
 // the same answers. Each returns JSON by default and caps its lists, reporting the totals. A
 // failure is a tool result with `isError: true` and `{ error, exitCode }`, the code meaning what
 // it means for the CLI (AR-17): 3 a configuration or usage error, 4 a missing or stale index.
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, relative } from 'node:path';
 import type { Config } from '../core/config.js';
 import type { Store } from '../core/store.js';
-import { architectureConfigPath, ConfigError, loadArchitectureConfig } from './config.js';
+import { ConfigError, loadArchitectureConfig, PRESETS } from './config.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, CONFIG_RULES, type CheckOptions } from './check.js';
 import { configErrorReport, runArchitecture, type ArchReport, type Finding } from './report.js';
 import { renderTable } from './reporters/table.js';
@@ -18,7 +16,7 @@ import {
   changedSince, IntrospectError, isAllowed, layerMembers, layerSummaries, openArchitecture, unassignedElements, whichLayers, workspacePath,
   type ArchContext,
 } from './introspect.js';
-import { proposeFromRoles } from './propose.js';
+import { InitError, INIT_SOURCES, initOptionsProblem, runInit } from './infer.js';
 
 export const ARCH_TOOL_NAMES = ['mapx_arch_check', 'mapx_arch_layers', 'mapx_arch_allowed', 'mapx_arch_explain', 'mapx_arch_init'] as const;
 export type ArchToolName = typeof ARCH_TOOL_NAMES[number];
@@ -110,12 +108,17 @@ export const ARCH_TOOLS = [
   },
   {
     name: 'mapx_arch_init',
-    description: `Propose an architecture configuration from the index (AR-15): one layer per MapX role, selected with { role }, and the archetype's layer order as "may depend downward" rules, validated. Never writes unless write: true, and never over an existing file. Returns { path, view, exists, written, archetype, layers[{ name, role, files }], unplaced[{ role, files }], issues, config (the JSONC) }. A starting point to review: \`mapx arch init\` (M5-17) will infer more. ${ERRORS}`,
+    description: `Propose an architecture configuration (AR-15), as \`mapx arch init --json\` does: from MapX roles and the archetype's layer order (default), from the primary clusters (from: clusters, rules = today's cluster graph), from the detected framework's preset (from: framework), or from a shipped preset (preset: laravel, nestjs, django, layered, clean, hexagonal, ddd-contexts, feature-sliced) with its folder parameters inferred. The JSONC comments give the observed layer graph. baseline: true also proposes a baseline of today's violations, so \`mapx check\` passes on day one. Never writes unless write: true, and never over an existing configuration or baseline unless force: true. Returns { path, view, exists, written, source, preset, archetype, parameters, layers[{ name, files, role?, cluster?, path? }], unplaced[{ role, files }], observed[{ from, to, dependencies, violations }], violations, baseline: { path, entries, exists, written } | null, issues, notes, warnings, config (the JSONC) }. ${ERRORS}`,
     inputSchema: {
       type: 'object',
       properties: {
-        write: { type: 'boolean', description: 'Write the proposal to .mapx/architecture.jsonc (or the view); refused when the file exists', default: false },
+        from: { type: 'string', enum: [...INIT_SOURCES], description: 'Where layers come from: roles (default), clusters, or framework (the preset of the detected framework)' },
+        preset: { type: 'string', enum: Object.keys(PRESETS).sort(), description: 'Start from this shipped preset (mapx:preset/<id>) instead; excludes from' },
+        baseline: { type: 'boolean', description: 'Also propose (and with write, write) .mapx/architecture.baseline.json listing today\'s violations; needs a current index (sync: true syncs first)', default: false },
+        write: { type: 'boolean', description: 'Write the proposal to .mapx/architecture.jsonc (or the view)', default: false },
+        force: { type: 'boolean', description: 'With write: overwrite an existing configuration and baseline, or write a proposal whose every layer is empty (never through a symlink)', default: false },
         view,
+        sync,
         dir,
       },
     },
@@ -216,8 +219,8 @@ function sinceRef(args: Record<string, unknown>): string | undefined {
  * is exit 3 even on a stale or missing index (review of M5-14).
  */
 function validate(name: ArchToolName, args: Record<string, unknown>): void {
-  for (const key of ['view', 'layer', 'rule', 'file', 'since', 'format', 'failOn', 'kind', 'path', 'from', 'to', 'element', 'type']) str(args, key);
-  for (const key of ['sync', 'why', 'nested', 'unassigned', 'write', 'reportUncovered', 'failOnUncovered', 'reportSkipped', 'reportAllowed']) {
+  for (const key of ['view', 'layer', 'rule', 'file', 'since', 'format', 'failOn', 'kind', 'path', 'from', 'to', 'element', 'type', 'preset']) str(args, key);
+  for (const key of ['sync', 'why', 'nested', 'unassigned', 'write', 'force', 'baseline', 'reportUncovered', 'failOnUncovered', 'reportSkipped', 'reportAllowed']) {
     if (args[key] !== undefined && typeof args[key] !== 'boolean') throw new UsageError(`"${key}" must be true or false`);
   }
   edgeType(args);
@@ -236,8 +239,8 @@ function validate(name: ArchToolName, args: Record<string, unknown>): void {
   if (name === 'mapx_arch_allowed') { str(args, 'from', true); str(args, 'to', true); }
   if (name === 'mapx_arch_explain') str(args, 'element', true);
   if (name === 'mapx_arch_init') {
-    const v = str(args, 'view');
-    if (v !== undefined && (!v.trim() || /[\\/]|^\.\.?$/.test(v))) throw new UsageError(`view "${v}" is not a file name in .mapx/architecture/`);
+    const problem = initOptionsProblem({ from: str(args, 'from'), preset: str(args, 'preset'), view: str(args, 'view') });
+    if (problem) throw new UsageError(problem);
   }
 }
 
@@ -345,25 +348,21 @@ function explain(args: Record<string, unknown>, ctx: ArchContext): ToolResult {
 // ─── mapx_arch_init ──────────────────────────────────────────────────────────────────────────
 
 async function init<C extends Loaded>(args: Record<string, unknown>, workspace: string, env: ArchToolEnv<C>): Promise<ToolResult> {
-  const v = str(args, 'view');
-  if (args.write !== undefined && typeof args.write !== 'boolean') throw new UsageError('"write" must be true or false');
-  if (v !== undefined && (!v.trim() || /[\\/]|^\.\.?$/.test(v))) throw new UsageError(`view "${v}" is not a file name in .mapx/architecture/`);
   // A proposal reads roles, which a stale index still has: only a missing or outdated one fails.
-  const gate = await indexGate(workspace, env.load, { allowStale: true, syncAdvice: '`sync: true`', updateAdvice: '`mapx_sync`' });
+  // A baseline lists today's violations, so it needs a current index, as `mapx check` does.
+  const gate = await indexGate(workspace, env.load, {
+    allowStale: args.baseline !== true, sync: args.sync === true ? env.sync : undefined, syncAdvice: '`sync: true`', updateAdvice: '`mapx_sync`',
+  });
   if ('problems' in gate) return failure(EXIT.index, gate.problems.join(' '));
   const { config, store } = gate.context;
-  const proposal = proposeFromRoles(store, config.repo.name);
-  const target = architectureConfigPath(workspace, v);
-  const path = relative(workspace, target).split('\\').join('/');
-  const exists = existsSync(target);
-  const out = {
-    path, view: v ?? null, exists, written: false, archetype: proposal.archetype, layers: proposal.layers, unplaced: proposal.unplaced,
-    issues: proposal.issues, config: proposal.text,
-  };
-  if (args.write !== true) return json(out);
-  if (exists) return failure(EXIT.config, `${path} already exists: mapx_arch_init never writes over a configuration. Remove it first, or pass a new view.`, { path });
-  if (proposal.issues.length) return failure(EXIT.config, 'The proposal is not a valid configuration: nothing was written.', { path, issues: proposal.issues });
-  mkdirSync(dirname(target), { recursive: true });
-  writeFileSync(target, proposal.text);
-  return json({ ...out, written: true });
+  try {
+    return json(runInit(store, workspace, {
+      from: str(args, 'from') as never, preset: str(args, 'preset'), baseline: args.baseline === true, view: str(args, 'view'),
+      write: args.write === true, force: args.force === true, forceHint: '`force: true`',
+      repoPaths: Object.fromEntries(config.repos.map((r) => [r.name, r.path])), repos: config.repos.map((r) => r.name),
+    }));
+  } catch (err) {
+    if (err instanceof InitError) return failure(EXIT.config, err.message, err.extra);
+    throw err;
+  }
 }

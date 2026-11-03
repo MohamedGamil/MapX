@@ -35,7 +35,8 @@ import type { ScanProgress, ProgressCallback } from './types.js';
 import { RouteRegistry, toRouteView } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
 import { VERSION } from './version.js';
-import { architectureConfigPath, ConfigError, formatValidation, loadArchitectureConfig, validateArchitectureConfig } from './arch/config.js';
+import { architectureConfigPath, ConfigError, formatValidation, loadArchitectureConfig, PRESETS, validateArchitectureConfig } from './arch/config.js';
+import { InitError, INIT_SOURCES, initOptionsProblem, runInit, type InitSource } from './arch/infer.js';
 import { EDGE_TYPES, type ArchitectureConfig } from './arch/schema.js';
 import { buildReport, configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
@@ -2589,6 +2590,78 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       process.exitCode = report.valid ? EXIT.ok : EXIT.config;
     });
 
+  // A starting configuration (M5-17; AR-15): inferred from roles or clusters, or a preset, with the
+  // observed layer graph in its comments and optionally a baseline. Dry run by default; the same
+  // engine as mapx_arch_init (src/arch/infer.ts). Exit 3 for usage errors and refused writes.
+  archCmd
+    .command('init')
+    .description('Propose .mapx/architecture.jsonc from roles, clusters, the detected framework or a preset (dry run unless --write; exit 3 over an existing file without --force)')
+    .argument('[path]', 'Target directory')
+    .option('-d, --dir <path>', 'Target directory')
+    .option('--from <source>', `Where layers come from: ${INIT_SOURCES.join(', ')} (default roles; framework uses the detected framework's preset)`)
+    .option('--preset <id>', `Start from a shipped preset: ${Object.keys(PRESETS).sort().join(', ')}`)
+    .option('--baseline', "Also write .mapx/architecture.baseline.json with today's violations, so `mapx check` passes until new ones appear")
+    .option('--write', 'Write the files (otherwise print the proposal and write nothing)')
+    .option('--force', 'With --write: overwrite an existing configuration and baseline, or write a proposal whose every layer is empty (never through a symlink)')
+    .option('--view <name>', 'Propose the view .mapx/architecture/<name>.jsonc instead')
+    .option('--sync', 'Sync the index first when files changed since the last scan (--baseline needs a current index)')
+    .option('--format <format>', 'Output format: text or json', 'text')
+    .option('--json', 'Same as --format json')
+    .exitOverride((err) => { process.exit(err.exitCode === 0 ? 0 : EXIT.config); })
+    .action(async (pathArg: string | undefined, opts: Record<string, unknown>) => {
+      const dir = pathArg ? resolve(pathArg) : resolveDir({ dir: opts.dir ?? archCmd.opts().dir }, program.opts());
+      const format = opts.json ? 'json' : String(opts.format);
+      const fail = (message: string, extra: Record<string, unknown> = {}) => {
+        if (format === 'json') console.log(JSON.stringify({ error: message, ...extra }, null, 2));
+        else console.error(`Error: ${message}`);
+        process.exitCode = EXIT.config;
+      };
+      if (!['text', 'json'].includes(format)) {
+        console.error(`Error: --format must be text or json, not "${format}"`);
+        process.exitCode = EXIT.config;
+        return;
+      }
+      const request = {
+        from: opts.from as InitSource | undefined, preset: opts.preset as string | undefined, view: opts.view as string | undefined,
+        baseline: !!opts.baseline, write: !!opts.write, force: !!opts.force, forceHint: '--force',
+      };
+      const problem = initOptionsProblem(request);
+      if (problem) { fail(problem); return; }
+      try {
+        // Roles survive a stale index; a baseline lists today's violations and needs a current one.
+        const problems: string[] = [];
+        const context = await openCurrentIndex(dir, { sync: !!opts.sync, command: 'mapx arch init', allowStale: !request.baseline, problems });
+        if (!context) {
+          if (format === 'json') console.log(JSON.stringify({ error: problems.join(' ') }, null, 2));
+          return;
+        }
+        const { config, store } = context;
+        const result = runInit(store, dir, { ...request, repoPaths: Object.fromEntries(config.repos.map((r) => [r.name, r.path])), repos: config.repos.map((r) => r.name) });
+        process.exitCode = EXIT.ok;
+        if (format === 'json') { console.log(JSON.stringify(result, null, 2)); return; }
+        for (const w of result.warnings) console.error(`Warning: ${w}`);
+        const counts = `${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}, ${result.violations} violation${result.violations === 1 ? '' : 's'} today`;
+        if (result.written) {
+          console.log(`Wrote ${result.path} (${counts}).`);
+          if (result.baseline?.written) console.log(`Wrote ${result.baseline.path} (${result.baseline.entries} entr${result.baseline.entries === 1 ? 'y' : 'ies'}).`);
+          else if (result.baseline) console.log(`No baseline written: there are no violations to list.`);
+          console.log('Review it, then run `mapx check`.');
+          return;
+        }
+        process.stdout.write(result.config);
+        for (const i of result.issues) console.error(`Problem: ${i.file}${i.pointer ? `#${i.pointer}` : ''}: ${i.message}`);
+        const baseline = result.baseline ? ` and ${result.baseline.path} (${result.baseline.entries} entr${result.baseline.entries === 1 ? 'y' : 'ies'})` : '';
+        const over = result.exists || result.baseline?.exists ? ` ${result.exists ? result.path : result.baseline!.path} exists: add --force to overwrite it.` : '';
+        console.error(`Dry run (${counts}): nothing written. Add --write to create ${result.path}${baseline}.${over}`);
+      } catch (err) {
+        if (err instanceof InitError) { fail(err.message, err.extra); return; }
+        const message = `mapx arch init failed: ${err instanceof Error ? err.message : String(err)}`;
+        if (format === 'json') console.log(JSON.stringify({ error: message }, null, 2));
+        console.error(message);
+        process.exitCode = EXIT.index;
+      }
+    });
+
   // Introspection (M5-08; AR-13a–g, docs/architecture-rules.md#introspection): questions about the
   // configuration answered from the index. Each prints text or `--format json` (the object
   // src/arch/introspect.ts returns) and exits by AR-17: 3 for configuration and usage errors (an
@@ -2877,7 +2950,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           const missing = view ? `.mapx/architecture/${view}.jsonc` : '.mapx/architecture.jsonc';
           const message = view
             ? `No view "${view}" in ${dir}: ${missing} does not exist.`
-            : `No architecture configuration in ${dir}: create ${missing} (see docs/architecture-rules.md). \`mapx arch init\`, which will infer one from roles, clusters and frameworks, is not available yet (M5-17).`;
+            : `No architecture configuration in ${dir}: create ${missing} (see docs/architecture-rules.md), or propose one with \`mapx arch init\`.`;
           console.error(message);
           // A JSON or CI-format consumer still gets a report: one configuration error.
           if (format !== 'table' || opts.output) emit(configErrorReport(new ConfigError([{ file: missing, pointer: '', message: 'not found' }])));

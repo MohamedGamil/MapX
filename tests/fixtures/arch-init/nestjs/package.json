@@ -1,0 +1,6 @@
+{
+  "name": "m5-17-nestjs-fixture",
+  "private": true,
+  "description": "Synthetic NestJS app for M5-17. Not a real application.",
+  "dependencies": { "@nestjs/common": "^10.0.0", "@nestjs/core": "^10.0.0" }
+}

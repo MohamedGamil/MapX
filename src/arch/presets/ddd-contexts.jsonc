@@ -1,0 +1,17 @@
+// mapx:preset/ddd-contexts: bounded contexts that share only a kernel.
+// AR-15. Each context is one layer, declared by the configuration that extends this preset
+// (`mapx arch init --preset ddd-contexts` adds one per folder under root), for example { "name": "Billing", "selectors": [{ "path": "%root%billing/**" }] }.
+// A context may depend on the SharedKernel and on nothing else: never on another context.
+// Parameter: root, the folder holding the context folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // Code every context shares.
+    { "name": "SharedKernel", "selectors": [{ "path": "%root%{shared,shared-kernel,shared_kernel,sharedkernel,kernel,common}/**" }] }
+  ],
+  "rules": {
+    // A default for every layer, contexts included.
+    "*": ["SharedKernel"],
+    "SharedKernel": []
+  }
+}

@@ -10,6 +10,7 @@ import { buildServer } from '../src/mcp.js';
 import { init, mapx, mapxResult } from './helpers/e2e.js';
 import { Store } from '../src/core/store.js';
 import { isAllowed, openArchitecture } from '../src/arch/introspect.js';
+import { stripJsonc } from '../src/core/js-aliases.js';
 
 // M5-14 (AR-19): the mapx_arch_* MCP tools, through a real MCP client, on scanned temp copies of
 // tests/fixtures/arch-mcp/ts (synthetic; its architecture.jsonc names the expected decisions) and
@@ -334,7 +335,7 @@ describe('mapx_arch_init', SLOW, () => {
     // Roles the scan assigned, in the archetype's order, each allowed to depend on the ones below.
     const layers = b.layers.map((l: { name: string; role: string }) => [l.name, l.role]);
     expect(layers.length).toBeGreaterThan(0);
-    const doc = JSON.parse(b.config.replace(/^\/\/.*\n/gm, ''));
+    const doc = JSON.parse(stripJsonc(b.config)); // comments explain each layer and rule (M5-17)
     expect(doc.layers).toEqual(b.layers.map((l: { name: string; role: string }) => ({ name: l.name, selectors: [{ role: l.role }] })));
     expect(doc.rules).toEqual(Object.fromEntries(layers.map(([name]: string[], i: number) => [name, layers.slice(i + 1).map(([n]: string[]) => n)])));
   });

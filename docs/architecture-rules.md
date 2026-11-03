@@ -16,8 +16,46 @@ What exists so far:
 - **Layer graphs** (M5-13): `mapx arch graph --format dot|svg|mermaid|dsm|json`. See [Layer graphs](#layer-graphs). CLI only: no MCP tool draws the graph yet.
 - **Hierarchy and member selectors, and inherited dependencies** (M5-09): `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`, and `policy.inheritDependencies`. See [Type hierarchy and members](#type-hierarchy-and-members).
 - **Smells from the rules** (M5-16, AR-18): with a configuration, `mapx_smells`, `mapx arch` and the dashboard take their layer violations from the rules and gain the smells the rules make possible. See [Smells](#smells).
+- **`mapx arch init` and the first presets** (M5-17, AR-15): a starting configuration inferred from roles or clusters, or from a shipped preset, with an optional baseline. See [Getting started: `mapx arch init`](#getting-started-mapx-arch-init) and [Presets](#presets).
 
 `@internal` markers come in M5-09 to M5-11.
+
+## Getting started: `mapx arch init`
+
+`mapx arch init` proposes a configuration from the index, for you to review before relying on it (AR-15). It is a dry run unless you pass `--write`, and it never writes over an existing configuration or baseline without `--force`. The MCP tool `mapx_arch_init` runs the same engine. Options and output are in [cli-reference.md](cli-reference.md#mapx-arch-init).
+
+1. **Map MapX roles to layers** (`--from roles`, the default). There is one layer per role the scan assigned, in the archetype's `LAYER_ORDER`, and each may depend on the layers after it. `--from clusters` makes one layer per primary cluster instead.
+2. **Or start from a preset** (`--preset <id>`, or `--from framework` for the detected framework's preset). The configuration `extends` the preset and sets its folder parameter, inferred from the indexed paths.
+3. **Read the observed layer graph** in the comments: for each layer, its files and the dependencies on other layers the index has today, and which of them the rules refuse. With `--from clusters`, the rules allow exactly today's graph.
+4. **Make day one green** with `--baseline`: today's violations go to `.mapx/architecture.baseline.json`, so `mapx check` exits 0 until a new one appears (see [Baselines and the ratchet](#baselines-and-the-ratchet)).
+
+```bash
+mapx arch init --preset laravel            # look at the proposal
+mapx arch init --preset laravel --baseline --write
+mapx check                                 # exit 0; new violations fail
+```
+
+## Presets
+
+A preset is a shipped document, `mapx:preset/<id>`, that a configuration extends. Its source is `src/arch/presets/<id>.jsonc`, with a comment on each layer. A configuration that extends a preset can override its parameters, replace a layer by declaring one of the same name, and add layers and rules.
+
+| Preset | Layers | Rules | Parameter |
+|---|---|---|---|
+| `layered` | Presentation, Business, Persistence, Common (by folder name under `root`) | each layer on the one below and on Common | `root`, default `src/` |
+| `clean` | Domain, Application, Adapters, Infrastructure | inward only; Domain on nothing | `root`, default `src/` |
+| `hexagonal` | Domain, Application (use cases and ports), Adapters | Adapters on Application and Domain; Application on Domain | `root`, default `src/` |
+| `ddd-contexts` | SharedKernel; the configuration declares one layer per context (`mapx arch init` adds one per folder under `root`) | `"*": ["SharedKernel"]`: a context never depends on another | `root`, default `src/` |
+| `feature-sliced` | App, Processes, Pages, Widgets, Features, Entities, Shared | strictly top-down | `root`, default `src/` |
+| `laravel` | Routes (`routes/` but `console.php`), Http (also route handlers and middleware outside `app/Http`, routed actions aside), Console (with `routes/console.php`), Providers, Jobs, Events, Listeners, Services (`Services`, `Actions`, `Domain`), Models (also classes with relations), Views, Database | Models, Jobs, Listeners and Providers never on Http. Routes on Http, Services (invokable actions) and Models (route-model binding, channel authorisation); Listeners on Events; Console on Jobs and Models (the Laravel 11 scheduler). Idiomatic Laravel 11 passes clean | `root`, default `""` (artisan at the repo root) |
+| `nestjs` | Module, Controller, Enhancer (guards, interceptors, pipes, filters, middleware, strategies), Provider, Dto, Entity, by file-name suffix and `@Module`/`@Controller` | Controller on Enhancer, Provider and Dto only; Entity on nothing | none |
+| `django` | Urls, Views, Admin, Commands, Forms, Serializers, Migrations, Models, by module name in any app | Models on nothing; Urls on Views | none |
+
+Limits of this first wave:
+- Presets select by path, file name, decorator and framework part. They do not use the hierarchy selectors (`extends`, `implements`, `inherits`) yet, so a Laravel model outside `app/Models` with no relation is not in Models unless your configuration adds an `inherits` selector to that layer.
+- `feature-sliced` does not forbid imports between slices of one layer, and `ddd-contexts` has no "only through Contracts" exception: both need a layer per slice or private selectors, which you can add.
+- A preset layer that matches nothing on your code is an `empty-layer` warning, not an error. `mapx arch init` warns when most layers are empty. It refuses to write a proposal whose every layer is empty (exit 3) unless you pass `--force`, since such a configuration checks nothing.
+- Laravel's Mail, Notifications, Policies and Enums folders are in no layer: dependencies on them are uncovered, never violations.
+- An inferred `root` is written as a literal glob. Glob characters in the folder name are escaped (`svc (v2)/` becomes `svc \(v2\)/`), and `%` is doubled.
 
 ## The configuration document
 
@@ -41,7 +79,7 @@ Put the configuration in `.mapx/architecture.jsonc`. Views go in `.mapx/architec
 }
 ```
 
-**`extends`** takes relative files and `mapx:preset/<id>` presets; no presets ship yet. Documents load depth-first, so extended documents come before the one that extends them:
+**`extends`** takes relative files and `mapx:preset/<id>` presets (see [Presets](#presets)). Documents load depth-first, so extended documents come before the one that extends them:
 
 - a later document replaces a layer of the same name, which keeps its first position;
 - rule lists are merged per source layer;

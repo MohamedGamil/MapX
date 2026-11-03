@@ -1,0 +1,22 @@
+// mapx:preset/layered: the classic layered (n-tier) architecture.
+// AR-15. Each layer may depend on the layer directly below it and on Common; nothing depends upward.
+// Parameter: root, the folder holding the layer folders ("src/" by default, "" for the repo root).
+{
+  "parameters": { "root": "src/" },
+  "layers": [
+    // What users and clients talk to: controllers, handlers, routes, views.
+    { "name": "Presentation", "selectors": [{ "path": "%root%{presentation,controllers,controller,handlers,routes,api,web,ui,views}/**" }] },
+    // The rules of the application: services and use cases.
+    { "name": "Business", "selectors": [{ "path": "%root%{business,services,service,logic,usecases}/**" }] },
+    // Data access: repositories, the database, DAOs.
+    { "name": "Persistence", "selectors": [{ "path": "%root%{persistence,repositories,repository,data,dal,dao,db,database}/**" }] },
+    // Helpers, types and constants every layer may use.
+    { "name": "Common", "selectors": [{ "path": "%root%{common,shared,utils,util,lib,types,helpers}/**" }] }
+  ],
+  "rules": {
+    "Presentation": ["Business", "Common"],
+    "Business": ["Persistence", "Common"],
+    "Persistence": ["Common"],
+    "Common": []
+  }
+}

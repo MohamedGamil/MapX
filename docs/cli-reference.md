@@ -800,7 +800,7 @@ Generate a comprehensive architecture and design quality report, with sections f
 mapx arch [path] [--dir /path] [--smells] [--dsm] [--violations] [--json]
 ```
 
-The subcommands `validate-config`, `layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed` work with the architecture rules configuration; they are described below.
+The subcommands `init`, `validate-config`, `layers`, `which`, `unassigned`, `deps`, `unused`, `changed`, `allowed` and `graph` work with the architecture rules configuration; they are described below.
 
 Options:
 - `--smells` — Show only detected architectural smells
@@ -815,6 +815,64 @@ Examples:
 mapx arch                           # Full text report
 mapx arch --smells                  # Show only code smells
 mapx arch --violations --json       # Show violations as JSON
+```
+
+### `mapx arch init`
+
+Proposes a starting configuration, `.mapx/architecture.jsonc` (or a view), for a person to review (AR-15). It is a **dry run by default**: it prints the JSONC on stdout and a one-line summary on stderr, and writes nothing. The comments in the JSONC give, for each layer, the files it holds and the dependencies on other layers the index has today, and which of them the proposed rules refuse. The MCP tool `mapx_arch_init` runs the same engine and returns the same JSON as `--json`.
+
+```bash
+mapx arch init [path] [--dir /path] [--from roles|clusters|framework] [--preset <id>] [--baseline]
+               [--write] [--force] [--view <name>] [--sync] [--format text|json] [--json]
+```
+
+Where the layers come from:
+- `--from roles` (the default): one layer per MapX role, in the order of the archetype's `LAYER_ORDER` (`{ "role": … }` selectors). Each layer may depend on the layers after it in that order. Roles with no place in the order (`other`, `test`…) are named in the header and left out.
+- `--from clusters`: one layer per primary cluster (`mapx clusters`, `{ "cluster": … }` selectors). The rules allow exactly the dependencies between clusters the index has today, so a new one fails `mapx check`.
+- `--from framework`: the preset of the framework the scan detected (`laravel`, `nestjs` or `django`). Exit 3 when none is detected.
+- `--preset <id>`: a configuration that `extends` the shipped preset `mapx:preset/<id>` (see [architecture-rules.md](architecture-rules.md#presets)). The preset's folder parameter (`root`) is inferred: the folder, up to three levels down, under which the most of the preset's layers have files. For `ddd-contexts`, every folder under `root` becomes a context layer. `--preset` and `--from` exclude each other.
+
+Options:
+- `--baseline`: also propose `.mapx/architecture.baseline.json` (the view's own baseline file for a view), listing the proposal's violations on today's index, so `mapx check` exits 0 until a new violation appears. It needs a current index: on a stale one it exits 4 (`--sync` syncs first). Without `--baseline`, a stale index is accepted, since roles and paths are what a proposal reads.
+- `--write`: write the files. It refuses each of these with exit 3, and writes nothing:
+  - a configuration or baseline file that already exists, unless `--force` is given;
+  - a proposal whose every layer is empty (no file matches its selectors), unless `--force` is given;
+  - a proposal with problems;
+  - a target that is a symlink, or that is in a folder resolving outside the workspace, even with `--force`.
+
+  The files are written together. Each is staged in a temporary file first, so a failure (a directory in the way, no permission) leaves the configuration and baseline as they were, and exits 3. A dry run warns, on stderr, when every layer or most of them are empty.
+- `--force`: with `--write`, overwrite an existing configuration and baseline, and write a proposal whose layers are all empty.
+- `--view <name>`: propose `.mapx/architecture/<name>.jsonc`. A name that leads outside `.mapx/architecture/` (`../x`, or through a symlink) is exit 3.
+- `--format json` / `--json`: `{ path, view, exists, written, source, preset, archetype, parameters, layers: [{ name, files, role?, cluster?, path? }], unplaced: [{ role, files }], observed: [{ from, to, dependencies, violations }], violations, baseline: { path, entries, exists, written } | null, issues, notes, warnings, config }`, where `config` is the JSONC.
+
+It exits 0 on success, 3 for a usage error, a refused write or a failed one, and 4 for a missing or outdated index (or a stale one with `--baseline`). The output depends only on the index: the same index gives the same bytes.
+
+```bash
+$ mapx arch init --preset clean --baseline
+// Proposed by `mapx arch init` from the preset mapx:preset/clean (AR-15): Clean Architecture, dependencies pointing inward.
+// Review it before relying on it. Layers and rules declared here merge over the preset's (a layer of
+// the same name replaces the preset's); `mapx arch layers` lists the result.
+// root = "src/": the folder where the most of the preset's layers have files (4 of 4, 6 files).
+// The layers on this index (files; dependencies on other layers today):
+//   Domain          1 file; → Infrastructure 2; against the rules: Infrastructure 2
+//   Application     2 files; → Domain 3
+//   Adapters        1 file; → Application 2
+//   Infrastructure  2 files; → Application 2, Domain 1
+// Today: 10 dependencies between layers, 2 against these rules.
+// With the baseline (.mapx/architecture.baseline.json), `mapx check` skips today's 2 violations and fails on new ones.
+{
+  "extends": "mapx:preset/clean",
+  "parameters": { "root": "src/" }
+}
+Dry run (4 layers, 2 violations today): nothing written. Add --write to create .mapx/architecture.jsonc and .mapx/architecture.baseline.json (2 entries).
+
+$ mapx arch init --preset clean --baseline --write
+Wrote .mapx/architecture.jsonc (4 layers, 2 violations today).
+Wrote .mapx/architecture.baseline.json (2 entries).
+Review it, then run `mapx check`.
+
+$ mapx check
+Violations: 0 (0 error, 0 warn)   Uncovered: 0   Skipped: 2   Allowed: 8   Warnings: 0   Errors: 0
 ```
 
 ### `mapx arch validate-config`

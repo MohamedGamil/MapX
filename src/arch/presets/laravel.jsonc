@@ -1,0 +1,53 @@
+// mapx:preset/laravel: a Laravel application.
+// AR-15. By Laravel's folder conventions and the framework parts MapX detects (route handlers,
+// middleware, Eloquent models with relations). Idiomatic Laravel 11 passes it: route closures with
+// route-model binding, invokable actions routed directly, the scheduler in routes/console.php,
+// listeners that type-hint their event. Models never depend on Http; Jobs, Listeners and Providers
+// never on Http either.
+// Parameter: root, the folder holding the application ("" when artisan is at the repo root).
+{
+  "parameters": { "root": "" },
+  "layers": [
+    // Route files (web, api, channels): they name controllers or invokable actions, and their
+    // closures bind models. routes/console.php is the scheduler: it is in Console.
+    { "name": "Routes", "selectors": [{ "all": [{ "path": "%root%routes/**" }, { "not": { "path": "%root%routes/console.php" } }] }] },
+    // Controllers, middleware, form requests and resources, and any other class a route or
+    // middleware edge targets (module controllers). Route files, whose closures are route handlers
+    // too, stay in Routes, and routed actions stay in Services.
+    { "name": "Http", "selectors": [
+      { "path": "%root%app/Http/**" },
+      { "all": [{ "framework": "route-handler" }, { "not": { "any": [{ "path": "%root%routes/**" }, { "path": "%root%app/{Services,Actions,Domain}/**" }] } }] },
+      { "framework": "middleware" }
+    ] },
+    // Artisan commands, and the schedule and closure commands of routes/console.php.
+    { "name": "Console", "selectors": [{ "path": "%root%app/Console/**" }, { "path": "%root%routes/console.php" }] },
+    // Service providers: the container's wiring.
+    { "name": "Providers", "selectors": [{ "path": "%root%app/Providers/**" }] },
+    // Queued jobs.
+    { "name": "Jobs", "selectors": [{ "path": "%root%app/Jobs/**" }] },
+    // Events and their listeners.
+    { "name": "Events", "selectors": [{ "path": "%root%app/Events/**" }] },
+    { "name": "Listeners", "selectors": [{ "path": "%root%app/Listeners/**" }] },
+    // Domain logic outside the framework: services, actions (invokable ones may be routed), a domain folder.
+    { "name": "Services", "selectors": [{ "path": "%root%app/{Services,Actions,Domain}/**" }] },
+    // Eloquent models, and any class with relation edges.
+    { "name": "Models", "selectors": [{ "path": "%root%app/Models/**" }, { "framework": "model" }] },
+    // Blade views.
+    { "name": "Views", "selectors": [{ "path": "%root%resources/views/**" }] },
+    // Migrations, factories and seeders.
+    { "name": "Database", "selectors": [{ "path": "%root%database/**" }] }
+  ],
+  "rules": {
+    "Routes": ["Http", "Services", "Models"],
+    "Http": ["Services", "Models", "Jobs", "Events", "Views"],
+    "Console": ["Services", "Models", "Jobs", "Events"],
+    "Providers": ["Services", "Models", "Jobs", "Events", "Listeners"],
+    "Jobs": ["Services", "Models", "Events"],
+    "Listeners": ["Events", "Services", "Models", "Jobs"],
+    "Events": ["Models"],
+    "Services": ["Models", "Jobs", "Events"],
+    "Models": ["Events"],
+    "Views": ["Models"],
+    "Database": ["Models"]
+  }
+}

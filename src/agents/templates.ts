@@ -811,7 +811,7 @@ The architecture rules of \`.mapx/architecture.jsonc\`, answered as \`mapx check
 - \`mapx_arch_layers\`: the layers; with \`layer\`, its members (\`why\` names the selector); with \`unassigned: true\`, the elements in no layer.
 - \`mapx_arch_allowed\`: \`from\`, \`to\` (layer, file or symbol), optional \`type\`. Returns \`allowed\`, \`rule\`, \`reason\`, \`decisions\`, \`allowedLayers\` and \`alternatives\`.
 - \`mapx_arch_explain\`: \`element\`, optional \`layer\` and \`to\`: the selector trace and the rule trace.
-- \`mapx_arch_init\`: a proposed configuration from MapX roles; it writes only with \`write: true\`, never over an existing file.
+- \`mapx_arch_init\`: a proposed configuration from MapX roles, clusters (\`from\`) or a preset (\`preset\`: laravel, nestjs, django, layered, clean, hexagonal, ddd-contexts, feature-sliced), optionally with a \`baseline\` of today's violations; it writes only with \`write: true\`, never over an existing file unless \`force: true\`.
 
 ---
 

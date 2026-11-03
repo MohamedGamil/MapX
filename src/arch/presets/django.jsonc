@@ -1,0 +1,33 @@
+// mapx:preset/django: a Django project.
+// AR-15. By Django's module-name conventions, in every app.
+// Models never depend on views, forms or serializers; URLconfs reach views only.
+// No parameters: the module names place every file, in whichever app it is.
+{
+  "layers": [
+    // URLconfs.
+    { "name": "Urls", "selectors": [{ "path": "**/urls.py" }] },
+    // Views and viewsets.
+    { "name": "Views", "selectors": [{ "path": "**/{views,viewsets}.py" }, { "path": "**/views/**" }] },
+    // The admin site.
+    { "name": "Admin", "selectors": [{ "path": "**/admin.py" }] },
+    // Management commands.
+    { "name": "Commands", "selectors": [{ "path": "**/management/commands/**" }] },
+    // Forms and REST framework serializers.
+    { "name": "Forms", "selectors": [{ "path": "**/forms.py" }, { "path": "**/forms/**" }] },
+    { "name": "Serializers", "selectors": [{ "path": "**/serializers.py" }, { "path": "**/serializers/**" }] },
+    // Schema migrations.
+    { "name": "Migrations", "selectors": [{ "path": "**/migrations/**" }] },
+    // Models.
+    { "name": "Models", "selectors": [{ "path": "**/models.py" }, { "path": "**/models/**" }] }
+  ],
+  "rules": {
+    "Urls": ["Views"],
+    "Views": ["Forms", "Serializers", "Models"],
+    "Admin": ["Forms", "Models"],
+    "Commands": ["Models"],
+    "Forms": ["Models"],
+    "Serializers": ["Models"],
+    "Migrations": ["Models"],
+    "Models": []
+  }
+}
