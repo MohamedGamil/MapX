@@ -38,7 +38,7 @@ import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
 import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, jsBaseUrlTarget, type AliasContext } from './js-aliases.js';
 import { declaredGlobalNames, exportSkeleton, globalScopeKey, hasCommonJsExports, hasModuleSyntax, jsExportSignature, scanModule, type JsText } from './js-source.js';
-import { EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
+import { ATTRIBUTION_VERSION, EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
 import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalAttribution, type ExternalRefRow, type JsImport } from './external-refs.js';
 import { NpmAttributor, nodeBuiltin, npmPackageName, repoParentDirs, yarnRootDirs } from './manifests/npm.js';
 import { EXTERNAL_INPUTS_KEY, changedInputFiles, contentHash, parseExternalInputs } from './manifests/inputs.js';
@@ -2684,7 +2684,7 @@ export class Scanner {
     const rows = this.store.getExternalCandidates();
     const recorded = parseExternalInputs(this.store.getMeta(EXTERNAL_INPUTS_KEY));
     if (!rows.length) {
-      if (recorded && Object.keys(recorded.files).length) this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at: Date.now(), files: {}, yarnRoots: [] }));
+      if (recorded && (Object.keys(recorded.files).length || recorded.rules !== ATTRIBUTION_VERSION)) this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at: Date.now(), files: {}, yarnRoots: [], rules: ATTRIBUTION_VERSION }));
       return;
     }
     // The index as this run leaves it, as a forced scan sees it; read anew.
@@ -2700,8 +2700,9 @@ export class Scanner {
     this.externalDecisions.clear();
     // Package attribution (M5-20): manifests and lockfiles as they stand, read once per pass, each
     // file's only within its own repo. When none of those the last pass read changed (their hashes in
-    // meta) and the indexed folders give the yarn locks the same roots, the stored attribution
-    // stands: only rows that have none, or became external, are attributed (review of M5-20).
+    // meta), the indexed folders give the yarn locks the same roots and the same attribution rules
+    // made it (ATTRIBUTION_VERSION, M5-19-R1), the stored attribution stands: only rows that have
+    // none, or became external, are attributed (review of M5-20).
     const at = Date.now();
     const workspaceRoot = this.config.getWorkspaceRoot();
     const repoRoots = new Map(this.config.repos.map((r) => [r.name, relative(workspaceRoot, resolve(workspaceRoot, r.path)).split(sep).join('/')]));
@@ -2719,6 +2720,7 @@ export class Scanner {
       manifestDirs: () => (manifestDirs ??= this.npmManifestDirs(repoRootOf)),
     };
     const unchanged = !!recorded
+      && recorded.rules === ATTRIBUTION_VERSION
       && !changedInputFiles(workspaceRoot, recorded).length
       && recorded.yarnRoots.every((y) => yarnRootDirs(workspace.manifestDirs(), y.lock, y.repo).join('\0') === y.dirs.join('\0'));
     const npm = new NpmAttributor(workspace);
@@ -2800,7 +2802,7 @@ export class Scanner {
     for (const [path, text] of [...npm.reads, ...composer.reads, ...pypi.reads, ...go.reads]) files[path] = contentHash(text);
     const yarnRoots = unchanged ? [...recorded!.yarnRoots] : [];
     for (const y of npm.yarnRoots) if (!yarnRoots.some((o) => o.repo === y.repo && o.lock === y.lock)) yarnRoots.push(y);
-    this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at, files, yarnRoots }));
+    this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at, files, yarnRoots, rules: ATTRIBUTION_VERSION }));
   }
 
   /**

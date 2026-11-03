@@ -279,7 +279,7 @@ Commands that read the index warn `Graph index may be stale` when indexed files 
 
 New files are found by walking the workspace with those rules, not by asking git. So a new file counts in a workspace that is not a git repository, in a nested repo, and in a registered repo below a folder the scan otherwise skips (such as `.wt/api`). A file in a gitignored folder counts too, because the scan does not read `.gitignore` and indexes it. A file the scan cannot read does not count. `mapx status`, `mapx check`, this warning and the MCP tools' warning all find new files this way. Each command, and each MCP tool call, walks the workspace once, and a file is tested by name before any pattern, so a folder of thousands of images costs little more than listing it.
 
-The index records the version of the extractor that built it. An index an older MapX built (one from before a fix that changes what a scan extracts) is stale too: the commands warn `was built by an older MapX`, `mapx check` exits 4, and the next `mapx scan` or `mapx update` re-parses every file of that repo once (M5-26).
+The index records the version of the extractor that built it. An index an older MapX built (one from before a fix that changes what a scan extracts) is stale too: the commands warn `was built by an older MapX`, `mapx check` exits 4, and the next `mapx scan` or `mapx update` re-parses every file of that repo once (M5-26). The external-reference attribution has its own rules version: an index whose attribution older rules made reports the same warning, `mapx status` shows it, and the next `mapx sync` (or `mapx check --sync`) attributes the stored references again without parsing any file (M5-19-R1).
 
 ## `mapx node <symbol>`
 

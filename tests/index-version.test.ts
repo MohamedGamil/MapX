@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, init, mapx, mapxResult, workspace } from './helpers/e2e.js';
-import { EXTRACTOR_VERSION } from '../src/core/extractor-version.js';
+import { ATTRIBUTION_VERSION, EXTRACTOR_VERSION } from '../src/core/extractor-version.js';
 import { Scanner } from '../src/core/scanner.js';
 import { Store } from '../src/core/store.js';
 import { Config } from '../src/core/config.js';
@@ -165,5 +165,77 @@ describe('mapx check --sync with a repo it cannot rebuild (review of M5-26)', ()
     const r = mapxResult(root, 'check', '--sync');
     expect(r.status).toBe(4);
     expect(r.stderr).toContain('could not rebuild');
+  }, 120000);
+});
+
+// M5-19-R1 (review): an index whose external-reference attribution older rules made is outdated for
+// the gate, `status` and the warnings, like an older extractor; the sync attributes it again and
+// parses no file. Only the attribution version differs from a current index.
+describe('the attribution-rules version of an index (M5-19-R1)', () => {
+  let root: string;
+  beforeEach(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', dependencies: { lodash: '^4.0.0' } }),
+      'src/a.ts': "import _ from 'lodash';\nexport function a() { return _.noop(); }\n",
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterEach(() => cleanup(root));
+
+  const db = <T>(use: (d: Database.Database) => T): T => {
+    const d = new Database(join(root, '.mapx', 'mapx.db'));
+    try { return use(d); } finally { d.close(); }
+  };
+  const record = () => JSON.parse((db((d) => d.prepare("SELECT value FROM meta WHERE key = 'external_inputs'").get()) as { value: string }).value);
+  /** Records the previous attribution version: the only change to the index. */
+  const older = () => {
+    const r = record();
+    r.rules = ATTRIBUTION_VERSION - 1;
+    db((d) => d.prepare("UPDATE meta SET value = ? WHERE key = 'external_inputs'").run(JSON.stringify(r)));
+  };
+  const state = () => db((d) => ({
+    scanned: d.prepare('SELECT path, last_scanned FROM files').all(),
+    extractor: d.prepare("SELECT value FROM meta WHERE key LIKE 'extractor_version:%'").all(),
+  }));
+  const mcpWarning = () => {
+    const store = new Store(join(root, '.mapx', 'mapx.db'));
+    try { return getMcpStalenessWarning(store, root); } finally { store.close(); }
+  };
+
+  it('a current index is clean for the gate, status and the warnings', () => {
+    expect(record().rules).toBe(ATTRIBUTION_VERSION);
+    expect(mapxResult(root, 'check').status).toBe(3);
+    expect(mapxResult(root, 'status').stdout).not.toContain('older MapX');
+    expect(mcpWarning()).not.toContain('older MapX');
+  }, 120000);
+
+  it('an older attribution version: check exits 4, status and the warnings say so, and --sync attributes again without parsing a file', () => {
+    older();
+    const before = state();
+    const stale = mapxResult(root, 'check');
+    expect(stale.status).toBe(4);
+    expect(stale.stderr).toContain('was built by an older MapX');
+    const status = mapxResult(root, 'status');
+    expect(status.stdout).toContain('was built by an older MapX');
+    expect(status.stdout).toContain('Index is stale');
+    expect(mapxResult(root, 'query', 'a').stderr).toContain('was built by an older MapX');
+    expect(mcpWarning()).toContain('was built by an older MapX: run mapx_sync');
+
+    // Past the gate (no architecture configuration: 3); no file parsed, the extractor version kept.
+    expect(mapxResult(root, 'check', '--sync').status).toBe(3);
+    expect(record().rules).toBe(ATTRIBUTION_VERSION);
+    expect(state()).toEqual(before);
+    expect(mapxResult(root, 'check').status).toBe(3);
+    expect(mapxResult(root, 'status').stdout).not.toContain('older MapX');
+  }, 120000);
+
+  it('an older record of an index with no external reference left is brought up to date by the sync too', () => {
+    writeFileSync(join(root, 'src/a.ts'), 'export function a() { return 1; }\n');
+    mapx(root, 'scan', '.');
+    db((d) => d.prepare("INSERT OR REPLACE INTO meta (key, value) VALUES ('external_inputs', ?)").run(JSON.stringify({ at: Date.now(), files: {}, yarnRoots: [], rules: ATTRIBUTION_VERSION - 1 })));
+    expect(mapxResult(root, 'check').status).toBe(4);
+    expect(mapxResult(root, 'check', '--sync').status).toBe(3);
+    expect(record().rules).toBe(ATTRIBUTION_VERSION);
   }, 120000);
 });

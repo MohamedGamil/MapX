@@ -16,6 +16,8 @@ export interface ExternalInputs {
   files: Record<string, string | null>;
   /** The yarn locks' roots, which the set of indexed folders decides. */
   yarnRoots: YarnRoots[];
+  /** The attribution-rules version of the pass that recorded them (ATTRIBUTION_VERSION; 1 when not recorded, M5-19-R1). */
+  rules: number;
 }
 
 export const contentHash = (text: string | null): string | null => (text === null ? null : createHash('md5').update(text).digest('hex'));
@@ -44,7 +46,7 @@ export function parseExternalInputs(value: string | null | undefined): ExternalI
   if (!value) return null;
   try {
     const v = JSON.parse(value);
-    return v && typeof v.at === 'number' && v.files && typeof v.files === 'object' ? { at: v.at, files: v.files, yarnRoots: Array.isArray(v.yarnRoots) ? v.yarnRoots : [] } : null;
+    return v && typeof v.at === 'number' && v.files && typeof v.files === 'object' ? { at: v.at, files: v.files, yarnRoots: Array.isArray(v.yarnRoots) ? v.yarnRoots : [], rules: typeof v.rules === 'number' ? v.rules : 1 } : null;
   } catch {
     return null;
   }

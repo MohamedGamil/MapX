@@ -102,7 +102,7 @@ SQLite abstraction with two backends:
 
 Both backends are opened with `PRAGMA journal_mode = WAL` and `PRAGMA busy_timeout = 5000` so concurrent readers/writers wait up to 5 seconds instead of failing immediately with `SQLITE_BUSY`.
 
-Tables: `files`, `symbols`, `edges`, `snapshots`, `meta`, `clusters`, `cluster_membership`, `cluster_metrics`, `classification_signals`, `arch_smells` and `external_ref_candidates`, with the `external_refs` view (each reference to a package, built-in or ambient name outside the workspace, with its package attribution). The schema is versioned and migrated on open; the index also records the extractor version that built it, so an index from an older MapX is re-parsed once.
+Tables: `files`, `symbols`, `edges`, `snapshots`, `meta`, `clusters`, `cluster_membership`, `cluster_metrics`, `classification_signals`, `arch_smells` and `external_ref_candidates`, with the `external_refs` view (each reference to a package, built-in or ambient name outside the workspace, with its package attribution). The schema is versioned and migrated on open; the index also records the extractor version that built it, so an index from an older MapX is re-parsed once, and the version of the external-reference attribution rules, so a change to those rules alone re-attributes the stored references on the next sync without re-parsing.
 
 The `meta` table stores scan state including:
 - `last_scan_time` / `last_scan_commit` — For incremental change detection

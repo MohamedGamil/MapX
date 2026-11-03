@@ -919,6 +919,13 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // One walk for the whole status (M5-05-R1): the new files git cannot list, in a workspace that
       // is not a git repository or in a nested repo, come from it.
       const stale = findStaleFiles(store, dir);
+      // An index an older MapX built (an older extractor, or older external-reference attribution rules).
+      const outdated = outdatedIndexWarning(store, "run 'mapx sync' or 'mapx scan'");
+      if (outdated) {
+        isStale = true;
+        console.log('\n── Index version ────────────────────────────────────');
+        console.log(`  ⚠ ${outdated}`);
+      }
       const git = isGitRepo(repoRoot);
       // --exclude/--include narrow the changed files reported, as in mapx_status (M4-28-R2).
       const cliExcludes = (opts.exclude as string[]) ?? [];

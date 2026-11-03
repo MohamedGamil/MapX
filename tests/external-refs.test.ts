@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { Scanner } from '../src/core/scanner.js';
-import { Store } from '../src/core/store.js';
+import { Store, type ExternalDecision } from '../src/core/store.js';
 import { Config } from '../src/core/config.js';
 import { MapxGraph } from '../src/core/graph.js';
-import { extractorVersionKey } from '../src/core/extractor-version.js';
+import { ATTRIBUTION_VERSION, extractorVersionKey } from '../src/core/extractor-version.js';
 import { jsImports } from '../src/core/external-refs.js';
 import { builtinModules } from 'node:module';
 import { NODE_BUILTINS, NODE_PREFIX_ONLY_BUILTINS, nodeBuiltin, npmPackageName, parsePackageLock, parsePnpmLock, parseYarnLock } from '../src/core/manifests/npm.js';
@@ -3563,4 +3563,67 @@ describe('external dependencies in the rules (M5-24)', () => {
     // Unattributed: Go's github.com/pkg/errors (direct false), pypi's sklearn, Composer's Illuminate\Support\Str (direct null).
     expect(got.some((d) => /pkg\/errors|sklearn|acme_missing|Illuminate|collect|Acme/.test(d))).toBe(false);
   }, 180000);
+});
+
+// M5-19-R1: the end-of-run pass records the attribution-rules version beside its inputs. The next
+// sync decides the attribution of an index whose record an older version wrote again, from the
+// stored candidates. No file is parsed and EXTRACTOR_VERSION is not involved. Synthetic, labelled:
+// `\Redis` (a PECL class, ambient since M5-21-R1) and GO_FILES. The rows an older MapX stored are
+// simulated: Redis as an unknown class, uuid flagged manifest.
+describe.each([
+  ['git sync', true],
+  ['hash sync', false],
+] as const)('an attribution-rules version (M5-19-R1), on a %s', (_name, withGit) => {
+  const p = project(withGit);
+  const files = {
+    ...GO_FILES,
+    'composer.json': COMPOSER_MANIFEST,
+    'composer.lock': COMPOSER_LOCK,
+    'app/Cache.php': '<?php\nnamespace App;\n\nclass Cache { public function open() { return new \\Redis(); } }\n',
+  };
+  const attribution = (store: Store) => [...composerAttribution(store), ...goAttribution(store)];
+  /** Scans, then makes the stored rows and the record what an index built by older rules holds. */
+  const olderIndex = async (rules: number | undefined) => {
+    p.create(files);
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    const current = attribution(store);
+    const old = store.getExternalCandidates().flatMap((c): ExternalDecision[] => c.specifier === 'Redis'
+      ? [{ id: c.id, external: 1, package: null, origin: 'package', direct: null, dev: null, attribution: 'lock' }]
+      : c.specifier === 'github.com/google/uuid' ? [{ id: c.id, external: 1, package: c.package, origin: c.origin, direct: c.direct, dev: c.dev, attribution: 'manifest' }] : []);
+    // uuid: its import and its call.
+    expect(old.map((d) => d.package ?? 'Redis').sort()).toEqual(['Redis', 'github.com/google/uuid', 'github.com/google/uuid']);
+    store.setExternalDecisions(old);
+    const record = JSON.parse(store.getMeta(EXTERNAL_INPUTS_KEY)!);
+    expect(record.rules).toBe(ATTRIBUTION_VERSION);
+    if (rules === undefined) delete record.rules;
+    else record.rules = rules;
+    store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify(record));
+    return { store, current };
+  };
+
+  it.each([
+    ['the previous version', ATTRIBUTION_VERSION - 1],
+    ['no version (recorded before M5-19-R1)', undefined],
+  ] as const)('an index recorded by %s: the next sync attributes every row by the current rules, parsing no file', async (_label, rules) => {
+    const { store, current } = await olderIndex(rules);
+    expect(current).toContain('app/Cache.php:4 Redis instantiation → ext-redis ambient null null null');
+    expect(current).toContain('cmd/main.go:7 github.com/google/uuid → github.com/google/uuid package 1 0 lock');
+    expect(attribution(store)).toContain('app/Cache.php:4 Redis instantiation → null package null null lock');
+    const repo = store.getRepoNames()[0]!;
+    const extractor = store.getMeta(extractorVersionKey(repo));
+    const result = await p.sync(store);
+    expect(result.filesScanned).toBe(0);
+    expect(store.getMeta(extractorVersionKey(repo))).toBe(extractor);
+    expect(attribution(store)).toEqual(current);
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
+    expect(JSON.parse(store.getMeta(EXTERNAL_INPUTS_KEY)!).rules).toBe(ATTRIBUTION_VERSION);
+  }, 120000);
+
+  it('an index recorded by the current version keeps its stored attribution while its inputs stand', async () => {
+    const { store } = await olderIndex(ATTRIBUTION_VERSION);
+    const stored = attribution(store);
+    expect((await p.sync(store)).filesScanned).toBe(0);
+    expect(attribution(store)).toEqual(stored);
+  }, 120000);
 });

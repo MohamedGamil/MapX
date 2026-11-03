@@ -1029,8 +1029,9 @@ EXAMPLE:
         for (const c of shown) gitInfo += `\n    ${icon[c.status] ?? '~'} ${c.path}`;
         if (shown.length < listed.length) gitInfo += `\n    … ${listed.length - shown.length} more (showing ${shown.length} of ${listed.length}; pass limit: 0 to list all)`;
 
-        const recommendations = isStale
-          ? '⚠ Index is stale. Run `mapx sync` or `mapx update` to bring it up to date.'
+        const outdated = outdatedIndexWarning(ctx.store, 'run mapx_sync');
+        const recommendations = isStale || outdated
+          ? `⚠ Index is stale. Run \`mapx sync\` or \`mapx update\` to bring it up to date.${outdated ? `\n  ${outdated}` : ''}`
           : '✓ Index is up to date.';
 
         const textOutput = `Directory: ${dir}

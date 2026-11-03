@@ -1,4 +1,5 @@
 import type { Store } from './store.js';
+import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js';
 
 /**
  * The version of what a scan extracts (M5-26). Bump it when a change makes an unchanged file index
@@ -52,6 +53,23 @@ import type { Store } from './store.js';
  */
 export const EXTRACTOR_VERSION = 21;
 
+/**
+ * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided
+ * external gets its package, origin, direct, dev and attribution from manifests, locks and the
+ * built-in lists. The end-of-run pass records it with its inputs (`external_inputs`), and keeps a
+ * stored attribution only while both stand. Bump it when a change attributes unchanged inputs
+ * differently, so the next scan or sync re-attributes every repo's candidates without parsing a
+ * file. A change to what a scan extracts bumps EXTRACTOR_VERSION instead. Evaluation rules, which
+ * `check` computes from the stored rows (M5-24), need no version.
+ * - 1: M5-20 (npm), M5-21 (Composer), M5-22 (pip, Poetry, uv), M5-23 (Go modules). A record
+ *   without a version counts as 1.
+ * - 2: M5-21-R1 (PECL names ambient; vendor/composer classmap and files names attributed to their
+ *   installed package), M5-23-R1 (the module path of an unreadable go.mod from the folder layout),
+ *   M5-25-R3 (a module replaced by a folder outside the workspace or the registered repos is
+ *   external, attributed `manifest`: go.sum holds no hash of a directory).
+ */
+export const ATTRIBUTION_VERSION = 2;
+
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 
 /** Scanned repos whose index an older extractor built (no recorded version counts as older). */
@@ -59,10 +77,33 @@ export function outdatedRepos(store: Store, repoNames: string[] = store.getRepoN
   return repoNames.filter(r => !!store.getMeta('last_scan_time:' + r) && Number(store.getMeta(extractorVersionKey(r)) ?? 0) < EXTRACTOR_VERSION);
 }
 
-/** The warning for an index an older extractor built, or '' (M5-26). */
+/**
+ * True when the external-reference attribution of the index was made by older rules (M5-19-R1 and
+ * its review): the inputs record names an earlier ATTRIBUTION_VERSION (none counts as 1). The next
+ * scan or sync attributes the stored candidates again without parsing a file, so it is not an
+ * outdated extractor (`outdatedRepos`), which re-parses.
+ */
+export function outdatedAttribution(store: Store): boolean {
+  if (typeof store.getMeta !== 'function') return false;
+  const inputs = parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY));
+  return !!inputs && inputs.rules < ATTRIBUTION_VERSION;
+}
+
+/**
+ * The scanned repos whose index an older MapX built: by an older extractor, or, for every scanned
+ * repo, with older attribution rules (the record is the workspace's). What the index gate, `status`
+ * and the warnings report; `outdatedRepos` alone decides a re-parse.
+ */
+export function outdatedIndexRepos(store: Store, repoNames: string[] = store.getRepoNames()): string[] {
+  const attribution = outdatedAttribution(store);
+  return repoNames.filter(r => !!store.getMeta('last_scan_time:' + r)
+    && (attribution || Number(store.getMeta(extractorVersionKey(r)) ?? 0) < EXTRACTOR_VERSION));
+}
+
+/** The warning for an index an older MapX built, or '' (M5-26, M5-19-R1). */
 export function outdatedIndexWarning(store: Store, rescan: string): string {
   // A partial store (a test double without the meta API) records no version to compare.
   if (typeof store.getRepoNames !== 'function' || typeof store.getMeta !== 'function') return '';
-  const repos = outdatedRepos(store);
+  const repos = outdatedIndexRepos(store);
   return repos.length ? `The index of ${repos.join(', ')} was built by an older MapX: ${rescan} to rebuild it.` : '';
 }
