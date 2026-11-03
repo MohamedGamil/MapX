@@ -338,3 +338,7 @@ Answers M4-12-R1's blocking condition. Under CPU load, idle lanes steal new gram
 - **Held:** M4-13-R1 (parse pool sizing honours CPU affinity) and M5-98 (M5 acceptance re-score) start only when the owner explicitly asks. Each carries an owner-hold blocking condition so the plan tool never promotes it.
 - **Follow-ups:** every follow-up found during the 2026-11-03 consolidation is registered as BACKLOG, and none is started.
 - **Release:** after the remaining work, the version goes to 0.3.9 with a local `v0.3.9` tag. The Linux binary is packaged and installed for the user, as for v0.3.7 (D023) and v0.3.8 (D029). Nothing is published or pushed.
+
+## D036 — Release documentation before the v0.3.9 tag (owner, 2026-11-03)
+
+Before the 0.3.9 version is pinned, the owner asked for all changes since 0.3.5 to be documented, every doc brought up to date, and the root README to reflect the features MapX provides now. Registered as M4-28 (P1). The bump and tag of D035 wait for it.

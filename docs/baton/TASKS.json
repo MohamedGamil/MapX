@@ -27912,6 +27912,95 @@
       ]
     },
     {
+      "milestone": "M4",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "low",
+      "area": [
+        "docs"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-24",
+          "type": "hard"
+        },
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M5-15",
+          "type": "hard"
+        },
+        {
+          "id": "M5-18",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "CHANGELOG.md",
+        "docs/baton/DECISIONS.md#D035",
+        "docs/baton/PROJECT_STATE.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M4-28",
+      "actualHours": null,
+      "startedAt": "2026-11-03T13:29:15.877Z",
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [
+        {
+          "at": "2026-11-03T13:29:15.475Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T13:29:15.877Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-28",
+      "title": "Release documentation for 0.3.9: README, docs and CHANGELOG cover every change since 0.3.5",
+      "objective": "Before the v0.3.9 tag (D035), the root README presents every feature MapX provides today (architecture rules and check, arch init/graph/smells, external references and package attribution, the dashboard Architecture view, worker pool, MCP tools and counts, languages), every docs/*.md page matches the code (commands, flags, MCP tools, exit codes, config keys), and CHANGELOG entries since 0.3.5 are complete, grouped and readable.",
+      "description": "Owner request 2026-11-03: document all new changes since 0.3.5, ensure all docs are up to date, and make the root README reflect the latest features, before pinning the 0.3.9 tag.",
+      "outputs": [
+        "README.md",
+        "docs/*.md",
+        "CHANGELOG.md",
+        "reports/M4-28.md"
+      ],
+      "affectedFiles": [
+        "README.md",
+        "docs/*.md",
+        "CHANGELOG.md",
+        "tests/docs*.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Every CLI command and flag in `mapx --help` (and each subcommand's --help, including arch and check) appears in docs/cli-reference.md, and every MCP tool src/mcp.ts registers appears in docs/mcp-integration.md with its parameters; counts stated anywhere (tools, languages, presets, reporters) equal the code (scripted check recorded in the report, or a docs test).",
+        "README.md has a current feature overview linking each feature to its doc page, and its quick start runs verbatim in a temp folder (recorded in the report).",
+        "CHANGELOG.md [Unreleased] entries are grouped by feature area with no duplicates or contradictions; every user-visible change since v0.3.5 (git log v0.3.5..HEAD, tasks DONE since) is covered by an entry in [0.3.6]–[Unreleased]; `npm run check` (changelog coverage) passes."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ]
+    },
+    {
       "milestone": "M2",
       "priority": "P2",
       "estimate": {
