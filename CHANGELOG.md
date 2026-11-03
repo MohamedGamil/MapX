@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- The dashboard's Architecture tab has a Layer rules view for `.mapx/architecture.jsonc` (health tiles, a layer diagram whose edges and layers drill down to file:line dependencies and selector-matched members, a layer DSM, filterable findings), the graph can colour files by declared layer, and `/api/arch/report`, `/api/arch/layers` and `/api/arch/edges` serve them read-only and flag a stale index; `mapx check --layer` now matches layer names that contain a comma (M5-15).
 - MapX now checks its own architecture in CI with `mapx check`, and docs/architecture-rules.md is a complete guide with a tested example of every selector, rule, reporter and exit code (M5-18).
 - External references to Go packages now record their module, whether go.mod requires it directly or `// indirect` and whether only tests use it, from go.mod, go.sum and go.work (longest module path, `/v2` major versions, `replace`), and standard-library packages (`fmt`, `net/http`) are classified as built-ins and cgo's `C` as ambient (M5-23).
 - External references to Python modules now record their distribution, whether it is a direct or transitive dependency and dev-only, from pyproject.toml (PEP 621, dependency groups, Poetry), requirements files, uv.lock and poetry.lock, and standard-library modules (`os`, `json`, `tomllib`) are classified as built-ins (M5-22).

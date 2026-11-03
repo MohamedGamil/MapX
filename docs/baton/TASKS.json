@@ -16447,14 +16447,27 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-15",
       "actualHours": null,
       "startedAt": "2026-11-03T08:30:23.276Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T11:19:08.855Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-15.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/ui-arch-api.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-15.md"
+        },
+        {
+          "command": "npx tsx scripts/check-package.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-15.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T08:30:22.807Z",
@@ -16467,9 +16480,32 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T11:19:08.369Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T11:19:08.855Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/ui-arch-api.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-15.md"
+            },
+            {
+              "command": "npx tsx scripts/check-package.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-15.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
@@ -21103,7 +21139,7 @@
           "evidence": []
         }
       ],
-      "criticalPath": false,
+      "criticalPath": true,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
