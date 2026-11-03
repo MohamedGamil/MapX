@@ -120,3 +120,29 @@
       right: [(function_expression) (arrow_function) (generator_function)]) @symbol.kind_function)
   (#eq? @_module "module")
   (#eq? @symbol.scope "exports"))
+
+; `module.exports = function build() {}` and `module.exports = class Widget {}`: the module's whole
+; export, declared under the expression's name, which a whole-module `require` binding reaches
+; (M2-20). An anonymous expression declares nothing.
+(program
+  (expression_statement
+    (assignment_expression
+      left: (member_expression
+        object: (identifier) @_module
+        property: (property_identifier) @_exports)
+      right: [
+        (function_expression name: (identifier) @symbol.name)
+        (generator_function name: (identifier) @symbol.name)
+      ] @symbol.kind_function))
+  (#eq? @_module "module")
+  (#eq? @_exports "exports"))
+
+(program
+  (expression_statement
+    (assignment_expression
+      left: (member_expression
+        object: (identifier) @_module
+        property: (property_identifier) @_exports)
+      right: (class name: (identifier) @symbol.name) @symbol.kind_class))
+  (#eq? @_module "module")
+  (#eq? @_exports "exports"))

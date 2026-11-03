@@ -194,6 +194,46 @@ function stripPythonComments(text: string): string {
 interface ImportBinding {
   file: string;
   imported: string | null;
+  /** A CommonJS `require` binding, and the line it is on: the declarator is not a shadowing local (M2-20). */
+  require?: { line: number };
+}
+
+/** `module.exports = require('./a')`: a CommonJS module that is another module whole (M2-20). */
+const CJS_REEXPORT = /(?<![\w$.])module\.exports\s*=\s*require\s*\(\s*['"]([^'"\n]+)['"]\s*\)/;
+/** `const x = require('./m')`, `const { a, b: c } = require('./m')`, `const f = require('./m').f` (M2-20). */
+const CJS_REQUIRE_BINDING = /\b(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)(?:\s*\.\s*([\w$]+))?/g;
+
+/**
+ * The properties of a JS module's `module.exports = { … }` literal (M2-20): each key with the name
+ * its value is (`a` and `a: a` → a, `b: c` → c, a method `m() {}` → m), or null for any other value
+ * (`f: function () {}`, `n: 1`). Undefined when the module has no such literal, or it spreads
+ * (`...require('./a')`) or computes a key, so the whole set of names is unknown.
+ */
+function commonJsObjectExports(masked: string): Map<string, string | null> | undefined {
+  const all = [...masked.matchAll(/(?<![\w$.])module\.exports\s*=\s*\{/g)];
+  if (all.length !== 1) return undefined;
+  let depth = 0;
+  let start = all[0]!.index! + all[0]![0].length;
+  const parts: string[] = [];
+  for (let i = start; i < masked.length; i++) {
+    const c = masked[i]!;
+    if ('([{'.includes(c)) depth++;
+    else if (')]}'.includes(c) && depth-- === 0) {
+      parts.push(masked.slice(start, i));
+      break;
+    } else if (c === ',' && depth === 0) {
+      parts.push(masked.slice(start, i));
+      start = i + 1;
+    }
+  }
+  const exports = new Map<string, string | null>();
+  for (const part of parts.map(p => p.trim()).filter(Boolean)) {
+    const m = /^([A-Za-z_$][\w$]*)\s*(?::\s*([\s\S]*))?$/.exec(part) ?? /^(?:async\s+|get\s+|set\s+)?\*?\s*([A-Za-z_$][\w$]*)\s*\(/.exec(part);
+    if (!m) return undefined;
+    const value = m[2]?.trim();
+    exports.set(m[1]!, value === undefined ? m[1]! : /^[A-Za-z_$][\w$]*$/.test(value) ? value : null);
+  }
+  return exports;
 }
 /** What resolveSymbolToFile finds for a name in one resolution phase, before the caller is known (M4-03). */
 interface NameCandidates {
@@ -1881,7 +1921,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, fileLevel: _fileLevel, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, fileLevel: _fileLevel, required: _required, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -1982,7 +2022,10 @@ export class Scanner {
   private isBarrel(path: string): boolean {
     if (path.endsWith('__init__.py')) return true;
     const code = this.jsText(path).code;
-    return /\bexport\s*(?:\*|\{[^}]*\})\s*from\b/.test(code) || (/\bexport\s*\{[^}]*\}(?!\s*from)/.test(code) && /\bimport\b/.test(code));
+    return /\bexport\s*(?:\*|\{[^}]*\})\s*from\b/.test(code) || (/\bexport\s*\{[^}]*\}(?!\s*from)/.test(code) && /\bimport\b/.test(code))
+      // CommonJS: `module.exports = require('./a')`, or a required name passed on (M2-20).
+      || CJS_REEXPORT.test(code) || [...code.matchAll(CJS_REQUIRE_BINDING)].some(m =>
+        (m[1]!.startsWith('{') ? m[1]!.slice(1, -1).split(',').map(p => p.split(':').pop()!.trim()) : [m[1]!]).some(n => n && this.commonJsPassesOn(path, n)));
   }
 
   /** A JS/TS module's text without comments, for this resolution phase (M2-08-R1). */
@@ -2006,9 +2049,16 @@ export class Scanner {
   ): { file: string; symbol: string } | false | null {
     const python = language === 'python';
     if (!isJsOrTs && !python) return null;
+    const name = ref.targetName;
+    // `require('./m').f()`: the export f of the project module required there; a module outside the
+    // project declares nothing of the project's (M2-20).
+    const required = isJsOrTs ? ref.metadata?.required : undefined;
+    if (typeof required === 'string') {
+      const target = this.resolveImportPath(required, sourcePath, fileMap);
+      return target && fileMap.has(target) ? orNoEdge(this.findExport(target, name, fileMap)) : false;
+    }
     const bindings = this.importBindings(sourcePath, python, fileMap);
     if (!bindings.size) return null;
-    const name = ref.targetName;
     let receiver = ref.metadata?.receiver as string | undefined;
     // The file declares the name where the call sees it (a later top-level def, a function nested in
     // the caller's enclosing function): the declaration shadows the import, and name lookup picks the
@@ -2018,7 +2068,9 @@ export class Scanner {
       // `exports.f = function` binds no lexical `f` (M2-09).
       const lexical = (d: NonNullable<typeof symbols>[number]) => d.kind !== 'method' && !exportOnly({ scope: d.scope, assigned: d.metadata?.['assigned'] === true });
       if (!declared) this.declaredNames.set(symbols, (declared = new Set(symbols.filter(lexical).map(d => d.name))));
-      if (declared.has(name) && symbols.some(d => d.name === name && lexical(d) && this.visibleAt(d, ref.startLine, symbols))) return null;
+      // `const Logger = require('./logger')` is the parser's function symbol Logger, and the binding itself (M2-20).
+      const requiredOn = bindings.get(name)?.require?.line;
+      if (declared.has(name) && symbols.some(d => d.name === name && lexical(d) && d.startLine !== requiredOn && this.visibleAt(d, ref.startLine, symbols))) return null;
     }
     // A Python base of a class (M2-12 review) is resolved from no line: a bare name's binding.
     if (python && !receiver && ref.startLine > 0) {
@@ -2034,9 +2086,16 @@ export class Scanner {
       return isJsOrTs ? this.assignedMember(module.file, module.imported, name) : null;
     }
     const binding = bindings.get(name);
-    if (!binding || binding.imported === null) return null;
-    const exported = binding.imported === 'default' && !python ? this.defaultExportName(binding.file) : binding.imported;
-    return exported ? orNoEdge(this.findExport(binding.file, exported, fileMap)) : null;
+    if (!binding) return null;
+    // `const Logger = require('./logger'); new Logger()`: what `module.exports = …` exports. Only a
+    // homonym could be found by name, so none is looked for (M2-20).
+    if (binding.imported === null) return isJsOrTs && binding.require ? orNoEdge(this.commonJsMainExport(binding.file, fileMap) ?? 'absent') : null;
+    if (binding.imported === 'default' && !python) {
+      const exported = this.defaultExportName(binding.file);
+      // An ES default import of a CommonJS module: its `module.exports = …` (M2-20).
+      return orNoEdge(exported ? this.findExport(binding.file, exported, fileMap) : this.commonJsMainExport(binding.file, fileMap));
+    }
+    return orNoEdge(this.findExport(binding.file, binding.imported, fileMap));
   }
 
   /**
@@ -2180,6 +2239,14 @@ export class Scanner {
   }
 
   private findExportUncached(file: string, name: string, fileMap: Map<string, string>, depth: number): ExportLookup {
+    const python = file.endsWith('.py');
+    // A required name the module passes on (`const { f } = require('./a'); module.exports = { f }`,
+    // `const L = require('./l'); module.exports = L`): the required module's export. Before the
+    // declarations: `const L = require(…)` is a symbol of its own (M2-20).
+    const bound = depth < 5 ? this.importBindings(file, python, fileMap).get(name) : undefined;
+    if (bound?.require && this.commonJsPassesOn(file, name)) {
+      return bound.imported ? this.findExport(bound.file, bound.imported, fileMap, depth + 1) : this.commonJsMainExport(bound.file, fileMap, depth + 1);
+    }
     // A top-level declaration, or a CommonJS export: `exports.f = …`, or a member of the object that
     // `module.exports = obj` exports (M2-09).
     const entries = (this.symbolIndex?.get(name.toLowerCase()) ?? []).filter(e => e.file === file && e.name === name);
@@ -2193,14 +2260,23 @@ export class Scanner {
       return declared.every(value) ? false : { file, symbol: name };
     }
     if (depth >= 5) return null;
-    const python = file.endsWith('.py');
     // A name the file imports and passes on: `from .impl import x` in a package's __init__.py, or
     // `import { x } from './a'; export { x }`.
-    const bound = this.importBindings(file, python, fileMap).get(name);
     if (python) return bound?.imported ? this.findExport(bound.file, bound.imported, fileMap, depth + 1) : null;
     const js = this.jsText(file);
     const text = js.code;
     let hit: ExportLookup;
+    // CommonJS (M2-20): `module.exports = require('./a')` is module a whole; `exports.f = g` and
+    // `module.exports = { f: g }` export the local g as f, and `{ f: function () {} }` declares nothing.
+    const reexport = CJS_REEXPORT.exec(text);
+    if (reexport) {
+      const target = this.resolveImportPath(reexport[1]!, file, fileMap);
+      if (target) return this.findExport(target, name, fileMap, depth + 1);
+      return this.outsideProject(reexport[1]!, file, fileMap) ? 'absent' : null;
+    }
+    const local = this.commonJsExportedAs(file, name);
+    if (local === null) return 'absent';
+    if (local && local !== name) return this.findExport(file, local, fileMap, depth + 1);
     for (const m of text.matchAll(/\bexport\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
       for (const part of m[1]!.split(',')) {
         const [orig, alias] = part.trim().replace(/^type\s+/, '').split(/\s+as\s+/);
@@ -2245,10 +2321,55 @@ export class Scanner {
     return hit ? { file, symbol: name } : null;
   }
 
-  /** The name a CommonJS module exports whole (`module.exports = hooks`), or null (M2-09). */
+  /**
+   * The name a CommonJS module exports whole (`module.exports = hooks`, M2-09), or the named function
+   * or class it assigns (`module.exports = function build`, `= class Widget`, M2-20); null for none.
+   */
   private commonJsMain(file: string): string | null {
-    const all = [...this.jsText(file).code.matchAll(/(?<![\w$.])module\.exports\s*=\s*([A-Za-z_$][\w$]*)\s*(?:;|$)/gm)];
-    return all.length ? all[all.length - 1]![1]! : null;
+    const all = [...this.jsText(file).code.matchAll(
+      /(?<![\w$.])module\.exports\s*=\s*(?:(?:async\s+)?function\b\s*\*?\s*([A-Za-z_$][\w$]*)\s*\(|class\s+([A-Za-z_$][\w$]*)[\s{]|([A-Za-z_$][\w$]*)\s*(?:;|$))/gm)];
+    const last = all[all.length - 1];
+    return last ? (last[1] ?? last[2] ?? last[3])! : null;
+  }
+
+  /**
+   * The declaration a CommonJS module exports whole (M2-20): its `module.exports = X`, through
+   * `module.exports = require('./a')` re-exports. Null when the module assigns no named one (no
+   * `module.exports =`, an object literal, an anonymous function); 'absent' for a module outside the project.
+   */
+  private commonJsMainExport(file: string, fileMap: Map<string, string>, depth = 0): ExportLookup {
+    if (depth >= 5) return null;
+    const reexport = CJS_REEXPORT.exec(this.jsText(file).code);
+    if (reexport) {
+      const target = this.resolveImportPath(reexport[1]!, file, fileMap);
+      if (target) return this.commonJsMainExport(target, fileMap, depth + 1);
+      return this.outsideProject(reexport[1]!, file, fileMap) ? 'absent' : null;
+    }
+    const main = this.commonJsMain(file);
+    return main ? this.findExport(file, main, fileMap, depth) : null;
+  }
+
+  /**
+   * The local name a CommonJS module exports as `key` (M2-20): `exports.key = local`,
+   * `module.exports.key = local`, or `module.exports = { key: local }` / `{ key }`. Null for a key the
+   * module's export literal gives another value (`key: function () {}`): no declaration to link.
+   * Undefined when the module does not say.
+   */
+  private commonJsExportedAs(file: string, key: string): string | null | undefined {
+    const js = this.jsText(file);
+    const escaped = key.replace(/[$]/g, '\\$');
+    const assigned = new RegExp(`(?<![\\w$.])(?:module\\.)?exports\\.${escaped}\\s*=\\s*([A-Za-z_$][\\w$]*)\\s*(?:;|$)`, 'm').exec(js.code);
+    if (assigned) return assigned[1]!;
+    return commonJsObjectExports(js.masked)?.get(key);
+  }
+
+  /** Whether a CommonJS module exports its local `name` under any key, or whole (M2-20). */
+  private commonJsPassesOn(file: string, name: string): boolean {
+    const js = this.jsText(file);
+    const escaped = name.replace(/[$]/g, '\\$');
+    return this.commonJsMain(file) === name
+      || new RegExp(`(?<![\\w$.])(?:module\\.)?exports\\.[\\w$]+\\s*=\\s*${escaped}\\s*(?:;|$)`, 'm').test(js.code)
+      || [...(commonJsObjectExports(js.masked)?.values() ?? [])].includes(name);
   }
 
   /** The declared name of a JS/TS module's default export (`export default function build`). */
@@ -2301,10 +2422,10 @@ export class Scanner {
       }
       return bindings;
     }
-    const bind = (specifier: string, entries: [string, string | null][]) => {
+    const bind = (specifier: string, entries: [string, string | null][], require?: { line: number }) => {
       const target = this.resolveImportPath(specifier, file, fileMap);
       if (!target || !fileMap.has(target)) return;
-      for (const [local, imported] of entries) bindings.set(local, { file: target, imported });
+      for (const [local, imported] of entries) bindings.set(local, { file: target, imported, ...(require ? { require } : {}) });
     };
     const named = (clause: string, renameSeparator: RegExp): [string, string][] => clause.split(',').flatMap((part) => {
       const [imported, local] = part.trim().replace(/^type\s+/, '').split(renameSeparator);
@@ -2323,8 +2444,10 @@ export class Scanner {
       if (def) entries.push([def[1]!, 'default']);
       bind(m[2]!, entries);
     }
-    for (const m of text.matchAll(/\b(?:const|let|var)\s+(\{[^}]*\}|[\w$]+)\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
-      bind(m[2]!, m[1]!.startsWith('{') ? named(m[1]!.slice(1, -1), /\s*:\s*/) : [[m[1]!, null]]);
+    // `const f = require('./m').f` binds the export f; `const m = require('./m')` the module (M2-20).
+    for (const m of text.matchAll(CJS_REQUIRE_BINDING)) {
+      const line = text.slice(0, m.index).split('\n').length;
+      bind(m[2]!, m[1]!.startsWith('{') ? named(m[1]!.slice(1, -1), /\s*:\s*/) : [[m[1]!, m[3] ?? null]], { line });
     }
     return bindings;
   }
@@ -2446,6 +2569,9 @@ export class Scanner {
     });
     if (ecosystem === 'npm') {
       // `require('x')` is reported as a call of `require`.
+      // `require('pkg').f()`: f of that module (M2-20).
+      const inline = ref.metadata?.required;
+      if (kind === 'call' && typeof inline === 'string') return jsCandidateSpecifier(inline) ? [row(inline, name)] : [];
       const required = kind === 'call' && name === 'require' && !ref.metadata?.receiver;
       if (kind === 'import' || required) {
         const as = required ? 'require' : 'import';

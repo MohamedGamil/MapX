@@ -176,6 +176,21 @@ function bindingValue(node: any): any {
   return value ?? null;
 }
 
+/** The specifier of a JS/TS `require('s')` call node, or null (M2-20). */
+function requireSpecifier(node: any): string | null {
+  if (node?.type !== 'call_expression' || node.childForFieldName('function')?.text !== 'require') return null;
+  const args = node.childForFieldName('arguments')?.namedChildren ?? [];
+  return args.length === 1 && args[0].type === 'string' ? String(args[0].text).slice(1, -1) : null;
+}
+
+/** Whether a JS/TS node sits in no function or class: a top-level `require` is the file's, as an import is (M2-20). */
+function outsideFunctions(node: any): boolean {
+  for (let p = node.parent; p; p = p.parent) {
+    if (/function|method|arrow|class|generator/.test(p.type)) return false;
+  }
+  return true;
+}
+
 /**
  * The class a method call's receiver instantiates (M2-12): `new Order().total()` in JS/TS (`Order`,
  * `ns.Order`; type arguments are a separate field), Java and C# (`Order`, generics and qualifiers
@@ -800,9 +815,13 @@ export class GenericWasmParser implements LanguageParser {
             // A new instance of a class the syntax does not name: no class to link, and never a
             // same-named method by name (M2-12 review).
             if (newClass === null) continue;
+            // `require('./m').f()`: the module whose export f the scanner links (M2-20).
+            const required = referenceType === 'call' && receiver?.type === 'call_expression' ? requireSpecifier(receiver) : null;
+            // A top-level `require('./m')` is the file's dependency, not the `const x = …` it initialises (M2-20).
+            const topRequire = referenceType === 'import' && requireSpecifier(capture.node.parent?.parent) !== null && outsideFunctions(capture.node);
 
             references.push({
-              sourceSymbol: oneLineSource(capture.node),
+              sourceSymbol: topRequire ? null : oneLineSource(capture.node),
               targetName,
               referenceType,
               startLine,
@@ -812,7 +831,9 @@ export class GenericWasmParser implements LanguageParser {
               ...(referenceType === 'call' && (receiver || newClass) ? { metadata: {
                 ...(receiver ? { receiver: receiver.type === 'identifier' ? receiver.text : `<${receiver.type}>` } : {}),
                 ...(newClass ? { newClass } : {}),
+                ...(required !== null ? { required } : {}),
               } } : {}),
+              ...(topRequire ? { metadata: { fileLevel: true } } : {}),
               // The import path of a package-qualified Go type or call (M0-17-R5, M5-25, M5-25-R1).
               ...(goPackage ? { metadata: goPackage } : {}),
               // Where the table of a Lua `T:m()` call lives, for the scanner (M2-10).

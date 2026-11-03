@@ -44,8 +44,11 @@ import type { Store } from './store.js';
  * - 19: M5-21-R1 (PHP names of PECL extensions are ambient; with vendor/composer metadata, classmap
  *   and files names are attributed to their installed package. The stored attribution of an index
  *   built before is skipped while its recorded inputs stand, so it is rebuilt once).
+ * - 20: M2-20 (a JS/TS `require('./m')` of a project module is an import edge, and the names it binds
+ *   link the module's `module.exports` / `exports.f` declarations; `module.exports = function f` and
+ *   `= class C` declare f and C).
  */
-export const EXTRACTOR_VERSION = 19;
+export const EXTRACTOR_VERSION = 20;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

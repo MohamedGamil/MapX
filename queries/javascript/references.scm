@@ -7,6 +7,13 @@
 (export_statement
   source: (string) @ref.target_import) @ref.type_import
 
+; `require('./m')`: a CommonJS module depends on the modules it requires, as on those it imports
+; (M2-20). A computed specifier (`require(name)`, `require('./' + x)`) names no module.
+(call_expression
+  function: (identifier) @_require
+  arguments: (arguments . (string) @ref.target_import .)
+  (#eq? @_require "require")) @ref.type_import
+
 (class_declaration
   (class_heritage
     (identifier) @ref.target_extends)) @ref.type_extends
@@ -39,6 +46,16 @@
       (parenthesized_expression (new_expression))
     ]
     property: (property_identifier) @ref.target_call)) @ref.type_call
+
+; A function of a module called where it is required: `require('./m').f()`. The parser records the
+; specifier, and the scanner links the module's export f (M2-20).
+(call_expression
+  function: (member_expression
+    object: (call_expression
+      function: (identifier) @_require
+      arguments: (arguments . (string) .))
+    property: (property_identifier) @ref.target_call)
+  (#eq? @_require "require")) @ref.type_call
 
 (jsx_opening_element
   name: [

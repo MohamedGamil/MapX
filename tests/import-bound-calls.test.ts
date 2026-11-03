@@ -306,7 +306,7 @@ describe('names absent from the imported project module (M2-08-R1)', () => {
       'src/lib/body.ts': 'export function other() { const run = 1; return run; }\n',
       // The name at the top level, but not declared or re-exported: unknown, name lookup.
       'src/lib/ext.ts': "import { run } from 'some-pkg';\nexport function other() { return run(); }\n",
-      // CommonJS and compiled exports: unknown.
+      // CommonJS and compiled exports: unknown, except a whole-module re-export (M2-20).
       'src/lib/cjs.js': "module.exports = require('./impl');\n",
       'src/lib/star-compiled.js': '"use strict";\n__exportStar(require("./impl"), exports);\n',
       'src/lib/assign.js': "Object.assign(exports, require('./impl'));\n",
@@ -364,9 +364,12 @@ describe('names absent from the imported project module (M2-08-R1)', () => {
     expect(from('two-star')).toEqual(['src/lib/impl.ts#run']);
   });
 
+  it('follows module.exports = require(…) to the module it re-exports (M2-20)', () => {
+    expect(from('cjs')).toEqual(['src/lib/impl.ts#run']);
+  });
+
   it.each([
     ['the name occurs at the top level', 'ext'],
-    ['module.exports = require(…)', 'cjs'],
     ['compiled __exportStar(require(…), exports)', 'star-compiled'],
     ['Object.assign(exports, …)', 'assign'],
     ['exports[k] = …', 'dynamic'],

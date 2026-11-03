@@ -216,6 +216,8 @@ describe('JS/TS member-assigned functions (real scan)', () => {
   it('links obj.method(), a prototype method call and a CommonJS export call from another file through its imports', () => {
     expect(callsFrom('src/main.js')).toEqual([
       'viaExports -> src/api.js#ping',
+      // `require('./api').ping()`: the module's export, through the specifier (M2-20).
+      'viaInline -> src/api.js#ping',
       'viaMember -> src/api.js#post',
       'viaPrototype -> src/api.js#bar',
     ]);
@@ -225,11 +227,11 @@ describe('JS/TS member-assigned functions (real scan)', () => {
     ]);
   });
 
-  it('never links a bare name or an inline require to an exports.f function', () => {
-    // `require('./api').ping()` has no reference (its receiver is a call), and `pong()` names no
-    // lexical binding: exports.pong is reached only through its module.
+  it('never links a bare name to an exports.f function', () => {
+    // `pong()` names no lexical binding: exports.pong is reached only through its module. (An inline
+    // `require('./api').ping()` had no reference before M2-20; it now links the module's export, above.)
     const main = callsFrom('src/main.js');
-    expect(main.filter((e) => e.startsWith('viaInline') || e.startsWith('bareExportName'))).toEqual([]);
+    expect(main.filter((e) => e.startsWith('bareExportName'))).toEqual([]);
   });
 
   it('keeps an imported name over the file\'s own exports.f of that name (review P1-a)', () => {
