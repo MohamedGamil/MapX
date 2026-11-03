@@ -37,6 +37,11 @@
       "id": "M5",
       "title": "Architecture rules (Deptrac-inspired)",
       "goal": "Declared layers, selectors and allow-rules over the MapX graph in every supported language, enforced in CI, explorable in CLI/MCP/dashboard."
+    },
+    {
+      "id": "M6",
+      "title": "Dashboard graph scale and readability",
+      "goal": "The dashboard's graph views and Architecture screen stay fast on large codebases (tens of thousands of files), lay graphs out readably, and let users browse complex node and edge sets by aggregating, focusing, filtering and drilling down, measured against labelled large fixtures with budgets that hold under machine load."
     }
   ],
   "gates": [
@@ -16620,7 +16625,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
@@ -17044,7 +17049,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
@@ -21309,6 +21314,62 @@
       "rollback": "Revert the task commit."
     },
     {
+      "milestone": "M5",
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "eval"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-22",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-22.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-22-R1",
+      "title": "The architecture fixture scores Poetry and pip attribution, not only uv",
+      "objective": "tests/fixtures/arch-rules gains Poetry (poetry.lock) and requirements.txt apps whose pypi rows score recall and precision 1.0, without changing the Python module roots of the existing apps.",
+      "description": "M5-22 limitation: the scored fixture covers uv only; Poetry and pip are covered by end-to-end tests, because a nested pyproject.toml in the fixture would change Python module roots.",
+      "outputs": [
+        "tests/fixtures/arch-rules/**",
+        "reports/M5-22-R1.md"
+      ],
+      "affectedFiles": [
+        "tests/fixtures/arch-rules",
+        "scripts/eval/score-arch.ts"
+      ],
+      "acceptanceCriteria": [
+        "score-arch externals.pypi covers Poetry and pip rows at recall and precision 1.0; every existing row is unchanged."
+      ],
+      "verificationCommands": [
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ]
+    },
+    {
       "id": "M5-23",
       "milestone": "M5",
       "title": "External references: Go modules package attribution and builtins",
@@ -21426,6 +21487,64 @@
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
+    },
+    {
+      "milestone": "M5",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-23",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-23.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-23-R1",
+      "title": "An unreadable go.mod keeps the module's own imports internal",
+      "objective": "When a go.mod exists but cannot be read, imports of the module's own packages stay internal (recognised by folder layout), and only third-party imports become unknown rows flagged manifest.",
+      "description": "M5-23 limitation: an unreadable go.mod turns the module's own imports into unknown external rows too.",
+      "outputs": [
+        "src/core/manifests/go.ts",
+        "tests/external-refs.test.ts",
+        "reports/M5-23-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/go.ts",
+        "src/core/import-resolvers.ts",
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "go.mod chmod 000: an import of a sibling package of the same module gives no external row and keeps its internal edge (test); github.com/google/uuid stays unknown, flagged manifest."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts"
+      ]
     },
     {
       "id": "M5-24",
@@ -21618,7 +21737,7 @@
       "artifacts": [],
       "evidence": [],
       "history": [],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit."
@@ -27491,6 +27610,65 @@
       "milestone": "M4",
       "priority": "P2",
       "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "tests"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-09-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-09-R2.md",
+        "docs/baton/reports/M4-09-R3.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-09-R5",
+      "title": "No test leaves temp folders: a suite-wide check",
+      "objective": "A vitest global teardown and the Playwright global teardown assert that a run leaves no new mapx-* or playwright-artifacts-* entry in os.tmpdir(), and the tests that leak today (mapx-arch-*, mapx-e2e-*, mapx-bench-*, Playwright artifacts) clean up.",
+      "description": "Finding 2026-11-03: after M4-09-R3 fixed external-refs, 437 mapx-* folders (mapx-arch-*, mapx-e2e-*, mapx-extrefs-* from older runs) and 123 playwright-artifacts-* folders had accumulated in /tmp.",
+      "outputs": [
+        "tests/global-teardown.ts",
+        "reports/M4-09-R5.md"
+      ],
+      "affectedFiles": [
+        "vitest.config.ts",
+        "playwright.config.ts",
+        "tests/**"
+      ],
+      "acceptanceCriteria": [
+        "After `npm run check` and `npm run test:ui` in a private TMPDIR, no entry remains (asserted by the teardowns); removing one test's cleanup fails the teardown naming that folder."
+      ],
+      "verificationCommands": [
+        "npm run check",
+        "npm run test:ui"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
         "min": 1,
         "expected": 2,
         "max": 3
@@ -28016,6 +28194,68 @@
     },
     {
       "milestone": "M4",
+      "priority": "P3",
+      "estimate": {
+        "min": 3,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "parsers"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-27",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-27.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-27-R1",
+      "title": "Lua grammar: Luau type syntax and string escapes parse without errors",
+      "objective": "`.luau` type annotations, and backslash-newline and `\\z` inside Lua strings, parse without ERROR nodes, so symbols and calls in those files are indexed.",
+      "description": "M4-27 recorded as pre-existing: a backslash-newline inside a string, `\\z`, and `.luau` type syntax give ERROR nodes (old and new grammars alike).",
+      "outputs": [
+        "scripts/build-wasm.ts",
+        "wasm/tree-sitter-lua.wasm",
+        "tests/grammar-health.test.ts",
+        "reports/M4-27-R1.md"
+      ],
+      "affectedFiles": [
+        "scripts/build-wasm.ts",
+        "wasm/**",
+        "queries/lua/**",
+        "tests/grammar-health.test.ts",
+        "src/core/extractor-version.ts"
+      ],
+      "acceptanceCriteria": [
+        "Samples with each construct parse error-free and yield their symbols (grammar-health test); the existing Lua tests and `npm run eval` hold."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/grammar-health.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M4",
       "priority": "P1",
       "estimate": {
         "min": 4,
@@ -28293,6 +28533,165 @@
       ],
       "verificationCommands": [
         "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "tests"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-16.md",
+        "docs/baton/reports/M5-24.md",
+        "docs/baton/reports/M2-08-R3.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-30",
+      "title": "CLI-spawning arch tests stay within their timeouts under load",
+      "objective": "tests/arch-reporters.test.ts, tests/arch-baseline.test.ts and tests/legacy-metrics-edges.test.ts pass under machine load: they share one scanned fixture per file (or build the CLI once) instead of re-running init and scan per test, and their timeouts reflect measured worst cases.",
+      "description": "Finding 2026-11-03: across many lane and clean-clone runs at load 25–59, these files hit 30 s timeouts (1–3 per full run) and passed alone; every closure needed an `npm run check` rerun.",
+      "outputs": [
+        "tests/arch-reporters.test.ts",
+        "tests/arch-baseline.test.ts",
+        "tests/legacy-metrics-edges.test.ts",
+        "reports/M4-30.md"
+      ],
+      "affectedFiles": [
+        "tests/arch-reporters.test.ts",
+        "tests/arch-baseline.test.ts",
+        "tests/legacy-metrics-edges.test.ts",
+        "tests/helpers/**"
+      ],
+      "acceptanceCriteria": [
+        "Under 16 busy loops, the three files pass 10 of 10 runs (recorded); their total wall time on a quiet machine drops (before/after in the report)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-reporters.test.ts tests/arch-baseline.test.ts tests/legacy-metrics-edges.test.ts"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "tests"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-09-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-31",
+      "title": "Test runs add no more than ten process listeners (MaxListenersExceededWarning)",
+      "objective": "Find what adds SIGINT, SIGTERM and exit listeners to `process` in the test run (MCP and CLI test setups) and remove them on teardown, so `npm run check` prints no MaxListenersExceededWarning.",
+      "description": "Finding 2026-11-03: every full run prints \"Possible EventEmitter memory leak detected. 11 SIGINT/exit/SIGTERM listeners added to [process]\".",
+      "outputs": [
+        "reports/M4-31.md"
+      ],
+      "affectedFiles": [
+        "src/mcp.ts",
+        "src/core/store.ts",
+        "tests/**"
+      ],
+      "acceptanceCriteria": [
+        "`npm run check` output has no MaxListenersExceededWarning; a test asserts listener counts return to their starting values after a server or store is closed."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P3",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "docs"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [
+        "Owner decision: the root CLAUDE.md has hand edits; regenerate its block with `mapx agents generate --providers claude --force` (which also writes this checkout's path) or edit it by hand."
+      ],
+      "sources": [
+        "docs/baton/reports/M4-28.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-32",
+      "title": "Root CLAUDE.md generated block is current",
+      "objective": "The MapxGraph block of the root CLAUDE.md lists the current MCP tools (39) and languages (23) and the right project path, while the BATON section and the owner's edits stay.",
+      "description": "Finding 2026-11-03: CLAUDE.md says \"MCP Tools Available (32 total)\"; the code registers 39. M4-28 found that `mapx agents generate --providers claude --force` regenerates the block and leaves the BATON section alone.",
+      "outputs": [
+        "CLAUDE.md"
+      ],
+      "affectedFiles": [
+        "CLAUDE.md"
+      ],
+      "acceptanceCriteria": [
+        "tests/docs-surface.test.ts (or a new check) asserts the CLAUDE.md tool count equals the registered tools."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/docs-surface.test.ts"
       ]
     },
     {
@@ -28838,6 +29237,65 @@
       "rollback": "Revert the task commit."
     },
     {
+      "milestone": "M5",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-25-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-25-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-25-R4",
+      "title": "Go: a parenthesised receiver type is indexed",
+      "objective": "`func (b (Box[T])) Paren()` and `func (b (*Box)) M()` give methods scoped Box, as the unparenthesised forms do.",
+      "description": "M5-25-R2 limitation and review P2: a parenthesised receiver gives no symbol, before and after that task.",
+      "outputs": [
+        "queries/go/symbols.scm",
+        "tests/go-qualified-instantiation.test.ts",
+        "reports/M5-25-R4.md"
+      ],
+      "affectedFiles": [
+        "queries/go/**",
+        "tests/go-qualified-instantiation.test.ts",
+        "src/core/extractor-version.ts"
+      ],
+      "acceptanceCriteria": [
+        "Both forms give a method scoped Box (test); no duplicate symbols; `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/go-qualified-instantiation.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
       "milestone": "M4",
       "priority": "P2",
       "estimate": {
@@ -29289,6 +29747,681 @@
       "verificationCommands": [
         "npx vitest run tests/git-injection.test.ts tests/git-tracker.test.ts",
         "npm run check"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P1",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "low",
+      "area": [
+        "ui",
+        "eval"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-20",
+          "type": "hard"
+        },
+        {
+          "id": "M5-15",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-01",
+      "title": "Large-graph fixtures and baseline measurements for the graph and Architecture views",
+      "objective": "Generated synthetic workspaces of 2k, 10k and 50k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap.",
+      "description": "Owner request 2026-11-03: improve dashboard graph and Architecture-view performance and readability on large codebases. Today the Full Codebase graph of 2,000 files takes ~4.5 s (M4-20); nothing measures 10k+ files or large architecture configs. Fixture first: every later M6 task is measured here.",
+      "outputs": [
+        "scripts/ui/gen-large-workspace.ts",
+        "tests/ui/perf-scale.spec.ts",
+        "reports/M6-01.md"
+      ],
+      "affectedFiles": [
+        "scripts/ui/**",
+        "tests/ui/perf-scale.spec.ts",
+        "tests/fixtures/ui-scale/**"
+      ],
+      "acceptanceCriteria": [
+        "The generator produces byte-identical workspaces for a seed; 2k/10k/50k sizes scan with `mapx scan` (report records file, symbol and edge counts).",
+        "The harness reports the five metrics for the Graph tab (each layout), the Full Codebase view and the Architecture view on each size, 3 runs each, in a JSON artifact; baseline numbers recorded in the report, including where a view fails to load or freezes."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/perf-scale.spec.ts"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P1",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "ui",
+        "api"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-02",
+      "title": "Graph aggregation API: levels, counts and limits",
+      "objective": "/api/graph serves the graph at a chosen level (repo, folder, cluster, layer, file, symbol) with aggregated nodes (member counts) and aggregated edges (counts by type and verifiability), expansion of one aggregate into its children, and hard limits with paging, so the client never receives more than it can draw.",
+      "description": "Large codebases cannot be drawn file by file; the server must aggregate. Stable node ids across levels let the client expand and collapse without re-laying out everything.",
+      "outputs": [
+        "src/ui-graph.ts",
+        "src/ui-server.ts",
+        "tests/ui-graph-api.test.ts",
+        "reports/M6-02.md"
+      ],
+      "affectedFiles": [
+        "src/ui-graph.ts",
+        "src/ui-server.ts",
+        "src/core/store.ts",
+        "tests/ui-graph-api.test.ts",
+        "docs/mcp-integration.md"
+      ],
+      "acceptanceCriteria": [
+        "On the 10k fixture, folder-level responses stay under a node/edge limit (configurable) and their counts sum to the file-level graph (test against the store).",
+        "Expanding an aggregate returns exactly its children and the edges between them and the rest at the current level (test); responses for 50k files return within the budget M6-01 sets."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-graph-api.test.ts"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "ui",
+        "research"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-03",
+      "title": "Renderer decision: Cytoscape canvas vs Cytoscape WebGL vs sigma.js/graphology for large graphs",
+      "objective": "A measured decision on the renderer for large graphs: prototype the 10k and 50k fixtures in Cytoscape (canvas), Cytoscape's WebGL renderer and sigma.js (graphology is already a dependency), compare M6-01's metrics, bundle size, licence and feature fit (compound nodes, styling, events, accessibility), and record the choice as a decision.",
+      "description": "The dashboard uses Cytoscape on canvas with fcose, ELK, Dagre and Cola layouts and a layout worker (M4-20). Canvas rendering limits node counts; the choice of renderer constrains M6-04 to M6-07.",
+      "outputs": [
+        "reports/M6-03.md",
+        "docs/baton/DECISIONS.md"
+      ],
+      "affectedFiles": [
+        "scripts/ui/renderer-spike/**",
+        "docs/baton/reports/M6-03.md"
+      ],
+      "acceptanceCriteria": [
+        "The report tabulates M6-01 metrics per renderer on 10k and 50k files (3 runs each) and the bundle delta; a DECISIONS entry names the renderer and why; no production code changes."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P1",
+      "estimate": {
+        "min": 12,
+        "expected": 16,
+        "max": 16
+      },
+      "risk": "high",
+      "area": [
+        "ui"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-02",
+          "type": "hard"
+        },
+        {
+          "id": "M6-03",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-04",
+      "title": "Level-of-detail graph rendering for large codebases",
+      "objective": "The Graph tab draws aggregates when zoomed out and expands them on zoom or click, culls what is off screen, thins labels by zoom and importance, and loads detail progressively from /api/graph, so the 50k-file fixture opens and pans smoothly.",
+      "description": "Uses the M6-02 API and the M6-03 renderer. Replaces drawing every file node at once.",
+      "outputs": [
+        "src/ui/graph/**",
+        "tests/ui/graph-lod.spec.ts",
+        "reports/M6-04.md"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "src/ui/graph/**",
+        "src/ui/layout-worker.ts",
+        "tests/ui/graph-lod.spec.ts",
+        "tests/ui/perf-scale.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "On the 50k fixture: interactive within the M6-01 budget, no main-thread task over 200 ms while panning, frame time median under 33 ms (perf-scale spec).",
+        "Zooming into a folder aggregate shows its files with their edges and the totals stay consistent with the API (functional spec); the 500- and 2,000-file budgets of M4-20 still hold."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/graph-lod.spec.ts tests/ui/perf-scale.spec.ts",
+        "npx tsx scripts/check-package.ts"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P1",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "ui"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-05",
+      "title": "Readable graph layouts: layered direction, compound groups, edge bundling",
+      "objective": "Dependency graphs lay out readably: a layered (dependency-direction) layout by default for directed views, compound nodes for folders/clusters/layers, bundled or aggregated parallel edges, stable positions across reloads (cached per view), and readability measured on the fixtures (edge crossings, node overlaps, edge length spread).",
+      "description": "Force layouts (fcose) on large graphs give hairballs. Readability needs structure, grouping and fewer, aggregated edges.",
+      "outputs": [
+        "src/ui/graph/layouts/**",
+        "scripts/ui/readability.ts",
+        "reports/M6-05.md"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "src/ui/graph/**",
+        "src/ui/layout-worker.ts",
+        "scripts/ui/readability.ts",
+        "tests/ui/graph-layout.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "On the 2k fixture the default layout has 0 node overlaps and at least 40% fewer edge crossings than fcose (scripts/ui/readability.ts, numbers in the report).",
+        "The same data gives the same positions across two loads (spec); compound groups expand and collapse without a full re-layout."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/graph-layout.spec.ts",
+        "npx tsx scripts/ui/readability.ts"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P2",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "ui"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-02",
+          "type": "hard"
+        },
+        {
+          "id": "M6-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-06",
+      "title": "Browsing complex graphs: focus, neighbourhoods, paths, filters and search",
+      "objective": "Users can focus a node and see its k-hop neighbourhood, expand and collapse groups, find the shortest dependency path between two nodes, filter edges by type, verifiability and repo, search with jump-to, pin nodes, and follow a breadcrumb back; a minimap shows where they are; everything works by keyboard.",
+      "description": "Owner request: easier browsing through complex nodes and edges. Applies to the Graph tab; M6-07 applies it to the Architecture screen.",
+      "outputs": [
+        "src/ui/graph/browse/**",
+        "tests/ui/graph-browse.spec.ts",
+        "reports/M6-06.md"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "src/ui/graph/**",
+        "src/ui/index.html",
+        "src/ui/styles.css",
+        "src/ui-graph.ts",
+        "tests/ui/graph-browse.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each interaction has a functional spec on the 10k fixture (focus, k-hop 1–3, path between two files equal to the store's shortest path, filters, search, pin, breadcrumb, minimap) and passes axe in both themes.",
+        "Each interaction responds within the M6-01 budget on 50k files (perf-scale spec)."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/graph-browse.spec.ts"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P1",
+      "estimate": {
+        "min": 8,
+        "expected": 12,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "ui",
+        "arch"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-02",
+          "type": "hard"
+        },
+        {
+          "id": "M6-05",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md",
+        "docs/research/deptrac/03-mapx-gap-and-integration.md#36-dashboard-an-architecture-view"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-07",
+      "title": "Architecture screen at scale: layered diagram, collapsible groups, paged drill-down, virtual DSM",
+      "objective": "The Architecture view stays readable and fast for large configs: the layer diagram uses the M6-05 layered layout in rule order, groups collapse, edges show aggregated counts with drill-down fetched on demand and paged, the DSM is virtualised (100+ layers), the findings table is virtualised and paged server-side (10k+ findings), and the declared-layer overlay uses level-of-detail.",
+      "description": "M5-15 built the Architecture view for small configs; it draws every layer pair and fetches every finding at once. Owner request: apply the graph scale and readability work to the Architecture screen too.",
+      "outputs": [
+        "src/ui-arch.ts",
+        "src/ui/main.ts",
+        "tests/ui/arch-scale.spec.ts",
+        "reports/M6-07.md"
+      ],
+      "affectedFiles": [
+        "src/ui-arch.ts",
+        "src/ui/main.ts",
+        "src/ui/arch/**",
+        "src/ui/styles.css",
+        "tests/ui-arch-api.test.ts",
+        "tests/ui/arch-scale.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "With the M6-01 architecture fixture (40+ layers, thousands of findings): interactive within budget, DSM scroll frame time under 33 ms, findings paging returns pages equal to `mapx check --format json` slices (tests).",
+        "Counts in diagram, DSM, tiles and drill-down stay equal to `mapx check` (the M5-15 consistency test extended to the large fixture)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-arch-api.test.ts",
+        "npx playwright test tests/ui/arch-scale.spec.ts"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P2",
+      "estimate": {
+        "min": 6,
+        "expected": 10,
+        "max": 14
+      },
+      "risk": "low",
+      "area": [
+        "ui",
+        "perf"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-08",
+      "title": "Dashboard runtime performance: virtual tables, worker computations, cached and compressed payloads",
+      "objective": "Every long list (files, symbols, routes, hooks, HTTP calls, findings) is virtualised; heavy client computations (metrics, filters, sorting) run in a worker; API payloads are cached by index and config mtime and served compressed; each lazy chunk has a size budget.",
+      "description": "Tables and API payloads grow with the codebase; on the 50k fixture they dominate load time even before the graph.",
+      "outputs": [
+        "src/ui/**",
+        "src/ui-server.ts",
+        "reports/M6-08.md"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "src/ui/tables/**",
+        "src/ui-server.ts",
+        "scripts/check-package.ts",
+        "tests/ui/tables-scale.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "On the 50k fixture each table tab renders within budget and scrolls with frame time under 33 ms (spec); repeated API requests with an unchanged index are served from cache (test).",
+        "check-package enforces per-chunk budgets and passes; the D006 ceiling holds."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/tables-scale.spec.ts",
+        "npx tsx scripts/check-package.ts"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "ui",
+        "eval"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-01",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-16.md",
+        "docs/baton/reports/M4-20.md",
+        "docs/baton/reports/M4-21.md",
+        "docs/baton/reports/M5-15.md",
+        "docs/baton/reports/M4-24-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-09",
+      "title": "UI performance budgets that hold under machine load",
+      "objective": "Perf specs compare against a calibration run on the same machine (ratios, not absolute milliseconds), take the median of N, report load, and run in a CI job, so budgets catch regressions without failing on a busy machine.",
+      "description": "Finding 2026-11-03: perf.spec and perf-large.spec failed repeatedly at load 20–35 (medians 5,0–6,0 s against 4,992 ms) and passed at load 3–4; M4-24-R1 could only close on a quiet machine. Absolute budgets are machine- and load-dependent (M4-20 scales them only in CI).",
+      "outputs": [
+        "tests/ui/perf*.spec.ts",
+        "tests/ui/perf-calibrate.ts",
+        "reports/M6-09.md"
+      ],
+      "affectedFiles": [
+        "tests/ui/perf.spec.ts",
+        "tests/ui/perf-large.spec.ts",
+        "tests/ui/perf-scale.spec.ts",
+        "playwright.config.ts",
+        ".github/workflows/ci.yml"
+      ],
+      "acceptanceCriteria": [
+        "Under a synthetic CPU load (busy loops, load ≥ 20) the perf specs pass 5 of 5 runs, and a deliberate 2× slowdown injected in the graph code fails them 5 of 5 (recorded in the report)."
+      ],
+      "verificationCommands": [
+        "npm run test:ui"
+      ]
+    },
+    {
+      "milestone": "M6",
+      "priority": "P1",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "ui",
+        "eval"
+      ],
+      "dependencies": [
+        {
+          "id": "M6-04",
+          "type": "quality"
+        },
+        {
+          "id": "M6-05",
+          "type": "quality"
+        },
+        {
+          "id": "M6-06",
+          "type": "quality"
+        },
+        {
+          "id": "M6-07",
+          "type": "quality"
+        },
+        {
+          "id": "M6-08",
+          "type": "quality"
+        },
+        {
+          "id": "M6-09",
+          "type": "quality"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M6-01.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M6-98",
+      "title": "M6 acceptance: re-measure graph and Architecture views against the M6-01 baselines",
+      "objective": "Re-run the M6-01 harness on 2k/10k/50k files and the large architecture fixture, record every metric against the baseline, and mark each M6 objective met or open a follow-up.",
+      "description": "Milestone acceptance for M6.",
+      "outputs": [
+        "reports/M6-98.md"
+      ],
+      "affectedFiles": [
+        "docs/baton/reports/M6-98.md"
+      ],
+      "acceptanceCriteria": [
+        "Every M6-01 metric is recorded before and after; every budget set by M6-01 is met on 50k files, or a follow-up task exists for each miss."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/perf-scale.spec.ts"
       ]
     }
   ]

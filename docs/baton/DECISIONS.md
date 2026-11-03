@@ -377,3 +377,25 @@ Verified outside the repository with PATH=~/.local/bin:/usr/bin:/bin:
 - `mapx serve` answers MCP `initialize` as mapx 0.3.9.
 
 A one-line PHP class losing its calls was found; it is pre-existing (0.3.8 does the same) and registered as M2-13.
+
+## D038 — Milestone M6: dashboard graph scale and readability; remaining findings registered (owner, 2026-11-03)
+
+The owner asked for work items covering:
+- dashboard UI and Architecture-view performance;
+- more readable graph layouts;
+- performance on large codebases;
+- easier browsing of complex nodes and edges, applied to the Architecture screen as well.
+
+They are registered as milestone **M6**, documented only and not started:
+- **M6-01:** large-graph fixtures (2k/10k/50k files, a 40+ layer architecture config) and baseline measurements. Fixture first: every other M6 task is measured against it.
+- **M6-02:** graph aggregation API.
+- **M6-03:** renderer decision between Cytoscape canvas, Cytoscape WebGL and sigma.js.
+- **M6-04:** level-of-detail rendering.
+- **M6-05:** readable layered and grouped layouts.
+- **M6-06:** browsing (focus, neighbourhoods, paths, filters, search, minimap).
+- **M6-07:** the Architecture screen at scale.
+- **M6-08:** runtime performance (virtual tables, workers, caching).
+- **M6-09:** perf budgets that hold under load.
+- **M6-98:** acceptance.
+
+Findings from the 2026-11-03 session not registered before are BACKLOG too: M4-09-R5, M4-30, M4-31, M4-32 (owner decision on CLAUDE.md), M5-22-R1, M5-23-R1, M4-27-R1 and M5-25-R4.

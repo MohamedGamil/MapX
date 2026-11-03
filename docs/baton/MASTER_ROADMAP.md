@@ -235,12 +235,17 @@ Fixture scoring in CI; optional message edges.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
 - **M4-09-R3** external-refs tests remove every temp workspace, including unreadable ones — DONE, P2, 1h; depends on M4-09-R2.
 - **M4-09-R4** store-coverage tests keep their databases out of tests/ — DONE, P2, 0.5h; depends on M4-09-R3.
+- **M4-09-R5** No test leaves temp folders: a suite-wide check — BACKLOG, P2, 3h; depends on M4-09-R3.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
+- **M4-27-R1** Lua grammar: Luau type syntax and string escapes parse without errors — BACKLOG, P3, 6h; depends on M4-27.
 - **M4-28** Release documentation for 0.3.9: README, docs and CHANGELOG cover every change since 0.3.5 — DONE, P1, 8h; depends on M5-24, M2-08-R3, M5-15, M5-18.
 - **M4-28-R1** Agent templates do not advertise `mapx explain --reclassify` — BACKLOG, P2, 1h; depends on M4-28.
 - **M4-28-R2** `mapx_status` honours its exclude and include parameters — BACKLOG, P2, 1h; depends on M4-28.
 - **M4-29** The installer replaces a running mapx binary — BACKLOG, P2, 1h; depends on nothing.
+- **M4-30** CLI-spawning arch tests stay within their timeouts under load — BACKLOG, P2, 5h; depends on nothing.
+- **M4-31** Test runs add no more than ten process listeners (MaxListenersExceededWarning) — BACKLOG, P3, 2h; depends on nothing.
+- **M4-32** Root CLAUDE.md generated block is current — BACKLOG, P3, 1h; depends on nothing.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — DONE, P2, 3h; depends on M4-12.
 - **M4-12-R2** Worker pool: the grammar-load bound holds across crashes and refused retries — BACKLOG, P3, 2h; depends on M4-12-R1.
 
@@ -278,7 +283,9 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
 - **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — BACKLOG, P3, 4h; depends on M5-21.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
+- **M5-22-R1** The architecture fixture scores Poetry and pip attribution, not only uv — BACKLOG, P3, 3h; depends on M5-22.
 - **M5-23** External references: Go modules package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
+- **M5-23-R1** An unreadable go.mod keeps the module's own imports internal — BACKLOG, P3, 2h; depends on M5-23.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — DONE, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 - **M5-24-R1** Ambient access is extracted: environment, globals and superglobals — BACKLOG, P2, 8h; depends on M5-24.
 - **M5-24-R2** External elements: multi-layer warning and inherited dependencies — BACKLOG, P2, 4h; depends on M5-24, M5-09.
@@ -293,7 +300,23 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — DONE, P2, 3h; depends on M5-05.
 - **M5-25-R2** Go methods with a generic receiver are indexed — DONE, P2, 2h; depends on M5-25-R1.
 - **M5-25-R3** Go: an unversioned local replace outside the workspace is external — BACKLOG, P2, 2h; depends on M5-25-R1, M5-23.
+- **M5-25-R4** Go: a parenthesised receiver type is indexed — BACKLOG, P3, 2h; depends on M5-25-R2.
 - **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — DONE, P2, 2h; depends on M5-07.
 - **M5-07-R2** CI reporters: baselines outside the repository and submodule workspaces — BACKLOG, P3, 2h; depends on M5-07-R1.
 - **M5-08-R1** Git refs and paths never reach a shell — DONE, P0, 1h; depends on M5-08.
+
+## M6 — Dashboard graph scale and readability
+
+The dashboard's graph views and Architecture screen stay fast on large codebases (tens of thousands of files), lay graphs out readably, and let users browse complex node and edge sets by aggregating, focusing, filtering and drilling down, measured against labelled large fixtures with budgets that hold under machine load.
+
+- **M6-01** Large-graph fixtures and baseline measurements for the graph and Architecture views — BACKLOG, P1, 8h; depends on M4-20, M5-15.
+- **M6-02** Graph aggregation API: levels, counts and limits — BACKLOG, P1, 12h; depends on M6-01.
+- **M6-03** Renderer decision: Cytoscape canvas vs Cytoscape WebGL vs sigma.js/graphology for large graphs — BACKLOG, P2, 6h; depends on M6-01.
+- **M6-04** Level-of-detail graph rendering for large codebases — BACKLOG, P1, 16h; depends on M6-02, M6-03.
+- **M6-05** Readable graph layouts: layered direction, compound groups, edge bundling — BACKLOG, P1, 12h; depends on M6-01.
+- **M6-06** Browsing complex graphs: focus, neighbourhoods, paths, filters and search — BACKLOG, P2, 12h; depends on M6-02, M6-04.
+- **M6-07** Architecture screen at scale: layered diagram, collapsible groups, paged drill-down, virtual DSM — BACKLOG, P1, 12h; depends on M6-02, M6-05.
+- **M6-08** Dashboard runtime performance: virtual tables, worker computations, cached and compressed payloads — BACKLOG, P2, 10h; depends on M6-01.
+- **M6-09** UI performance budgets that hold under machine load — BACKLOG, P2, 6h; depends on M6-01.
+- **M6-98** M6 acceptance: re-measure graph and Architecture views against the M6-01 baselines — BACKLOG, P1, 3h; depends on M6-04, M6-05, M6-06, M6-07, M6-08, M6-09.
 
