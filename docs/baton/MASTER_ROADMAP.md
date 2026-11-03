@@ -117,6 +117,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-10-R6** Unknown --repo is an error; git sync counts indexed files — DONE, P2, 2h; depends on M0-10-R5.
 - **M0-12-R11** Svelte template names scoped per block; quoted handlers — DONE, P2, 2h; depends on M0-12-R10.
 - **M0-02-R12** A full scan killed after its index transaction keeps referrers and changed files — DONE, P2, 4h; depends on M0-02-R11.
+- **M0-02-R13** A package.json edit re-parses only the files its change affects — BACKLOG, P2, 4h; depends on M3-05-R3.
 
 ## M1 — Laravel route correctness
 
@@ -166,6 +167,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06-R4** Route domains are workspace hosts for HTTP pairing — DONE, P2, 2h; depends on M2-06-R2.
 - **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
 - **M2-08-R3** Names imported from an external module never link to a same-named project symbol — DONE, P1, 4h; depends on M2-08-R2.
+- **M2-08-R4** Sync follows a file turning from module to script — BACKLOG, P2, 3h; depends on M2-08-R3.
 - **M2-09** JS/TS member-assigned functions are symbols — DONE, P2, 4h; depends on M2-08.
 - **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.
 - **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
@@ -232,7 +234,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-09-R4** store-coverage tests keep their databases out of tests/ — DONE, P2, 0.5h; depends on M4-09-R3.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
-- **M4-12-R1** Grammar-load bound and work stealing agree under load — BLOCKED, P2, 3h; depends on M4-12.
+- **M4-12-R1** Grammar-load bound and work stealing agree under load — IN_PROGRESS, P2, 3h; depends on M4-12.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 
@@ -253,17 +255,26 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — DONE, P2, 6h; depends on M5-04.
 - **M5-14** MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates — DONE, P1, 8h; depends on M5-05, M5-08, M5-02-R1.
 - **M5-15** Dashboard Architecture view and /api/arch endpoints — DONE, P3, 12h; depends on M5-05, M5-13.
+- **M5-15-R1** Dashboard architecture: health trend and repo-narrowed diagram, DSM and tiles — BACKLOG, P3, 8h; depends on M5-15.
 - **M5-16** Rule-derived smells and single-source layer violations — DONE, P2, 8h; depends on M5-04, M5-08.
+- **M5-16-R1** score-arch scores smells — BACKLOG, P3, 4h; depends on M5-16, M5-24.
+- **M5-16-R2** Smells: orphan-element and baseline-debt — BACKLOG, P3, 4h; depends on M5-16.
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — DONE, P2, 12h; depends on M5-04, M5-06.
+- **M5-17-R1** Presets use hierarchy selectors; remaining AR-15 presets — BACKLOG, P3, 8h; depends on M5-17, M5-09.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — DONE, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
+- **M5-18-R1** MapX dogfood config judges calls and references, not only imports — BACKLOG, P2, 3h; depends on M5-18, M2-08-R3.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
 - **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — DONE, P2, 1.5h; depends on M5-20.
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
+- **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — BACKLOG, P3, 4h; depends on M5-21.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
 - **M5-23** External references: Go modules package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — DONE, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
+- **M5-24-R1** Ambient access is extracted: environment, globals and superglobals — BACKLOG, P2, 8h; depends on M5-24.
+- **M5-24-R2** External elements: multi-layer warning and inherited dependencies — BACKLOG, P2, 4h; depends on M5-24, M5-09.
+- **M5-24-R3** Agent templates describe package and built-in targets for mapx_arch_allowed — BACKLOG, P3, 1h; depends on M5-24.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — DONE, P2, 3h; depends on M5-05.
 - **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.
@@ -273,6 +284,8 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — DONE, P2, 4h; depends on M5-03-R1.
 - **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — DONE, P2, 3h; depends on M5-05.
 - **M5-25-R2** Go methods with a generic receiver are indexed — DONE, P2, 2h; depends on M5-25-R1.
+- **M5-25-R3** Go: an unversioned local replace outside the workspace is external — BACKLOG, P2, 2h; depends on M5-25-R1, M5-23.
 - **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — DONE, P2, 2h; depends on M5-07.
+- **M5-07-R2** CI reporters: baselines outside the repository and submodule workspaces — BACKLOG, P3, 2h; depends on M5-07-R1.
 - **M5-08-R1** Git refs and paths never reach a shell — DONE, P0, 1h; depends on M5-08.
 

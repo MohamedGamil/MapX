@@ -328,3 +328,13 @@ Answers M2-08-R1's blocking condition, after attempt 1 was reverted (`reports/M2
 ## D033 — Fixture row workspace-03 stays (owner, 2026-11-02)
 
 M5-04 added the expected-findings row `workspace-03`: `backend/routes/api.php` imports the API controller, which is Backend → PublicApi, and the two-repo app's rules forbid it (`Backend: []`). M5-01 had left it unlabelled. The owner confirmed the label is the fixture's intent: the rules stay as they are and the row stays. Also recorded, without objection: M5-04 evaluates `private-layer` (the AR-08 chain names it), so M5-11 keeps internal markers, native markers and its fixture criterion for both rules.
+
+## D034 — Grammar loads stay bounded; work stealing yields (owner, 2026-11-03)
+
+Answers M4-12-R1's blocking condition. Under CPU load, idle lanes steal new grammars more often, so M4-12's AC1 (grammar loads at most languages + workers) and AC2 (no worker idles while files remain) conflict. The owner chose option (a): **cap new-grammar steals per batch**, so AC1 holds. A lane may finish while another still has files of a grammar it would have to load. M4-12-R1 implements the cap and makes the 4-worker test deterministic under load.
+
+## D035 — M4-13-R1 and M5-98 wait for the owner; follow-ups registered, not started; v0.3.9 (owner, 2026-11-03)
+
+- **Held:** M4-13-R1 (parse pool sizing honours CPU affinity) and M5-98 (M5 acceptance re-score) start only when the owner explicitly asks. Each carries an owner-hold blocking condition so the plan tool never promotes it.
+- **Follow-ups:** every follow-up found during the 2026-11-03 consolidation is registered as BACKLOG, and none is started.
+- **Release:** after the remaining work, the version goes to 0.3.9 with a local `v0.3.9` tag. The Linux binary is packaged and installed for the user, as for v0.3.7 (D023) and v0.3.8 (D029). Nothing is published or pushed.

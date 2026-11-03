@@ -16562,6 +16562,70 @@
       "description": "Layer diagram with violation drill-down to concrete edges, layer DSM, findings table with filters, health tiles, declared-layer overlay on the graph; /api/arch/report, /api/arch/layers, /api/arch/edges."
     },
     {
+      "id": "M5-15-R1",
+      "milestone": "M5",
+      "title": "Dashboard architecture: health trend and repo-narrowed diagram, DSM and tiles",
+      "objective": "Scan snapshots record architecture counts so the Architecture view shows a health trend, and choosing a repo narrows the layer diagram, DSM and tiles as it already narrows the lists.",
+      "description": "M5-15 limitations: no health trend (no snapshot stores architecture counts); with a repo chosen only the lists narrow.",
+      "priority": "P3",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-15",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-15.md"
+      ],
+      "outputs": [
+        "src/ui-arch.ts",
+        "src/ui/main.ts",
+        "tests/ui-arch-api.test.ts",
+        "reports/M5-15-R1.md"
+      ],
+      "affectedFiles": [
+        "src/ui-arch.ts",
+        "src/ui/main.ts",
+        "src/ui-server.ts",
+        "src/core/store.ts",
+        "tests/ui-arch-api.test.ts",
+        "tests/ui/arch.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "/api/arch/report with repo= narrows layer edges, DSM and health counts, equal to `mapx check` on that repo alone (test, two-repo workspace).",
+        "Two scans with different violation counts give a two-point trend in the API (test); the bundle stays under D006."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ui-arch-api.test.ts",
+        "npx tsx scripts/check-package.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "optionalDependencies": [
         "M5-12",
         "M5-10"
@@ -16681,6 +16745,127 @@
       "description": "When an architecture config exists, layer-violation smells come from the evaluator (FlowValidator suppressed unless policy.alsoInferred); add layer-cycle, dead-allowance, weak-allowance, layer-skip, unstable-layer-dependency, abstractness-distance; vendor-leak, undeclared-dependency, dev-dependency-in-prod and deprecated-usage once M5-12/M5-10 land."
     },
     {
+      "id": "M5-16-R1",
+      "milestone": "M5",
+      "title": "score-arch scores smells",
+      "objective": "The architecture fixture labels expected smells (rule-derived and package smells), and score-arch reports recall and precision per smell kind, with floors.",
+      "description": "M5-24 limitation: smells are covered by tests only, not scored by score-arch.",
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-16",
+          "type": "hard"
+        },
+        {
+          "id": "M5-24",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-16.md",
+        "docs/baton/reports/M5-24.md"
+      ],
+      "outputs": [
+        "scripts/eval/score-arch.ts",
+        "tests/fixtures/arch-rules",
+        "reports/M5-16-R1.md"
+      ],
+      "affectedFiles": [
+        "scripts/eval/score-arch.ts",
+        "tests/fixtures/arch-rules",
+        "scripts/eval/floors.json"
+      ],
+      "acceptanceCriteria": [
+        "score-arch --json has a smells section with per-kind recall/precision, 1.0 on the labelled rows (score-arch)."
+      ],
+      "verificationCommands": [
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-16-R2",
+      "milestone": "M5",
+      "title": "Smells: orphan-element and baseline-debt",
+      "objective": "Add the AR-18 smells orphan-element (an element in no layer that nothing depends on) and baseline-debt (baselined findings by layer and age), each with a positive and a negative fixture case.",
+      "description": "M5-16 left orphan-element and baseline-debt out of its objective.",
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-16",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-16.md",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-18"
+      ],
+      "outputs": [
+        "src/arch/smells.ts",
+        "tests/arch-smells.test.ts",
+        "reports/M5-16-R2.md"
+      ],
+      "affectedFiles": [
+        "src/arch/smells.ts",
+        "tests/arch-smells.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each smell has a positive and negative fixture case (test); no-config output stays byte-identical (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-smells.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
@@ -16796,6 +16981,73 @@
         "npx vitest run tests/arch-init.test.ts"
       ],
       "description": "Generate a reviewed-by-human starting config from roles + LAYER_ORDER + observed layer graph or from a preset; optional baseline so day one is green; presets layered, clean, hexagonal, ddd-contexts, feature-sliced, laravel, nestjs, django."
+    },
+    {
+      "id": "M5-17-R1",
+      "milestone": "M5",
+      "title": "Presets use hierarchy selectors; remaining AR-15 presets",
+      "objective": "Framework presets (laravel, nestjs, django) select by ancestry where the framework defines it (extends Model, implements ShouldQueue, extends Controller) using M5-09 selectors, and the AR-15 presets not yet shipped are added, each with a fixture filling every layer.",
+      "description": "M5-17 limitations: presets don't use M5-09's hierarchy selectors (landed mid-task), and the other AR-15 presets were not done.",
+      "priority": "P3",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-17",
+          "type": "hard"
+        },
+        {
+          "id": "M5-09",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-17.md",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-15"
+      ],
+      "outputs": [
+        "src/arch/presets/**",
+        "tests/arch-init.test.ts",
+        "reports/M5-17-R1.md"
+      ],
+      "affectedFiles": [
+        "src/arch/presets/**",
+        "scripts/gen-arch-presets.ts",
+        "tests/arch-init.test.ts",
+        "tests/fixtures/arch-init/**",
+        "docs/architecture-rules.md"
+      ],
+      "acceptanceCriteria": [
+        "Each changed or new preset gives 0 config errors and its fixture's one planted violation by file pair; every layer non-empty (test).",
+        "`gen-arch-presets.ts --check` exits 0."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-init.test.ts",
+        "npx tsx scripts/gen-arch-presets.ts --check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
     },
     {
       "optionalDependencies": [],
@@ -16924,10 +17176,78 @@
       "description": "Commit .mapx/architecture.jsonc for MapX itself (with baseline for the Languages→Parsers and Agents→Parsers findings or fixes), add `mapx check --format sarif` to CI, write docs/architecture-rules.md and update cli-reference and mcp-integration. Interface dependency M4-01: M4-01 owns the CI scoring step in .github/workflows/ci.yml; the arch-check step is added to that layout."
     },
     {
+      "id": "M5-18-R1",
+      "milestone": "M5",
+      "title": "MapX dogfood config judges calls and references, not only imports",
+      "objective": ".mapx/architecture.jsonc for MapX evaluates call, instantiation and reference dependencies as well as imports, now that M2-08-R3 removed the false edges that made M5-18 limit it to imports; real findings are fixed or baselined.",
+      "description": "M5-18 limited MapX's own architecture check to imports because node:path/DOM names linked to project symbols (36 false violations). M2-08-R3 removed those edges (345 → 0 on a self-scan).",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-18",
+          "type": "hard"
+        },
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-18.md",
+        "docs/baton/reports/M2-08-R3.md"
+      ],
+      "outputs": [
+        ".mapx/architecture.jsonc",
+        ".mapx/architecture.baseline.json",
+        "reports/M5-18-R1.md"
+      ],
+      "affectedFiles": [
+        ".mapx/architecture.jsonc",
+        ".mapx/architecture.baseline.json",
+        "tests/dogfood-architecture.test.ts",
+        "docs/architecture-rules.md"
+      ],
+      "acceptanceCriteria": [
+        "MapX's config judges every dependency type; `node dist/main.js check --fail-on-uncovered` exits 0 after a scan, each new finding fixed or baselined with a reason (report lists them).",
+        "tests/dogfood-architecture.test.ts asserts calls are judged (a probe call across a forbidden layer exits 1)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/dogfood-architecture.test.ts",
+        "npm run build:npm"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "optionalDependencies": [
         "M5-12"
       ],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D035, 2026-11-03): start only when the owner explicitly asks."
+      ],
       "verificationPlan": "Run every registered command; each must exit 0.",
       "status": "BACKLOG",
       "owner": "maintainer",
@@ -20812,6 +21132,64 @@
       "rollback": "Revert the task commit."
     },
     {
+      "id": "M5-21-R1",
+      "milestone": "M5",
+      "title": "Composer: classmap and files autoload attribution from vendor/ when present",
+      "objective": "When vendor/composer/autoload_classmap.php and autoload_files.php exist, names loaded by classmap or files are attributed from them instead of the naming-convention heuristic; PECL extensions are classified ambient or builtin as decided in the report.",
+      "description": "M5-21 \"not done\": reading vendor/ and PECL extensions as ambient were left as owner decisions; classmap/files names use a heuristic or stay unknown.",
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-21",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-21.md"
+      ],
+      "outputs": [
+        "src/core/manifests/composer.ts",
+        "tests/external-refs.test.ts",
+        "reports/M5-21-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/composer.ts",
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "With a synthetic vendor/composer/autoload_classmap.php, a classmap-loaded class is attributed to its package (test); without vendor/ behaviour is unchanged (score-arch composer 24/24)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "id": "M5-22",
       "milestone": "M5",
       "title": "External references: pip/Poetry/uv package attribution and builtins",
@@ -21175,6 +21553,192 @@
           ]
         }
       ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-24-R1",
+      "milestone": "M5",
+      "title": "Ambient access is extracted: environment, globals and superglobals",
+      "objective": "Scans record ambient-access references (process.env, window/document/globalThis, $_GET/$_POST/$_SERVER/$GLOBALS, os.environ/sys.argv, Go os.Getenv) as external_refs with origin ambient, so the `ambient` selector matches them in every language, not only Go cgo C.",
+      "description": "M5-24 limitation: `ambient` matches only Go's cgo `C`; ambient globals are not extracted. Needs parser/query work and an EXTRACTOR_VERSION bump.",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-24",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-24.md",
+        "docs/research/deptrac/02-abstract-feature-model.md#AR-04"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "queries/**",
+        "tests/external-refs.test.ts",
+        "reports/M5-24-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "queries/**",
+        "src/parsers/**",
+        "src/core/extractor-version.ts",
+        "tests/external-refs.test.ts",
+        "tests/fixtures/arch-rules"
+      ],
+      "acceptanceCriteria": [
+        "Fixture rows for ambient access in ts, php, python and go reach recall and precision 1.0 in score-arch (externals ambient).",
+        "`{ ambient: \"env\" }`-style selectors match exactly the labelled rows (test); no existing score-arch row changes."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": true,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-24-R2",
+      "milestone": "M5",
+      "title": "External elements: multi-layer warning and inherited dependencies",
+      "objective": "An external element selected by several layers gets the same multi-layer warning as an internal one, and policy.inheritDependencies makes a subtype answer for its bases' external dependencies too.",
+      "description": "M5-24 limitations: no multi-layer warning for externals (each layer is decided), and external dependencies are not inherited under inheritDependencies (M5-09).",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-24",
+          "type": "hard"
+        },
+        {
+          "id": "M5-09",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-24.md",
+        "docs/baton/reports/M5-09.md"
+      ],
+      "outputs": [
+        "src/arch/evaluate.ts",
+        "tests/external-refs.test.ts",
+        "reports/M5-24-R2.md"
+      ],
+      "affectedFiles": [
+        "src/arch/evaluate.ts",
+        "src/arch/selectors/**",
+        "tests/external-refs.test.ts",
+        "tests/arch-hierarchy.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A package matched by two layers gives one multi-layer warning naming both (test).",
+        "With inheritDependencies, a subclass of a base that imports a forbidden package gets a finding naming the inheritance path in `via` (test); without it, none."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts tests/arch-hierarchy.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-24-R3",
+      "milestone": "M5",
+      "title": "Agent templates describe package and built-in targets for mapx_arch_allowed",
+      "objective": "src/agents/templates.ts and the generated agent docs describe mapx_arch_allowed's `to` as a layer, file, symbol, package (npm:express, express) or built-in (node:fs), matching the tool schema.",
+      "description": "M5-24 limitation: agent templates still say \"layer, file or symbol\"; left to avoid regenerating agent docs in that task.",
+      "priority": "P3",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-24",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-24.md"
+      ],
+      "outputs": [
+        "src/agents/templates.ts",
+        "reports/M5-24-R3.md"
+      ],
+      "affectedFiles": [
+        "src/agents/templates.ts",
+        "tests/agents*.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The template text names package and built-in targets with one example each, and the agents test that renders templates asserts it (test)."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -24901,7 +25465,9 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D035, 2026-11-03): start only when the owner explicitly asks."
+      ],
       "sources": [
         "docs/baton/reviews/REVIEW-2026-11-02-b2558df592cf.md"
       ],
@@ -26096,6 +26662,63 @@
       "kind": "iteration"
     },
     {
+      "id": "M2-08-R4",
+      "milestone": "M2",
+      "title": "Sync follows a file turning from module to script",
+      "objective": "When a file loses its last top-level import/export (becomes a script) its declarations become globals; sync re-parses the files that may now link to them, so sync equals scan --force.",
+      "description": "M2-08-R3 limitation: the script→module direction is handled; the reverse (newly global names) is not.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R3.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R4.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A module file edited into a script: after sync, a user of its now-global function has the same edge as after scan --force (test, git and hash sync)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "milestone": "M5",
       "priority": "P2",
       "estimate": {
@@ -26982,6 +27605,65 @@
       ]
     },
     {
+      "id": "M0-02-R13",
+      "milestone": "M0",
+      "title": "A package.json edit re-parses only the files its change affects",
+      "objective": "Sync re-parses files below a changed package.json only when a field that affects their resolution changed (dependencies relevant to gates, exports, imports, workspaces, type), and not nested packages that have their own manifest.",
+      "description": "M3-05-R3 finding: the configReferrers tracking (M0-02-R8) re-parses the whole subtree, nested packages included, on every package.json edit; and an outer-root edit re-parses every source.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M3-05-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M3-05-R3.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/scanner-config-referrers.test.ts",
+        "reports/M0-02-R13.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/vue-stores.test.ts",
+        "tests/legacy-globs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Editing only package.json `version` or `scripts` re-parses 0 files (test); adding pinia re-parses the governed modules and gives the same edges as scan --force (test).",
+        "A nested package with its own package.json is not re-parsed by its parent's edit (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/vue-stores.test.ts tests/legacy-globs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "milestone": "M2",
       "priority": "P2",
       "estimate": {
@@ -27592,6 +28274,69 @@
       ]
     },
     {
+      "id": "M5-25-R3",
+      "milestone": "M5",
+      "title": "Go: an unversioned local replace outside the workspace is external",
+      "objective": "A go.mod `replace X => ../../outside/y` whose target folder is outside the MapX workspace makes imports of X external (attributed to X), not internal.",
+      "description": "M5-23 limitation (pre-existing in M5-25-R1): an unversioned local replace pointing outside the workspace is treated as internal.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-25-R1",
+          "type": "hard"
+        },
+        {
+          "id": "M5-23",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-25-R1.md",
+        "docs/baton/reports/M5-23.md"
+      ],
+      "outputs": [
+        "src/core/manifests/go.ts",
+        "tests/external-refs.test.ts",
+        "reports/M5-25-R3.md"
+      ],
+      "affectedFiles": [
+        "src/core/manifests/go.ts",
+        "src/core/import-resolvers.ts",
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "replace to a folder outside the workspace: imports of X are external rows attributed to X (test); a replace inside the workspace stays internal (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "milestone": "M4",
       "priority": "P2",
       "estimate": {
@@ -27610,19 +28355,17 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [
-        "Owner decision: under CPU load, idle lanes steal new grammars more often, so M4-12 AC1 (grammar loads at most languages + workers) and AC2 (no worker idles while files remain) conflict. Either cap new-grammar steals per batch (AC1 holds; a lane may end while another still has files) or restate AC1 as plan + up to (workers - 1) steals (AC2 holds)."
-      ],
+      "blockingConditions": [],
       "sources": [
         "docs/baton/reports/M4-12.md",
         "docs/baton/reports/M5-10.md",
         "docs/baton/reports/M5-19.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BLOCKED",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M4-12-R1",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T12:54:20.180Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -27633,9 +28376,21 @@
           "from": "BACKLOG",
           "to": "BLOCKED",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T12:54:19.786Z",
+          "from": "BLOCKED",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T12:54:20.180Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -27771,6 +28526,63 @@
         "npx vitest run tests/arch-reporters.test.ts",
         "npm run check"
       ]
+    },
+    {
+      "id": "M5-07-R2",
+      "milestone": "M5",
+      "title": "CI reporters: baselines outside the repository and submodule workspaces",
+      "objective": "A baseline outside the git repository is reported with a path SARIF consumers accept (absolute file URI or omitted location with a message), and a workspace inside a submodule can be prefixed relative to the superproject when asked.",
+      "description": "M5-07-R1 limitations: a baseline outside the repo gives `../../outside/bl.json` outside %SRCROOT%; a submodule workspace is prefixed relative to the submodule.",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-07-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-07-R1.md"
+      ],
+      "outputs": [
+        "src/arch/reporters/**",
+        "tests/arch-reporters.test.ts",
+        "reports/M5-07-R2.md"
+      ],
+      "affectedFiles": [
+        "src/arch/reporters/**",
+        "tests/arch-reporters.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A baseline outside the repo produces SARIF that validates against the schema with no `..` uri (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-reporters.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
     },
     {
       "milestone": "M5",
