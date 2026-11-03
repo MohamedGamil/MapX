@@ -21880,10 +21880,10 @@
         "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-D2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T20:39:21.405Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -21893,6 +21893,12 @@
           "at": "2026-11-03T18:55:30.830Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T20:39:21.405Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -29951,6 +29957,125 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/new-expression-calls.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-17-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-20",
+      "title": "CommonJS `require` of a local module gives import edges",
+      "objective": "`const x = require('../x')`, `const { f } = require('./y')` and `module.exports`/`exports.f` give file-to-file import edges and import-bound call edges, as ES imports do.",
+      "description": "Found by M5-17-R1 (2026-11-03): a CommonJS require of a local module gives no file-to-file edge, so an Express fixture had to be written with ES imports.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "queries/javascript/**",
+        "tests/commonjs-require.test.ts",
+        "reports/M2-20.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/import-resolvers.ts",
+        "queries/javascript/**",
+        "src/core/extractor-version.ts",
+        "tests/commonjs-require.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A CommonJS app (require + module.exports, destructured and whole-module) gets the import edges and the call edges to the required functions (e2e test); a package require stays external (M2-08-R3).",
+        "`npm run eval` holds every floor."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/commonjs-require.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-17-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-21",
+      "title": "C# method calls resolve on the receiver's type, not by bare name",
+      "objective": "C# calls on a typed variable, field, parameter or `this` resolve to that type's method (walking bases, as M2-12 does for new-expressions); a same-named method of another class is not linked.",
+      "description": "Found by M5-17-R1 (2026-11-03): C# calls resolve by bare method name, which gave false layer violations until the aspnet fixture used unique method names.",
+      "outputs": [
+        "src/parsers/languages/**",
+        "tests/csharp-calls.test.ts",
+        "reports/M2-21.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/**",
+        "queries/c_sharp/**",
+        "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
+        "tests/csharp-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Two C# classes with a same-named method: a call on a variable of type A links A#m only (e2e test); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/csharp-calls.test.ts",
         "npm run eval"
       ]
     },
