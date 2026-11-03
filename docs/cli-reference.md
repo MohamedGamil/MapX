@@ -127,10 +127,10 @@ Options:
 Show scan metrics, collected data, graph statistics, and git changes since the last scan.
 
 ```bash
-mapx status [/path] [--all]
+mapx status [/path] [--all] [--exclude <glob>] [--include <glob>]
 ```
 
-`--all` prints one row per registered repository (Repo, Files, Symbols, Edges, HEAD, Last scan, Changed), the totals, and the cross-repo edge count per repo pair. Changed reads `unscanned` for a repo that is registered but has never been scanned, `clean` when nothing indexed has changed, and otherwise the number of changed files.
+`--exclude` and `--include` add patterns to the configured ones in the **Scan info** lines (`Excludes:`, `Includes:`); they do not change the counts or the changed files. `--all` prints one row per registered repository (Repo, Files, Symbols, Edges, HEAD, Last scan, Changed), the totals, and the cross-repo edge count per repo pair. Changed reads `unscanned` for a repo that is registered but has never been scanned, `clean` when nothing indexed has changed, and otherwise the number of changed files.
 
 Outputs:
 - **Scan info**: project name, directory, last scan time, last git commit, schema version
@@ -288,11 +288,12 @@ Inspect a specific symbol node with detailed metadata. Optionally view its sourc
 `<symbol>` is a name, `Class::method` or `Class.method`. A symbol whose own name contains a dot, such as the object member `'api.get'` or Lua's `M.foo`, opens by that name when no class `api` has a member `get`; when one does, `api.get` opens that member and `actions::api.get` (scope, then name) opens the object member. `mapx callers`, `callees` and `impact` take both readings (M4-26).
 
 ```bash
-mapx node <symbol> [--dir /path] [--source] [--format <format>]
+mapx node <symbol> [--dir /path] [--source] [--include-members] [--format <format>]
 ```
 
 Options:
 - `--source` — Include the source code of the symbol
+- `--include-members` — List the member symbols (methods, properties) of a class, interface or trait
 - `--format` — Output format: `text` (default) or `json`
 
 Examples:
@@ -353,9 +354,9 @@ mapx clusters core --json              # Inspect a specific cluster as JSON
 Export the code graph in various formats.
 
 ```bash
-mapx export [--format <fmt>] [--tokens <budget>] [--repo <name>] [-o <file>]
+mapx export [--format <fmt>] [--tokens <budget>] [--repo <name>] [--all] [-o <file>]
             [--exclude <glob>] [--include <glob>]
-            [--cluster <mode>] [--depth <n>]
+            [--cluster <mode>] [--depth <n>] [--fallback-grid]
             [--delimiter <delimiter>] [--key-folding]
 ```
 
@@ -369,6 +370,7 @@ Options:
 - `--include` — Include glob patterns
 - `--cluster` — Cluster rendering for DOT/SVG: `none` (default, flat) or `auto` (with subgraph blocks)
 - `--depth` — Maximum cluster nesting depth for DOT/SVG. With `--cluster auto`, `--depth 0` is the cluster-level view: one node per cluster (with its file count), one edge per cluster pair labelled with its edge count and types, and `penwidth` = log(count) + 1, capped at 5
+- `--fallback-grid` — For SVG: always use the built-in renderer, even when Graphviz is installed
 - `--delimiter` — Delimiter for TOON format: `comma`, `tab`, `pipe` (default: `comma`)
 - `--key-folding` — Collapse single-key chains into dotted paths for TOON
 
@@ -847,7 +849,7 @@ Where the layers come from:
 - `--from roles` (the default): one layer per MapX role, in the order of the archetype's `LAYER_ORDER` (`{ "role": … }` selectors). Each layer may depend on the layers after it in that order. Roles with no place in the order (`other`, `test`…) are named in the header and left out.
 - `--from clusters`: one layer per primary cluster (`mapx clusters`, `{ "cluster": … }` selectors). The rules allow exactly the dependencies between clusters the index has today, so a new one fails `mapx check`.
 - `--from framework`: the preset of the framework the scan detected (`laravel`, `nestjs` or `django`). Exit 3 when none is detected.
-- `--preset <id>`: a configuration that `extends` the shipped preset `mapx:preset/<id>` (see [architecture-rules.md](architecture-rules.md#presets)). The preset's folder parameter (`root`) is inferred: the folder, up to three levels down, under which the most of the preset's layers have files. For `ddd-contexts`, every folder under `root` becomes a context layer. `--preset` and `--from` exclude each other.
+- `--preset <id>`: one of `clean`, `ddd-contexts`, `django`, `feature-sliced`, `hexagonal`, `laravel`, `layered` or `nestjs`. The proposal is a configuration that `extends` the shipped preset `mapx:preset/<id>` (see [architecture-rules.md](architecture-rules.md#presets)). The preset's folder parameter (`root`) is inferred: the folder, up to three levels down, under which the most of the preset's layers have files. For `ddd-contexts`, every folder under `root` becomes a context layer. `--preset` and `--from` exclude each other.
 
 Whatever the source, when the index has references to packages outside the workspace, the proposal also declares a `Packages` layer, `{ "package": "*" }`, that every layer may use (`"*": ["Packages"]`), so that `mapx check --fail-on-uncovered` passes on the proposal's first day (M5-24). That layer is left out of `layers` in the JSON output and of the empty-layer warnings.
 
@@ -1090,19 +1092,15 @@ Paths in every CI format use `/` and are relative to the root of the git reposit
 
 ## `mapx explain <file>`
 
-Explain the automatic file role/layer classification result for a given file. Shows all evaluated signals (path, naming, topology, framework, imports) with confidence weights and alternate role scores.
+Explain the automatic file role/layer classification result for a given file. Shows the role, its confidence and every signal the last scan stored for the file (path, naming, topology, framework, imports), each with its role, confidence and reason. The path is the indexed, workspace-relative one.
 
 ```bash
-mapx explain <file> [--dir /path] [--reclassify]
+mapx explain <file> [--dir /path]
 ```
-
-Options:
-- `--reclassify` — Re-run the role classifier engine for this file on-the-fly instead of reading cached DB results
 
 Examples:
 ```bash
 mapx explain src/core/scanner.ts
-mapx explain src/api/users.ts --reclassify
 ```
 
 ## `mapx layers`

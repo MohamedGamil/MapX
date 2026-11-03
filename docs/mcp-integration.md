@@ -305,12 +305,17 @@ Full scan: parse all files, build graph. Unchanged files are not re-parsed, exce
 - `dir` (string, optional): Target project directory
 - `repo` (string, optional): Scan only this registered repository. Without it, every registered repository is scanned (as `all: true`), so a workspace root's nested repos are covered too
 - `all` (boolean, optional): Scan all registered repositories (the default)
+- `force` (boolean, optional): Re-parse every file, as `mapx scan --force`
+- `parallel` (boolean, optional): Parse on worker threads when the work repays them (default `true`; `settings.parseWorkers` sizes the pool); `false` parses on the main thread, as `--no-parallel`
+- `exclude`, `include` (string, optional): Comma-separated glob patterns added to the configured exclude and include patterns for this scan, as `--exclude` and `--include`
 
 #### `mapx_sync`
 Incremental update: sync changed files only. Like `mapx sync`, it re-parses the referrers of a removed file that comes back, drops the old path of a git rename and re-parses its referrers, re-parses the referrers of a removed file when a new or changed file names what they referenced in it (the target moved), re-parses the `.vue` files using a tag whose Vue global registration changed (`app.component` added, removed or retargeted) or navigating to a route record that changed (renamed, another component), skips a file git lists whose blob is the one indexed, drops a deleted file that was indexed while untracked or only staged, re-indexes an edit reverted to the committed content, keeps both files of a `git mv` that left a copy behind, indexes gitignored files as a scan does, leaves the files of a nested registered repo to that repo, and re-parses everything once when the include/exclude filters have changed since the last scan.
 - `dir` (string, optional): Target project directory
 - `repo` (string, optional): Sync only this registered repository. Without it, every registered repository is synced (as `all: true`)
 - `all` (boolean, optional): Sync all registered repositories (the default)
+- `parallel` (boolean, optional): As for `mapx_scan` (default `true`)
+- `exclude`, `include` (string, optional): Comma-separated glob patterns added to the configured ones for this sync
 
 The server keeps one pool of parse workers across `mapx_scan` and `mapx_sync` calls, so a call reuses the workers and grammars of the previous one. The workers close after `MAPX_WORKER_IDLE_MS` milliseconds without work (default 60000); see [Parallel parsing](configuration.md#parallel-parsing).
 
@@ -323,25 +328,28 @@ Search symbols by name pattern. A class that declares Eloquent relationships lis
 
 #### `mapx_search`
 Advanced filtered symbol search.
-- `term` (string, required): Search term
-- `kind` (string, optional): Filter by symbol kind (class, function, method, etc.)
+- `term` (string, required): Symbol name, glob pattern (`*` and `?`), or `*` to list all; case-insensitive
+- `kind` (string, optional): Filter by symbol kind: `class`, `method`, `function`, `interface`, `trait`, `constant`, `enum`, `property`, `namespace`, `struct`, `module` or `field`
 - `file` (string, optional): Filter by file path prefix
 - `exact` (boolean, optional): Exact name match
-- `limit` (number, optional): Max results (default: 50)
+- `limit` (number, optional): Max results (default: 20)
+- `format` (string, optional): `text` (default) or `json`
 - `dir` (string, optional): Target project directory
 
 #### `mapx_node`
 Deep inspection of a specific symbol node.
 - `symbol` (string, required): Symbol name, `Class::method` or `Class.method`. A name that itself contains a dot (`api.get`) opens by that name unless a class `api` has a member `get`; `scope::api.get` is unambiguous
 - `source` (boolean, optional): Include source code
+- `include_members` (boolean, optional): List the member symbols (methods, properties) of a class, interface or trait, as `mapx node --include-members`
+- `format` (string, optional): `text` (default) or `json`
 - `dir` (string, optional): Target project directory
 
 #### `mapx_files`
 List and filter project files.
 - `path` (string, optional): Filter by path prefix or glob pattern
 - `lang` (string, optional): Filter by language
-- `sort` (string, optional): Sort by `name`, `lines`, `size`, `pagerank`
-- `limit` (number, optional): Max results
+- `sort` (string, optional): `path` (default, ascending) or `lines` (descending)
+- `limit` (number, optional): Max results (default: 50)
 - `dir` (string, optional): Target project directory
 
 ### Dependencies & Flow
@@ -354,20 +362,23 @@ Get file-level dependencies and reverse dependencies. A file that declares servi
 
 #### `mapx_callers`
 Trace direct and nested callers of a symbol.
-- `symbol` (string, required): Symbol name
-- `depth` (number, optional): Max traversal depth
+- `symbol` (string, required): Symbol name or scoped name (`UserService::findAll`)
+- `depth` (number, optional): Max traversal depth (default 1: direct callers; 2 or more is transitive)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_callees`
 Trace direct and nested callees of a symbol.
-- `symbol` (string, required): Symbol name
-- `depth` (number, optional): Max traversal depth
+- `symbol` (string, required): Symbol name or scoped name
+- `depth` (number, optional): Max traversal depth (default 1)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_trace`
 Trace data flow paths from a starting symbol or file.
-- `symbol` (string, required): Starting symbol or file
-- `depth` (number, optional): Max traversal depth
+- `start` (string, required): Starting symbol (`UserController::store`) or file path
+- `direction` (string, optional): `up`, `down` or `both` (default)
+- `depth` (number, optional): Max traversal depth (default 3)
+- `format` (string, optional): `text` (default), `dot` or `json`
+- `include_structural` (boolean, optional): Also follow structural edges such as `import` and `extends` (default `false`)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_sources`
@@ -393,6 +404,7 @@ Each route has the same fields as `mapx routes --json`: `line`, `name`, `middlew
 Show hooks from detected frameworks.
 - `framework` (string, optional): Filter by framework name
 - `type` (string, optional): Filter by hook type
+- `namePattern` (string, optional): Filter by hook name pattern
 - `dir` (string, optional): Target project directory
 
 #### `mapx_edges`
@@ -410,17 +422,19 @@ Structured edge neighbourhood of a file, JSON by default. With `file` it returns
 
 #### `mapx_impact`
 Change impact analysis — blast radius and risk for modifying a symbol.
-- `symbol` (string, required): Symbol name
-- `depth` (number, optional): Max traversal depth
+- `symbol` (string, required): Symbol name or scoped name (`ClassName::method`)
+- `depth` (number, optional): Max traversal depth (default 3)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_clusters`
 List detected code clusters/modules.
 - `source` (string, optional): Filter by source (`layer`, `community`, `namespace`, `directory`, `all`)
+- `cluster` (string, optional): Inspect one cluster by name
 - `dir` (string, optional): Target project directory
 
 #### `mapx_status`
 Check scan status, language breakdown, PageRank rankings, and index recommendations. The changed-file count is the git changes plus the stale files git does not list, such as a new file in a nested repo or in a workspace that is not a git repository; the other tools' `Index is stale` warning names them too (see [Staleness warning](cli-reference.md#staleness-warning)).
+- `exclude`, `include` (string, optional): Accepted, but they do not change the result yet (`mapx status --exclude` / `--include` only print them)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_metrics`
@@ -434,12 +448,12 @@ Structural coupling metrics per file, ranked by total degree (in + out, then Pag
 
 #### `mapx_profile`
 Retrieve codebase profile (archetype, frameworks, active taxonomy).
+- `repo` (string, optional): The repo whose profile to return (default: the workspace's)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_explain`
-Explain file architectural role classification details and signal weights.
-- `file` (string, required): File path to analyze
-- `reclassify` (boolean, optional): Re-run classification on-the-fly
+Explain file architectural role classification details and signal weights, from the signals the last scan stored.
+- `file` (string, required): File path to analyze (relative to the project root)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_smells`
@@ -449,10 +463,12 @@ Detect design smells and potential architectural violations. With `.mapx/archite
 
 #### `mapx_dsm`
 Generate the cluster-level Dependency Structure Matrix (DSM).
+- `repo` (string, optional): The repo whose DSM to return (default: the workspace's)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_layers`
 List files grouped by active dynamic architectural roles.
+- `repo` (string, optional): The repo whose files to list (default: the workspace's)
 - `dir` (string, optional): Target project directory
 
 #### `mapx_arch_validate_config`
@@ -557,17 +573,21 @@ The files are staged and replaced together, so a failed write is also `exitCode:
 #### `mapx_export`
 Export compact graph summary.
 - `format` (string, optional): `llm`, `json`, `dot`, `svg`, `toon` (default: `llm`)
-- `tokens` (number, optional): Token budget for LLM format (default: 8192)
+- `tokens` (number, optional): Token budget for the LLM and TOON formats (default: 8192)
 - `repo` (string, optional): Filter by repo name
 - `all` (boolean, optional): LLM format only. Produces the combined multi-repo export of `mapx export --all`: the repo list, the cross-repo dependencies, then one `## <repo>` section per repo
+- `exclude`, `include` (string, optional): Comma-separated glob patterns; matching files are left out of, or kept in, the export, as `mapx export --exclude` / `--include`
+- `cluster` (string, optional): DOT/SVG: `none` (default) or `auto` (the cluster-level view)
+- `depth` (number, optional): DOT/SVG: maximum cluster nesting depth (default 3)
+- `fallback_grid` (boolean, optional): SVG: always use the built-in renderer, as `--fallback-grid`
 - `dir` (string, optional): Target project directory
 
 #### `mapx_context`
 Intelligent, token-budgeted workspace context builder for LLM prompts.
 - `task` (string, required): Describe your prompt target
 - `seeds` (array of strings, optional): Seed files/symbols to expand around
-- `tokens` (number, optional): Estimated token limit
-- `depth` (number, optional): Graph depth traversal limit
+- `tokens` (number, optional): Token budget (default 8192)
+- `depth` (number, optional): Graph traversal depth from the seeds (default 2)
 - `dir` (string, optional): Target project directory
 
 ### Workspace Management
@@ -578,7 +598,7 @@ Workspace introspection with two actions:
 - **`discover`** — Discovers unregistered submodules, VS Code workspace folders, nested repos and monorepo packages; peer repos only with `includePeers`
 
 Parameters:
-- `action` (string, required): `list` or `discover`
+- `action` (string, optional): `list` (default) or `discover`
 - `includePeers` (boolean, optional, default false): also discover sibling git repositories
 - `dir` (string, optional): Target project directory
 
@@ -604,7 +624,8 @@ Compatibility no-ops: they report that the grammar is bundled and nothing is ins
 #### `mapx_batch`
 Execute multiple operations in a single round-trip.
 - `operations` (array, required): Operations list containing `{ tool, args }`
-- `maxItems` (number, optional): Max operations limit
+- `maxItems` (number, optional): Max operations limit (default 10)
+- `dir` (string, optional): Target project directory
 
 #### `mapx_agents_generate`
 Generate or update project-level agent integration instructions and rule files.

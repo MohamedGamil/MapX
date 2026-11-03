@@ -151,6 +151,18 @@ wordpress    | filter          | the_content               | inc/filters.php#add
 
 ---
 
+## HTTP pairing
+
+MapX links a frontend's HTTP calls to the backend routes they reach, also when the frontend and the backend are separate registered repositories:
+
+1. **Call sites.** In JS, TS and Vue files it finds calls through axios, `fetch`, `axios.create` instances, client factories such as `Api()`, aliases of these, and the receivers you configure in `settings.http.clients`.
+2. **URLs.** It resolves each URL statically: string constants, template literals, conditional branches, the client's `baseURL` (from `axios.create` options or `.env*` files, with Vite's `${A:-default}` expansion), joined as axios joins them.
+3. **Pairing.** Each call pairs with the live route it reaches, by method and path: at least one literal path segment must match, and an absolute URL must name one of the workspace's own hosts (`settings.http.hosts`, `.env*` URLs, client base URLs, literal Laravel `Route::domain()` hosts). A paired call becomes an `http` edge from the calling file to the route handler, and a cross-repo edge when the two are in different repos.
+
+`mapx routes --clients` (MCP: `mapx_routes { clients: "all" }`) lists every call with its resolved URL and route; `--unmatched` lists the calls that reach no route. The dashboard's HTTP Calls tab draws the calls between repos. The exact rules are in [`mapx routes`](cli-reference.md#mapx-routes), and the configuration in [Settings](configuration.md#settings).
+
+---
+
 ## MCP Tools Integration
 
 When integrating MapxGraph with LLM agents (e.g., Claude Desktop, Cursor), two specialized tools are exposed:
@@ -161,6 +173,7 @@ Query routes from all detected frameworks.
   * `framework` (string, optional) — Filter routes by framework name (e.g., `laravel`, `express`).
   * `method` (string, optional) — Filter routes by HTTP method (e.g., `GET`, `POST`).
   * `pathPattern` (string, optional) — Filter routes by route path pattern.
+  * `clients` (`"all"` | `"unmatched"`, optional) — List frontend HTTP calls instead (see [HTTP pairing](#http-pairing)).
   * `dir` (string, optional) — Target project directory.
 
 ### `mapx_hooks`

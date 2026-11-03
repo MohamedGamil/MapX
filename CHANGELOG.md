@@ -9,34 +9,21 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
-- Architecture rules can select packages, built-ins and ambient access (`package`, `builtin`, `ambient`), and `mapx check` reports vendor-confinement and dev-dependency violations and the smells vendor-leak, undeclared-dependency and dev-dependency-in-prod (M5-24).
-- The dashboard's Architecture tab has a Layer rules view for `.mapx/architecture.jsonc` (health tiles, a layer diagram whose edges and layers drill down to file:line dependencies and selector-matched members, a layer DSM, filterable findings), the graph can colour files by declared layer, and `/api/arch/report`, `/api/arch/layers` and `/api/arch/edges` serve them read-only and flag a stale index; `mapx check --layer` now matches layer names that contain a comma (M5-15).
-- MapX now checks its own architecture in CI with `mapx check`, and docs/architecture-rules.md is a complete guide with a tested example of every selector, rule, reporter and exit code (M5-18).
-- External references to Go packages now record their module, whether go.mod requires it directly or `// indirect` and whether only tests use it, from go.mod, go.sum and go.work (longest module path, `/v2` major versions, `replace`), and standard-library packages (`fmt`, `net/http`) are classified as built-ins and cgo's `C` as ambient (M5-23).
-- External references to Python modules now record their distribution, whether it is a direct or transitive dependency and dev-only, from pyproject.toml (PEP 621, dependency groups, Poetry), requirements files, uv.lock and poetry.lock, and standard-library modules (`os`, `json`, `tomllib`) are classified as built-ins (M5-22).
-- `mapx arch init` proposes `.mapx/architecture.jsonc` from MapX roles, clusters, the detected framework or one of eight shipped presets (layered, clean, hexagonal, ddd-contexts, feature-sliced, laravel, nestjs, django), shows today's layer dependencies in its comments, and with `--baseline` writes a baseline so `mapx check` passes on day one; it writes only with `--write` and never over an existing file without `--force`, and `mapx_arch_init` gains the same options (M5-17).
-- With `.mapx/architecture.jsonc`, `mapx_smells`, `mapx arch` and the dashboard take layer violations from the rules instead of file roles (`policy.alsoInferred` adds role-based ones only for code no layer covers) and add rule-derived smells: layer cycles, layer skips, dead and weak allowances, unstable layer dependencies, distance from the main sequence, deprecated usage and configuration or stale-baseline errors (M5-16).
-- External references to PHP classes and functions now record their Composer package, whether it is a direct or transitive dependency and dev-only, from composer.json and composer.lock autoload sections, and PHP built-ins (`DateTime`, `PDO`, `str_contains`, `use const PHP_EOL`) are classified as built-ins of their extension (M5-21).
-- Architecture layers can select types by ancestry and members (`extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`), transitively and across languages, including framework bases outside the workspace, and `policy.inheritDependencies` makes a subclass answer for its bases' dependencies, each finding naming the inheritance path in `via` (M5-09).
-- `mapx arch graph` draws the layer graph as Graphviz DOT, SVG (no Graphviz needed), Mermaid, a layer DSM or JSON, with dependency counts per layer pair, violations in red, skipped ones dashed, groups as subgraphs, hidden layers and point-to-group (M5-13).
-- Five MCP tools give agents the architecture rules: `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed` (a pre-flight check that names allowed alternatives), `mapx_arch_explain` and `mapx_arch_init` (a role-based proposal that writes only with `write: true`). They answer as `mapx check` and `mapx arch …` do, and the generated agent instructions say to call `mapx_arch_allowed` before adding an import across modules. MCP now has 39 tools (M5-14).
-- External references to npm packages now record their package, whether it is a direct or transitive dependency and whether it is dev-only, from package.json and package-lock, pnpm or yarn lockfiles. Node built-ins (`fs`, `node:fs`, `fs/promises`) are classified as built-ins, and a package.json or lockfile change makes the index stale (M5-20).
-- Architecture checks now report `internal-element` violations for symbols tagged `@internal` or `@mapx-internal` (configurable with `visibility.internalTags`). With `visibility.nativeMarkers` they also report references the language's own module visibility refuses: Go `internal/` packages, Python `_private` modules and names, Kotlin and C# `internal`, Java package-private and Rust `pub(crate)` (M5-11).
-- `mapx check --format` gains `sarif` (GitHub code scanning), `github` (PR annotations, chosen automatically inside GitHub Actions for stdout), `codeclimate` (GitLab Code Quality, with a `report.codeclimate` severity map) and `junit` (GitLab and Jenkins test reports). All are validated against their schemas, byte-stable, and mark exactly the findings that fail the run (M5-07).
-- `mapx arch` gains introspection subcommands (`layers --why`, `which`, `unassigned`, `deps`, `unused`, `changed`, `allowed`), each with `--format json` and AR-17 exit codes. They answer which elements are in a layer and why, what is in no layer, which edges join two layers, which allowances are unused, which layers a change touches, and whether a dependency would be allowed, exactly as `mapx check` decides it (M5-08).
-- The index now records references to packages, modules and classes outside the workspace (npm, Composer, pip and Go) in a new `external_refs` view, kept equal to a forced scan on every sync and without changing edges or metrics. The extractor version is now 9 (M5-19).
-- Scans now record each symbol's decorators, attributes or annotations and its doc tags for PHP, TypeScript, JavaScript, Python, Java, Kotlin and C#, and architecture layers can select symbols with `decorator` and `docTag` (M5-10).
-- `mapx check` gains baselines (`--generate-baseline`, `--baseline`, Deptrac-style `skip_violations`; stale entries exit 3) and the `--compare <base-report.json>` ratchet, which fails only on violations new since the base revision (M5-06).
-- `mapx arch validate-config` and the MCP tool `mapx_arch_validate_config` validate `.mapx/architecture.jsonc` (or a view) without an index, listing every problem with its JSON pointer (exit 3). The loader now accepts a UTF-8 BOM, reports `extends` to a directory, views outside `.mapx/architecture/`, symlink loops and permission errors as configuration errors, and substitutes `%parameters%` in every selector key, with `%%` for a literal `%` and parameters inside parameter values (M5-02-R1).
-- An index built by an older MapX is stale: `mapx check` exits 4, the commands warn, and the next `mapx scan` or `mapx update` re-parses every file once. The index records the extractor version that built it (M5-26).
-- `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).
-- `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that the coming `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
+
+#### Architecture rules
 
 - `mapx check` checks `.mapx/architecture.jsonc` against the index (M5-05):
   - findings as a table grouped by layer, or as JSON (`--format json`, `--output`, described by `schemas/arch-report.schema.json`);
   - `--view`, `--layer`, `--rule`, `--report-uncovered`, `--report-allowed`, `--fail-on warn`, `--fail-on-uncovered` and `--sync`;
   - exit codes: 0 clean, 1 violations, 2 uncovered with `--fail-on-uncovered`, 3 configuration errors or no configuration, 4 no index or a stale one.
-- The architecture rule evaluator and report (`src/arch/report.ts`, run by the coming `mapx check`) (M5-04). It covers:
+- `schemas/architecture.schema.json` ships in the package: the JSON Schema of `.mapx/architecture.jsonc`, the architecture-rules configuration (layers, selectors, allow rules, `extends`, `%parameters%`, views) that `mapx check` reads. Its loader validates a document completely, reporting every problem with a JSON pointer (M5-02).
+- `mapx arch validate-config` and the MCP tool `mapx_arch_validate_config` validate `.mapx/architecture.jsonc` (or a view) without an index, listing every problem with its JSON pointer (exit 3). The loader now accepts a UTF-8 BOM, reports `extends` to a directory, views outside `.mapx/architecture/`, symlink loops and permission errors as configuration errors, and substitutes `%parameters%` in every selector key, with `%%` for a literal `%` and parameters inside parameter values (M5-02-R1).
+- The architecture element view and core selectors (`path`, `name`, `layer`, `all`/`any`/`not`, `role`, `cluster`, `repo`, `workspacePackage`, `language`, `framework`) with layer membership that records which selector matched, computed once per scan and configuration (M5-03).
+- Scans now record each symbol's decorators, attributes or annotations and its doc tags for PHP, TypeScript, JavaScript, Python, Java, Kotlin and C#, and architecture layers can select symbols with `decorator` and `docTag` (M5-10).
+- Architecture layers can select types by ancestry and members (`extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`), transitively and across languages, including framework bases outside the workspace, and `policy.inheritDependencies` makes a subclass answer for its bases' dependencies, each finding naming the inheritance path in `via` (M5-09).
+- Architecture rules can select packages, built-ins and ambient access (`package`, `builtin`, `ambient`), so `mapx check` reports a layer that uses a package it may not (vendor confinement, dev-only packages in production code) as a `disallowed-layer` or `private-layer` violation, and adds the smells vendor-leak, undeclared-dependency and dev-dependency-in-prod (M5-24).
+- Architecture checks now report `internal-element` violations for symbols tagged `@internal` or `@mapx-internal` (configurable with `visibility.internalTags`). With `visibility.nativeMarkers` they also report references the language's own module visibility refuses: Go `internal/` packages, Python `_private` modules and names, Kotlin and C# `internal`, Java package-private and Rust `pub(crate)` (M5-11).
+- The architecture rule evaluator and report (`src/arch/report.ts`, run by `mapx check`) (M5-04). It covers:
   - allowances `L`, `+L` (transitive), `!L`, `*`, a `"*"` defaults key, and edge-type-scoped and advisory (`severity: "warn"`) allowances;
   - the evaluation chain: scope, uncovered, same layer, `disallowed-layer`, `private-layer`, allowed;
   - inferred edges as warnings by default;
@@ -45,28 +32,53 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - a layer-pair matrix.
 
   On the labelled fixture it finds every row but those baselines and `@internal` markers own (M5-04).
-- An architecture-rules fixture set (PHP, TypeScript, Python, Go and a two-repo workspace, with labelled violations, skips, uncovered and baseline rows) and `scripts/eval/score-arch.ts`, which scores a report per kind; the baseline is 0.0 until `mapx check` exists (M5-01).
-- The architecture element view and core selectors (`path`, `name`, `layer`, `all`/`any`/`not`, `role`, `cluster`, `repo`, `workspacePackage`, `language`, `framework`) with layer membership that records which selector matched, computed once per scan and configuration (M5-03).
+- `mapx check` gains baselines (`--generate-baseline`, `--baseline`, Deptrac-style `skip_violations`; stale entries exit 3) and the `--compare <base-report.json>` ratchet, which fails only on violations new since the base revision (M5-06).
+- `mapx check --format` gains `sarif` (GitHub code scanning), `github` (PR annotations, chosen automatically inside GitHub Actions for stdout), `codeclimate` (GitLab Code Quality, with a `report.codeclimate` severity map) and `junit` (GitLab and Jenkins test reports). All are validated against their schemas, byte-stable, and mark exactly the findings that fail the run (M5-07).
+- `mapx arch` gains introspection subcommands (`layers --why`, `which`, `unassigned`, `deps`, `unused`, `changed`, `allowed`), each with `--format json` and AR-17 exit codes. They answer which elements are in a layer and why, what is in no layer, which edges join two layers, which allowances are unused, which layers a change touches, and whether a dependency would be allowed, exactly as `mapx check` decides it (M5-08).
+- `mapx arch graph` draws the layer graph as Graphviz DOT, SVG (no Graphviz needed), Mermaid, a layer DSM or JSON, with dependency counts per layer pair, violations in red, skipped ones dashed, groups as subgraphs, hidden layers and point-to-group (M5-13).
+- With `.mapx/architecture.jsonc`, `mapx_smells`, `mapx arch` and the dashboard take layer violations from the rules instead of file roles (`policy.alsoInferred` adds role-based ones only for code no layer covers) and add rule-derived smells: layer cycles, layer skips, dead and weak allowances, unstable layer dependencies, distance from the main sequence, deprecated usage and configuration or stale-baseline errors (M5-16).
+- `mapx arch init` proposes `.mapx/architecture.jsonc` from MapX roles, clusters, the detected framework or one of eight shipped presets (layered, clean, hexagonal, ddd-contexts, feature-sliced, laravel, nestjs, django), shows today's layer dependencies in its comments, and with `--baseline` writes a baseline so `mapx check` passes on day one; it writes only with `--write` and never over an existing file without `--force`, and `mapx_arch_init` gains the same options (M5-17).
+- Five MCP tools give agents the architecture rules: `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed` (a pre-flight check that names allowed alternatives), `mapx_arch_explain` and `mapx_arch_init` (a role-based proposal that writes only with `write: true`). They answer as `mapx check` and `mapx arch …` do, and the generated agent instructions say to call `mapx_arch_allowed` before adding an import across modules. MCP now has 39 tools (M5-14).
+- MapX now checks its own architecture in CI with `mapx check`, and docs/architecture-rules.md is a complete guide with a tested example of every selector, rule, reporter and exit code (M5-18).
+- An architecture-rules fixture set (PHP, TypeScript, Python, Go and a two-repo workspace, with labelled violations, skips, uncovered and baseline rows) and `scripts/eval/score-arch.ts`, which scores a report per kind (M5-01).
+
+#### External references
+
+- The index now records references to packages, modules and classes outside the workspace (npm, Composer, pip and Go) in a new `external_refs` view, kept equal to a forced scan on every sync and without changing edges or metrics. (M5-19).
+- External references to npm packages now record their package, whether it is a direct or transitive dependency and whether it is dev-only, from package.json and package-lock, pnpm or yarn lockfiles. Node built-ins (`fs`, `node:fs`, `fs/promises`) are classified as built-ins, and a package.json or lockfile change makes the index stale (M5-20).
+- External references to PHP classes and functions now record their Composer package, whether it is a direct or transitive dependency and dev-only, from composer.json and composer.lock autoload sections, and PHP built-ins (`DateTime`, `PDO`, `str_contains`, `use const PHP_EOL`) are classified as built-ins of their extension (M5-21).
+- External references to Python modules now record their distribution, whether it is a direct or transitive dependency and dev-only, from pyproject.toml (PEP 621, dependency groups, Poetry), requirements files, uv.lock and poetry.lock, and standard-library modules (`os`, `json`, `tomllib`) are classified as built-ins (M5-22).
+- External references to Go packages now record their module, whether go.mod requires it directly or `// indirect` and whether only tests use it, from go.mod, go.sum and go.work (longest module path, `/v2` major versions, `replace`), and standard-library packages (`fmt`, `net/http`) are classified as built-ins and cgo's `C` as ambient (M5-23).
+
+#### Dashboard
+
+- The dashboard's Architecture tab has a Layer rules view for `.mapx/architecture.jsonc` (health tiles, a layer diagram whose edges and layers drill down to file:line dependencies and selector-matched members, a layer DSM, filterable findings), the graph can colour files by declared layer, and `/api/arch/report`, `/api/arch/layers` and `/api/arch/edges` serve them read-only and flag a stale index; `mapx check --layer` now matches layer names that contain a comma (M5-15).
+
+#### Indexing
+
+- An index built by an older MapX is stale: `mapx check` exits 4, the commands warn, and the next `mapx scan` or `mapx update` re-parses every file once. The index records the extractor version that built it (M5-26).
+
+#### CLI and documentation
+
+- `mapx scan` and `mapx sync` (`update`) open with the MapX logo in a terminal, as `mapx init` does; the CLI only, never in pipes, CI or MCP (M4-25).
+- The README gives an overview of every feature with links to its documentation and a quick start that runs as written; `tests/docs-surface.test.ts` keeps docs/cli-reference.md and docs/mcp-integration.md equal to the CLI and MCP surface (every command, flag, tool and parameter), the stated tool, framework and preset counts equal to the code, and every relative link and anchor in the docs resolving (M4-28).
 
 ### Changed
+
+#### Architecture rules
+
 - `mapx check` now reports packages that no layer covers as uncovered, and `--fail-on-uncovered` fails on them (`policy.uncovered.externals: false` turns that off); `mapx arch init` adds a `Packages` layer every layer may use (M5-24).
+
+#### CLI
+
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
-- Parallel scans never load more grammars than languages plus workers, however busy the machine (M4-12-R1).
-- The dashboard's escaping check now follows values instead of trusting variable names and also checks HTML built by concatenation, and the XSS browser test covers every tab, including Workspace, HTTP and Configuration, with payloads in handler, symbol and repo names and config values (M4-24-R1).
-- In JS/TS, a name imported from a package or a Node builtin (`import { join } from 'node:path'`) no longer links to a same-named project symbol, and a global an ES module neither imports nor declares (`Node`, `Request`) no longer links to another module's declaration; bare imports under a tsconfig/jsconfig `baseUrl` now resolve (M2-08-R3).
-- npm attribution of external references no longer falls through to a parent folder's lockfile when a nested lockfile exists but cannot be read (a folder, no permission); the nested package's manifests answer, flagged manifest (M5-20-R1).
-- In monorepos, a Pinia or Vuex library declared at the workspace root (package.json `workspaces` or pnpm-workspace.yaml) now counts for the packages it lists, also when MapX is initialised in a package, and sync follows changes to those roots (M3-05-R3).
+
+#### Architecture rules
+
 - In a monorepo whose MapX workspace is a subfolder, `mapx check --format sarif|github|codeclimate|junit` names files from the git repository root (`services/api/app/…`), so code scanning, PR annotations and GitLab reports point at the right files (M5-07-R1).
-- Go methods with a generic receiver (`func (p *Pair[K, V]) Set()`) are indexed as methods of their type. A method called on a Go variable or parameter of a declared type (`var x legacy.Pair`, `c *legacy.Conn`, `x := &legacy.Conn{}`) links that type's method, and other method calls link by name only within the caller's package and its imports (M5-25-R2).
-- Security: a `--since` git ref, from `mapx arch changed`, `mapx check` or an MCP tool, can no longer run a shell command or become a git option, and `mapx ui --open` no longer passes `--host` through a shell (M5-08-R1).
-- Go: a struct embedding `v1.UnimplementedFooServer` or `database.Store` links again when the package name is not the import path's last element (`api/v1`, a package named differently from its folder); when two imported project packages could both be meant, no edge is made (M0-17-R5, review 2026-11-02).
-- Dashboard: the Architecture profile shows its Yes/No pills again instead of their HTML as text (M4-24, review 2026-11-02).
 - Architecture layer membership is recomputed after every scan and sync; a sync that kept the numbers of files, symbols and edges served the previous membership (M5-03, review 2026-11-02).
-- `score-arch.ts` no longer lets a duplicate finding on another edge type, reported first, hide the one that matches a labelled row (M5-01, review 2026-11-02).
-- The architecture fixture configurations under `tests/fixtures/**/.mapx/` are no longer gitignored, so a fresh clone passes the arch tests; a test fails when any file under `tests/` is ignored (M5-01, M5-02, review 2026-11-02).
-- Completion of M4-09 is disputed: `tests/mcp-coverage.test.ts` still appends to the checkout's `.mapx/tool-calls.jsonl`; remediation is M4-09-R1 (review 2026-11-02).
 - Architecture qualified names match the documented form on real scans (M5-03-R1):
   - nested and `a::b` C++ namespaces (`acme::domain::Order::run`);
   - Ruby module nesting and `class Billing::Receipt`;
@@ -75,31 +87,76 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
   - Python packages and Rust crates in subfolders, which start at their `pyproject.toml` or `Cargo.toml`.
 
   The C++, Ruby and Dart symbol queries now store these declarations, and a function in a Scala `object` is a method of it (M5-03-R1).
-- Go: a composite literal of a type from another project package (`domain.Order{}`, also through an aliased import) is an instantiation edge to that type; standard-library and third-party types make none (M5-25).
 - `not` over a symbol-level selector no longer puts every file in a layer, and `language: typescript` also matches `.tsx` files (M5-03-R1).
-- `mapx scan --repo` and `mapx sync --repo` with a name no repo is registered under fail with a message listing the registered repos (exit 1; the MCP `mapx_scan` and `mapx_sync` tools report it too) instead of reporting 0 files. A git sync reports the files it re-indexed, not every path git listed, as the hash sync does (M0-10-R6).
-- A sync killed before its re-indexed files were written no longer loses a restored file, the edges into it, another repo's queued referrers, a changed tsconfig alias, or the record of a reverted edit: those records are consumed in the same transaction as the files (M0-02-R11).
+
+#### External references
+
+- npm attribution of external references no longer falls through to a parent folder's lockfile when a nested lockfile exists but cannot be read (a folder, no permission); the nested package's manifests answer, flagged manifest (M5-20-R1).
+
+#### Dashboard
+
+- The dashboard's escaping check now follows values instead of trusting variable names and also checks HTML built by concatenation, and the XSS browser test covers every tab, including Workspace, HTTP and Configuration, with payloads in handler, symbol and repo names and config values (M4-24-R1).
+- The Architecture profile shows its Yes/No pills again instead of their HTML as text (M4-24, review 2026-11-02).
+
+#### Security
+
+- A `--since` git ref, from `mapx arch changed`, `mapx check` or an MCP tool, can no longer run a shell command or become a git option, and `mapx ui --open` no longer passes `--host` through a shell (M5-08-R1).
+
+#### Indexing and resolution: JavaScript, TypeScript, Vue and Svelte
+
+- In JS/TS, a name imported from a package or a Node builtin (`import { join } from 'node:path'`) no longer links to a same-named project symbol, and a global an ES module neither imports nor declares (`Node`, `Request`) no longer links to another module's declaration; bare imports under a tsconfig/jsconfig `baseUrl` now resolve (M2-08-R3).
 - JS/TS import-bound calls (M2-08-R1):
   - a call to a name imported from a project module that neither declares nor re-exports it no longer links a same-named function in another file;
   - `mapx sync` follows `export … from` and `export *` barrels, re-parsing a barrel's importers only when a module behind it gains, loses or renames an export, or is deleted; an edit inside a function body re-parses none;
   - a `/*` inside a string or regex literal no longer hides a module's re-exports, and a commented-out `export default` names nothing;
   - `./utils` resolves to `utils.ts` before `utils/index.ts`, as Node and TypeScript do.
-- Laravel `->group([fileA, fileB])` and `Route::group($attributes, [files])` mount each listed route file, including spread and closure elements, and a route prefix bound by `foreach`, reassigned under a condition or reassigned later in a loop is reported as `{dynamic}` instead of one possibly wrong value (M1-07-R3).
-- In packages that use Pinia or Vuex, Pinia stores with any hook name now link from plain JS/TS modules that import only the hook, and Vuex arrow-function members in an imported object (`actions: userActions`) get symbols and edges whatever the file is called (M3-05-R2).
-- `mapx sync` re-links an import that a newly added module satisfies, or that a new file now resolves to instead of a folder index or another extension, as a full scan does, also through barrels. The index's extractor version is now 2, so the next sync re-parses every file once (M2-08-R2).
-- Two axios clients with the same name in one file, each created in its own function, now give their calls their own `baseURL` instead of the first client's. Client extraction on large files is much faster (M2-04-R4).
-- A symbol whose own name contains a dot, such as a string-keyed object member `'api.get'` or Lua's `M.foo`, now opens by that name in `mapx node`, MCP `mapx_node`, the dashboard and context seeds, while `Class.method` keeps finding the class member, and callers, callees and impact include both (M4-26).
-- HTTP pairing treats a host named literally by a Laravel `Route::domain()` as one of the workspace's own hosts, served by the app that declares it, so calls to it pair without a `.env` naming it; domains with `{param}` or unevaluated parts do not count (M2-06-R4).
-- Every Lua file of a scan now parses correctly: the bundled Lua grammar parsed only the first Lua file of a process and lost the calls of the rest. The index's extractor version is now 3, so the next sync re-parses every file once (M4-27).
-- `mapx status`, the staleness warning of every command and the MCP tools' warning now find a new file in a workspace that is not a git repository, in a nested repo or in a registered repo below a skipped folder, as `mapx check` does, with one fast walk of the workspace per command (M5-05-R1).
-- Go package-qualified calls (`domain.NewOrder()`) and methods on a qualified literal (`domain.Order{}.Run()`) link the declaration in the imported package, across go.work and local `replace` modules, and generic, slice, array and map literals (`domain.Box[int]{}`, `[]domain.Item{{}}`, `map[string]domain.Item{}`) link their element type (M5-25-R1).
-- C++ classes in `.h` headers now get C++ symbols and qualified names (C headers stay C), symbols in C# files with several namespace blocks and in nested Scala packages take their own block's namespace, and calls inside a one-line C++ namespace come from their function (M5-03-R2).
-- Lua method calls now give call edges: `self:log()` inside `function Account:withdraw()` links to `Account:log`, and `acct:withdraw()` links to `Account:withdraw` when `acct` comes from `Account.new()`. A `local` table's methods are only found in its own file, receivers such as strings, files and parameters link nothing, global `function f()` declarations are symbols, and locals and `self.x` fields inside functions are no longer module constants (M2-10, M2-11).
 - In JavaScript and TypeScript, a function assigned to a member (`obj.method = function () {}`, `obj.method = () => …`, `Foo.prototype.bar = function () {}`) is now a method symbol of `obj` / `Foo`, and `exports.f = function () {}` a CommonJS export `f` of its module, so calls through the object or the module link to them and `mapx node obj.method` opens them (M2-09).
+- In monorepos, a Pinia or Vuex library declared at the workspace root (package.json `workspaces` or pnpm-workspace.yaml) now counts for the packages it lists, also when MapX is initialised in a package, and sync follows changes to those roots (M3-05-R3).
+- In packages that use Pinia or Vuex, Pinia stores with any hook name now link from plain JS/TS modules that import only the hook, and Vuex arrow-function members in an imported object (`actions: userActions`) get symbols and edges whatever the file is called (M3-05-R2).
 - Svelte template-local names (each aliases, `{:then}`/`{:catch}` values, `let:`, `{@const}`, snippets) now hide references only inside their block, and quoted event handlers such as `on:click="{save}"` link (M0-12-R11).
+
+#### Indexing and resolution: Go
+
+- Go: a struct embedding `v1.UnimplementedFooServer` or `database.Store` links again when the package name is not the import path's last element (`api/v1`, a package named differently from its folder); when two imported project packages could both be meant, no edge is made (M0-17-R5, review 2026-11-02).
+- Go: a composite literal of a type from another project package (`domain.Order{}`, also through an aliased import) is an instantiation edge to that type; standard-library and third-party types make none (M5-25).
+- Go package-qualified calls (`domain.NewOrder()`) and methods on a qualified literal (`domain.Order{}.Run()`) link the declaration in the imported package, across go.work and local `replace` modules, and generic, slice, array and map literals (`domain.Box[int]{}`, `[]domain.Item{{}}`, `map[string]domain.Item{}`) link their element type (M5-25-R1).
+- Go methods with a generic receiver (`func (p *Pair[K, V]) Set()`) are indexed as methods of their type. A method called on a Go variable or parameter of a declared type (`var x legacy.Pair`, `c *legacy.Conn`, `x := &legacy.Conn{}`) links that type's method, and other method calls link by name only within the caller's package and its imports (M5-25-R2).
+
+#### Indexing and resolution: Lua, C++, C# and Scala
+
+- Every Lua file of a scan now parses correctly: the bundled Lua grammar parsed only the first Lua file of a process and lost the calls of the rest. The next sync re-parses every file once (M4-27).
+- Lua method calls now give call edges: `self:log()` inside `function Account:withdraw()` links to `Account:log`, and `acct:withdraw()` links to `Account:withdraw` when `acct` comes from `Account.new()`. A `local` table's methods are only found in its own file, receivers such as strings, files and parameters link nothing, global `function f()` declarations are symbols, and locals and `self.x` fields inside functions are no longer module constants (M2-10, M2-11).
+- C++ classes in `.h` headers now get C++ symbols and qualified names (C headers stay C), symbols in C# files with several namespace blocks and in nested Scala packages take their own block's namespace, and calls inside a one-line C++ namespace come from their function (M5-03-R2).
+
+#### Frameworks and HTTP pairing
+
+- Laravel `->group([fileA, fileB])` and `Route::group($attributes, [files])` mount each listed route file, including spread and closure elements, and a route prefix bound by `foreach`, reassigned under a condition or reassigned later in a loop is reported as `{dynamic}` instead of one possibly wrong value (M1-07-R3).
+- Two axios clients with the same name in one file, each created in its own function, now give their calls their own `baseURL` instead of the first client's. Client extraction on large files is much faster (M2-04-R4).
+- HTTP pairing treats a host named literally by a Laravel `Route::domain()` as one of the workspace's own hosts, served by the app that declares it, so calls to it pair without a `.env` naming it; domains with `{param}` or unevaluated parts do not count (M2-06-R4).
+
+#### Scans, sync and staleness
+
+- `mapx sync` re-links an import that a newly added module satisfies, or that a new file now resolves to instead of a folder index or another extension, as a full scan does, also through barrels. The next sync re-parses every file once (M2-08-R2).
+- A sync killed before its re-indexed files were written no longer loses a restored file, the edges into it, another repo's queued referrers, a changed tsconfig alias, or the record of a reverted edit: those records are consumed in the same transaction as the files (M0-02-R11).
 - A full scan killed after it indexed files, but before it wrote their parse results, no longer leaves changed files with stale symbols or loses the edges of a restored file's referrers. A file edited while a scan or sync parses it is reported stale afterwards (M0-02-R12).
-- The test suite no longer appends to the checkout's `.mapx/tool-calls.jsonl`: `tests/mcp-coverage.test.ts` runs from a temporary folder, and `scripts/baton/check-test-cwd.mjs` now compares every tracked, untracked and ignored file (with its content) and runs the whole suite by default (M4-09-R1).
+- `mapx status`, the staleness warning of every command and the MCP tools' warning now find a new file in a workspace that is not a git repository, in a nested repo or in a registered repo below a skipped folder, as `mapx check` does, with one fast walk of the workspace per command (M5-05-R1).
+
+#### Performance
+
+- Parallel scans never load more grammars than languages plus workers, however busy the machine (M4-12-R1).
+
+#### CLI and MCP
+
+- `mapx scan --repo` and `mapx sync --repo` with a name no repo is registered under fail with a message listing the registered repos (exit 1; the MCP `mapx_scan` and `mapx_sync` tools report it too) instead of reporting 0 files. A git sync reports the files it re-indexed, not every path git listed, as the hash sync does (M0-10-R6).
+- A symbol whose own name contains a dot, such as a string-keyed object member `'api.get'` or Lua's `M.foo`, now opens by that name in `mapx node`, MCP `mapx_node`, the dashboard and context seeds, while `Class.method` keeps finding the class member, and callers, callees and impact include both (M4-26).
+- Documentation matches the CLI and MCP surface: docs/mcp-integration.md lists every parameter each tool takes (scan and sync `force`, `parallel`, `exclude`, `include`; trace `start`, `direction`, `format`; node `include_members`; export `cluster`, `depth`, `fallback_grid`; the real defaults of search, files and callers) and no longer documents a `reclassify` that `mapx explain` and `mapx_explain` never took; docs/cli-reference.md documents `node --include-members`, `export --fallback-grid` and `status --exclude/--include` (M4-28).
+
+#### Packaging and development
+
 - The npm package no longer picks up release builds: `make package-*` writes binaries, tarballs and installers to `dist/release/`, which `npm pack` included (185 MB instead of 4.7 MB); `scripts/check-package.ts` now fails if any are packed (M5-02).
+- The architecture fixture configurations under `tests/fixtures/**/.mapx/` are no longer gitignored, so a fresh clone passes the arch tests; a test fails when any file under `tests/` is ignored (M5-01, M5-02, review 2026-11-02).
+- `score-arch.ts` no longer lets a duplicate finding on another edge type, reported first, hide the one that matches a labelled row (M5-01, review 2026-11-02).
+- The test suite no longer appends to the checkout's `.mapx/tool-calls.jsonl`: `tests/mcp-coverage.test.ts` runs from a temporary folder, and `scripts/baton/check-test-cwd.mjs` now compares every tracked, untracked and ignored file (with its content) and runs the whole suite by default; tests also remove every temporary workspace and database they create, unreadable ones included (M4-09, M4-09-R1, M4-09-R2, M4-09-R3, M4-09-R4).
 
 ## [0.3.8] — 2026-11-02
 
@@ -175,7 +232,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - **Laravel route fixture and scorer**: `tests/fixtures/laravel-routes` (41 labelled routes) and `scripts/eval/score-routes.ts`, which report per-pattern recall and precision. (M1-01)
 - `frameworks.json` is now honoured as an override: frameworks listed there stay active even when detection misses them. (M1-08)
 
-- **Frontend → backend HTTP pairing**: MapX now finds HTTP call sites in JS, TS and Vue files (axios, `fetch`, `axios.create` instances, factories such as `Api()`, aliases, and receivers configured in `settings.http.clients`), resolves their URLs (string constants, template literals, conditional branches, base URLs from `axios.create` options and `.env` files with axios joining rules), and pairs each call with the live backend route it reaches across repositories. Paired calls become `http` edges to the route handler. `mapx routes --clients [--unmatched]` and `mapx_routes { clients }` list calls and the calls that reach no route. (M2-03, M2-04, M2-05, M2-06)
+- **Frontend → backend HTTP pairing**: MapX now finds HTTP call sites in JS, TS and Vue files (axios, `fetch`, `axios.create` instances, factories such as `Api()`, aliases, and receivers configured in `settings.http.clients`), resolves their URLs (string constants, template literals, conditional branches, base URLs from `axios.create` options and `.env` files with axios joining rules), and pairs each call with the live backend route it reaches across repositories. Paired calls become `http` edges to the route handler. `mapx routes --clients [--unmatched]` and `mapx_routes { clients }` list calls and the calls that reach no route. (M2-03, M2-04, M2-05, M2-06; review fixes M2-03-R1, M2-04-R1)
 - **HTTP pairing fixture and scorer**: `tests/fixtures/vue-http` (32 labelled calls in Vue 2.7 and Vue 3 apps) and `scripts/eval/score-http.ts`. (M2-02)
 - **Vue SFC edge fixture and scorer**: `tests/fixtures/vue-sfc` (Vue 2.7 and Vue 3 apps, 100 labelled edges, 11 component symbols and 16 negatives over 15 patterns) and `scripts/eval/score-edges.ts`, a generic per-pattern edge recall/precision scorer. The edge contract for M3-02 … M3-06 is in `docs/baton/iterations/M3-01.md`. (M3-01)
 

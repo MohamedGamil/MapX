@@ -2,7 +2,7 @@
 
 ## Overview
 
-MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **23 languages** across two tiers (built-in, bundled) and provides **39 MCP tools** for LLM integration.
+MapxGraph is a local code graph memory system that provides persistent, structured understanding of codebases for LLMs. It supports **23 languages** across two tiers (built-in, bundled), plus five static file types indexed for their links, and provides **39 MCP tools** for LLM integration. On top of the graph it records references to packages outside the workspace and checks declared architecture rules ([architecture-rules.md](architecture-rules.md)).
 
 
 <!-- ![Architecture Diagram](./images/01-arch.png) -->
@@ -102,7 +102,7 @@ SQLite abstraction with two backends:
 
 Both backends are opened with `PRAGMA journal_mode = WAL` and `PRAGMA busy_timeout = 5000` so concurrent readers/writers wait up to 5 seconds instead of failing immediately with `SQLITE_BUSY`.
 
-Tables: `files`, `symbols`, `edges`, `snapshots`, `meta`
+Tables: `files`, `symbols`, `edges`, `snapshots`, `meta`, `clusters`, `cluster_membership`, `cluster_metrics`, `classification_signals`, `arch_smells` and `external_ref_candidates`, with the `external_refs` view (each reference to a package, built-in or ambient name outside the workspace, with its package attribution). The schema is versioned and migrated on open; the index also records the extractor version that built it, so an index from an older MapX is re-parsed once.
 
 The `meta` table stores scan state including:
 - `last_scan_time` / `last_scan_commit` — For incremental change detection
@@ -122,7 +122,7 @@ Each language entry defines:
 - `grammarWasm` — Path to tree-sitter WASM grammar
 - `queries` — Paths to `symbols.scm` and `references.scm` query files
 - `nodeMappings` — Maps `SymbolKind` values to AST node types for scope resolution and container detection
-- `tier` — `built-in` or `bundled`
+- `tier` — `built-in`, `bundled` or `static` (Markdown, HTML, CSS, JSON and YAML: links only, no grammar)
 
 ### Parsers (`src/parsers/`)
 
@@ -180,11 +180,25 @@ Manages multi-repository workspaces:
   - `delimiter: 'comma' | 'tab' | 'pipe'`
   - `keyFolding: boolean` — collapse single-key chains into dotted paths
 
+### MCP Server (`src/mcp.ts`)
+
 Model Context Protocol server with 39 tools:
 
 - **Transports**: stdio (default) and SSE (HTTP)
 - **Tools**: scan, sync, query, search, node, files, dependencies, callers, callees, trace, sources, sinks, impact, clusters, status, export, context, workspaces, lang_list, lang_info, lang_install, lang_uninstall, profile, explain, smells, dsm, layers, routes, hooks, edges, metrics, agents_generate, batch, arch_validate_config, arch_check, arch_layers, arch_allowed, arch_explain, arch_init (the last five in `src/arch/mcp-tools.ts`, M5-14)
 - Configuration snippet generation for Claude Desktop, Cursor, VS Code, and opencode
+
+### Parse Worker Pool (`src/core/worker-pool.ts`)
+
+Parses files on worker threads when the work repays them: the pool is sized per batch from the bytes to parse, the CPUs and the available memory, files are shared out by language so each worker loads only the grammars it needs, and `mapx serve` keeps one pool across calls. See [Parallel parsing](configuration.md#parallel-parsing).
+
+### External References (`src/core/external-refs.ts`, `src/core/manifests/`)
+
+Records every import, call or type reference to something outside the workspace and attributes it to a package from the npm, Composer, pypi (pip, Poetry, uv) or Go manifests and lockfiles, or classifies it as a built-in or ambient access. See [External dependencies](architecture-rules.md#external-dependencies-packages-built-ins-ambient-access).
+
+### Architecture Rules (`src/arch/`)
+
+Loads and validates `.mapx/architecture.jsonc` (`config.ts`, `schema.ts`), maps files, symbols and external elements to layers through selectors (`elements.ts`, `selectors/`, `membership.ts`), evaluates every dependency against the rules (`evaluate.ts`, `report.ts`), applies baselines (`baseline.ts`), renders the reports and layer graphs (`reporters/`), derives smells (`smells.ts`), proposes configurations (`infer.ts`, `presets/`) and serves `mapx check`, `mapx arch …` and the architecture MCP tools (`check.ts`, `introspect.ts`, `mcp-tools.ts`). See [architecture-rules.md](architecture-rules.md).
 
 ### CLI Progress Display (`src/cli.ts`)
 
@@ -274,7 +288,7 @@ Inspects structural health and warns of anti-patterns:
 7. `trace` → FlowTracer walks call/dependency chains → Returns flow paths
 8. `impact` → FlowTracer computes blast radius → Returns affected symbols with risk scores
 9. `callers`/`callees` → FlowTracer traces call chains in specified direction
-10. `serve` → Starts MCP server → Exposes all functionality as 25 tools
+10. `serve` → Starts MCP server → Exposes all functionality as 39 tools
 
 ## Process Flow Diagrams
 

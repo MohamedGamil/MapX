@@ -26,7 +26,7 @@ npm install --legacy-peer-deps
 
 ### Pre-built binary (no dependencies)
 
-Download from releases/ and add to your `PATH`.
+Download from the GitHub Releases page and add to your `PATH`, or use the installer script shown in the [README](../README.md#pre-built-binary).
 
 ## Quick Start
 
@@ -117,38 +117,52 @@ The content is wrapped in markers:
 
 ## Supported Languages
 
-### Built-in (Tier 1) — Dedicated Parsers
+All 23 languages ship with their tree-sitter grammars; `mapx lang list` lists them with their extensions and tier.
+
+### Dedicated parsers
 
 | Language | Extensions | Symbols Extracted |
 |----------|-----------|-------------------|
-| PHP | `.php`, `.phtml` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
-| JavaScript | `.js`, `.mjs`, `.cjs` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
-| TypeScript | `.ts`, `.cts`, `.mts` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| PHP | `.php`, `.phtml`, `.php3`–`.php7` | classes, methods, functions, interfaces, traits, enums, constants, properties, namespaces |
+| JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
+| TypeScript | `.ts`, `.cts`, `.mts`, `.tsx` | classes, methods, functions, interfaces, constants, enums, properties, namespaces |
 | Vue | `.vue` | functions, classes, methods, properties (SFC script blocks); a component symbol per file; template handler and binding calls, and render edges for locally or globally registered component tags; `props` / `emits` from `defineProps` / `defineEmits` on the component symbol; composable `useX()` calls and the functions destructured from them resolved through the import; navigate edges from Vue Router `push` / `replace` and `<router-link :to>` to the route's component |
+| Svelte | `.svelte` | the component, `export let` props, and the functions, classes, methods and constants of its `<script>` blocks (`context="module"` too), with their imports, calls and instantiations as in a `.js` / `.ts` file; template calls, event handlers and `use:` actions link to the component's own or imported functions, and component tags (`<Child />`, `<ui.Button />`) give render edges |
 
-### Bundled (Tier 2) — Generic WASM Parsers (Always Available)
+### Query-driven parsers (tree-sitter queries)
 
 | Language | Extensions | Symbols Extracted |
 |----------|-----------|-------------------|
-| Python | `.py` | classes, functions, methods (auto-promoted), constants |
+| Python | `.py`, `.pyw` | classes, functions, methods (auto-promoted), constants |
 | Go | `.go` | structs, interfaces, functions, methods, constants, packages, variables, type aliases |
 | Rust | `.rs` | structs, traits, enums, functions, impl blocks, constants, statics, modules, macros |
 | Java | `.java` | classes, interfaces, enums, methods, constructors, fields, constants, annotations, packages |
 | C# | `.cs` | classes, interfaces, enums, structs, methods, properties, constants, namespaces, records, delegates |
-| Ruby | `.rb` | classes, modules, methods, constants, properties (attr_*) |
+| Ruby | `.rb`, `.rake`, `.gemspec`, `Rakefile`, `Gemfile` | classes, modules, methods, constants, properties (attr_*) |
 | C | `.c`, `.h` | structs, functions, enums, typedefs, macros, unions |
-| C++ | `.cpp`, `.hpp`, `.cc`; `.h` headers that use C++-only syntax outside preprocessor conditionals (`namespace`, `class`, `template`, …) | classes, structs, functions, namespaces, enums, templates |
+| C++ | `.cpp`, `.hpp`, `.cc`, `.cxx`, `.hh`, `.h++`, `.c++`; `.h` headers that use C++-only syntax outside preprocessor conditionals (`namespace`, `class`, `template`, …) | classes, structs, functions, namespaces, enums, templates |
 | Swift | `.swift` | classes, structs, protocols, enums, functions, properties, extensions |
 | Kotlin | `.kt`, `.kts` | classes, objects, functions, interfaces, properties, enum entries |
 | Scala | `.scala`, `.sc` | classes, objects, traits, functions, vals, vars, packages |
-| Svelte | `.svelte` | the component, `export let` props, and the functions, classes, methods and constants of its `<script>` blocks (`context="module"` too), with their imports, calls and instantiations as in a `.js` / `.ts` file; template calls, event handlers and `use:` actions link to the component's own or imported functions, and component tags (`<Child />`, `<ui.Button />`) give render edges |
-| Lua | `.lua` | functions, methods, local functions, variables |
+| Lua | `.lua`, `.luau` | functions, methods, local functions, variables |
 | Elixir | `.ex`, `.exs` | modules, functions (def/defp), macros, structs, protocols |
 | Zig | `.zig` | functions, structs, constants, tests, error sets |
-| Bash | `.sh`, `.bash` | functions, variables, aliases |
-| Fish | `.fish` | functions |
-| Pascal | `.pas`, `.pp` | procedures, functions, classes, records, interfaces, methods, constants, units |
+| Bash | `.sh`, `.bash`, `.zsh` | functions, variables, aliases |
+| Fish | `.fish` | functions (calls and `source` imports tracked) |
+| Pascal | `.pas`, `.pp`, `.dpr`, `.lpr` | procedures, functions, classes, records, interfaces, methods, constants, units |
 | Dart | `.dart` | classes, functions, methods, getters/setters, factory/named constructors, enums, mixins, extensions, typedefs, extension types (Dart 3.3+), constants, library namespaces |
+
+### Static (index-only)
+
+| File type | Extensions | Tracked references |
+|-----------|-----------|-------------------|
+| Markdown | `.md`, `.mdx`, `.markdown` | links to other files |
+| HTML | `.html`, `.htm`, `.xhtml` | `href`, `src` attributes |
+| CSS/SCSS/Sass/Less | `.css`, `.scss`, `.sass`, `.less` | `@import`, `url()` references |
+| JSON/JSONC/JSON5 | `.json`, `.jsonc`, `.json5` | `$ref`, `extends` values |
+| YAML | `.yaml`, `.yml` | relative paths to other YAML files (`./config.yaml`) |
+
+Extensionless scripts are indexed by their `#!` line (bash/sh/zsh, python, node/deno/bun, ts-node/tsx, ruby, php, lua, elixir, fish).
 
 ## Dependencies Tracked
 

@@ -1,6 +1,6 @@
 # Configuration
 
-MapxGraph stores its configuration in `.mapx/config.json`.
+MapxGraph stores its configuration in `.mapx/config.json`. The architecture rules have their own file, `.mapx/architecture.jsonc`, described in [architecture-rules.md](architecture-rules.md). The dashboard's Configuration tab (`mapx ui`) shows the effective settings, where each comes from, and any invalid or unknown setting.
 
 ## Default Config
 
@@ -17,20 +17,20 @@ MapxGraph stores its configuration in `.mapx/config.json`.
   "settings": {
     "maxTokenBudget": 16384,
     "excludePatterns": [
-      "node_modules/**",
-      "vendor/**",
-      ".git/**",
-      "dist/**",
-      ".mapx/**",
-      "*.min.js",
-      "*.min.css",
-      "package-lock.json",
-      "composer.lock"
+      ".git/**", ".mapx/**", "node_modules/**", "**/node_modules/**", "dist/**", "**/dist/**",
+      "vendor/**", "**/vendor/**", "build/**", "**/build/**", "*.min.js", "*.min.css",
+      "package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "composer.json", "composer.lock",
+      "…"
     ],
-    "includePatterns": []
+    "includePatterns": [],
+    "graphExcludePatterns": ["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]
   }
 }
 ```
+
+The full default `excludePatterns` list is `DEFAULT_CONFIG` in `src/core/config.ts`: build and dependency folders, minified and vendored bundles, manifests and lockfiles, logs and editor files. Manifests and lockfiles are excluded from the index but still read: package attribution of external references uses `package.json`, `composer.json`, `pyproject.toml`, `go.mod` and their lockfiles (see [External dependencies](architecture-rules.md#external-dependencies-packages-built-ins-ambient-access)).
+
+Each repo entry takes `name`, `path` (relative to the workspace root) and optionally `framework` (for example `laravel`, which turns on the [Laravel default excludes](#laravel-default-excludes)).
 
 ## Multi-Repo Setup
 
@@ -89,6 +89,9 @@ All 23 supported languages are pre-configured. No `languages` entry is needed un
 |------|-----------|-------|
 | **Built-in** | PHP, JavaScript, TypeScript, Python, Go, Rust, Java, C# | 8 |
 | **Bundled** | Ruby, C, C++, Swift, Kotlin, Dart, Scala, Svelte, Vue, Lua, Elixir, Zig, Bash, Fish, Pascal | 15 |
+| **Static** (index-only, no grammar) | Markdown, HTML, CSS, JSON, YAML | 5 |
+
+The tier is what `mapx lang list` reports; every grammar ships with MapX. TypeScript's `.tsx` files have their own grammar entry (`tsx`) but count as TypeScript.
 
 List all available languages and status with:
 ```bash
@@ -101,10 +104,27 @@ mapx lang list
 |---------|------|---------|-------------|
 | `maxTokenBudget` | number | 16384 | Maximum token budget for LLM export |
 | `excludePatterns` | string[] | (see above) | Glob patterns for files to exclude from scanning |
-| `includePatterns` | string[] | [] | If set, only include matching files |
+| `includePatterns` | string[] | [] | If set, only include matching files; an exclude still wins |
 | `graphExcludePatterns` | string[] | `["scratch/**", "benchmarks/**", "tests/**", "**/*.test.*", "**/*.spec.*"]` | Glob patterns for files to exclude from PageRank rankings and graph analysis (files are still indexed but deprioritized) |
 | `laravelDefaultExcludes` | boolean \| string[] | `true` | Laravel's default excludes for repos with `"framework": "laravel"` (see below). `false` turns them off; a list applies only the patterns it names. |
 | `parseWorkers` | `"auto"` \| number | `"auto"` | Parse workers per batch; see [Parallel parsing](#parallel-parsing). `"auto"` sizes the pool from the source to parse, the CPUs and the available memory. A number uses that many workers, at most one per file; `0` parses on the main thread. `MAPX_PARSE_WORKERS` overrides it, and `--no-parallel` forces one thread. |
+| `php.facadeMap` | object | `{}` | Maps Laravel facade aliases to their classes (`{ "Cache": "Illuminate\\Cache\\CacheManager" }`), for facades MapX does not know |
+| `http.clients` | `{ receiver, baseURL? }[]` | `[]` | HTTP client objects MapX cannot recognise on its own, for [HTTP pairing](framework-integration.md#http-pairing): calls on `receiver` (`apiService.get('/users')`) are HTTP calls, joined to `baseURL` |
+| `http.hosts` | string[] | `[]` | Hosts of the workspace's own backends. An absolute URL pairs only when its host is one of these, a host named in a `.env*` file or a client's base URL, or a literal Laravel `Route::domain()` |
+| `architecture` | object | — | Role classification overrides: see [Architecture & Role Classification](#architecture--role-classification). The architecture *rules* live in `.mapx/architecture.jsonc` instead |
+
+### Environment variables
+
+| Variable | Effect |
+|----------|--------|
+| `MAPX_PARSE_WORKERS` | Parse workers per batch, overriding `settings.parseWorkers` (see [Parallel parsing](#parallel-parsing)) |
+| `MAPX_WORKER_IDLE_MS` | How long idle parse workers of `mapx serve` live (default 60000) |
+| `MAPX_WORKER_BATCH_TIMEOUT_MS` | Watchdog for a parse batch that never answers (default 30 s plus 1 s per 100 KB) |
+| `MAPX_WORKER_STATS` | `1` prints worker statistics after each parallel scan or sync |
+| `MAPX_GRAPHVIZ_TIMEOUT_MS` | How long Graphviz may run for SVG output before the built-in renderer takes over (default 10000) |
+| `MAPX_NO_BANNER` | Turns off the logo `init`, `scan` and `sync` print in a terminal |
+| `MAPX_NO_UI` | `1`: `mapx ui` run from source does not build a missing or stale dashboard |
+| `NO_COLOR` | Plain output, without colours |
 
 Patterns match workspace-relative paths with `/` separators. A leading `./` is ignored, and `\` is read as `/`, so `./app/Models/**` and `app\Models\**` both mean `app/Models/**`. Because of this, a backslash cannot escape a glob character. Changing the patterns makes the next `scan` or `sync` re-parse every file once, so that edges into files that come back in are restored.
 

@@ -377,6 +377,15 @@ The base list is read for PHP, TypeScript and JavaScript, Python, Java, Kotlin, 
 
 A scan records every reference to something outside the workspace (the `external_refs` view). It also records what each reference belongs to: a package of npm, Composer, pypi or Go modules, the language's standard library or runtime (a built-in), or ambient access. For each package it records whether the manifest lists it directly and whether it is dev-only. The rules see these as **external elements**. There is one per ecosystem and name: the package (`pg`, `guzzlehttp/guzzle`, `golang.org/x/sys`), a built-in's package (`node:fs`, `ext-pdo`, `python:os`, `net/http`), or for a package no manifest or lockfile provides, the name as written (`Acme\Missing\Widget`). A package that is a direct dependency for one file and a transitive one for another is two elements of the same name.
 
+Where the attribution comes from, per ecosystem. MapX reads these files even though the default `excludePatterns` keep them out of the index, and a change to any of them makes the index stale:
+
+| Ecosystem | References | Read from | Built-ins |
+| --- | --- | --- | --- |
+| npm | JS/TS/Vue/Svelte imports and `require` of bare specifiers | `package.json` (dependencies, devDependencies, …), `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` | Node built-ins: `fs`, `node:fs`, `fs/promises` |
+| Composer | PHP classes, functions and `use` imports outside the workspace | `composer.json` and `composer.lock` (`require`, `require-dev`, autoload sections) | PHP extension classes, functions and constants (`DateTime`, `PDO`, `str_contains`, `PHP_EOL`), as `ext-<name>` |
+| pypi | Python imports | `pyproject.toml` (PEP 621, dependency groups, Poetry), `requirements*.txt`, `uv.lock`, `poetry.lock` | the standard library (`os`, `json`, `tomllib`), as `python:<module>` |
+| Go modules | Go imports | `go.mod` (direct and `// indirect` requirements, `replace`), `go.sum`, `go.work`; the longest module path wins, `/v2` majors included; dev-only means only `_test.go` files use it | the standard library (`fmt`, `net/http`); cgo's `C` is ambient |
+
 | Selector | Matches |
 | --- | --- |
 | `package` (+ `dev`, `direct`) | A package by name: `"pg"`, `"guzzlehttp/*"`, `"@acme/*"`, `"*"`. A package no manifest or lockfile provides is matched by its name as written (`github.com/pkg/errors`), so `"*"` covers every package. With `dev: true`, only dev-only packages; with `dev: false`, only production ones. With `direct: true`, only packages a manifest lists directly; with `direct: false`, only transitive ones and those no manifest lists. A package whose status is unknown (no lockfile says) matches neither value. |
@@ -832,7 +841,7 @@ The `mapx arch` subcommands follow the same codes: `arch allowed` exits 1 when `
 
 ## Layer graphs
 
-`mapx arch graph` draws the layer graph (Deptrac's `graphviz-*` and `mermaidjs` formatters); its options are in [cli-reference.md](cli-reference.md#mapx-arch-graph). It is built from the report `mapx check` builds, baseline included, so every count and status is `check`'s own decision. `layerGraph(report, config)` in `src/arch/reporters/graph.ts` returns the graph, which `--format json` prints and the dashboard (M5-15) reads.
+`mapx arch graph` draws the layer graph (Deptrac's `graphviz-*` and `mermaidjs` formatters) as `dot` (the default), `svg`, `mermaid`, `dsm` or `json`; its options are in [cli-reference.md](cli-reference.md#mapx-arch-graph). It is built from the report `mapx check` builds, baseline included, so every count and status is `check`'s own decision. `layerGraph(report, config)` in `src/arch/reporters/graph.ts` returns the graph, which `--format json` prints and the dashboard (M5-15) reads.
 
 - **Nodes:** one per layer, in configuration order. A layer's `color` fills its node when it is `#rrggbb`, `#rrggbbaa` or a colour name; other values are ignored. Overlay layers have a dashed border.
 - **Edges:** for each layer pair, the dependencies counted in `layerEdges` (one per element pair and edge type), one edge per status: allowed (grey), violations (red), warn-level violations (amber) and skipped, that is baselined, violations (dashed). The label is the count.

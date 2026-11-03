@@ -1,18 +1,18 @@
 # Adding Languages
 
-MapxGraph supports two tiers of pre-configured language support and a third tier for custom user-defined languages. All tiers use tree-sitter WASM grammars and `.scm` query files for symbol and reference extraction.
+MapxGraph ships 23 languages with their tree-sitter WASM grammars and `.scm` query files (in `wasm/` and `queries/`), and lets you add custom user-defined languages. `mapx lang list` reports each language's tier: `built-in` (PHP, JavaScript, TypeScript, Python, Go, Rust, Java, C#), `bundled` (the other fifteen) or `static` (Markdown, HTML, CSS, JSON and YAML, indexed for their links without a grammar). The tier no longer changes availability: every grammar is bundled. What differs is the parser.
 
-## Tier 1: Built-in Languages (Dedicated Parsers)
+## Dedicated Parsers
 
-PHP, JavaScript, TypeScript, and Vue are built-in and always available. They use dedicated, language-specific parser implementations for enhanced analysis. Their tree-sitter WASM grammars and queries are bundled with the tool at relative paths (`wasm/` and `queries/`).
+PHP, JavaScript, TypeScript (and TSX), Vue and Svelte use dedicated, language-specific parser implementations (`src/parsers/languages/`) on top of their grammars, for framework-aware analysis. The Vue and Svelte parsers hand each `<script>` block to the JavaScript or TypeScript parser.
 
-## Tier 2: Bundled Languages (Generic WASM Parsers)
+## Query-driven Parsers (Generic WASM Parser)
 
-Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Lua, Elixir, Zig, Bash, Fish, and Pascal are bundled — their WASM grammars and queries ship with the tool and are available out-of-the-box. They use relative paths and are parsed dynamically via the `GenericWasmParser` base class. Svelte is bundled too, but like Vue it has a dedicated parser (`src/parsers/languages/svelte.ts`) that hands each `<script>` block to the JavaScript or TypeScript parser.
+Python, Go, Rust, Java, C#, Ruby, C, C++, Swift, Kotlin, Dart, Scala, Lua, Elixir, Zig, Bash, Fish, and Pascal are parsed by the `GenericWasmParser` base class from their queries alone; language-specific resolution (imports, method receivers, module paths) happens in the scanner.
 
 Most grammars come from their npm packages. The fish grammar is not on npm: `npm run build:wasm` builds it from the pinned upstream archive, [ram02z/tree-sitter-fish](https://github.com/ram02z/tree-sitter-fish) 3.7.0 (Unlicense), with `tree-sitter build --wasm` (emscripten, or docker when emscripten is not installed).
 
-## Tier 3: User-Defined Languages
+## User-Defined Languages
 
 Users can add entirely custom languages via `.mapx/config.json` without modifying the tool:
 

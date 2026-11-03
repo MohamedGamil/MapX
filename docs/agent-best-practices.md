@@ -64,6 +64,9 @@ After making the code changes:
 | **View symbol source code** | `mapx_node` (with `source: true`) | Reads only the selected symbol implementation from the filesystem. | Reading the whole file using file-viewing tools. |
 | **Trace who calls a method** | `mapx_callers` | Follows edges upstream to find all parent call chains. | Grepping for the method name across the project. |
 | **Find API route controller** | `mapx_routes` | Maps HTTP verbs/paths directly to controller symbols/files. | Searching for route declaration files and tracing imports. |
+| **Find the backend route a frontend call reaches** | `mapx_routes` (with `clients: "all"`) | Lists each HTTP call site with its resolved URL and the route it pairs with, across repos. | Reading both codebases to match URLs by hand. |
+| **Add an import across modules** | `mapx_arch_allowed` | Answers whether `.mapx/architecture.jsonc` allows the dependency, and names allowed alternatives. | Adding the import and waiting for CI's `mapx check`. |
+| **Check the rules after editing** | `mapx_arch_check` (with `sync: true`) | Reports the violations as `mapx check` does, narrowed with `file` or `since`. | Running the whole CI pipeline. |
 | **Update graph after edit** | `mapx_sync` | Fast, incremental re-index of only the changed files. | Running `mapx_scan` (which does a full re-scan). |
 
 ---
