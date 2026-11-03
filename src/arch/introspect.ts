@@ -24,6 +24,7 @@ import {
   type Dependency, type EdgeScope, type Evaluation, type FindingSeverity, type TargetLayers,
 } from './evaluate.js';
 import { externalKey, type Element } from './elements.js';
+import { declaredBuiltin, declaredPackage } from './declared-externals.js';
 import { globOrRegex } from './selectors/index.js';
 import { internalMarkers } from './visibility.js';
 
@@ -132,10 +133,16 @@ export function resolveElements(ctx: ArchContext, query: string): Element[] {
     }
     nameIndexes.set(view, idx);
   }
+  // An external element (M5-24): by name (`pg`, `node:fs`) or ecosystem and name (`npm:pg`).
+  const externals = (view.externals ?? []).filter((e) => e.qualifiedName === query || externalKey(e.external!) === query);
+  // A bare name that is a direct dependency (the manifest lists it) names the package, before a
+  // workspace symbol of the same name (review of M5-24-R3: `express` with a local `express()`);
+  // the symbol is then named by its file or qualified name (`src/util/express.ts#express`).
+  const direct = externals.filter((e) => e.external!.origin === 'package' && e.external!.direct === true);
+  if (direct.length && !query.includes(':')) return direct;
   const found = idx.byQn.get(query) ?? idx.byScoped.get(query) ?? idx.byName.get(query) ?? idx.byMember.get(query) ?? [];
   if (found.length) return found;
-  // An external element (M5-24): by name (`pg`, `node:fs`) or ecosystem and name (`npm:pg`).
-  return (view.externals ?? []).filter((e) => e.qualifiedName === query || externalKey(e.external!) === query);
+  return externals;
 }
 
 /** The one element a query names; an IntrospectError when it names none or several. */
@@ -524,13 +531,13 @@ export interface Alternative {
 
 export const ALTERNATIVES_PER_LAYER = 10;
 
-function end(ctx: ArchContext, query: string, role: 'source' | 'target'): { end: AllowedEnd; element: Element | null } {
+function end(ctx: ArchContext, query: string, role: 'source' | 'target', sourceFile: string | null = null): { end: AllowedEnd; element: Element | null } {
   const layer = ctx.config.layers.find((l) => l.name === query);
   if (layer) {
     if (role === 'source' && layer.overlay) throw new IntrospectError(`"${query}" is an overlay layer: overlays are never dependency sources`);
     return { end: { query, kind: 'layer', layers: layer.overlay ? [] : [query], overlays: layer.overlay ? [query] : [], private: [], inScope: true }, element: null };
   }
-  const el = resolveElement(ctx, query);
+  const el = role === 'target' ? targetElement(ctx, query, sourceFile) : resolveElement(ctx, query);
   const all = ctx.membership.of(el);
   const primary = ctx.membership.primaryOf(el);
   return {
@@ -542,6 +549,22 @@ function end(ctx: ArchContext, query: string, role: 'source' | 'target'): { end:
     },
     element: el,
   };
+}
+
+/**
+ * The element a target query names. Before any file uses it (review of M5-24-R3), a package the
+ * manifests near the source list, or a built-in, has no element in the index: one is made, as the
+ * first reference would be attributed (src/arch/declared-externals.ts), and decided by the selectors
+ * and policy. A bare name the manifests list is that package, before a workspace symbol of the name.
+ */
+function targetElement(ctx: ArchContext, query: string, sourceFile: string | null): Element {
+  const indexed = resolveElements(ctx, query);
+  // An external the index has (a direct dependency already wins over a same-named symbol there).
+  if (indexed.some((e) => e.kind === 'external')) return resolveElement(ctx, query);
+  const listed = declaredPackage(ctx.membership.view.root, query, sourceFile);
+  if (listed) return listed;
+  if (indexed.length) return resolveElement(ctx, query);
+  return declaredBuiltin(query) ?? resolveElement(ctx, query);
 }
 
 /**
@@ -603,7 +626,7 @@ export function isAllowed(ctx: ArchContext, from: string, to: string, options: {
 /** isAllowed; `withAlternatives` false for the check of an alternative itself (no recursion). */
 function answer(ctx: ArchContext, from: string, to: string, options: { edgeType?: string }, withAlternatives: boolean): AllowedAnswer {
   const { end: source, element: sourceEl } = end(ctx, from, 'source');
-  const { end: target, element: targetEl } = end(ctx, to, 'target');
+  const { end: target, element: targetEl } = end(ctx, to, 'target', sourceEl && sourceEl.kind !== 'external' ? sourceEl.file.path : null);
   const edgeType = options.edgeType ?? null;
   const scopeTypes = ctx.config.scope.types as string[];
   const label = (e: AllowedEnd) => (e.kind === 'layer' ? `layer ${e.query}` : e.element!);

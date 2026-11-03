@@ -50,7 +50,7 @@ const ARCH_WORKFLOW = `## Architecture Rules
 
 When the project has \`.mapx/architecture.jsonc\` (\`mapx_arch_init\` proposes one, and writes it only with \`write: true\`):
 
-1. **Before adding an import across modules, call \`mapx_arch_allowed\`** with \`from\` (the file or symbol you are editing) and \`to\` (what you want to use). If \`allowed\` is false, read \`reason\`. \`alternatives\` lists matching symbols (a supertype, or a similar name) that the rules let \`from\` use; check that one fits before switching to it.
+1. **Before adding an import across modules, call \`mapx_arch_allowed\`** with \`from\` (the file or symbol you are editing) and \`to\` (what you want to use: a layer \`Domain\`, a file \`src/domain/Order.ts\`, a symbol \`Order::total\`, a package \`npm:express\` or \`express\`, or a built-in \`node:fs\`). If \`allowed\` is false, read \`reason\`. \`alternatives\` lists matching symbols (a supertype, or a similar name) that the rules let \`from\` use; check that one fits before switching to it.
 2. Call \`mapx_arch_explain\` to see why an element is in a layer, or why a dependency is refused.
 3. After editing, call \`mapx_arch_check\` with \`sync: true\` (narrow it with \`file\` or \`since\`): \`exitCode\` 1 means a violation to fix. Without \`sync: true\`, every architecture tool refuses an index older than your edits (\`exitCode\` 4); pass it to \`mapx_arch_allowed\` too once you have edited files.`;
 
@@ -809,7 +809,7 @@ List supported languages and show a language's extensions, file names and gramma
 The architecture rules of \`.mapx/architecture.jsonc\`, answered as \`mapx check\` and \`mapx arch …\` answer them. JSON by default; lists are capped (\`limit\`) with their totals. A failure is a tool error whose JSON has \`exitCode\` 3 (configuration or usage) or 4 (missing or stale index: pass \`sync: true\`).
 - \`mapx_arch_check\`: the report, with \`exitCode\` (1 for violations). Filters: \`layer\`, \`rule\`, \`file\` (prefix or glob), \`since\` (git ref).
 - \`mapx_arch_layers\`: the layers; with \`layer\`, its members (\`why\` names the selector); with \`unassigned: true\`, the elements in no layer.
-- \`mapx_arch_allowed\`: \`from\`, \`to\` (layer, file or symbol), optional \`type\`. Returns \`allowed\`, \`rule\`, \`reason\`, \`decisions\`, \`allowedLayers\` and \`alternatives\`.
+- \`mapx_arch_allowed\`: \`from\`, \`to\` (a layer \`Domain\`, a file \`src/domain/Order.ts\`, a symbol \`Order::total\`, a package \`npm:express\` or \`express\`, or a built-in \`node:fs\`), optional \`type\`. Returns \`allowed\`, \`rule\`, \`reason\`, \`decisions\`, \`allowedLayers\` and \`alternatives\`.
 - \`mapx_arch_explain\`: \`element\`, optional \`layer\` and \`to\`: the selector trace and the rule trace.
 - \`mapx_arch_init\`: a proposed configuration from MapX roles, clusters (\`from\`) or a preset (\`preset\`: laravel, symfony, nestjs, express, django, fastapi, rails, spring, aspnet, flutter, nextjs, vue, layered, clean, hexagonal, onion, ddd-contexts, mvc, mvvm, feature-sliced), optionally with a \`baseline\` of today's violations; it writes only with \`write: true\`, never over an existing file unless \`force: true\`.
 

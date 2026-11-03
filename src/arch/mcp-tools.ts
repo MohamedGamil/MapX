@@ -75,7 +75,7 @@ export const ARCH_TOOLS = [
   },
   {
     name: 'mapx_arch_allowed',
-    description: `Pre-flight check before writing an import or call (AR-19): may <from> depend on <to>? Each end is a layer name, a file path or a symbol (qualified, scoped like Order::run, or a bare name). Returns \`mapx arch allowed --json\`: { allowed, rule, severity, reason, exitCode (1 when mapx check would fail), decisions[] (per edge type and source layer), allowedTypes, allowedLayers, alternatives[{ layer, total, symbols[{ element, file, match: supertype|name }] }] }. A refused dependency is a result, not an error. ${ERRORS}`,
+    description: `Pre-flight check before writing an import or call (AR-19): may <from> depend on <to>? Each end is a layer name, a file path or a symbol (qualified, scoped like Order::run, or a bare name); <to> can also be a package or built-in (express, npm:express, node:fs), a bare name that is a direct dependency meaning the package, and a package a manifest lists, or a built-in, is decided before any file imports it. Returns \`mapx arch allowed --json\`: { allowed, rule, severity, reason, exitCode (1 when mapx check would fail), decisions[] (per edge type and source layer), allowedTypes, allowedLayers, alternatives[{ layer, total, symbols[{ element, file, match: supertype|name }] }] }. A refused dependency is a result, not an error. ${ERRORS}`,
     inputSchema: {
       type: 'object',
       properties: {

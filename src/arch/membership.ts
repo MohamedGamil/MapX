@@ -99,13 +99,15 @@ export function computeMembership(view: ElementView, config: Pick<ArchitectureCo
   const privateTraces = new Map<string, string[]>();
   const members = new Map<string, Element[]>(layers.map((l) => [l.name, []]));
   // External elements (M5-24) are members too: a vendor layer is not empty, and `private` applies.
-  for (const el of [...view.elements, ...(view.externals ?? [])]) {
+  // An element outside the view (a package the manifest lists that no file uses yet, for
+  // `mapx arch allowed`; review of M5-24-R3) is classified when first asked, and is no layer's member.
+  const classify = (el: Element, listed: boolean) => {
     const entries: TraceEntry[] = [];
     for (const layer of layers) {
       const hit = membership(el, layer.name);
       if (hit) {
         entries.push(hit);
-        members.get(layer.name)!.push(el);
+        if (listed) members.get(layer.name)!.push(el);
       }
     }
     traces.set(el.id, entries);
@@ -119,9 +121,14 @@ export function computeMembership(view: ElementView, config: Pick<ArchitectureCo
       if (at || viaSymbol) priv.push(layer.name);
     }
     if (priv.length) privateTraces.set(el.id, priv);
-  }
+  };
+  for (const el of [...view.elements, ...(view.externals ?? [])]) classify(el, true);
 
-  const idOf = (e: Element | string) => (typeof e === 'string' ? e : e.id);
+  const idOf = (e: Element | string) => {
+    if (typeof e === 'string') return e;
+    if (!traces.has(e.id)) classify(e, false);
+    return e.id;
+  };
   const of = (e: Element | string) => (traces.get(idOf(e)) ?? []).map((t) => t.layer);
   const primaryOf = (e: Element | string) => of(e).filter((l) => !overlays.has(l));
 

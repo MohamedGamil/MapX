@@ -1,0 +1,6 @@
+{
+  "name": "m5-24-r3-agents-arch-allowed",
+  "private": true,
+  "description": "Synthetic fixture for M5-24-R3. Not a real application. lodash is listed but imported by no file (review of M5-24-R3).",
+  "dependencies": { "express": "^4.19.0", "lodash": "^4.17.21" }
+}

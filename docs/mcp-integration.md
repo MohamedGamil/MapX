@@ -525,7 +525,7 @@ Parameters:
 - `view`, `sync`, `dir` (optional).
 
 #### `mapx_arch_allowed`
-The pre-flight check: may `from` depend on `to`? Each end is a layer, a file or a symbol. `to` can also be a package or built-in outside the workspace, by name or as `<ecosystem>:<name>` (`npm:pg`; M5-24). The answer is `mapx arch allowed --json`:
+The pre-flight check: may `from` depend on `to`? Each end is a layer, a file or a symbol. `to` can also be a package or built-in outside the workspace, by name or as `<ecosystem>:<name>` (`npm:pg`; M5-24). A bare name that is a direct dependency is the package before a same-named workspace symbol, and a package a manifest near `from` lists, or a built-in (`node:path`), is decided before any file uses it (review of M5-24-R3). The answer is `mapx arch allowed --json`:
 
 `{ from, to, edgeType, allowed, rule, severity, reason, exitCode, decisions, allowedTypes, allowedLayers, alternatives }`
 
