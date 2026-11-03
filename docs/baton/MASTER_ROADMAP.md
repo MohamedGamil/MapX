@@ -274,7 +274,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-16-R1** score-arch scores smells — BACKLOG, P3, 4h; depends on M5-16, M5-24.
 - **M5-16-R2** Smells: orphan-element and baseline-debt — BACKLOG, P3, 4h; depends on M5-16.
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — DONE, P2, 12h; depends on M5-04, M5-06.
-- **M5-17-R1** Presets use hierarchy selectors; remaining AR-15 presets — BACKLOG, P3, 8h; depends on M5-17, M5-09.
+- **M5-17-R1** Presets use hierarchy selectors; remaining AR-15 presets — IN_PROGRESS, P3, 8h; depends on M5-17, M5-09.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — DONE, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-18-R1** MapX dogfood config judges calls and references, not only imports — BACKLOG, P2, 3h; depends on M5-18, M2-08-R3.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
@@ -282,15 +282,15 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
 - **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — DONE, P2, 1.5h; depends on M5-20.
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — BACKLOG, P3, 4h; depends on M5-21.
+- **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — READY, P3, 4h; depends on M5-21.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
 - **M5-22-R1** The architecture fixture scores Poetry and pip attribution, not only uv — BACKLOG, P3, 3h; depends on M5-22.
 - **M5-23** External references: Go modules package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-23-R1** An unreadable go.mod keeps the module's own imports internal — BACKLOG, P3, 2h; depends on M5-23.
+- **M5-23-R1** An unreadable go.mod keeps the module's own imports internal — IN_PROGRESS, P3, 2h; depends on M5-23.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — DONE, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 - **M5-24-R1** Ambient access is extracted: environment, globals and superglobals — BACKLOG, P2, 8h; depends on M5-24.
 - **M5-24-R2** External elements: multi-layer warning and inherited dependencies — BACKLOG, P2, 4h; depends on M5-24, M5-09.
-- **M5-24-R3** Agent templates describe package and built-in targets for mapx_arch_allowed — BACKLOG, P3, 1h; depends on M5-24.
+- **M5-24-R3** Agent templates describe package and built-in targets for mapx_arch_allowed — READY, P3, 1h; depends on M5-24.
 - **M5-24-R4** Uncovered packages are opt-in — DONE, P1, 5h; depends on M5-24.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — DONE, P2, 3h; depends on M5-05.
@@ -304,7 +304,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-25-R3** Go: an unversioned local replace outside the workspace is external — BACKLOG, P2, 2h; depends on M5-25-R1, M5-23.
 - **M5-25-R4** Go: a parenthesised receiver type is indexed — BACKLOG, P3, 2h; depends on M5-25-R2.
 - **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — DONE, P2, 2h; depends on M5-07.
-- **M5-07-R2** CI reporters: baselines outside the repository and submodule workspaces — BACKLOG, P3, 2h; depends on M5-07-R1.
+- **M5-07-R2** CI reporters: baselines outside the repository and submodule workspaces — READY, P3, 2h; depends on M5-07-R1.
 - **M5-08-R1** Git refs and paths never reach a shell — DONE, P0, 1h; depends on M5-08.
 
 ## M6 — Dashboard graph scale and readability

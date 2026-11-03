@@ -12,15 +12,15 @@ Remaining effort min/expected/max: **107.5 / 183 / 270h**. Capacity: 1 engineer(
 - M5-15-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R2 (BACKLOG): prerequisites satisfied
-- M5-17-R1 (BACKLOG): prerequisites satisfied
+- M5-17-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-18-R1 (BACKLOG): prerequisites satisfied
 - M5-98 (BACKLOG): prerequisites satisfied
-- M5-21-R1 (BACKLOG): prerequisites satisfied
+- M5-21-R1 (READY): prerequisites satisfied
 - M5-22-R1 (BACKLOG): prerequisites satisfied
-- M5-23-R1 (BACKLOG): prerequisites satisfied
+- M5-23-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-24-R1 (BACKLOG): prerequisites satisfied
 - M5-24-R2 (BACKLOG): prerequisites satisfied
-- M5-24-R3 (BACKLOG): prerequisites satisfied
+- M5-24-R3 (READY): prerequisites satisfied
 - M4-22-R1 (BACKLOG): prerequisites satisfied
 - M4-13-R1 (BACKLOG): Owner hold (D035, 2026-11-03): start only when the owner explicitly asks.
 - M2-08-R4 (BACKLOG): prerequisites satisfied
@@ -33,7 +33,7 @@ Remaining effort min/expected/max: **107.5 / 183 / 270h**. Capacity: 1 engineer(
 - M5-25-R3 (BACKLOG): prerequisites satisfied
 - M5-25-R4 (BACKLOG): prerequisites satisfied
 - M4-12-R2 (BACKLOG): prerequisites satisfied
-- M5-07-R2 (BACKLOG): prerequisites satisfied
+- M5-07-R2 (READY): prerequisites satisfied
 - M6-01 (BACKLOG): prerequisites satisfied
 - M6-02 (BACKLOG): M6-01
 - M6-03 (BACKLOG): M6-01
