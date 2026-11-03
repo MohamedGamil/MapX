@@ -439,7 +439,7 @@ describe('golden files on the PHP fixture (the real CLI)', () => {
     expect(sarif.results.find((r: { ruleId: string }) => r.ruleId === 'multi-layer').locations[0].physicalLocation.region).toEqual({ startLine: 1 });
     const junit = parseXml(mapxResult(root, 'check', '--format', 'junit', ...ARGS).stdout);
     expect(all(junit, 'testsuite').map((s) => s.attrs.name)).toEqual(['Controller', 'Application', 'Domain', 'Shared', 'Infrastructure', 'Reporting', 'Domain, Shared', 'configuration']);
-    expect(all(junit, 'skipped')).toHaveLength(2);
+    expect(all(junit, 'skipped')).toHaveLength(3); // php-07's import, instantiation and call (M2-12)
     expect(all(all(junit, 'testsuite').at(-1)!, 'error')[0]!.attrs.type).toBe('stale-baseline');
     if (lxml) expect(validateJunitXsd(mapxResult(root, 'check', '--format', 'junit', ...ARGS, '--report-allowed').stdout)).toBe('valid');
   });
@@ -465,18 +465,20 @@ describe('golden files on the PHP fixture (the real CLI)', () => {
   });
 
   // 15 errors since M5-11: php-19 and php-20 (@internal, import and instantiation each) are internal-element violations.
-  it('GitHub: the 15 errors of the fixture: the stale entry (the exit-3 cause) is annotated, the cut is stated, every finding is logged', () => {
+  // 22 since M2-12: each `(new X())->run()` violation has its call beside the instantiation (7 more).
+  it('GitHub: the 22 errors of the fixture: the stale entry (the exit-3 cause) is annotated, the cut is stated, every finding is logged', () => {
     const lines = mapxResult(root, 'check', '--format', 'github', ...ARGS).stdout.split('\n');
     const errors = lines.filter((l) => l.startsWith('::error'));
     expect(errors).toHaveLength(10);
     expect(parseCommand(errors[0]!).props.title).toBe('stale-baseline');
     expect(parseCommand(errors[0]!).message).toMatch(/^\.mapx\/architecture\.baseline\.json#\/entries\/0: the baseline entry /);
-    // 5 errors past the 10 shown (HttpGateway's packages in no layer are out of scope: M5-24-R4, D039).
-    expect(lines.at(-2)).toMatch(/Errors: 1   5 more not annotated \(GitHub shows 10 per level in a step\); see the log lines above or --format sarif$/);
+    // 12 errors past the 10 shown (HttpGateway's packages in no layer are out of scope: M5-24-R4, D039);
+    // M2-12 adds the `(new X())->run()` calls beside the instantiations.
+    expect(lines.at(-2)).toMatch(/Errors: 1   12 more not annotated \(GitHub shows 10 per level in a step\); see the log lines above or --format sarif$/);
     const json: ArchReport = JSON.parse(mapxResult(root, 'check', '--format', 'json', ...ARGS).stdout);
     const logged = lines.filter((l) => /^\[(error|warning|notice)\] /.test(l));
     expect(logged).toHaveLength(json.findings.filter((f) => f.kind !== 'allowed').length);
-    expect(logged.filter((l) => l.startsWith('[error] '))).toHaveLength(15);
+    expect(logged.filter((l) => l.startsWith('[error] '))).toHaveLength(22);
   });
 
   it('an unknown --format is a usage error (exit 3) that lists the formats', () => {

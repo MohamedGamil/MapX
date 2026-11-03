@@ -1,10 +1,10 @@
 ── Layer Dependency Structure Matrix (DSM) ────────────
                          L1   L2   L3   L4   L5
 -----------------------------------------------
-L1 Controller             *   8!   4!   2!    .
-L2 Application            .    *   6!    2    .
-L3 Domain                 .   2~    *    4    .
-L4 Shared                 .   2!   2s    *    .
+L1 Controller             *  12!   6!   3!    .
+L2 Application            .    *   9!    3    .
+L3 Domain                 .   3~    *    6    .
+L4 Shared                 .   3!   3s    *    .
 L5 Reports "v2" <beta>    .    .    .    .    *
 
 Legend:
@@ -20,4 +20,4 @@ Layer Key:
   L4: Shared
   L5: Reports "v2" <beta>
 
-Dependencies: 16 allowed, 18 violations (2 at warn), 2 skipped, 4 uncovered; 1 hidden layer counted, not drawn
+Dependencies: 24 allowed, 27 violations (3 at warn), 3 skipped, 6 uncovered; 1 hidden layer counted, not drawn

@@ -32,9 +32,9 @@ C4 layer:api      .    .    .    *    .    .    .    .    .    .    .
 C5 layer:data     .    .    .    .    *    .    .    .    .    .    .
 C6 layer:service    .    .    .    .    .    *    .    .    .    .    .
 C7 layer:shared    .    .    .    .    .    .    *    .    .    .    .
-C8 src            .    .    .    .    .    .    .    *    2    3    6
+C8 src            .    .    .    .    .    .    .    *    3    3    6
 C9 src.repository    .    .    .    .    .    .    .    3    *    .    .
-C10 src.service    .    .    .    .    .    .    .    6    5    *    2
+C10 src.service    .    .    .    .    .    .    .    6    6    *    2
 C11 src.shared    .    .    .    .    .    .    .    1    .    .    *
 
 Legend:

@@ -218,12 +218,14 @@ describe('mapx check --format json', () => {
     // M5-11: php-19 and php-20 (@internal, import and instantiation each) are violations, no longer allowed.
     // M5-24-R4 (D039): HttpGateway's dependencies on packages in no layer are out of scope, as the
     // configuration has no package selector.
-    expect(report.counts).toMatchObject({ violation: 14, skipped: 2, error: 1, uncovered: 4, allowed: 16, warning: 2 });
-    expect(report.findings.filter((f: any) => f.kind === 'allowed')).toHaveLength(16);
+    // M2-12: each `(new X())->run()` is a call of X::run too, beside its instantiation (php-07's three
+    // edges skipped; Clock and Uuid uncovered).
+    expect(report.counts).toMatchObject({ violation: 21, skipped: 3, error: 1, uncovered: 6, allowed: 24, warning: 2 });
+    expect(report.findings.filter((f: any) => f.kind === 'allowed')).toHaveLength(24);
     // Without --report-*: allowed and uncovered are counted, not listed.
     const plain = JSON.parse(run(php, 'check', '--format', 'json').stdout);
     expect(validate(plain)).toBe(true);
-    expect(plain.counts.uncovered).toBe(4);
+    expect(plain.counts.uncovered).toBe(6);
     expect(plain.findings.some((f: any) => f.kind === 'uncovered' || f.kind === 'allowed')).toBe(false);
   }, 120_000);
 

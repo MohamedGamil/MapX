@@ -1,5 +1,5 @@
 flowchart TB
-  %% Dependencies: 16 allowed, 18 violations (2 at warn), 2 skipped, 4 uncovered; 1 hidden layer counted, not drawn
+  %% Dependencies: 24 allowed, 27 violations (3 at warn), 3 skipped, 6 uncovered; 1 hidden layer counted, not drawn
   subgraph group_Web____UI_["Web #amp; #quot;UI#quot;"]
     layer_Controller["Controller"]
   end
@@ -9,18 +9,18 @@ flowchart TB
   end
   layer_Application["Application"]
   layer_Reports__v2___beta_["Reports #quot;v2#quot; #lt;beta#gt;"]
-  layer_Controller -->|4| layer_Application
-  layer_Controller -->|4| layer_Application
-  layer_Controller -->|2| group_Domain
-  layer_Controller -->|2| group_Domain
-  layer_Controller -->|2| layer_Shared
-  layer_Application -->|2| group_Domain
-  layer_Application -->|4| group_Domain
-  layer_Application -->|2| layer_Shared
-  layer_Domain -->|2| layer_Application
-  layer_Domain -->|4| layer_Shared
-  layer_Shared -->|2| layer_Application
-  layer_Shared -.->|2| layer_Domain
+  layer_Controller -->|6| layer_Application
+  layer_Controller -->|6| layer_Application
+  layer_Controller -->|3| group_Domain
+  layer_Controller -->|3| group_Domain
+  layer_Controller -->|3| layer_Shared
+  layer_Application -->|3| group_Domain
+  layer_Application -->|6| group_Domain
+  layer_Application -->|3| layer_Shared
+  layer_Domain -->|3| layer_Application
+  layer_Domain -->|6| layer_Shared
+  layer_Shared -->|3| layer_Application
+  layer_Shared -.->|3| layer_Domain
   linkStyle 1 stroke:#dc2626,stroke-width:2px,color:#dc2626
   linkStyle 2 stroke:#dc2626,stroke-width:2px,color:#dc2626
   linkStyle 3 stroke:#d97706,color:#d97706

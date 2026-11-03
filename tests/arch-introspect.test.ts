@@ -155,10 +155,12 @@ describe('mapx arch deps (AR-13d)', CLI, () => {
   it('lists the concrete edges from one layer to another with file:line, type, verifiability and decision', () => {
     const violation = { targetLayers: ['Infrastructure'], verifiability: 'verified', kind: 'violation', rule: 'disallowed-layer', severity: 'error', violatedLayers: ['Infrastructure'] };
     expect(json('deps', 'Domain', 'Infrastructure')).toEqual({ status: 0, stderr: '', body: {
-      from: 'Domain', to: 'Infrastructure', counts: { allowed: 0, violation: 2, uncovered: 0 },
+      from: 'Domain', to: 'Infrastructure', counts: { allowed: 0, violation: 3, uncovered: 0 },
       dependencies: [
         { source: { ...file('src/domain/Order.ts'), line: 1 }, target: file('src/infrastructure/SqlOrderRepository.ts'), edgeType: 'import', ...violation },
         { source: { element: 'src/domain/Order.ts#Order.run', kind: 'symbol', symbolKind: 'method', file: 'src/domain/Order.ts', line: 8 }, target: cls('src/infrastructure/SqlOrderRepository.ts', 'SqlOrderRepository'), edgeType: 'instantiation', ...violation },
+        // `new SqlOrderRepository().run()` calls the method too (M2-12).
+        { source: { element: 'src/domain/Order.ts#Order.run', kind: 'symbol', symbolKind: 'method', file: 'src/domain/Order.ts', line: 8 }, target: { element: 'src/infrastructure/SqlOrderRepository.ts#SqlOrderRepository.run', kind: 'symbol', symbolKind: 'method', file: 'src/infrastructure/SqlOrderRepository.ts' }, edgeType: 'call', ...violation },
       ],
     } });
   });
@@ -167,18 +169,20 @@ describe('mapx arch deps (AR-13d)', CLI, () => {
     const r = json('deps', 'Infrastructure').body;
     // M5-24-R4 (D039): the dependencies on packages in no layer (HttpGateway.ts, Tooling.ts) are out of
     // scope, as the configuration has no package selector; M5-24 counted 20 of them uncovered.
-    expect(r.counts).toEqual({ allowed: 4, violation: 0, uncovered: 2 });
+    // M2-12: MailGateway → Order and → Uuid are `new X().run()` calls too.
+    expect(r.counts).toEqual({ allowed: 6, violation: 0, uncovered: 3 });
     expect(r.dependencies.filter((d: any) => d.target.kind === 'external')).toEqual([]);
     expect(r.dependencies.filter((d: any) => d.kind === 'uncovered' && d.target.kind !== 'external')).toEqual([
       { source: { ...file('src/infrastructure/MailGateway.ts'), line: 2 }, target: file('src/support/Uuid.ts'), targetLayers: [], edgeType: 'import', verifiability: 'verified', kind: 'uncovered', rule: 'uncovered', severity: 'warn' },
       { source: { element: 'src/infrastructure/MailGateway.ts#MailGateway.run', kind: 'symbol', symbolKind: 'method', file: 'src/infrastructure/MailGateway.ts', line: 7 }, target: cls('src/support/Uuid.ts', 'Uuid'), targetLayers: [], edgeType: 'instantiation', verifiability: 'verified', kind: 'uncovered', rule: 'uncovered', severity: 'warn' },
+      { source: { element: 'src/infrastructure/MailGateway.ts#MailGateway.run', kind: 'symbol', symbolKind: 'method', file: 'src/infrastructure/MailGateway.ts', line: 7 }, target: { element: 'src/support/Uuid.ts#Uuid.run', kind: 'symbol', symbolKind: 'method', file: 'src/support/Uuid.ts' }, targetLayers: [], edgeType: 'call', verifiability: 'verified', kind: 'uncovered', rule: 'uncovered', severity: 'warn' },
     ]);
     expect(json('deps', 'Domain', 'Nope').status).toBe(3);
   });
 
   it('`deps L L` lists nothing: Order → OrderId (Domain and Shared) is a Domain → Shared edge', () => {
     expect(json('deps', 'Domain', 'Domain').body).toEqual({ from: 'Domain', to: 'Domain', counts: { allowed: 0, violation: 0, uncovered: 0 }, dependencies: [] });
-    expect(json('deps', 'Domain', 'Shared').body.dependencies.map((d: { target: { element: string } }) => d.target.element)).toEqual(['src/shared/Text.ts', 'src/shared/Text.ts#Text', 'src/domain/ids/OrderId.ts', 'src/domain/ids/OrderId.ts#OrderId']);
+    expect(json('deps', 'Domain', 'Shared').body.dependencies.map((d: { target: { element: string } }) => d.target.element)).toEqual(['src/shared/Text.ts', 'src/shared/Text.ts#Text', 'src/shared/Text.ts#Text.run', 'src/domain/ids/OrderId.ts', 'src/domain/ids/OrderId.ts#OrderId', 'src/domain/ids/OrderId.ts#OrderId.run']);
   });
 });
 
@@ -194,8 +198,9 @@ describe('mapx arch unused (AR-13e)', CLI, () => {
       { from: 'Application', to: 'Shared', rule: 'explicit', types: ['import'], severity: 'error', uses: 1 },
       { from: 'Infrastructure', to: 'Shared', rule: 'explicit', types: null, severity: 'error', uses: 0 },
     ] });
-    // An advisory allowance is used by the warnings it reports: twice here.
-    expect(json('unused', '--view', 'introspect', '--limit', '2').body.allowances[0]).toEqual({ from: 'Controller', to: 'Domain', rule: 'explicit', types: null, severity: 'warn', uses: 2 });
+    // An advisory allowance is used by the warnings it reports: three times here (import,
+    // instantiation and, since M2-12, the `new Order().run()` call).
+    expect(json('unused', '--view', 'introspect', '--limit', '3').body.allowances[0]).toEqual({ from: 'Controller', to: 'Domain', rule: 'explicit', types: null, severity: 'warn', uses: 3 });
     expect(mapxResult(root, 'arch', 'unused', '--limit', 'x').status).toBe(3);
   });
 });
@@ -243,7 +248,7 @@ describe('mapx arch allowed (AR-13g)', CLI, () => {
       from: { query: 'OrderController', kind: 'symbol', element: 'src/controller/OrderController.ts#OrderController', file: 'src/controller/OrderController.ts', layers: ['Controller'], overlays: [], private: [], inScope: true },
       to: { query: 'PricingRules', kind: 'symbol', element: 'src/application/internal/PricingRules.ts#PricingRules', file: 'src/application/internal/PricingRules.ts', layers: ['Application'], overlays: [], private: ['Application'], inScope: true },
       edgeType: null, allowed: false, rule: 'private-layer', severity: 'error', reason, exitCode: 1,
-      decisions: [decision('import'), decision('instantiation')], allowedTypes: [], allowedLayers: ['Application'],
+      decisions: [decision('import'), decision('call'), decision('instantiation')], allowedTypes: [], allowedLayers: ['Application'],
       alternatives: [], // nothing in Controller or Application is named like PricingRules but itself (M5-14)
     } });
   });
@@ -251,7 +256,7 @@ describe('mapx arch allowed (AR-13g)', CLI, () => {
   it('an allowed pair names how the policy grants it; a types-scoped grant fails the other types; advisory is warn, exit 0', () => {
     const allowed = json('allowed', 'PlaceOrder', 'src/domain/Order.ts');
     expect(allowed.status).toBe(0);
-    expect(allowed.body).toMatchObject({ allowed: true, rule: 'allowed', severity: 'info', exitCode: 0, allowedTypes: ['import', 'instantiation'] });
+    expect(allowed.body).toMatchObject({ allowed: true, rule: 'allowed', severity: 'info', exitCode: 0, allowedTypes: ['import', 'call', 'instantiation'] });
     expect(json('allowed', 'Application', 'src/domain/Order.ts').body).toMatchObject({ allowed: true, allowedTypes: TYPES }); // a layer: hypothetical, every type
     expect(allowed.body.decisions[0]).toEqual({ edgeType: 'import', observed: true, verifiability: 'verified', sourceLayer: 'Application', allowed: true, rule: 'allowed', severity: 'info', via: ['+Domain'], reason: 'Application may depend on Domain over import (+Domain)' });
     // Imports only: the import decision is allowed, every other type is an error.
@@ -367,7 +372,7 @@ describe('allowed agrees with mapx check (property, in process)', CLI, () => {
     expect(mapxResult(variant, 'check').status).toBe(1);
     const controller = JSON.parse(mapxResult(variant, 'arch', 'allowed', 'OrderController', 'Order', '--json').stdout);
     expect(controller).toMatchObject({ severity: 'error', exitCode: 1, allowedTypes: [] });
-    expect(controller.decisions.map((d: { edgeType: string; severity: string }) => [d.edgeType, d.severity])).toEqual([['import', 'warn'], ['instantiation', 'error']]);
+    expect(controller.decisions.map((d: { edgeType: string; severity: string }) => [d.edgeType, d.severity])).toEqual([['import', 'warn'], ['call', 'error'], ['instantiation', 'error']]);
     const store = new Store(join(variant, '.mapx', 'mapx.db'));
     try {
       const ctx = openArchitecture(variant, store)!;

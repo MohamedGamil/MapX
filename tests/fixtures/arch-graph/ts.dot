@@ -1,5 +1,5 @@
 digraph "MapX layers" {
-  graph [compound=true, rankdir=TB, label="Dependencies: 16 allowed, 18 violations (2 at warn), 2 skipped, 4 uncovered; 1 hidden layer counted, not drawn", labelloc=b, fontname="Helvetica", fontsize=10];
+  graph [compound=true, rankdir=TB, label="Dependencies: 24 allowed, 27 violations (3 at warn), 3 skipped, 6 uncovered; 1 hidden layer counted, not drawn", labelloc=b, fontname="Helvetica", fontsize=10];
   node [shape=box, style="rounded,filled", fillcolor="#f8fafc", color="#475569", fontname="Helvetica"];
   edge [color="#64748b", fontcolor="#475569", fontname="Helvetica", fontsize=10];
 
@@ -23,16 +23,16 @@ digraph "MapX layers" {
   n0 [label="Application"];
   n3 [label="Reports \"v2\" <beta>"];
 
-  n1 -> n0 [label="4"];
-  n1 -> n0 [label="4", color="#dc2626", fontcolor="#dc2626", penwidth=2];
-  n1 -> n2 [label="2", color="#dc2626", fontcolor="#dc2626", penwidth=2, lhead=cluster_0];
-  n1 -> n2 [label="2", color="#d97706", fontcolor="#d97706", lhead=cluster_0];
-  n1 -> n4 [label="2", color="#dc2626", fontcolor="#dc2626", penwidth=2];
-  n0 -> n2 [label="2", lhead=cluster_0];
-  n0 -> n2 [label="4", color="#dc2626", fontcolor="#dc2626", penwidth=2, lhead=cluster_0];
-  n0 -> n4 [label="2"];
-  n2 -> n0 [label="2", color="#d97706", fontcolor="#d97706"];
-  n2 -> n4 [label="4"];
-  n4 -> n0 [label="2", color="#dc2626", fontcolor="#dc2626", penwidth=2];
-  n4 -> n2 [label="2", color="#94a3b8", fontcolor="#94a3b8", style=dashed];
+  n1 -> n0 [label="6"];
+  n1 -> n0 [label="6", color="#dc2626", fontcolor="#dc2626", penwidth=2];
+  n1 -> n2 [label="3", color="#dc2626", fontcolor="#dc2626", penwidth=2, lhead=cluster_0];
+  n1 -> n2 [label="3", color="#d97706", fontcolor="#d97706", lhead=cluster_0];
+  n1 -> n4 [label="3", color="#dc2626", fontcolor="#dc2626", penwidth=2];
+  n0 -> n2 [label="3", lhead=cluster_0];
+  n0 -> n2 [label="6", color="#dc2626", fontcolor="#dc2626", penwidth=2, lhead=cluster_0];
+  n0 -> n4 [label="3"];
+  n2 -> n0 [label="3", color="#d97706", fontcolor="#d97706"];
+  n2 -> n4 [label="6"];
+  n4 -> n0 [label="3", color="#dc2626", fontcolor="#dc2626", penwidth=2];
+  n4 -> n2 [label="3", color="#94a3b8", fontcolor="#94a3b8", style=dashed];
 }

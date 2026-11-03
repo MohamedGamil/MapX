@@ -2,6 +2,22 @@
   {
     "type": "issue",
     "check_name": "disallowed-layer",
+    "description": "App\\Controller\\OrderController must not depend on App\\Domain\\Order (Controller on Domain) [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "f8287ac76afa8a3c",
+    "location": {
+      "path": "app/Controller/OrderController.php",
+      "lines": {
+        "begin": 15
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
     "description": "App\\Controller\\OrderController must not depend on App\\Domain\\Order (Controller on Domain) [import]",
     "categories": [
       "Complexity"
@@ -26,6 +42,22 @@
     "fingerprint": "0616a75572a2e512",
     "location": {
       "path": "app/Controller/OrderController.php",
+      "lines": {
+        "begin": 15
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Controller\\ReportController must not depend on App\\Infrastructure\\SqlOrderRepository (Controller on Infrastructure) [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "b0fa1d5cebd01eee",
+    "location": {
+      "path": "app/Controller/ReportController.php",
       "lines": {
         "begin": 15
       }
@@ -66,6 +98,22 @@
   {
     "type": "issue",
     "check_name": "disallowed-layer",
+    "description": "App\\Shared\\Result must not depend on App\\Domain\\Money (Shared on Domain) [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "f7a6aaf266bf295b",
+    "location": {
+      "path": "app/Shared/Result.php",
+      "lines": {
+        "begin": 11
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
     "description": "App\\Shared\\Result must not depend on App\\Domain\\Money (Shared on Domain) [import]",
     "categories": [
       "Complexity"
@@ -92,6 +140,22 @@
       "path": "app/Shared/Result.php",
       "lines": {
         "begin": 11
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "internal-element",
+    "description": "App\\Application\\CancelOrder must not depend on App\\Domain\\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "4177d54d7b424582",
+    "location": {
+      "path": "app/Application/CancelOrder.php",
+      "lines": {
+        "begin": 13
       }
     }
   },
@@ -130,6 +194,22 @@
   {
     "type": "issue",
     "check_name": "internal-element",
+    "description": "App\\Application\\PlaceOrder must not depend on App\\Domain\\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "e80c3de43805b59d",
+    "location": {
+      "path": "app/Application/PlaceOrder.php",
+      "lines": {
+        "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "internal-element",
     "description": "App\\Application\\PlaceOrder must not depend on App\\Domain\\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [import]",
     "categories": [
       "Complexity"
@@ -154,6 +234,22 @@
     "fingerprint": "40b9b66842efd062",
     "location": {
       "path": "app/Application/PlaceOrder.php",
+      "lines": {
+        "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "private-layer",
+    "description": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "8080646ffaf94a43",
+    "location": {
+      "path": "app/Controller/OrderController.php",
       "lines": {
         "begin": 16
       }
@@ -194,6 +290,22 @@
   {
     "type": "issue",
     "check_name": "private-layer",
+    "description": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "092916ff384dddf4",
+    "location": {
+      "path": "app/Controller/ReportController.php",
+      "lines": {
+        "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "private-layer",
     "description": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [import]",
     "categories": [
       "Complexity"
@@ -220,6 +332,22 @@
       "path": "app/Controller/ReportController.php",
       "lines": {
         "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "disallowed-layer",
+    "description": "App\\Domain\\Order must not depend on App\\Infrastructure\\SqlOrderRepository (Domain on Infrastructure) [call] (skipped by the baseline)",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "minor",
+    "fingerprint": "dcdd89d89783f7a1",
+    "location": {
+      "path": "app/Domain/Order.php",
+      "lines": {
+        "begin": 12
       }
     }
   },
@@ -258,6 +386,22 @@
   {
     "type": "issue",
     "check_name": "uncovered",
+    "description": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "fb1609ab410349b2",
+    "location": {
+      "path": "app/Application/PlaceOrder.php",
+      "lines": {
+        "begin": 17
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
     "description": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [import]",
     "categories": [
       "Complexity"
@@ -284,6 +428,22 @@
       "path": "app/Application/PlaceOrder.php",
       "lines": {
         "begin": 17
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "uncovered",
+    "description": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [call]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "info",
+    "fingerprint": "88c5be0e629a49dd",
+    "location": {
+      "path": "app/Infrastructure/MailGateway.php",
+      "lines": {
+        "begin": 13
       }
     }
   },

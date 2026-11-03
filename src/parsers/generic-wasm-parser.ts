@@ -176,6 +176,89 @@ function bindingValue(node: any): any {
   return value ?? null;
 }
 
+/**
+ * The class a method call's receiver instantiates (M2-12): `new Order().total()` in JS/TS (`Order`,
+ * `ns.Order`; type arguments are a separate field), Java and C# (`Order`, generics and qualifiers
+ * dropped), and Python `Order().total()` (a CapWords name, as the instantiation query reads it).
+ * Parentheses around the receiver are looked through. Null for a new instance whose class the
+ * syntax does not name (`new (getClass())()`, `new reg[0]()`); undefined for any other call: a
+ * chained `new A().b().c()` has no known receiver type for `c`.
+ */
+function newReceiverClass(node: any, language: string): string | null | undefined {
+  const call = node.parent;
+  const field = call?.type === 'member_expression' ? ['object', 'property']
+    : call?.type === 'attribute' ? ['object', 'attribute']
+      : call?.type === 'method_invocation' ? ['object', 'name']
+        : call?.type === 'member_access_expression' ? ['expression', 'name'] : null;
+  if (!field || call.childForFieldName(field[1])?.id !== node.id) return undefined;
+  let object = call.childForFieldName(field[0]);
+  while (object?.type === 'parenthesized_expression') object = object.namedChildren[0];
+  if (object?.type === 'new_expression') {
+    const constructor = object.childForFieldName('constructor');
+    return constructor?.type === 'identifier' || constructor?.type === 'member_expression' ? constructor.text : null;
+  }
+  if (object?.type === 'object_creation_expression' && (language === 'java' || language === 'c-sharp')) {
+    const name = String(object.childForFieldName('type')?.text ?? '').replace(/<[\s\S]*$/, '').split('.').pop()!.trim();
+    return /^[A-Za-z_]\w*$/.test(name) ? name : null;
+  }
+  if (object?.type === 'call' && language === 'python') {
+    const fn = object.childForFieldName('function');
+    return fn?.type === 'identifier' && /^[A-Z]/.test(fn.text) ? fn.text : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * The types a class declaration names as its bases, as written (reviews of M2-12), for the walk of a
+ * method called on a new instance: `class Sub extends Base` (JS/TS, `ns.Base` too), the Java
+ * superclass then its interfaces (default methods), every entry of a C# base list, every Python
+ * base (`class Sub(Base, mod.Mixin)`). `?` stands for a base the syntax does not name
+ * (`extends Timestamped(Plain)`, `Generic[T]`), so the walk knows the method set is not complete. A C#
+ * `partial` class says so. {} for other nodes and languages.
+ */
+function classBases(language: string, node: any): Record<string, unknown> {
+  const plain = (n: any) => String(n?.text ?? '').replace(/<[\s\S]*$/, '').trim();
+  const named = (n: any, ok: string[], text: (n: any) => string = (x) => x.text) => (n && ok.includes(n.type) ? text(n) : '?');
+  let bases: string[] = [];
+  const meta: Record<string, unknown> = {};
+  if (language === 'javascript' || language === 'typescript' || language === 'tsx') {
+    const heritage = node.namedChildren?.find((c: any) => c.type === 'class_heritage');
+    const ext = heritage?.namedChildren.find((c: any) => c.type === 'extends_clause') ?? (language === 'javascript' ? heritage : null);
+    const value = ext?.childForFieldName?.('value') ?? ext?.namedChildren[0];
+    if (ext) bases = [named(value, ['identifier', 'member_expression'])];
+  } else if (language === 'java') {
+    const type = node.childForFieldName?.('superclass')?.namedChildren[0];
+    const interfaces = node.childForFieldName?.('interfaces')?.namedChildren.find((c: any) => c.type === 'type_list')?.namedChildren ?? [];
+    const javaType = (t: any) => named(t, ['type_identifier', 'scoped_type_identifier', 'generic_type'], (x) => plain(x).split('.').pop()!);
+    bases = [...(type ? [javaType(type)] : []), ...interfaces.map(javaType)];
+  } else if (language === 'c-sharp') {
+    const list = node.namedChildren?.find((c: any) => c.type === 'base_list');
+    bases = (list?.namedChildren ?? []).filter((c: any) => c.type !== 'comment').map((c: any) =>
+      named(c, ['identifier', 'qualified_name', 'generic_name'], (x) => plain(x).split('.').pop()!));
+    if (node.namedChildren?.some((c: any) => c.type === 'modifier' && c.text === 'partial')) meta['partial'] = true;
+  } else if (language === 'python') {
+    bases = (node.childForFieldName?.('superclasses')?.namedChildren ?? [])
+      .filter((c: any) => c.type !== 'keyword_argument' && c.type !== 'comment')
+      .map((c: any) => named(c, ['identifier', 'attribute']))
+      .filter((b: string) => b !== 'object');
+  }
+  bases = bases.map((b) => (/^[A-Za-z_$][\w$.]*$/.test(b) ? b : '?'));
+  if (bases.length) meta['bases'] = bases;
+  return meta;
+}
+
+/**
+ * The type a C# extension method extends (`static int Spin(this Acme.App.Widget w)` → Widget;
+ * review of M2-12), so a new instance of it reaches the method. {} for any other node.
+ */
+function extensionOf(language: string, node: any): Record<string, unknown> {
+  if (language !== 'c-sharp' || node?.type !== 'method_declaration') return {};
+  const first = node.childForFieldName?.('parameters')?.namedChildren.find((c: any) => c.type === 'parameter');
+  if (!first?.namedChildren.some((c: any) => c.type === 'modifier' && c.text === 'this') && !/^this\s/.test(first?.text ?? '')) return {};
+  const type = String(first.childForFieldName?.('type')?.text ?? '').replace(/<[\s\S]*$/, '').split('.').pop()!.trim();
+  return /^[A-Za-z_]\w*$/.test(type) ? { extensionOf: type } : {};
+}
+
 const LOCAL_SCOPE_LANGUAGES = new Set(['javascript', 'typescript', 'tsx', 'python']);
 const CALL_NODES = new Set(['call_expression', 'call', 'new_expression']);
 
@@ -641,6 +724,8 @@ export class GenericWasmParser implements LanguageParser {
                 ...(kind !== 'namespace' && (this.languageName === 'c-sharp' || this.languageName === 'scala')
                   ? { namespace: declaredNamespace(capture.node) } : this.symbolMetadata(capture.node)),
                 ...symbolAnnotations(this.languageName, capture.node),
+                ...(kind === 'class' ? classBases(this.languageName, capture.node.type === 'export_statement' ? capture.node.namedChildren.find((c: any) => c.type === 'class_declaration' || c.type === 'class') ?? capture.node : capture.node) : {}),
+                ...(kind === 'method' ? extensionOf(this.languageName, capture.node) : {}),
               },
             });
           }
@@ -710,6 +795,11 @@ export class GenericWasmParser implements LanguageParser {
             const goPackage = (referenceType === 'extends' || referenceType === 'instantiation') && goParent?.type === 'qualified_type'
               ? { goPackage: goImportPath(goParent) }
               : referenceType === 'call' && goParent?.type === 'selector_expression' ? goSelectorCall(goParent) : null;
+            // `new Order().total()`: the class whose method the scanner links (M2-12).
+            const newClass = referenceType === 'call' ? newReceiverClass(capture.node, this.languageName) : undefined;
+            // A new instance of a class the syntax does not name: no class to link, and never a
+            // same-named method by name (M2-12 review).
+            if (newClass === null) continue;
 
             references.push({
               sourceSymbol: oneLineSource(capture.node),
@@ -719,7 +809,10 @@ export class GenericWasmParser implements LanguageParser {
               verifiability,
               // The receiver of a member call (`obj`, `this`, `super`, `a.b`), for the scanner to tell a
               // library object and never take the call for a global function (M0-17-R4).
-              ...(referenceType === 'call' && receiver ? { metadata: { receiver: receiver.type === 'identifier' ? receiver.text : `<${receiver.type}>` } } : {}),
+              ...(referenceType === 'call' && (receiver || newClass) ? { metadata: {
+                ...(receiver ? { receiver: receiver.type === 'identifier' ? receiver.text : `<${receiver.type}>` } : {}),
+                ...(newClass ? { newClass } : {}),
+              } } : {}),
               // The import path of a package-qualified Go type or call (M0-17-R5, M5-25, M5-25-R1).
               ...(goPackage ? { metadata: goPackage } : {}),
               // Where the table of a Lua `T:m()` call lives, for the scanner (M2-10).

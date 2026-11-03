@@ -99,12 +99,13 @@ describe('/api/arch on the arch-rules fixture (M5-15)', () => {
     const pairs = (edges: any[]) => edges.map((e) => `${e.from}>${e.to} ${e.allowed}/${e.violations}/${e.warnings}/${e.skipped}`).sort();
     expect(pairs(body.graph.edges)).toEqual(pairs(check.layerEdges));
     const edge = (from: string, to: string) => body.graph.edges.find((e: any) => e.from === from && e.to === to);
-    expect(edge('Shared', 'Domain')).toMatchObject({ allowed: 0, violations: 0, skipped: 2 });
+    // Each `new X().run()` pair counts the call too, beside the import and the instantiation (M2-12).
+    expect(edge('Shared', 'Domain')).toMatchObject({ allowed: 0, violations: 0, skipped: 3 });
     expect(edge(XSS_LAYER, 'Domain')).toMatchObject({ allowed: 0, skipped: 1 });
     expect(body.counts).toEqual(check.counts);
     // The edges as `mapx arch graph` draws them: one per status of a pair.
-    expect(body.drawn.filter((e: any) => e.from === 'Controller' && e.to === 'Application').map((e: any) => [e.status, e.count])).toEqual([['allowed', 4], ['violation', 4]]);
-    expect(body.drawn).toContainEqual({ from: 'Shared', to: 'Domain', status: 'skipped', count: 2, toGroup: null });
+    expect(body.drawn.filter((e: any) => e.from === 'Controller' && e.to === 'Application').map((e: any) => [e.status, e.count])).toEqual([['allowed', 6], ['violation', 6]]);
+    expect(body.drawn).toContainEqual({ from: 'Shared', to: 'Domain', status: 'skipped', count: 3, toGroup: null });
   });
 
   it('report: the layer DSM marks each cell by its worst status', async () => {
@@ -116,9 +117,9 @@ describe('/api/arch on the arch-rules fixture (M5-15)', () => {
       const j = dsm.layers.indexOf(to);
       return [dsm.matrix[i][j], dsm.status[i][j]];
     };
-    expect(cell('Controller', 'Application')).toEqual([8, 'violation']);
-    expect(cell('Application', 'Shared')).toEqual([2, 'allowed']);
-    expect(cell('Shared', 'Domain')).toEqual([2, 'skipped']);
+    expect(cell('Controller', 'Application')).toEqual([12, 'violation']);
+    expect(cell('Application', 'Shared')).toEqual([3, 'allowed']);
+    expect(cell('Shared', 'Domain')).toEqual([3, 'skipped']);
     expect(cell(XSS_LAYER, 'Domain')[1]).toBe('violation');
     expect(cell('Domain', 'Application')).toEqual([0, 'none']);
     // The faint cells: allowances no dependency uses, as `mapx arch unused` lists them.
@@ -137,16 +138,17 @@ describe('/api/arch on the arch-rules fixture (M5-15)', () => {
     });
     // M5-24-R4 (D039): HttpGateway's and toolingCheck's 19 dependencies on packages in no layer are out
     // of scope, as the configuration has no package selector (M5-24 counted 23); as `mapx check` gives.
-    expect(check.counts.uncovered).toBe(4);
+    // M2-12: PlaceOrder → Clock and MailGateway → Uuid are calls too.
+    expect(check.counts.uncovered).toBe(6);
     // Review of M5-15: the Warnings tile is check's "Warnings" (the multi-layer OrderId), not warn-level violations.
     expect(check.counts.warning).toBeGreaterThan(0);
-    expect(check.counts.skipped).toBe(3); // Result → Money twice, and the payload's first
+    expect(check.counts.skipped).toBe(4); // Result → Money three times (import, instantiation, call), and the payload's first
     expect(unassigned.total).toBe(4);
     // Every finding check shows with --report-uncovered --report-skipped, in its order; allowed ones only counted.
     expect(body.findings.map((f: any) => f.fingerprint)).toEqual(check.findings.map((f) => f.fingerprint));
     expect(body.findings.some((f: any) => f.kind === 'allowed')).toBe(false);
     const skipped = body.findings.filter((f: any) => f.kind === 'skipped' && f.source.file === 'src/shared/Result.ts');
-    expect(skipped.map((f: any) => [f.target.file, f.skippedBy])).toEqual([['src/domain/Money.ts', 'baseline'], ['src/domain/Money.ts', 'baseline']]);
+    expect(skipped.map((f: any) => [f.target.file, f.skippedBy])).toEqual([['src/domain/Money.ts', 'baseline'], ['src/domain/Money.ts', 'baseline'], ['src/domain/Money.ts', 'baseline']]);
     // The rule smells are the ones /api/smells merges (M5-16), one evaluation each.
     const smells = (await get('/api/smells')).body.smells.filter((s: any) => s.source === 'rules');
     expect(body.smells.map((s: any) => [s.type, s.description]).sort()).toEqual(smells.map((s: any) => [s.type, s.description]).sort());
@@ -211,13 +213,13 @@ describe('/api/arch on the arch-rules fixture (M5-15)', () => {
       expect(body.findings.every((f: any) => (f.kind === 'skipped') === (from === 'Shared' || f.skippedBy === 'baseline'))).toBe(true);
     }
     const r = (await get('/api/arch/edges?from=Controller&to=Application')).body;
-    expect(r.counts).toEqual({ allowed: 4, violations: 4, warnings: 0, skipped: 0, uncovered: 0 });
+    expect(r.counts).toEqual({ allowed: 6, violations: 6, warnings: 0, skipped: 0, uncovered: 0 });
     const pricing = r.findings.find((f: any) => f.target.file === 'src/application/internal/PricingRules.ts' && f.edgeType === 'import');
     expect(pricing).toMatchObject({ kind: 'violation', rule: 'private-layer', source: { file: 'src/controller/OrderController.ts', line: 4 } });
     expect(pricing.dependencies).toHaveLength(1);
     // Without `to`: every finding from the layer, uncovered ones included.
     const any = (await get('/api/arch/edges?from=Application')).body;
-    expect(any.counts.uncovered).toBe(2);
+    expect(any.counts.uncovered).toBe(3); // PlaceOrder → Clock: import, instantiation, call
     expect((await get('/api/arch/edges?to=Domain')).status).toBe(400);
     expect((await get('/api/arch/edges?from=Controller&to=Nope')).status).toBe(404);
   });

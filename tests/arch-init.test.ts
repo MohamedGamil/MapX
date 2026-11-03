@@ -350,7 +350,8 @@ describe('mapx arch init: dry run by default, no silent overwrite, stable bytes,
     expect(snapshot(root)).toEqual(before);
     expect(a.stdout.startsWith('// Proposed by `mapx arch init` from MapX roles')).toBe(true);
     expect(a.stderr).toBe('Dry run (3 layers, 3 violations today): nothing written. Add --write to create .mapx/architecture.jsonc.\n');
-    expect(b.stderr).toContain('Add --write to create .mapx/architecture.jsonc and .mapx/architecture.baseline.json (2 entries).');
+    // PlaceOrder → SqlOrderRepository: import, instantiation and the `new SqlOrderRepository().save()` call (M2-12).
+    expect(b.stderr).toContain('Add --write to create .mapx/architecture.jsonc and .mapx/architecture.baseline.json (3 entries).');
     expect(JSON.parse(c.stdout)).toMatchObject({ path: '.mapx/architecture/proposed.jsonc', view: 'proposed', written: false });
   });
 

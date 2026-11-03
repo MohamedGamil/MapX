@@ -110,28 +110,30 @@ describe('mapx arch graph on the fixture (AR-16)', CLI, () => {
     // Every pair as check's own layerEdges (an independent CLI run), plus `hidden`.
     expect(g.edges.map(({ hidden: _h, ...e }) => e)).toEqual(expect.arrayContaining(check.layerEdges));
     expect(g.edges).toHaveLength(check.layerEdges.length);
-    // Private-layer violations next to allowed dependencies; the baselined pair skipped.
-    expect(edge('Controller', 'Application')).toEqual({ from: 'Controller', to: 'Application', allowed: 4, violations: 4, warnings: 0, skipped: 0, hidden: false });
-    expect(edge('Shared', 'Domain')).toEqual({ from: 'Shared', to: 'Domain', allowed: 0, violations: 0, warnings: 0, skipped: 2, hidden: false });
+    // Private-layer violations next to allowed dependencies; the baselined pair skipped. Each pair
+    // counts the import, the instantiation and the `new X().run()` call (M2-12).
+    expect(edge('Controller', 'Application')).toEqual({ from: 'Controller', to: 'Application', allowed: 6, violations: 6, warnings: 0, skipped: 0, hidden: false });
+    expect(edge('Shared', 'Domain')).toEqual({ from: 'Shared', to: 'Domain', allowed: 0, violations: 0, warnings: 0, skipped: 3, hidden: false });
     // IdController → OrderId: Shared refuses it, so it is an error on both of its pairs; with the
     // advisory OrderController → Order (warn) next to it on Controller → Domain.
-    expect(edge('Controller', 'Domain')).toEqual({ from: 'Controller', to: 'Domain', allowed: 0, violations: 4, warnings: 2, skipped: 0, hidden: false });
-    expect(edge('Controller', 'Shared')).toEqual({ from: 'Controller', to: 'Shared', allowed: 0, violations: 2, warnings: 0, skipped: 0, hidden: false });
+    expect(edge('Controller', 'Domain')).toEqual({ from: 'Controller', to: 'Domain', allowed: 0, violations: 6, warnings: 3, skipped: 0, hidden: false });
+    expect(edge('Controller', 'Shared')).toEqual({ from: 'Controller', to: 'Shared', allowed: 0, violations: 3, warnings: 0, skipped: 0, hidden: false });
     // OrderRef → PlaceOrder: one error finding (source in Domain and Shared) whose Domain pair is advisory.
     const ref = check.findings.filter((f) => f.source?.element === 'src/domain/ids/OrderRef.ts#OrderRef' && f.kind === 'violation');
-    expect(ref.map((f) => [f.source!.layer, f.severity, f.edgeType])).toEqual([['Domain, Shared', 'error', 'import'], ['Domain, Shared', 'error', 'instantiation']]);
-    expect(edge('Domain', 'Application')).toEqual({ from: 'Domain', to: 'Application', allowed: 0, violations: 2, warnings: 2, skipped: 0, hidden: false });
-    expect(edge('Shared', 'Application')).toEqual({ from: 'Shared', to: 'Application', allowed: 0, violations: 2, warnings: 0, skipped: 0, hidden: false });
-    expect(edge(INFRA, 'Domain')).toMatchObject({ allowed: 4, hidden: true });
-    expect(edge('Domain', INFRA)).toMatchObject({ violations: 2, hidden: true });
+    expect(ref.map((f) => [f.source!.layer, f.severity, f.edgeType])).toEqual([['Domain, Shared', 'error', 'call'], ['Domain, Shared', 'error', 'import'], ['Domain, Shared', 'error', 'instantiation']]);
+    expect(edge('Domain', 'Application')).toEqual({ from: 'Domain', to: 'Application', allowed: 0, violations: 3, warnings: 3, skipped: 0, hidden: false });
+    expect(edge('Shared', 'Application')).toEqual({ from: 'Shared', to: 'Application', allowed: 0, violations: 3, warnings: 0, skipped: 0, hidden: false });
+    expect(edge(INFRA, 'Domain')).toMatchObject({ allowed: 6, hidden: true });
+    expect(edge('Domain', INFRA)).toMatchObject({ violations: 3, hidden: true });
     expect(g.groups).toEqual([
       { name: 'Web & "UI"', layers: ['Controller'], pointTo: null },
       { name: 'Domain', layers: ['Domain', 'Shared'], pointTo: 'Domain' },
     ]);
     expect(g.layers.find((l) => l.name === 'Controller')).toMatchObject({ group: 'Web & "UI"', color: '#fde68a', hidden: false });
-    // Uncovered per layer, a name with ", " included: MailGateway → Uuid and PlaceOrder → Clock. The
-    // packages in no layer are out of scope (M5-24-R4, D039): the configuration has no package selector.
-    expect(g.layers.map((l) => [l.name, l.uncovered])).toEqual([['Controller', 0], ['Application', 2], ['Domain', 0], ['Shared', 0], [INFRA, 2], [REPORTS, 0]]);
+    // Uncovered per layer, a name with ", " included: MailGateway → Uuid and PlaceOrder → Clock (import,
+    // instantiation and, M2-12, the `new X().run()` call). The packages in no layer are out of scope
+    // (M5-24-R4, D039): the configuration has no package selector.
+    expect(g.layers.map((l) => [l.name, l.uncovered])).toEqual([['Controller', 0], ['Application', 3], ['Domain', 0], ['Shared', 0], [INFRA, 3], [REPORTS, 0]]);
     // Totals are check's counts: a finding on two pairs is one dependency, not two.
     const w = check.findings.filter((f) => f.kind === 'violation' && f.severity === 'warn').length;
     expect(g.totals).toEqual({ allowed: check.counts.allowed, violations: check.counts.violation, warnings: w, skipped: check.counts.skipped, uncovered: check.counts.uncovered, hiddenLayers: 1 });
@@ -143,7 +145,7 @@ describe('mapx arch graph on the fixture (AR-16)', CLI, () => {
     golden('ts.dot', dot);
     expect(dot).not.toContain('Infra');
     expect(dot).toContain(`label="${caption(checkReport())}"`);
-    expect(dot).toContain('n1 -> n2 [label="2", color="#d97706", fontcolor="#d97706", lhead=cluster_0];'); // Controller → Domain (advisory)
+    expect(dot).toContain('n1 -> n2 [label="3", color="#d97706", fontcolor="#d97706", lhead=cluster_0];'); // Controller → Domain (advisory)
     expect(dot).toContain('subgraph cluster_1 {\n    label="Web &amp; \\"UI\\"";');
     expect(graph('--format', 'dot')).toBe(dot); // byte-stable
     if (!HAS_DOT) return;
@@ -161,8 +163,8 @@ describe('mapx arch graph on the fixture (AR-16)', CLI, () => {
     expect(mmd).toContain(`%% ${caption(checkReport())}`);
     expect(mmd).toContain('subgraph group_Web____UI_["Web #amp; #quot;UI#quot;"]');
     expect(mmd).toContain(`layer_Reports__v2___beta_["Reports #quot;v2#quot; #lt;beta#gt;"]`);
-    expect(mmd).toContain('layer_Controller -->|2| group_Domain');
-    expect(mmd).toContain('layer_Shared -.->|2| layer_Domain');
+    expect(mmd).toContain('layer_Controller -->|3| group_Domain');
+    expect(mmd).toContain('layer_Shared -.->|3| layer_Domain');
   });
 
   it('golden layer DSM: counts with status marks, hidden layers absent but counted', () => {

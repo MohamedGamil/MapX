@@ -124,11 +124,13 @@ describe('mapx_arch_check', SLOW, () => {
     const r = await call('mapx_arch_check', { dir: app, limit: 0 });
     expect(r.isError).toBeFalsy();
     const { exitCode, total, limit, truncated, ...report } = body(r);
-    expect({ exitCode, total, limit, truncated }).toEqual({ exitCode: 1, total: 3, limit: 0, truncated: false });
+    expect({ exitCode, total, limit, truncated }).toEqual({ exitCode: 1, total: 4, limit: 0, truncated: false });
     const c = cli(app, 'check', '--format', 'json');
     expect(c.status).toBe(1);
     expect(report).toEqual(c.json);
     expect(ids(report)).toEqual([
+      // `new SqlOrderRepository().save(order)` calls the repository too (M2-12).
+      violation('src/application/PlaceOrder.ts#PlaceOrder', 'src/infrastructure/SqlOrderRepository.ts#SqlOrderRepository', 'call'),
       violation('src/application/PlaceOrder.ts#PlaceOrder', 'src/infrastructure/SqlOrderRepository.ts#SqlOrderRepository', 'import'),
       violation('src/application/PlaceOrder.ts#PlaceOrder', 'src/infrastructure/SqlOrderRepository.ts#SqlOrderRepository', 'instantiation'),
       violation('src/controller/OrderController.ts#OrderController', 'src/domain/Order.ts#Order', 'import'),
@@ -148,7 +150,7 @@ describe('mapx_arch_check', SLOW, () => {
 
   it('caps the findings and reports the total', async () => {
     const b = body(await call('mapx_arch_check', { dir: app, limit: 1 }));
-    expect({ n: b.findings.length, total: b.total, limit: b.limit, truncated: b.truncated, exitCode: b.exitCode, counts: b.counts.violation }).toEqual({ n: 1, total: 3, limit: 1, truncated: true, exitCode: 1, counts: 3 });
+    expect({ n: b.findings.length, total: b.total, limit: b.limit, truncated: b.truncated, exitCode: b.exitCode, counts: b.counts.violation }).toEqual({ n: 1, total: 4, limit: 1, truncated: true, exitCode: 1, counts: 4 });
   });
 
   it('file keeps the findings with an end in that file or folder; since, those of the files changed since a ref', async () => {
@@ -156,7 +158,7 @@ describe('mapx_arch_check', SLOW, () => {
     expect(ids(byFile)).toEqual([violation('src/controller/OrderController.ts#OrderController', 'src/domain/Order.ts#Order', 'import')]);
     expect(byFile.exitCode).toBe(1);
     const byGlob = body(await call('mapx_arch_check', { dir: app, file: 'src/**/SqlOrderRepository.ts' }));
-    expect(ids(byGlob).map((f) => f.edgeType)).toEqual(['import', 'instantiation']);
+    expect(ids(byGlob).map((f) => f.edgeType)).toEqual(['call', 'import', 'instantiation']);
     const since = body(await call('mapx_arch_check', { dir: app, since: 'HEAD~1' }));
     expect(ids(since)).toEqual([violation('src/controller/OrderController.ts#OrderController', 'src/domain/Order.ts#Order', 'import')]);
     const none = body(await call('mapx_arch_check', { dir: app, since: 'HEAD' }));

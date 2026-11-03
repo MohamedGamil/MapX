@@ -39,6 +39,14 @@ export const LARAVEL_FACADE_MAP: Record<string, string> = {
   View:          'Illuminate\\View\\Factory',
 };
 
+const PHP_TYPE_DECLARATIONS = new Set(['class_declaration', 'interface_declaration', 'trait_declaration', 'enum_declaration']);
+
+/** The class, interface, trait or enum declaration a node sits in, or null. */
+function phpEnclosingType(node: any): any {
+  for (let p = node.parent; p; p = p.parent) if (PHP_TYPE_DECLARATIONS.has(p.type)) return p;
+  return null;
+}
+
 export class PhpParser extends GenericWasmParser {
   constructor(langDef: LanguageDefinition) {
     super(langDef);
@@ -62,7 +70,6 @@ export class PhpParser extends GenericWasmParser {
         source, this.language, this.symbolsQuery!, this.referencesQuery!
       );
 
-      let currentClass: string | null = null;
       // Each symbol's declaration node, for its attributes and PHPDoc tags once `use` is read (M5-10).
       const declarations: Array<[ExtractedSymbol, any]> = [];
 
@@ -80,10 +87,6 @@ export class PhpParser extends GenericWasmParser {
               continue;
             }
 
-            if (kind === 'class' || kind === 'interface' || kind === 'trait' || kind === 'enum') {
-              currentClass = name;
-            }
-
             let signature = name;
             const parentNode = capture.node.parent;
             if (parentNode) {
@@ -93,8 +96,10 @@ export class PhpParser extends GenericWasmParser {
             const symbol: ExtractedSymbol = {
               name,
               kind,
+              // The type the member is declared in, from the syntax tree: captures come grouped by kind,
+              // so the last class read is not the member's in a file of several (M2-12 review).
               scope: kind === 'method' || kind === 'property' || kind === 'constant'
-                ? currentClass
+                ? phpEnclosingType(capture.node)?.childForFieldName('name')?.text ?? null
                 : null,
               signature,
               startLine,
@@ -202,6 +207,9 @@ export class PhpParser extends GenericWasmParser {
           .filter((c: any) => c.type === 'use_declaration')
           .flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'name' || n.type === 'qualified_name').map((n: any) => resolveToFqn(n.text)));
         if (mixins.length) symbol.metadata.mixins = mixins;
+        // The class it extends, fully qualified: a method called on a new instance may be inherited (M2-12 review).
+        const base = node.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name');
+        if (base && symbol.kind === 'class') symbol.metadata.bases = [resolveToFqn(base.text)];
       }
 
       // Process standard captures (extends, implements, calls, instantiations)
@@ -256,12 +264,35 @@ export class PhpParser extends GenericWasmParser {
               resolvedTarget = resolveToFqn(cleaned);
             }
 
+            // `(new Order())->total()`: the class whose method the scanner links (M2-12).
+            let newClass: string | null = null;
+            const call = capture.node.parent;
+            if (referenceType === 'call' && call?.type === 'member_call_expression' && call.childForFieldName('name')?.id === capture.node.id) {
+              let object = call.childForFieldName('object');
+              while (object?.type === 'parenthesized_expression') object = object.namedChildren[0];
+              const created = object?.type === 'object_creation_expression'
+                ? object.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name' || c.type === 'relative_scope') : null;
+              const written = created?.text.toLowerCase();
+              // `new self()` / `new static()`: the enclosing class; `new parent()`: the class it extends.
+              const owner = written === 'self' || written === 'static' || written === 'parent' ? phpEnclosingType(created) : null;
+              const ownerName = written === 'parent'
+                ? owner?.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name')?.text
+                : owner?.childForFieldName('name')?.text;
+              // `new parent()` in a class that extends nothing names no class either.
+              if (created && owner && !ownerName && owner.type === 'class_declaration') continue;
+              if (created) newClass = owner ? (ownerName ? resolveToFqn(ownerName) : null) : resolveToFqn(created.text);
+              // `(new $cls())->m()`, `(new class { … })->m()`: a class the syntax does not name, so no
+              // class to link and never a same-named method by name (review of M2-12).
+              else if (object?.type === 'object_creation_expression') continue;
+            }
+
             references.push({
               sourceSymbol: null,
               targetName: resolvedTarget,
               referenceType,
               startLine,
               verifiability,
+              ...(newClass ? { metadata: { newClass } } : {}),
             });
           }
         }

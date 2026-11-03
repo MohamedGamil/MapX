@@ -30,6 +30,16 @@
     object: (identifier)
     property: (property_identifier) @ref.target_call)) @ref.type_call
 
+; A method called on a new instance: `new Order().total()`, `(new Order()).total()`. The parser
+; records the class for the scanner, which links the method that class declares (M2-12).
+(call_expression
+  function: (member_expression
+    object: [
+      (new_expression)
+      (parenthesized_expression (new_expression))
+    ]
+    property: (property_identifier) @ref.target_call)) @ref.type_call
+
 (jsx_opening_element
   name: [
     (identifier) @ref.target_render

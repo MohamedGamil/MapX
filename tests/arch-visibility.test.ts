@@ -95,7 +95,8 @@ describe('the fixture: private-layer and internal-element rows (AR-07, AR-08)', 
     const ts = reportOf('ts');
     for (const id of ['ts-19', 'php-19']) {
       const row = expected.rows.find((x) => x.id === id)!;
-      expect(between(id === 'ts-19' ? ts : r, row), id).toEqual(['violation internal-element import', 'violation internal-element instantiation']);
+      // The `new LedgerHelper().run()` call is one too (M2-12).
+      expect(between(id === 'ts-19' ? ts : r, row), id).toEqual(['violation internal-element call', 'violation internal-element import', 'violation internal-element instantiation']);
     }
     // php-21: Order (Domain) → LedgerHelper is same-layer.
     expect(r.findings.filter((x) => x.source?.element === 'App\\Domain\\Order' && x.target?.element === 'App\\Domain\\LedgerHelper')).toEqual([]);
@@ -121,7 +122,7 @@ describe('the fixture: private-layer and internal-element rows (AR-07, AR-08)', 
   it('internal-element comes before private-layer (AR-08): an element both internal and private is reported as internal', () => {
     const r = reportOf('php', undefined, (t) => t.replace('"name": "Domain",', '"name": "Domain", "private": [{ "path": "app/Domain/LedgerHelper.php" }],'));
     const rules = r.findings.filter((f) => f.source?.element === 'App\\Application\\PlaceOrder' && f.target?.element === 'App\\Domain\\LedgerHelper').map((f) => `${f.rule} ${f.edgeType}`);
-    expect(rules.sort()).toEqual(['internal-element import', 'internal-element instantiation']);
+    expect(rules.sort()).toEqual(['internal-element call', 'internal-element import', 'internal-element instantiation']);
   });
 
   it('Go doc comments give doc tags: the fixture\'s `// @internal` types', () => {

@@ -56,7 +56,28 @@ const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 's
  * Symbol index entry: a declaration by name, with its file, scope and kind. `assigned`: a JS/TS
  * member-assigned function (`obj.m = function`, `exports.f = …`: M2-09).
  */
-type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string; assigned?: boolean };
+/**
+ * The type facts a new-instance call walks (M2-12 reviews): `bases`, a class's traits (PHP, first)
+ * then base class and interfaces, as its parser names them (`?` for one it cannot name); `partial`,
+ * the namespace-qualified name of a C# partial class; `extensionOf`, the type a C# extension method
+ * extends.
+ */
+type TypeFacts = { bases?: string[]; partial?: string; extensionOf?: string };
+type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string; assigned?: boolean } & TypeFacts;
+/**
+ * A symbol's type facts from its metadata, or undefined: PHP traits before the base class (a
+ * trait's method overrides an inherited one), C# partial classes and extension methods.
+ */
+function typeFacts(metadata: Record<string, unknown> | undefined): TypeFacts | undefined {
+  const names = [metadata?.['mixins'], metadata?.['bases']].flatMap((v) => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string') : []));
+  const facts: TypeFacts = {};
+  if (names.length) facts.bases = names;
+  if (metadata?.['partial'] === true) facts.partial = `${metadata['namespace'] ?? ''}`;
+  if (typeof metadata?.['extensionOf'] === 'string') facts.extensionOf = metadata['extensionOf'];
+  return Object.keys(facts).length ? facts : undefined;
+}
+const TYPE_FACT_KEYS = /"(?:bases|mixins|partial|extensionOf)"/;
+
 /**
  * Per line, the smallest symbol enclosing it (the first of equal spans): a reference's source symbol.
  * Painted widest first, so a file of many symbols costs their spans, not references × symbols (M2-09).
@@ -1787,6 +1808,13 @@ export class Scanner {
       // named by the module/namespace rather than the raw statement (M0-12-R4).
       let targets: { file: string; symbol: string; verifiability?: 'verified' | 'inferred'; metadata?: Record<string, unknown> }[] | undefined;
       let vueHit: { file: string; symbol: string } | null | undefined;
+      // `new Order().total()`: the method the instantiated class or one of its bases declares; when
+      // none does, no edge if MapX knows the class's whole method set, else name lookup, inferred (M2-12).
+      let newTargets: { file: string; symbol: string; verifiability: 'verified' }[] | null = null;
+      if (ref.referenceType === 'call' && typeof ref.metadata?.newClass === 'string') {
+        newTargets = this.resolveNewReceiverCall(ref, sourcePath, sourceLanguage, isJsOrTs, fileMap, symbols);
+        if (newTargets === null) ref = { ...ref, verifiability: 'inferred' };
+      }
 
       if (navigate) {
         targets = this.resolveNavigation(ref, sourcePath, fileMap);
@@ -1814,6 +1842,8 @@ export class Scanner {
         // rules in their component, mixin or store file, never by name alone. Undefined: the hook
         // is not a store after all (M3-05-R1), so the reference resolves as any other.
         targets = vueHit ? [vueHit] : [];
+      } else if (newTargets) {
+        targets = newTargets;
       } else {
         let targetFile: string | null = null;
         if (ref.referenceType === 'require') {
@@ -1848,7 +1878,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -1987,7 +2017,8 @@ export class Scanner {
       if (!declared) this.declaredNames.set(symbols, (declared = new Set(symbols.filter(lexical).map(d => d.name))));
       if (declared.has(name) && symbols.some(d => d.name === name && lexical(d) && this.visibleAt(d, ref.startLine, symbols))) return null;
     }
-    if (python && !receiver) {
+    // A Python base of a class (M2-12 review) is resolved from no line: a bare name's binding.
+    if (python && !receiver && ref.startLine > 0) {
       const found = this.pythonReceiver(sourcePath, ref.startLine, name);
       if (found === null) return null;
       receiver = found;
@@ -2003,6 +2034,96 @@ export class Scanner {
     if (!binding || binding.imported === null) return null;
     const exported = binding.imported === 'default' && !python ? this.defaultExportName(binding.file) : binding.imported;
     return exported ? orNoEdge(this.findExport(binding.file, exported, fileMap)) : null;
+  }
+
+  /**
+   * A method called on a new instance (M2-12): `new Order().total()` (JS/TS, Java, C#),
+   * `(new Order())->total()` (PHP; `new self()`, `static` and `parent` named by the parser),
+   * `Order().total()` (Python). The call links the method the class declares, else the first base
+   * that does, depth first and left first (PHP traits before the parent; Python's order for simple
+   * hierarchies), each base resolved from its own class's file; a C# partial class is all its
+   * declarations, and a C# extension method of a class of the chain counts. Verified, never a
+   * same-named method of an unrelated class.
+   *
+   * Without such a method, the answer depends on whether MapX knows the class's whole method set
+   * (reviews of M2-12): the chain is closed when every base resolved to a project class and no class
+   * of it has `__call` / `__getattr__`. A closed chain links nothing; an open one (a library base, an
+   * unknown base, magic, an extension method of another type) keeps name lookup, inferred, as before
+   * M2-12 (null). JS/TS linked no call on a new instance before M2-12, so it links nothing. A class
+   * the project does not declare links nothing ([]).
+   */
+  private resolveNewReceiverCall(
+    ref: ExtractedReference, sourcePath: string, language: string | null, isJsOrTs: boolean, fileMap: Map<string, string>,
+    symbols?: Parameters<Scanner['resolveImportedCall']>[5],
+  ): { file: string; symbol: string; verifiability: 'verified' }[] | null {
+    if (!this.symbolIndex) return null;
+    const index = this.symbolIndex;
+    const method = ref.targetName;
+    const last = (name: string) => name.split(/\\|\.|::/).pop()!;
+    const seen = new Set<string>();
+    const owners = new Set<string>();
+    let open = false;
+    const visit = (cls: { file: string; owner: string } | null, depth: number): { file: string; symbol: string } | undefined => {
+      if (!cls || depth > 12) { open = true; return undefined; }
+      if (seen.has(`${cls.file}#${cls.owner}`)) return undefined;
+      seen.add(`${cls.file}#${cls.owner}`);
+      owners.add(cls.owner.toLowerCase());
+      const lang = this.languageOf(cls.file);
+      const same = (a: string, b: string, kind: string) => a === b || (foldsCase(lang, kind) && a.toLowerCase() === b.toLowerCase());
+      const type = (index.get(cls.owner.toLowerCase()) ?? []).find(e => e.file === cls.file && TYPE_KINDS.has(e.kind ?? '') && same(e.name, cls.owner, 'class'));
+      // A C# partial class: every declaration of it, in any file.
+      const files = new Set(type?.partial !== undefined
+        ? (index.get(cls.owner.toLowerCase()) ?? []).filter(e => e.partial === type.partial && e.name === cls.owner).map(e => e.file)
+        : [cls.file]);
+      const member = (name: string) => (index.get(name.toLowerCase()) ?? []).find(e => files.has(e.file)
+        && (e.kind === 'method' || e.kind === 'function') && same(e.name, name, e.kind ?? '')
+        && !!e.scope && same(last(e.scope), cls.owner, 'class'));
+      const declared = member(method);
+      if (declared) return { file: declared.file, symbol: declared.name };
+      // A name that is no type (a Python factory `Maker()`) or a magic class: the method set is unknown.
+      if (!type || ['__call', '__getattr__', '__getattribute__'].some(member)) open = true;
+      const isJs = /\.([cm]?[jt]sx?|vue|svelte)$/.test(cls.file) || lang === 'javascript' || lang === 'typescript';
+      for (const base of type?.bases ?? []) {
+        // No line of the class file is the call's: a base is resolved from the file's bindings.
+        const hit = visit(base === '?' ? null : this.resolveClassName(base, { ...ref, startLine: 0 }, cls.file, lang, isJs, fileMap), depth + 1);
+        if (hit) return hit;
+      }
+      return undefined;
+    };
+    const hit = visit(this.resolveClassName(ref.metadata!.newClass as string, ref, sourcePath, language, isJsOrTs, fileMap, symbols), 0);
+    if (hit) return [{ ...hit, verifiability: 'verified' }];
+    // The class itself is not the project's: nothing to link (M2-08-R3, a library class).
+    if (!seen.size) return [];
+    // C#: an extension method (`static int Spin(this Widget w)`) of a class of the chain.
+    const extensions = (index.get(method.toLowerCase()) ?? []).filter(e => e.name === method && e.extensionOf !== undefined);
+    const extension = extensions.find(e => owners.has(last(e.extensionOf!).toLowerCase()));
+    if (extension) return [{ file: extension.file, symbol: extension.name, verifiability: 'verified' }];
+    if (extensions.length) open = true;
+    if (isJsOrTs) return [];
+    return open ? null : [];
+  }
+
+  /**
+   * The project class a written class name denotes from `sourcePath`, as its instantiation resolves
+   * (M2-12): a JS/TS name an import from outside the project binds is that module's (M2-08-R3), so
+   * none; an imported project class is the declaration the import names (`ns.Order` through a
+   * namespace import); else name lookup. Null when the project declares no such class.
+   */
+  private resolveClassName(
+    written: string, ref: ExtractedReference, sourcePath: string, language: string | null, isJsOrTs: boolean, fileMap: Map<string, string>,
+    symbols?: Parameters<Scanner['resolveImportedCall']>[5],
+  ): { file: string; owner: string } | null {
+    // `new ns.Order()`: the class Order of the binding ns.
+    const dot = isJsOrTs || language === 'python' ? written.lastIndexOf('.') : -1;
+    const instantiation: ExtractedReference = {
+      ...ref, referenceType: 'instantiation', targetName: written.slice(dot + 1), metadata: dot < 0 ? {} : { receiver: written.slice(0, dot) },
+    };
+    if (isJsOrTs && this.boundOutside(instantiation, sourcePath, fileMap)) return null;
+    const imported = this.resolveImportedCall(instantiation, sourcePath, language, isJsOrTs, fileMap, symbols);
+    if (imported === false) return null;
+    const file = imported ? imported.file : this.resolveSymbolToFile(instantiation.targetName, fileMap, sourcePath, true,
+      isJsOrTs ? this.globalScopeFilter(instantiation, sourcePath, fileMap) : undefined);
+    return file ? { file, owner: (imported ? imported.symbol : instantiation.targetName).split(/\\|\.|::/).pop()! } : null;
   }
 
   /**
@@ -4721,8 +4842,9 @@ export class Scanner {
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 
-    const addEntry = (name: string, file: string, scope: string | null, kind?: string, assigned?: boolean) => {
+    const addEntry = (name: string, file: string, scope: string | null, kind?: string, assigned?: boolean, facts?: TypeFacts) => {
       const entry: SymbolIndexEntry = assigned ? { name, file, scope, kind, assigned } : { name, file, scope, kind };
+      if (facts) Object.assign(entry, facts);
       const key = name.toLowerCase();
       const existing = index.get(key);
       if (existing) {
@@ -4747,8 +4869,9 @@ export class Scanner {
       const filePath = sym.file_path as string;
       const symRepo = sym.repo as string;
       if (symRepo === repoName && excludeSet.has(filePath)) continue;
+      const meta = typeof sym.metadata === 'string' ? sym.metadata : '';
       addEntry(sym.name as string, filePath, (sym.scope as string) || null, sym.kind as string,
-        typeof sym.metadata === 'string' && sym.metadata.includes('"assigned":true'));
+        meta.includes('"assigned":true'), TYPE_FACT_KEYS.test(meta) ? typeFacts(JSON.parse(meta)) : undefined);
     }
 
     // PHP namespaces: stored ones, replaced by this phase's parse results.
@@ -4764,7 +4887,7 @@ export class Scanner {
         const res = results[i];
         if (!res) continue;
         for (const sym of res.symbols) {
-          addEntry(sym.name, filePath, sym.scope, sym.kind, sym.metadata?.['assigned'] === true);
+          addEntry(sym.name, filePath, sym.scope, sym.kind, sym.metadata?.['assigned'] === true, typeFacts(sym.metadata));
         }
         if (this.languageOf(filePath) === 'php') this.phpNamespaces.set(filePath, res.fileMetadata?.namespace ?? '');
       }

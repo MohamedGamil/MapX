@@ -34,8 +34,10 @@ import type { Store } from './store.js';
  * - 15: M2-08-R3 (a JS/TS name bound by an import from outside the project links no project symbol;
  *   a bare name an ES module neither imports nor declares links no other module's declaration; bare
  *   imports resolve under a tsconfig/jsconfig `baseUrl`; files record their global scope).
+ * - 16: M2-12 (a method called on a new instance, `new X().m()`, `(new X())->m()`, Python `X().m()`,
+ *   links the method class X declares, in JS/TS, PHP, Java, C# and Python).
  */
-export const EXTRACTOR_VERSION = 15;
+export const EXTRACTOR_VERSION = 16;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

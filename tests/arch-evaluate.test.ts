@@ -148,7 +148,9 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
     // M5-11: the two @internal dependencies (import and instantiation each) are violations, no longer allowed.
     // M5-24-R4 (D039): HttpGateway's dependencies on packages in no layer (php-x01 … php-x14) are out
     // of scope, as the configuration has no package selector; M5-24 counted them uncovered (20).
-    expect(r.counts).toEqual({ violation: 16, skipped: 0, uncovered: 4, allowed: 16, warning: 2, error: 0 });
+    // M2-12: each `(new X())->run()` is a call of X::run too, beside its instantiation: 8 more
+    // violations, 2 more uncovered (Clock, Uuid) and 8 more allowed.
+    expect(r.counts).toEqual({ violation: 24, skipped: 0, uncovered: 6, allowed: 24, warning: 2, error: 0 });
     // Unique fingerprints within a report.
     expect(new Set(r.findings.map((f) => f.fingerprint)).size).toBe(r.findings.length);
   });
@@ -156,10 +158,11 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
   it('layerEdges counts allowed and violating dependencies per layer pair', () => {
     const r = runArchitecture(roots['php']!)!;
     const pair = (from: string, to: string) => r.layerEdges.find((e) => e.from === from && e.to === to);
-    // Controller → Application: PlaceOrder and CancelOrder allowed, PricingRules and TaxRules private (import + instantiation each).
-    expect(pair('Controller', 'Application')).toEqual({ from: 'Controller', to: 'Application', allowed: 4, violations: 4, warnings: 0, skipped: 0 });
-    expect(pair('Controller', 'Domain')).toEqual({ from: 'Controller', to: 'Domain', allowed: 0, violations: 2, warnings: 0, skipped: 0 });
-    expect(pair('Domain', 'Shared')).toMatchObject({ allowed: 4, violations: 0 }); // Money → Text, Order → OrderId
+    // Controller → Application: PlaceOrder and CancelOrder allowed, PricingRules and TaxRules private
+    // (import, instantiation and the `->run()` call each, M2-12).
+    expect(pair('Controller', 'Application')).toEqual({ from: 'Controller', to: 'Application', allowed: 6, violations: 6, warnings: 0, skipped: 0 });
+    expect(pair('Controller', 'Domain')).toEqual({ from: 'Controller', to: 'Domain', allowed: 0, violations: 3, warnings: 0, skipped: 0 });
+    expect(pair('Domain', 'Shared')).toMatchObject({ allowed: 6, violations: 0 }); // Money → Text, Order → OrderId
     expect(r.layerEdges.map((e) => `${e.from}>${e.to}`)).toEqual(r.layerEdges.map((e) => `${e.from}>${e.to}`).sort());
     expect(pair('Controller', 'Controller')).toBeUndefined();
   });
