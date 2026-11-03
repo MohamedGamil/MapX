@@ -129,9 +129,9 @@ describe('mapx arch graph on the fixture (AR-16)', CLI, () => {
       { name: 'Domain', layers: ['Domain', 'Shared'], pointTo: 'Domain' },
     ]);
     expect(g.layers.find((l) => l.name === 'Controller')).toMatchObject({ group: 'Web & "UI"', color: '#fde68a', hidden: false });
-    // Uncovered per layer, a name with ", " included: MailGateway → Uuid and PlaceOrder → Clock, and
-    // (M5-24) HttpGateway and toolingCheck's 19 dependencies on packages in no layer.
-    expect(g.layers.map((l) => [l.name, l.uncovered])).toEqual([['Controller', 0], ['Application', 2], ['Domain', 0], ['Shared', 0], [INFRA, 21], [REPORTS, 0]]);
+    // Uncovered per layer, a name with ", " included: MailGateway → Uuid and PlaceOrder → Clock. The
+    // packages in no layer are out of scope (M5-24-R4, D039): the configuration has no package selector.
+    expect(g.layers.map((l) => [l.name, l.uncovered])).toEqual([['Controller', 0], ['Application', 2], ['Domain', 0], ['Shared', 0], [INFRA, 2], [REPORTS, 0]]);
     // Totals are check's counts: a finding on two pairs is one dependency, not two.
     const w = check.findings.filter((f) => f.kind === 'violation' && f.severity === 'warn').length;
     expect(g.totals).toEqual({ allowed: check.counts.allowed, violations: check.counts.violation, warnings: w, skipped: check.counts.skipped, uncovered: check.counts.uncovered, hiddenLayers: 1 });

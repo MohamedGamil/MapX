@@ -87,7 +87,7 @@ test('health tiles, the layer diagram with drill-down, the layer DSM and the fin
   await openRules(page);
   await expect(tile(page, 'Violations')).toHaveText('16');
   await expect(tile(page, 'Baseline debt')).toHaveText('2');
-  await expect(tile(page, 'Uncovered')).toHaveText('23'); // M5-24: 19 are dependencies on packages in no layer
+  await expect(tile(page, 'Uncovered')).toHaveText('4'); // M5-24-R4 (D039): packages in no layer are out of scope without a package selector
   await expect(tile(page, 'Unassigned')).toHaveText('4');
   await expect(tile(page, 'Warnings')).toHaveText('1'); // mapx check's Warnings: the multi-layer OrderId (review of M5-15)
   await expect(tile(page, 'Warn-level violations')).toHaveText('0');
@@ -140,8 +140,8 @@ test('health tiles, the layer diagram with drill-down, the layer DSM and the fin
   const rows = page.locator('#table-arch-findings tbody tr:has(.arch-kind)');
   const total = await rows.count();
   await page.selectOption('#arch-filter-kind', 'uncovered');
-  await expect(rows).toHaveCount(23); // M5-24: packages in no layer are uncovered too
-  await expect(page.locator('#arch-findings-count')).toContainText(`23 of ${total} findings`);
+  await expect(rows).toHaveCount(4); // M5-24-R4: the 19 package findings of M5-24 are out of scope
+  await expect(page.locator('#arch-findings-count')).toContainText(`4 of ${total} findings`);
   await page.selectOption('#arch-filter-kind', '');
   await page.selectOption('#arch-filter-rule', 'private-layer');
   await expect(rows).toHaveCount(4);
@@ -151,7 +151,7 @@ test('health tiles, the layer diagram with drill-down, the layer DSM and the fin
   await page.selectOption('#arch-filter-rule', '');
   await page.selectOption('#arch-filter-verifiability', 'verified');
   await page.selectOption('#arch-filter-layer', INFRA); // a name with ", " (review of M5-15)
-  await expect(rows).toHaveCount(25); // M5-24: the 19 package findings are verified
+  await expect(rows).toHaveCount(6); // M5-24-R4: without the 19 package findings M5-24 added
   await page.selectOption('#arch-filter-layer', PLUGINS);
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText(`(${PLUGINS} on Domain)`);

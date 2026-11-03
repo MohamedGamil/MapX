@@ -68,8 +68,9 @@ describe('the fixture', () => {
     expect(baseline.entries[0].source.endsWith(stale[0]!.from!.symbol!)).toBe(true);
     const ws = rows.filter((r) => r.app === 'workspace');
     // workspace-03 was added by M5-04: the route file's import of the API controller (Backend → PublicApi).
-    // workspace-x01 and x02 (M5-24): the route files use the Route facade, a package in no layer.
-    expect(ws.map((r) => [r.kind, r.edgeType])).toEqual([['allowed', 'http'], ['violation', 'http'], ['violation', 'import'], ['uncovered', 'import'], ['uncovered', 'import']]);
+    // workspace-x01 and x02 (M5-24): the route files use the Route facade, a package in no layer;
+    // out of scope since D039 (M5-24-R4), as the configuration has no package selector.
+    expect(ws.map((r) => [r.kind, r.edgeType])).toEqual([['allowed', 'http'], ['violation', 'http'], ['violation', 'import'], ['none', 'import'], ['none', 'import']]);
     expect(expected.apps['workspace']!.repos).toEqual(['frontend', 'backend']);
   });
 

@@ -106,7 +106,7 @@
           "properties": {
             "externals": {
               "type": "boolean",
-              "description": "Report dependencies on third-party elements in no layer. Default: true."
+              "description": "Report dependencies on packages (third-party elements) in no layer as uncovered. Packages are opt-in: left unset, it is true only when a non-overlay layer has a positive package selector (any dev or direct filter) in its selectors or private, directly or inside all or any, and false otherwise; one only under not, or only in overlay layers, does not opt in. A configuration without one leaves packages out of scope and --fail-on-uncovered ignores them. An explicit value always wins."
             },
             "builtins": {
               "type": "boolean",

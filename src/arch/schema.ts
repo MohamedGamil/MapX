@@ -149,9 +149,19 @@ export interface ArchitectureConfig {
   rules: Record<string, Allowance[]>;
   baseline: string | null;
   report: { groups: Record<string, string[]>; hidden: string[]; pointToGroups: boolean; codeclimate: CodeClimateSeverityMap };
+  /** Why `policy.uncovered.externals` has its value (M5-24-R4); set by the loader. */
+  uncoveredExternals?: ExternalsResolution;
 }
 
+/**
+ * How the loader resolved `policy.uncovered.externals` (D039 and its addendum): set in a document
+ * (`file`), opted in by a non-overlay `layer` with a positive package selector, or off by default.
+ */
+export interface ExternalsResolution { value: boolean; source: 'explicit' | 'package-selector' | 'default'; file?: string; layer?: string }
+
 export const DEFAULTS = {
-  policy: { inferred: 'warn' as const, inheritDependencies: false, uncovered: { externals: true, builtins: false }, strictLayers: false, alsoInferred: false },
+  // `uncovered.externals` left unset is resolved by the loader: true when a layer uses a `package`
+  // selector (D039, M5-24-R4), so false here is only the value for a configuration without one.
+  policy: { inferred: 'warn' as const, inheritDependencies: false, uncovered: { externals: false, builtins: false }, strictLayers: false, alsoInferred: false },
   visibility: { internalTags: ['@internal', '@mapx-internal'], nativeMarkers: false },
 };

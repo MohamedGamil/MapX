@@ -170,10 +170,12 @@ function observedOf(report: ArchReport | null, skip?: string): ObservedPair[] {
 
 /**
  * The layer of packages outside the workspace every proposal gets when the index has package
- * references (review of M5-24): without it `mapx check` reports each dependency on a package as
- * uncovered (`policy.uncovered.externals`), which `--fail-on-uncovered` fails on and no baseline can
- * skip. `Packages` holds every package, dev-only and unattributed ones included, and every layer may
- * use it (`"*"`); a dev-only package in production code is the `dev-dependency-in-prod` smell's.
+ * references (review of M5-24). Since D039 (M5-24-R4) a configuration without a package selector
+ * leaves packages out of scope, so day one passes without it too; the layer is kept as the starting
+ * point for vendor rules, and shows the package dependencies in the layer graph. Its selector opts
+ * the draft in to uncovered packages (`policy.uncovered.externals`), and as it holds every package,
+ * dev-only and unattributed ones included, none is uncovered: every layer may use it (`"*"`). A
+ * dev-only package in production code is the `dev-dependency-in-prod` smell's.
  * Returns its name, or undefined when none was added.
  */
 function addPackagesLayer(store: Store, draft: Draft, reserved: string[] = []): string | undefined {
@@ -186,8 +188,9 @@ function addPackagesLayer(store: Store, draft: Draft, reserved: string[] = []): 
   for (let i = 2; taken.has(packages); i++) packages = `Packages${i}`;
   draft.layers = [...(draft.layers ?? []), {
     comment: [
-      'every package outside the workspace (npm, Composer, pypi, Go modules), which every layer may use:',
-      'without it `mapx check` reports each one as uncovered (policy.uncovered.externals)',
+      'every package outside the workspace (npm, Composer, pypi, Go modules), which every layer may use.',
+      'A package selector opts in to uncovered packages (policy.uncovered.externals): narrow this layer',
+      'and a package it leaves out is uncovered; delete it and packages are out of scope',
     ],
     layer: { name: packages, selectors: [{ package: '*' }] },
   }];

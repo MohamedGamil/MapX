@@ -33,7 +33,7 @@ const ERRORS = 'A failure is a tool error with JSON { error, exitCode, issues?, 
 export const ARCH_TOOLS = [
   {
     name: 'mapx_arch_check',
-    description: `Check the architecture rules (.mapx/architecture.jsonc) against the index, as \`mapx check --format json\` does. Returns the report { counts, findings, layers, layerEdges, configErrors, selection } plus exitCode (0 clean, 1 violations, 2 uncovered with failOnUncovered), total (findings before the cap), limit and truncated. Violations are a result, not an error. Filters: layer, rule, file, since. ${ERRORS}`,
+    description: `Check the architecture rules (.mapx/architecture.jsonc) against the index, as \`mapx check --format json\` does. Returns the report { counts, findings, layers, layerEdges, configErrors, selection, policy (the resolved policy.uncovered and why) } plus exitCode (0 clean, 1 violations, 2 uncovered with failOnUncovered), total (findings before the cap), limit and truncated. Violations are a result, not an error. Filters: layer, rule, file, since. ${ERRORS}`,
     inputSchema: {
       type: 'object',
       properties: {

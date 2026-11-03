@@ -474,7 +474,7 @@ List files grouped by active dynamic architectural roles.
 - `dir` (string, optional): Target project directory
 
 #### `mapx_arch_validate_config`
-Validate the [architecture rules](architecture-rules.md) configuration, `.mapx/architecture.jsonc` or a view, with every document it extends, as `mapx arch validate-config` does. It needs no index. The result is JSON: `{ valid, view, files, issues: [{ file, pointer, message }] }`, every problem at once in document order. An invalid or missing configuration is a tool error (`isError`), as the CLI exits 3.
+Validate the [architecture rules](architecture-rules.md) configuration, `.mapx/architecture.jsonc` or a view, with every document it extends, as `mapx arch validate-config` does. It needs no index. The result is JSON: `{ valid, view, files, issues: [{ file, pointer, message }] }`, every problem at once in document order, plus `policy` for a valid configuration: the resolved `policy.uncovered` and why packages are or are not reported (M5-24-R4). An invalid or missing configuration is a tool error (`isError`), as the CLI exits 3.
 - `view` (string, optional): Validate `.mapx/architecture/<view>.jsonc`
 - `format` (string, optional): `json` (default) or `text`, one `file#pointer: message` line per problem, as the CLI prints
 - `dir` (string, optional): Target project directory
@@ -498,7 +498,7 @@ A violation, or a refused dependency, is an answer rather than an error: it carr
 **What the server writes.** The server logs tool calls to `.mapx/tool-calls.jsonl` of the first workspace it is called on that already has a `.mapx/` folder. It never creates a workspace or a `.mapx/` folder. `mapx_arch_init` without `write: true` is never logged, so its workspace stays byte-identical.
 
 #### `mapx_arch_check`
-Checks the rules against the index, as `mapx check --format json` does. The result is the report: `{ version, counts, findings, layers, layerEdges, configErrors, selection }`. Four fields are added:
+Checks the rules against the index, as `mapx check --format json` does. The result is the report: `{ version, counts, findings, layers, layerEdges, configErrors, selection, policy }` (`policy`: the resolved `policy.uncovered`, M5-24-R4). Four fields are added:
 - `exitCode`: 0, 1 for violations, or 2 for uncovered dependencies with `failOnUncovered`;
 - `total`: the findings shown before the cap;
 - `limit`;

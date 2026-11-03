@@ -15,7 +15,7 @@ import { execFileSync } from 'node:child_process';
 import { isAbsolute, join, posix, relative, resolve } from 'node:path';
 import { getChangedFiles, isGitRepo } from '../core/git-tracker.js';
 import type { Store } from '../core/store.js';
-import { loadArchitectureConfig, type LoadOptions } from './config.js';
+import { describeUncoveredExternals, loadArchitectureConfig, reportedUncoveredPolicy, type LoadOptions } from './config.js';
 import { SYMBOL_KINDS, type ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership, type TraceEntry } from './membership.js';
 import { decide, expandPolicy, type ExpandedPolicy } from './policy.js';
@@ -549,11 +549,31 @@ function end(ctx: ArchContext, query: string, role: 'source' | 'target'): { end:
  * file stands for every element it declares, a top-level symbol for its members (findings name
  * the top-level declaration), a member for itself. A Go package import counts for its files.
  */
+/** Whether element `q` (a file, a top-level element with its members, or one element) covers `e`. */
+const covers = (view: ArchContext['membership']['view'], q: Element, e: Element) =>
+  (q.kind === 'file' ? e.file.path === q.file.path : q.topLevel ? e.id === q.id || reportElement(view, e).id === q.id : e.id === q.id);
+
 function observedDependencies(ctx: ArchContext, source: Element, target: Element): Dependency[] {
   const view = ctx.membership.view;
-  const covers = (q: Element, e: Element) => (q.kind === 'file' ? e.file.path === q.file.path : q.topLevel ? e.id === q.id || reportElement(view, e).id === q.id : e.id === q.id);
-  return ctx.evaluation().dependencies.filter((d) => covers(source, d.source)
-    && (d.targetPackage ? target.kind === 'file' && posix.dirname(target.file.path) === d.targetPackage.dir : covers(target, d.target)));
+  return ctx.evaluation().dependencies.filter((d) => covers(view, source, d.source)
+    && (d.targetPackage ? target.kind === 'file' && posix.dirname(target.file.path) === d.targetPackage.dir : covers(view, target, d.target)));
+}
+
+/**
+ * The edge types of the stored references from `source` to the external `target` in scope, whatever
+ * `policy.uncovered` says: the evaluator drops the ones it does not report, but they are observed
+ * (review of M5-24-R4).
+ */
+function observedExternalTypes(ctx: ArchContext, source: Element, target: Element): Set<string> {
+  const view = ctx.membership.view;
+  const resolve = endResolver(view);
+  const out = new Set<string>();
+  for (const ref of view.externalRefs ?? []) {
+    if (ref.target.id !== target.id || !ctx.scope.types.has(ref.kind) || !ctx.scope.path(ref.file)) continue;
+    const from = resolve(ref.file, ref.sourceSymbol);
+    if (from && covers(view, source, from)) out.add(ref.kind);
+  }
+  return out;
 }
 
 const SEVERITY_RANK: Record<FindingSeverity, number> = { error: 2, warn: 1, info: 0 };
@@ -605,7 +625,10 @@ function answer(ctx: ArchContext, from: string, to: string, options: { edgeType?
     whole('unassigned-source', `${label(source)} is in no layer, so no rule applies to it`);
   } else {
     const observed = sourceEl && targetEl ? observedDependencies(ctx, sourceEl, targetEl) : [];
-    const types = edgeType !== null ? [edgeType] : observed.length ? scopeTypes.filter((t) => observed.some((d) => d.edgeType === t)) : scopeTypes;
+    // An external's stored references are observed even when check does not report them (M5-24-R4).
+    const external = sourceEl && targetEl?.kind === 'external' ? observedExternalTypes(ctx, sourceEl, targetEl) : new Set<string>();
+    const observedTypes = new Set([...observed.map((d) => d.edgeType), ...external]);
+    const types = edgeType !== null ? [edgeType] : observedTypes.size ? scopeTypes.filter((t) => observedTypes.has(t)) : scopeTypes;
     // A hypothetical dependency between two elements: the target's internal markers apply (M5-11).
     const markers = sourceEl && targetEl && targetEl.kind !== 'external' ? internalMarkers(ctx.membership.view, ctx.config.visibility, (el) => reportElement(ctx.membership.view, el)) : null;
     for (const type of types) {
@@ -626,15 +649,17 @@ function answer(ctx: ArchContext, from: string, to: string, options: { edgeType?
       for (const d of decideEdge(ctx.config, ctx.policy, source.layers, targetSide, type, 'verified')) {
         // An external in no layer is reported only as `policy.uncovered` says, as the evaluator does
         // (M5-24 review): packages under `externals`, built-ins and ambient access under `builtins`.
+        // `externals` is the loader's resolved value: unset, it is true only with a package selector (D039).
         const ext = targetEl?.external;
         if (d.kind === 'uncovered' && ext && !(ext.origin === 'package' ? ctx.config.policy.uncovered.externals : ctx.config.policy.uncovered.builtins)) {
           const key = JSON.stringify([type, d.sourceLayer, 'unreported-external']);
           if (seen.has(key)) continue;
           seen.add(key);
-          const flag = ext.origin === 'package' ? 'externals' : 'builtins';
+          // The reason names why: an explicit false, or no opt-in at all (review of M5-24-R4).
+          const why = ext.origin === 'package' ? describeUncoveredExternals(reportedUncoveredPolicy(ctx.config).uncovered.externals) : 'policy.uncovered.builtins is false';
           decisions.push({
-            edgeType: type, observed: false, verifiability: 'verified', sourceLayer: d.sourceLayer, allowed: true, rule: 'out-of-scope', severity: 'info',
-            reason: `${label(target)} is in no layer and policy.uncovered.${flag} is false: \`mapx check\` does not report the dependency`,
+            edgeType: type, observed: external.has(type), verifiability: 'verified', sourceLayer: d.sourceLayer, allowed: true, rule: 'out-of-scope', severity: 'info',
+            reason: `${label(target)} is in no layer and ${why}: \`mapx check\` does not report the dependency`,
           });
           continue;
         }

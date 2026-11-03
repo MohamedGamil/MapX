@@ -66,6 +66,34 @@
         "layer": { "type": ["string", "null"] },
         "rule": { "type": ["string", "null"] }
       }
+    },
+    "policy": {
+      "description": "The resolved policy.uncovered of the configuration (M5-24-R4): whether dependencies on packages and on built-ins in no layer are reported as uncovered, and why for packages. Absent when the configuration cannot be loaded.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uncovered"],
+      "properties": {
+        "uncovered": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["externals", "builtins"],
+          "properties": {
+            "externals": {
+              "description": "Packages: value, and source: explicit (policy.uncovered.externals set in file), package-selector (a non-overlay layer with a positive package selector, named in layer, opts in) or default (neither: packages are out of scope).",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["value", "source"],
+              "properties": {
+                "value": { "type": "boolean" },
+                "source": { "enum": ["explicit", "package-selector", "default"] },
+                "file": { "type": "string" },
+                "layer": { "type": "string" }
+              }
+            },
+            "builtins": { "type": "boolean" }
+          }
+        }
+      }
     }
   },
   "definitions": {

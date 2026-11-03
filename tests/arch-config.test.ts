@@ -472,10 +472,14 @@ describe('mapx arch validate-config (M5-02-R1)', () => {
   it('exits 0 on a valid chain and a valid view, and needs no index', () => {
     const r = mapxResult(F, 'arch', 'validate-config', join(F, 'chain'));
     expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toBe('Valid: .mapx/a.jsonc, .mapx/b.jsonc, .mapx/architecture.jsonc (4 layers).\n');
+    // M5-24-R4: a second line says whether packages in no layer are uncovered, and why.
+    expect(r.stdout).toBe('Valid: .mapx/a.jsonc, .mapx/b.jsonc, .mapx/architecture.jsonc (4 layers).\nPackages in no layer: uncovered (layer "Http" has a package selector, which opts in).\n');
     const v = mapxResult(F, 'arch', 'validate-config', join(F, 'views'), '--view', 'contexts', '--format', 'json');
     expect(v.status, v.stderr).toBe(0);
-    expect(JSON.parse(v.stdout)).toEqual({ valid: true, view: 'contexts', files: ['.mapx/architecture.jsonc', '.mapx/architecture/contexts.jsonc'], issues: [] });
+    expect(JSON.parse(v.stdout)).toEqual({
+      valid: true, view: 'contexts', files: ['.mapx/architecture.jsonc', '.mapx/architecture/contexts.jsonc'], issues: [],
+      policy: { uncovered: { externals: { value: false, source: 'default' }, builtins: false } },
+    });
   });
 
   it('exits 3 when there is no configuration, or the view escapes .mapx/architecture/', () => {

@@ -2894,6 +2894,93 @@ describe('external dependencies in the rules (M5-24)', () => {
     }
   }, 180000);
 
+  // D039 (M5-24-R4): a package in no layer is uncovered only when the configuration opts in, through
+  // `policy.uncovered.externals: true` or a `package` selector in a layer; otherwise it is out of
+  // scope, `--fail-on-uncovered` ignores it, and `mapx arch allowed` says so, as check decides.
+  it('uncovered packages are opt-in: externals true or a package selector (M5-24-R4)', () => {
+    const paths = [
+      { name: 'Domain', selectors: [{ path: 'src/domain/**' }] },
+      { name: 'Infrastructure', selectors: [{ path: 'src/infrastructure/**' }] },
+    ];
+    const rules = { Infrastructure: ['Domain', 'Database'], Domain: ['Database'] };
+    const root = scannedApp('ts-vendor', { layers: paths, rules: { Infrastructure: ['Domain'] } });
+    const decide = (config: { layers: object[]; rules?: object; policy?: object }) => {
+      const layers = config.layers.map((l: any) => l.name);
+      // Rules name only the layers the configuration has.
+      const own = Object.fromEntries(Object.entries(config.rules ?? rules).map(([k, v]) => [k, (v as string[]).filter((t) => layers.includes(t))]).filter(([k]) => layers.includes(k)));
+      writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify({ ...config, rules: own }));
+      const r = mapxResult(root, 'check', '--fail-on-uncovered', '--report-uncovered', '--format', 'json');
+      const report = JSON.parse(r.stdout) as NonNullable<ReturnType<typeof runArchitecture>>;
+      const uncovered = report.findings.filter((f) => f.kind === 'uncovered').map((f) => `${f.source!.element} -> ${f.target!.element} ${f.edgeType}`).sort();
+      const store = new Store(join(root, '.mapx/mapx.db'));
+      try {
+        const a = isAllowed(openArchitecture(root, store)!, 'src/infrastructure/Server.ts', 'express');
+        return {
+          status: r.status, uncovered, count: report.counts.uncovered, externals: report.policy!.uncovered.externals,
+          allowed: { allowed: a.allowed, rule: a.rule }, reason: a.reason, decisions: a.decisions.map((d) => `${d.edgeType} ${d.rule} observed=${d.observed}`),
+        };
+      } finally {
+        store.close();
+      }
+    };
+    const express = ['src/infrastructure/Server.ts#Server -> express call', 'src/infrastructure/Server.ts#Server -> express import'];
+    const database = (selector: object, extra: object = {}) => ({ name: 'Database', selectors: [selector], ...extra });
+
+    // No package selector, no `policy.uncovered.externals`: packages are out of scope. `arch allowed`
+    // agrees, and still reports the two edge types the index has (import and call) as observed.
+    const none = decide({ layers: paths });
+    expect({ status: none.status, uncovered: none.uncovered, count: none.count, allowed: none.allowed, externals: none.externals })
+      .toEqual({ status: 0, uncovered: [], count: 0, allowed: { allowed: true, rule: 'out-of-scope' }, externals: { value: false, source: 'default' } });
+    expect(none.decisions).toEqual(['import out-of-scope observed=true', 'call out-of-scope observed=true']);
+    expect(none.reason).toContain('policy.uncovered.externals is unset and no non-overlay layer has a package selector');
+    // validate-config says the same.
+    const v = mapxResult(root, 'arch', 'validate-config', '--format', 'json');
+    expect(JSON.parse(v.stdout).policy).toEqual({ uncovered: { externals: { value: false, source: 'default' }, builtins: false } });
+    expect(mapxResult(root, 'arch', 'validate-config').stdout).toContain('Packages in no layer: out of scope (policy.uncovered.externals is unset and no non-overlay layer has a package selector).');
+
+    // `externals: true`: every package in no layer is uncovered (pg, lodash and express).
+    const on = decide({ layers: paths, policy: { uncovered: { externals: true } } });
+    expect(on.status).toBe(2);
+    expect(on.uncovered).toEqual(expect.arrayContaining(express));
+    expect(on.uncovered.every((u) => / -> (express|lodash|pg) /.test(u))).toBe(true);
+    expect(on.allowed).toEqual({ allowed: true, rule: 'uncovered' });
+    expect(on.externals).toEqual({ value: true, source: 'explicit', file: '.mapx/architecture.jsonc' });
+
+    // A positive package selector in a non-overlay layer opts in, with any dev or direct filter, in
+    // `selectors` or `private`, and inside `all` or `any` (D039 addendum).
+    for (const layer of [
+      database({ package: 'pg' }),
+      database({ package: 'pg', dev: false }),
+      database({ package: 'pg', direct: true }),
+      database({ all: [{ package: 'pg' }] }),
+      database({ any: [{ path: 'nothing/**' }, { package: 'pg' }] }),
+      { name: 'Database', selectors: [{ path: 'nothing/**' }], private: [{ package: 'pg' }] },
+    ]) {
+      const opted = decide({ layers: [...paths, layer] });
+      expect({ status: opted.status, allowed: opted.allowed, externals: opted.externals }, JSON.stringify(layer))
+        .toEqual({ status: 2, allowed: { allowed: true, rule: 'uncovered' }, externals: { value: true, source: 'package-selector', layer: 'Database' } });
+      expect(opted.uncovered, JSON.stringify(layer)).toEqual(expect.arrayContaining(express));
+    }
+    expect(decide({ layers: [...paths, database({ package: 'pg' })] }).uncovered.some((u) => / -> pg /.test(u))).toBe(false);
+
+    // Not an opt-in: a package selector only under `not`, or only in an overlay layer (overlays never cover).
+    for (const layers of [
+      [paths[0]!, { ...paths[1]!, private: [{ not: { package: 'left-pad' } }] }],
+      [paths[0]!, { name: 'Infrastructure', selectors: [{ all: [{ path: 'src/infrastructure/**' }, { not: { package: '*' } }] }] }],
+      [...paths, { name: 'DevOnly', overlay: true, selectors: [{ package: '*', dev: true }] }],
+    ]) {
+      const out = decide({ layers });
+      expect({ status: out.status, uncovered: out.uncovered, externals: out.externals }, JSON.stringify(layers)).toEqual({ status: 0, uncovered: [], externals: { value: false, source: 'default' } });
+    }
+
+    // An explicit `externals: false` wins over a package selector, and the reason names it.
+    const off = decide({ layers: [...paths, database({ package: 'pg' })], policy: { uncovered: { externals: false } } });
+    expect({ status: off.status, allowed: off.allowed, externals: off.externals })
+      .toEqual({ status: 0, allowed: { allowed: true, rule: 'out-of-scope' }, externals: { value: false, source: 'explicit', file: '.mapx/architecture.jsonc' } });
+    expect(off.reason).toContain('policy.uncovered.externals is false in .mapx/architecture.jsonc');
+    expect(off.reason).not.toContain('package selector');
+  }, 300000);
+
   const smellsOf = (app: string, extra: Record<string, string> = {}) => {
     const root = scannedApp(app, undefined, extra);
     const store = new Store(join(root, '.mapx/mapx.db'));

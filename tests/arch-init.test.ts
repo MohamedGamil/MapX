@@ -419,10 +419,11 @@ describe('mapx arch init: dry run by default, no silent overwrite, stable bytes,
   });
 });
 
-// Review of M5-24: dependencies on packages outside the workspace are uncovered unless a layer
-// holds them, and no baseline skips an uncovered dependency. So every proposal on an index with
-// package references gets a Packages layer every layer may use, and `check --fail-on-uncovered`
-// passes on the day the configuration is written. tests/fixtures/arch-init/packages: express and
+// Review of M5-24: every proposal on an index with package references gets a Packages layer every
+// layer may use, and `check --fail-on-uncovered` passes on the day the configuration is written.
+// Since D039 (M5-24-R4) packages are uncovered only when the configuration opts in (a package
+// selector, as the Packages layer is, or `policy.uncovered.externals: true`), and no baseline skips
+// an uncovered dependency: day one passes with the layer and without it. tests/fixtures/arch-init/packages: express and
 // pg (production), left-pad (in no manifest: its dev status is unknown, so `{ package: "*", dev: false }`
 // would leave it uncovered), node:crypto (built in, never reported by default).
 describe('mapx arch init on a project with packages: check --fail-on-uncovered passes on day one (review of M5-24)', SLOW, () => {
@@ -443,7 +444,7 @@ describe('mapx arch init on a project with packages: check --fail-on-uncovered p
     });
   }
 
-  it('without the Packages layer, the same check fails on uncovered packages (exit 2)', () => {
+  it('without the Packages layer packages are out of scope (exit 0); with policy.uncovered.externals they are uncovered (exit 2)', () => {
     const root = scanned('packages-without', PACKAGES);
     expect(run(root, 'arch', 'init', '--preset', 'layered', '--baseline', '--write').status).toBe(0);
     const path = join(root, '.mapx/architecture.jsonc');
@@ -451,6 +452,10 @@ describe('mapx arch init on a project with packages: check --fail-on-uncovered p
     delete config.rules;
     config.layers = config.layers.filter((l: { name: string }) => l.name !== 'Packages');
     writeFileSync(path, JSON.stringify(config));
+    const out = run(root, 'check', '--fail-on-uncovered', '--format', 'json', '--report-uncovered');
+    expect(JSON.parse(out.stdout).findings.filter((f: { kind: string }) => f.kind === 'uncovered')).toEqual([]);
+    expect(out.status, out.stdout).toBe(0);
+    writeFileSync(path, JSON.stringify({ ...config, policy: { uncovered: { externals: true } } }));
     const check = run(root, 'check', '--fail-on-uncovered', '--format', 'json', '--report-uncovered');
     expect(check.status).toBe(2);
     expect(JSON.parse(check.stdout).findings.filter((f: { kind: string }) => f.kind === 'uncovered').map((f: { target: { element: string } }) => f.target.element).sort())

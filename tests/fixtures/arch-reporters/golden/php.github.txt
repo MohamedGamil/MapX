@@ -16,22 +16,6 @@
 [notice] app/Domain/Order.php:12 disallowed-layer: App\Domain\Order must not depend on App\Infrastructure\SqlOrderRepository (Domain on Infrastructure) [instantiation] (skipped by the baseline)
 [notice] app/Application/PlaceOrder.php:8 uncovered: App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [import]
 [notice] app/Application/PlaceOrder.php:17 uncovered: App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [instantiation]
-[notice] app/Infrastructure/HttpGateway.php:31 uncovered: App\Infrastructure\HttpGateway depends on Acme\Missing\Widget, which is in no layer [instantiation]
-[notice] app/Infrastructure/HttpGateway.php:32 uncovered: App\Infrastructure\HttpGateway depends on Illuminate\Support\Str, which is in no layer [call]
-[notice] app/Infrastructure/HttpGateway.php:30 uncovered: App\Infrastructure\HttpGateway depends on collect, which is in no layer [call]
-[notice] app/Infrastructure/HttpGateway.php:33 uncovered: App\Infrastructure\HttpGateway depends on doctrine/event-manager, which is in no layer [instantiation]
-[notice] app/Infrastructure/HttpGateway.php:29 uncovered: App\Infrastructure\HttpGateway depends on doctrine/instantiator, which is in no layer [instantiation]
-[notice] app/Infrastructure/HttpGateway.php:26 uncovered: App\Infrastructure\HttpGateway depends on fakerphp/faker, which is in no layer [call]
-[notice] app/Infrastructure/HttpGateway.php:8 uncovered: App\Infrastructure\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [import]
-[notice] app/Infrastructure/HttpGateway.php:16 uncovered: App\Infrastructure\HttpGateway depends on guzzlehttp/guzzle, which is in no layer [instantiation]
-[notice] app/Infrastructure/HttpGateway.php:25 uncovered: App\Infrastructure\HttpGateway depends on guzzlehttp/psr7, which is in no layer [call]
-[notice] app/Infrastructure/HttpGateway.php:12 uncovered: App\Infrastructure\HttpGateway depends on illuminate/routing, which is in no layer [extends]
-[notice] app/Infrastructure/HttpGateway.php:24 uncovered: App\Infrastructure\HttpGateway depends on mustache/mustache, which is in no layer [instantiation]
-[notice] app/Infrastructure/HttpGateway.php:28 uncovered: App\Infrastructure\HttpGateway depends on myclabs/deep-copy, which is in no layer [call]
-[notice] app/Infrastructure/HttpGateway.php:18 uncovered: App\Infrastructure\HttpGateway depends on nesbot/carbon, which is in no layer [call]
-[notice] app/Infrastructure/HttpGateway.php:27 uncovered: App\Infrastructure\HttpGateway depends on phpunit/phpunit, which is in no layer [call]
-[notice] app/Infrastructure/HttpGateway.php:9 uncovered: App\Infrastructure\HttpGateway depends on psr/log, which is in no layer [import]
-[notice] app/Infrastructure/HttpGateway.php:14 uncovered: App\Infrastructure\HttpGateway depends on psr/log, which is in no layer [param_type]
 [notice] app/Infrastructure/MailGateway.php:6 uncovered: App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [import]
 [notice] app/Infrastructure/MailGateway.php:13 uncovered: App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [instantiation]
 [warning] .mapx/architecture.jsonc empty-layer: layer Reporting matches no element
@@ -51,12 +35,8 @@
 ::notice file=app/Domain/Order.php,line=12,title=disallowed-layer::App\Domain\Order must not depend on App\Infrastructure\SqlOrderRepository (Domain on Infrastructure) [instantiation] (skipped by the baseline)
 ::notice file=app/Application/PlaceOrder.php,line=8,title=uncovered::App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [import]
 ::notice file=app/Application/PlaceOrder.php,line=17,title=uncovered::App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [instantiation]
-::notice file=app/Infrastructure/HttpGateway.php,line=31,title=uncovered::App\Infrastructure\HttpGateway depends on Acme\Missing\Widget, which is in no layer [instantiation]
-::notice file=app/Infrastructure/HttpGateway.php,line=32,title=uncovered::App\Infrastructure\HttpGateway depends on Illuminate\Support\Str, which is in no layer [call]
-::notice file=app/Infrastructure/HttpGateway.php,line=30,title=uncovered::App\Infrastructure\HttpGateway depends on collect, which is in no layer [call]
-::notice file=app/Infrastructure/HttpGateway.php,line=33,title=uncovered::App\Infrastructure\HttpGateway depends on doctrine/event-manager, which is in no layer [instantiation]
-::notice file=app/Infrastructure/HttpGateway.php,line=29,title=uncovered::App\Infrastructure\HttpGateway depends on doctrine/instantiator, which is in no layer [instantiation]
-::notice file=app/Infrastructure/HttpGateway.php,line=26,title=uncovered::App\Infrastructure\HttpGateway depends on fakerphp/faker, which is in no layer [call]
+::notice file=app/Infrastructure/MailGateway.php,line=6,title=uncovered::App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [import]
+::notice file=app/Infrastructure/MailGateway.php,line=13,title=uncovered::App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [instantiation]
 ::warning file=.mapx/architecture.jsonc,title=empty-layer::layer Reporting matches no element
 ::warning file=app/Domain/Ids/OrderId.php,title=multi-layer::App\Domain\Ids\OrderId is in 2 layers: Domain, Shared
-Violations: 14 (14 error, 0 warn)   Uncovered: 20   Skipped: 2   Allowed: 16   Warnings: 2   Errors: 1   17 more not annotated (GitHub shows 10 per level in a step); see the log lines above or --format sarif
+Violations: 14 (14 error, 0 warn)   Uncovered: 4   Skipped: 2   Allowed: 16   Warnings: 2   Errors: 1   5 more not annotated (GitHub shows 10 per level in a step); see the log lines above or --format sarif

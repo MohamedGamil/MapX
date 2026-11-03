@@ -135,8 +135,9 @@ describe('/api/arch on the arch-rules fixture (M5-15)', () => {
       violations: check.counts.violation, warnLevelViolations: warnLevel, warnings: check.counts.warning, baselineDebt: check.counts.skipped,
       uncovered: check.counts.uncovered, unassigned: unassigned.total, configErrors: 0, ruleSmells: expect.any(Number), trend: null,
     });
-    // M5-24: 19 of the uncovered are HttpGateway's and toolingCheck's dependencies on packages in no layer.
-    expect(check.counts.uncovered).toBe(23);
+    // M5-24-R4 (D039): HttpGateway's and toolingCheck's 19 dependencies on packages in no layer are out
+    // of scope, as the configuration has no package selector (M5-24 counted 23); as `mapx check` gives.
+    expect(check.counts.uncovered).toBe(4);
     // Review of M5-15: the Warnings tile is check's "Warnings" (the multi-layer OrderId), not warn-level violations.
     expect(check.counts.warning).toBeGreaterThan(0);
     expect(check.counts.skipped).toBe(3); // Result → Money twice, and the payload's first

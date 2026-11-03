@@ -8,7 +8,7 @@ import { stripJsonc } from '../core/js-aliases.js';
 import {
   ALLOWANCE_KEYS, CODECLIMATE_KEYS, CODECLIMATE_SEVERITIES, DEFAULTS, DEFAULT_SCOPE_TYPES, EDGE_TYPES, FRAMEWORK_PARTS, LAYER_KEYS, POLICY_KEYS, REPORT_KEYS, SCOPE_KEYS,
   SELECTOR_KEYS, SELECTOR_MODIFIERS, SELECTOR_PRIMARY_KEYS, SYMBOL_KINDS, TOP_LEVEL_KEYS, UNCOVERED_KEYS, VISIBILITY_KEYS,
-  type Allowance, type ArchitectureConfig, type ArchitectureDocument, type Layer, type Selector,
+  type Allowance, type ArchitectureConfig, type ArchitectureDocument, type ExternalsResolution, type Layer, type Selector,
 } from './schema.js';
 import { PRESET_TEXTS } from './presets/index.js';
 
@@ -470,6 +470,17 @@ export interface ValidationReport {
   files: string[];
   /** Every problem, in document order; a missing configuration is one `not found` issue. */
   issues: ConfigIssue[];
+  /** A valid configuration's resolved uncovered policy, and why packages are or are not reported (M5-24-R4). */
+  policy?: ReportedUncoveredPolicy;
+}
+
+/** `policy.uncovered` as resolved, for validate-config and the check report (M5-24-R4, D039). */
+export interface ReportedUncoveredPolicy { uncovered: { externals: ExternalsResolution; builtins: boolean } }
+
+/** The resolved uncovered policy of `config` (a configuration built without the loader: from its value). */
+export function reportedUncoveredPolicy(config: Pick<ArchitectureConfig, 'policy' | 'uncoveredExternals'>): ReportedUncoveredPolicy {
+  const externals = config.uncoveredExternals ?? { value: config.policy.uncovered.externals, source: 'explicit' as const };
+  return { uncovered: { externals, builtins: config.policy.uncovered.builtins } };
 }
 
 /** Validates the configuration of the workspace at `dir` (or a view); needs no index. */
@@ -480,12 +491,18 @@ export function validateArchitectureConfig(dir: string, options: LoadOptions = {
     const file = view ? `.mapx/architecture/${view}.jsonc` : '.mapx/architecture.jsonc';
     issues.push({ file, pointer: '', message: view ? `not found: no view ${quote(view)}` : 'not found: create it (see docs/architecture-rules.md)' });
   }
-  return { report: { valid: issues.length === 0, view, files, issues }, config: issues.length ? null : config };
+  const valid = issues.length === 0;
+  return { report: { valid, view, files, issues, ...(valid && config ? { policy: reportedUncoveredPolicy(config) } : {}) }, config: valid ? config : null };
 }
 
 /** The text form: one `file#pointer: message` line per problem and a count, or a one-line verdict. */
 export function formatValidation(report: ValidationReport, config?: Pick<ArchitectureConfig, 'layers'>): string {
-  if (report.valid) return `Valid: ${report.files.join(', ')}${config ? ` (${config.layers.length} layer${config.layers.length === 1 ? '' : 's'})` : ''}.`;
+  if (report.valid) {
+    const externals = report.policy?.uncovered.externals;
+    // The second line says whether packages in no layer are uncovered, and why (M5-24-R4, D039).
+    const packages = externals ? `\nPackages in no layer: ${externals.value ? 'uncovered' : 'out of scope'} (${describeUncoveredExternals(externals)}).` : '';
+    return `Valid: ${report.files.join(', ')}${config ? ` (${config.layers.length} layer${config.layers.length === 1 ? '' : 's'})` : ''}.${packages}`;
+  }
   const lines = report.issues.map((i) => `${i.file}${i.pointer ? `#${i.pointer}` : ''}: ${i.message}`);
   const files = [...new Set(report.issues.map((i) => i.file))];
   lines.push(`${report.issues.length} problem${report.issues.length === 1 ? '' : 's'} in ${files.join(', ')}.`);
@@ -551,6 +568,7 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
   let baseline: string | null = null;
   const layers: MergedLayer[] = [];
   const rules = new Map<string, { origin: Origin; list: MergedAllowance[] }>();
+  let externalsFrom: string | null = null; // the last document that sets policy.uncovered.externals
 
   for (const { file, doc } of docs) {
     if (isObject(doc.parameters)) {
@@ -572,7 +590,7 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
       if (typeof p.strictLayers === 'boolean') policy.strictLayers = p.strictLayers;
       if (typeof p.alsoInferred === 'boolean') policy.alsoInferred = p.alsoInferred;
       if (isObject(p.uncovered)) {
-        if (typeof p.uncovered.externals === 'boolean') policy.uncovered.externals = p.uncovered.externals;
+        if (typeof p.uncovered.externals === 'boolean') { policy.uncovered.externals = p.uncovered.externals; externalsFrom = file; }
         if (typeof p.uncovered.builtins === 'boolean') policy.uncovered.builtins = p.uncovered.builtins;
       }
     }
@@ -628,6 +646,16 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
       }
     }
   }
+
+  // Packages in no layer are uncovered only when the configuration opts in (D039 and its addendum,
+  // M5-24-R4): an explicit `policy.uncovered.externals`, else a layer that covers packages.
+  const covering = externalsFrom === null
+    ? layers.find(({ layer }) => layer.overlay !== true && coversPackages([...layer.selectors, ...(Array.isArray(layer.private) ? layer.private : [])]))
+    : undefined;
+  if (externalsFrom === null) policy.uncovered.externals = !!covering;
+  const uncoveredExternals: ExternalsResolution = externalsFrom !== null
+    ? { value: policy.uncovered.externals, source: 'explicit', file: externalsFrom }
+    : covering ? { value: true, source: 'package-selector', layer: covering.layer.name } : { value: false, source: 'default' };
 
   const names = new Set(layers.map((l) => l.layer.name));
   const overlays = new Set(layers.filter((l) => l.layer.overlay === true).map((l) => l.layer.name));
@@ -741,8 +769,26 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
     rules: Object.fromEntries([...rules].map(([k, v]) => [k, v.list.map((m) => m.allowance)])),
     baseline,
     report,
+    uncoveredExternals,
   };
   return { config, issues };
+}
+
+/**
+ * Whether a selector covers packages: a positive `package` selector (any `dev`/`direct` filter), or
+ * one inside `all` or `any`. One only under `not` excludes packages, so it does not (D039 addendum).
+ */
+function coversPackages(sel: unknown): boolean {
+  if (Array.isArray(sel)) return sel.some(coversPackages);
+  if (!isObject(sel)) return false;
+  return 'package' in sel || coversPackages(sel['all']) || coversPackages(sel['any']);
+}
+
+/** Why packages in no layer are, or are not, uncovered: one clause for check, allowed and validate-config. */
+export function describeUncoveredExternals(r: ExternalsResolution): string {
+  if (r.source === 'explicit') return `policy.uncovered.externals is ${r.value} in ${r.file}`;
+  if (r.source === 'package-selector') return `layer ${quote(r.layer!)} has a package selector, which opts in`;
+  return 'policy.uncovered.externals is unset and no non-overlay layer has a package selector';
 }
 
 /** `%%` (a literal `%`) or a `%name%` reference. */

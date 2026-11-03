@@ -851,7 +851,7 @@ Where the layers come from:
 - `--from framework`: the preset of the framework the scan detected (`laravel`, `nestjs` or `django`). Exit 3 when none is detected.
 - `--preset <id>`: one of `clean`, `ddd-contexts`, `django`, `feature-sliced`, `hexagonal`, `laravel`, `layered` or `nestjs`. The proposal is a configuration that `extends` the shipped preset `mapx:preset/<id>` (see [architecture-rules.md](architecture-rules.md#presets)). The preset's folder parameter (`root`) is inferred: the folder, up to three levels down, under which the most of the preset's layers have files. For `ddd-contexts`, every folder under `root` becomes a context layer. `--preset` and `--from` exclude each other.
 
-Whatever the source, when the index has references to packages outside the workspace, the proposal also declares a `Packages` layer, `{ "package": "*" }`, that every layer may use (`"*": ["Packages"]`), so that `mapx check --fail-on-uncovered` passes on the proposal's first day (M5-24). That layer is left out of `layers` in the JSON output and of the empty-layer warnings.
+Whatever the source, when the index has references to packages outside the workspace, the proposal also declares a `Packages` layer, `{ "package": "*" }`, that every layer may use (`"*": ["Packages"]`) (M5-24). Its package selector opts the configuration in to uncovered packages, and it covers every package, so `mapx check --fail-on-uncovered` passes on the proposal's first day; without a non-overlay layer that has a package selector, packages are out of scope (M5-24-R4, D039). That layer is left out of `layers` in the JSON output and of the empty-layer warnings.
 
 Options:
 - `--baseline`: also propose `.mapx/architecture.baseline.json` (the view's own baseline file for a view), listing the proposal's violations on today's index, so `mapx check` exits 0 until a new violation appears. It needs a current index: on a stale one it exits 4 (`--sync` syncs first). Without `--baseline`, a stale index is accepted, since roles and paths are what a proposal reads.
@@ -906,7 +906,7 @@ mapx arch validate-config [path] [--dir /path] [--view <name>] [--format text|js
 
 Options:
 - `--view <name>`: validate `.mapx/architecture/<name>.jsonc`. An empty name is an error, and so is a name or a symlink that leads outside `.mapx/architecture/` (`../x`).
-- `--format json`: `{ valid, view, files, issues: [{ file, pointer, message }] }`, where `files` lists the documents read, extended ones first.
+- `--format json`: `{ valid, view, files, issues: [{ file, pointer, message }] }`, where `files` lists the documents read, extended ones first. A valid configuration also has `policy: { uncovered: { externals: { value, source, file?, layer? }, builtins } }`: the resolved uncovered policy, and why packages in no layer are or are not reported (`source`: `explicit` in `file`, `package-selector` in `layer`, or `default`; M5-24-R4). The text form adds a line such as `Packages in no layer: out of scope (policy.uncovered.externals is unset and no non-overlay layer has a package selector).`
 
 It exits 0 when the configuration is valid, and 3 when it has problems, does not exist, or for a usage error. The MCP tool `mapx_arch_validate_config` does the same.
 

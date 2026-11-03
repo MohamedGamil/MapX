@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { Store } from '../core/store.js';
-import { ConfigError, loadArchitectureConfig, type LoadOptions } from './config.js';
+import { ConfigError, loadArchitectureConfig, reportedUncoveredPolicy, type LoadOptions, type ReportedUncoveredPolicy } from './config.js';
 import type { ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership } from './membership.js';
 import { expandPolicy } from './policy.js';
@@ -32,6 +32,12 @@ export interface ArchReport {
    * `--compare` can refuse a base report made on something else. Absent from in-process reports.
    */
   selection?: Selection;
+  /**
+   * The resolved `policy.uncovered` (M5-24-R4, D039): whether packages in no layer are reported,
+   * and why (explicit, a package selector in a layer, or off by default). Absent from a report of
+   * a configuration that cannot be loaded.
+   */
+  policy?: ReportedUncoveredPolicy;
 }
 
 export interface LayerEdge { from: string; to: string; allowed: number; violations: number; warnings: number; skipped: number }
@@ -251,6 +257,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     layers: membership.layers.map((l) => ({ name: l.name, elements: membership.members(l.name).length, files: filesIn(l.name), overlay: !!l.overlay, uncovered: uncoveredIn.get(l.name) ?? 0 })),
     layerEdges: [...pairs.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : a.to > b.to ? 1 : 0)),
     configErrors: policy.errors,
+    policy: reportedUncoveredPolicy(config),
   };
   for (const f of report.findings) report.counts[f.kind]++;
   return report;

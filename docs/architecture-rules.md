@@ -96,7 +96,7 @@ Where to look up each part:
 2. **Or start from a preset** (`--preset <id>`, or `--from framework` for the detected framework's preset). The configuration `extends` the preset and sets its folder parameter, inferred from the indexed paths.
 3. **Read the observed layer graph** in the comments: for each layer, its files and the dependencies on other layers the index has today, and which of them the rules refuse. With `--from clusters`, the rules allow exactly today's graph.
 4. **Make day one green** with `--baseline`: today's violations go to `.mapx/architecture.baseline.json`, so `mapx check` exits 0 until a new one appears (see [Baselines and the ratchet](#baselines-and-the-ratchet)).
-5. **Packages are covered.** When the index has references to packages outside the workspace, every proposal (every `--from` source and every preset) adds a `Packages` layer, `{ "package": "*" }`, which every layer may use (`"*": ["Packages"]`). Without it, `mapx check` reports each dependency on a package as uncovered (`policy.uncovered.externals`), and a baseline cannot skip an uncovered dependency, so `--fail-on-uncovered` would fail on day one. The layer holds dev-only and unattributed packages too; the `dev-dependency-in-prod` smell reports production code that uses a dev-only one. Narrow it, or split it into vendor layers, as the rules tighten (see [External dependencies](#external-dependencies-packages-built-ins-ambient-access)).
+5. **Packages get a layer.** When the index has references to packages outside the workspace, every proposal (every `--from` source and every preset) adds a `Packages` layer, `{ "package": "*" }`, which every layer may use (`"*": ["Packages"]`). It is the starting point for vendor rules, and it shows the package dependencies in the layer graph. Its package selector opts the configuration in to [uncovered packages](#external-dependencies-packages-built-ins-ambient-access), and since it holds every package, dev-only and unattributed ones included, none is uncovered: `--fail-on-uncovered` passes on day one. Narrow it, or split it into vendor layers, as the rules tighten; a package the layers then leave out is uncovered, and a baseline cannot skip an uncovered dependency. Delete the layer and packages are out of scope again. The `dev-dependency-in-prod` smell reports production code that uses a dev-only package.
 
 ```bash
 mapx arch init --preset laravel            # look at the proposal
@@ -398,8 +398,18 @@ Where the attribution comes from, per ecosystem. MapX reads these files even tho
 - **No multi-layer warning.** An external element in several layers gets no `multi-layer` warning. Each of its layers is decided, as for any target.
 
 **Evaluation.** Each recorded reference whose source file is in scope (`scope.include`, `scope.exclude`) and of a type in `scope.types` is decided like an edge whose target is the external element (the [evaluation](#evaluation) chain). The reference kind (`import`, `require`, `call`, `instantiation`, `extends`, `param_type` …) is the edge type. A target in no non-overlay layer is uncovered only as `policy.uncovered` says:
-- `externals` (default `true`) for packages, including those no input provides;
+- `externals` for packages, including those no input provides. Packages are opt-in (D039, since M5-24-R4). Unset, `externals` is `true` only when a layer covers packages: a non-overlay layer with a positive `package` selector (any `dev` or `direct` filter) in its `selectors` or `private`, directly or inside `all` or `any`. A package selector only under `not`, or only in overlay layers (which never cover), does not opt in. A configuration without one leaves packages out of scope: no uncovered finding, so `--fail-on-uncovered` ignores them. An explicit `true` or `false` always wins.
+- The check JSON report (`policy.uncovered.externals`: `value` and `source`, one of `explicit` with its `file`, `package-selector` with the first such `layer`, or `default`) and `mapx arch validate-config` (the same in `--format json`; a "Packages in no layer" line in text) say which applies and why.
 - `builtins` (default `false`) for built-ins and ambient access.
+
+```jsonc
+// Paths only: an import of express in src/infrastructure is out of scope, and check --fail-on-uncovered exits 0.
+{ "layers": [{ "name": "Infrastructure", "selectors": [{ "path": "src/infrastructure/**" }] }] }
+// The same with "policy": { "uncovered": { "externals": true } }, or with a package layer such as
+// { "name": "Database", "selectors": [{ "package": "pg" }] }: express is uncovered, and the check exits 2.
+// A dev-only overlay alone, { "name": "DevOnly", "overlay": true, "selectors": [{ "package": "*", "dev": true }] },
+// does not opt in: express stays out of scope.
+```
 
 A finding's target names the external (`"element": "pg"`, an empty `file`) and carries `external`: `{ ecosystem, origin, package, direct, dev }`. `origin` is `package`, `builtin` or `ambient`. External dependencies are not inherited under `policy.inheritDependencies`.
 
@@ -418,11 +428,11 @@ A finding's target names the external (`"element": "pg"`, an empty `file`) and c
 }
 ```
 
-Here `src/domain/Order.ts` importing `pg` is a `disallowed-layer` violation (`Domain on Database`), and importing `lodash` (a dev dependency) is one on `DevOnly`. A package used from Infrastructure but in no layer, such as `express`, is uncovered. A built-in is uncovered only under `uncovered.builtins`. Alternatively, `private: [{ "package": "pg" }]` on a layer that also selects `pg` lets other layers use the layer, but not `pg` (a `private-layer` violation, and a `vendor-leak` smell).
+Here `src/domain/Order.ts` importing `pg` is a `disallowed-layer` violation (`Domain on Database`), and importing `lodash` (a dev dependency) is one on `DevOnly`. A package used from Infrastructure but in no layer, such as `express`, is uncovered: the package selectors opt the configuration in. A built-in is uncovered only under `uncovered.builtins`. Alternatively, `private: [{ "package": "pg" }]` on a layer that also selects `pg` lets other layers use the layer, but not `pg` (a `private-layer` violation, and a `vendor-leak` smell).
 
 **Go and dev.** Go has no dev requirements: a module is dev-only when only `_test.go` files use it. A test file inside a layer's path is that layer's code, so with the `DevOnly` overlay above, its use of `testify` is a violation. Leave tests out of the layer (`{ "not": { "path": "**/*_test.go" } }`) if they may use test-only modules.
 
-**Introspection.** `mapx arch which` and `mapx arch allowed` accept an external by name (`pg`, `node:fs`) or by ecosystem and name (`npm:pg`, `go:fmt`). `allowed` decides as `check` does: an external in no layer that `policy.uncovered` does not report (a built-in, by default) is `out-of-scope`, allowed, at `info`. `mapx arch layer` lists a layer's externals with `kind: "external"` and an empty `file`. `mapx arch unassigned` lists files and symbols only.
+**Introspection.** `mapx arch which` and `mapx arch allowed` accept an external by name (`pg`, `node:fs`) or by ecosystem and name (`npm:pg`, `go:fmt`). `allowed` decides as `check` does: an external in no layer that `policy.uncovered` does not report (a built-in by default, and a package unless the configuration opts in) is `out-of-scope`, allowed, at `info`, with a reason that names why (an explicit `false`, or no opt-in). The edge types the index records for the pair are still listed as observed. `mapx arch layer` lists a layer's externals with `kind: "external"` and an empty `file`. `mapx arch unassigned` lists files and symbols only.
 
 <!-- End of M5-24's section. -->
 
@@ -502,7 +512,7 @@ Violations: 8 (5 error, 3 warn)   Uncovered: 0   Skipped: 0   Allowed: 14   Warn
 | `policy.inheritDependencies` | `false` | A type answers for its workspace ancestors' dependencies too (see [Type hierarchy and members](#type-hierarchy-and-members)) |
 | `policy.strictLayers` | `false` | An element in several non-overlay layers is an error (`multi-layer`), not a warning |
 | `policy.alsoInferred` | `false` | Keep the role-order layer violations in the smells beside the rules' own (see [Smells](#smells)) |
-| `policy.uncovered` | `{ "externals": true, "builtins": false }` | Whether dependencies on packages and on the standard library count as uncovered. Packages under `externals`; built-ins and ambient access under `builtins` (see [External dependencies](#external-dependencies-packages-built-ins-ambient-access)) |
+| `policy.uncovered` | `{ "builtins": false }`; `externals` unset is `true` only when a non-overlay layer has a positive `package` selector | Whether dependencies on packages and on the standard library count as uncovered. Packages under `externals`, opt-in (D039); built-ins and ambient access under `builtins` (see [External dependencies](#external-dependencies-packages-built-ins-ambient-access)) |
 
 ```jsonc
 "scope": { "types": ["import", "extends", "implements", "instantiation"], "exclude": ["src/legacy/**"] },
@@ -660,6 +670,7 @@ Domain
 - **`layerEdges`:** allowed, violating and skipped dependencies per layer pair, and `warnings`: how many of the violations are reported at `warn` (an advisory allowance, or an inferred edge under `policy.inferred: "warn"`). A pair keeps its own severity, so a source in two layers can be advisory on one pair and an error on the other.
 - **`counts`:** per kind.
 - **`selection`** (from `mapx check`): the `view`, `layer` and `rule` the run evaluated and kept, `null` when not given.
+- **`policy`** (M5-24-R4): `policy: { uncovered: { externals: { value, source, file?, layer? }, builtins } }`, the resolved uncovered policy. `externals.source` says why packages in no layer are or are not uncovered: `explicit` (set in `file`), `package-selector` (`layer` opts in) or `default` (out of scope). Absent when the configuration cannot be loaded.
 
 A workspace with a configuration but no index is an error (`run mapx scan first`), never an empty report.
 
@@ -967,6 +978,8 @@ Package smells (M5-24), also marked `Source: rules`:
 | `dev-dependency-in-prod` | Code in scope uses a dev-only package from a file that is not a test, configuration, script or tooling file: by its role (`test`, `config`, `scripts`), or by a conventional name (`*.config.ts`, `*.conf.js`, `.eslintrc.cjs`, `conftest.py`, `setup.py`, `noxfile.py`, `gulpfile.js` …). One per source file and package. |
 
 A package whose direct or dev status is unknown gives neither of the last two.
+
+The [uncovered-package opt-in](#external-dependencies-packages-built-ins-ambient-access) (D039) does not apply to them. `vendor-leak` is any `private-layer` violation on an external element: a package, but also a built-in or ambient access that a layer selects and keeps private (`"selectors": [{ "builtin": true }], "private": [{ "builtin": true }]`, used from another layer, is a vendor leak on `node:fs`). It needs a `private` selector that matches the external, not the opt-in. `undeclared-dependency` and `dev-dependency-in-prod` compare the code with its manifests rather than with the layers, and they never change `mapx check`'s exit code, so they are reported with or without a package selector.
 
 ## Baselines and the ratchet
 

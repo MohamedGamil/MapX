@@ -146,8 +146,9 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
     // only when every target layer is the source's), and Domain may use Shared.
     expect(r.findings.find((f) => f.source?.element === 'App\\Domain\\Order' && f.target?.element === 'App\\Domain\\Ids\\OrderId' && f.edgeType === 'instantiation')?.kind).toBe('allowed');
     // M5-11: the two @internal dependencies (import and instantiation each) are violations, no longer allowed.
-    // M5-24: 16 more uncovered, HttpGateway's dependencies on packages in no layer (php-x01 … php-x14).
-    expect(r.counts).toEqual({ violation: 16, skipped: 0, uncovered: 20, allowed: 16, warning: 2, error: 0 });
+    // M5-24-R4 (D039): HttpGateway's dependencies on packages in no layer (php-x01 … php-x14) are out
+    // of scope, as the configuration has no package selector; M5-24 counted them uncovered (20).
+    expect(r.counts).toEqual({ violation: 16, skipped: 0, uncovered: 4, allowed: 16, warning: 2, error: 0 });
     // Unique fingerprints within a report.
     expect(new Set(r.findings.map((f) => f.fingerprint)).size).toBe(r.findings.length);
   });

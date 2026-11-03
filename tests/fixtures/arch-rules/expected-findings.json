@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive. A row with \"native\" is labelled for the default configuration; \"native\" gives its kind, rule and (where they differ) edge types when visibility.nativeMarkers is true. \"edgeTypes\", where given, lists every edge type that carries the dependency; \"edgeType\" is the one the scorer matches (M5-11). M5-24: a row whose \"to\" names \"external\" (\"<ecosystem>:<name>\", as npm:pg) is a dependency on something outside the workspace (src/arch/elements.ts): the existing apps report every external package their layered code uses as uncovered (policy.uncovered.externals defaults to true; built-ins are not reported), derived from expected-externals.json by the granularity rules; the ts-vendor, python-vendor, php-vendor and go-vendor apps confine a package to the layer that may use it (a package selector) and deny an overlay of dev-only packages.",
+  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive. A row with \"native\" is labelled for the default configuration; \"native\" gives its kind, rule and (where they differ) edge types when visibility.nativeMarkers is true. \"edgeTypes\", where given, lists every edge type that carries the dependency; \"edgeType\" is the one the scorer matches (M5-11). M5-24: a row whose \"to\" names \"external\" (\"<ecosystem>:<name>\", as npm:pg) is a dependency on something outside the workspace (src/arch/elements.ts): the existing apps' rows on every external package their layered code uses were derived from expected-externals.json by the granularity rules as uncovered; since D039 (M5-24-R4) they are \"none\" rows, as those configurations have no package selector and no policy.uncovered.externals, so packages are out of scope (built-ins are not reported either); the ts-vendor, python-vendor, php-vendor and go-vendor apps confine a package to the layer that may use it (a package selector) and deny an overlay of dev-only packages.",
   "apps": {
     "php": {
       "language": "php",
@@ -1857,8 +1857,7 @@
       "id": "go-x01",
       "app": "go",
       "language": "go",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "infrastructure/http_gateway.go",
         "symbol": "HttpGateway"
@@ -1871,14 +1870,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: github.com/google/uuid is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): github.com/google/uuid is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "go-x02",
       "app": "go",
       "language": "go",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "infrastructure/http_gateway.go",
         "symbol": "HttpGateway"
@@ -1891,14 +1889,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: github.com/sirupsen/logrus is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): github.com/sirupsen/logrus is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "go-x03",
       "app": "go",
       "language": "go",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "infrastructure/http_gateway_test.go",
         "symbol": "TestHttpGateway"
@@ -1911,14 +1908,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: github.com/google/uuid is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): github.com/google/uuid is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "go-x04",
       "app": "go",
       "language": "go",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "infrastructure/http_gateway_test.go",
         "symbol": "TestHttpGateway"
@@ -1931,14 +1927,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: github.com/stretchr/testify is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): github.com/stretchr/testify is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "go-x05",
       "app": "go",
       "language": "go",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "infrastructure/http_gateway_test.go",
         "symbol": "TestHttpGateway"
@@ -1951,14 +1946,13 @@
         "import",
         "instantiation"
       ],
-      "note": "M5-24: gopkg.in/yaml.v3 is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): gopkg.in/yaml.v3 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "go-x06",
       "app": "go",
       "language": "go",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "infrastructure/system_probe.go",
         "symbol": "SystemProbe"
@@ -1971,14 +1965,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: github.com/pkg/errors is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): github.com/pkg/errors is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "go-x07",
       "app": "go",
       "language": "go",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "infrastructure/system_probe.go",
         "symbol": "SystemProbe"
@@ -1991,14 +1984,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: golang.org/x/sys is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): golang.org/x/sys is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x01",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2007,14 +1999,13 @@
         "external": "composer:Acme\\Missing\\Widget"
       },
       "edgeType": "instantiation",
-      "note": "M5-24: Acme\\Missing\\Widget is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): Acme\\Missing\\Widget is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "php-x02",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2023,14 +2014,13 @@
         "external": "composer:Illuminate\\Support\\Str"
       },
       "edgeType": "call",
-      "note": "M5-24: Illuminate\\Support\\Str is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): Illuminate\\Support\\Str is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "php-x03",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2039,14 +2029,13 @@
         "external": "composer:collect"
       },
       "edgeType": "call",
-      "note": "M5-24: collect is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): collect is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "php-x04",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2055,14 +2044,13 @@
         "external": "composer:doctrine/event-manager"
       },
       "edgeType": "instantiation",
-      "note": "M5-24: doctrine/event-manager is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): doctrine/event-manager is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x05",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2071,14 +2059,13 @@
         "external": "composer:doctrine/instantiator"
       },
       "edgeType": "instantiation",
-      "note": "M5-24: doctrine/instantiator is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): doctrine/instantiator is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x06",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2087,14 +2074,13 @@
         "external": "composer:fakerphp/faker"
       },
       "edgeType": "call",
-      "note": "M5-24: fakerphp/faker is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): fakerphp/faker is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x07",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2107,14 +2093,13 @@
         "import",
         "instantiation"
       ],
-      "note": "M5-24: guzzlehttp/guzzle is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): guzzlehttp/guzzle is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x08",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2123,14 +2108,13 @@
         "external": "composer:guzzlehttp/psr7"
       },
       "edgeType": "call",
-      "note": "M5-24: guzzlehttp/psr7 is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): guzzlehttp/psr7 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x09",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2139,14 +2123,13 @@
         "external": "composer:illuminate/routing"
       },
       "edgeType": "extends",
-      "note": "M5-24: illuminate/routing is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): illuminate/routing is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x10",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2155,14 +2138,13 @@
         "external": "composer:mustache/mustache"
       },
       "edgeType": "instantiation",
-      "note": "M5-24: mustache/mustache is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): mustache/mustache is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x11",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2171,14 +2153,13 @@
         "external": "composer:myclabs/deep-copy"
       },
       "edgeType": "call",
-      "note": "M5-24: myclabs/deep-copy is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): myclabs/deep-copy is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x12",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2187,14 +2168,13 @@
         "external": "composer:nesbot/carbon"
       },
       "edgeType": "call",
-      "note": "M5-24: nesbot/carbon is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): nesbot/carbon is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x13",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2203,14 +2183,13 @@
         "external": "composer:phpunit/phpunit"
       },
       "edgeType": "call",
-      "note": "M5-24: phpunit/phpunit is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): phpunit/phpunit is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "php-x14",
       "app": "php",
       "language": "php",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/Infrastructure/HttpGateway.php",
         "symbol": "HttpGateway"
@@ -2223,14 +2202,13 @@
         "import",
         "param_type"
       ],
-      "note": "M5-24: psr/log is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): psr/log is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x01",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2239,14 +2217,13 @@
         "external": "pypi:acme_missing"
       },
       "edgeType": "import",
-      "note": "M5-24: acme_missing is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): acme_missing is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "python-x02",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2259,14 +2236,13 @@
         "import",
         "extends"
       ],
-      "note": "M5-24: flask is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): flask is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x03",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2275,14 +2251,13 @@
         "external": "pypi:jinja2"
       },
       "edgeType": "import",
-      "note": "M5-24: jinja2 is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): jinja2 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x04",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2291,14 +2266,13 @@
         "external": "pypi:markupsafe"
       },
       "edgeType": "import",
-      "note": "M5-24: markupsafe is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): markupsafe is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x05",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2311,14 +2285,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: pillow is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): pillow is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x06",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2327,14 +2300,13 @@
         "external": "pypi:pluggy"
       },
       "edgeType": "import",
-      "note": "M5-24: pluggy is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): pluggy is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x07",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2343,14 +2315,13 @@
         "external": "pypi:pysocks"
       },
       "edgeType": "import",
-      "note": "M5-24: pysocks is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): pysocks is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x08",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2359,14 +2330,13 @@
         "external": "pypi:pytest"
       },
       "edgeType": "import",
-      "note": "M5-24: pytest is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): pytest is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x09",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2379,14 +2349,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: pyyaml is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): pyyaml is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x10",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2399,14 +2368,13 @@
         "import",
         "instantiation"
       ],
-      "note": "M5-24: requests is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): requests is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x11",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2415,14 +2383,13 @@
         "external": "pypi:sklearn"
       },
       "edgeType": "import",
-      "note": "M5-24: sklearn is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): sklearn is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "python-x12",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2435,14 +2402,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: sqlalchemy is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): sqlalchemy is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "python-x13",
       "app": "python",
       "language": "python",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "app/infrastructure/http_gateway.py",
         "symbol": "HttpGateway"
@@ -2451,14 +2417,13 @@
         "external": "pypi:urllib3"
       },
       "edgeType": "import",
-      "note": "M5-24: urllib3 is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): urllib3 is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x01",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts"
       },
@@ -2466,14 +2431,13 @@
         "external": "npm:@acme/logging"
       },
       "edgeType": "import",
-      "note": "M5-24: @acme/logging is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): @acme/logging is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x02",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts"
       },
@@ -2481,14 +2445,13 @@
         "external": "npm:express"
       },
       "edgeType": "import",
-      "note": "M5-24: express is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): express is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x03",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts"
       },
@@ -2496,14 +2459,13 @@
         "external": "npm:js-yaml"
       },
       "edgeType": "require",
-      "note": "M5-24: js-yaml is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): js-yaml is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x04",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts"
       },
@@ -2511,14 +2473,13 @@
         "external": "npm:pg"
       },
       "edgeType": "import",
-      "note": "M5-24: pg is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): pg is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x05",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts"
       },
@@ -2526,14 +2487,13 @@
         "external": "npm:react"
       },
       "edgeType": "import",
-      "note": "M5-24: react is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): react is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x06",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts"
       },
@@ -2541,14 +2501,13 @@
         "external": "npm:reflect-metadata"
       },
       "edgeType": "import",
-      "note": "M5-24: reflect-metadata is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): reflect-metadata is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x07",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts",
         "symbol": "HttpGateway"
@@ -2557,14 +2516,13 @@
         "external": "npm:@acme/logging"
       },
       "edgeType": "param_type",
-      "note": "M5-24: @acme/logging is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): @acme/logging is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x08",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts",
         "symbol": "HttpGateway"
@@ -2573,14 +2531,13 @@
         "external": "npm:express"
       },
       "edgeType": "call",
-      "note": "M5-24: express is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): express is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x09",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts",
         "symbol": "HttpGateway"
@@ -2589,14 +2546,13 @@
         "external": "npm:js-yaml"
       },
       "edgeType": "call",
-      "note": "M5-24: js-yaml is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): js-yaml is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x10",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts",
         "symbol": "HttpGateway"
@@ -2609,14 +2565,13 @@
         "instantiation",
         "call"
       ],
-      "note": "M5-24: pg is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): pg is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x11",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/HttpGateway.ts",
         "symbol": "HttpGateway"
@@ -2625,14 +2580,13 @@
         "external": "npm:react"
       },
       "edgeType": "extends",
-      "note": "M5-24: react is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): react is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x12",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/Tooling.ts",
         "symbol": "toolingCheck"
@@ -2645,14 +2599,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: debug is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): debug is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x13",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/Tooling.ts",
         "symbol": "toolingCheck"
@@ -2661,14 +2614,13 @@
         "external": "npm:left-pad"
       },
       "edgeType": "import",
-      "note": "M5-24: left-pad is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): left-pad is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x14",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/Tooling.ts",
         "symbol": "toolingCheck"
@@ -2677,14 +2629,13 @@
         "external": "npm:lodash"
       },
       "edgeType": "import",
-      "note": "M5-24: lodash is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): lodash is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x15",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/Tooling.ts",
         "symbol": "toolingCheck"
@@ -2697,14 +2648,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: semver is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): semver is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "ts-x16",
       "app": "ts",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "src/infrastructure/Tooling.ts",
         "symbol": "toolingCheck"
@@ -2713,14 +2663,13 @@
         "external": "npm:sqlite"
       },
       "edgeType": "import",
-      "note": "M5-24: sqlite is in no layer (the default policy.uncovered.externals)"
+      "note": "M5-24-R4 (D039): sqlite is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24)"
     },
     {
       "id": "workspace-x01",
       "app": "workspace",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "backend/routes/api.php"
       },
@@ -2732,14 +2681,13 @@
         "import",
         "call"
       ],
-      "note": "M5-24: Illuminate\\Support\\Facades\\Route is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): Illuminate\\Support\\Facades\\Route is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "workspace-x02",
       "app": "workspace",
       "language": "typescript",
-      "rule": "uncovered",
-      "kind": "uncovered",
+      "kind": "none",
       "from": {
         "file": "backend/routes/web.php"
       },
@@ -2751,7 +2699,7 @@
         "import",
         "call"
       ],
-      "note": "M5-24: Illuminate\\Support\\Facades\\Route is in no layer (the default policy.uncovered.externals); a package no input provides is named by its specifier"
+      "note": "M5-24-R4 (D039): Illuminate\\Support\\Facades\\Route is in no layer, and the configuration opts in to uncovered packages neither by a package selector nor by policy.uncovered.externals: out of scope, no finding (uncovered under M5-24); a package no input provides is named by its specifier"
     },
     {
       "id": "ts-vendor-01",
