@@ -85,7 +85,7 @@
       "required": ["kind", "severity", "fingerprint", "message"],
       "properties": {
         "kind": { "enum": ["violation", "skipped", "uncovered", "allowed", "warning", "error"] },
-        "rule": { "description": "disallowed-layer, private-layer, uncovered, multi-layer, empty-layer, unsupported-selector, plus-cycle, config, stale-baseline …", "type": "string" },
+        "rule": { "description": "disallowed-layer, internal-element, private-layer, uncovered, multi-layer, empty-layer, unsupported-selector, plus-cycle, config, stale-baseline …", "type": "string" },
         "severity": { "enum": ["error", "warn", "info"] },
         "source": { "$ref": "#/definitions/end" },
         "target": { "$ref": "#/definitions/end" },

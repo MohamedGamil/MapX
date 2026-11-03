@@ -1,8 +1,10 @@
 // Decorators, attributes and annotations, and doc-block tags, of a declaration (M5-10; gap G4 in
 // docs/research/deptrac/03-mapx-gap-and-integration.md). Read from the syntax tree for PHP, TS/JS,
-// Python, Java, Kotlin and C#, and stored in `symbols.metadata` as `decorators` and `docTags`, each
-// only when non-empty. The architecture `decorator` and `docTag` selectors read them; the shape is
-// specified in docs/baton/iterations/M5-10.md.
+// Python, Java, Kotlin, C# and (doc tags only) Go, and stored in `symbols.metadata` as `decorators`
+// and `docTags`, each only when non-empty. The architecture `decorator` and `docTag` selectors read
+// them; the shape is specified in docs/baton/iterations/M5-10.md. Also a declaration's restricted
+// native visibility, `visibility`, for Kotlin, C#, Java and Rust: the architecture's native internal
+// markers read it (M5-11; AR-07).
 
 import type { SymbolDecorator, SymbolDocTag } from '../types.js';
 
@@ -10,13 +12,13 @@ import type { SymbolDecorator, SymbolDocTag } from '../types.js';
 export type Decorator = SymbolDecorator;
 /** `@deprecated use V2` → `{ tag: '@deprecated', value: 'use V2' }`. */
 export type DocTag = SymbolDocTag;
-export interface SymbolAnnotations { decorators?: Decorator[]; docTags?: DocTag[] }
+export interface SymbolAnnotations { decorators?: Decorator[]; docTags?: DocTag[]; visibility?: string }
 
 /** Longest stored `args` or tag value, in characters; longer ones are cut and end in `…`. */
 export const ANNOTATION_TEXT_LIMIT = 500;
 
 const JS_LIKE = new Set(['typescript', 'tsx', 'javascript']);
-export const ANNOTATED_LANGUAGES = new Set([...JS_LIKE, 'python', 'java', 'kotlin', 'c-sharp', 'php']);
+export const ANNOTATED_LANGUAGES = new Set([...JS_LIKE, 'python', 'java', 'kotlin', 'c-sharp', 'php', 'go', 'rust']);
 
 const cut = (s: string) => (s.length > ANNOTATION_TEXT_LIMIT ? `${s.slice(0, ANNOTATION_TEXT_LIMIT - 1)}…` : s);
 const collapse = (s: string) => cut(s.replace(/\s+/g, ' ').trim());
@@ -88,11 +90,111 @@ export function symbolAnnotations(language: string, node: any, resolve?: (name: 
       }
     }
     docTags = javadocTags(precedingDoc(node));
+  } else if (language === 'go') {
+    docTags = goDocTags(goDeclaration(node));
   }
   const out: SymbolAnnotations = {};
   if (decorators.length) out.decorators = decorators;
   if (docTags.length) out.docTags = docTags;
+  const visibility = nativeVisibility(language, node);
+  if (visibility) out.visibility = visibility;
   return out;
+}
+
+// ─── Native visibility (M5-11) ───────────────────────────────────────────────────────────────
+
+/** C# declarations that are types: at file or namespace level, without an access modifier, they are `internal`. */
+const CSHARP_TYPES = new Set(['class_declaration', 'struct_declaration', 'interface_declaration', 'enum_declaration', 'record_declaration', 'delegate_declaration']);
+/** Java declarations that take an access modifier; members of an interface or annotation type are implicitly public. */
+const JAVA_ACCESSIBLE = new Set(['class_declaration', 'interface_declaration', 'enum_declaration', 'record_declaration', 'annotation_type_declaration', 'method_declaration', 'constructor_declaration', 'field_declaration']);
+
+/**
+ * A declaration's visibility when the language restricts it to a module, package or crate, else
+ * null (public, or private to its type or file, which another file cannot reach anyway):
+ * - Kotlin `internal`;
+ * - C# `internal` (not `protected internal`, which derived types anywhere reach), `private
+ *   protected`, and a type declared at file or namespace level without an access modifier;
+ * - Java package-private (`package`): no access modifier, outside interface and annotation bodies;
+ * - Rust `pub(crate)`, `pub(super)`, `pub(self)`, `pub(in path)`. A bare item is not marked: trait
+ *   impl methods have no `pub` and are as public as the trait.
+ */
+export function nativeVisibility(language: string, node: any): string | null {
+  if (language === 'kotlin') {
+    const v = namedChildren(namedChildren(node).find((c) => c.type === 'modifiers')).find((c) => c.type === 'visibility_modifier');
+    return v?.text === 'internal' ? 'internal' : null;
+  }
+  if (language === 'c-sharp') {
+    const mods = namedChildren(node).filter((c) => c.type === 'modifier').map((c) => c.text);
+    if (mods.includes('internal')) return mods.includes('protected') ? null : 'internal';
+    if (mods.includes('private') && mods.includes('protected')) return 'internal';
+    if (mods.some((m) => m === 'public' || m === 'private' || m === 'protected') || !CSHARP_TYPES.has(node.type)) return null;
+    // A type directly in the file or a namespace (block or file-scoped); a nested one is private.
+    const parent = node.parent;
+    const atTop = parent?.type === 'compilation_unit' || parent?.type === 'file_scoped_namespace_declaration'
+      || (parent?.type === 'declaration_list' && parent.parent?.type === 'namespace_declaration');
+    return atTop ? 'internal' : null;
+  }
+  if (language === 'java') {
+    if (!JAVA_ACCESSIBLE.has(node.type)) return null;
+    const body = node.parent?.type;
+    if (body === 'interface_body' || body === 'annotation_type_body') return null;
+    const mods = namedChildren(node).find((c) => c.type === 'modifiers');
+    const access = (mods?.children ?? []).some((c: any) => c.type === 'public' || c.type === 'protected' || c.type === 'private');
+    return access ? null : 'package';
+  }
+  if (language === 'rust') {
+    const v = namedChildren(node).find((c) => c.type === 'visibility_modifier');
+    const text = v?.text.replace(/\s+/g, ' ').replace(/\(\s+/, '(').replace(/\s+\)/, ')');
+    return text && /^pub\(/.test(text) ? text : null;
+  }
+  return null;
+}
+
+// ─── Go doc comments (M5-11) ─────────────────────────────────────────────────────────────────
+
+/**
+ * The node a Go declaration's doc comment sits above: a type, const or var spec's declaration when
+ * it holds that one spec, the spec itself inside a group (`type ( … )`), otherwise the node.
+ */
+function goDeclaration(node: any): any {
+  if (!/^(type|const|var)_spec$/.test(node.type)) return node;
+  const parent = node.parent;
+  if (!parent || !/^(type|const|var)_declaration$/.test(parent.type)) return node;
+  return namedChildren(parent).filter((c) => /_spec$/.test(c.type)).length === 1 ? parent : node;
+}
+
+/**
+ * Tags of a Go doc comment: the comments directly above the declaration, each on its own line, with
+ * no blank line between (a detached or trailing comment is not documentation). `@tag` lines, as in the other languages, and Go's
+ * `Deprecated:` paragraph as `@deprecated`. A value runs to the next tag or the end of its
+ * paragraph; indented lines are code blocks, never tags.
+ */
+function goDocTags(decl: any): DocTag[] {
+  const comments: any[] = [];
+  let next = decl;
+  for (let p = decl.previousNamedSibling; isComment(p) && p.endPosition.row >= next.startPosition.row - 1 && startsOwnLine(p); p = p.previousNamedSibling) {
+    comments.unshift(p);
+    next = p;
+  }
+  const lines = comments.flatMap((c) => {
+    const text: string = c.text;
+    if (text.startsWith('//')) return [text.replace(/^\/\/ ?/, '')];
+    return text.replace(/^\/\*/, '').replace(/\*\/$/, '').split('\n').map((l) => l.replace(/^ ?/, ''));
+  });
+  const tags: Array<{ tag: string; value: string[] }> = [];
+  let current: (typeof tags)[number] | null = null;
+  let paragraphStart = true;
+  for (const line of lines) {
+    if (!line.trim()) { current = null; paragraphStart = true; continue; }
+    const code = /^\s/.test(line);
+    const tag = code ? null : BLOCK_TAG.exec(line);
+    const deprecated = code || !paragraphStart ? null : /^Deprecated:(.*)$/.exec(line);
+    if (tag) tags.push(current = { tag: `@${tag[1]}`, value: [tag[2]!] });
+    else if (deprecated) tags.push(current = { tag: '@deprecated', value: [deprecated[1]!] });
+    else current?.value.push(line);
+    paragraphStart = false;
+  }
+  return tags.map((t) => ({ tag: t.tag, value: collapse(t.value.join(' ')) }));
 }
 
 // ─── Declarations and their comments ─────────────────────────────────────────────────────────
@@ -168,6 +270,16 @@ function kotlinAnnotations(a: any): Decorator[] {
   return out;
 }
 
+/**
+ * Does a comment start its own line (nothing but whitespace before it)? A trailing comment
+ * (`type A struct{} // @internal`, `f(); /** … *\/`) documents the code before it, never the next
+ * declaration (review of M5-11).
+ */
+const startsOwnLine = (n: any) => {
+  const prev = n.previousSibling;
+  return !prev || prev.endPosition.row < n.startPosition.row;
+};
+
 /** A `/** … *\/` doc comment (not `/**\/`). */
 const isBlockDoc = (n: any) => isComment(n) && n.text.startsWith('/**') && n.text !== '/**/';
 
@@ -181,7 +293,7 @@ function precedingDoc(node: any, skip: (n: any) => boolean = () => false): any {
   let p = node.previousNamedSibling;
   for (;;) {
     while (p && (skip(p) || (isComment(p) && !isBlockDoc(p)))) p = p.previousNamedSibling;
-    if (!p || isComment(p)) return p ?? null;
+    if (!p || isComment(p)) return p && startsOwnLine(p) ? p : null;
     const last = p.lastChild;
     if (!last?.isNamed) return null;
     p = last;
@@ -240,7 +352,7 @@ function xmlDocTags(node: any): DocTag[] {
   const lines: string[] = [];
   let p = node.previousNamedSibling;
   while (isComment(p) && !p.text.startsWith('///')) p = p.previousNamedSibling;
-  for (; isComment(p) && p.text.startsWith('///'); p = p.previousNamedSibling) lines.unshift(p.text.slice(3));
+  for (; isComment(p) && p.text.startsWith('///') && startsOwnLine(p); p = p.previousNamedSibling) lines.unshift(p.text.slice(3));
   if (!lines.length) return [];
   const xml = lines.join('\n');
   const tags: DocTag[] = [];

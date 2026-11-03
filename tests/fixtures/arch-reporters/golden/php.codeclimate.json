@@ -97,6 +97,70 @@
   },
   {
     "type": "issue",
+    "check_name": "internal-element",
+    "description": "App\\Application\\CancelOrder must not depend on App\\Domain\\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "8633c33dc1304f63",
+    "location": {
+      "path": "app/Application/CancelOrder.php",
+      "lines": {
+        "begin": 6
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "internal-element",
+    "description": "App\\Application\\CancelOrder must not depend on App\\Domain\\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "453e5814488e8d9b",
+    "location": {
+      "path": "app/Application/CancelOrder.php",
+      "lines": {
+        "begin": 13
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "internal-element",
+    "description": "App\\Application\\PlaceOrder must not depend on App\\Domain\\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [import]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "2806b62b7cd3050a",
+    "location": {
+      "path": "app/Application/PlaceOrder.php",
+      "lines": {
+        "begin": 7
+      }
+    }
+  },
+  {
+    "type": "issue",
+    "check_name": "internal-element",
+    "description": "App\\Application\\PlaceOrder must not depend on App\\Domain\\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [instantiation]",
+    "categories": [
+      "Complexity"
+    ],
+    "severity": "major",
+    "fingerprint": "40b9b66842efd062",
+    "location": {
+      "path": "app/Application/PlaceOrder.php",
+      "lines": {
+        "begin": 16
+      }
+    }
+  },
+  {
+    "type": "issue",
     "check_name": "private-layer",
     "description": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [import]",
     "categories": [

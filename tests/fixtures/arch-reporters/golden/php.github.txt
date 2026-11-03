@@ -4,6 +4,10 @@
 [error] app/Controller/ReportController.php:15 disallowed-layer: App\Controller\ReportController must not depend on App\Infrastructure\SqlOrderRepository (Controller on Infrastructure) [instantiation]
 [error] app/Shared/Result.php:5 disallowed-layer: App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [import]
 [error] app/Shared/Result.php:11 disallowed-layer: App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [instantiation]
+[error] app/Application/CancelOrder.php:6 internal-element: App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [import]
+[error] app/Application/CancelOrder.php:13 internal-element: App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [instantiation]
+[error] app/Application/PlaceOrder.php:7 internal-element: App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [import]
+[error] app/Application/PlaceOrder.php:16 internal-element: App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [instantiation]
 [error] app/Controller/OrderController.php:7 private-layer: App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [import]
 [error] app/Controller/OrderController.php:16 private-layer: App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [instantiation]
 [error] app/Controller/ReportController.php:7 private-layer: App\Controller\ReportController must not depend on App\Application\Internal\TaxRules: it is private to Application (Controller on Application) [import]
@@ -24,9 +28,9 @@
 ::error file=app/Controller/ReportController.php,line=15,title=disallowed-layer::App\Controller\ReportController must not depend on App\Infrastructure\SqlOrderRepository (Controller on Infrastructure) [instantiation]
 ::error file=app/Shared/Result.php,line=5,title=disallowed-layer::App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [import]
 ::error file=app/Shared/Result.php,line=11,title=disallowed-layer::App\Shared\Result must not depend on App\Domain\Money (Shared on Domain) [instantiation]
-::error file=app/Controller/OrderController.php,line=7,title=private-layer::App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [import]
-::error file=app/Controller/OrderController.php,line=16,title=private-layer::App\Controller\OrderController must not depend on App\Application\Internal\PricingRules: it is private to Application (Controller on Application) [instantiation]
-::error file=app/Controller/ReportController.php,line=7,title=private-layer::App\Controller\ReportController must not depend on App\Application\Internal\TaxRules: it is private to Application (Controller on Application) [import]
+::error file=app/Application/CancelOrder.php,line=6,title=internal-element::App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [import]
+::error file=app/Application/CancelOrder.php,line=13,title=internal-element::App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [instantiation]
+::error file=app/Application/PlaceOrder.php,line=7,title=internal-element::App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [import]
 ::notice file=app/Domain/Order.php,line=5,title=disallowed-layer::App\Domain\Order must not depend on App\Infrastructure\SqlOrderRepository (Domain on Infrastructure) [import] (skipped by the baseline)
 ::notice file=app/Domain/Order.php,line=12,title=disallowed-layer::App\Domain\Order must not depend on App\Infrastructure\SqlOrderRepository (Domain on Infrastructure) [instantiation] (skipped by the baseline)
 ::notice file=app/Application/PlaceOrder.php,line=8,title=uncovered::App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [import]
@@ -35,4 +39,4 @@
 ::notice file=app/Infrastructure/MailGateway.php,line=13,title=uncovered::App\Infrastructure\MailGateway depends on App\Support\Uuid, which is in no layer [instantiation]
 ::warning file=.mapx/architecture.jsonc,title=empty-layer::layer Reporting matches no element
 ::warning file=app/Domain/Ids/OrderId.php,title=multi-layer::App\Domain\Ids\OrderId is in 2 layers: Domain, Shared
-Violations: 10 (10 error, 0 warn)   Uncovered: 4   Skipped: 2   Allowed: 20   Warnings: 2   Errors: 1   1 more not annotated (GitHub shows 10 per level in a step); see the log lines above or --format sarif
+Violations: 14 (14 error, 0 warn)   Uncovered: 4   Skipped: 2   Allowed: 16   Warnings: 2   Errors: 1   5 more not annotated (GitHub shows 10 per level in a step); see the log lines above or --format sarif

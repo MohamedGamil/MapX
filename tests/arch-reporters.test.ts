@@ -460,17 +460,18 @@ describe('golden files on the PHP fixture (the real CLI)', () => {
     expect(readFileSync(out, 'utf8')).toContain('::error file=');
   });
 
-  it('GitHub: the 11 errors of the fixture: the stale entry (the exit-3 cause) is annotated, the cut is stated, every finding is logged', () => {
+  // 15 errors since M5-11: php-19 and php-20 (@internal, import and instantiation each) are internal-element violations.
+  it('GitHub: the 15 errors of the fixture: the stale entry (the exit-3 cause) is annotated, the cut is stated, every finding is logged', () => {
     const lines = mapxResult(root, 'check', '--format', 'github', ...ARGS).stdout.split('\n');
     const errors = lines.filter((l) => l.startsWith('::error'));
     expect(errors).toHaveLength(10);
     expect(parseCommand(errors[0]!).props.title).toBe('stale-baseline');
     expect(parseCommand(errors[0]!).message).toMatch(/^\.mapx\/architecture\.baseline\.json#\/entries\/0: the baseline entry /);
-    expect(lines.at(-2)).toMatch(/Errors: 1   1 more not annotated \(GitHub shows 10 per level in a step\); see the log lines above or --format sarif$/);
+    expect(lines.at(-2)).toMatch(/Errors: 1   5 more not annotated \(GitHub shows 10 per level in a step\); see the log lines above or --format sarif$/);
     const json: ArchReport = JSON.parse(mapxResult(root, 'check', '--format', 'json', ...ARGS).stdout);
     const logged = lines.filter((l) => /^\[(error|warning|notice)\] /.test(l));
     expect(logged).toHaveLength(json.findings.filter((f) => f.kind !== 'allowed').length);
-    expect(logged.filter((l) => l.startsWith('[error] '))).toHaveLength(11);
+    expect(logged.filter((l) => l.startsWith('[error] '))).toHaveLength(15);
   });
 
   it('an unknown --format is a usage error (exit 3) that lists the formats', () => {

@@ -34,6 +34,18 @@
               }
             },
             {
+              "id": "internal-element",
+              "shortDescription": {
+                "text": "A dependency on an element marked internal to its layer."
+              },
+              "helpUri": "https://github.com/MohamedGamil/mapx/blob/main/docs/architecture-rules.md",
+              "properties": {
+                "tags": [
+                  "architecture"
+                ]
+              }
+            },
+            {
               "id": "multi-layer",
               "shortDescription": {
                 "text": "A declaration in more than one layer."
@@ -323,8 +335,164 @@
           }
         },
         {
+          "ruleId": "internal-element",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "App\\Application\\CancelOrder must not depend on App\\Domain\\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Application/CancelOrder.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 6
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Application\\CancelOrder"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "8633c33dc1304f63"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Application",
+            "target": "App\\Domain\\AuditTrail",
+            "targetFile": "app/Domain/AuditTrail.php",
+            "targetLayer": "Domain",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "internal-element",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "App\\Application\\CancelOrder must not depend on App\\Domain\\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Application/CancelOrder.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 13
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Application\\CancelOrder"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "453e5814488e8d9b"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Application",
+            "target": "App\\Domain\\AuditTrail",
+            "targetFile": "app/Domain/AuditTrail.php",
+            "targetLayer": "Domain",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "internal-element",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "App\\Application\\PlaceOrder must not depend on App\\Domain\\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [import]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Application/PlaceOrder.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 7
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Application\\PlaceOrder"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "2806b62b7cd3050a"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Application",
+            "target": "App\\Domain\\LedgerHelper",
+            "targetFile": "app/Domain/LedgerHelper.php",
+            "targetLayer": "Domain",
+            "edgeType": "import",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
+          "ruleId": "internal-element",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "App\\Application\\PlaceOrder must not depend on App\\Domain\\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [instantiation]"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "app/Application/PlaceOrder.php",
+                  "uriBaseId": "%SRCROOT%"
+                },
+                "region": {
+                  "startLine": 16
+                }
+              },
+              "logicalLocations": [
+                {
+                  "fullyQualifiedName": "App\\Application\\PlaceOrder"
+                }
+              ]
+            }
+          ],
+          "partialFingerprints": {
+            "mapx/v1": "40b9b66842efd062"
+          },
+          "properties": {
+            "kind": "violation",
+            "sourceLayer": "Application",
+            "target": "App\\Domain\\LedgerHelper",
+            "targetFile": "app/Domain/LedgerHelper.php",
+            "targetLayer": "Domain",
+            "edgeType": "instantiation",
+            "verifiability": "verified",
+            "edges": 1
+          }
+        },
+        {
           "ruleId": "private-layer",
-          "ruleIndex": 3,
+          "ruleIndex": 4,
           "level": "error",
           "message": {
             "text": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [import]"
@@ -363,7 +531,7 @@
         },
         {
           "ruleId": "private-layer",
-          "ruleIndex": 3,
+          "ruleIndex": 4,
           "level": "error",
           "message": {
             "text": "App\\Controller\\OrderController must not depend on App\\Application\\Internal\\PricingRules: it is private to Application (Controller on Application) [instantiation]"
@@ -402,7 +570,7 @@
         },
         {
           "ruleId": "private-layer",
-          "ruleIndex": 3,
+          "ruleIndex": 4,
           "level": "error",
           "message": {
             "text": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [import]"
@@ -441,7 +609,7 @@
         },
         {
           "ruleId": "private-layer",
-          "ruleIndex": 3,
+          "ruleIndex": 4,
           "level": "error",
           "message": {
             "text": "App\\Controller\\ReportController must not depend on App\\Application\\Internal\\TaxRules: it is private to Application (Controller on Application) [instantiation]"
@@ -572,7 +740,7 @@
         },
         {
           "ruleId": "uncovered",
-          "ruleIndex": 5,
+          "ruleIndex": 6,
           "level": "note",
           "message": {
             "text": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [import]"
@@ -610,7 +778,7 @@
         },
         {
           "ruleId": "uncovered",
-          "ruleIndex": 5,
+          "ruleIndex": 6,
           "level": "note",
           "message": {
             "text": "App\\Application\\PlaceOrder depends on App\\Support\\Clock, which is in no layer [instantiation]"
@@ -648,7 +816,7 @@
         },
         {
           "ruleId": "uncovered",
-          "ruleIndex": 5,
+          "ruleIndex": 6,
           "level": "note",
           "message": {
             "text": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [import]"
@@ -686,7 +854,7 @@
         },
         {
           "ruleId": "uncovered",
-          "ruleIndex": 5,
+          "ruleIndex": 6,
           "level": "note",
           "message": {
             "text": "App\\Infrastructure\\MailGateway depends on App\\Support\\Uuid, which is in no layer [instantiation]"
@@ -752,7 +920,7 @@
         },
         {
           "ruleId": "multi-layer",
-          "ruleIndex": 2,
+          "ruleIndex": 3,
           "level": "warning",
           "message": {
             "text": "App\\Domain\\Ids\\OrderId is in 2 layers: Domain, Shared"
@@ -785,7 +953,7 @@
         },
         {
           "ruleId": "stale-baseline",
-          "ruleIndex": 4,
+          "ruleIndex": 5,
           "level": "error",
           "message": {
             "text": ".mapx/architecture.baseline.json#/entries/0: the baseline entry disallowed-layer App\\Domain\\Money → App\\Infrastructure\\SqlOrderRepository (instantiation) matches no violation; delete it"

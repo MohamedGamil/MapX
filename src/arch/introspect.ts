@@ -25,6 +25,7 @@ import {
 } from './evaluate.js';
 import type { Element } from './elements.js';
 import { globOrRegex } from './selectors/index.js';
+import { internalMarkers } from './visibility.js';
 
 /** A question that cannot be answered as asked: an unknown layer or element, an ambiguous name. Exit 3. */
 export class IntrospectError extends Error {
@@ -427,7 +428,7 @@ export function changedSince(dir: string, ref: string, repoPaths: Record<string,
 
 // ─── AR-13g: allowed ──────────────────────────────────────────────────────────────────────────
 
-export type AllowedRule = 'allowed' | 'same-layer' | 'uncovered' | 'overlay' | 'unassigned-source' | 'out-of-scope' | 'disallowed-layer' | 'private-layer';
+export type AllowedRule = 'allowed' | 'same-layer' | 'uncovered' | 'overlay' | 'unassigned-source' | 'out-of-scope' | 'disallowed-layer' | 'internal-element' | 'private-layer';
 
 export interface AllowedEnd {
   query: string;
@@ -513,7 +514,7 @@ function observedDependencies(ctx: ArchContext, source: Element, target: Element
 }
 
 const SEVERITY_RANK: Record<FindingSeverity, number> = { error: 2, warn: 1, info: 0 };
-const RULE_RANK: Record<AllowedRule, number> = { 'disallowed-layer': 7, 'private-layer': 6, uncovered: 5, 'unassigned-source': 4, allowed: 3, overlay: 2, 'same-layer': 1, 'out-of-scope': 0 };
+const RULE_RANK: Record<AllowedRule, number> = { 'disallowed-layer': 8, 'internal-element': 7, 'private-layer': 6, uncovered: 5, 'unassigned-source': 4, allowed: 3, overlay: 2, 'same-layer': 1, 'out-of-scope': 0 };
 const strictness = (d: AllowedDecision) => SEVERITY_RANK[d.severity] * 100 + (d.allowed ? 0 : 10) + RULE_RANK[d.rule];
 
 type Draft = Omit<AllowedDecision, 'reason' | 'via'> & { advisory: boolean; targetLayers: string[] };
@@ -557,8 +558,13 @@ export function isAllowed(ctx: ArchContext, from: string, to: string, options: {
   } else {
     const observed = sourceEl && targetEl ? observedDependencies(ctx, sourceEl, targetEl) : [];
     const types = edgeType !== null ? [edgeType] : observed.length ? scopeTypes.filter((t) => observed.some((d) => d.edgeType === t)) : scopeTypes;
-    const targetSide: TargetLayers = { layers: target.layers, overlays: target.overlays, privateIn: target.private };
+    // A hypothetical dependency between two elements: the target's internal markers apply (M5-11).
+    const markers = sourceEl && targetEl ? internalMarkers(ctx.membership.view, ctx.config.visibility, (el) => reportElement(ctx.membership.view, el)) : null;
     for (const type of types) {
+      const targetSide: TargetLayers = {
+        layers: target.layers, overlays: target.overlays, privateIn: target.private,
+        ...(markers ? { internal: () => markers.check({ source: sourceEl!, target: targetEl!, edgeType: type }) } : {}),
+      };
       const stored = observed.filter((d) => d.edgeType === type);
       for (const d of stored) {
         const advisory = d.kind === 'violation' && d.severity === 'warn' && d.rule === 'disallowed-layer'
@@ -608,6 +614,7 @@ function explain(ctx: ArchContext, d: Omit<AllowedDecision, 'reason' | 'via'>, a
     case 'overlay': return { reason: `${target.query} is an overlay layer: it decides only where a source layer denies it ("!${target.query}"), and ${layer} does not` };
     case 'uncovered': return { reason: `${targetLabel} is in no layer: \`mapx check\` reports the dependency as uncovered (warn) and fails on it only with --fail-on-uncovered` };
     case 'private-layer': return { reason: `${targetLabel} is private to ${violated.join(', ')}: only ${violated.length > 1 ? 'those layers' : 'that layer'} may depend on it` };
+    case 'internal-element': return { reason: `${targetLabel} is internal to ${targetLayers.join(', ')} (visibility): only ${targetLayers.length > 1 ? 'those layers' : 'that layer'} may depend on it` };
     default: {
       if (advisory) return { reason: `${layer} on ${violated.join(', ')} ${over} is advisory (severity warn): \`mapx check\` reports it as a warning` };
       const denied = violated.filter((t) => ctx.policy.denied.get(layer)?.has(t));

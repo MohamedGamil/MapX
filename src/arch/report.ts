@@ -43,6 +43,10 @@ export interface SkipOptions {
   repoPaths?: Record<string, string>;
 }
 
+/** What an internal-element message says is internal: "it" for the target or its file, else the marked member. */
+const internalName = (marked: Parameters<typeof elementName>[0], target: string) =>
+  marked.kind === 'file' || elementName(marked) === target ? 'it' : elementName(marked);
+
 const KINDS: FindingKind[] = ['violation', 'skipped', 'uncovered', 'allowed', 'warning', 'error'];
 const KIND_ORDER = Object.fromEntries(KINDS.map((k, i) => [k, i]));
 
@@ -110,19 +114,33 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
         ? `${s} may depend on ${t} (${[...m.sourceLayers].join(', ')} on ${finding.target!.layer})`
         : d.rule === 'private-layer'
           ? `${s} must not depend on ${t}: it is private to ${violated} (${[...m.sourceLayers].join(', ')} on ${violated})`
-          : `${s} must not depend on ${t} (${[...m.sourceLayers].join(', ')} on ${violated})`;
+          : d.rule === 'internal-element' && d.internal
+            ? `${s} must not depend on ${t}: ${internalName(d.internal.element, t)} is internal to ${violated} (${d.internal.marker}) (${[...m.sourceLayers].join(', ')} on ${violated})`
+            : `${s} must not depend on ${t} (${[...m.sourceLayers].join(', ')} on ${violated})`;
   }
   for (const [f, m] of meta) f.source!.layer = [...m.sourceLayers].sort(byOrder).join(', ');
 
   // A package-level finding (a Go import) is subsumed by a finer one of the same kind and rule, from
   // the same source file, on a type of that package: the import is how the type is reached. Without
   // one (a package used only through calls the resolver does not link) it stands. Keyed by file,
-  // since an import is file-level whatever the file declares (review of M5-04).
+  // since an import is file-level whatever the file declares (review of M5-04). An allowed import
+  // is subsumed by a finer finding of any kind: once the type it reaches is a violation (an internal
+  // type, M5-11), the import is how that violation is reached, not an allowed dependency of its own.
   const finer = new Set<string>();
-  for (const [f, m] of meta) if (m.packageDir === undefined) for (const file of m.sourceFiles) finer.add(JSON.stringify([f.kind, f.rule ?? '', file, posix.dirname(f.target!.file)]));
+  const anyFiner = new Set<string>();
+  for (const [f, m] of meta) {
+    if (m.packageDir !== undefined) continue;
+    for (const file of m.sourceFiles) {
+      finer.add(JSON.stringify([f.kind, f.rule ?? '', file, posix.dirname(f.target!.file)]));
+      anyFiner.add(JSON.stringify([file, posix.dirname(f.target!.file)]));
+    }
+  }
   for (const [key, f] of byKey) {
     const m = meta.get(f)!;
-    if (m.packageDir !== undefined && [...m.sourceFiles].every((file) => finer.has(JSON.stringify([f.kind, f.rule ?? '', file, m.packageDir])))) byKey.delete(key);
+    if (m.packageDir === undefined) continue;
+    const subsumed = (file: string) => finer.has(JSON.stringify([f.kind, f.rule ?? '', file, m.packageDir]))
+      || (f.kind === 'allowed' && anyFiner.has(JSON.stringify([file, m.packageDir])));
+    if ([...m.sourceFiles].every(subsumed)) byKey.delete(key);
   }
 
   // AR-10: a violation the baseline lists, or the base report already had, is skipped. Before the

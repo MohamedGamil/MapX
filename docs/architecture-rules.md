@@ -58,6 +58,7 @@ Put the configuration in `.mapx/architecture.jsonc`. Views go in `.mapx/architec
 - an unknown layer in rules, `layer` selectors or report groups. It suggests the closest name: `did you mean "Http"?`;
 - an overlay layer used as a rule source;
 - `+` cycles, named: `"+" allowances form a cycle: Service → Repo → Service`;
+- a `visibility.internalTags` entry that is not a doc tag (`"@internal"` and `"internal"` are; `"not a tag"` is not);
 - circular `extends`, a missing extended file, an `extends` naming a directory or a path that cannot be read (a symlink loop, no permission), an unknown preset, a parameter without a value or in a cycle, and a regular expression that does not compile;
 - an empty view name, or a view outside `.mapx/architecture/` (by `..` or through a symlink).
 
@@ -125,7 +126,7 @@ Not evaluated yet: these never match, `not` of them never matches either, and me
 
 ### Decorators and doc tags
 
-A scan stores each symbol's decorators, attributes or annotations, and its doc-block tags, for PHP, TypeScript, JavaScript (with Vue and Svelte script blocks), Python, Java, Kotlin and C#. Other languages store none yet, so these selectors never match their symbols.
+A scan stores each symbol's decorators, attributes or annotations, and its doc-block tags, for PHP, TypeScript, JavaScript (with Vue and Svelte script blocks), Python, Java, Kotlin and C#, and the doc tags of Go symbols. Other languages store none yet, so these selectors never match their symbols.
 
 | Language | Decorators | Doc tags |
 | --- | --- | --- |
@@ -134,6 +135,7 @@ A scan stores each symbol's decorators, attributes or annotations, and its doc-b
 | Python | `@dec`, `@dec(…)`, `@app.route(…)` on `def` and `class` | docstring directives (`.. deprecated:: 2.0`) and `@tag` lines |
 | Java, Kotlin | `@Ann`, `@Ann(…)`, `@a.b.Ann`, each of Kotlin's `@[A B]` | Javadoc and KDoc block tags |
 | C# | `[Attr]`, `[Attr(…)]`, several per list; not `[return: …]`, `[param: …]`, `[field: …]` and other targets that name something else | XML doc `///` elements, as `@remarks`, `@param` and so on; `<summary>` is the description and `<code>` a sample, neither a tag |
+| Go | none | the doc comment: the `//` (or `/* */`) comments directly above the declaration, each on its own line, with no blank line between (a detached or trailing comment is not documentation). `@tag` lines, and the `Deprecated:` paragraph as `@deprecated`; a value ends at the next tag or the end of its paragraph, and indented lines are code, never tags. In a `type ( … )` group, each spec's own comment |
 
 A block tag starts a line of the doc comment (after the leading `*`), so an inline `{@link X}` is not a tag. Its value runs to the next tag. Decorator names keep their qualifier as written (`app.route`, `System.Obsolete`), except in PHP, where they are fully qualified. Parameter decorators are not stored. Comments between decorators, or between the doc comment and the declaration (`// eslint-disable-next-line`), are passed over; code is not.
 
@@ -143,7 +145,9 @@ A block tag starts a line of the doc comment (after the leading `*`), so an inli
 - C# `<code>`;
 - in a Python docstring, a literal block (the lines indented under a paragraph ending in `::`) and doctest examples (from `>>>` to the next blank line).
 
-**A doc comment attaches to the next declaration, even across blank lines,** as TypeScript and Javadoc tooling do. A file-header block (`/** @license MIT */` or `/** @internal */` at the top of a file) therefore becomes the first declaration's tags. Keep `@internal` and similar markers out of file headers, or the first class of the file is marked.
+**A doc comment starts its own line.** A trailing comment documents the code before it, never the next declaration: in `type Legacy struct{} // @internal`, `int count; /** @internal */` or `x = 1; /** @internal */`, the next declaration gets no tag. The same holds for C# `///`.
+
+**A doc comment attaches to the next declaration, even across blank lines,** as TypeScript and Javadoc tooling do (Go: only directly above). A file-header block (`/** @license MIT */` or `/** @internal */` at the top of a file) therefore becomes the first declaration's tags. Keep `@internal` and similar markers out of file headers, or the first class of the file is marked.
 
 - **`decorator`.** A plain value matches a stored decorator, ignoring case, when:
   - it equals the decorator's name, or is a suffix of it on a namespace boundary (`\` or `.`). `Entity` and `Mapping\Entity` match `Doctrine\ORM\Mapping\Entity`; `tity` does not.
@@ -189,6 +193,39 @@ A `"*"` key gives defaults to every source layer: `"*": ["Shared", "!Legacy"]`.
 
 **Precedence.** `!` beats explicit allowances, which beat what `+` brings, which beats `*`. For one target, only the strongest form's allowances count, so an explicit `{ "to": "C", "types": ["import"] }` limits C to imports even if a `+` would bring C for calls. Allowances brought through `+` keep that `+`'s edge types and advisory severity. Each `+` path counts on its own, so the order of rules never matters.
 
+## Visibility
+
+Two mechanisms hide a layer's implementation from other layers, even ones its rules allow (AR-07). Both apply only after the rules allow a dependency, so a forbidden one stays a `disallowed-layer` violation.
+
+- **Private parts (rule `private-layer`).** A layer's `private` selectors mark elements only that layer may reach. `"private": [{ "path": "app/Infrastructure/Db/**" }]` lets other layers use the Infrastructure layer but not its database code.
+- **Internal elements (rule `internal-element`).** An internal element is reachable only from its own layers. An element is internal when:
+  - it is a symbol with a doc tag listed in `visibility.internalTags` (default `@internal` and `@mapx-internal`). Tags compare like the `docTag` selector: case is ignored and the `@` is optional. A list replaces the default, so `["@mapx-internal"]` stops `@internal` from counting;
+  - it is a member of an internal type, since the type is how it is reached;
+  - it is a file whose top-level symbols are all internal (an import of the file names them), or a whole file a native marker covers;
+  - for a Go import, every in-scope file of the package is internal;
+  - with `visibility.nativeMarkers: true`, its language's own module visibility makes it internal (below).
+
+**Native markers** are off by default, because layer boundaries rarely match compiler boundaries. `"visibility": { "nativeMarkers": true }` turns on all of them. A native marker counts only for a reference the language itself refuses, so code that compiles (or follows the language's convention) is never flagged. Where MapX cannot see the boundary (no project, module or package file), it reports nothing:
+
+| Language | Internal | Refused (an `internal-element` finding) when the referrer… |
+| --- | --- | --- |
+| Go | a file under a directory named `internal` | is not rooted at the parent of the (deepest) `internal` directory, by import path. `internal/http` may use `internal/domain`, and a module-root `internal/` is open to the whole module |
+| Python | a module or package whose name starts with `_` (not a dunder such as `__init__`) | is outside the package that holds it and imports the private module itself. A name the package re-exports (`from ._journal import Journal` in `__init__.py`, used as `from app.domain import Journal`) is public through that path |
+| Python | a symbol whose name starts with `_` (not a dunder) | is in another module. `from m import _x` names it, so that import is reported on `_x` too |
+| Dart | a symbol whose name starts with `_` | is in another file that is not a `part of` |
+| Dart | a file under `lib/src/` | is in another package (nearest `pubspec.yaml`) |
+| Kotlin | `internal` | is in another module (nearest `build.gradle`, `build.gradle.kts` or `pom.xml`). A module's tests are in the module |
+| C# | `internal` (not `protected internal`), `private protected`, and a type declared in a file or namespace without an access modifier. A partial type is as accessible as its most accessible part | is in another project (nearest `.csproj`) that the target's project does not name in `InternalsVisibleTo` (a `.csproj` item or `[assembly: InternalsVisibleTo("…")]`) |
+| Java | package-private: a type or member without `public`, `protected` or `private`, except interface and annotation members | is in another package. A test in the same package under another source root (`src/test/java`) may use it |
+| Rust | `pub(crate)`, `pub(self)`, `pub(super)`, `pub(in path)` | is in another crate (nearest `Cargo.toml`), or outside the item's module, its parent module, or the path. A plain item without `pub` is not marked: methods of a trait impl have no `pub` |
+| TypeScript, TSX, JavaScript, Vue, Svelte | the `@internal` doc tag, even when `internalTags` leaves it out | is in another workspace package (nearest `package.json` name): `stripInternal` removes it from the published types |
+| PHP | none | PHP has no module visibility. Its `@internal` convention is a doc tag: keep it in `internalTags` |
+| Others | none | Swift's `internal` is its default; Scala `private[pkg]` is not read yet |
+
+The scan stores the Kotlin, C#, Java and Rust visibility on each symbol as `metadata.visibility` (`internal`, `package`, `pub(crate)` …), only when it is restricted, as each declaration (or part of a partial type) writes it. Overloads that share one element are restricted only when every one of them is.
+
+A finding names the marker: `App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain)`. When a member carries the marker, the finding (reported on its type) names the member: `… Account: core/Ledger.kt#Account.audit is internal to Core (Kotlin internal) …`.
+
 ## Evaluation
 
 Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `implements`, `call`, `instantiation`, `param_type`, `return_type`) is checked in this order. The first step that applies decides:
@@ -200,14 +237,15 @@ Each stored edge in `scope.types` (default: `import`, `require`, `extends`, `imp
    2. **Uncovered:** the target is in no non-overlay layer.
    3. **Same layer:** every non-overlay layer of the target is the source layer. Nothing is recorded.
    4. **`disallowed-layer`:** one of the target's other layers is not allowed for this edge type, or is denied.
-   5. **`private-layer`:** the target is private to a layer other than the source layer (a `private` selector).
-   6. **Allowed.**
+   5. **`internal-element`:** the target is internal (see [Visibility](#visibility)) and the source layer is not one of its layers.
+   6. **`private-layer`:** the target is private to a layer other than the source layer (a `private` selector).
+   7. **Allowed.**
 
 **Severity.** A violation is an `error`. It is a `warn` when the edge is inferred (under the default `policy.inferred: "warn"`) or when the pair is advisory. Uncovered dependencies are `warn`.
 
 **Granularity.** Layers are decided on the finest element an edge names: the method, or the file for an import. An edge end names a symbol only when the file has exactly one symbol of that name; an import path names the file. A finding then names the top-level declaration: a method's dependency is reported on its class, even when the method is declared in another file of the class's namespace or package (Go, C# partial classes). An import is reported on the file's only top-level symbol, or on the file when it has several. So one class-to-class dependency is one finding per edge type, however many edges carry it. There are two exceptions:
 - the target of an `http` or `route` edge stays the handler method;
-- a Go import names a package, so its target is the package (its import path, with the layers of its directory's in-scope files). It is dropped when every importing file already has a finding of the same kind and rule on a type of that package.
+- a Go import names a package, so its target is the package (its import path, with the layers of its directory's in-scope files). It is dropped when every importing file already has a finding of the same kind and rule on a type of that package. An allowed import is also dropped when every importing file has a finding of any kind on a type of that package: when that type is internal, the import is how the violation is reached.
 
 ## The report
 

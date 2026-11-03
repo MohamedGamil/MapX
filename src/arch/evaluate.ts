@@ -6,7 +6,8 @@
 //      a. the target is in no non-overlay layer           → uncovered
 //      b. the source layer is one of the target's layers  → nothing (same layer)
 //      c. no target layer is allowed for this edge type   → violation, disallowed-layer
-//      d. internal-element                                → not yet (doc tags arrive with M5-10)
+//      d. the target is internal and the source layer is
+//         not one of its layers (src/arch/visibility.ts)  → violation, internal-element (M5-11)
 //      e. the target is private to another layer          → violation, private-layer
 //      f. otherwise                                       → allowed
 //
@@ -23,6 +24,7 @@ import type { Element, ElementView } from './elements.js';
 import type { LayerMembership } from './membership.js';
 import { globOrRegex } from './selectors/index.js';
 import { decide, type ExpandedPolicy } from './policy.js';
+import { internalMarkers, type InternalMarker } from './visibility.js';
 
 export type FindingKind = 'violation' | 'skipped' | 'uncovered' | 'allowed' | 'warning' | 'error';
 export type FindingSeverity = 'error' | 'warn' | 'info';
@@ -158,7 +160,7 @@ export interface PackageEnd { name: string; dir: string }
 
 export interface Dependency {
   kind: 'violation' | 'uncovered' | 'allowed';
-  rule?: 'disallowed-layer' | 'private-layer' | 'uncovered';
+  rule?: 'disallowed-layer' | 'internal-element' | 'private-layer' | 'uncovered';
   severity: FindingSeverity;
   source: Element;
   target: Element;
@@ -171,6 +173,8 @@ export interface Dependency {
   line?: number;
   /** Set when the target is a whole package rather than a file or symbol. */
   targetPackage?: PackageEnd;
+  /** For an `internal-element` violation: the element that carries the marker, and the marker. */
+  internal?: InternalMarker;
 }
 
 export interface Evaluation {
@@ -199,6 +203,10 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
   };
 
   const rows = store.raw.prepare('SELECT source_file, target_file, source_symbol, target_symbol, edge_type, verifiability, metadata FROM edges ORDER BY id').all() as unknown as EdgeRow[];
+  // What each file imports: Python's native marker tells a re-export from a direct import (M5-11).
+  const imports = new Map<string, Set<string>>();
+  for (const r of rows) if (r.edge_type === 'import') imports.set(r.source_file, (imports.get(r.source_file) ?? new Set()).add(r.target_file));
+  const markers = internalMarkers(view, config.visibility, (el) => reportElement(view, el), imports);
   const out: Dependency[] = [];
   const endFiles = new Set<string>();
   for (const r of rows) {
@@ -217,21 +225,35 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
     // An import of a package (Go stores the package path as the symbol): every file of the package.
     let targetPackage: PackageEnd | undefined;
     let targetLayers = membership.primaryOf(target);
+    let line: number | undefined;
+    try { const m = r.metadata ? JSON.parse(r.metadata) : null; const at = m?.startLine ?? m?.line; if (typeof at === 'number') line = at; } catch { /* no line */ }
+    // Internal to this reference: the target, or for a package every one of its files (computed when needed).
+    let internal: () => InternalMarker | null = () => markers.check({ source, target, edgeType: r.edge_type, line });
     if (target.kind === 'file' && r.target_symbol && target.file.namespace && r.target_symbol === target.file.namespace) {
       const dir = posix.dirname(target.file.path);
       targetPackage = { name: target.file.namespace, dir };
       const union = new Set<string>();
-      for (const f of packageFiles(dir, target.file.namespace)) for (const l of membership.primaryOf(`file:${f}`)) union.add(l);
+      const files = packageFiles(dir, target.file.namespace);
+      for (const f of files) for (const l of membership.primaryOf(`file:${f}`)) union.add(l);
       targetLayers = config.layers.map((l) => l.name).filter((l) => union.has(l));
+      internal = () => {
+        const marks = files.map((f) => view.byId.get(`file:${f}`)).map((el) => (el ? markers.check({ source, target: el, edgeType: r.edge_type, line }) : null));
+        return marks.length && marks.every(Boolean) ? marks[0]! : null;
+      };
     }
-    let line: number | undefined;
-    try { const m = r.metadata ? JSON.parse(r.metadata) : null; const at = m?.startLine ?? m?.line; if (typeof at === 'number') line = at; } catch { /* no line */ }
     const base = { source, target, targetLayers, edgeType: r.edge_type, verifiability: verifiability as Dependency['verifiability'], line, ...(targetPackage ? { targetPackage } : {}) };
     // Overlays the target is in (Deprecated, Vendor …): they only ever matter as denied targets.
-    const targetSide: TargetLayers = { layers: targetLayers, overlays: membership.of(target).filter((l) => overlays.has(l)), privateIn: membership.privateIn(target) };
+    const targetSide: TargetLayers = { layers: targetLayers, overlays: membership.of(target).filter((l) => overlays.has(l)), privateIn: membership.privateIn(target), internal };
     for (const d of decideEdge(config, policy, sourceLayers, targetSide, r.edge_type, verifiability)) {
       if (d.kind === 'same-layer') continue;
-      out.push({ ...base, kind: d.kind, ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, sourceLayer: d.sourceLayer, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}) });
+      // A Python `from m import _x`: the import names the internal symbol, so it is its target, as
+      // for the call it brings (review of M5-11).
+      const marker = d.internal;
+      const named = !!marker && target.kind === 'file' && source.file.language === 'python' && r.edge_type === 'import' && marker.element.kind === 'symbol' && marker.element.file.path === target.file.path;
+      out.push({
+        ...base, ...(named ? { target: marker!.element } : {}), kind: d.kind, ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, sourceLayer: d.sourceLayer,
+        ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}), ...(marker ? { internal: marker } : {}),
+      });
     }
   }
   return { dependencies: out, endFiles };
@@ -284,21 +306,25 @@ export interface TargetLayers {
   overlays: string[];
   /** Layers whose `private` selectors match the target (AR-07); none for a whole layer. */
   privateIn: string[];
+  /** The target's internal marker for this reference (AR-07 §2, M5-11), computed only when needed; none for a whole layer. */
+  internal?: () => InternalMarker | null;
 }
 
 /** What AR-08 decides for one source layer (steps 3.1 to 3.6); severity is the caller's. */
 export interface LayerDecision {
   kind: 'violation' | 'uncovered' | 'allowed' | 'same-layer';
-  rule?: 'disallowed-layer' | 'private-layer' | 'uncovered';
+  rule?: 'disallowed-layer' | 'internal-element' | 'private-layer' | 'uncovered';
   /** For a violation: the target layers the source layer may not depend on. */
   violatedLayers?: string[];
   /** A disallowed-layer violation every refused layer of which only an advisory grant covers. */
   advisory?: boolean;
+  /** For an internal-element violation: the element that carries the marker, and the marker. */
+  internal?: InternalMarker;
 }
 
 /**
  * The AR-08 chain for one source layer and edge type: a denied overlay, uncovered, same layer,
- * disallowed layer, private layer, allowed. The evaluator and `mapx arch allowed` share it, so a
+ * disallowed layer, internal element, private layer, allowed. The evaluator and `mapx arch allowed` share it, so a
  * pre-flight answer is what `mapx check` would report.
  */
 export function decideLayers(policy: ExpandedPolicy, sourceLayer: string, target: TargetLayers, type: string): LayerDecision {
@@ -315,6 +341,11 @@ export function decideLayers(policy: ExpandedPolicy, sourceLayer: string, target
   if (refused.length) {
     const advisory = refused.every((x) => !x.d.allowed && x.d.advisory && !x.d.denied);
     return { kind: 'violation', rule: 'disallowed-layer', violatedLayers: refused.map((x) => x.t), advisory };
+  }
+  // AR-07 §2: an internal element is reachable only from its own layers (M5-11).
+  if (target.internal && !target.layers.includes(sourceLayer)) {
+    const internal = target.internal();
+    if (internal) return { kind: 'violation', rule: 'internal-element', violatedLayers: others, advisory: false, internal };
   }
   // AR-07: private parts of another layer are reachable only from that layer.
   const privateTo = target.privateIn.filter((l) => l !== sourceLayer);

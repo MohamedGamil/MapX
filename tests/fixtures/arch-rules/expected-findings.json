@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive.",
+  "description": "Labelled architecture findings (M5-01). Keys are the fingerprint inputs of AR-09 (rule, from, to, edge type), never line numbers. kind \"allowed\" and \"none\" rows are negatives: any finding reported for them is a false positive. A row with \"native\" is labelled for the default configuration; \"native\" gives its kind, rule and (where they differ) edge types when visibility.nativeMarkers is true. \"edgeTypes\", where given, lists every edge type that carries the dependency; \"edgeType\" is the one the scorer matches (M5-11).",
   "apps": {
     "php": {
       "language": "php",
@@ -1229,6 +1229,77 @@
       "note": "Reporting matches nothing"
     },
     {
+      "id": "python-26",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "native": {
+        "kind": "violation",
+        "rule": "internal-element"
+      },
+      "from": {
+        "file": "app/application/close_order.py",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "app/domain/_journal.py",
+        "symbol": "Journal"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain. With visibility.nativeMarkers, the module _journal is internal to Domain (M5-11)",
+      "edgeTypes": [
+        "call",
+        "import",
+        "instantiation"
+      ]
+    },
+    {
+      "id": "python-27",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "native": {
+        "kind": "violation",
+        "rule": "internal-element",
+        "edgeTypes": [
+          "call",
+          "import"
+        ]
+      },
+      "from": {
+        "file": "app/application/close_order.py",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "app/domain/rounding.py",
+        "symbol": "_round_half_even"
+      },
+      "edgeType": "call",
+      "note": "Application \u2192 Domain through +Domain. With visibility.nativeMarkers, the function _round_half_even is internal to its module: its call, and the import that names it (without native markers that import is a file-level dependency on rounding.py) (M5-11)",
+      "edgeTypes": [
+        "call"
+      ]
+    },
+    {
+      "id": "python-28",
+      "app": "python",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/application/close_order.py",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "app/domain/rounding.py",
+        "symbol": "round_amount"
+      },
+      "edgeType": "call",
+      "note": "Application \u2192 Domain through +Domain, with or without native markers: round_amount is public. Its import is a file-level dependency on rounding.py (M5-11)",
+      "edgeTypes": [
+        "call"
+      ]
+    },
+    {
       "id": "go-01",
       "app": "go",
       "language": "go",
@@ -1626,6 +1697,70 @@
       "kind": "warning",
       "layer": "Reporting",
       "note": "Reporting matches nothing"
+    },
+    {
+      "id": "go-26",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/close_order.go",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "internal/ledger/journal.go",
+        "symbol": "Journal"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain. Journal is under a module-root internal/: Go lets the whole module import it, so it stays allowed with visibility.nativeMarkers too (M5-11)",
+      "edgeTypes": [
+        "call",
+        "instantiation"
+      ]
+    },
+    {
+      "id": "go-27",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "application/close_order.go",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "domain/money.go",
+        "symbol": "Money"
+      },
+      "edgeType": "instantiation",
+      "note": "Application \u2192 Domain through +Domain, with or without native markers (M5-11)",
+      "edgeTypes": [
+        "call",
+        "instantiation"
+      ]
+    },
+    {
+      "id": "go-28",
+      "app": "go",
+      "language": "go",
+      "kind": "allowed",
+      "native": {
+        "kind": "violation",
+        "rule": "internal-element"
+      },
+      "from": {
+        "file": "application/close_order.go",
+        "symbol": "CloseOrder"
+      },
+      "to": {
+        "file": "domain/internal/vault/vault.go",
+        "symbol": "Vault"
+      },
+      "edgeType": "instantiation",
+      "edgeTypes": [
+        "call",
+        "instantiation"
+      ],
+      "note": "Application \u2192 Domain through +Domain. With visibility.nativeMarkers, Vault is under domain/internal/, which Go lets only code rooted at domain/ import: internal to Domain (M5-11)"
     },
     {
       "id": "php-26",

@@ -85,6 +85,8 @@ const escapePointer = (token: string | number) => String(token).replace(/~/g, '~
 const at = (pointer: string, ...tokens: Array<string | number>) => pointer + tokens.map((t) => '/' + escapePointer(t)).join('');
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const quote = (s: string) => JSON.stringify(s);
+/** A doc tag as `visibility.internalTags` takes it: the block-tag names the parsers store, `@` optional. */
+const DOC_TAG = /^@?[A-Za-z_][\w\\.:-]*$/;
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────────────────────
 
@@ -171,7 +173,13 @@ export function validateDocument(doc: unknown, file: string): ConfigIssue[] {
       case 'visibility':
         if (!isObject(value)) { issue(p, 'expected an object'); break; }
         knownKeys(value, p, VISIBILITY_KEYS, 'visibility');
-        if ('internalTags' in value) stringList(value['internalTags'], at(p, 'internalTags'), 'a list of doc tags');
+        if ('internalTags' in value) {
+          stringList(value['internalTags'], at(p, 'internalTags'), 'a list of doc tags');
+          // A tag as the parsers store it (`@name`, the `@` optional): anything else never matches (M5-11).
+          if (Array.isArray(value['internalTags'])) value['internalTags'].forEach((t, i) => {
+            if (typeof t === 'string' && t && !DOC_TAG.test(t)) issue(at(p, 'internalTags', i), `expected a doc tag such as "@internal", got ${quote(t)}`);
+          });
+        }
         if ('nativeMarkers' in value) bool(value['nativeMarkers'], at(p, 'nativeMarkers'));
         break;
       case 'layers':

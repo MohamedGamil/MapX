@@ -151,29 +151,22 @@ describe('the scorer', () => {
   });
 });
 
-describe('the real-scan score (`mapx check`, M5-04 evaluator, M5-06 baseline)', () => {
-  // Rows later tasks own: @internal markers (M5-10/M5-11: internal-element). Every other labelled
-  // row is found, and nothing else is.
-  const LATER = (r: (typeof rows)[number]) => r.rule === 'internal-element';
-
-  it('score-arch.ts finds every row but those later tasks own, and nothing else', () => {
+describe('the real-scan score (`mapx check`, M5-04 evaluator, M5-06 baseline, M5-11 internal markers)', () => {
+  // Every labelled row is found, and nothing else is (M5-11 found the last ones: internal-element).
+  it('score-arch.ts finds every row, and nothing else', () => {
     const out = execFileSync(process.execPath, ['--import', 'tsx', resolve(__dirname, '../scripts/eval/score-arch.ts'), FIXTURE, '--json'], { encoding: 'utf8', cwd: resolve(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'] });
     const score = JSON.parse(out);
     expect(score.apps).toHaveLength(Object.keys(expected.apps).length);
     expect(score.apps.every((a: any) => a.report)).toBe(true);
-    const misses = score.apps.flatMap((a: any) => a.misses).sort();
-    expect(misses).toEqual(rows.filter(LATER).map((r) => r.id).sort());
+    expect(score.apps.flatMap((a: any) => a.misses)).toEqual([]);
     expect(score.apps.flatMap((a: any) => a.negativeHits)).toEqual([]);
-    // Recall and precision 1 for skipped (php-07), uncovered, warning and error rows (the + cycle
-    // and php-26's stale baseline entry, M5-06).
-    for (const kind of ['skipped', 'uncovered', 'warning', 'error']) expect(score.kinds[kind], kind).toMatchObject({ recall: 1, precision: 1 });
-    const violation = score.kinds.violation;
-    const later = rows.filter((r) => r.kind === 'violation' && LATER(r)).length;
-    expect(violation.matched).toBe(violation.expected - later);
+    // Recall and precision 1 for every kind: violations (internal-element included), skipped
+    // (php-07), uncovered, warning and error rows (the + cycle and php-26's stale baseline entry, M5-06).
+    for (const kind of ['violation', 'skipped', 'uncovered', 'warning', 'error']) expect(score.kinds[kind], kind).toMatchObject({ recall: 1, precision: 1 });
     // No false positive: the baseline's pair skips both edges of php-07 (import and instantiation).
+    const violation = score.kinds.violation;
     expect(violation.reported).toBe(violation.matched);
-    const php = score.apps.find((a: any) => a.app === 'php');
-    expect(php.misses).not.toContain('php-07');
+    expect(violation.expected).toBe(rows.filter((r) => r.kind === 'violation').length);
     expect(score.failures).toEqual([]);
   }, 300_000);
 });

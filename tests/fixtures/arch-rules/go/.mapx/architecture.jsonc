@@ -28,6 +28,10 @@
       "selectors": [
         {
           "path": "domain/**"
+        },
+        // M5-11: a module-root internal/ package the architecture assigns to Domain.
+        {
+          "path": "internal/ledger/**"
         }
       ]
     },

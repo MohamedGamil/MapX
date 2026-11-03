@@ -2766,7 +2766,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--report-allowed', 'Show allowed dependencies too')
     .option('--fail-on <severity>', 'Lowest severity that fails the run: error or warn', 'error')
     .option('--layer <name>', 'Only findings about this layer')
-    .option('--rule <rule>', 'Only findings of this rule (disallowed-layer, private-layer, uncovered, multi-layer, …)')
+    .option('--rule <rule>', 'Only findings of this rule (disallowed-layer, internal-element, private-layer, uncovered, multi-layer, …)')
     .option('--sync', 'Sync the index first when files changed since the last scan')
     .option('--baseline <file>', "Use this baseline instead of the configuration's (relative to the current directory)")
     .option('--generate-baseline [file]', 'Write every current violation to the baseline (or to <file>) and exit 0')

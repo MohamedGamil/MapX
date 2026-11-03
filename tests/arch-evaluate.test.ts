@@ -125,6 +125,9 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
       'violation disallowed-layer App\\Controller\\ReportController -> App\\Infrastructure\\SqlOrderRepository instantiation',
       'violation disallowed-layer App\\Domain\\Order -> App\\Infrastructure\\SqlOrderRepository instantiation',
       'violation disallowed-layer App\\Shared\\Result -> App\\Domain\\Money instantiation',
+      // php-19, php-20: @internal to Domain (M5-11).
+      'violation internal-element App\\Application\\CancelOrder -> App\\Domain\\AuditTrail instantiation',
+      'violation internal-element App\\Application\\PlaceOrder -> App\\Domain\\LedgerHelper instantiation',
       'violation private-layer App\\Controller\\OrderController -> App\\Application\\Internal\\PricingRules instantiation',
       'violation private-layer App\\Controller\\ReportController -> App\\Application\\Internal\\TaxRules instantiation',
       'uncovered uncovered App\\Application\\PlaceOrder -> App\\Support\\Clock instantiation',
@@ -141,7 +144,8 @@ describe('the evaluation chain on the PHP app (AR-08)', () => {
     // Order (Domain) → OrderId (Domain and Shared) is checked against Shared too (AR-08: same layer
     // only when every target layer is the source's), and Domain may use Shared.
     expect(r.findings.find((f) => f.source?.element === 'App\\Domain\\Order' && f.target?.element === 'App\\Domain\\Ids\\OrderId' && f.edgeType === 'instantiation')?.kind).toBe('allowed');
-    expect(r.counts).toEqual({ violation: 12, skipped: 0, uncovered: 4, allowed: 20, warning: 2, error: 0 });
+    // M5-11: the two @internal dependencies (import and instantiation each) are violations, no longer allowed.
+    expect(r.counts).toEqual({ violation: 16, skipped: 0, uncovered: 4, allowed: 16, warning: 2, error: 0 });
     // Unique fingerprints within a report.
     expect(new Set(r.findings.map((f) => f.fingerprint)).size).toBe(r.findings.length);
   });

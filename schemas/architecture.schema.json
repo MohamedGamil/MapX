@@ -128,13 +128,14 @@
           "type": "array",
           "items": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "^@?[A-Za-z_][\\w\\\\.:-]*$"
           },
-          "description": "Doc tags that make an element internal to its layer. Default: @internal, @mapx-internal."
+          "description": "Doc tags that make a symbol internal to its layers: only its own layers may depend on it (rule internal-element). Compared like the docTag selector: case-insensitive, the @ optional. A member of an internal type, and a file whose top-level symbols are all internal, are internal too. Replaces the default: @internal, @mapx-internal."
         },
         "nativeMarkers": {
           "type": "boolean",
-          "description": "Treat language visibility (Go internal/, Kotlin internal, …) as internal markers. Default: false."
+          "description": "Also treat each language's module-scoped visibility as an internal marker, for references the language itself refuses: Go internal/ (from outside its parent), Python _module (imported directly from outside its package; a re-export is public) and _name (from another module), Dart _name (another file) and lib/src/ (another package), Kotlin internal (another module), C# internal (another project without InternalsVisibleTo; partial types merged), Java package-private (another package), Rust pub(crate)/pub(self)/pub(super)/pub(in …) (outside the crate or module), and the TypeScript/JavaScript @internal tag (another package). Where the boundary is unknown, nothing is reported. PHP has none. Default: false."
         }
       }
     },

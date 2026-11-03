@@ -29,6 +29,13 @@ export interface ExpectedRow {
   edgeType?: string;
   /** For layer-level findings (`empty-layer`, `plus-cycle`). */
   layer?: string;
+  /**
+   * The row's label when `visibility.nativeMarkers` is on (M5-11); `kind` and `rule` label the
+   * fixture's own configuration, which this scorer runs.
+   */
+  native?: { kind: ScoredKind | 'allowed' | 'none'; rule?: string; edgeTypes?: string[] };
+  /** Every edge type that carries the dependency, where labelled (M5-11); `edgeType` is the one matched. */
+  edgeTypes?: string[];
   note?: string;
 }
 export interface ExpectedFindings {

@@ -37,9 +37,13 @@ export interface Element {
   /** A symbol's decorators, attributes or annotations, and doc tags, as parsed (M5-10); absent when none. */
   decorators?: SymbolDecorator[];
   docTags?: SymbolDocTag[];
+  /** A symbol's restricted native visibility (Kotlin/C# `internal`, Java `package`, Rust `pub(crate)` …; M5-11). */
+  visibility?: string;
 }
 
 export interface ElementView {
+  /** The workspace directory the view's paths are relative to. */
+  root: string;
   elements: Element[];
   files: Map<string, FileInfo>;
   byId: Map<string, Element>;
@@ -215,14 +219,15 @@ export function scanStamp(store: Store): string {
   return [times, count('files'), count('symbols'), count('edges')].join(':');
 }
 
-/** The decorators and doc tags a symbol row's metadata holds (M5-10). */
-function annotationsOf(s: SymbolRow): { decorators?: SymbolDecorator[]; docTags?: SymbolDocTag[] } {
-  if (!s.metadata || !(s.metadata.includes('"decorators"') || s.metadata.includes('"docTags"'))) return {};
+/** The decorators, doc tags (M5-10) and restricted visibility (M5-11) a symbol row's metadata holds. */
+function annotationsOf(s: SymbolRow): { decorators?: SymbolDecorator[]; docTags?: SymbolDocTag[]; visibility?: string } {
+  if (!s.metadata || !(s.metadata.includes('"decorators"') || s.metadata.includes('"docTags"') || s.metadata.includes('"visibility"'))) return {};
   try {
-    const m = JSON.parse(s.metadata) as { decorators?: unknown; docTags?: unknown };
+    const m = JSON.parse(s.metadata) as { decorators?: unknown; docTags?: unknown; visibility?: unknown };
     return {
       ...(Array.isArray(m.decorators) && m.decorators.length ? { decorators: m.decorators as SymbolDecorator[] } : {}),
       ...(Array.isArray(m.docTags) && m.docTags.length ? { docTags: m.docTags as SymbolDocTag[] } : {}),
+      ...(typeof m.visibility === 'string' && m.visibility ? { visibility: m.visibility } : {}),
     };
   } catch {
     return {};
@@ -325,6 +330,8 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
       // Overloads share one element: it carries all their decorators and doc tags (M5-10).
       if (e.decorators) known.decorators = [...(known.decorators ?? []), ...e.decorators];
       if (e.docTags) known.docTags = [...(known.docTags ?? []), ...e.docTags];
+      // A restricted visibility only when every overload has it: a public overload is reachable (M5-11).
+      if (known.visibility !== e.visibility) delete known.visibility;
       return;
     }
     byId.set(e.id, e);
@@ -438,5 +445,5 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
 
   const stamp = scanStamp(store);
 
-  return { elements, files, byId, ofFile: (p) => byFile.get(p) ?? [], workspacePackage, scanStamp: stamp };
+  return { root: dir, elements, files, byId, ofFile: (p) => byFile.get(p) ?? [], workspacePackage, scanStamp: stamp };
 }

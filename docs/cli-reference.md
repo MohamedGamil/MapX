@@ -887,7 +887,7 @@ $ mapx arch unassigned --kind class                                # coverage ga
 
 ## `mapx check`
 
-Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, and private parts. See [architecture-rules.md](architecture-rules.md) for the configuration. It is meant for CI, so it never prints the logo and its exit code says what it found.
+Checks the architecture rules in `.mapx/architecture.jsonc` against the index: layers, the allow policy, private parts and internal elements. See [architecture-rules.md](architecture-rules.md) for the configuration. It is meant for CI, so it never prints the logo and its exit code says what it found.
 
 ```bash
 mapx check [path] [--view <name>] [--format table|json|sarif|github|codeclimate|junit] [--output <file>]
@@ -912,7 +912,7 @@ Options:
 - `--report-allowed`: list allowed dependencies too.
 - `--fail-on warn`: warn-level violations (advisory rules, inferred edges) and warnings (`multi-layer`, `empty-layer`, `unsupported-selector`) also fail the run.
 - `--layer <name>`: only findings whose source or target layer is `<name>`, or that are about that layer. A name that is not a layer of the configuration is an error (exit 3), so a typo cannot turn the check off.
-- `--rule <rule>`: only findings of one rule: `disallowed-layer`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`. An unknown rule is an error (exit 3).
+- `--rule <rule>`: only findings of one rule: `disallowed-layer`, `internal-element`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`. An unknown rule is an error (exit 3).
 - `--sync`: when files changed since the last scan, sync the index first instead of failing.
 - `--baseline <file>`: use this baseline instead of the configuration's `baseline`. The path is relative to the current directory.
 - `--generate-baseline [file]`: write every current violation to the baseline and exit 0.

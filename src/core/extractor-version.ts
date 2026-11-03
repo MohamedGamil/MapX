@@ -20,8 +20,10 @@ import type { Store } from './store.js';
  *   Kotlin, C#).
  * - 9: M5-19 (external references: candidates of references outside the workspace, decided again
  *   at the end of every scan and sync).
+ * - 10: M5-11 (Go doc-comment tags; the restricted native visibility of Kotlin, C#, Java and Rust
+ *   symbols in metadata).
  */
-export const EXTRACTOR_VERSION = 9;
+export const EXTRACTOR_VERSION = 10;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

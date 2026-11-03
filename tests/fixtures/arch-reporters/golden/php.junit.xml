@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="mapx check" tests="19" failures="10" errors="1">
+<testsuites name="mapx check" tests="23" failures="14" errors="1">
   <testsuite name="Controller" tests="8" failures="8" errors="0" skipped="0">
     <testcase name="App\Controller\OrderController → App\Domain\Order (import)" classname="disallowed-layer">
       <failure type="disallowed-layer" message="App\Controller\OrderController must not depend on App\Domain\Order (Controller on Domain) [import]">app/Controller/OrderController.php:6
@@ -42,7 +42,27 @@ App\Controller\ReportController must not depend on App\Application\Internal\TaxR
 fingerprint: 3c555d3915d9bf5a</failure>
     </testcase>
   </testsuite>
-  <testsuite name="Application" tests="2" failures="0" errors="0" skipped="0">
+  <testsuite name="Application" tests="6" failures="4" errors="0" skipped="0">
+    <testcase name="App\Application\CancelOrder → App\Domain\AuditTrail (import)" classname="internal-element">
+      <failure type="internal-element" message="App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [import]">app/Application/CancelOrder.php:6
+App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [import]
+fingerprint: 8633c33dc1304f63</failure>
+    </testcase>
+    <testcase name="App\Application\CancelOrder → App\Domain\AuditTrail (instantiation)" classname="internal-element">
+      <failure type="internal-element" message="App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [instantiation]">app/Application/CancelOrder.php:13
+App\Application\CancelOrder must not depend on App\Domain\AuditTrail: it is internal to Domain (@internal) (Application on Domain) [instantiation]
+fingerprint: 453e5814488e8d9b</failure>
+    </testcase>
+    <testcase name="App\Application\PlaceOrder → App\Domain\LedgerHelper (import)" classname="internal-element">
+      <failure type="internal-element" message="App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [import]">app/Application/PlaceOrder.php:7
+App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [import]
+fingerprint: 2806b62b7cd3050a</failure>
+    </testcase>
+    <testcase name="App\Application\PlaceOrder → App\Domain\LedgerHelper (instantiation)" classname="internal-element">
+      <failure type="internal-element" message="App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [instantiation]">app/Application/PlaceOrder.php:16
+App\Application\PlaceOrder must not depend on App\Domain\LedgerHelper: it is internal to Domain (@internal) (Application on Domain) [instantiation]
+fingerprint: 40b9b66842efd062</failure>
+    </testcase>
     <testcase name="App\Application\PlaceOrder → App\Support\Clock (import)" classname="uncovered">
       <system-out>uncovered (warn): app/Application/PlaceOrder.php:8
 App\Application\PlaceOrder depends on App\Support\Clock, which is in no layer [import]
