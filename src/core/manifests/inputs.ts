@@ -20,6 +20,13 @@ export interface ExternalInputs {
 
 export const contentHash = (text: string | null): string | null => (text === null ? null : createHash('md5').update(text).digest('hex'));
 
+/**
+ * What a path that is there but cannot be read (a folder, a file without permission) is recorded
+ * as, so removing or fixing it is a change (M5-20-R1 review): it ends a lockfile walk, absence does not.
+ */
+export const UNREADABLE_INPUT = '\u0000unreadable';
+const UNREADABLE_HASH = contentHash(UNREADABLE_INPUT);
+
 export function parseExternalInputs(value: string | null | undefined): ExternalInputs | null {
   if (!value) return null;
   try {
@@ -41,21 +48,27 @@ export function changedInputFiles(root: string, inputs: ExternalInputs): string[
   const changed: string[] = [];
   for (const [path, expected] of Object.entries(inputs.files)) {
     const abs = resolve(root, path);
+    let exists = false;
     let isFile = false;
     let mtime = 0;
     try {
       const st = statSync(abs);
+      exists = true;
       isFile = st.isFile();
       mtime = st.mtimeMs;
     } catch { /* absent */ }
-    if (!isFile) {
+    if (!exists) {
       if (expected !== null) changed.push(path);
       continue;
     }
-    if (expected !== null && mtime < inputs.at - SLACK_MS) continue;
+    if (!isFile) {
+      if (expected !== UNREADABLE_HASH) changed.push(path);
+      continue;
+    }
+    if (expected !== null && expected !== UNREADABLE_HASH && mtime < inputs.at - SLACK_MS) continue;
     let text: string | null = null;
     try { text = readFileSync(abs, 'utf-8'); } catch { /* unreadable */ }
-    if (contentHash(text) !== expected) changed.push(path);
+    if (contentHash(text ?? UNREADABLE_INPUT) !== expected) changed.push(path);
   }
   return changed;
 }

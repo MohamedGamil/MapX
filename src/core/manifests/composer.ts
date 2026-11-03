@@ -7,6 +7,7 @@
 import type { ExternalAttribution } from '../external-refs.js';
 import { repoParentDirs, type NpmWorkspace } from './npm.js';
 import { PHP_BUILTINS } from './php-builtins.js';
+import { UNREADABLE_INPUT } from './inputs.js';
 
 // ─── Built-ins ──────────────────────────────────────────────────────────────────────────────
 
@@ -157,10 +158,7 @@ export function packageByConvention(name: string, candidates: Iterable<string>):
 export interface PhpName { kind?: PhpKind; facadeTarget?: string }
 
 /** What the attributor reads (paths workspace-relative, as `NpmWorkspace`'s). */
-export type ComposerWorkspace = Pick<NpmWorkspace, 'readText' | 'repoRootOf'> & {
-  /** Whether something is at the path, readable or not (a folder, a file without permission). */
-  exists?(path: string): boolean;
-};
+export type ComposerWorkspace = Pick<NpmWorkspace, 'readText' | 'repoRootOf' | 'exists'>;
 
 const inDir = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 
@@ -189,7 +187,7 @@ type Found = { package: string; byManifest?: boolean } | { ambiguous: true } | n
  *   `use` row is; its target class decides only when that class shows no package (a global alias).
  */
 export class ComposerAttributor {
-  /** Every path read, with its text (null: absent or unreadable). */
+  /** Every path read, with its text (null: absent; `UNREADABLE_INPUT`: there but unreadable). */
   readonly reads = new Map<string, string | null>();
   private manifests = new Map<string, ComposerRoots | null>();
   private locks = new Map<string, ComposerLock | null>();
@@ -197,9 +195,16 @@ export class ComposerAttributor {
 
   constructor(private readonly workspace: ComposerWorkspace) {}
 
+  /** A path's text, or null when it is absent or unreadable; an unreadable one is recorded as such. */
   private read(path: string): string | null {
-    if (!this.reads.has(path)) this.reads.set(path, this.workspace.readText(path));
-    return this.reads.get(path)!;
+    if (!this.reads.has(path)) this.reads.set(path, this.workspace.readText(path) ?? (this.workspace.exists?.(path) ? UNREADABLE_INPUT : null));
+    const text = this.reads.get(path)!;
+    return text === UNREADABLE_INPUT ? null : text;
+  }
+
+  /** Whether something is at the path, readable or not. */
+  private present(path: string): boolean {
+    return this.read(path) !== null || this.reads.get(path) === UNREADABLE_INPUT;
   }
 
   attribute(name: string, sourcePath: string, what: PhpName = {}): ExternalAttribution {
@@ -276,7 +281,7 @@ export class ComposerAttributor {
   private lockFor(dirs: string[]): ComposerLock | null {
     for (const dir of dirs) {
       const path = inDir(dir, 'composer.lock');
-      if (!this.lockDirs.has(dir)) this.lockDirs.set(dir, this.read(path) !== null || !!this.workspace.exists?.(path));
+      if (!this.lockDirs.has(dir)) this.lockDirs.set(dir, this.present(path));
       if (!this.lockDirs.get(dir)) continue;
       if (!this.locks.has(dir)) {
         let lock: ComposerLock | null = null;

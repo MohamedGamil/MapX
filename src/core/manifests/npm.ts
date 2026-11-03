@@ -5,6 +5,7 @@
 // node_modules or the network. The scanner asks once per file and specifier in its end-of-run
 // decision pass, so a sync sees the manifests and lockfiles as a forced scan does.
 import type { ExternalAttribution } from '../external-refs.js';
+import { UNREADABLE_INPUT } from './inputs.js';
 
 /**
  * Node's built-in modules importable without the `node:` prefix: the union of `builtinModules` of
@@ -276,6 +277,8 @@ export function parseYarnLock(text: string, roots: ManifestRoots[], file = 'yarn
 export interface NpmWorkspace {
   /** A workspace file's text; null when it is absent or unreadable. */
   readText(path: string): string | null;
+  /** Whether something is at the path, readable or not (a folder, a file without permission). */
+  exists?(path: string): boolean;
   /** The root folder of the repo that holds a file: '' for the workspace root, `../R` for a sibling repo. */
   repoRootOf(path: string): string;
   /** The folders holding a package.json, each with its repo's root: walked from indexed files up to their repo's root. */
@@ -317,7 +320,7 @@ const inDir = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
  * Every path read is recorded with its text (`reads`), so the scanner can tell when they change.
  */
 export class NpmAttributor {
-  /** Every path read, with its text (null: absent or unreadable). */
+  /** Every path read, with its text (null: absent; `UNREADABLE_INPUT`: there but unreadable). */
   readonly reads = new Map<string, string | null>();
   /** The yarn locks' roots as read. */
   readonly yarnRoots: YarnRoots[] = [];
@@ -327,9 +330,16 @@ export class NpmAttributor {
 
   constructor(private readonly workspace: NpmWorkspace) {}
 
+  /** A path's text, or null when it is absent or unreadable; an unreadable one is recorded as such. */
   private read(path: string): string | null {
-    if (!this.reads.has(path)) this.reads.set(path, this.workspace.readText(path));
-    return this.reads.get(path)!;
+    if (!this.reads.has(path)) this.reads.set(path, this.workspace.readText(path) ?? (this.workspace.exists?.(path) ? UNREADABLE_INPUT : null));
+    const text = this.reads.get(path)!;
+    return text === UNREADABLE_INPUT ? null : text;
+  }
+
+  /** Whether something is at the path, readable or not. */
+  private present(path: string): boolean {
+    return this.read(path) !== null || this.reads.get(path) === UNREADABLE_INPUT;
   }
 
   attribute(specifier: string, sourcePath: string): ExternalAttribution {
@@ -374,10 +384,14 @@ export class NpmAttributor {
     return this.manifests.get(dir)!;
   }
 
-  /** The nearest folder, from the file up to its repo's root, that holds a lockfile, and its first readable lockfile. */
+  /**
+   * The nearest folder, from the file up to its repo's root, that holds a lockfile, and its first
+   * readable lockfile. A lockfile that is there but cannot be read (a folder, no permission) ends the
+   * walk as a corrupt one does: the manifests alone answer, never a parent folder's lockfile (M5-20-R1).
+   */
   private lockFor(dirs: string[], repoRoot: string): NpmLock | null {
     for (const dir of dirs) {
-      if (!this.lockDirs.has(dir)) this.lockDirs.set(dir, NPM_LOCKFILES.some((f) => this.read(inDir(dir, f)) !== null));
+      if (!this.lockDirs.has(dir)) this.lockDirs.set(dir, NPM_LOCKFILES.some((f) => this.present(inDir(dir, f))));
       if (!this.lockDirs.get(dir)) continue;
       if (!this.locks.has(dir)) this.locks.set(dir, this.readLock(dir, repoRoot));
       return this.locks.get(dir)!;

@@ -14,6 +14,7 @@ import { builtinModules } from 'node:module';
 import { NODE_BUILTINS, NODE_PREFIX_ONLY_BUILTINS, nodeBuiltin, npmPackageName, parsePackageLock, parsePnpmLock, parseYarnLock } from '../src/core/manifests/npm.js';
 import { ComposerAttributor, composerRoots, lockPackagesOf, packageByConvention, parseComposerLock, phpBuiltin } from '../src/core/manifests/composer.js';
 import { PHP_BUILTINS_SOURCE } from '../src/core/manifests/php-builtins.js';
+import { EXTERNAL_INPUTS_KEY, changedInputFiles, parseExternalInputs } from '../src/core/manifests/inputs.js';
 import { cleanup, init, mapx, mapxResult, query } from './helpers/e2e';
 
 // M5-19: references to modules, packages, classes and functions outside the workspace are kept apart
@@ -855,6 +856,30 @@ describe('npm attribution of a scan', () => {
       .toEqual(attributed('src/a.ts', 'lock'));
   }, 120000);
 
+  // M5-20-R1 (found by M5-21): a nested lockfile that is there but cannot be read ends the walk, as a
+  // corrupt one does; the nested package's manifests answer, never the root folder's lockfile.
+  const NESTED = { 'package.json': JSON.stringify({ name: 'root', private: true }), 'package-lock.json': PACKAGE_LOCK, 'packages/app/package.json': NPM_MANIFEST, 'packages/app/src/a.ts': NPM_SOURCE };
+  it.each([
+    ['a folder', { 'packages/app/package-lock.json/x.txt': 'x' }],
+    ['a file it cannot read', { 'packages/app/package-lock.json': PACKAGE_LOCK }],
+  ])('a nested package-lock.json that is %s: the nested package.json alone, flagged manifest, never the root lock', async (name, extra) => {
+    // Root can read a file without permission: the case holds only for another user.
+    if (name !== 'a folder' && process.getuid?.() === 0) return;
+    p.create({ ...NESTED, ...extra });
+    if (name !== 'a folder') chmodSync(join(p.root, 'packages/app/package-lock.json'), 0o000);
+    try {
+      const store = new Store(':memory:');
+      await (await p.scanner(store)).scanFull();
+      expect(npmAttribution(store)).toEqual(attributed('packages/app/src/a.ts', 'manifest'));
+    } finally {
+      if (name !== 'a folder') chmodSync(join(p.root, 'packages/app/package-lock.json'), 0o644);
+    }
+  }, 120000);
+
+  it('a nested package.json without a lockfile: the root folder\'s lockfile answers', async () => {
+    expect(await scan(NESTED)).toEqual(attributed('packages/app/src/a.ts', 'lock'));
+  }, 120000);
+
   // Review of M5-20 (owner's decision): a bare built-in name the nearest manifest lists is that npm
   // package (a polyfill); a `node:` specifier is always the built-in.
   it('a polyfill the nearest manifest lists is the npm package; node: and unlisted names are built-ins', async () => {
@@ -935,6 +960,32 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a
     const forced = await p.forced();
     expect(dumpAll(store)).toEqual(dumpAll(forced));
     expect(npmAttribution(forced)).toContain(expected);
+  }, 120000);
+
+  // Review of M5-20-R1: an unreadable lock is recorded as such, so removing it is a change.
+  it.each(['a folder', 'a file it cannot read'])('a nested package-lock.json that is %s is removed: the root lock answers, as scan --force', async (name) => {
+    if (name !== 'a folder' && process.getuid?.() === 0) return;
+    const lock = 'packages/app/package-lock.json';
+    const nested = { 'package.json': JSON.stringify({ name: 'root', private: true }), 'package-lock.json': PACKAGE_LOCK, 'packages/app/package.json': NPM_MANIFEST, 'packages/app/src/a.ts': NPM_SOURCE };
+    p.create({ ...nested, ...(name === 'a folder' ? { [`${lock}/x.txt`]: 'x' } : { [lock]: PACKAGE_LOCK }) });
+    if (name !== 'a folder') chmodSync(join(p.root, lock), 0o000);
+    const store = new Store(':memory:');
+    try {
+      await (await p.scanner(store)).scanFull();
+      expect(npmAttribution(store)).toEqual(attributed('packages/app/src/a.ts', 'manifest'));
+      // Left as it is, the unreadable lock is no change.
+      expect(changedInputFiles(p.root, parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY))!)).toEqual([]);
+    } finally {
+      if (name !== 'a folder') chmodSync(join(p.root, lock), 0o644);
+    }
+    rmSync(join(p.root, lock), { recursive: true, force: true });
+    if (withGit) {
+      git(p.root, 'add', '-A');
+      git(p.root, 'commit', '-qm', 'remove');
+    }
+    await p.sync(store);
+    expect(npmAttribution(store)).toEqual(attributed('packages/app/src/a.ts', 'lock'));
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
   }, 120000);
 
   it('fills the attribution of an index M5-19 built (null columns), without --force', async () => {
@@ -1482,6 +1533,27 @@ describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when c
     const forced = await p.forced();
     expect(dumpAll(store)).toEqual(dumpAll(forced));
     expect(composerAttribution(forced)).toContain(expected);
+  }, 120000);
+
+  // Review of M5-20-R1: an unreadable lock is recorded as such, so removing it is a change.
+  it.each(['a folder', 'a file it cannot read'])('a nested composer.lock that is %s is removed: the root lock answers, as scan --force', async (name) => {
+    if (name !== 'a folder' && process.getuid?.() === 0) return;
+    const lock = 'app/composer.lock';
+    p.create({ 'composer.json': COMPOSER_MANIFEST, 'composer.lock': COMPOSER_LOCK, 'app/Gateway.php': PHP_SOURCE, ...(name === 'a folder' ? { [`${lock}/x.txt`]: 'x' } : { [lock]: COMPOSER_LOCK }) });
+    if (name !== 'a folder') chmodSync(join(p.root, lock), 0o000);
+    const store = new Store(':memory:');
+    try {
+      await (await p.scanner(store)).scanFull();
+      expect(composerAttribution(store)).toEqual(composerAttributed('app/Gateway.php', 'manifest'));
+      expect(changedInputFiles(p.root, parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY))!)).toEqual([]);
+    } finally {
+      if (name !== 'a folder') chmodSync(join(p.root, lock), 0o644);
+    }
+    rmSync(join(p.root, lock), { recursive: true, force: true });
+    commit('remove');
+    await p.sync(store);
+    expect(composerAttribution(store)).toEqual(composerAttributed('app/Gateway.php', 'lock'));
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
   }, 120000);
 
   it('keeps the stored Composer attribution when nothing it read changed; a lock edit re-attributes', async () => {
