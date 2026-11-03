@@ -28,7 +28,8 @@
   name: (identifier) @symbol.name) @symbol.kind_function
 
 ; Method declarations (with receiver); a generic receiver (`Pair[K, V]`, `*Pair[K, V]`) is scoped to
-; its type (M5-25-R2)
+; its type (M5-25-R2), and so is a receiver type in parentheses, `(Box[T])`, `(*Box)`, `*(Box)`
+; (M5-25-R4). Each receiver type matches one alternative only.
 (method_declaration
   receiver: (parameter_list
     (parameter_declaration
@@ -37,6 +38,12 @@
         (type_identifier) @symbol.scope
         (generic_type type: (type_identifier) @symbol.scope)
         (pointer_type (generic_type type: (type_identifier) @symbol.scope))
+        (parenthesized_type (type_identifier) @symbol.scope)
+        (parenthesized_type (generic_type type: (type_identifier) @symbol.scope))
+        (parenthesized_type (pointer_type (type_identifier) @symbol.scope))
+        (parenthesized_type (pointer_type (generic_type type: (type_identifier) @symbol.scope)))
+        (pointer_type (parenthesized_type (type_identifier) @symbol.scope))
+        (pointer_type (parenthesized_type (generic_type type: (type_identifier) @symbol.scope)))
       ]
     )
   )

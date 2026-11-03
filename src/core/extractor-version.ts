@@ -47,8 +47,10 @@ import type { Store } from './store.js';
  * - 20: M2-20 (a JS/TS `require('./m')` of a project module is an import edge, and the names it binds
  *   link the module's `module.exports` / `exports.f` declarations; `module.exports = function f` and
  *   `= class C` declare f and C).
+ * - 21: M5-25-R4 (a Go method whose receiver type is in parentheses, `func (b (*Box)) M()`, is a symbol
+ *   scoped to the type).
  */
-export const EXTRACTOR_VERSION = 20;
+export const EXTRACTOR_VERSION = 21;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

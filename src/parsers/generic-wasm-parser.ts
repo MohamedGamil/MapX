@@ -394,9 +394,10 @@ function goTypeParameter(node: any, name: string): boolean {
     const list = curr.type === 'function_declaration' || curr.type === 'type_spec' ? curr.childForFieldName('type_parameters') : null;
     if (list?.namedChildren.some((d: any) => goDeclaredNames(d).includes(name))) return true;
     if (curr.type === 'method_declaration') {
-      // `func (p *Pair[K, V]) M()`: the receiver type's arguments name the type parameters.
+      // `func (p *Pair[K, V]) M()`: the receiver type's arguments name the type parameters, through
+      // parentheses too, `(*Pair[K, V])` (M5-25-R4).
       let type = curr.childForFieldName('receiver')?.namedChildren[0]?.childForFieldName('type');
-      if (type?.type === 'pointer_type') type = type.namedChildren[0];
+      while (type?.type === 'pointer_type' || type?.type === 'parenthesized_type') type = type.namedChildren[0];
       const args = type?.type === 'generic_type' ? type.childForFieldName('type_arguments') : null;
       return !!args?.descendantsOfType('type_identifier').some((t: any) => t.text === name);
     }

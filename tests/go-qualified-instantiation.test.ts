@@ -494,3 +494,85 @@ describe('Go method calls on variables and parameters (M5-25-R2, review)', () =>
     expect(callsOf('app/typed.go', 'Untyped')).toEqual(['legacy/pair.go#Conn.Close inferred']);
   });
 });
+
+// M5-25-R4: a parenthesised receiver type (`(Box[T])`, `(*Box)`, `*(Box)`) is a method of its type,
+// as the unparenthesised form is. Synthetic, labelled:
+//   gen/box.go    a generic Box whose methods all have a parenthesised receiver; Get uses `[]T{}`
+//   plain/box.go  a non-generic Box, the same
+//   other/t.go    a type T, which `[]T{}` (Box's type parameter) must not reach
+//   app/use.go    calls on qualified literals of both
+describe('Go methods with a parenthesised receiver (M5-25-R4)', () => {
+  let paren = '';
+  beforeAll(() => {
+    paren = scanned({
+      'go.mod': 'module example.com/shop\n',
+      'gen/box.go': [
+        'package gen',
+        '',
+        'type Box[T any] struct{ v T }',
+        '',
+        'func (b (Box[T])) Paren() {}',
+        '',
+        'func (b (*Box[T])) PtrIn() {}',
+        '',
+        'func (b *(Box[T])) PtrOut() {}',
+        '',
+        'func (b (Box[T])) Get() []T { return []T{} }',
+        '',
+      ].join('\n'),
+      'plain/box.go': [
+        'package plain',
+        '',
+        'type Box struct{}',
+        '',
+        'func (b (*Box)) M() {}',
+        '',
+        'func (b (Box)) V() {}',
+        '',
+        'func ((Box)) Unnamed() {}',
+        '',
+        'func (b *(Box)) N() {}',
+        '',
+      ].join('\n'),
+      'other/t.go': 'package other\n\ntype T struct{}\n',
+      'app/use.go': [
+        'package app',
+        '',
+        'import (',
+        '\t"example.com/shop/gen"',
+        '\t"example.com/shop/plain"',
+        ')',
+        '',
+        'func Use() {',
+        '\tgen.Box[int]{}.Paren()',
+        '\t(&plain.Box{}).M()',
+        '}',
+        '',
+      ].join('\n'),
+    });
+  }, 120_000);
+  afterAll(() => cleanup(paren));
+
+  it('a parenthesised receiver type gives one method scoped to the type, and calls on its literals link it', () => {
+    const methods = (file: string) => query<{ name: string; scope: string | null }>(paren,
+      "SELECT name, scope FROM symbols WHERE file_path = ? AND kind = 'method' ORDER BY name", file);
+    expect(methods('gen/box.go')).toEqual([
+      { name: 'Get', scope: 'Box' },
+      { name: 'Paren', scope: 'Box' },
+      { name: 'PtrIn', scope: 'Box' },
+      { name: 'PtrOut', scope: 'Box' },
+    ]);
+    expect(methods('plain/box.go')).toEqual([
+      { name: 'M', scope: 'Box' },
+      { name: 'N', scope: 'Box' },
+      { name: 'Unnamed', scope: 'Box' },
+      { name: 'V', scope: 'Box' },
+    ]);
+    const calls = query<Edge>(paren,
+      "SELECT target_file, target_symbol FROM edges WHERE source_file = 'app/use.go' AND source_symbol = 'Use' AND edge_type = 'call' ORDER BY target_file, target_symbol")
+      .map((e) => `${e.target_file}#${e.target_symbol}`);
+    expect(calls).toEqual(['gen/box.go#Paren', 'plain/box.go#M']);
+    // `[]T{}` in Get names the receiver's type parameter, never other/t.go's T.
+    expect(query(paren, "SELECT target_file, target_symbol FROM edges WHERE source_file = 'gen/box.go' AND edge_type = 'instantiation'")).toEqual([]);
+  });
+});
