@@ -13,7 +13,7 @@ Remaining effort min/expected/max: **126.5 / 223 / 333h**. Capacity: 1 engineer(
 - M5-16-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R2 (BACKLOG): prerequisites satisfied
 - M5-17-R1 (IN_PROGRESS): prerequisites satisfied
-- M5-18-R1 (BACKLOG): prerequisites satisfied
+- M5-18-R1 (READY): prerequisites satisfied
 - M5-98 (BACKLOG): prerequisites satisfied
 - M5-21-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-19-R1 (BACKLOG): prerequisites satisfied
@@ -36,7 +36,7 @@ Remaining effort min/expected/max: **126.5 / 223 / 333h**. Capacity: 1 engineer(
 - M2-17 (BACKLOG): prerequisites satisfied
 - M2-18 (BACKLOG): prerequisites satisfied
 - M2-19 (BACKLOG): prerequisites satisfied
-- M2-20 (BACKLOG): prerequisites satisfied
+- M2-20 (IN_PROGRESS): prerequisites satisfied
 - M2-21 (BACKLOG): prerequisites satisfied
 - M2-22 (BACKLOG): prerequisites satisfied
 - M5-25-R3 (BACKLOG): prerequisites satisfied

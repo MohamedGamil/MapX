@@ -180,7 +180,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-17** PHP functions in several namespace blocks of one file resolve — BACKLOG, P3, 3h; depends on M2-13.
 - **M2-18** PHP `use` imports are scoped to their namespace block — BACKLOG, P3, 3h; depends on M2-13.
 - **M2-19** Java default interface methods are walked as bases — BACKLOG, P3, 3h; depends on M2-12.
-- **M2-20** CommonJS `require` of a local module gives import edges — BACKLOG, P1, 6h; depends on nothing.
+- **M2-20** CommonJS `require` of a local module gives import edges — IN_PROGRESS, P1, 6h; depends on nothing.
 - **M2-21** C# method calls resolve on the receiver's type, not by bare name — BACKLOG, P2, 6h; depends on M2-12.
 - **M2-22** A one-line PHP anonymous class does not take over its enclosing method's calls — BACKLOG, P3, 3h; depends on M2-13.
 
@@ -286,7 +286,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — DONE, P2, 12h; depends on M5-04, M5-06.
 - **M5-17-R1** Presets use hierarchy selectors; remaining AR-15 presets — IN_PROGRESS, P3, 8h; depends on M5-17, M5-09.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — DONE, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
-- **M5-18-R1** MapX dogfood config judges calls and references, not only imports — BACKLOG, P2, 3h; depends on M5-18, M2-08-R3.
+- **M5-18-R1** MapX dogfood config judges calls and references, not only imports — READY, P2, 3h; depends on M5-18, M2-08-R3.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
