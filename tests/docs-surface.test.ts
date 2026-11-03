@@ -73,7 +73,8 @@ describe('docs/mcp-integration.md documents every MCP tool', () => {
 
   it('states the tool count the server has, wherever a count is given', () => {
     const counts: string[] = [];
-    for (const f of [...DOCS, 'src/agents.stub.md'])
+    // CLAUDE.md's generated MapxGraph block too (M4-32): it went stale at 32 while the server had 39.
+    for (const f of [...DOCS, 'src/agents.stub.md', 'CLAUDE.md', ...(existsSync(join(ROOT, 'AGENTS.md')) ? ['AGENTS.md'] : [])])
       for (const m of read(f).matchAll(/\b(\d+)\s+(?:MCP\s+)?tools\b|\((\d+) total\)/g)) {
         if (f === 'docs/framework-integration.md') continue; // "(22 total)" frameworks
         if (Number(m[1] ?? m[2]) !== tools.length) counts.push(`${f}: "${m[0]}"`);
