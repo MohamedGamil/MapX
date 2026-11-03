@@ -76,6 +76,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
+- The generated AGENTS.md no longer lists `mapx explain --reclassify` or `mapx arch --json`, which the CLI does not accept (M4-28-R1).
+- `mapx status --exclude/--include` and MCP `mapx_status` `exclude`/`include` now leave the matching changed files out of the report, and `mapx_status` lists the changed files as the CLI does (M4-28-R2).
+- The Linux/macOS installer replaces a mapx binary that running `mapx serve` processes use instead of failing with "Text file busy", and the Windows installer moves a running mapx.exe aside instead of failing (M4-29).
 
 #### Architecture rules
 

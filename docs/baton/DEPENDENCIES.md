@@ -285,6 +285,7 @@ flowchart LR
 - M4-28 ← M5-24 (hard), M2-08-R3 (hard), M5-15 (hard), M5-18 (hard)
 - M4-28-R1 ← M4-28 (hard)
 - M4-28-R2 ← M4-28 (hard)
+- M4-28-R3 ← M4-28-R1 (hard)
 - M4-29 ← none
 - M4-30 ← none
 - M4-31 ← none

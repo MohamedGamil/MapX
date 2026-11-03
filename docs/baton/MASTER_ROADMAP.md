@@ -240,11 +240,12 @@ Fixture scoring in CI; optional message edges.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 - **M4-27-R1** Lua grammar: Luau type syntax and string escapes parse without errors — BACKLOG, P3, 6h; depends on M4-27.
 - **M4-28** Release documentation for 0.3.9: README, docs and CHANGELOG cover every change since 0.3.5 — DONE, P1, 8h; depends on M5-24, M2-08-R3, M5-15, M5-18.
-- **M4-28-R1** Agent templates do not advertise `mapx explain --reclassify` — IN_PROGRESS, P2, 1h; depends on M4-28.
-- **M4-28-R2** `mapx_status` honours its exclude and include parameters — READY, P2, 1h; depends on M4-28.
-- **M4-29** The installer replaces a running mapx binary — READY, P2, 1h; depends on nothing.
+- **M4-28-R1** Agent templates do not advertise `mapx explain --reclassify` — DONE, P2, 1h; depends on M4-28.
+- **M4-28-R2** `mapx_status` honours its exclude and include parameters — DONE, P2, 1h; depends on M4-28.
+- **M4-28-R3** docs/cli-reference.md shows no `mapx arch --json`; root AGENTS.md regenerated — BACKLOG, P3, 1h; depends on M4-28-R1.
+- **M4-29** The installer replaces a running mapx binary — DONE, P2, 1h; depends on nothing.
 - **M4-30** CLI-spawning arch tests stay within their timeouts under load — DONE, P2, 5h; depends on nothing.
-- **M4-31** Test runs add no more than ten process listeners (MaxListenersExceededWarning) — READY, P3, 2h; depends on nothing.
+- **M4-31** Test runs add no more than ten process listeners (MaxListenersExceededWarning) — DONE, P3, 2h; depends on nothing.
 - **M4-32** Root CLAUDE.md generated block is current — DONE, P3, 1h; depends on nothing.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — DONE, P2, 3h; depends on M4-12.
 - **M4-12-R2** Worker pool: the grammar-load bound holds across crashes and refused retries — BACKLOG, P3, 2h; depends on M4-12-R1.

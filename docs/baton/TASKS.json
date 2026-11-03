@@ -28474,14 +28474,22 @@
         "docs/baton/reports/M4-28.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-C",
       "actualHours": null,
       "startedAt": "2026-11-03T16:52:35.772Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T18:41:52.512Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-28-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-28-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T16:52:34.059Z",
@@ -28494,6 +28502,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:52.106Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:52.512Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-28-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -28543,20 +28569,52 @@
         "docs/baton/reports/M4-28.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff-lane-C2",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-03T17:52:41.485Z",
+      "completedAt": "2026-11-03T18:41:53.369Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-28-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/mcp-coverage.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-28-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T16:52:34.490Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T17:52:41.485Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:52.943Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:53.369Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/mcp-coverage.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-28-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -28586,6 +28644,66 @@
     },
     {
       "milestone": "M4",
+      "priority": "P3",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-28-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-28-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-28-R3",
+      "title": "docs/cli-reference.md shows no `mapx arch --json`; root AGENTS.md regenerated",
+      "objective": "docs/cli-reference.md (lines ~819 and ~836) stops showing `mapx arch --json`, which the CLI rejects; the docs-surface check validates each documented command line against that command's own flags; the root AGENTS.md generated block is regenerated from the fixed template.",
+      "description": "Found by M4-28-R1 (2026-11-03): cli-reference shows `mapx arch --json`; the docs test misses it because other commands take --json. The AGENTS.md template was fixed (explain --reclassify, arch --json, scan --dir) but the root AGENTS.md still has the old lines. Also (M5-24-R4): the mapx_arch_validate_config description in src/mcp.ts does not mention the new `policy` field.",
+      "outputs": [
+        "docs/cli-reference.md",
+        "AGENTS.md",
+        "tests/docs-surface.test.ts",
+        "reports/M4-28-R3.md"
+      ],
+      "affectedFiles": [
+        "docs/cli-reference.md",
+        "AGENTS.md",
+        "tests/docs-surface.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Every `mapx <cmd> …` line in docs/*.md and README.md uses only flags that <cmd> takes (docs-surface test); `mapx arch --json` is gone.",
+        "AGENTS.md has no line the template test rejects."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/docs-surface.test.ts"
+      ]
+    },
+    {
+      "milestone": "M4",
       "priority": "P2",
       "estimate": {
         "min": 0.5,
@@ -28603,20 +28721,52 @@
         "docs/baton/DECISIONS.md#D037"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff-lane-C3",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-03T17:52:41.922Z",
+      "completedAt": "2026-11-03T18:41:54.191Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-29.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-29.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T16:52:34.930Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T17:52:41.922Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:53.776Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:54.191Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-29.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -28758,20 +28908,52 @@
         "docs/baton/reports/M4-09-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff-lane-C4",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-03T17:52:42.348Z",
+      "completedAt": "2026-11-03T18:41:55.038Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-31.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-31.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T16:52:35.346Z",
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T17:52:42.348Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:54.606Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:41:55.038Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-31.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
