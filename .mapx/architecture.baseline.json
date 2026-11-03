@@ -9,6 +9,20 @@
       "edgeType": "import"
     },
     {
+      "fingerprint": "7311eafdb642b7ec",
+      "rule": "disallowed-layer",
+      "source": "src/agents/generator.ts#AgentGenerator",
+      "target": "src/parsers/static-file-parser.ts#hasJsoncComments",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "8751cfcdcee2f732",
+      "rule": "disallowed-layer",
+      "source": "src/agents/generator.ts#AgentGenerator",
+      "target": "src/parsers/static-file-parser.ts#stripJsoncSyntax",
+      "edgeType": "call"
+    },
+    {
       "fingerprint": "71e03f28581d2b27",
       "rule": "disallowed-layer",
       "source": "src/core/workspace-summary.ts",
@@ -30,11 +44,32 @@
       "edgeType": "import"
     },
     {
+      "fingerprint": "2477655ad5d9b4e2",
+      "rule": "disallowed-layer",
+      "source": "src/frameworks/detectors/vue-router.ts#VueRouterDetector",
+      "target": "src/parsers/languages/vue-navigation.ts#componentBindings",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "2015f6a5a0e87c30",
+      "rule": "disallowed-layer",
+      "source": "src/frameworks/detectors/vue-router.ts#VueRouterDetector",
+      "target": "src/parsers/languages/vue-template.ts#vueComponentName",
+      "edgeType": "call"
+    },
+    {
       "fingerprint": "16aa1e363f7e1dcd",
       "rule": "disallowed-layer",
       "source": "src/frameworks/http/client-calls.ts",
       "target": "src/core/js-aliases.ts",
       "edgeType": "import"
+    },
+    {
+      "fingerprint": "07b1d0544b36a24d",
+      "rule": "disallowed-layer",
+      "source": "src/frameworks/http/client-calls.ts#resolveImport",
+      "target": "src/core/js-aliases.ts#jsAliasTargets",
+      "edgeType": "call"
     },
     {
       "fingerprint": "8e7741854ef44b49",
@@ -44,6 +79,13 @@
       "edgeType": "import"
     },
     {
+      "fingerprint": "412468c816ffce4b",
+      "rule": "disallowed-layer",
+      "source": "src/languages/installer.ts#describeLanguage",
+      "target": "src/parsers/assets.ts#findAssetRoot",
+      "edgeType": "call"
+    },
+    {
       "fingerprint": "928ce6ba85a8ce9f",
       "rule": "disallowed-layer",
       "source": "src/parsers/languages/vue-navigation.ts",
@@ -51,11 +93,172 @@
       "edgeType": "import"
     },
     {
+      "fingerprint": "a4691170e8c81923",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#arrayRecords",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "9078afdbd6ad74b6",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#boundNames",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "f7304052fdf4c77e",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#callTarget",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "bb9814120afbd126",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#componentBindings",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "d96aba9a3b47449d",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#functionAt",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "3a1d9bf848f0cf05",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#guardsAt",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "47ec1a72cd661fdd",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#literal",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "ce74fa7c10c01acf",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#literal",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "9c7372c92aca35b0",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#nestedBodies",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "460a211aca41912f",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#objectProps",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "176f712cad924244",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#routeRecords",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "a1d741e18a48b4d2",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#routeRecords",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "c087b60ab6463972",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#routerBindings",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "4fa5834011886ed4",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#routerCalls",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "72e08c67dc432fe8",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#shadowedRanges",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "6323c482004ec74d",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-navigation.ts#stringProps",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
       "fingerprint": "3c50b43790b48fb2",
       "rule": "disallowed-layer",
       "source": "src/parsers/languages/vue-template.ts",
       "target": "src/frameworks/http/client-calls.ts",
       "edgeType": "import"
+    },
+    {
+      "fingerprint": "6cadee004304e3be",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts#callsIn",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "c257921baee1d75f",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts#globalRegistrations",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "bf3331707d4b3cc3",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts#globalRegistrations",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "74e72432eae8554b",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts#moduleImports",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "f89559c9563531dd",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts#optionBody",
+      "target": "src/frameworks/http/client-calls.ts#matchBracket",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "c99670947ebfd582",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts#patternNames",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
+    },
+    {
+      "fingerprint": "076411ed905d2b7f",
+      "rule": "disallowed-layer",
+      "source": "src/parsers/languages/vue-template.ts#scriptBindings",
+      "target": "src/frameworks/http/client-calls.ts#maskCode",
+      "edgeType": "call"
     }
   ]
 }

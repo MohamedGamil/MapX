@@ -4,23 +4,26 @@
 // docs/research/deptrac/03-mapx-gap-and-integration.md §3.9, updated for src/ as it is now.
 // The user guide is docs/architecture-rules.md.
 //
-// Today's violations are frozen in .mapx/architecture.baseline.json: a new one fails CI, and a fixed one
+// Today's violations are frozen in .mapx/architecture.baseline.json (each import, and since M5-18-R1 each
+// call behind a baselined import, as its own entry): a new one fails CI, and a fixed one
 // leaves a stale entry that fails it too, so the baseline only shrinks (`mapx check --generate-baseline`
 // after a fix). Only this file and the baseline are tracked; the rest of .mapx/ stays ignored (D030).
 {
   "$schema": "../schemas/architecture.schema.json",
 
   // MapX's own source is under the rules. Tests and scripts are in scope only as targets: they are in the
-  // Outside overlay below, which no layer may depend on, and in no other layer, so their own imports are
-  // never judged (an edge from a file in no layer is skipped). Fixtures, which hold sample projects in
-  // other languages, are tests/** too: production code may not import them either.
+  // Outside overlay below, which no layer may depend on, and in no other layer, so their own dependencies
+  // are never judged (an edge from a file in no layer is skipped).
   //
-  // Only module imports are judged. In TypeScript every dependency on another module starts with an
-  // import (type-only imports included), and imports are resolved by module path, so they are exact.
-  // Calls, instantiations and type references are resolved by name, and some are bound to the wrong
-  // symbol: `join` from node:path to the private `join` in src/core/import-resolvers.ts, a `Node` type to
-  // src/core/manifests/pypi.ts#Node. Judging them would fail CI on code that imports nothing new.
-  "scope": { "include": ["src/**", "tests/**", "scripts/**"], "types": ["import", "require"] },
+  // Every dependency type is judged: imports, and the calls, instantiations, inheritance and type
+  // references behind them (M5-18-R1). M5-18 judged imports only, while names imported from node:path or
+  // the DOM resolved to project symbols; M2-08-R3, M2-12 and M2-13 removed those edges.
+  //
+  // tests/fixtures/** is out of scope. It holds sample projects (thousands of classes and functions such
+  // as `Database`, `Order` or `step`) that no production module imports, and that a call resolved by name
+  // can still reach by homonym: a destructured local and a for-of loop variable did (M5-18-R1, reported
+  // as resolver bugs, not baselined).
+  "scope": { "include": ["src/**", "tests/**", "scripts/**"], "exclude": ["tests/fixtures/**"] },
 
   // Only verified edges are judged: an inferred edge is matched by name alone. Under the default ("warn")
   // its violations would be warnings, and generating the baseline would freeze them too, so a change in

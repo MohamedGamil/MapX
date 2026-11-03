@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateArchitectureConfig } from '../src/arch/config.js';
 import { loadBaseline } from '../src/arch/baseline.js';
+import { DEFAULT_SCOPE_TYPES } from '../src/arch/schema.js';
+import { cleanup, init, mapx, mapxResult, workspace } from './helpers/e2e.js';
 
 // MapX checks its own architecture in CI (M5-18): .mapx/architecture.jsonc and its baseline are
 // committed, while the rest of .mapx/ stays ignored (D030). The check itself runs in the CI job; these
@@ -23,12 +25,15 @@ describe("MapX's own architecture configuration", () => {
     // Tests and scripts are in scope only as targets: an overlay every layer denies, so production code
     // may not import them, while their own imports (sources in no layer) are never judged.
     expect(config!.scope.include).toEqual(['src/**', 'tests/**', 'scripts/**']);
+    // Fixtures are sample projects whose symbols name lookup can reach by homonym (M5-18-R1).
+    expect(config!.scope.exclude).toEqual(['tests/fixtures/**']);
     const outside = config!.layers.find((l) => l.name === 'Outside')!;
     expect(outside.overlay).toBe(true);
     expect(outside.selectors).toEqual([{ path: '{tests,scripts}/**' }]);
     expect(config!.rules['*']).toContain('!Outside');
-    // Imports only: calls and type references are resolved by name, and some resolve wrongly.
-    expect(config!.scope.types).toEqual(['import', 'require']);
+    // Every dependency type is judged, calls and type references too (M5-18-R1).
+    expect(config!.scope.types).toEqual([...DEFAULT_SCOPE_TYPES]);
+    expect(config!.scope.types).toContain('call');
   });
 
   it('has a baseline that parses, holding the Languages → Parsers and Agents → Parsers findings', () => {
@@ -38,6 +43,36 @@ describe("MapX's own architecture configuration", () => {
     const pairs = baseline.entries.map((e) => `${e.source} → ${e.target} (${e.edgeType})`);
     expect(pairs).toContain('src/languages/installer.ts → src/parsers/assets.ts (import)');
     expect(pairs).toContain('src/agents/generator.ts → src/parsers/static-file-parser.ts (import)');
+  });
+});
+
+// M5-18-R1: the check judges calls, not only imports. A probe workspace under MapX's own configuration:
+// a Frameworks module imports a Parsers helper (frozen in a baseline), then calls it. Only the call is
+// new, and it fails the check.
+describe("MapX's own configuration judges calls (real scan)", () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      '.mapx/architecture.jsonc': readFileSync(join(ROOT, '.mapx/architecture.jsonc'), 'utf8'),
+      'src/parsers/helper.ts': 'export function helper(): number { return 1; }\n',
+      'src/frameworks/probe.ts': "import { helper } from '../parsers/helper.js';\nexport const probe = helper;\nexport function use(): number { return 0; }\n",
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120_000);
+  afterAll(() => cleanup(root));
+
+  it('fails on a call across a forbidden layer whose import is baselined', () => {
+    // The import alone (Frameworks on Parsers) is a violation; freeze it, as MapX's baseline does.
+    expect(mapxResult(root, 'check', '--fail-on-uncovered').status).toBe(1);
+    expect(mapxResult(root, 'check', '--generate-baseline').status).toBe(0);
+    expect(mapxResult(root, 'check', '--fail-on-uncovered').status).toBe(0);
+    // A call of the helper adds a call edge across the same forbidden pair.
+    writeFileSync(join(root, 'src/frameworks/probe.ts'), "import { helper } from '../parsers/helper.js';\nexport const probe = helper;\nexport function use(): number { return helper(); }\n");
+    mapx(root, 'scan', root);
+    const r = mapxResult(root, 'check', '--fail-on-uncovered');
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/src\/frameworks\/probe\.ts#use → src\/parsers\/helper\.ts#helper \(call\)/);
   });
 });
 
