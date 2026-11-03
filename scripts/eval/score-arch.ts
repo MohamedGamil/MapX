@@ -147,7 +147,7 @@ export interface ArchScore {
   kinds: Record<ScoredKind, KindScore>;
 }
 
-// ─── External-reference attribution (M5-20 npm; M5-21 … M5-23 add their ecosystems' rows) ────
+// ─── External-reference attribution (M5-20 npm, M5-21 Composer; M5-22, M5-23 add their rows) ──
 
 /** A labelled external reference (expected-externals.json): identity, and its attribution once labelled. */
 export interface ExpectedExternal {
@@ -158,7 +158,11 @@ export interface ExpectedExternal {
 export type ScannedExternal = Omit<ExpectedExternal, 'app'>;
 export interface ExternalScore {
   expected: number; reported: number; matched: number; recall: number; precision: number | null;
-  /** Expected and matched rows per class: builtin, direct-prod, direct-dev, transitive-prod, transitive-dev, unlisted (in no manifest, dev unknown: no lockfile, or none holds it). */
+  /**
+   * Expected and matched rows per class: builtin, direct-prod, direct-dev, transitive-prod,
+   * transitive-dev, unlisted (in no manifest, dev unknown: no lockfile, or none holds it), unknown
+   * (no input names the package: a PHP name no autoload prefix or naming convention covers, M5-21).
+   */
   classes: Record<string, { expected: number; matched: number }>;
   misses: string[];
   extras: string[];
@@ -170,6 +174,7 @@ const externalAttributed = (app: string, r: ScannedExternal) =>
 /** The class of a labelled row, for the per-class breakdown. */
 export function externalClass(r: ScannedExternal): string {
   if (r.origin !== 'package') return r.origin ?? 'none';
+  if (r.package === null) return 'unknown';
   if (!r.direct && (r.dev === null || r.dev === undefined)) return 'unlisted';
   return `${r.direct ? 'direct' : 'transitive'}-${r.dev ? 'dev' : 'prod'}`;
 }

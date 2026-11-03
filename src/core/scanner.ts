@@ -42,6 +42,10 @@ import { EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extract
 import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalAttribution, type ExternalRefRow, type JsImport } from './external-refs.js';
 import { NpmAttributor, repoParentDirs, yarnRootDirs } from './manifests/npm.js';
 import { EXTERNAL_INPUTS_KEY, changedInputFiles, contentHash, parseExternalInputs } from './manifests/inputs.js';
+import { ComposerAttributor, type PhpName } from './manifests/composer.js';
+
+/** The ecosystems whose external rows the decision pass attributes (M5-20 npm, M5-21 Composer). */
+const ATTRIBUTED_ECOSYSTEMS = new Set(['npm', 'composer']);
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
@@ -304,8 +308,6 @@ export class Scanner {
   private externalBindingsCache = new Map<string, Map<string, ExternalBinding>>();
   /** The workspace's PHP classes and functions by lower-case qualified name, for one resolution phase (M5-19). */
   private phpDeclared: Set<string> | null = null;
-  /** Per PHP file, its `use` imports by lower-case alias, for one resolution phase (M5-19). */
-  private phpUsesCache = new Map<string, Map<string, string>>();
   /** External-reference decisions by ecosystem, folder and specifier, for one resolution phase (M5-19). */
   private externalDecisions = new Map<string, boolean>();
   /** JS/TS module text without comments, and its export skeleton, for one resolution phase (M2-08-R1). */
@@ -2320,29 +2322,20 @@ export class Scanner {
       if (PHP_CONSTRUCTS.has(global.toLowerCase())) return [];
       return [row(global, global.slice(global.lastIndexOf('\\') + 1), kind, { phpCandidates: candidates.slice(0, -1) })];
     }
-    // A facade call (`DB::transaction()`) is stored as the file names it; the class the facade
-    // resolves to goes in the metadata.
-    const facade = typeof ref.metadata?.facadeAlias === 'string' ? ref.metadata.facadeAlias as string : null;
-    const fqn = (facade ? this.phpNamed(sourcePath, facade) : name).replace(/^\\/, '');
+    // `use function` / `use const` (M5-21 review): a function, decided and attributed as one, or a
+    // constant; never a class.
+    const use = ref.metadata?.phpUse;
+    if (kind === 'import' && (use === 'function' || use === 'const')) {
+      const fqn = name.replace(/^\\/, '');
+      return [row(fqn, fqn.slice(fqn.lastIndexOf('\\') + 1), kind, use === 'function' ? { phpCandidates: [] } : { phpConst: true })];
+    }
+    // A facade call (`DB::transaction()`) is stored as the file names it (the parser keeps it:
+    // `\Cache` is the global alias in any namespace); the class the facade resolves to goes in the
+    // metadata.
+    const facade = typeof ref.metadata?.facadeClass === 'string' ? ref.metadata.facadeClass as string : null;
+    const fqn = (facade ?? name).replace(/^\\/, '');
     if (!fqn || /^(self|static|parent)$/i.test(fqn)) return [];
     return [row(fqn, fqn.slice(fqn.lastIndexOf('\\') + 1), kind, facade ? { facadeTarget: name } : undefined)];
-  }
-
-  /**
-   * The class a PHP file means by a short name: its `use` import (`use X\DB;`, `use X\Y as DB;`),
-   * else the name in the file's namespace, else the global name (M5-19 review).
-   */
-  private phpNamed(sourcePath: string, short: string): string {
-    let uses = this.phpUsesCache.get(sourcePath);
-    if (!uses) {
-      uses = new Map();
-      for (const m of (this.readWorkspaceText(sourcePath) ?? '').matchAll(/^\s*use\s+\\?([\w\\]+)(?:\s+as\s+(\w+))?\s*;/gm)) {
-        uses.set((m[2] ?? m[1]!.slice(m[1]!.lastIndexOf('\\') + 1)).toLowerCase(), m[1]!);
-      }
-      this.phpUsesCache.set(sourcePath, uses);
-    }
-    const namespace = this.phpNamespaces.get(sourcePath);
-    return uses.get(short.toLowerCase()) ?? (namespace ? `${namespace}\\${short}` : short);
   }
 
   /**
@@ -2412,6 +2405,8 @@ export class Scanner {
     let manifestDirs: Array<[string, string]> | null = null;
     const workspace = {
       readText: (path: string) => { try { return this.readWorkspaceText(path); } catch { return null; } },
+      // Present though unreadable (a folder, no permission): a lock that stops the walk (M5-21 review).
+      exists: (path: string) => existsSync(resolve(workspaceRoot, path)),
       repoRootOf,
       manifestDirs: () => (manifestDirs ??= this.npmManifestDirs(repoRootOf)),
     };
@@ -2419,31 +2414,41 @@ export class Scanner {
       && !changedInputFiles(workspaceRoot, recorded).length
       && recorded.yarnRoots.every((y) => yarnRootDirs(workspace.manifestDirs(), y.lock, y.repo).join('\0') === y.dirs.join('\0'));
     const npm = new NpmAttributor(workspace);
+    // Composer (M5-21): composer.json and composer.lock, the same way; a function or a facade's
+    // target (the row's metadata) is part of what is asked.
+    const composer = new ComposerAttributor(workspace);
     const attributions = new Map<string, ExternalAttribution>();
-    const attribute = (ecosystem: string, specifier: string, sourcePath: string): ExternalAttribution => {
-      if (ecosystem !== 'npm') return NO_ATTRIBUTION;
-      const key = `${dirname(sourcePath)}\0${specifier}`;
+    const attribute = (ecosystem: string, specifier: string, sourcePath: string, php: PhpName): ExternalAttribution => {
+      if (ecosystem !== 'npm' && ecosystem !== 'composer') return NO_ATTRIBUTION;
+      const key = [ecosystem, dirname(sourcePath), specifier, php.kind ?? '', php.facadeTarget ?? ''].join('\0');
       let a = attributions.get(key);
-      if (!a) attributions.set(key, (a = npm.attribute(specifier, sourcePath)));
+      if (!a) attributions.set(key, (a = ecosystem === 'npm' ? npm.attribute(specifier, sourcePath) : composer.attribute(specifier, sourcePath, php)));
       return a;
     };
     const flag = (b: boolean | null) => (b === null ? null : b ? 1 : 0);
     const changed: ExternalDecision[] = [];
     for (const r of rows) {
       let phpCandidates: string[] | undefined;
+      let facadeTarget: string | undefined;
+      let phpConst = false;
       if (r.ecosystem === 'composer' && r.metadata && r.metadata !== '{}') {
-        try { phpCandidates = JSON.parse(r.metadata).phpCandidates; } catch { /* none */ }
+        try {
+          const metadata = JSON.parse(r.metadata);
+          phpCandidates = Array.isArray(metadata.phpCandidates) ? metadata.phpCandidates : undefined;
+          facadeTarget = typeof metadata.facadeTarget === 'string' ? metadata.facadeTarget : undefined;
+          phpConst = metadata.phpConst === true;
+        } catch { /* none */ }
       }
       const external = this.decideExternal(r.ecosystem as Ecosystem, r.specifier, r.file_path, this.workspaceFileMap, phpCandidates);
-      if (unchanged && external && r.external === 1 && (r.ecosystem !== 'npm' || r.origin !== null)) continue;
-      const a = external ? attribute(r.ecosystem, r.specifier, r.file_path) : NO_ATTRIBUTION;
+      if (unchanged && external && r.external === 1 && (!ATTRIBUTED_ECOSYSTEMS.has(r.ecosystem) || r.origin !== null)) continue;
+      const a = external ? attribute(r.ecosystem, r.specifier, r.file_path, { kind: phpCandidates ? 'function' : phpConst ? 'const' : 'class', facadeTarget }) : NO_ATTRIBUTION;
       const d: ExternalDecision = { id: r.id, external: external ? 1 : 0, package: a.package, origin: a.origin, direct: flag(a.direct), dev: flag(a.dev), attribution: a.attribution };
       if (d.external !== r.external || d.package !== r.package || d.origin !== r.origin || d.direct !== r.direct || d.dev !== r.dev || d.attribution !== r.attribution) changed.push(d);
     }
     if (changed.length) this.store.setExternalDecisions(changed);
     // What this pass read, added to what the last one read when that still stands.
     const files: Record<string, string | null> = unchanged ? { ...recorded!.files } : {};
-    for (const [path, text] of npm.reads) files[path] = contentHash(text);
+    for (const [path, text] of [...npm.reads, ...composer.reads]) files[path] = contentHash(text);
     const yarnRoots = unchanged ? [...recorded!.yarnRoots] : [];
     for (const y of npm.yarnRoots) if (!yarnRoots.some((o) => o.repo === y.repo && o.lock === y.lock)) yarnRoots.push(y);
     this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at, files, yarnRoots }));
@@ -4360,7 +4365,6 @@ export class Scanner {
     this.jsImportsCache.clear();
     this.externalBindingsCache.clear();
     this.phpDeclared = null;
-    this.phpUsesCache.clear();
     this.externalDecisions.clear();
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);

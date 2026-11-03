@@ -6,7 +6,7 @@
 // again at the end of every scan and sync, without re-parsing; the `external_refs` view holds the
 // candidates decided external. This module holds the row type and the syntax the scanner reads.
 
-/** The package-manifest family that attributes a reference (M5-20 npm … M5-23 Go modules). */
+/** The package-manifest family that attributes a reference (M5-20 npm, M5-21 Composer … M5-23 Go modules). */
 export type Ecosystem = 'npm' | 'composer' | 'pypi' | 'go';
 
 /** One candidate reference to something outside the workspace, as stored. */
@@ -31,9 +31,10 @@ export interface ExternalRefRow {
   external: boolean;
   /**
    * What else decides the row or describes it: for a PHP function, the namespaced names PHP tries
-   * before the global one (empty when none); a facade's target class.
+   * before the global one (empty when none: a qualified call or a `use function` import); a `use
+   * const` import (`phpConst`, M5-21); a facade's target class.
    */
-  metadata?: { phpCandidates?: string[]; facadeTarget?: string };
+  metadata?: { phpCandidates?: string[]; phpConst?: boolean; facadeTarget?: string };
 }
 
 /**
@@ -42,11 +43,17 @@ export interface ExternalRefRow {
  * no ecosystem task attributes yet.
  */
 export interface ExternalAttribution {
-  /** The package (`pg`, `@scope/pkg`) or built-in module (`node:fs`) the specifier names. */
+  /**
+   * The package (`pg`, `@scope/pkg`, `guzzlehttp/guzzle`) or built-in module or extension (`node:fs`,
+   * `ext-pdo`) the specifier names; null for a PHP name no input attributes to a package (M5-21).
+   */
   package: string | null;
   /** `package`, `builtin` (the language's standard library or runtime) or `ambient`. */
   origin: 'package' | 'builtin' | 'ambient' | null;
-  /** A manifest of the file lists the package (true), or only a lockfile holds it or nothing does (false); null for a built-in. */
+  /**
+   * A manifest of the file lists the package (true), or only a lockfile holds it or nothing does
+   * (false); null for a built-in and when the package is unknown.
+   */
   direct: boolean | null;
   /** A dev-only dependency; null when unknown (no lockfile tells) and for a built-in. */
   dev: boolean | null;

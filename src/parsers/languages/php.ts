@@ -158,13 +158,16 @@ export class PhpParser extends GenericWasmParser {
         // Function names are case-insensitive in PHP (M0-04-R5).
         if (importsFunction) useFunctions.set(importName.toLowerCase(), fullTarget.replace(/^\\/, ''));
 
-        // Emit import reference
+        // Emit import reference; a function or constant import says so (M5-21: its external
+        // reference is a function or constant, never a class).
+        const isConst = !importsClass && !importsFunction;
         references.push({
           sourceSymbol: null,
           targetName: fullTarget,
           referenceType: 'import',
           startLine,
           verifiability: 'verified',
+          ...(importsClass ? {} : { metadata: { phpUse: isConst ? 'const' : 'function' } }),
         });
       }
 
@@ -881,11 +884,15 @@ export class PhpParser extends GenericWasmParser {
           // class; that dropped the call and failed every parallel scan reaching it (M0-06-R2).
           const resolved = Object.hasOwn(mergedFacadeMap, shortName) ? mergedFacadeMap[shortName] : undefined;
           if (typeof resolved === 'string' && resolved) {
+            // The class the file names (`\Cache` is the global alias even in a namespaced file),
+            // kept for its external reference (M5-21 review).
+            const facadeClass = ref.targetName;
             ref.targetName = resolved;
             ref.verifiability = 'inferred';
             ref.metadata = {
               ...ref.metadata,
               facadeAlias: shortName,
+              facadeClass,
               isRawDbAccess: shortName === 'DB',
             };
           }

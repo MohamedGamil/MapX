@@ -24,8 +24,10 @@ import type { Store } from './store.js';
  *   symbols in metadata).
  * - 11: M5-09 (TS `abstract class` symbols and their bases; TS and PHP interface `extends` edges; PHP
  *   trait uses in `metadata.mixins`).
+ * - 12: M5-21 review (PHP `use function` / `use const` imports and a facade's named class, `\Cache`
+ *   in a namespaced file, in external-reference candidates).
  */
-export const EXTRACTOR_VERSION = 11;
+export const EXTRACTOR_VERSION = 12;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

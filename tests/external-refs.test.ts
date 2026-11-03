@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import Database from 'better-sqlite3';
@@ -12,6 +12,8 @@ import { extractorVersionKey } from '../src/core/extractor-version.js';
 import { jsImports } from '../src/core/external-refs.js';
 import { builtinModules } from 'node:module';
 import { NODE_BUILTINS, NODE_PREFIX_ONLY_BUILTINS, nodeBuiltin, npmPackageName, parsePackageLock, parsePnpmLock, parseYarnLock } from '../src/core/manifests/npm.js';
+import { ComposerAttributor, composerRoots, lockPackagesOf, packageByConvention, parseComposerLock, phpBuiltin } from '../src/core/manifests/composer.js';
+import { PHP_BUILTINS_SOURCE } from '../src/core/manifests/php-builtins.js';
 import { cleanup, init, mapx, mapxResult, query } from './helpers/e2e';
 
 // M5-19: references to modules, packages, classes and functions outside the workspace are kept apart
@@ -127,11 +129,12 @@ describe('a scan of the arch-rules fixture', () => {
     expect(scanApp(app).map(key).sort()).toEqual(labels.rows.filter((l) => l.app === app).map(key).sort());
   }, 120000);
 
-  // M5-20: every npm row carries the labelled package, origin, direct, dev and attribution.
-  it.each(labels.apps)('attributes every npm row of %s as labelled: package or built-in, direct or transitive, dev or production', (app) => {
+  // M5-20 (npm), M5-21 (Composer): every row carries the labelled package, origin, direct, dev and attribution.
+  it.each(labels.apps)('attributes every npm and Composer row of %s as labelled: package or built-in, direct or transitive, dev or production', (app) => {
     const attributed = (r: Omit<Label, 'app'>) => `${key(r)} | ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`;
-    expect(scanApp(app).filter((r) => r.ecosystem === 'npm').map(attributed).sort())
-      .toEqual(labels.rows.filter((l) => l.app === app && l.ecosystem === 'npm').map(attributed).sort());
+    const ecosystems = new Set(['npm', 'composer']);
+    expect(scanApp(app).filter((r) => ecosystems.has(r.ecosystem)).map(attributed).sort())
+      .toEqual(labels.rows.filter((l) => l.app === app && ecosystems.has(l.ecosystem)).map(attributed).sort());
   }, 120000);
 
   it.each(labels.apps)('gives a row to every import of %s that names something outside the workspace', (app) => {
@@ -1052,4 +1055,495 @@ describe('a sync that changes nothing attribution reads (review of M5-20, P2)', 
     expect(npmAttribution(store)).toEqual(npmAttribution(await p.forced()));
     expect(npmAttribution(store)).toContain('src/a.ts:1 semver satisfies import → semver package 0 1 lock');
   }, 120000);
+});
+
+// ─── M5-21: Composer package attribution and PHP built-ins ──────────────────────────────────
+
+describe('PHP built-ins and Composer names', () => {
+  it('maps built-in classes, functions and constants to their extension; PECL and user names are none', () => {
+    expect(PHP_BUILTINS_SOURCE).toMatch(/reflection of PHP 8\.1\.\d+, 8\.2\.\d+, 8\.4\.\d+; php-src stubs of php-8\.3\.0, php-8\.4\.14, php-8\.5\.0/);
+    expect(phpBuiltin('DateTime')).toBe('ext-date');
+    expect(phpBuiltin('\\datetime', 'class')).toBe('ext-date');
+    expect(phpBuiltin('PDO')).toBe('ext-pdo');
+    expect(phpBuiltin('Exception')).toBe('ext-core');
+    expect(phpBuiltin('ArrayObject')).toBe('ext-spl');
+    expect(phpBuiltin('Random\\Randomizer')).toBe('ext-random');
+    expect(phpBuiltin('str_contains', 'function')).toBe('ext-standard');
+    expect(phpBuiltin('STRLEN', 'function')).toBe('ext-core');
+    expect(phpBuiltin('json_encode', 'function')).toBe('ext-json');
+    expect(phpBuiltin('array_find', 'function')).toBe('ext-standard');
+    // Constants are case-sensitive (review of M5-21: `use const PHP_EOL`).
+    expect(phpBuiltin('PHP_EOL', 'const')).toBe('ext-core');
+    expect(phpBuiltin('JSON_THROW_ON_ERROR', 'const')).toBe('ext-json');
+    expect(phpBuiltin('php_eol', 'const')).toBeNull();
+    // A class is not a function or constant of the same name; PECL extensions and packages are not PHP's.
+    expect(phpBuiltin('strlen', 'class')).toBeNull();
+    expect(phpBuiltin('DateTime', 'function')).toBeNull();
+    expect(phpBuiltin('PHP_EOL', 'class')).toBeNull();
+    expect(phpBuiltin('Redis')).toBeNull();
+    expect(phpBuiltin('xdebug_info', 'function')).toBeNull();
+    expect(phpBuiltin('GuzzleHttp\\Client')).toBeNull();
+    expect(phpBuiltin('collect', 'function')).toBeNull();
+  });
+
+  // Review of M5-21: bundled extensions no local build loads come from php-src's stubs.
+  it('covers bundled extensions no reflected build loaded: gmp, pgsql, bz2, odbc, 8.4 Dom\\ and mbstring, 8.5 uri', () => {
+    expect([
+      phpBuiltin('mb_str_pad', 'function'), phpBuiltin('gmp_add', 'function'), phpBuiltin('GMP'), phpBuiltin('pg_connect', 'function'),
+      phpBuiltin('PgSql\\Connection'), phpBuiltin('bzopen', 'function'), phpBuiltin('odbc_connect', 'function'), phpBuiltin('Dom\\HTMLDocument'),
+      phpBuiltin('imap_open', 'function'), phpBuiltin('Pdo\\Mysql'), phpBuiltin('array_first', 'function'), phpBuiltin('Uri\\Rfc3986\\Uri'),
+    ]).toEqual(['ext-mbstring', 'ext-gmp', 'ext-gmp', 'ext-pgsql', 'ext-pgsql', 'ext-bz2', 'ext-odbc', 'ext-dom', 'ext-imap', 'ext-pdo_mysql', 'ext-standard', 'ext-uri']);
+  });
+
+  // The list is static; when a PHP runs here, its bundled extensions' names must all be in it.
+  const php = (() => { try { execFileSync('php', ['-v'], { stdio: 'pipe' }); return true; } catch { return false; } })();
+  it.skipIf(!php)('lists every class, function and constant of the running PHP\'s bundled extensions', () => {
+    const dump = JSON.parse(execFileSync('php', [resolve(__dirname, '../scripts/gen-php-builtins.php'), 'dump'], { encoding: 'utf8' })) as
+      { extensions: Record<string, { classes?: string[]; functions?: string[]; constants?: string[] }> };
+    const missing: string[] = [];
+    for (const [ext, { classes = [], functions = [], constants = [] }] of Object.entries(dump.extensions)) {
+      for (const c of classes) if (phpBuiltin(c, 'class') !== ext) missing.push(`${ext} class ${c}`);
+      for (const f of functions) if (phpBuiltin(f, 'function') !== ext) missing.push(`${ext} function ${f}`);
+      for (const k of constants) if (!phpBuiltin(k, 'const')) missing.push(`${ext} constant ${k}`);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  // The generator reads php-src stubs with PHP's tokenizer: namespaces (braced or not), top-level
+  // declarations only.
+  it.skipIf(!php)('reads stub declarations: namespaced and braced blocks, never methods or ::class', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mapx-php-stubs-'));
+    try {
+      write(dir, {
+        'ext/dom/php_dom.stub.php': '<?php\nnamespace {\n  /** @var int */\n  const XML_ELEMENT_NODE = UNKNOWN;\n  class DOMNode { public function appendChild() {} const X = 1; }\n  function dom_import_simplexml(object $node): DOMElement {}\n  $x = DOMNode::class;\n}\nnamespace Dom {\n  final class HTMLDocument {}\n  enum AdjacentPosition: string {}\n  function import_simplexml(object $node): Element {}\n}\n',
+        'ext/bz2/bz2.stub.php': '<?php\n/** @generate-class-entries */\nfunction bzopen($file, string $mode) {}\nfunction &byref() {}\n',
+        'ext/zend_test/test.stub.php': '<?php\nfunction zend_test_func() {}\n',
+      });
+      const out = JSON.parse(execFileSync('php', [resolve(__dirname, '../scripts/gen-php-builtins.php'), 'stubs', 'php-9.9.9', dir], { encoding: 'utf8' }));
+      expect(out.version).toBe('9.9.9');
+      expect(out.extensions).toEqual({
+        'ext-bz2': { functions: ['bzopen', 'byref'] },
+        'ext-dom': { constants: ['XML_ELEMENT_NODE'], classes: ['DOMNode', 'Dom\\HTMLDocument', 'Dom\\AdjacentPosition'], functions: ['dom_import_simplexml', 'Dom\\import_simplexml'] },
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('platform requirements are not packages; a name in require and require-dev is production', () => {
+    const roots = composerRoots({
+      require: { php: '^8.2', 'php-64bit': '*', hhvm: '*', 'ext-pdo': '*', 'ext-zend-opcache': '*', 'lib-icu': '*', composer: '^2', 'composer-plugin-api': '^2', 'composer-runtime-api': '^2', 'PSR/Log': '^3', 'php-http/client-common': '^2' },
+      'require-dev': { 'phpunit/phpunit': '^10', 'php-http/client-common': '^2', 'ext-xdebug': '*' },
+    });
+    expect([...roots.prod].sort()).toEqual(['php-http/client-common', 'psr/log']);
+    expect([...roots.dev]).toEqual(['phpunit/phpunit', 'php-http/client-common']);
+  });
+
+  it('names a package by Composer convention only when one requirement clearly matches', () => {
+    const req = ['psr/log', 'nesbot/carbon', 'symfony/console', 'laravel/framework', 'guzzlehttp/guzzle', 'phpunit/phpunit'];
+    expect(packageByConvention('Psr\\Log\\LoggerInterface', req)).toBe('psr/log');
+    expect(packageByConvention('\\Carbon\\Carbon', req)).toBe('nesbot/carbon');
+    expect(packageByConvention('Symfony\\Component\\Console\\Command\\Command', req)).toBe('symfony/console');
+    expect(packageByConvention('PHPUnit\\Framework\\TestCase', req)).toBe('phpunit/phpunit');
+    // No convention: Illuminate is laravel/framework's, GuzzleHttp names no package; a global name none.
+    expect(packageByConvention('Illuminate\\Support\\Collection', req)).toBeNull();
+    expect(packageByConvention('GuzzleHttp\\Client', req)).toBeNull();
+    expect(packageByConvention('Carbon', req)).toBeNull();
+    // A tie names none.
+    expect(packageByConvention('Carbon\\Carbon', ['nesbot/carbon', 'other/carbon'])).toBeNull();
+  });
+});
+
+const COMPOSER_LOCK = JSON.stringify({
+  packages: [
+    { name: 'guzzlehttp/guzzle', version: '7.8.1', autoload: { 'psr-4': { 'GuzzleHttp\\': 'src/' } } },
+    { name: 'guzzlehttp/psr7', version: '2.6.2', autoload: { 'psr-4': { 'GuzzleHttp\\Psr7\\': 'src/' } } },
+    { name: 'psr/log', version: '3.0.0', autoload: { 'psr-4': { 'Psr\\Log\\': 'src' } } },
+    { name: 'nesbot/carbon', version: '2.72.3', autoload: { 'psr-4': { 'Carbon\\': 'src/Carbon/' } } },
+    { name: 'mustache/mustache', version: 'v2.14.2', autoload: { 'psr-0': { Mustache: 'src/' } } },
+  ],
+  'packages-dev': [
+    { name: 'fakerphp/faker', version: 'v1.23.1', autoload: { 'psr-4': { 'Faker\\': 'src/Faker/' } } },
+    { name: 'doctrine/instantiator', version: '2.0.0', autoload: { 'psr-4': { 'Doctrine\\Instantiator\\': 'src/Doctrine/Instantiator/' } } },
+  ],
+});
+
+describe('composer.lock', () => {
+  it('reads production and dev packages, PSR-4 and PSR-0 prefixes (longest first), and opaque packages', () => {
+    const lock = parseComposerLock(JSON.stringify({
+      packages: [
+        { name: 'Acme/Both', autoload: { 'psr-4': { 'Acme\\Both\\': 'src/' } } },
+        { name: 'acme/opaque', autoload: { classmap: ['src/'], files: ['f.php'] } },
+        { name: 'acme/fallback', autoload: { 'psr-4': { '': 'src/' } } },
+        { name: 'acme/meta', type: 'metapackage' },
+      ],
+      'packages-dev': [{ name: 'acme/both', autoload: {} }, { name: 'acme/tool', autoload: { 'psr-0': { Tool_: 'lib/' } } }],
+    }));
+    expect([...lock.dev]).toEqual([['acme/both', false], ['acme/opaque', false], ['acme/fallback', false], ['acme/meta', false], ['acme/tool', true]]);
+    expect(lock.opaque).toEqual(['acme/fallback', 'acme/opaque']);
+    expect(lock.prefixes.map((p) => p.prefix)).toEqual(['acme\\both\\', 'tool_']);
+    const full = parseComposerLock(COMPOSER_LOCK);
+    expect(lockPackagesOf(full, 'GuzzleHttp\\Psr7\\Utils', false)).toEqual(['guzzlehttp/psr7']);
+    expect(lockPackagesOf(full, 'guzzlehttp\\client', false)).toEqual(['guzzlehttp/guzzle']);
+    expect(lockPackagesOf(full, 'Mustache_Engine', false)).toEqual(['mustache/mustache']);
+    expect(lockPackagesOf(full, 'GuzzleHttp\\Psr7\\str', true)).toEqual(['guzzlehttp/psr7']);
+    // A global function shows no package, though a PSR-0 prefix spells its start.
+    expect(lockPackagesOf(full, 'Mustache_render', true)).toEqual([]);
+    expect(lockPackagesOf(full, 'Acme\\Widget', false)).toEqual([]);
+  });
+
+  // Review of M5-21 (P1): sibling packages that register one prefix; `replace` and `provide`.
+  it('keeps every package of a shared prefix, and what each package replaces or provides', () => {
+    const lock = parseComposerLock(JSON.stringify({
+      packages: [
+        { name: 'illuminate/support', autoload: { 'psr-4': { 'Illuminate\\Support\\': '' } } },
+        { name: 'illuminate/collections', autoload: { 'psr-4': { 'Illuminate\\Support\\': '' } } },
+        { name: 'illuminate/macroable', autoload: { 'psr-4': { 'Illuminate\\Support\\': '' } } },
+        { name: 'laravel/framework', autoload: { 'psr-4': { 'Illuminate\\': 'src/Illuminate/' } }, replace: { 'illuminate/bus': 'self.version' }, provide: { 'psr/container-implementation': '1.1' } },
+      ],
+    }));
+    expect(lockPackagesOf(lock, 'Illuminate\\Support\\Str', false)).toEqual(['illuminate/collections', 'illuminate/macroable', 'illuminate/support']);
+    expect(lockPackagesOf(lock, 'Illuminate\\Bus\\Dispatcher', false)).toEqual(['laravel/framework']);
+    expect([...lock.provides.get('laravel/framework')!]).toEqual(['laravel/framework', 'illuminate/bus', 'psr/container-implementation']);
+    expect(lock.satisfied.has('illuminate/bus')).toBe(true);
+  });
+
+  it('throws on text that is no Composer lock (read as unreadable)', () => {
+    for (const text of ['{ broken', '{}', '[]', JSON.stringify({ lockfileVersion: 3, packages: {} })]) expect(() => parseComposerLock(text), text).toThrow();
+  });
+
+  it('attributes a facade as the class the file names; its target only when that class shows no package', () => {
+    const files: Record<string, string> = {
+      // illuminate/support repeated for dev: production wins.
+      'composer.json': JSON.stringify({ require: { 'illuminate/support': '^11.0', 'illuminate/database': '^11.0' }, 'require-dev': { 'illuminate/support': '^11.0' } }),
+      'composer.lock': JSON.stringify({ packages: [
+        { name: 'illuminate/support', autoload: { 'psr-4': { 'Illuminate\\Support\\': '' } } },
+        { name: 'illuminate/database', autoload: { 'psr-4': { 'Illuminate\\Database\\': '' } } },
+      ] }),
+    };
+    const a = new ComposerAttributor({ readText: (p) => files[p] ?? null, repoRootOf: () => '' });
+    const target = 'Illuminate\\Database\\DatabaseManager';
+    expect(a.attribute('Illuminate\\Support\\Facades\\DB', 'routes/web.php', { facadeTarget: target })).toEqual({ package: 'illuminate/support', origin: 'package', direct: true, dev: false, attribution: 'lock' });
+    expect(a.attribute('DB', 'routes/web.php', { facadeTarget: target })).toEqual({ package: 'illuminate/database', origin: 'package', direct: true, dev: false, attribution: 'lock' });
+    expect(a.attribute('DB', 'routes/web.php')).toEqual({ package: null, origin: 'package', direct: false, dev: null, attribution: 'lock' });
+    expect([...a.reads.keys()].sort()).toEqual(['composer.json', 'composer.lock', 'routes/composer.json', 'routes/composer.lock']);
+  });
+});
+
+const composerAttribution = (store: Store) => store.getExternalRefs().filter((r) => r.ecosystem === 'composer')
+  .map((r) => `${r.file_path}:${r.line} ${r.specifier} ${r.kind} → ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`).sort();
+
+// `guzzlehttp/guzzle` and `psr/log` required, `fakerphp/faker` for dev; `nesbot/carbon` locked for
+// production, `doctrine/instantiator` for dev; `Acme\Missing\Widget` in no package.
+const COMPOSER_MANIFEST = JSON.stringify({
+  name: 'acme/app',
+  require: { php: '^8.2', 'ext-pdo': '*', 'guzzlehttp/guzzle': '^7.8', 'psr/log': '^3.0' },
+  'require-dev': { 'fakerphp/faker': '^1.23' },
+  autoload: { 'psr-4': { 'App\\': 'app/' } },
+});
+const PHP_SOURCE = [
+  '<?php',
+  'namespace App;',
+  '',
+  'use GuzzleHttp\\Client;',
+  'use Psr\\Log\\LoggerInterface;',
+  '',
+  'class Gateway',
+  '{',
+  '    public function run(LoggerInterface $logger)',
+  '    {',
+  '        new Client();',
+  '        \\Carbon\\Carbon::now();',
+  '        \\Faker\\Factory::create();',
+  '        new \\Doctrine\\Instantiator\\Instantiator();',
+  '        new \\Acme\\Missing\\Widget();',
+  '        new \\DateTime();',
+  "        strlen('x');",
+  '    }',
+  '}',
+  '',
+].join('\n');
+/** The rows of PHP_SOURCE at `file`, attributed with or without a lock. */
+const composerAttributed = (file: string, by: 'lock' | 'manifest') => {
+  const lock = by === 'lock';
+  return [
+    `${file}:11 GuzzleHttp\\Client instantiation → ${lock ? 'guzzlehttp/guzzle package 1 0' : 'null package null null'} ${by}`,
+    `${file}:12 Carbon\\Carbon call → ${lock ? 'nesbot/carbon package 0 0' : 'null package null null'} ${by}`,
+    `${file}:13 Faker\\Factory call → fakerphp/faker package 1 1 ${by}`,
+    `${file}:14 Doctrine\\Instantiator\\Instantiator instantiation → ${lock ? 'doctrine/instantiator package 0 1' : 'null package null null'} ${by}`,
+    `${file}:15 Acme\\Missing\\Widget instantiation → null package ${lock ? '0' : 'null'} null ${by}`,
+    `${file}:16 DateTime instantiation → ext-date builtin null null null`,
+    `${file}:17 strlen call → ext-core builtin null null null`,
+    `${file}:4 GuzzleHttp\\Client import → ${lock ? 'guzzlehttp/guzzle package 1 0' : 'null package null null'} ${by}`,
+    `${file}:5 Psr\\Log\\LoggerInterface import → psr/log package 1 0 ${by}`,
+    `${file}:9 Psr\\Log\\LoggerInterface param_type → psr/log package 1 0 ${by}`,
+  ];
+};
+
+describe('Composer attribution of a scan', () => {
+  const p = project(false);
+  afterEach(() => p.remove());
+  const scan = async (files: Record<string, string>) => {
+    p.create(files);
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    return composerAttribution(store);
+  };
+
+  it('a composer.lock: direct, transitive, dev-only, not locked and built-in', async () => {
+    expect(await scan({ 'composer.json': COMPOSER_MANIFEST, 'composer.lock': COMPOSER_LOCK, 'app/Gateway.php': PHP_SOURCE })).toEqual(composerAttributed('app/Gateway.php', 'lock'));
+  }, 120000);
+
+  it('no composer.lock: direct from the manifest by naming convention only, flagged manifest', async () => {
+    expect(await scan({ 'composer.json': COMPOSER_MANIFEST, 'app/Gateway.php': PHP_SOURCE })).toEqual(composerAttributed('app/Gateway.php', 'manifest'));
+  }, 120000);
+
+  it.each([
+    ['a corrupt composer.lock', { 'composer.lock': '{"packages": [' }],
+    ['a composer.lock that is JSON but no lock', { 'composer.lock': '{"name": "acme/app"}' }],
+    ['a composer.lock that is a folder', { 'composer.lock/x.txt': 'x' }],
+  ])('%s: direct from the manifest only, flagged manifest, no crash', async (_name, extra) => {
+    expect(await scan({ 'composer.json': COMPOSER_MANIFEST, 'app/Gateway.php': PHP_SOURCE, ...extra })).toEqual(composerAttributed('app/Gateway.php', 'manifest'));
+  }, 120000);
+
+  it('a classmap or files package: named by convention, else the package is unknown', async () => {
+    const lock = JSON.stringify({
+      packages: [{ name: 'laravel/framework', autoload: { files: ['src/Illuminate/Support/helpers.php'], 'psr-4': { 'Illuminate\\': 'src/Illuminate/' } } }],
+      'packages-dev': [{ name: 'phpunit/phpunit', autoload: { classmap: ['src/'] } }],
+    });
+    expect(await scan({
+      'composer.json': JSON.stringify({ require: { 'laravel/framework': '^11.0' }, 'require-dev': { 'phpunit/phpunit': '^10.5' }, autoload: { 'psr-4': { 'App\\': 'app/' } } }),
+      'composer.lock': lock,
+      'app/T.php': '<?php\nnamespace App;\n\nclass T\n{\n    public function t()\n    {\n        \\PHPUnit\\Framework\\Assert::assertTrue(true);\n        collect([]);\n        new \\Acme\\Missing\\Widget();\n        new \\Illuminate\\Support\\Collection();\n    }\n}\n',
+    })).toEqual([
+      'app/T.php:10 Acme\\Missing\\Widget instantiation → null package null null lock',
+      'app/T.php:11 Illuminate\\Support\\Collection instantiation → laravel/framework package 1 0 lock',
+      'app/T.php:8 PHPUnit\\Framework\\Assert call → phpunit/phpunit package 1 1 lock',
+      'app/T.php:9 collect call → null package null null lock',
+    ]);
+  }, 120000);
+
+  // ─── Review of M5-21 ───
+
+  it('sibling packages sharing a prefix: the one composer.json requires (prod, then dev), else unknown', async () => {
+    const shared = (name: string, prefix: string) => ({ name, autoload: { 'psr-4': { [prefix]: 'src/' } } });
+    expect(await scan({
+      'composer.json': JSON.stringify({ require: { 'doctrine/event-manager': '^2.0', 'acme/twin-a': '^1', 'acme/twin-b': '^1', 'acme/mix-b': '^1' }, 'require-dev': { 'acme/tool-b': '^1', 'acme/mix-a': '^1' } }),
+      'composer.lock': JSON.stringify({
+        packages: [
+          shared('illuminate/support', 'Illuminate\\Support\\'), shared('illuminate/collections', 'Illuminate\\Support\\'), shared('illuminate/macroable', 'Illuminate\\Support\\'),
+          shared('doctrine/common', 'Doctrine\\Common\\'), shared('doctrine/event-manager', 'Doctrine\\Common\\'),
+          shared('acme/twin-a', 'Acme\\Twin\\'), shared('acme/twin-b', 'Acme\\Twin\\'),
+          shared('acme/mix-a', 'Acme\\Mix\\'), shared('acme/mix-b', 'Acme\\Mix\\'),
+        ],
+        'packages-dev': [shared('acme/tool-a', 'Acme\\Tool\\'), shared('acme/tool-b', 'Acme\\Tool\\')],
+      }),
+      'src/a.php': "<?php\n\\Illuminate\\Support\\Str::of('x');\nnew \\Doctrine\\Common\\EventManager();\nnew \\Acme\\Twin\\Thing();\nnew \\Acme\\Tool\\Thing();\nnew \\Acme\\Mix\\Thing();\n",
+    })).toEqual([
+      // None of the three is required: unknown. Both twins are: unknown. One for production beats one for dev.
+      'src/a.php:2 Illuminate\\Support\\Str call → null package null null lock',
+      'src/a.php:3 Doctrine\\Common\\EventManager instantiation → doctrine/event-manager package 1 0 lock',
+      'src/a.php:4 Acme\\Twin\\Thing instantiation → null package null null lock',
+      'src/a.php:5 Acme\\Tool\\Thing instantiation → acme/tool-b package 1 1 lock',
+      'src/a.php:6 Acme\\Mix\\Thing instantiation → acme/mix-b package 1 0 lock',
+    ]);
+  }, 120000);
+
+  it('use function and use const: built-in functions and constants, a namespaced function by its package', async () => {
+    expect(await scan({
+      'composer.json': COMPOSER_MANIFEST,
+      'composer.lock': COMPOSER_LOCK,
+      'app/F.php': '<?php\nnamespace App;\n\nuse function sprintf;\nuse function count;\nuse const PHP_EOL;\nuse function GuzzleHttp\\Psr7\\str;\nuse const Acme\\Lib\\VERSION;\n\nclass F {}\n',
+    })).toEqual([
+      'app/F.php:4 sprintf import → ext-standard builtin null null null',
+      'app/F.php:5 count import → ext-standard builtin null null null',
+      'app/F.php:6 PHP_EOL import → ext-core builtin null null null',
+      'app/F.php:7 GuzzleHttp\\Psr7\\str import → guzzlehttp/psr7 package 0 0 lock',
+      'app/F.php:8 Acme\\Lib\\VERSION import → null package 0 null lock',
+    ]);
+  }, 120000);
+
+  it.each([
+    ['a folder', { 'app/composer.lock/x.txt': 'x' }],
+    ['a file it cannot read', { 'app/composer.lock': COMPOSER_LOCK }],
+  ])('a nested composer.lock that is %s: the manifests alone, flagged manifest, never the parent lock', async (name, extra) => {
+    // Root can read a file without permission: the case holds only for another user.
+    if (name !== 'a folder' && process.getuid?.() === 0) return;
+    p.create({ 'composer.json': COMPOSER_MANIFEST, 'composer.lock': COMPOSER_LOCK, 'app/Gateway.php': PHP_SOURCE, ...extra });
+    if (name !== 'a folder') chmodSync(join(p.root, 'app/composer.lock'), 0o000);
+    try {
+      const store = new Store(':memory:');
+      await (await p.scanner(store)).scanFull();
+      expect(composerAttribution(store)).toEqual(composerAttributed('app/Gateway.php', 'manifest'));
+    } finally {
+      if (name !== 'a folder') chmodSync(join(p.root, 'app/composer.lock'), 0o644);
+    }
+  }, 120000);
+
+  it('a stale lock that lacks a required package: that package from the manifest, flagged manifest', async () => {
+    expect(await scan({
+      'composer.json': JSON.stringify({ require: { 'acme/widgets': '^1', 'psr/log': '^3' } }),
+      'composer.lock': JSON.stringify({ packages: [{ name: 'psr/log', autoload: { 'psr-4': { 'Psr\\Log\\': 'src' } } }] }),
+      'src/a.php': "<?php\nnew \\Acme\\Widgets\\Gear();\nnew \\Psr\\Log\\NullLogger();\nnew \\Other\\Thing();\n",
+    })).toEqual([
+      'src/a.php:2 Acme\\Widgets\\Gear instantiation → acme/widgets package 1 0 manifest',
+      'src/a.php:3 Psr\\Log\\NullLogger instantiation → psr/log package 1 0 lock',
+      'src/a.php:4 Other\\Thing instantiation → null package null null manifest',
+    ]);
+  }, 120000);
+
+  it('a locked package that replaces or provides a required name is direct', async () => {
+    expect(await scan({
+      'composer.json': JSON.stringify({ require: { 'illuminate/support': '^11' }, 'require-dev': { 'psr/log-implementation': '^3' } }),
+      'composer.lock': JSON.stringify({
+        packages: [{ name: 'laravel/framework', autoload: { 'psr-4': { 'Illuminate\\': 'src/Illuminate/' } }, replace: { 'illuminate/support': 'self.version' } }],
+        'packages-dev': [{ name: 'monolog/monolog', autoload: { 'psr-4': { 'Monolog\\': 'src/Monolog' } }, provide: { 'psr/log-implementation': '3.0.0' } }],
+      }),
+      'src/a.php': "<?php\n\\Illuminate\\Support\\Str::of('x');\nnew \\Monolog\\Logger('x');\n",
+    })).toEqual([
+      'src/a.php:2 Illuminate\\Support\\Str call → laravel/framework package 1 0 lock',
+      'src/a.php:3 Monolog\\Logger instantiation → monolog/monolog package 1 1 lock',
+    ]);
+  }, 120000);
+
+  it('a facade under a global alias is attributed by its target class', async () => {
+    const refs = await scan({
+      artisan: '#!/usr/bin/env php\n<?php\n',
+      'composer.json': JSON.stringify({ require: { 'laravel/framework': '^11.0' }, autoload: { 'psr-4': { 'App\\': 'app/' } } }),
+      'composer.lock': JSON.stringify({ packages: [{ name: 'laravel/framework', autoload: { 'psr-4': { 'Illuminate\\': 'src/Illuminate/' } } }] }),
+      'routes/web.php': "<?php\n\nuse Illuminate\\Support\\Facades\\Cache;\n\nDB::table('users');\nCache::get('k');\n",
+      // M5-19 (found in M5-21): `\Cache` is the global alias in a namespaced file too, never App\Http\Cache.
+      'app/Http/C.php': "<?php\nnamespace App\\Http;\n\nclass C\n{\n    public function r()\n    {\n        \\Cache::get('k');\n    }\n}\n",
+    });
+    expect(refs).toEqual([
+      'app/Http/C.php:8 Cache call → laravel/framework package 1 0 lock',
+      'routes/web.php:3 Illuminate\\Support\\Facades\\Cache import → laravel/framework package 1 0 lock',
+      'routes/web.php:5 DB call → laravel/framework package 1 0 lock',
+      'routes/web.php:6 Illuminate\\Support\\Facades\\Cache call → laravel/framework package 1 0 lock',
+    ]);
+  }, 120000);
+});
+
+// Sync = scan --force when composer.json or composer.lock changes.
+const LOCKED = JSON.parse(COMPOSER_LOCK) as { packages: Array<{ name: string }>; 'packages-dev': Array<{ name: string }> };
+const COMPOSER_CHANGES: Array<{ name: string; change: Record<string, string | null>; expect: string }> = [
+  {
+    name: 'a dev requirement moves to require',
+    change: { 'composer.json': COMPOSER_MANIFEST.replace('"require-dev":{"fakerphp/faker":"^1.23"}', '"require-dev":{}').replace('"psr/log":"^3.0"', '"psr/log":"^3.0","fakerphp/faker":"^1.23"') },
+    expect: 'app/Gateway.php:13 Faker\\Factory call → fakerphp/faker package 1 0 lock',
+  },
+  {
+    name: 'composer.lock is deleted',
+    change: { 'composer.lock': null },
+    expect: 'app/Gateway.php:12 Carbon\\Carbon call → null package null null manifest',
+  },
+  {
+    name: 'composer.lock is edited: a transitive package becomes dev-only',
+    change: { 'composer.lock': JSON.stringify({
+      packages: LOCKED.packages.filter((x) => x.name !== 'nesbot/carbon'),
+      'packages-dev': [...LOCKED['packages-dev'], ...LOCKED.packages.filter((x) => x.name === 'nesbot/carbon')],
+    }) },
+    expect: 'app/Gateway.php:12 Carbon\\Carbon call → nesbot/carbon package 0 1 lock',
+  },
+  {
+    name: 'composer.lock is corrupted',
+    change: { 'composer.lock': '{ corrupt' },
+    expect: 'app/Gateway.php:14 Doctrine\\Instantiator\\Instantiator instantiation → null package null null manifest',
+  },
+  {
+    name: 'a nearer composer.json requires a transitive package',
+    change: { 'app/composer.json': JSON.stringify({ name: 'acme/inner', 'require-dev': { 'nesbot/carbon': '^2.72' } }) },
+    expect: 'app/Gateway.php:12 Carbon\\Carbon call → nesbot/carbon package 1 1 lock',
+  },
+  {
+    name: 'a nearer composer.json requires a dev package for production: the nearest wins',
+    change: { 'app/composer.json': JSON.stringify({ name: 'acme/inner', require: { 'fakerphp/faker': '^1.23' } }) },
+    expect: 'app/Gateway.php:13 Faker\\Factory call → fakerphp/faker package 1 0 lock',
+  },
+];
+
+describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when composer.json or composer.lock changes', (_name, withGit) => {
+  const p = project(withGit);
+  afterEach(() => p.remove());
+  const commit = (message: string) => {
+    if (!withGit) return;
+    git(p.root, 'add', '-A');
+    git(p.root, 'commit', '-qm', message);
+  };
+
+  it.each(COMPOSER_CHANGES)('$name: equal to scan --force', async ({ change, expect: expected }) => {
+    p.create({ 'composer.json': COMPOSER_MANIFEST, 'composer.lock': COMPOSER_LOCK, 'app/Gateway.php': PHP_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    expect(composerAttribution(store)).toEqual(composerAttributed('app/Gateway.php', 'lock'));
+    write(p.root, change);
+    commit('change');
+    await p.sync(store);
+    const forced = await p.forced();
+    expect(dumpAll(store)).toEqual(dumpAll(forced));
+    expect(composerAttribution(forced)).toContain(expected);
+  }, 120000);
+
+  it('keeps the stored Composer attribution when nothing it read changed; a lock edit re-attributes', async () => {
+    p.create({ 'composer.json': COMPOSER_MANIFEST, 'composer.lock': COMPOSER_LOCK, 'app/Gateway.php': PHP_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    store.raw.exec("UPDATE external_ref_candidates SET attribution = 'kept' WHERE specifier = 'Carbon\\Carbon'");
+    write(p.root, { 'app/Other.php': '<?php\nnamespace App;\n\nclass Other\n{\n    public function o()\n    {\n        \\Faker\\Factory::create();\n    }\n}\n' });
+    commit('add');
+    await p.sync(store);
+    expect(composerAttribution(store)).toContain('app/Gateway.php:12 Carbon\\Carbon call → nesbot/carbon package 0 0 kept');
+    expect(composerAttribution(store)).toContain('app/Other.php:8 Faker\\Factory call → fakerphp/faker package 1 1 lock');
+    write(p.root, { 'composer.lock': `${COMPOSER_LOCK}\n` });
+    commit('lock');
+    await p.sync(store);
+    expect(composerAttribution(store)).toEqual(composerAttribution(await p.forced()));
+    expect(composerAttribution(store)).toContain('app/Gateway.php:12 Carbon\\Carbon call → nesbot/carbon package 0 0 lock');
+  }, 120000);
+});
+
+describe('Composer attribution through the CLI', () => {
+  it('a sibling repo reads only its own composer.json and lock; a lock-only change makes the index stale', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'mapx-extrefs-composer-'));
+    try {
+      write(parent, {
+        // Above both repos: a composer.json requiring nesbot/carbon. W locks psr/log and carbon; R
+        // requires psr/log, has no lock, and uses both.
+        'composer.json': JSON.stringify({ require: { 'nesbot/carbon': '^2.72' } }),
+        'W/composer.json': COMPOSER_MANIFEST,
+        'W/composer.lock': COMPOSER_LOCK,
+        'W/app/Gateway.php': PHP_SOURCE,
+        'R/composer.json': JSON.stringify({ require: { 'psr/log': '^3.0' }, autoload: { 'psr-4': { 'Lib\\': 'src/' } } }),
+        'R/src/X.php': '<?php\nnamespace Lib;\n\nuse Psr\\Log\\LoggerInterface;\nuse Carbon\\Carbon;\n\nclass X {}\n',
+      });
+      const w = join(parent, 'W');
+      execFileSync('git', ['init', '-q', w]);
+      execFileSync('git', ['init', '-q', join(parent, 'R')]);
+      init(w);
+      git(w, 'add', '-A');
+      git(w, 'commit', '-qm', 'init');
+      mapx(w, 'workspaces', 'add', '../R');
+      mapx(w, 'scan');
+      const imports = () => query<{ file_path: string; specifier: string; package: string | null; direct: number | null; dev: number | null; attribution: string | null }>(
+        w, "SELECT file_path, specifier, package, direct, dev, attribution FROM external_refs WHERE ecosystem = 'composer' AND kind = 'import'")
+        .map((r) => `${r.file_path} ${r.specifier} → ${r.package} ${r.direct} ${r.dev} ${r.attribution}`).sort();
+      expect(imports()).toEqual([
+        '../R/src/X.php Carbon\\Carbon → null null null manifest',
+        '../R/src/X.php Psr\\Log\\LoggerInterface → psr/log 1 0 manifest',
+        'app/Gateway.php GuzzleHttp\\Client → guzzlehttp/guzzle 1 0 lock',
+        'app/Gateway.php Psr\\Log\\LoggerInterface → psr/log 1 0 lock',
+      ]);
+      expect(mapx(w, 'status')).toContain('Index is up to date');
+      // Only the lock changes: the package that loads GuzzleHttp\ is now one composer.json does not require.
+      write(w, { 'composer.lock': COMPOSER_LOCK.replace('"name":"guzzlehttp/guzzle"', '"name":"guzzlehttp/guzzle-fork"') });
+      const status = mapx(w, 'status');
+      expect(status).toContain('Index is stale');
+      expect(status).toContain('composer.lock');
+      mapx(w, 'sync');
+      expect(imports()).toContain('app/Gateway.php GuzzleHttp\\Client → guzzlehttp/guzzle-fork 0 0 lock');
+      expect(mapx(w, 'status')).toContain('Index is up to date');
+    } finally {
+      cleanup(parent);
+    }
+  }, 180000);
 });
