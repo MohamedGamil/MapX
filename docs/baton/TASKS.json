@@ -30146,6 +30146,63 @@
       ]
     },
     {
+      "milestone": "M2",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-13",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-13.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-22",
+      "title": "A one-line PHP anonymous class does not take over its enclosing method's calls",
+      "objective": "Calls in a method that contains a one-line `new class { … }` keep the enclosing method as their source, and the anonymous class's methods get their own scope rather than the outer class's.",
+      "description": "Re-review of M2-12/M2-13 (2026-11-03): calls made in UseIt::anon come out as UseIt::x when a one-line anonymous class defines x (php.ts:45, 128). Pre-existing.",
+      "outputs": [
+        "src/parsers/languages/php.ts",
+        "tests/php-one-line.test.ts",
+        "reports/M2-22.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "tests/php-one-line.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A method containing a one-line anonymous class: its own calls keep it as source; the anonymous class's method calls do not take the outer class as scope (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/php-one-line.test.ts"
+      ]
+    },
+    {
       "milestone": "M5",
       "priority": "P2",
       "estimate": {
