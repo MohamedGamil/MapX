@@ -22,8 +22,10 @@ import type { Store } from './store.js';
  *   at the end of every scan and sync).
  * - 10: M5-11 (Go doc-comment tags; the restricted native visibility of Kotlin, C#, Java and Rust
  *   symbols in metadata).
+ * - 11: M5-09 (TS `abstract class` symbols and their bases; TS and PHP interface `extends` edges; PHP
+ *   trait uses in `metadata.mixins`).
  */
-export const EXTRACTOR_VERSION = 10;
+export const EXTRACTOR_VERSION = 11;
 
 export const extractorVersionKey = (repo: string) => `extractor_version:${repo}`;
 

@@ -108,6 +108,7 @@
             "targetRepo": { "type": "string" }
           }
         },
+        "via": { "description": "An inherited dependency (policy.inheritDependencies): the inheritance path from the source type to the ancestor whose dependency it is, both included; past eight names, the first five and the last two around one \"… N more …\" entry.", "type": "array", "items": { "type": "string" }, "minItems": 2 },
         "skippedBy": { "description": "Why a skipped finding is skipped: a baseline entry, or the base report of --compare.", "enum": ["baseline", "compare"] },
         "location": {
           "description": "Where to fix a finding that is not about code: a stale baseline entry is in the baseline file (workspace-relative, with /) at a JSON pointer.",

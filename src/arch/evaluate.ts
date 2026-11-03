@@ -11,6 +11,13 @@
 //      e. the target is private to another layer          → violation, private-layer
 //      f. otherwise                                       → allowed
 //
+// With `policy.inheritDependencies` (AR-02, M5-09) a type also answers for the dependencies of its
+// workspace ancestors (src/arch/selectors/hierarchy.ts): each is decided again with the type as
+// source, by the same chain, and carries `via`, the inheritance path from the type to the ancestor
+// whose dependency it is (shortened past VIA_LIMIT names). A dependency the type, or its file, has
+// itself (same target, same edge type) is not derived again, nor one on the type itself or on one
+// of its own ancestors.
+//
 // Findings are reported at the granularity of top-level declarations: a method's dependency is its
 // class's, and a file-level edge (an import) belongs to the file's only top-level symbol, so one
 // class-to-class dependency carried by an import, a `new` and a call is one dependency per edge type.
@@ -25,6 +32,7 @@ import type { LayerMembership } from './membership.js';
 import { globOrRegex } from './selectors/index.js';
 import { decide, type ExpandedPolicy } from './policy.js';
 import { internalMarkers, type InternalMarker } from './visibility.js';
+import { hierarchyOf, isType, shownPath } from './selectors/hierarchy.js';
 
 export type FindingKind = 'violation' | 'skipped' | 'uncovered' | 'allowed' | 'warning' | 'error';
 export type FindingSeverity = 'error' | 'warn' | 'info';
@@ -57,6 +65,11 @@ export interface Finding {
    * baseline file (workspace-relative, `/`) at a JSON pointer. CI reporters locate it here.
    */
   location?: { file: string; pointer?: string };
+  /**
+   * An inherited dependency (`policy.inheritDependencies`, AR-02, M5-09): the inheritance path from
+   * the source type to the ancestor whose dependency this is, both included.
+   */
+  via?: string[];
   message: string;
 }
 
@@ -175,6 +188,8 @@ export interface Dependency {
   targetPackage?: PackageEnd;
   /** For an `internal-element` violation: the element that carries the marker, and the marker. */
   internal?: InternalMarker;
+  /** An inherited dependency (M5-09): the path from the source type to the ancestor that has it. */
+  via?: string[];
 }
 
 export interface Evaluation {
@@ -209,24 +224,21 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
   const markers = internalMarkers(view, config.visibility, (el) => reportElement(view, el), imports);
   const out: Dependency[] = [];
   const endFiles = new Set<string>();
-  for (const r of rows) {
-    if (!scope.types.has(r.edge_type)) continue;
-    const verifiability = r.verifiability === 'inferred' ? 'inferred' : 'verified';
-    if (!scope.verifiability(verifiability)) continue;
-    if (!inScopePath(r.source_file) || !inScopePath(r.target_file)) continue;
-    const source = resolve(r.source_file, r.source_symbol);
-    const target = resolve(r.target_file, r.target_symbol);
-    if (!source || !target) continue; // an end outside the index (externals: M5-19)
-    if (source.id === target.id) continue;
-    endFiles.add(source.file.path);
-    endFiles.add(target.file.path);
+  // Each in-scope edge with its resolved ends; with inheritDependencies, also by the type it belongs to.
+  const inherit = config.policy.inheritDependencies;
+  const ofType = new Map<string, Array<{ r: EdgeRow; target: Element; verifiability: 'verified' | 'inferred' }>>();
+  const own = new Set<string>();
+  const ownKey = (source: Element, target: Element, type: string) => `${reportElement(view, source).id}\u0000${reportElement(view, target).id}\u0000${type}`;
+
+  const evaluate = (r: EdgeRow, source: Element, target: Element, verifiability: 'verified' | 'inferred', via?: string[]) => {
     const sourceLayers = membership.primaryOf(source);
-    if (!sourceLayers.length) continue; // the source is in no layer: nothing to check
+    if (!sourceLayers.length) return; // the source is in no layer: nothing to check
     // An import of a package (Go stores the package path as the symbol): every file of the package.
     let targetPackage: PackageEnd | undefined;
     let targetLayers = membership.primaryOf(target);
     let line: number | undefined;
-    try { const m = r.metadata ? JSON.parse(r.metadata) : null; const at = m?.startLine ?? m?.line; if (typeof at === 'number') line = at; } catch { /* no line */ }
+    // An inherited dependency's line is in the ancestor's file, not the source's: none is shown.
+    if (!via) try { const m = r.metadata ? JSON.parse(r.metadata) : null; const at = m?.startLine ?? m?.line; if (typeof at === 'number') line = at; } catch { /* no line */ }
     // Internal to this reference: the target, or for a package every one of its files (computed when needed).
     let internal: () => InternalMarker | null = () => markers.check({ source, target, edgeType: r.edge_type, line });
     if (target.kind === 'file' && r.target_symbol && target.file.namespace && r.target_symbol === target.file.namespace) {
@@ -241,7 +253,7 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
         return marks.length && marks.every(Boolean) ? marks[0]! : null;
       };
     }
-    const base = { source, target, targetLayers, edgeType: r.edge_type, verifiability: verifiability as Dependency['verifiability'], line, ...(targetPackage ? { targetPackage } : {}) };
+    const base = { source, target, targetLayers, edgeType: r.edge_type, verifiability, line, ...(targetPackage ? { targetPackage } : {}), ...(via ? { via } : {}) };
     // Overlays the target is in (Deprecated, Vendor …): they only ever matter as denied targets.
     const targetSide: TargetLayers = { layers: targetLayers, overlays: membership.of(target).filter((l) => overlays.has(l)), privateIn: membership.privateIn(target), internal };
     for (const d of decideEdge(config, policy, sourceLayers, targetSide, r.edge_type, verifiability)) {
@@ -254,6 +266,60 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
         ...base, ...(named ? { target: marker!.element } : {}), kind: d.kind, ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, sourceLayer: d.sourceLayer,
         ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}), ...(marker ? { internal: marker } : {}),
       });
+    }
+  };
+
+  for (const r of rows) {
+    if (!scope.types.has(r.edge_type)) continue;
+    const verifiability = r.verifiability === 'inferred' ? 'inferred' : 'verified';
+    if (!scope.verifiability(verifiability)) continue;
+    if (!inScopePath(r.source_file) || !inScopePath(r.target_file)) continue;
+    const source = resolve(r.source_file, r.source_symbol);
+    const target = resolve(r.target_file, r.target_symbol);
+    if (!source || !target) continue; // an end outside the index (externals: M5-19)
+    if (source.id === target.id) continue;
+    endFiles.add(source.file.path);
+    endFiles.add(target.file.path);
+    if (inherit) {
+      const owner = reportElement(view, source);
+      if (isType(owner)) {
+        const list = ofType.get(owner.id) ?? [];
+        list.push({ r, target, verifiability });
+        ofType.set(owner.id, list);
+      }
+      own.add(ownKey(source, target, r.edge_type));
+    }
+    evaluate(r, source, target, verifiability);
+  }
+
+  // Inherited dependencies (AR-02): each type with workspace ancestors answers for theirs, once per
+  // (target, edge type), through the shortest path to an ancestor that has it. A dependency on the
+  // type or on one of its own ancestors is the inheritance itself, decided where it is declared.
+  // The path is rebuilt only for a dependency derived (review of M5-09: linear memory in the depth).
+  if (inherit) {
+    const hierarchy = hierarchyOf(view);
+    for (const type of view.elements) {
+      if (!isType(type) || !type.topLevel || !inScopePath(type.file.path) || !membership.primaryOf(type).length) continue;
+      const reaches = hierarchy.reaches(type)!;
+      const first = new Map<string, number>(); // workspace ancestor → its first (shortest) entry
+      for (let i = 0; i < reaches.length; i++) {
+        const a = reaches.ancestor(i).element;
+        if (a && !first.has(a.id)) first.set(a.id, i);
+      }
+      if (!first.size) continue;
+      const derived = new Set<string>();
+      // The type's file stands for it too: an import a multi-type file makes is the file's own.
+      const fileEl = view.byId.get(`file:${type.file.path}`);
+      for (const [ancestorId, i] of first) {
+        for (const { r, target, verifiability } of ofType.get(ancestorId) ?? []) {
+          const tgt = reportElement(view, target);
+          if (tgt.id === type.id || first.has(tgt.id)) continue;
+          const key = ownKey(type, target, r.edge_type);
+          if (own.has(key) || derived.has(key) || (fileEl && own.has(ownKey(fileEl, target, r.edge_type)))) continue;
+          derived.add(key);
+          evaluate(r, type, target, verifiability, shownPath(reaches.path(i).map((a) => a.name)));
+        }
+      }
     }
   }
   return { dependencies: out, endFiles };

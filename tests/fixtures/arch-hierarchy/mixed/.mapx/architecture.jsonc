@@ -1,0 +1,12 @@
+// Synthetic fixture (M5-09 review): a Domain type that imports Mailer itself, in a file with two
+// top-level types, and inherits the same import from its Support base. With inheritDependencies the
+// file's own import must not come back as a second, inherited finding.
+{
+  "policy": { "inheritDependencies": true },
+  "layers": [
+    { "name": "Domain", "selectors": [{ "path": "php/App/Domain/**" }] },
+    { "name": "Support", "selectors": [{ "path": "php/App/Support/**" }] },
+    { "name": "Http", "selectors": [{ "path": "php/App/Http/**" }] }
+  ],
+  "rules": { "Domain": ["Support"], "Support": ["Http"], "Http": [] }
+}

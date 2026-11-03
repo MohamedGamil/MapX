@@ -39,6 +39,21 @@ export interface Element {
   docTags?: SymbolDocTag[];
   /** A symbol's restricted native visibility (Kotlin/C# `internal`, Java `package`, Rust `pub(crate)` …; M5-11). */
   visibility?: string;
+  /** A type's declaration line as stored (its base list; M5-09); absent for other symbols. */
+  signature?: string;
+  /** The traits a PHP type uses, fully qualified (`metadata.mixins`; M5-09). */
+  mixins?: string[];
+}
+
+/** What the index records of inheritance (M5-09): the stored edges, and the references outside it. */
+export interface InheritanceRecords {
+  /** `extends` and `implements` edges, as stored. */
+  edges: Array<{ sourceFile: string; sourceSymbol: string | null; targetFile: string; targetSymbol: string | null; type: 'extends' | 'implements' }>;
+  /**
+   * External-reference candidates (M5-19) that name a base: `extends` and `implements` ones (PHP's
+   * FQN through `use`, a TS class's base), and the imports that name what a base is written as.
+   */
+  candidates: Array<{ file: string; sourceSymbol: string | null; specifier: string; symbol: string | null; kind: string }>;
 }
 
 export interface ElementView {
@@ -53,6 +68,8 @@ export interface ElementView {
   workspacePackage(path: string): string | null;
   /** Identifies the scan the view was built from (M5-03 memoisation). */
   scanStamp: string;
+  /** Inheritance as stored, for the hierarchy selectors and inherited dependencies (M5-09). */
+  inheritance: InheritanceRecords;
 }
 
 // ─── Qualified names (AR-01) ─────────────────────────────────────────────────────────────────
@@ -173,7 +190,10 @@ const CONTAINER_RANK: Record<string, number> = { namespace: 0, module: 1, class:
 const NAMESPACE_LIKE = new Set(['namespace', 'module']);
 const RANK_TYPE = 2;
 
-interface SymbolRow { file_path: string; name: string; kind: string; scope: string | null; start_line: number | null; end_line: number | null; metadata?: string | null }
+interface SymbolRow { file_path: string; name: string; kind: string; scope: string | null; start_line: number | null; end_line: number | null; metadata?: string | null; signature?: string | null }
+
+/** Symbol kinds that declare a type, whose signature holds the base list (M5-09). */
+export const TYPE_SYMBOL_KINDS = new Set(['class', 'interface', 'trait', 'struct', 'enum', 'module']);
 
 /**
  * The innermost container of each symbol of one file, from line ranges: a container encloses a
@@ -219,26 +239,29 @@ export function scanStamp(store: Store): string {
   return [times, count('files'), count('symbols'), count('edges')].join(':');
 }
 
-/** The decorators, doc tags (M5-10) and restricted visibility (M5-11) a symbol row's metadata holds. */
-function annotationsOf(s: SymbolRow): { decorators?: SymbolDecorator[]; docTags?: SymbolDocTag[]; visibility?: string } {
-  if (!s.metadata || !(s.metadata.includes('"decorators"') || s.metadata.includes('"docTags"') || s.metadata.includes('"visibility"'))) return {};
+/** The decorators, doc tags (M5-10), restricted visibility (M5-11) and PHP trait uses (M5-09) a symbol row's metadata holds. */
+function annotationsOf(s: SymbolRow): { decorators?: SymbolDecorator[]; docTags?: SymbolDocTag[]; visibility?: string; mixins?: string[] } {
+  if (!s.metadata || !(s.metadata.includes('"decorators"') || s.metadata.includes('"docTags"') || s.metadata.includes('"visibility"') || s.metadata.includes('"mixins"'))) return {};
   try {
-    const m = JSON.parse(s.metadata) as { decorators?: unknown; docTags?: unknown; visibility?: unknown };
+    const m = JSON.parse(s.metadata) as { decorators?: unknown; docTags?: unknown; visibility?: unknown; mixins?: unknown };
     return {
       ...(Array.isArray(m.decorators) && m.decorators.length ? { decorators: m.decorators as SymbolDecorator[] } : {}),
       ...(Array.isArray(m.docTags) && m.docTags.length ? { docTags: m.docTags as SymbolDocTag[] } : {}),
       ...(typeof m.visibility === 'string' && m.visibility ? { visibility: m.visibility } : {}),
+      ...(Array.isArray(m.mixins) && m.mixins.length ? { mixins: m.mixins.filter((x): x is string => typeof x === 'string') } : {}),
     };
   } catch {
     return {};
   }
 }
 
+const hasTable = (store: Store, name: string) => !!store.raw.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
+
 export function buildElementView(store: Store, dir: string, repoPaths: Record<string, string> = {}): ElementView {
   const db = store.raw;
   const fileRows = db.prepare('SELECT path, repo, language, namespace, role, role_confidence FROM files').all() as Array<{ path: string; repo: string; language: string; namespace: string | null; role: string | null; role_confidence: number | null }>;
   const clusterRows = db.prepare('SELECT file_path, cluster_name FROM cluster_membership').all() as Array<{ file_path: string; cluster_name: string }>;
-  const symbolRows = db.prepare('SELECT file_path, name, kind, scope, start_line, end_line, metadata FROM symbols ORDER BY file_path, start_line').all() as unknown as SymbolRow[];
+  const symbolRows = db.prepare('SELECT file_path, name, kind, scope, start_line, end_line, metadata, signature FROM symbols ORDER BY file_path, start_line').all() as unknown as SymbolRow[];
   const clusters = new Map<string, string[]>();
   for (const r of clusterRows) {
     const list = clusters.get(r.file_path) ?? [];
@@ -406,7 +429,8 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
       const topLevel = scoped
         ? (!parent || namespaceLike(parent)) && !(scope && !(s.kind in CONTAINER_RANK) && !scopedToNamespace)
         : !s.scope;
-      add({ id: `symbol:${file.path}#${qn}#${s.kind}`, kind: 'symbol', qualifiedName: qn, file, name: s.name, symbolKind: s.kind, scope: s.scope, topLevel, ...annotationsOf(s) });
+      const signature = TYPE_SYMBOL_KINDS.has(s.kind) && s.signature ? { signature: s.signature } : {};
+      add({ id: `symbol:${file.path}#${qn}#${s.kind}`, kind: 'symbol', qualifiedName: qn, file, name: s.name, symbolKind: s.kind, scope: s.scope, topLevel, ...signature, ...annotationsOf(s) });
     }
   }
 
@@ -445,5 +469,15 @@ export function buildElementView(store: Store, dir: string, repoPaths: Record<st
 
   const stamp = scanStamp(store);
 
-  return { root: dir, elements, files, byId, ofFile: (p) => byFile.get(p) ?? [], workspacePackage, scanStamp: stamp };
+  // Inheritance (M5-09): the stored edges, and the candidates that name bases outside the index.
+  const inheritance: InheritanceRecords = {
+    edges: (db.prepare("SELECT source_file, source_symbol, target_file, target_symbol, edge_type FROM edges WHERE edge_type IN ('extends', 'implements') ORDER BY id").all() as Array<{ source_file: string; source_symbol: string | null; target_file: string; target_symbol: string | null; edge_type: 'extends' | 'implements' }>)
+      .map((r) => ({ sourceFile: r.source_file, sourceSymbol: r.source_symbol, targetFile: r.target_file, targetSymbol: r.target_symbol, type: r.edge_type })),
+    candidates: hasTable(store, 'external_ref_candidates')
+      ? (db.prepare("SELECT file_path, source_symbol, specifier, symbol, kind FROM external_ref_candidates WHERE kind IN ('extends', 'implements', 'import') ORDER BY id").all() as Array<{ file_path: string; source_symbol: string | null; specifier: string; symbol: string | null; kind: string }>)
+        .map((r) => ({ file: r.file_path, sourceSymbol: r.source_symbol, specifier: r.specifier, symbol: r.symbol, kind: r.kind }))
+      : [],
+  };
+
+  return { root: dir, elements, files, byId, ofFile: (p) => byFile.get(p) ?? [], workspacePackage, scanStamp: stamp, inheritance };
 }

@@ -18,6 +18,8 @@ export interface TraceEntry {
   selector: string;
   /** `self`, or the top-level symbol that put a file in the layer. */
   via: string;
+  /** A hierarchy match's inheritance path, from the type to the matched ancestor (M5-09). */
+  chain?: string[];
 }
 
 export interface LayerMembership {
@@ -56,10 +58,10 @@ export function computeMembership(view: ElementView, config: Pick<ArchitectureCo
   const evaluating = new Set<string>();
   const ctx: SelectorContext = { view, inLayer: (el, name) => inLayer(el, name) };
 
-  const firstMatch = (selectors: Selector[] | undefined, el: Element, prefix: string): string | null => {
+  const firstMatch = (selectors: Selector[] | undefined, el: Element, prefix: string): { at: string; chain?: string[] } | null => {
     for (let i = 0; i < (selectors ?? []).length; i++) {
       const m = matchSelector(selectors![i]!, el, ctx);
-      if (m.matched) return `${prefix}[${i}].${m.path}`;
+      if (m.matched) return { at: `${prefix}[${i}].${m.path}`, ...(m.chain ? { chain: m.chain } : {}) };
     }
     return null;
   };
@@ -70,9 +72,9 @@ export function computeMembership(view: ElementView, config: Pick<ArchitectureCo
     const layer = byName.get(layerName);
     if (!layer || evaluating.has(key)) return null; // unknown layer, or a cycle (the loader rejects both)
     evaluating.add(key);
-    const at = firstMatch(layer.selectors, el, 'selectors');
+    const hit = firstMatch(layer.selectors, el, 'selectors');
     evaluating.delete(key);
-    const entry = at ? { layer: layerName, selector: at, via: 'self' } : null;
+    const entry: TraceEntry | null = hit ? { layer: layerName, selector: hit.at, via: 'self', ...(hit.chain ? { chain: hit.chain } : {}) } : null;
     direct.set(key, entry);
     return entry;
   }
@@ -84,7 +86,7 @@ export function computeMembership(view: ElementView, config: Pick<ArchitectureCo
     for (const sym of view.ofFile(el.file.path)) {
       if (sym.kind !== 'symbol' || !sym.topLevel) continue;
       const hit = directMatch(sym, layerName);
-      if (hit) return { layer: layerName, selector: hit.selector, via: sym.qualifiedName };
+      if (hit) return { ...hit, via: sym.qualifiedName };
     }
     return null;
   }

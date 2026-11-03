@@ -190,6 +190,17 @@ export class PhpParser extends GenericWasmParser {
       // Attributes, named like classes, and PHPDoc tags (M5-10).
       for (const [symbol, node] of declarations) Object.assign(symbol.metadata, symbolAnnotations('php', node, resolveToFqn));
 
+      // The traits a class, trait or enum uses (`use HasUuid, \App\Logs;`), resolved like class
+      // names: the architecture `mixes` selector reads them (M5-09).
+      for (const [symbol, node] of declarations) {
+        if (symbol.kind !== 'class' && symbol.kind !== 'trait' && symbol.kind !== 'enum') continue;
+        const body = node.childForFieldName?.('body');
+        const mixins = (body?.namedChildren ?? [])
+          .filter((c: any) => c.type === 'use_declaration')
+          .flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'name' || n.type === 'qualified_name').map((n: any) => resolveToFqn(n.text)));
+        if (mixins.length) symbol.metadata.mixins = mixins;
+      }
+
       // Process standard captures (extends, implements, calls, instantiations)
       for (const [captureName, captures] of refCaptures) {
         if (captureName === 'ref.target_use_clause') continue;

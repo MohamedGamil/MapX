@@ -189,10 +189,10 @@ describe('layer membership on the fixture apps', () => {
   });
 
   it('reports selectors later tasks evaluate, and they match nothing', () => {
-    const m = computeMembership(apps['ts']!.view, { layers: [{ name: 'Old', overlay: true, selectors: [{ member: 'run' }, { any: [{ extends: 'Base' }] }] }] });
+    const m = computeMembership(apps['ts']!.view, { layers: [{ name: 'Old', overlay: true, selectors: [{ package: 'lodash' }, { any: [{ builtin: true }] }] }] });
     expect(m.unsupported).toEqual([
-      { layer: 'Old', selector: 'selectors[0]', key: 'member', task: 'M5-09' },
-      { layer: 'Old', selector: 'selectors[1]', key: 'extends', task: 'M5-09' },
+      { layer: 'Old', selector: 'selectors[0]', key: 'package', task: 'M5-24' },
+      { layer: 'Old', selector: 'selectors[1]', key: 'builtin', task: 'M5-24' },
     ]);
     expect(m.members('Old')).toEqual([]);
     expect(m.emptyLayers).toEqual([]); // an overlay is never "empty-layer"

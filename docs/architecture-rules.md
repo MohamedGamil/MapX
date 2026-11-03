@@ -14,6 +14,7 @@ What exists so far:
 - **CI reports** (M5-07): `--format sarif`, `github` (automatic inside GitHub Actions), `codeclimate` and `junit`. See [CI reports](#ci-reports).
 - **MCP tools** (M5-14, AR-19): `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed`, `mapx_arch_explain` and `mapx_arch_init` wrap `mapx check` and the introspection functions. See [mcp-integration.md](mcp-integration.md#architecture-rules-ar-19).
 - **Layer graphs** (M5-13): `mapx arch graph --format dot|svg|mermaid|dsm|json`. See [Layer graphs](#layer-graphs). CLI only: no MCP tool draws the graph yet.
+- **Hierarchy and member selectors, and inherited dependencies** (M5-09): `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`, and `policy.inheritDependencies`. See [Type hierarchy and members](#type-hierarchy-and-members).
 
 `@internal` markers come in M5-09 to M5-11.
 
@@ -112,16 +113,18 @@ A selector object has exactly one primary key, plus the modifiers that refine it
 | `framework` | a framework part read from stored edges: `route-handler` (target of a `route` or `http` edge), `middleware`, `model` (source of a `relation` edge), `job` and `event` (targets of `dispatch`), `listener` (target of `notify`), `resolver`, `component` (target of `render`), `http-client` (source of `http`) | the file |
 | `decorator` | a decorator, attribute or annotation of the symbol, by name or trailing segments, or `/regex/flags` (see below) | symbols only |
 | `docTag` (+ `value`) | a doc-block tag of the symbol, such as `@deprecated`, optionally with a value matching a regex (see below) | symbols only |
+| `extends`, `implements`, `inherits`, `mixes` | an ancestor of the type, transitively, by name or trailing segments, or `/regex/flags` (see [Type hierarchy and members](#type-hierarchy-and-members)) | types only |
+| `inheritanceDepth` | a type whose longest chain of bases is at least this long | types only |
+| `member` | a type with an own member whose name matches a regex | types only |
 | `layer` | membership in another layer | the element |
 | `all`, `any`, `not` | composition | |
 
-**Symbol-level selectors on files.** A `name`, `decorator` or `docTag` selector does not apply to a file. It is not a match, and neither is `not` of it, so `{ "all": [{ "path": "app/**" }, { "not": { "name": "Controller$" } }] }` never puts a file in a layer by itself. The file joins the layer only through a top-level symbol that is in it (see Membership). `all`, `any` and `not` use three-valued logic. `all` is inapplicable when no branch fails and one is inapplicable. `any` is inapplicable when no branch matches and one is inapplicable. So `{ "not": { "any": [{ "name": "Controller$" }, { "path": "app/Legacy/**" }] } }` does not select a file either.
+**Symbol-level selectors on files.** A `name`, `decorator`, `docTag` or hierarchy selector does not apply to a file. It is not a match, and neither is `not` of it, so `{ "all": [{ "path": "app/**" }, { "not": { "name": "Controller$" } }] }` never puts a file in a layer by itself. The file joins the layer only through a top-level symbol that is in it (see Membership). `all`, `any` and `not` use three-valued logic. `all` is inapplicable when no branch fails and one is inapplicable. `any` is inapplicable when no branch matches and one is inapplicable. So `{ "not": { "any": [{ "name": "Controller$" }, { "path": "app/Legacy/**" }] } }` does not select a file either.
 
 Not evaluated yet: these never match, `not` of them never matches either, and membership lists them as unsupported.
 
 | Selectors | Task that adds them |
 | --- | --- |
-| `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member` | M5-09 |
 | `package` | M5-24 (attribution M5-20 … M5-23) |
 | `builtin` | M5-24 |
 | `ambient` | M5-24 |
@@ -167,6 +170,45 @@ A block tag starts a line of the doc comment (after the leading `*`), so an inli
 { "name": "BillingAPI",  "selectors": [{ "docTag": "@internal", "value": "^billing" }] }
 ```
 
+### Type hierarchy and members
+
+The hierarchy selectors judge a type (a class, interface, trait, struct, enum or module symbol) by its ancestry. A member of a type (a method, property, field or constant) is judged by its type, as `path` judges a symbol by its file, so a layer `{ "extends": "Eloquent\\Model" }` holds the models' methods too, and a dependency a method has is checked. Another symbol never matches, and a file is inapplicable, as for `name`.
+
+**Where ancestry comes from.** A type's direct bases are:
+- the stored `extends` and `implements` edges, for bases the index resolved to a workspace type;
+- the base list its declaration's first line names, for bases outside the index. Each is named through what the file records: PHP name resolution (`use`, else the file's namespace: `Model` after `use Illuminate\Database\Eloquent\Model;` is that class, and a bare `P` in namespace `App` is `App\P`), a TS or JS import (`sequelize#Model`, the module and the name), a Python import (`models.Model` after `from django.db import models` is `django.db.models.Model`), or a Java, Kotlin or Scala `import` line (`org.springframework.data.jpa.domain.AbstractPersistable`). Otherwise the base keeps the name as written, generics dropped. A base so qualified that names a workspace type links to it;
+- mixins: the traits a PHP class, trait or enum uses (`use HasUuid;`, resolved like class names), and Scala and Dart `with` clauses.
+
+**What the file says wins over a same-named class.** The index may link a base to a workspace class only because the names match: `import { Model } from 'sequelize'` with a local `src/Model.ts`, `from django.db import models` with a local `Model`, or a Java import of Spring's `AbstractPersistable` with a local one. When the file's import says the base is outside the workspace, or the language's name resolution (PHP `use` and namespace, a JVM `import`) names another qualified name, the declared base is the ancestor and the edge is not followed. A base the file does resolve to the local class (`import { Model } from './Model'`) stays linked to it. A Kotlin type's qualified name is its path, so a Kotlin edge is never overruled.
+
+The base list is read for PHP, TypeScript and JavaScript, Python, Java, Kotlin, Scala, Dart, C#, Swift and Ruby. Kotlin tells a superclass by its constructor call (`Base()`); C# and Swift take the first base of a class as its superclass, except a C# `IName`. Python and Ruby bases are all `extends`, and an interface's bases are `extends` in every language, whatever kind the index stored (Kotlin and C# store `interface B : A` as implements). Go embedding is stored as `extends` and counts as such; Go's structural interfaces, Ruby `include`, Rust `impl Trait for` and C++ base lists are not read.
+
+**Closure.** Ancestry is transitive. A base outside the index is a leaf: nothing is known of its own bases, so `extends Model` matches a class two levels below `Eloquent\Model` only through a workspace base in between. A cycle (`class A extends B`, `class B extends A`: invalid code, valid input) is cut: every type is visited once per kind of path, and a type is never its own ancestor. The search keeps, for each ancestor reached, only the step it was reached from, so memory grows with the number of ancestors, not with the length of their paths; a path is rebuilt only when it is shown.
+
+| Selector | Matches a type with an ancestor … |
+| --- | --- |
+| `extends` | reached through `extends` hops only (a class's superclasses, an interface's parent interfaces) |
+| `implements` | reached through a path with an `implements` hop: an interface it implements, a parent of one, or one a superclass implements |
+| `mixes` | reached through a path whose last hop is a mixin: a trait it uses, or one a base uses. A used trait is not `extends` |
+| `inherits` | reached through any path |
+
+**Values.** An ancestor value is a name or its trailing namespace segments, case-insensitive: `Model`, `Eloquent\Model` and `Illuminate\Database\Eloquent\Model` all match `Illuminate\Database\Eloquent\Model`, and `sequelize#Model` matches the TS base above (segments split at `\`, `.`, `#`, `/` and `::`). A base outside the index known only as written (no import qualified it) also matches a qualified value it ends: `org.acme.Base` matches `Base`. `/regex/flags` tests the ancestor's qualified name.
+
+**`inheritanceDepth: N`** matches a type whose longest chain of bases is at least N long. A base outside the index counts as one level. Depth is computed once for all types, over the strongly connected components of the base graph: the types of a cycle count once each, so in `A extends B extends A` each has depth 1. Within a cycle this is an upper bound when no single chain passes through all of its types. The explanation shows a longest chain found from the type, never revisiting a type.
+
+**`member: "regex"`** matches a type with an own member (method, property, field, constant) whose name matches the regex, case-insensitive unless written `/…/flags`. A PHP property's `$` is optional. Inherited members do not count.
+
+**Explanations.** A hierarchy match records its chain, from the type to the ancestor that matched (for `inheritanceDepth`, the longest chain; for `member`, the type and the member). `mapx arch which` and `mapx arch layers <layer> --why` show it: `Domain  ← selectors[0].extends: App\Domain\Order → App\Support\BaseModel → Illuminate\Database\Eloquent\Model`, and with `--format json` it is `chain` in the trace entry or member.
+
+```jsonc
+{ "name": "Models",   "selectors": [{ "extends": "Eloquent\\Model" }] },
+{ "name": "Payables", "selectors": [{ "implements": "Payable" }] },
+{ "name": "Deep",     "selectors": [{ "inheritanceDepth": 4 }], "overlay": true },
+{ "name": "Handlers", "selectors": [{ "all": [{ "path": "src/**" }, { "member": "^handle$" }] }] }
+```
+
+**Inherited dependencies (AR-02).** With `"policy": { "inheritDependencies": true }`, a type also answers for the dependencies of its workspace ancestors, through every kind of hop. Each is decided again with the type as source, by the same [evaluation](#evaluation) chain and the type's own layers. Its finding carries `via`, the inheritance path from the type to the ancestor that has the dependency, and its message ends `inherited via App\Domain\Order → App\Support\BaseModel`. A dependency is derived once per type, target and edge type, through the shortest path. It is not derived when the type has it itself, or the type's file does (an import in a file with several types belongs to the file; that finding has no `via`), nor when its target is the type or one of its own ancestors (that is the inheritance itself, decided where it is declared). An inherited finding has no line: its edge is in the ancestor's file. A `via` longer than eight names shows the first five and the last two around one `… N more …` entry. The default, `false`, derives nothing.
+
 ## Membership
 
 - **Symbols.** A symbol is in the layers whose selectors match it. File-level selectors (`path`, `repo` and the like) judge a symbol by its file, so a `path` layer covers every symbol under its directory.
@@ -175,7 +217,7 @@ A block tag starts a line of the doc comment (after the leading `*`), so an inli
 - **No flow between symbols.** One symbol's layer never passes to another symbol.
 - **Several layers.** An element in more than one non-overlay layer will get a `multi-layer` warning. A non-overlay layer that matches nothing will get an `empty-layer` warning.
 - **Private parts.** A layer's `private` selectors mark the elements only that layer may reach. A file is private to a layer when its `private` selectors match the file or one of its top-level symbols.
-- **Explanations.** Membership records why an element is in a layer: the selector position (`selectors[0].name`), and for a file the top-level symbol that put it there.
+- **Explanations.** Membership records why an element is in a layer: the selector position (`selectors[0].name`), for a file the top-level symbol that put it there, and for a hierarchy match the inheritance chain.
 - **Caching.** Membership is computed once per scan and configuration.
 
 ## Rules
@@ -426,16 +468,16 @@ The `mapx arch` subcommands answer questions about the configuration from the in
 | --- | --- | --- |
 | `layers` | Which layers are there, and how big? | `{ layers: [{ name, overlay, elements, files }] }`, counted as `mapx check` counts them: every element, and the files among them |
 | `layers <layer> [--why]` | Which elements are in this layer? | `{ name, overlay, elements, files, total, members: [element] }`. See below |
-| `which <element>` | Which layers is this element in, and why? | `{ query, matches: [{ …element, layers, private, trace: [{ layer, selector, via }], inScope }] }`. See below |
+| `which <element>` | Which layers is this element in, and why? | `{ query, matches: [{ …element, layers, private, trace: [{ layer, selector, via, chain? }], inScope }] }`. See below |
 | `unassigned` | What is in no layer? | `{ total, elements: [element] }`. See below. **Exit 2** when `total` is not 0 |
-| `deps <from> [to]` | Which concrete edges go from one layer to another? | `{ from, to, counts: { allowed, violation, uncovered }, dependencies: [{ source: { …element, line }, target, targetLayers, edgeType, verifiability, kind, rule?, severity, violatedLayers? }] }`. See below |
+| `deps <from> [to]` | Which concrete edges go from one layer to another? | `{ from, to, counts: { allowed, violation, uncovered }, dependencies: [{ source: { …element, line }, target, targetLayers, edgeType, verifiability, kind, rule?, severity, violatedLayers?, via? }] }`. See below |
 | `unused [--limit N]` | Which allowances are used at most N times (default 0)? | `{ limit, total, allowances: [{ from, to, rule, types, severity, uses }] }`. See below |
 | `changed [files…] [--since <ref>] [--with-dependents]` | Which layers do these files touch, and which layers depend on them? | `{ files: [{ file, indexed, inScope, layers }], layers, dependents?: [{ layer, files }], unassignedDependents? }`. See below |
 | `allowed <from> <to> [--type T]` | Would a dependency from `from` to `to` pass `mapx check`? | Described below. **Exit 1** when `mapx check` would fail on it |
 
 - **`layers <layer>`:**
   - Members are files and top-level symbols; `--nested` adds every symbol.
-  - `--why` adds `selector`, the position that matched (`selectors[0].all`), and `via`: `self`, or the top-level symbol that put a file in the layer.
+  - `--why` adds `selector`, the position that matched (`selectors[0].all`), and `via`: `self`, or the top-level symbol that put a file in the layer. A hierarchy match adds `chain`, the inheritance path that matched.
 - **`which`:**
   - `layers` includes overlays, and `private` lists the layers the element is private to.
   - A name that matches several elements lists them all.

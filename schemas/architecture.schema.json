@@ -98,7 +98,7 @@
         },
         "inheritDependencies": {
           "type": "boolean",
-          "description": "A subclass inherits its parents' dependencies. Default: false."
+          "description": "A type answers for the dependencies of its workspace ancestors (through extends, implements and mixins, transitively): each is decided again with the type as source, and its finding names the inheritance path in via. A dependency the type has itself is not derived again. Default: false."
         },
         "uncovered": {
           "type": "object",
@@ -314,27 +314,27 @@
         "extends": {
           "type": "string",
           "minLength": 1,
-          "description": "Transitively extends this class (qualified name)."
+          "description": "A type with an ancestor of this name through extends hops only, transitively, workspace types and bases outside the index alike (Eloquent\\Model, Illuminate\\Database\\Eloquent\\Model, django.db.models.Model, sequelize#Model). The value is a name or its trailing namespace segments, case-insensitive, or /regex/flags on the ancestor's qualified name. A member of a type is judged by its type; never matches a file."
         },
         "implements": {
           "type": "string",
           "minLength": 1,
-          "description": "Transitively implements this interface."
+          "description": "A type with an ancestor of this name through a path with an implements hop: through an interface that extends it, or a superclass that implements it. Values as for extends. A member of a type is judged by its type; never matches a file."
         },
         "inherits": {
           "type": "string",
           "minLength": 1,
-          "description": "Extends or implements this, transitively."
+          "description": "A type with an ancestor of this name through any path of extends, implements and mixin hops. Values as for extends. A member of a type is judged by its type; never matches a file."
         },
         "mixes": {
           "type": "string",
           "minLength": 1,
-          "description": "Uses this trait or mixin."
+          "description": "A type that mixes this in: a path whose last hop is a mixin (a PHP trait use, a Scala or Dart with), directly or through a base. Values as for extends. A member of a type is judged by its type; never matches a file."
         },
         "inheritanceDepth": {
           "type": "integer",
           "minimum": 1,
-          "description": "Ancestry at least this deep."
+          "description": "A type whose longest chain of bases is at least this long; a base outside the index counts as one level, and a cycle is cut. A member of a type is judged by its type; never matches a file."
         },
         "decorator": {
           "type": "string",
@@ -354,7 +354,7 @@
         "member": {
           "type": "string",
           "minLength": 1,
-          "description": "Has a method or field whose name matches this regex."
+          "description": "A type with an own member (method, property, field, constant) whose name matches this regex, case-insensitive unless written /…/flags; a PHP property's $ is optional. Inherited members do not count. A member of a type is judged by its type; never matches a file."
         },
         "package": {
           "type": "string",

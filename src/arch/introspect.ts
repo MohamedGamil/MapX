@@ -148,7 +148,7 @@ export function resolveElement(ctx: ArchContext, query: string): Element {
 // ─── AR-13a: layer members ────────────────────────────────────────────────────────────────────
 
 export interface LayerSummary { name: string; overlay: boolean; elements: number; files: number }
-export interface LayerMember extends ElementRef { selector?: string; via?: string }
+export interface LayerMember extends ElementRef { selector?: string; via?: string; chain?: string[] }
 export interface LayerMembers extends LayerSummary { total: number; members: LayerMember[] }
 
 /** Every layer with its size (as `mapx check` counts: every element, and the files among them). */
@@ -164,7 +164,8 @@ export function layerSummaries(ctx: ArchContext): { layers: LayerSummary[] } {
 /**
  * The members of `layer`: files and top-level symbols (every symbol with `nested`). With `why`,
  * each names the selector that matched (`selectors[0].all[0].path`) and `via`: `self`, or the
- * top-level symbol that put a file in the layer.
+ * top-level symbol that put a file in the layer, and for a hierarchy selector (M5-09) `chain`, the
+ * inheritance path from the type to the ancestor that matched.
  */
 export function layerMembers(ctx: ArchContext, layer: string, options: { why?: boolean; nested?: boolean } = {}): LayerMembers {
   requireLayer(ctx, layer);
@@ -172,7 +173,7 @@ export function layerMembers(ctx: ArchContext, layer: string, options: { why?: b
   const members = ctx.membership.members(layer).filter((e) => listed(e, !!options.nested)).sort(byFile).map((e): LayerMember => {
     if (!options.why) return elementRef(e);
     const t = ctx.membership.explain(e).find((x) => x.layer === layer)!;
-    return { ...elementRef(e), selector: t.selector, via: t.via };
+    return { ...elementRef(e), selector: t.selector, via: t.via, ...(t.chain ? { chain: t.chain } : {}) };
   });
   return { ...summary, total: members.length, members };
 }
@@ -259,6 +260,8 @@ export interface ConcreteDependency {
   rule?: string;
   severity: FindingSeverity;
   violatedLayers?: string[];
+  /** An inherited dependency (`policy.inheritDependencies`, M5-09): the path from the source type to the ancestor whose edge it is. */
+  via?: string[];
 }
 
 /**
@@ -279,7 +282,7 @@ export function layerDependencies(ctx: ArchContext, from: string, to?: string): 
       source: { ...elementRef(d.source), ...(d.line !== undefined ? { line: d.line } : {}) },
       target: d.targetPackage ? { element: d.targetPackage.name, kind: 'file', file: d.targetPackage.dir } : elementRef(d.target),
       targetLayers: d.targetLayers, edgeType: d.edgeType, verifiability: d.verifiability, kind: d.kind,
-      ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}),
+      ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}), ...(d.via ? { via: d.via } : {}),
     }));
   const key = (d: ConcreteDependency) => [d.source.file, String(d.source.line ?? 0).padStart(9, '0'), d.source.element, d.target.element, d.edgeType].join('\u0000');
   deps.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));

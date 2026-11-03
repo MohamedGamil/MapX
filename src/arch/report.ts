@@ -101,6 +101,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
         target: { element: t, file: targetFile, ...(targetLayer ? { layer: targetLayer } : {}), repo: tgt.file.repo },
         edgeType: d.edgeType, verifiability: d.verifiability, edges: 0,
         fingerprint: fingerprint(rule, idS, idT, d.edgeType, sRepo, tRepo), message: '',
+        ...(d.via ? { via: d.via } : {}),
         ...(idS !== s || idT !== t || sRepo || tRepo ? { identity: { source: idS, target: idT, ...(sRepo || tRepo ? { sourceRepo: sRepo, targetRepo: tRepo } : {}) } } : {}),
       };
       byKey.set(key, finding);
@@ -132,6 +133,8 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
           : d.rule === 'internal-element' && d.internal
             ? `${s} must not depend on ${t}: ${internalName(d.internal.element, t)} is internal to ${violated} (${d.internal.marker}) (${[...m.sourceLayers].join(', ')} on ${violated})`
             : `${s} must not depend on ${t} (${[...m.sourceLayers].join(', ')} on ${violated})`;
+    // An inherited dependency (M5-09) names the inheritance path it comes through.
+    if (finding.via) finding.message += `, inherited via ${finding.via.join(' → ')}`;
   }
   for (const [f, m] of meta) f.source!.layer = [...m.sourceLayers].sort(byOrder).join(', ');
 

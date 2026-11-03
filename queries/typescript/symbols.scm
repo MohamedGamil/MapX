@@ -12,6 +12,10 @@
 (class_declaration
   name: (type_identifier) @symbol.name) @symbol.kind_class
 
+; `abstract class Base {}` is a class too (M5-09).
+(abstract_class_declaration
+  name: (type_identifier) @symbol.name) @symbol.kind_class
+
 (method_definition
   name: (property_identifier) @symbol.name) @symbol.kind_method
 

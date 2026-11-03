@@ -316,7 +316,7 @@ describe('review of M5-04: overlays, several target layers, Go packages, homonym
   });
 
   it('an unsupported selector is reported as a warning', () => {
-    const r = reportWith('php', (c) => ({ ...c, layers: [...c.layers, { name: 'Old', overlay: true, selectors: [{ member: 'run' }] }] }));
+    const r = reportWith('php', (c) => ({ ...c, layers: [...c.layers, { name: 'Old', overlay: true, selectors: [{ package: 'monolog/*' }] }] }));
     expect(r.findings.filter((f) => f.rule === 'unsupported-selector').map((f) => [f.kind, f.layer])).toEqual([['warning', 'Old']]);
   });
 });

@@ -1,0 +1,42 @@
+// Synthetic fixture (M5-09): as the PHP app.
+{
+  "$schema": "../../../../../schemas/architecture.schema.json",
+  "policy": {
+    "inheritDependencies": true
+  },
+  "layers": [
+    {
+      "name": "Domain",
+      "selectors": [
+        {
+          "path": "src/main/java/com/acme/domain/**"
+        }
+      ]
+    },
+    {
+      "name": "Support",
+      "selectors": [
+        {
+          "path": "src/main/java/com/acme/support/**"
+        }
+      ]
+    },
+    {
+      "name": "Http",
+      "selectors": [
+        {
+          "path": "src/main/java/com/acme/http/**"
+        }
+      ]
+    }
+  ],
+  "rules": {
+    "Domain": [
+      "Support"
+    ],
+    "Support": [
+      "Http"
+    ],
+    "Http": []
+  }
+}

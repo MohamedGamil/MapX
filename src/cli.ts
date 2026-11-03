@@ -2674,7 +2674,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     }
     const m = layerMembers(ctx, String(layer), { why: !!opts.why, nested: !!opts.nested });
     const lines = [`${m.name}${m.overlay ? ' (overlay)' : ''}: ${m.files} file(s), ${m.elements} element(s)`];
-    for (const e of m.members) lines.push(`  ${refText(e)}${e.selector ? `  ← ${e.selector}${e.via !== 'self' ? ` via ${e.via}` : ''}` : ''}`);
+    for (const e of m.members) lines.push(`  ${refText(e)}${e.selector ? `  ← ${e.selector}${e.chain ? `: ${e.chain.join(' → ')}` : ''}${e.via !== 'self' ? ` via ${e.via}` : ''}` : ''}`);
     if (!m.members.length) lines.push('  (no members)');
     return { json: m, text: lines.join('\n') };
   }, { configure: (c) => c.argument('[layer]', 'A layer name').option('--why', 'Name the selector that put each member in the layer').option('--nested', 'List members of types too (methods, properties)') });
@@ -2685,7 +2685,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     for (const m of r.matches) {
       lines.push(`${m.element} (${m.symbolKind ?? m.kind}, ${m.file})`);
       if (!m.trace.length) lines.push('  in no layer');
-      for (const t of m.trace) lines.push(`  ${t.layer}  ← ${t.selector}${t.via !== 'self' ? ` via ${t.via}` : ''}`);
+      for (const t of m.trace) lines.push(`  ${t.layer}  ← ${t.selector}${t.chain ? `: ${t.chain.join(' → ')}` : ''}${t.via !== 'self' ? ` via ${t.via}` : ''}`);
       if (m.private.length) lines.push(`  private to ${m.private.join(', ')}`);
     }
     return { json: r, text: lines.join('\n') };
@@ -2700,7 +2700,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   archQuestion('deps', 'The stored edges from one layer to another (or to every other), with file:line, edge type, verifiability and decision (AR-13d)', (ctx, [from, to]) => {
     const r = layerDependencies(ctx, String(from), to === undefined ? undefined : String(to));
     const mark = { allowed: '✔', violation: '✖', uncovered: '?' } as const;
-    const lines = r.dependencies.map((d) => `${mark[d.kind]} ${d.source.file}${d.source.line !== undefined ? `:${d.source.line}` : ''}  ${d.source.element} → ${d.target.element} (${d.edgeType}, ${d.verifiability}) [${d.targetLayers.join(', ') || 'no layer'}]${d.kind === 'violation' ? `  ${d.rule} [${d.severity}]` : ''}`);
+    const lines = r.dependencies.map((d) => `${mark[d.kind]} ${d.source.file}${d.source.line !== undefined ? `:${d.source.line}` : ''}  ${d.source.element} → ${d.target.element} (${d.edgeType}, ${d.verifiability}) [${d.targetLayers.join(', ') || 'no layer'}]${d.kind === 'violation' ? `  ${d.rule} [${d.severity}]` : ''}${d.via ? `  inherited via ${d.via.join(' → ')}` : ''}`);
     lines.push(`${r.from} → ${r.to ?? 'any layer'}: ${r.dependencies.length} edge(s): ${r.counts.allowed} allowed, ${r.counts.violation} violating, ${r.counts.uncovered} uncovered.`);
     return { json: r, text: lines.join('\n') };
   }, { configure: (c) => c.argument('<from>', 'Source layer').argument('[to]', 'Target layer (default: every other layer, and none)') });

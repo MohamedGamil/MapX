@@ -495,7 +495,7 @@ A configuration or baseline error is a tool error carrying the report of errors,
 #### `mapx_arch_layers`
 Answers what `mapx arch layers` and `mapx arch unassigned` answer (AR-13a–c):
 - **Without arguments:** `{ layers: [{ name, overlay, elements, files }] }`.
-- **With `layer`:** the layer's files and top-level symbols, `{ name, overlay, elements, files, total, members, truncated }`. `why: true` names the selector that matched each member, and `nested: true` adds the members of types.
+- **With `layer`:** the layer's files and top-level symbols, `{ name, overlay, elements, files, total, members, truncated }`. `why: true` names the selector that matched each member (for a hierarchy selector such as `extends`, also `chain`, the inheritance path that matched), and `nested: true` adds the members of types.
 - **With `unassigned: true`:** the elements in no layer, `{ total, elements, truncated }`, narrowed by `kind` and `path`.
 
 Parameters:
@@ -518,7 +518,7 @@ Parameters:
 #### `mapx_arch_explain`
 Explains why an element is in its layers, and why a dependency is allowed or a violation. The result is `{ element, layer?, dependency? }`:
 - `element` is `mapx arch which <element> --json`, the selector trace of every match.
-- `layer` is `{ name, matches: [{ element, inLayer, selector?, via? }] }`.
+- `layer` is `{ name, matches: [{ element, inLayer, selector?, via?, chain? }] }`. `chain` is a hierarchy match's inheritance path, as in the `which` trace.
 - `dependency` is the `mapx_arch_allowed` answer for `element` → `to`, the rule trace.
 
 Parameters:

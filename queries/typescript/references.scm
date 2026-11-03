@@ -25,6 +25,25 @@
       (generic_type name: (type_identifier) @ref.target_implements)
     ]))) @ref.type_implements
 
+; An abstract class's bases, and the interfaces an interface extends (M5-09).
+(abstract_class_declaration
+  (class_heritage
+    (extends_clause
+      (identifier) @ref.target_extends))) @ref.type_extends
+
+(abstract_class_declaration
+  (class_heritage
+    (implements_clause [
+      (type_identifier) @ref.target_implements
+      (generic_type name: (type_identifier) @ref.target_implements)
+    ]))) @ref.type_implements
+
+(interface_declaration
+  (extends_type_clause [
+    (type_identifier) @ref.target_extends
+    (generic_type name: (type_identifier) @ref.target_extends)
+  ])) @ref.type_extends
+
 (new_expression
   constructor: (identifier) @ref.target_instantiation) @ref.type_instantiation
 

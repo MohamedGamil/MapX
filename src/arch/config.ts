@@ -633,8 +633,8 @@ function mergeAndValidate(docs: LoadedDoc[], view: string | null): { config: Arc
           if (problem) issue({ file: origin.file, pointer: at(pointer, key) }, problem);
         }
       }
-      // `path` and `decorator` (M5-10) are regexes only when written `/…/flags`.
-      for (const key of ['path', 'decorator'] as const) {
+      // `path`, `decorator` (M5-10) and the ancestor values (M5-09) are regexes only when written `/…/flags`.
+      for (const key of ['path', 'decorator', 'extends', 'implements', 'inherits', 'mixes'] as const) {
         if (typeof sel[key] === 'string' && /^\/.*\/[a-z]*$/.test(sel[key] as string)) {
           const problem = regexProblem(sel[key] as string);
           if (problem) issue({ file: origin.file, pointer: at(pointer, key) }, problem);

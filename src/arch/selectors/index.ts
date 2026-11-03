@@ -1,6 +1,7 @@
 // Layer selectors (M5-03; docs/research/deptrac AR-04). Each is a pure function of an element and
 // the element view, and says which part of the selector decided the match (the trace that
-// `explain` shows). Symbol-level selectors (`name`, `kind`, `decorator`, `docTag`) never match a file element; file-level
+// `explain` shows). Symbol-level selectors (`name`, `kind`, `decorator`, `docTag`, and M5-09's
+// `extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`) never match a file element; file-level
 // ones (`path`, `repo`, `language`, `role`, `cluster`, `workspacePackage`, `framework`) judge a
 // symbol by its file. Selectors that need data later tasks add never match here and are reported.
 import type { Selector } from '../schema.js';
@@ -8,12 +9,13 @@ import type { Element, ElementView } from '../elements.js';
 import { globOrRegex, nameOrGlob, regex } from './patterns.js';
 import { hasDecorator } from './decorator.js';
 import { hasDocTag } from './doc-tag.js';
+import { hierarchyMatch, hierarchyOf, isType, type HierarchyKey } from './hierarchy.js';
+import { matchingMember } from './member.js';
 
 export { globOrRegex, regex } from './patterns.js';
 
 /** Selector keys this version cannot evaluate yet, with the task that adds them. */
 export const UNSUPPORTED_SELECTORS: Record<string, string> = {
-  extends: 'M5-09', implements: 'M5-09', inherits: 'M5-09', mixes: 'M5-09', inheritanceDepth: 'M5-09', member: 'M5-09',
   package: 'M5-24', builtin: 'M5-24', ambient: 'M5-24',
 };
 
@@ -35,6 +37,11 @@ export interface SelectorMatch {
    * matches and one is inapplicable.
    */
   inapplicable?: boolean;
+  /**
+   * For a hierarchy selector (M5-09): the inheritance path that decided the match, from the type to
+   * the matched ancestor (`inheritanceDepth`: the longest chain; `member`: the type and the member).
+   */
+  chain?: string[];
 }
 
 const LANGUAGE_ALIASES: Record<string, string> = { ts: 'typescript', js: 'javascript', py: 'python', 'c#': 'c-sharp', csharp: 'c-sharp', 'c++': 'cpp', kt: 'kotlin', rb: 'ruby', rs: 'rust', golang: 'go' };
@@ -56,13 +63,14 @@ export function matchSelector(selector: Selector, element: Element, ctx: Selecto
   if (selector.all) {
     if (!selector.all.length) return no;
     let na = false;
+    let chain: string[] | undefined;
     for (const s of selector.all) {
       const m = matchSelector(s, element, ctx);
-      if (m.matched) continue;
+      if (m.matched) { chain ??= m.chain; continue; }
       if (!m.inapplicable) return no;
       na = true;
     }
-    return na ? inapplicable : yes('all');
+    return na ? inapplicable : { ...yes('all'), ...(chain ? { chain } : {}) };
   }
   // Three-valued (Kleene) logic: `any` matches when a branch matches; otherwise it is inapplicable
   // when any branch is, so `not` of it does not match either (review of M5-03-R1).
@@ -70,7 +78,7 @@ export function matchSelector(selector: Selector, element: Element, ctx: Selecto
     let na = false;
     for (let i = 0; i < selector.any.length; i++) {
       const m = matchSelector(selector.any[i]!, element, ctx);
-      if (m.matched) return yes(`any[${i}].${m.path}`);
+      if (m.matched) return { ...m, path: `any[${i}].${m.path}` };
       if (m.inapplicable) na = true;
     }
     return na ? inapplicable : no;
@@ -93,6 +101,30 @@ export function matchSelector(selector: Selector, element: Element, ctx: Selecto
   if (selector.docTag !== undefined) {
     if (element.kind !== 'symbol') return inapplicable;
     return hasDocTag(element, selector.docTag, selector.value === undefined ? undefined : regex(selector.value)) ? yes('docTag') : no;
+  }
+  // Type ancestry and members (M5-09, src/arch/selectors/hierarchy.ts): a type's, never a file's.
+  // A member (method, property …) is judged by the type it belongs to, as a symbol is judged by its
+  // file for `path`: a layer of Eloquent models holds their methods too (review of M5-09).
+  const typeOf = () => (isType(element) ? element : hierarchyOf(ctx.view).ownerType(element));
+  for (const key of ['extends', 'implements', 'inherits', 'mixes'] as const satisfies readonly HierarchyKey[]) {
+    if (selector[key] === undefined) continue;
+    if (element.kind !== 'symbol') return inapplicable;
+    const type = typeOf();
+    const chain = type ? hierarchyMatch(ctx.view, type, key, selector[key]!) : null;
+    return chain ? { ...yes(key), chain } : no;
+  }
+  if (selector.inheritanceDepth !== undefined) {
+    if (element.kind !== 'symbol') return inapplicable;
+    const h = hierarchyOf(ctx.view);
+    const type = typeOf();
+    if (!type || h.depth(type) < selector.inheritanceDepth) return no;
+    return { ...yes('inheritanceDepth'), chain: h.longestChain(type) };
+  }
+  if (selector.member !== undefined) {
+    if (element.kind !== 'symbol') return inapplicable;
+    const type = typeOf();
+    const m = type ? matchingMember(ctx.view, type, selector.member) : null;
+    return m ? { ...yes('member'), chain: [type!.qualifiedName, m.qualifiedName] } : no;
   }
   if (selector.repo !== undefined) return nameOrGlob(selector.repo)(file.repo) ? yes('repo') : no;
   if (selector.language !== undefined) return languageMatches(file.language, selector.language) ? yes('language') : no;

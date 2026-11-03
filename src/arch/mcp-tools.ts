@@ -58,7 +58,7 @@ export const ARCH_TOOLS = [
   },
   {
     name: 'mapx_arch_layers',
-    description: `The layers of the architecture configuration (AR-13a–c), as \`mapx arch layers\` / \`mapx arch unassigned --json\`. Without arguments: { layers: [{ name, overlay, elements, files }] }. With layer: its members (files and top-level symbols; nested adds members of types), why naming the selector that matched each. With unassigned: true: the elements in no layer (kind, path filters). Lists are capped by limit, with total and truncated. ${ERRORS}`,
+    description: `The layers of the architecture configuration (AR-13a–c), as \`mapx arch layers\` / \`mapx arch unassigned --json\`. Without arguments: { layers: [{ name, overlay, elements, files }] }. With layer: its members (files and top-level symbols; nested adds members of types), why naming the selector that matched each (and for a hierarchy selector, chain: the inheritance path that matched). With unassigned: true: the elements in no layer (kind, path filters). Lists are capped by limit, with total and truncated. ${ERRORS}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -93,7 +93,7 @@ export const ARCH_TOOLS = [
   },
   {
     name: 'mapx_arch_explain',
-    description: `Why an element is in its layers, and why a dependency is allowed or a violation (AR-19): the selector trace of \`mapx arch which\` and the rule trace of \`mapx arch allowed\`. Returns { element: { query, matches[{ element, layers, private, trace[{ layer, selector, via }], inScope }] }, layer?: { name, matches[{ element, inLayer, selector?, via? }] }, dependency?: <mapx_arch_allowed answer> }. ${ERRORS}`,
+    description: `Why an element is in its layers, and why a dependency is allowed or a violation (AR-19): the selector trace of \`mapx arch which\` and the rule trace of \`mapx arch allowed\`. Returns { element: { query, matches[{ element, layers, private, trace[{ layer, selector, via, chain? }], inScope }] }, layer?: { name, matches[{ element, inLayer, selector?, via?, chain? }] }, dependency?: <mapx_arch_allowed answer> }. ${ERRORS}`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -333,7 +333,7 @@ function explain(args: Record<string, unknown>, ctx: ArchContext): ToolResult {
       name: layer,
       matches: element.matches.map((m) => {
         const t = m.trace.find((x) => x.layer === layer);
-        return { element: m.element, inLayer: !!t, ...(t ? { selector: t.selector, via: t.via } : {}) };
+        return { element: m.element, inLayer: !!t, ...(t ? { selector: t.selector, via: t.via, ...(t.chain ? { chain: t.chain } : {}) } : {}) };
       }),
     };
   }

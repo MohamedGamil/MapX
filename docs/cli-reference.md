@@ -842,7 +842,7 @@ Questions about the architecture configuration, answered from the index without 
 
 ```bash
 mapx arch layers [layer] [--why] [--nested]          # layers and sizes; a layer's members
-mapx arch which <element>                            # the layers of a file or symbol, and why
+mapx arch which <element>                            # the layers of a file or symbol, and why (with a hierarchy match's chain)
 mapx arch unassigned [--kind <kind>] [--path <path>] [--nested]
 mapx arch deps <from> [to]                           # concrete edges from one layer to another
 mapx arch unused [--limit <n>]                       # allowances used at most n times (default 0)
@@ -945,6 +945,7 @@ Options:
 - `--fail-on-uncovered`: exit 2 when there are any (also lists them).
 - `--report-skipped`: list violations a baseline or `--compare` skips. Each has `skippedBy` set to `baseline` or `compare`.
 - `--report-allowed`: list allowed dependencies too.
+- An inherited dependency (`policy.inheritDependencies`) has `via`, the inheritance path from the source type to the ancestor whose dependency it is, and its message ends `inherited via …`. See [architecture-rules.md](architecture-rules.md#type-hierarchy-and-members).
 - `--fail-on warn`: warn-level violations (advisory rules, inferred edges) and warnings (`multi-layer`, `empty-layer`, `unsupported-selector`) also fail the run.
 - `--layer <name>`: only findings whose source or target layer is `<name>`, or that are about that layer. A name that is not a layer of the configuration is an error (exit 3), so a typo cannot turn the check off.
 - `--rule <rule>`: only findings of one rule: `disallowed-layer`, `internal-element`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`. An unknown rule is an error (exit 3).

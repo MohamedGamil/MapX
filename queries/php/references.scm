@@ -22,6 +22,11 @@
   (class_interface_clause
     [(name) (qualified_name)] @ref.target_implements)) @ref.type_implements
 
+; An interface's parents: `interface Billable extends Payable, Countable` (M5-09).
+(interface_declaration
+  (base_clause
+    [(name) (qualified_name)] @ref.target_extends)) @ref.type_extends
+
 ; Instantiation
 (object_creation_expression
   [(name) (qualified_name)] @ref.target_instantiation) @ref.type_instantiation
