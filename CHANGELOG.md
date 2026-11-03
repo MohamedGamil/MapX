@@ -77,6 +77,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
+- A method called on a new instance (`new Order().total()`, `(new Order())->total()`, Python `Order().total()`) now links the method that class declares, or one of its bases, in TS/JS, PHP, Java, C# and Python, instead of no edge or a same-named method of another class; PHP methods in a file of several classes now carry their own class (M2-12).
+- References inside a PHP class, method or function written on one line now come from it, a template's top-level calls come from the file, and PHP names resolve in the namespace block or statement where they are written (M2-13).
 - The generated AGENTS.md no longer lists `mapx explain --reclassify` or `mapx arch --json`, which the CLI does not accept (M4-28-R1).
 - `mapx status --exclude/--include` and MCP `mapx_status` `exclude`/`include` now leave the matching changed files out of the report, and `mapx_status` lists the changed files as the CLI does (M4-28-R2).
 - The Linux/macOS installer replaces a mapx binary that running `mapx serve` processes use instead of failing with "Text file busy", and the Windows installer moves a running mapx.exe aside instead of failing (M4-29).
