@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- Architecture rules can select packages, built-ins and ambient access (`package`, `builtin`, `ambient`), and `mapx check` reports vendor-confinement and dev-dependency violations and the smells vendor-leak, undeclared-dependency and dev-dependency-in-prod (M5-24).
 - The dashboard's Architecture tab has a Layer rules view for `.mapx/architecture.jsonc` (health tiles, a layer diagram whose edges and layers drill down to file:line dependencies and selector-matched members, a layer DSM, filterable findings), the graph can colour files by declared layer, and `/api/arch/report`, `/api/arch/layers` and `/api/arch/edges` serve them read-only and flag a stale index; `mapx check --layer` now matches layer names that contain a comma (M5-15).
 - MapX now checks its own architecture in CI with `mapx check`, and docs/architecture-rules.md is a complete guide with a tested example of every selector, rule, reporter and exit code (M5-18).
 - External references to Go packages now record their module, whether go.mod requires it directly or `// indirect` and whether only tests use it, from go.mod, go.sum and go.work (longest module path, `/v2` major versions, `replace`), and standard-library packages (`fmt`, `net/http`) are classified as built-ins and cgo's `C` as ambient (M5-23).
@@ -48,6 +49,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The architecture element view and core selectors (`path`, `name`, `layer`, `all`/`any`/`not`, `role`, `cluster`, `repo`, `workspacePackage`, `language`, `framework`) with layer membership that records which selector matched, computed once per scan and configuration (M5-03).
 
 ### Changed
+- `mapx check` now reports packages that no layer covers as uncovered, and `--fail-on-uncovered` fails on them (`policy.uncovered.externals: false` turns that off); `mapx arch init` adds a `Packages` layer every layer may use (M5-24).
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed

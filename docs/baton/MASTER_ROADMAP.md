@@ -228,7 +228,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-24-R1** Escaping check without blind spots; XSS spec covers every tab — IN_PROGRESS, P2, 2h; depends on M4-24.
 - **M4-25** Compact terminal logo for init, scan and sync — DONE, P2, 4h; depends on M4-18.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
-- **M4-09-R3** external-refs tests remove every temp workspace, including unreadable ones — IN_PROGRESS, P2, 1h; depends on M4-09-R2.
+- **M4-09-R3** external-refs tests remove every temp workspace, including unreadable ones — DONE, P2, 1h; depends on M4-09-R2.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — BLOCKED, P2, 3h; depends on M4-12.
@@ -262,7 +262,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
 - **M5-23** External references: Go modules package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — IN_PROGRESS, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
+- **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — DONE, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — DONE, P2, 3h; depends on M5-05.
 - **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.
