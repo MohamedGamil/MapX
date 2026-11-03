@@ -27267,6 +27267,66 @@
       "kind": "iteration"
     },
     {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-20.md",
+        "docs/baton/reports/M2-08-R3.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-08-R6",
+      "title": "A bare specifier never resolves to a relative project file",
+      "objective": "`import x from 'express'` and `require('express')` never resolve to ./express.js or another relative file; a bare specifier resolves only through a package, tsconfig/jsconfig baseUrl or paths, a bundler alias or a workspace package.",
+      "description": "Review of M2-20 (2026-11-03): with a local express.js, require('express') now links the project file, as ES import already did (pre-existing for ES, new for require). Node never resolves a bare specifier to a relative file.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R6.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/js-aliases.ts",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "With a local express.js and no baseUrl/alias mapping it, both import and require of 'express' give no project edge (test); a baseUrl import of 'components/Button' still resolves (test); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
       "id": "M2-08-R4",
       "milestone": "M2",
       "title": "Sync follows a file turning from module to script",
@@ -30328,6 +30388,67 @@
       "priority": "P2",
       "estimate": {
         "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-20",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-20.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-20-R1",
+      "title": "CommonJS edge cases: renamed exports, extends, scoped requires, a local require, TS import = require",
+      "objective": "`module.exports={f:g}` links g; `class C extends Base` with `const Base=require('./base')` links base.js#Base; a function-scoped require binds in its own function; a local `function require(){}` gives no import edge; TS `import y = require('./y')` gives import and call edges; `require.resolve()` gives no call edge to a project symbol.",
+      "description": "Review of M2-20 (2026-11-03), all pre-existing or unchanged from base except the TS form the report listed as covered: rename (scanner.ts:2252-2277), extends via require, last-binding-wins for scoped requires (scanner.ts:2428/2448), name-only require query, TS import-equals.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/commonjs-require.test.ts",
+        "reports/M2-20-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "queries/javascript/**",
+        "queries/typescript/**",
+        "src/core/extractor-version.ts",
+        "tests/commonjs-require.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Each case above has an e2e test with the expected exact edge; `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/commonjs-require.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
         "expected": 6,
         "max": 10
       },
@@ -30559,7 +30680,7 @@
     },
     {
       "milestone": "M2",
-      "priority": "P2",
+      "priority": "P1",
       "estimate": {
         "min": 2,
         "expected": 4,
@@ -30597,7 +30718,7 @@
       "id": "M2-25",
       "title": "A called loop variable never links a same-named function elsewhere",
       "objective": "A call through a local binding (for-of / for-in loop variable, parameter, destructured local) gets no by-name edge to a same-named function in another file, including a Vue SFC `<script setup>` function.",
-      "description": "Found by M5-18-R1 (2026-11-03): `for (const step of steps) step(x)` links a same-named function in a Vue SFC <script setup> (repro in reports/M5-18-R1.md).",
+      "description": "Found by M5-18-R1 (2026-11-03): `for (const step of steps) step(x)` links a same-named function in a Vue SFC <script setup> (repro in reports/M5-18-R1.md). Review of M2-20/M5-18-R1: confirmed on real code, not only fixtures (boundLocally, generic-wasm-parser.ts:305-320).",
       "outputs": [
         "src/core/scanner.ts",
         "tests/local-binding-calls.test.ts",
@@ -30618,7 +30739,7 @@
     },
     {
       "milestone": "M2",
-      "priority": "P2",
+      "priority": "P1",
       "estimate": {
         "min": 2,
         "expected": 4,
@@ -30656,7 +30777,7 @@
       "id": "M2-26",
       "title": "A class destructured from a call result never links a same-named class elsewhere",
       "objective": "`const { Database } = load('bun:sqlite'); new Database()` (a binding from a call result, not an import) gets no edge to a same-named project class.",
-      "description": "Found by M5-18-R1 (2026-11-03): such a destructured class links a same-named fixture class.",
+      "description": "Found by M5-18-R1 (2026-11-03): such a destructured class links a same-named fixture class. Review of M2-20/M5-18-R1: confirmed on real code, not only fixtures (boundLocally, generic-wasm-parser.ts:305-320).",
       "outputs": [
         "src/core/scanner.ts",
         "tests/local-binding-calls.test.ts",
