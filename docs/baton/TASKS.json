@@ -16765,14 +16765,27 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-18",
       "actualHours": null,
       "startedAt": "2026-11-03T07:39:58.205Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T10:02:47.399Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-18.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run build:npm",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-18.md"
+        },
+        {
+          "command": "node dist/main.js check --format json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-18.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T07:39:57.641Z",
@@ -16785,6 +16798,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T10:02:46.796Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T10:02:47.399Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run build:npm",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-18.md"
+            },
+            {
+              "command": "node dist/main.js check --format json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-18.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -21045,15 +21081,28 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-24",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T09:10:32.470Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T09:10:31.479Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T09:10:32.470Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -26427,15 +26476,28 @@
         "docs/baton/reports/M5-22.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M4-09-R3",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T09:10:33.041Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T09:10:31.959Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T09:10:33.041Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- MapX now checks its own architecture in CI with `mapx check`, and docs/architecture-rules.md is a complete guide with a tested example of every selector, rule, reporter and exit code (M5-18).
 - External references to Go packages now record their module, whether go.mod requires it directly or `// indirect` and whether only tests use it, from go.mod, go.sum and go.work (longest module path, `/v2` major versions, `replace`), and standard-library packages (`fmt`, `net/http`) are classified as built-ins and cgo's `C` as ambient (M5-23).
 - External references to Python modules now record their distribution, whether it is a direct or transitive dependency and dev-only, from pyproject.toml (PEP 621, dependency groups, Poetry), requirements files, uv.lock and poetry.lock, and standard-library modules (`os`, `json`, `tomllib`) are classified as built-ins (M5-22).
 - `mapx arch init` proposes `.mapx/architecture.jsonc` from MapX roles, clusters, the detected framework or one of eight shipped presets (layered, clean, hexagonal, ddd-contexts, feature-sliced, laravel, nestjs, django), shows today's layer dependencies in its comments, and with `--baseline` writes a baseline so `mapx check` passes on day one; it writes only with `--write` and never over an existing file without `--force`, and `mapx_arch_init` gains the same options (M5-17).
