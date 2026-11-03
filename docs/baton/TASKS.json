@@ -20334,15 +20334,28 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-21",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T02:36:31.810Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T02:36:31.259Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T02:36:31.810Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -26686,6 +26699,118 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/arch-reporters.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P0",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "high",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-08",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-14.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude-ff",
+      "actualHours": null,
+      "startedAt": "2026-11-03T03:08:11.168Z",
+      "completedAt": "2026-11-03T03:13:28.332Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M5-08-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/git-injection.test.ts tests/git-tracker.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-08-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-08-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-03T03:08:10.698Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T03:08:11.168Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T03:13:27.880Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T03:13:28.332Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/git-injection.test.ts tests/git-tracker.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-08-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-08-R1.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-08-R1",
+      "title": "Git refs and paths never reach a shell",
+      "objective": "A `--since` ref from `mapx arch changed`, `mapx check` or an MCP tool runs no shell syntax and cannot become a git option; every git call passes an argument array.",
+      "description": "Found by the review of M5-14 (2026-11-03, P0, reproduced): `since: \"HEAD^{/.|$(touch PWNED)}\"` is a valid git ref (commit-message regex), passes rev-parse, and getChangedFiles put it into an execSync shell string, so the command ran. M5-08 (`mapx arch changed --since`) already exposed it on the CLI; M5-14 would expose it to MCP agents. Also: `mapx ui --open` built a shell string with the user's --host.",
+      "outputs": [
+        "src/core/git-tracker.ts",
+        "tests/git-injection.test.ts",
+        "reports/M5-08-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/git-tracker.ts",
+        "src/cli.ts",
+        "tests/git-tracker.test.ts",
+        "tests/git-injection.test.ts",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "getChangedFiles with `HEAD^{/.|$(touch PWNED)}`, `HEAD;touch X` or a backquoted ref creates no file (tests/git-injection.test.ts, real git).",
+        "A ref starting with `-` (`--output=X`) is refused and writes no file (test); a real ref still diffs (test).",
+        "No git call in src/ uses a shell string (grep in the report)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/git-injection.test.ts tests/git-tracker.test.ts",
         "npm run check"
       ]
     }

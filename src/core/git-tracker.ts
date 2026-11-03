@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, join, dirname, relative } from 'node:path';
 
@@ -40,7 +40,7 @@ export function getGitBlobHashes(repoRoot: string, relativeTo: string = repoRoot
   try {
     // Single call: `git ls-tree -r HEAD` outputs lines like:
     //   100644 blob <hash>\t<path>
-    const output = execSync(`git ${GIT_RAW_PATHS} ls-tree -r HEAD`, {
+    const output = execFileSync('git', [...GIT_RAW_PATHS, 'ls-tree', '-r', 'HEAD'], {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
@@ -72,13 +72,23 @@ export function gitBlobId(content: Buffer | string): string {
   return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 }
 
+/**
+ * The revision argument of `git diff`: `since` (a ref from the CLI, MCP or the index), else HEAD.
+ * A value starting with `-` is refused, so a ref cannot become an option (`--output=…`), and the
+ * array form of execFileSync keeps any shell syntax inert (review of M5-14: a `since` ran a shell command).
+ */
+function revision(since?: string): string[] {
+  if (since && since.startsWith('-')) throw new Error(`Invalid revision: ${since}`);
+  return [since || 'HEAD', '--'];
+}
+
 export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus[] {
   const changes: GitFileStatus[] = [];
 
   // `--relative`: in a repo nested inside a larger checkout, git prints paths from the top level
   // and lists changes outside the repo; the scanner resolves paths against the repo root (M0-02-R3).
   try {
-    const output = execSync(`git ${GIT_RAW_PATHS} diff --name-status --relative ${since || 'HEAD'}`, {
+    const output = execFileSync('git', [...GIT_RAW_PATHS, 'diff', '--name-status', '--relative', ...revision(since)], {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
@@ -89,7 +99,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
   }
 
   try {
-    const stagedOutput = execSync(`git ${GIT_RAW_PATHS} diff --name-status --relative --cached`, {
+    const stagedOutput = execFileSync('git', [...GIT_RAW_PATHS, 'diff', '--name-status', '--relative', '--cached'], {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
     });
@@ -101,7 +111,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
 
   // New files git does not track yet are changes too (git diff never lists them).
   try {
-    const untracked = execSync(`git ${GIT_RAW_PATHS} ls-files --others --exclude-standard`, {
+    const untracked = execFileSync('git', [...GIT_RAW_PATHS, 'ls-files', '--others', '--exclude-standard'], {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
@@ -124,7 +134,7 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
  */
 export function getIgnoredEntries(repoRoot: string): string[] | null {
   try {
-    const output = execSync(`git ${GIT_RAW_PATHS} ls-files --others --ignored --exclude-standard --directory`, {
+    const output = execFileSync('git', [...GIT_RAW_PATHS, 'ls-files', '--others', '--ignored', '--exclude-standard', '--directory'], {
       cwd: repoRoot,
       encoding: 'utf-8', stdio: QUIET,
       maxBuffer: 50 * 1024 * 1024,
@@ -137,7 +147,7 @@ export function getIgnoredEntries(repoRoot: string): string[] | null {
 
 export function getCurrentCommitSha(repoRoot: string): string | null {
   try {
-    return execSync('git rev-parse HEAD', { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
+    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
   } catch {
     return null;
   }
@@ -145,7 +155,7 @@ export function getCurrentCommitSha(repoRoot: string): string | null {
 
 export function getPreviousCommitSha(repoRoot: string): string | null {
   try {
-    return execSync('git rev-parse HEAD~1', { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
+    return execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
   } catch {
     return null;
   }
@@ -153,7 +163,7 @@ export function getPreviousCommitSha(repoRoot: string): string | null {
 
 export function isGitRepo(dir: string): boolean {
   try {
-    execSync('git rev-parse --git-dir', { cwd: dir, stdio: 'pipe' });
+    execFileSync('git', ['rev-parse', '--git-dir'], { cwd: dir, stdio: 'pipe' });
     return true;
   } catch {
     return false;
@@ -162,7 +172,7 @@ export function isGitRepo(dir: string): boolean {
 
 export function getRepoName(repoRoot: string): string {
   try {
-    const remote = execSync('git remote get-url origin', { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
+    const remote = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
     const basename = remote.split('/').pop() || 'unknown';
     return basename.replace(/\.git$/, '');
   } catch {
@@ -174,7 +184,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { SubmoduleInfo } from '../types.js';
 
 // Non-ASCII paths as they are, not quoted and escaped (`"g\303\251n\303\251r\303\251s/"`).
-const GIT_RAW_PATHS = '-c core.quotePath=false';
+/** Paths as bytes, not C-quoted. Every git call passes an argument array: no shell sees a ref or path. */
+const GIT_RAW_PATHS = ['-c', 'core.quotePath=false'];
 
 // Callers handle failures (e.g. a repo with no commits); keep git's stderr off the terminal.
 const QUIET: ['ignore', 'pipe', 'ignore'] = ['ignore', 'pipe', 'ignore'];

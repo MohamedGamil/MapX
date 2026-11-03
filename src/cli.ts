@@ -2089,9 +2089,10 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       console.log(`Mapx Web Dashboard started at ${url}`);
 
       if (opts.open !== false) {
-        const { exec } = await import('node:child_process');
-        const openCmd = process.platform === 'win32' ? 'start' : process.platform === 'darwin' ? 'open' : 'xdg-open';
-        exec(`${openCmd} ${url}`).unref();
+        // An argument array, not a shell string: `--host` is user input (review of M5-14).
+        const { spawn } = await import('node:child_process');
+        const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]] : [process.platform === 'darwin' ? 'open' : 'xdg-open', [url]];
+        spawn(cmd, args as string[], { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
       }
     });
 

@@ -41,6 +41,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
+- Security: a `--since` git ref, from `mapx arch changed`, `mapx check` or an MCP tool, can no longer run a shell command or become a git option, and `mapx ui --open` no longer passes `--host` through a shell (M5-08-R1).
 - Go: a struct embedding `v1.UnimplementedFooServer` or `database.Store` links again when the package name is not the import path's last element (`api/v1`, a package named differently from its folder); when two imported project packages could both be meant, no edge is made (M0-17-R5, review 2026-11-02).
 - Dashboard: the Architecture profile shows its Yes/No pills again instead of their HTML as text (M4-24, review 2026-11-02).
 - Architecture layer membership is recomputed after every scan and sync; a sync that kept the numbers of files, symbols and edges served the previous membership (M5-03, review 2026-11-02).
