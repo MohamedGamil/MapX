@@ -250,7 +250,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-13** Layer graph reporters: DOT, SVG, Mermaid and layer DSM — DONE, P2, 6h; depends on M5-04.
 - **M5-14** MCP tools mapx_arch_check/_layers/_allowed/_explain/_init and agent templates — DONE, P1, 8h; depends on M5-05, M5-08, M5-02-R1.
 - **M5-15** Dashboard Architecture view and /api/arch endpoints — BACKLOG, P3, 12h; depends on M5-05, M5-13.
-- **M5-16** Rule-derived smells and single-source layer violations — IN_PROGRESS, P2, 8h; depends on M5-04, M5-08.
+- **M5-16** Rule-derived smells and single-source layer violations — DONE, P2, 8h; depends on M5-04, M5-08.
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — IN_PROGRESS, P2, 12h; depends on M5-04, M5-06.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — BACKLOG, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
@@ -258,7 +258,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
 - **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — IN_PROGRESS, P2, 1.5h; depends on M5-20.
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-22** External references: pip/Poetry/uv package attribution and builtins — READY, P2, 5h; depends on M5-19, M5-01.
+- **M5-22** External references: pip/Poetry/uv package attribution and builtins — IN_PROGRESS, P2, 5h; depends on M5-19, M5-01.
 - **M5-23** External references: Go modules package attribution and builtins — IN_PROGRESS, P2, 4h; depends on M5-19, M5-01.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — BACKLOG, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.

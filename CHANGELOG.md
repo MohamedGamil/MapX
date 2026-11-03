@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Added
+- With `.mapx/architecture.jsonc`, `mapx_smells`, `mapx arch` and the dashboard take layer violations from the rules instead of file roles (`policy.alsoInferred` adds role-based ones only for code no layer covers) and add rule-derived smells: layer cycles, layer skips, dead and weak allowances, unstable layer dependencies, distance from the main sequence, deprecated usage and configuration or stale-baseline errors (M5-16).
 - External references to PHP classes and functions now record their Composer package, whether it is a direct or transitive dependency and dev-only, from composer.json and composer.lock autoload sections, and PHP built-ins (`DateTime`, `PDO`, `str_contains`, `use const PHP_EOL`) are classified as built-ins of their extension (M5-21).
 - Architecture layers can select types by ancestry and members (`extends`, `implements`, `inherits`, `mixes`, `inheritanceDepth`, `member`), transitively and across languages, including framework bases outside the workspace, and `policy.inheritDependencies` makes a subclass answer for its bases' dependencies, each finding naming the inheritance path in `via` (M5-09).
 - `mapx arch graph` draws the layer graph as Graphviz DOT, SVG (no Graphviz needed), Mermaid, a layer DSM or JSON, with dependency counts per layer pair, violations in red, skipped ones dashed, groups as subgraphs, hidden layers and point-to-group (M5-13).

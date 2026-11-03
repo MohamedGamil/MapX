@@ -16519,14 +16519,27 @@
       ],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-16",
       "actualHours": null,
       "startedAt": "2026-11-03T04:12:10.497Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T07:16:22.996Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-16.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-smells.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-16.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-16.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T04:12:09.606Z",
@@ -16539,6 +16552,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T07:16:21.226Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T07:16:22.996Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-smells.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-16.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-16.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -20661,10 +20697,10 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-pip2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T07:12:47.723Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -20674,6 +20710,12 @@
           "at": "2026-11-03T05:52:23.290Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T07:12:47.723Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
