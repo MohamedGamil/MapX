@@ -24391,6 +24391,63 @@
       ]
     },
     {
+      "milestone": "M4",
+      "priority": "P3",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-22",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-28.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-22-R1",
+      "title": "Dashboard Configuration tab describes includePatterns correctly",
+      "objective": "The Configuration tab says an exclude pattern wins over an include pattern, as the scanner applies them.",
+      "description": "Found by M4-28: the dashboard Configuration tab says an include beats an exclude; the scanner lets the exclude win.",
+      "outputs": [
+        "src/ui/main.ts",
+        "reports/M4-22-R1.md"
+      ],
+      "affectedFiles": [
+        "src/ui/main.ts",
+        "src/ui-server.ts",
+        "tests/ui/config.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "The tab's text for includePatterns states that excludes win, and a test with a file matched by both shows it not indexed (test)."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/config.spec.ts"
+      ]
+    },
+    {
       "priority": "P1",
       "estimate": {
         "min": 6,
@@ -27995,14 +28052,22 @@
         "docs/baton/PROJECT_STATE.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M4-28",
       "actualHours": null,
       "startedAt": "2026-11-03T13:29:15.877Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T14:39:56.345Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-28.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-28.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T13:29:15.475Z",
@@ -28015,9 +28080,27 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T14:39:55.941Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T14:39:56.345Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-28.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
@@ -28044,6 +28127,120 @@
       ],
       "verificationCommands": [
         "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-28",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-28.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-28-R1",
+      "title": "Agent templates do not advertise `mapx explain --reclassify`",
+      "objective": "src/agents/templates.ts advertises only flags `mapx explain` takes; generated agent files (CLAUDE.md block, AGENTS.md) no longer mention --reclassify.",
+      "description": "Found by M4-28 (2026-11-03): src/agents/templates.ts:252 advertises `mapx explain --reclassify`, which no command takes.",
+      "outputs": [
+        "src/agents/templates.ts",
+        "reports/M4-28-R1.md"
+      ],
+      "affectedFiles": [
+        "src/agents/templates.ts",
+        "tests/agents*.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Every `mapx …` command line in the agent templates parses with the real CLI (`--help` of that command lists each flag), asserted by a test."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-28",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-28.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-28-R2",
+      "title": "`mapx_status` honours its exclude and include parameters",
+      "objective": "The MCP tool mapx_status applies the exclude/include patterns it accepts (as `mapx status` does), or stops accepting them; docs/mcp-integration.md matches.",
+      "description": "Found by M4-28: mapx_status accepts exclude/include but ignores them.",
+      "outputs": [
+        "src/mcp.ts",
+        "tests/mcp*.test.ts",
+        "reports/M4-28-R2.md"
+      ],
+      "affectedFiles": [
+        "src/mcp.ts",
+        "tests/mcp-coverage.test.ts",
+        "docs/mcp-integration.md"
+      ],
+      "acceptanceCriteria": [
+        "mapx_status with exclude: [\"src/**\"] reports no changed file under src/ while one exists (test), and equals the CLI with the same option."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/mcp-coverage.test.ts"
       ]
     },
     {
@@ -28285,6 +28482,68 @@
         "npx vitest run tests/lua-calls.test.ts",
         "npm run eval",
         "npm run check"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-09",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-28.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-12",
+      "title": "A method called on a new-expression gets a call edge (`new X().m()`)",
+      "objective": "In JS/TS (and the other languages that parse it the same way), `new X().m()` gives a call edge to X#m (and the instantiation edge to X), as `const x = new X(); x.m()` does.",
+      "description": "Found by M4-28 while checking doc examples: `new X().m()` creates no call edge to m.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "queries/**",
+        "tests/new-expression-calls.test.ts",
+        "reports/M2-12.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "queries/**",
+        "src/core/extractor-version.ts",
+        "tests/new-expression-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`new Order().total()` in a.ts links a.ts → order.ts#total, verified (e2e test, TS and JS); a same-named method elsewhere is not linked.",
+        "`npm run eval` holds every floor."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/new-expression-calls.test.ts",
+        "npm run eval"
       ]
     },
     {
