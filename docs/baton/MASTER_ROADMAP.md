@@ -168,11 +168,15 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
 - **M2-08-R3** Names imported from an external module never link to a same-named project symbol — DONE, P1, 4h; depends on M2-08-R2.
 - **M2-08-R4** Sync follows a file turning from module to script — BACKLOG, P2, 3h; depends on M2-08-R3.
+- **M2-08-R5** Python and Java names imported from packages never link to same-named project symbols — BACKLOG, P2, 6h; depends on M2-08-R3.
 - **M2-09** JS/TS member-assigned functions are symbols — DONE, P2, 4h; depends on M2-08.
 - **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.
 - **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
 - **M2-12** A method called on a new-expression gets a call edge (`new X().m()`) — IN_PROGRESS, P2, 4h; depends on M2-09.
-- **M2-13** Calls inside a one-line PHP class are indexed — READY, P2, 3h; depends on nothing.
+- **M2-13** Calls inside a one-line PHP class are indexed — IN_PROGRESS, P2, 3h; depends on nothing.
+- **M2-14** A method called on a variable holding a new instance links that class's method — BACKLOG, P2, 8h; depends on M2-12.
+- **M2-15** `new ns.X()` gets an instantiation edge — BACKLOG, P3, 2h; depends on M2-12.
+- **M2-16** PHP `self::m()` and `static::m()` calls link the enclosing class's method — BACKLOG, P2, 4h; depends on M2-13.
 
 ## M3 — Vue SFC semantics
 

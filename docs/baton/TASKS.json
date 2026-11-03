@@ -27098,6 +27098,67 @@
       "rollback": "Revert the task commit."
     },
     {
+      "id": "M2-08-R5",
+      "milestone": "M2",
+      "title": "Python and Java names imported from packages never link to same-named project symbols",
+      "objective": "M2-08-R3's rule for JS/TS applied to Python and Java: a class or function imported from a package (`from stripe import Order`, `import com.vendor.Invoice`) gets no edge to a same-named project symbol; project imports still link.",
+      "description": "Found by the review of M2-12 (2026-11-03): `from stripe import Order; Order().total()` links the project's order.py#total, verified; Java `import com.vendor.Invoice` links the project's Invoice#total. Pre-existing (before M2-12).",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R3.md",
+        "docs/baton/reports/M2-12.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R5.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/import-resolvers.ts",
+        "src/core/extractor-version.ts",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Python and Java e2e tests: a package import gives no edge to a same-named project symbol; a project import still links; `npm run eval` holds and edges precision does not drop."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run eval"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "milestone": "M5",
       "priority": "P2",
       "estimate": {
@@ -29478,10 +29539,10 @@
         "docs/baton/reports/M5-03-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-B2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T19:27:59.136Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -29491,6 +29552,12 @@
           "at": "2026-11-03T16:52:33.231Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T19:27:59.136Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -29518,6 +29585,192 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/php-one-line.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-12.md",
+        "docs/baton/reports/M2-13.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-14",
+      "title": "A method called on a variable holding a new instance links that class's method",
+      "objective": "`const o = new X(); o.m()` (and `$o = new X(); $o->m()`, `x = X(); x.m()`, `X o = new X(); o.m()`) links X#m, as `new X().m()` does since M2-12, instead of resolving m by name.",
+      "description": "Found by M2-12 (2026-11-03): a call on a local variable initialised with `new X()` still resolves by name and can pick a same-named method of another class.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/new-expression-calls.test.ts",
+        "reports/M2-14.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/**",
+        "queries/**",
+        "src/core/extractor-version.ts",
+        "tests/new-expression-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "In TS, JS, PHP, Java, C# and Python, a variable assigned `new X()` (or `X()` in Python) and then called links X#m, verified, never a same-named method of another class (e2e tests).",
+        "`npm run eval` holds every floor; score-arch stays 1/1."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/new-expression-calls.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-12.md",
+        "docs/baton/reports/M2-13.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-15",
+      "title": "`new ns.X()` gets an instantiation edge",
+      "objective": "A namespaced or member-qualified instantiation (`new ns.X()`, `new pkg.sub.X()`) gives the instantiation edge to X, as `new X()` does.",
+      "description": "Found by M2-12: `new ns.X()` resolves the method call but records no instantiation edge.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/new-expression-calls.test.ts",
+        "reports/M2-15.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "queries/**",
+        "src/core/extractor-version.ts",
+        "tests/new-expression-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`new ns.Order()` gives an instantiation edge to Order in TS and JS (test); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/new-expression-calls.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-13",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-12.md",
+        "docs/baton/reports/M2-13.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-16",
+      "title": "PHP `self::m()` and `static::m()` calls link the enclosing class's method",
+      "objective": "In PHP, `self::m()`, `static::m()` and `parent::m()` link to the enclosing class's (or its parent's) method m on any file layout.",
+      "description": "Found by M2-13 (2026-11-03): PHP `self::m()` gives no edge on any layout.",
+      "outputs": [
+        "src/parsers/languages/php.ts",
+        "tests/php-self-calls.test.ts",
+        "reports/M2-16.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/php.ts",
+        "queries/php/**",
+        "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
+        "tests/php-self-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`self::id()` in User::name links User::id; `parent::boot()` links the parent class's boot (e2e tests, one-line and multi-line); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/php-self-calls.test.ts",
         "npm run eval"
       ]
     },
