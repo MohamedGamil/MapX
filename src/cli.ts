@@ -3774,6 +3774,34 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   return program;
 }
 
+/**
+ * The stores loadContext opened, closed when the process exits or is interrupted. One exit, SIGINT
+ * and SIGTERM listener serves them all, added with the first and removed when the last is closed
+ * (M4-31): a set per call passed ten in in-process runs and printed MaxListenersExceededWarning.
+ */
+const openStores = new Set<Store>();
+const closeOpenStores = () => {
+  for (const s of [...openStores]) { try { s.close(); } catch { /* already closed */ } }
+};
+const onExitClose = () => closeOpenStores();
+const onSigIntClose = () => { closeOpenStores(); process.exit(130); };
+const onSigTermClose = () => { closeOpenStores(); process.exit(143); };
+
+function closeOnExit(store: Store): void {
+  if (openStores.size === 0) {
+    process.on('exit', onExitClose);
+    process.on('SIGINT', onSigIntClose);
+    process.on('SIGTERM', onSigTermClose);
+  }
+  openStores.add(store);
+  store.onClose(() => {
+    if (!openStores.delete(store) || openStores.size > 0) return;
+    process.removeListener('exit', onExitClose);
+    process.removeListener('SIGINT', onSigIntClose);
+    process.removeListener('SIGTERM', onSigTermClose);
+  });
+}
+
 export async function loadContext(dir: string): Promise<{
   config: Config;
   store: Store;
@@ -3794,10 +3822,7 @@ export async function loadContext(dir: string): Promise<{
   // after an unhandled error — this prevents the process from hanging after
   // command completion due to SQLite's open file descriptor keeping the event
   // loop alive.
-  const closeStore = () => { try { store.close(); } catch { /* already closed */ } };
-  process.once('exit', closeStore);
-  process.once('SIGINT', () => { closeStore(); process.exit(130); });
-  process.once('SIGTERM', () => { closeStore(); process.exit(143); });
+  closeOnExit(store);
 
   const graph = new MapxGraph(config.repo.name);
 

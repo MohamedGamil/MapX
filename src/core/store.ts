@@ -1380,7 +1380,18 @@ export class Store {
     return this.backend.inTransaction(fn);
   }
 
+  private closeHandlers: Array<() => void> = [];
+
+  /** Runs `fn` once, when the store is closed (M4-31: the CLI drops its process listeners). */
+  onClose(fn: () => void): void {
+    this.closeHandlers.push(fn);
+  }
+
   close(): void {
-    this.backend.close();
+    try {
+      this.backend.close();
+    } finally {
+      for (const fn of this.closeHandlers.splice(0)) fn();
+    }
   }
 }

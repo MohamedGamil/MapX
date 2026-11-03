@@ -90,6 +90,7 @@ const storeMocks = {
   getEdgesForFile: vi.fn().mockReturnValue([]),
   getReverseEdges: vi.fn().mockReturnValue([]),
   deleteRepo: vi.fn(),
+  onClose: vi.fn(), // loadContext registers its exit cleanup on it (M4-31)
 };
 
 vi.mock('../src/core/store.js', () => ({
