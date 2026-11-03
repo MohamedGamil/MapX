@@ -170,6 +170,54 @@ add_to_path() {
     echo "    export PATH=\"$PREFIX:\$PATH\""
 }
 
+# The file a symlink chain ends at: `readlink -f` where it exists, else one link at a time.
+resolve_link() {
+    local path="$1" link n=0
+    if readlink -f / >/dev/null 2>&1; then
+        readlink -f "$path"
+        return
+    fi
+    while [ -L "$path" ] && [ "$n" -lt 40 ]; do
+        link="$(readlink "$path")"
+        case "$link" in
+            /*) path="$link" ;;
+            *)  path="$(dirname "$path")/$link" ;;
+        esac
+        n=$((n + 1))
+    done
+    printf '%s\n' "$path"
+}
+
+# Installs $1 as $2 (M4-29). `cp` onto a binary that `mapx serve` processes run fails with "Text
+# file busy", so the binary is written to a temp file in the target's folder and renamed over it:
+# the rename is atomic, and running processes keep the old file until they exit. A symlinked target
+# is replaced at the file it points to, so the link keeps working. The temp file is removed if the
+# install fails or is interrupted.
+_MAPX_TMP=""
+install_binary() {
+    local src="$1" target="$2" dir
+    if [ -L "$target" ]; then target="$(resolve_link "$target")"; fi
+    dir="$(dirname "$target")"
+    if ! _MAPX_TMP="$(mktemp "$dir/.mapx.XXXXXX" 2>/dev/null)"; then
+        _MAPX_TMP=""
+        # A writable binary in a folder we cannot write: overwrite it in place, as before.
+        [ -w "$target" ] || die "Cannot write to $dir"
+        warn "Cannot create a file in $dir; overwriting $target in place (this fails while mapx runs)"
+        cp "$src" "$target"
+        chmod +x "$target"
+        return
+    fi
+    trap 'rm -f "$_MAPX_TMP"' EXIT
+    trap 'rm -f "$_MAPX_TMP"; exit 130' INT
+    trap 'rm -f "$_MAPX_TMP"; exit 143' TERM
+    if ! { cp "$src" "$_MAPX_TMP" && chmod 755 "$_MAPX_TMP" && mv -f "$_MAPX_TMP" "$target"; }; then
+        rm -f "$_MAPX_TMP"
+        die "Could not install $target"
+    fi
+    _MAPX_TMP=""
+    trap - EXIT INT TERM
+}
+
 do_install() {
     local binary="$SCRIPT_DIR/mapx"
 
@@ -186,8 +234,7 @@ do_install() {
     echo ""
 
     mkdir -p "$PREFIX"
-    cp "$binary" "$PREFIX/mapx"
-    chmod +x "$PREFIX/mapx"
+    install_binary "$binary" "$PREFIX/mapx"
     ok "Binary: $PREFIX/mapx"
 
     install_data
