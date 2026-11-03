@@ -256,10 +256,10 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
-- **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — BACKLOG, P2, 1.5h; depends on M5-20.
+- **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — IN_PROGRESS, P2, 1.5h; depends on M5-20.
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-22** External references: pip/Poetry/uv package attribution and builtins — BACKLOG, P2, 5h; depends on M5-19, M5-01.
-- **M5-23** External references: Go modules package attribution and builtins — BACKLOG, P2, 4h; depends on M5-19, M5-01.
+- **M5-22** External references: pip/Poetry/uv package attribution and builtins — READY, P2, 5h; depends on M5-19, M5-01.
+- **M5-23** External references: Go modules package attribution and builtins — IN_PROGRESS, P2, 4h; depends on M5-19, M5-01.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — BACKLOG, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — DONE, P2, 3h; depends on M5-05.
@@ -269,7 +269,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-25-R1** Go package-qualified calls, and generic, slice and map literals of imported types — DONE, P2, 4h; depends on M5-25.
 - **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — DONE, P2, 4h; depends on M5-03-R1.
 - **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — DONE, P2, 3h; depends on M5-05.
-- **M5-25-R2** Go methods with a generic receiver are indexed — IN_PROGRESS, P2, 2h; depends on M5-25-R1.
-- **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — IN_PROGRESS, P2, 2h; depends on M5-07.
+- **M5-25-R2** Go methods with a generic receiver are indexed — DONE, P2, 2h; depends on M5-25-R1.
+- **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — DONE, P2, 2h; depends on M5-07.
 - **M5-08-R1** Git refs and paths never reach a shell — DONE, P0, 1h; depends on M5-08.
 

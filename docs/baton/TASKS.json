@@ -20437,15 +20437,28 @@
         "docs/baton/reports/M5-21.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-pip",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T05:52:24.264Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T05:52:22.829Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T05:52:24.264Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -20648,7 +20661,7 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -20656,7 +20669,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T05:52:23.290Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -20718,15 +20738,28 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-M5-23",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-03T05:52:24.725Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-03T05:52:23.784Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T05:52:24.725Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -26776,14 +26809,32 @@
         "docs/baton/reports/M5-25-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-defects2",
       "actualHours": null,
       "startedAt": "2026-11-03T05:03:17.175Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T06:33:52.526Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-25-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R2.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R2.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T05:03:15.745Z",
@@ -26796,6 +26847,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T06:33:51.990Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T06:33:52.526Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R2.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R2.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -26922,14 +27001,27 @@
         "docs/baton/reports/M5-07.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-defects",
       "actualHours": null,
       "startedAt": "2026-11-03T04:12:10.969Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T06:33:51.476Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-07-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-reporters.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-07-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-07-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T04:12:10.047Z",
@@ -26942,6 +27034,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T06:33:50.969Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T06:33:51.476Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-reporters.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-07-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-07-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

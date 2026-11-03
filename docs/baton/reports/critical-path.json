@@ -4255,9 +4255,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 10,
-        "latestFinish": 10,
-        "slack": 10
+        "latestStart": 12,
+        "latestFinish": 12,
+        "slack": 12
       },
       {
         "id": "M5-03-R2",
@@ -4342,12 +4342,12 @@
       },
       {
         "id": "M5-25-R2",
-        "duration": 2,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 2,
-        "latestStart": 10,
+        "earliestFinish": 0,
+        "latestStart": 12,
         "latestFinish": 12,
-        "slack": 10
+        "slack": 12
       },
       {
         "id": "M4-12-R1",
@@ -4360,12 +4360,12 @@
       },
       {
         "id": "M5-07-R1",
-        "duration": 2,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 2,
-        "latestStart": 10,
+        "earliestFinish": 0,
+        "latestStart": 12,
         "latestFinish": 12,
-        "slack": 10
+        "slack": 12
       },
       {
         "id": "M5-08-R1",
@@ -4377,13 +4377,13 @@
         "slack": 12
       }
     ],
-    "totalEffort": 70.5
+    "totalEffort": 66.5
   },
   "resourceSchedule": {
-    "hours": 70.5,
-    "weeks": 3.525,
+    "hours": 66.5,
+    "weeks": 3.325,
     "forecastAsOf": "2026-11-03",
-    "conditionalDate": "2026-11-27",
+    "conditionalDate": "2026-11-26",
     "assignments": [
       {
         "id": "M0-01",
@@ -5811,25 +5811,25 @@
         "id": "M5-25-R2",
         "worker": 0,
         "start": 63.5,
-        "finish": 65.5
+        "finish": 63.5
       },
       {
         "id": "M4-12-R1",
         "worker": 0,
-        "start": 65.5,
-        "finish": 68.5
+        "start": 63.5,
+        "finish": 66.5
       },
       {
         "id": "M5-07-R1",
         "worker": 0,
-        "start": 68.5,
-        "finish": 70.5
+        "start": 66.5,
+        "finish": 66.5
       },
       {
         "id": "M5-08-R1",
         "worker": 0,
-        "start": 70.5,
-        "finish": 70.5
+        "start": 66.5,
+        "finish": 66.5
       }
     ]
   }
