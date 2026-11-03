@@ -25961,14 +25961,32 @@
         "docs/baton/reports/M5-18.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M2-08-R3",
       "actualHours": null,
       "startedAt": "2026-11-03T09:07:26.864Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T12:14:43.474Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R3.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R3.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R3.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T09:07:25.329Z",
@@ -25981,6 +25999,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T12:14:42.159Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T12:14:43.474Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R3.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R3.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R3.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
