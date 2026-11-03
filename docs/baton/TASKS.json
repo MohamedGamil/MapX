@@ -21198,14 +21198,27 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-E2",
       "actualHours": null,
       "startedAt": "2026-11-03T20:47:13.662Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T22:38:15.217Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-21-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-21-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-21-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T18:55:31.661Z",
@@ -21218,6 +21231,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T22:38:13.756Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T22:38:15.217Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-21-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-21-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -21603,14 +21639,22 @@
         "docs/baton/reports/M5-23.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-E",
       "actualHours": null,
       "startedAt": "2026-11-03T18:55:32.884Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T22:38:12.402Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-23-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-23-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T18:55:31.254Z",
@@ -21623,6 +21667,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T22:38:10.976Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T22:38:12.402Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-23-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -30865,14 +30927,22 @@
         "npx vitest run tests/arch-reporters.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-E3",
       "actualHours": null,
       "startedAt": "2026-11-03T20:47:14.147Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T22:38:18.616Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-07-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-reporters.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-07-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T18:55:32.071Z",
@@ -30885,6 +30955,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T22:38:16.853Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T22:38:18.616Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-reporters.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-07-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

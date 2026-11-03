@@ -292,12 +292,12 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
 - **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — DONE, P2, 1.5h; depends on M5-20.
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — IN_PROGRESS, P3, 4h; depends on M5-21.
+- **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — DONE, P3, 4h; depends on M5-21.
 - **M5-19-R1** An attribution-rules version re-decides external references without a re-parse — BACKLOG, P2, 3h; depends on M5-19.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
 - **M5-22-R1** The architecture fixture scores Poetry and pip attribution, not only uv — BACKLOG, P3, 3h; depends on M5-22.
 - **M5-23** External references: Go modules package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
-- **M5-23-R1** An unreadable go.mod keeps the module's own imports internal — IN_PROGRESS, P3, 2h; depends on M5-23.
+- **M5-23-R1** An unreadable go.mod keeps the module's own imports internal — DONE, P3, 2h; depends on M5-23.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — DONE, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.
 - **M5-24-R1** Ambient access is extracted: environment, globals and superglobals — BACKLOG, P2, 8h; depends on M5-24.
 - **M5-24-R2** External elements: multi-layer warning and inherited dependencies — BACKLOG, P2, 4h; depends on M5-24, M5-09.
@@ -315,7 +315,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-25-R3** Go: an unversioned local replace outside the workspace is external — BACKLOG, P2, 2h; depends on M5-25-R1, M5-23.
 - **M5-25-R4** Go: a parenthesised receiver type is indexed — BACKLOG, P3, 2h; depends on M5-25-R2.
 - **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — DONE, P2, 2h; depends on M5-07.
-- **M5-07-R2** CI reporters: baselines outside the repository and submodule workspaces — IN_PROGRESS, P3, 2h; depends on M5-07-R1.
+- **M5-07-R2** CI reporters: baselines outside the repository and submodule workspaces — DONE, P3, 2h; depends on M5-07-R1.
 - **M5-08-R1** Git refs and paths never reach a shell — DONE, P0, 1h; depends on M5-08.
 
 ## M6 — Dashboard graph scale and readability

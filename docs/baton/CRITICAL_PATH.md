@@ -6,7 +6,7 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **126.5 / 223 / 333h**. Capacity: 1 engineer(s) × 20 h/week → **11.2 weeks**, conditional finish **2027-01-20** (as of 2026-11-03).
+Remaining effort min/expected/max: **122.5 / 215 / 319h**. Capacity: 1 engineer(s) × 20 h/week → **10.8 weeks**, conditional finish **2027-01-17** (as of 2026-11-03).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
@@ -15,10 +15,8 @@ Remaining effort min/expected/max: **126.5 / 223 / 333h**. Capacity: 1 engineer(
 - M5-17-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-18-R1 (READY): prerequisites satisfied
 - M5-98 (BACKLOG): prerequisites satisfied
-- M5-21-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-19-R1 (BACKLOG): prerequisites satisfied
 - M5-22-R1 (BACKLOG): prerequisites satisfied
-- M5-23-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-24-R1 (BACKLOG): prerequisites satisfied
 - M5-24-R2 (BACKLOG): prerequisites satisfied
 - M5-24-R3 (IN_PROGRESS): prerequisites satisfied
@@ -42,7 +40,6 @@ Remaining effort min/expected/max: **126.5 / 223 / 333h**. Capacity: 1 engineer(
 - M5-25-R3 (BACKLOG): prerequisites satisfied
 - M5-25-R4 (BACKLOG): prerequisites satisfied
 - M4-12-R2 (BACKLOG): prerequisites satisfied
-- M5-07-R2 (IN_PROGRESS): prerequisites satisfied
 - M6-01 (BACKLOG): prerequisites satisfied
 - M6-02 (BACKLOG): M6-01
 - M6-03 (BACKLOG): M6-01
@@ -63,10 +60,8 @@ Remaining effort min/expected/max: **126.5 / 223 / 333h**. Capacity: 1 engineer(
 | M5-17-R1 | 0 | 8 | 43 | 51 | 43 |
 | M5-18-R1 | 0 | 3 | 48 | 51 | 48 |
 | M5-98 | 0 | 2 | 49 | 51 | 49 |
-| M5-21-R1 | 0 | 4 | 47 | 51 | 47 |
 | M5-19-R1 | 0 | 3 | 48 | 51 | 48 |
 | M5-22-R1 | 0 | 3 | 48 | 51 | 48 |
-| M5-23-R1 | 0 | 2 | 49 | 51 | 49 |
 | M5-24-R1 | 0 | 8 | 43 | 51 | 43 |
 | M5-24-R2 | 0 | 4 | 47 | 51 | 47 |
 | M5-24-R3 | 0 | 1 | 50 | 51 | 50 |
@@ -90,7 +85,6 @@ Remaining effort min/expected/max: **126.5 / 223 / 333h**. Capacity: 1 engineer(
 | M5-25-R3 | 0 | 2 | 49 | 51 | 49 |
 | M5-25-R4 | 0 | 2 | 49 | 51 | 49 |
 | M4-12-R2 | 0 | 2 | 49 | 51 | 49 |
-| M5-07-R2 | 0 | 2 | 49 | 51 | 49 |
 | M6-01 | 0 | 8 | 0 | 8 | 0 |
 | M6-02 | 8 | 20 | 8 | 20 | 0 |
 | M6-03 | 8 | 14 | 14 | 20 | 6 |
