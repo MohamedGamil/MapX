@@ -321,7 +321,7 @@ A workspace with a configuration but no index is an error (`run mapx scan first`
 | `junit` | GitLab and Jenkins test reports | One suite per layer, one testcase per finding; a testcase fails exactly when its finding fails the run |
 
 - **Failing level:** every format marks exactly the findings that fail the run (the exit-code rule, with `--fail-on`, `--fail-on-uncovered` and `--compare`) at its failing level: SARIF `error`, `::error`, the CodeClimate `error` severity, a JUnit failure or error. So the cause of exit 1, 2 or 3 is always shown as an error.
-- **Paths** are workspace-relative and use `/` in every format; a finding without a file is located on the configuration file. Run `mapx check` at the repository root so CI links the right file.
+- **Paths** use `/` in every format; a finding without a file is located on the configuration file. The CI formats give them from the root of the git repository that holds the workspace (`services/api/app/…` for a workspace in `services/api`), so CI links the right file; `table` and `json` keep them workspace-relative.
 - **Determinism:** the same findings give the same bytes: no timestamps, durations, host names or absolute paths. Only SARIF's `tool.driver.version` changes with the MapX version.
 - **Baselines and `--compare`:** a skipped violation is a SARIF suppression, a `::notice`, a CodeClimate issue at the `skipped` severity and a JUnit `<skipped>`, listed only with `--report-skipped`. A stale baseline entry is an error located on the baseline file (relative to the workspace, never absolute), its message naming the entry by JSON pointer (`.mapx/architecture.baseline.json#/entries/0`); the report gives it as `location`.
 

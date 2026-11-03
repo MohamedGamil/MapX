@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, posix, resolve } from 'node:path';
 import Ajv from 'ajv';
 import { cleanup, init, mapx, mapxResult, mapxResultEnv, workspace } from './helpers/e2e';
 import type { ArchReport, Finding } from '../src/arch/report';
@@ -630,4 +630,107 @@ describe('severities follow the configuration (CodeClimate) and the exit rule (J
     expectValidSarif(r.stdout);
     expect(JSON.parse(r.stdout).runs[0].results.map((x: { ruleId: string }) => x.ruleId)).toEqual(['config']);
   }, 120_000);
+});
+
+describe('paths from the repository root when the workspace is a subfolder (M5-07-R1)', () => {
+  // GitHub code scanning, PR annotations and GitLab resolve report paths from the checkout root, so
+  // a workspace at repo/sub must name its files sub/…. Synthetic PHP app, labelled:
+  //   App\Domain\Order → App\Infra\Repo      violation (Domain may use nothing), import + instantiation
+  //   App\App\PlaceOrder → App\Support\Clock uncovered (Support is in no layer)
+  //   layer Empty                            empty-layer warning, located on the configuration file
+  //   ../bl.json (with --baseline)           a stale entry, located on the baseline file
+  const layers = [
+    { name: 'App', selectors: [{ path: 'app/App/**' }] },
+    { name: 'Domain', selectors: [{ path: 'app/Domain/**' }] },
+    { name: 'Infra', selectors: [{ path: 'app/Infra/**' }] },
+    { name: 'Empty', selectors: [{ path: 'app/Nothing/**' }] },
+  ];
+  const FILES: Record<string, string> = {
+    'composer.json': '{"name":"acme/monorepo-sub","autoload":{"psr-4":{"App\\\\":"app/"}}}\n',
+    'app/App/PlaceOrder.php': '<?php\nnamespace App\\App;\n\nuse App\\Support\\Clock;\n\nclass PlaceOrder {\n  public function run() { return new Clock(); }\n}\n',
+    'app/Domain/Order.php': '<?php\nnamespace App\\Domain;\n\nuse App\\Infra\\Repo;\n\nclass Order {\n  public function save() { return new Repo(); }\n}\n',
+    'app/Infra/Repo.php': '<?php\nnamespace App\\Infra;\n\nclass Repo {}\n',
+    'app/Support/Clock.php': '<?php\nnamespace App\\Support;\n\nclass Clock {}\n',
+    '.mapx/architecture.jsonc': JSON.stringify({ layers, rules: { App: ['Domain'], Domain: [], Infra: ['Domain'], Empty: [] } }),
+  };
+  const STALE = JSON.stringify({ version: 1, entries: [{ fingerprint: '0123456789abcdef' }] });
+  const under = (dir: string) => Object.fromEntries(Object.entries(FILES).map(([p, c]) => [`${dir}/${p}`, c]));
+  let repo = '';
+  let top = '';
+  beforeAll(() => {
+    // A real repository whose top level holds the baseline, with the workspace in sub/; a workspace
+    // that is a repository's top level, and one outside git, with the baseline beside them.
+    repo = workspace({ ...under('sub'), 'bl.json': STALE }, ['.']);
+    top = workspace({ ...under('top'), ...under('plain'), 'bl.json': STALE }, ['top']);
+    temps.push(repo, top);
+    for (const w of [join(repo, 'sub'), join(top, 'top'), join(top, 'plain')]) { init(w); mapx(w, 'scan'); }
+  }, 180_000);
+
+  /**
+   * The file of each finding (allowed ones aside) in every format, sorted, and the JSON report's;
+   * each format's stdout and stderr.
+   */
+  function located(root: string, env: Record<string, string> = {}) {
+    const stdout: Record<string, string> = {};
+    const stderr: Record<string, string> = {};
+    const run = (format: string) => {
+      const r = mapxResultEnv(root, env, 'check', '--format', format, '--report-uncovered', '--baseline', join('..', 'bl.json'));
+      stdout[format] = r.stdout;
+      stderr[format] = r.stderr;
+      return r.stdout;
+    };
+    run('table');
+    const json: ArchReport = JSON.parse(run('json'));
+    const workspacePaths = json.findings.filter((f) => f.kind !== 'allowed').map((f) => f.location?.file ?? f.source?.file ?? '.mapx/architecture.jsonc').sort();
+    const sarif = JSON.parse(run('sarif')).runs[0].results.map((r: { locations: Array<{ physicalLocation: { artifactLocation: { uri: string } } }> }) => decodeURIComponent(r.locations[0]!.physicalLocation.artifactLocation.uri));
+    const github = run('github').split('\n').filter((l) => l.startsWith('::')).map((l) => parseCommand(l).props.file!);
+    const codeclimate = (JSON.parse(run('codeclimate')) as Array<{ location: { path: string } }>).map((i) => i.location.path);
+    // A testcase's body starts with `path:line` (after `kind (severity): ` when it passes).
+    const junit = all(parseXml(run('junit')), 'testcase').filter((t) => t.attrs.name !== 'no findings')
+      .map((t) => t.children.map((c) => c.text).join('').split('\n')[0]!.replace(/^\w+ \(\w+\): /, '').replace(/:\d+$/, ''));
+    return { workspacePaths, sarif: sarif.sort(), github: github.sort(), codeclimate: codeclimate.sort(), junit: junit.sort(), stdout, stderr };
+  }
+
+  it('a workspace at repo/sub: the SARIF uri, ::error file=, the CodeClimate path and the JUnit locations are sub/…', () => {
+    const got = located(join(repo, 'sub'));
+    // The labelled locations are all there: source files, the configuration file and the baseline.
+    expect(got.workspacePaths).toEqual(expect.arrayContaining(['app/Domain/Order.php', 'app/App/PlaceOrder.php', '.mapx/architecture.jsonc', '../bl.json']));
+    // From the repository root: sub/… for the workspace's files, and the baseline at the top level.
+    const fromRoot = got.workspacePaths.map((p) => posix.normalize(`sub/${p}`)).sort();
+    expect(fromRoot).toEqual(expect.arrayContaining(['sub/app/Domain/Order.php', 'sub/app/App/PlaceOrder.php', 'sub/.mapx/architecture.jsonc', 'bl.json']));
+    for (const format of ['sarif', 'github', 'codeclimate', 'junit'] as const) expect(got[format], format).toEqual(fromRoot);
+    // SARIF's targetFile property names the target from the root too.
+    const sarif = JSON.parse(mapxResult(join(repo, 'sub'), 'check', '--format', 'sarif').stdout);
+    expect(sarif.runs[0].results.map((r: { properties: { targetFile?: string } }) => r.properties.targetFile).filter(Boolean)).toContain('sub/app/Infra/Repo.php');
+  }, 120_000);
+
+  const WARNING = /^Warning: git could not locate .* in its repository \(git rev-parse --show-prefix failed\), so report paths are relative to the workspace, not the repository root\.$/m;
+
+  it('a workspace at a repository root, or outside git, is unchanged: workspace-relative paths, no warning', () => {
+    const atRoot = located(join(top, 'top'));
+    const outside = located(join(top, 'plain'));
+    for (const got of [atRoot, outside]) {
+      expect(got.workspacePaths).toEqual(expect.arrayContaining(['app/Domain/Order.php', '.mapx/architecture.jsonc', '../bl.json']));
+      for (const format of ['sarif', 'github', 'codeclimate', 'junit'] as const) expect(got[format], format).toEqual(got.workspacePaths);
+      for (const [format, err] of Object.entries(got.stderr)) expect(err, format).not.toMatch(WARNING);
+    }
+    // The same files give the same bytes in every CI format, in a repository or not (json names the
+    // repo after its folder).
+    for (const format of ['sarif', 'github', 'codeclimate', 'junit']) expect(outside.stdout[format], format).toBe(atRoot.stdout[format]);
+  }, 180_000);
+
+  it('a workspace in a checkout git refuses (a bad GIT_DIR): workspace-relative paths, the same stdout, and one warning on stderr', () => {
+    // Review of M5-07-R1: a git failure dropped the prefix silently (also git's "dubious ownership"
+    // refusal in CI containers). The .git above the workspace says it is in a checkout.
+    const refused = located(join(repo, 'sub'), { GIT_DIR: join(repo, 'no-such-git-dir') });
+    const atRoot = located(join(top, 'top'));
+    for (const format of ['sarif', 'github', 'codeclimate', 'junit'] as const) {
+      expect(refused[format], format).toEqual(refused.workspacePaths);
+      // stdout is the report alone: byte for byte what a workspace at a repository root writes.
+      expect(refused.stdout[format], format).toBe(atRoot.stdout[format]);
+      expect(refused.stderr[format]!.match(new RegExp(WARNING.source, 'gm')), format).toHaveLength(1);
+    }
+    // table and json are workspace-relative anyway: no warning.
+    for (const format of ['table', 'json']) expect(refused.stderr[format], format).not.toMatch(WARNING);
+  }, 180_000);
 });

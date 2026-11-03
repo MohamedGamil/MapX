@@ -1,6 +1,8 @@
 // What the CI reporters (M5-07; AR-16) need beyond the report, and what they share: where a
-// finding is (a workspace-relative POSIX path and line), how it reads on one line, and which
-// formats `mapx check --format` takes.
+// finding is (a POSIX path from the repository root, M5-07-R1, and a line), how it reads on one
+// line, and which formats `mapx check --format` takes.
+import { posix } from 'node:path';
+import { getRepoPrefix, inGitCheckout } from '../../core/git-tracker.js';
 import type { ArchReport, Finding } from '../report.js';
 import { failsRun, type CheckOptions } from '../check.js';
 import type { CodeClimateSeverityMap } from '../schema.js';
@@ -21,19 +23,46 @@ export interface ReportContext {
   codeclimate?: CodeClimateSeverityMap;
   /** MapX's version, for SARIF's `tool.driver.version`. */
   version?: string;
+  /**
+   * The workspace's folder from the top of its git repository (`sub/`, git-tracker's
+   * getRepoPrefix), put before every path: GitHub and GitLab locate files from the checkout root,
+   * so a workspace in a monorepo subfolder would name files that do not exist (M5-07-R1). Empty or
+   * absent at the top level or outside git: paths stay workspace-relative.
+   */
+  pathPrefix?: string;
+}
+
+/**
+ * The `pathPrefix` of a `mapx check` run in `dir`. `table` and `json` stay workspace-relative, so
+ * git is asked only for a CI format. If git cannot say where a folder inside a checkout is (a bad
+ * GIT_DIR, git's "dubious ownership" refusal in a CI container), the paths stay workspace-relative,
+ * and `warn` (stderr) says so: stdout is the report alone (review of M5-07-R1).
+ */
+export function reportPathPrefix(format: ReportFormat, dir: string, warn: (message: string) => void = (m) => console.error(m)): string {
+  if (format === 'table' || format === 'json') return '';
+  const prefix = getRepoPrefix(dir);
+  if (prefix !== null) return prefix;
+  if (inGitCheckout(dir)) warn(`Warning: git could not locate ${dir} in its repository (git rev-parse --show-prefix failed), so report paths are relative to the workspace, not the repository root.`);
+  return '';
 }
 
 /** A path as every CI format wants it: relative, with `/` (the store already records `/`). */
 export const posixPath = (p: string) => p.replace(/\\/g, '/').replace(/^\.\//, '');
 
+/** A workspace-relative path from the repository root (`sub/../bl.json` is `bl.json`). */
+export function repoPath(p: string, ctx: ReportContext): string {
+  const path = posixPath(p);
+  return ctx.pathPrefix ? posix.normalize(`${posixPath(ctx.pathPrefix)}${path}`) : path;
+}
+
 /**
- * Where a finding is fixed: its `location` (a stale entry: the baseline file), else its source file
- * and first line, else the configuration file.
+ * Where a finding is fixed, from the repository root: its `location` (a stale entry: the baseline
+ * file), else its source file and first line, else the configuration file.
  */
 export function locate(f: Finding, ctx: ReportContext): { path: string; line?: number } {
-  if (f.location) return { path: posixPath(f.location.file) };
-  if (f.source?.file) return { path: posixPath(f.source.file), ...(f.source.line !== undefined ? { line: f.source.line } : {}) };
-  return { path: posixPath(ctx.configFile) };
+  if (f.location) return { path: repoPath(f.location.file, ctx) };
+  if (f.source?.file) return { path: repoPath(f.source.file, ctx), ...(f.source.line !== undefined ? { line: f.source.line } : {}) };
+  return { path: repoPath(ctx.configFile, ctx) };
 }
 
 /**

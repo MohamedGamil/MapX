@@ -1,7 +1,7 @@
 // The reporters of `mapx check --format` (M5-05, M5-07; AR-16).
 import type { ArchReport } from '../report.js';
 import { renderCodeclimate } from './codeclimate.js';
-import { FORMATS, type ReportContext, type ReportFormat } from './context.js';
+import { FORMATS, reportPathPrefix, type ReportContext, type ReportFormat } from './context.js';
 import { renderGithub } from './github.js';
 import { renderJson } from './json.js';
 import { renderJunit } from './junit.js';
@@ -13,7 +13,7 @@ import type { LayerGraph } from './graph.js';
 import { renderMermaid } from './mermaid.js';
 import { renderSvg, type SvgOptions } from './svg.js';
 
-export { FORMATS, type ReportContext, type ReportFormat };
+export { FORMATS, reportPathPrefix, type ReportContext, type ReportFormat };
 
 export function renderReport(format: ReportFormat, report: ArchReport, ctx: ReportContext): string {
   switch (format) {

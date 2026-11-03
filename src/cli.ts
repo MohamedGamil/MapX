@@ -39,7 +39,7 @@ import { EDGE_TYPES, type ArchitectureConfig } from './arch/schema.js';
 import { buildReport, configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
 import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
 import { baselineLocation, displayPath, loadBaseline, loadCompareReport, renderBaseline } from './arch/baseline.js';
-import { defaultFormat, FORMATS, GRAPH_FORMATS, layerGraph, renderLayerGraph, renderReport, type GraphFormat, type ReportContext, type ReportFormat } from './arch/reporters/index.js';
+import { defaultFormat, FORMATS, GRAPH_FORMATS, layerGraph, renderLayerGraph, renderReport, reportPathPrefix, type GraphFormat, type ReportContext, type ReportFormat } from './arch/reporters/index.js';
 import { changedLayers, changedSince, IntrospectError, isAllowed, layerDependencies, layerMembers, layerSummaries, openArchitecture, unassignedElements, unusedAllowances, whichLayers, type ArchContext } from './arch/introspect.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
@@ -2832,6 +2832,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
       // What the CI formats need besides the report (M5-07): set once the configuration is loaded.
       const reportContext: ReportContext = {
         configFile: relative(dir, architectureConfigPath(dir, selection.view)).split(sep).join('/'),
+        pathPrefix: reportPathPrefix(format, dir), // CI tools read paths from the repository root (M5-07-R1)
         check: options,
         version: VERSION,
       };

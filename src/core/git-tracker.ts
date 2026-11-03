@@ -170,6 +170,27 @@ export function isGitRepo(dir: string): boolean {
   }
 }
 
+/**
+ * The folder's path from the top level of its git repository, with `/` and a trailing `/` (`sub/`):
+ * `''` at the top level. Null when git cannot tell: outside git, or a git that refuses the folder
+ * (a bad GIT_DIR, "dubious ownership"). CI reports locate files from the checkout root (M5-07-R1).
+ */
+export function getRepoPrefix(dir: string): string | null {
+  try {
+    return execFileSync('git', [...GIT_RAW_PATHS, 'rev-parse', '--show-prefix'], { cwd: dir, encoding: 'utf-8', stdio: QUIET }).replace(/\r?\n$/, '');
+  } catch {
+    return null;
+  }
+}
+
+/** True when the folder or one of its ancestors has a `.git` (a directory, or a worktree's file). */
+export function inGitCheckout(dir: string): boolean {
+  for (let d = resolve(dir); ; d = dirname(d)) {
+    if (existsSync(join(d, '.git'))) return true;
+    if (dirname(d) === d) return false;
+  }
+}
+
 export function getRepoName(repoRoot: string): string {
   try {
     const remote = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();

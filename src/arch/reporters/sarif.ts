@@ -7,7 +7,8 @@
 //                to it); otherwise `warning` for violations, warnings and errors a base report
 //                knows, `note` for uncovered and skipped ones; an allowed dependency is
 //                `kind: "pass"` at level none (listed only with --report-allowed)
-//   locations    the source file (relative to %SRCROOT%, the workspace) and first line, 1 when the
+//   locations    the source file (relative to %SRCROOT%, the repository root: a workspace in a
+//                subfolder prefixes its paths, M5-07-R1) and first line, 1 when the
 //                finding has none (GitHub requires a start line), and the element as a logical
 //                location. A stale baseline entry is located on the baseline file; a finding
 //                without a file (a configuration error, `empty-layer`) on the configuration file
@@ -16,7 +17,7 @@
 // `automationDetails.id` is `mapx-check/` (or `mapx-check/<view>/`), so code scanning keeps views
 // apart. No timestamps, durations or absolute paths: the output is byte-stable.
 import type { ArchReport, Finding } from '../report.js';
-import { describeFinding, fails, locate, ruleOf, RULE_DESCRIPTIONS, type ReportContext } from './context.js';
+import { describeFinding, fails, locate, repoPath, ruleOf, RULE_DESCRIPTIONS, type ReportContext } from './context.js';
 
 export const SARIF_SCHEMA = 'https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json';
 const INFO_URI = 'https://github.com/MohamedGamil/mapx';
@@ -45,7 +46,7 @@ export function renderSarif(report: ArchReport, ctx: ReportContext): string {
     const properties: Record<string, unknown> = { kind: f.kind };
     if (f.source?.layer) properties.sourceLayer = f.source.layer;
     if (f.target) properties.target = f.target.element;
-    if (f.target?.file) properties.targetFile = f.target.file;
+    if (f.target?.file) properties.targetFile = repoPath(f.target.file, ctx);
     if (f.target?.layer) properties.targetLayer = f.target.layer;
     if (f.layer) properties.layer = f.layer;
     if (f.edgeType) properties.edgeType = f.edgeType;
