@@ -235,7 +235,8 @@ Fixture scoring in CI; optional message edges.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 - **M4-28** Release documentation for 0.3.9: README, docs and CHANGELOG cover every change since 0.3.5 — IN_PROGRESS, P1, 8h; depends on M5-24, M2-08-R3, M5-15, M5-18.
-- **M4-12-R1** Grammar-load bound and work stealing agree under load — IN_PROGRESS, P2, 3h; depends on M4-12.
+- **M4-12-R1** Grammar-load bound and work stealing agree under load — DONE, P2, 3h; depends on M4-12.
+- **M4-12-R2** Worker pool: the grammar-load bound holds across crashes and refused retries — BACKLOG, P3, 2h; depends on M4-12-R1.
 
 ## M5 — Architecture rules (Deptrac-inspired)
 

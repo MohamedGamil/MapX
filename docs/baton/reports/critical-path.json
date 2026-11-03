@@ -2320,9 +2320,18 @@
         "duration": 3,
         "earliestStart": 44,
         "earliestFinish": 47,
-        "latestStart": 218,
+        "latestStart": 216,
+        "latestFinish": 219,
+        "slack": 172
+      },
+      {
+        "id": "M4-12-R2",
+        "duration": 2,
+        "earliestStart": 47,
+        "earliestFinish": 49,
+        "latestStart": 219,
         "latestFinish": 221,
-        "slack": 174
+        "slack": 172
       },
       {
         "id": "M5-07-R1",
@@ -2352,7 +2361,7 @@
         "slack": 16
       }
     ],
-    "totalEffort": 1381
+    "totalEffort": 1383
   },
   "remaining": {
     "duration": 8,
@@ -4648,12 +4657,21 @@
       },
       {
         "id": "M4-12-R1",
-        "duration": 3,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 3,
-        "latestStart": 5,
+        "earliestFinish": 0,
+        "latestStart": 6,
+        "latestFinish": 6,
+        "slack": 6
+      },
+      {
+        "id": "M4-12-R2",
+        "duration": 2,
+        "earliestStart": 0,
+        "earliestFinish": 2,
+        "latestStart": 6,
         "latestFinish": 8,
-        "slack": 5
+        "slack": 6
       },
       {
         "id": "M5-07-R1",
@@ -4683,11 +4701,11 @@
         "slack": 8
       }
     ],
-    "totalEffort": 70
+    "totalEffort": 69
   },
   "resourceSchedule": {
-    "hours": 70,
-    "weeks": 3.5,
+    "hours": 69,
+    "weeks": 3.45,
     "forecastAsOf": "2026-11-03",
     "conditionalDate": "2026-11-27",
     "assignments": [
@@ -6219,25 +6237,31 @@
         "id": "M4-12-R1",
         "worker": 0,
         "start": 65,
-        "finish": 68
+        "finish": 65
+      },
+      {
+        "id": "M4-12-R2",
+        "worker": 0,
+        "start": 65,
+        "finish": 67
       },
       {
         "id": "M5-07-R1",
         "worker": 0,
-        "start": 68,
-        "finish": 68
+        "start": 67,
+        "finish": 67
       },
       {
         "id": "M5-07-R2",
         "worker": 0,
-        "start": 68,
-        "finish": 70
+        "start": 67,
+        "finish": 69
       },
       {
         "id": "M5-08-R1",
         "worker": 0,
-        "start": 70,
-        "finish": 70
+        "start": 69,
+        "finish": 69
       }
     ]
   }

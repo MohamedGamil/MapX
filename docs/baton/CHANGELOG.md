@@ -111,3 +111,4 @@
 - M4-09-R4 DONE (claude-ff): store-coverage tests wrote their SQLite databases under tests/, racing fixtures-tracked.test.ts (seen once while verifying M5-24); now in a temp folder, with a path assertion that both mutations fail.
 - M5-24 post-acceptance defect: tests/ui/arch.spec.ts kept the pre-M5-24 uncovered counts (4); fixed to 23/25, 7 passed. Found running `npm run test:ui` for M4-24-R1.
 - M4-24-R1 DONE: closed on a quiet machine. `npm run test:ui` 54 passed, perf budgets met (fullGraph2000 4,487 ms against 4,992 ms; graph500 260 ms against 864 ms); ui-escaping 16 passed; npm run check 2,915 passed.
+- M4-12-R1 DONE (lane, cherry-picked as 4205d18; D034 option a): new-grammar steals are capped per batch, so a batch loads at most languages + workers grammars. 20/20 runs under 16 busy loops; deterministic seeded scheduler tests; bench 3–10% faster. Review: no P0/P1; crash-path P2s registered as M4-12-R2 (P3).

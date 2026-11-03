@@ -53,6 +53,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
+- Parallel scans never load more grammars than languages plus workers, however busy the machine (M4-12-R1).
 - The dashboard's escaping check now follows values instead of trusting variable names and also checks HTML built by concatenation, and the XSS browser test covers every tab, including Workspace, HTTP and Configuration, with payloads in handler, symbol and repo names and config values (M4-24-R1).
 - In JS/TS, a name imported from a package or a Node builtin (`import { join } from 'node:path'`) no longer links to a same-named project symbol, and a global an ES module neither imports nor declares (`Node`, `Request`) no longer links to another module's declaration; bare imports under a tsconfig/jsconfig `baseUrl` now resolve (M2-08-R3).
 - npm attribution of external references no longer falls through to a parent folder's lockfile when a nested lockfile exists but cannot be read (a folder, no permission); the nested package's manifests answer, flagged manifest (M5-20-R1).

@@ -28497,14 +28497,27 @@
         "docs/baton/reports/M5-19.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M4-12-R1",
       "actualHours": null,
       "startedAt": "2026-11-03T12:54:20.180Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T14:06:19.355Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-12-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/worker-pool.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-12-R1.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-12-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-02T22:16:39.687Z",
@@ -28523,6 +28536,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T14:06:18.968Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T14:06:19.355Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/worker-pool.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-12-R1.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-12-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -28550,6 +28586,64 @@
       "verificationCommands": [
         "npx vitest run tests/worker-pool.test.ts",
         "npm run check"
+      ]
+    },
+    {
+      "milestone": "M4",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M4-12-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-12-R1.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-12-R2",
+      "title": "Worker pool: the grammar-load bound holds across crashes and refused retries",
+      "objective": "After a worker crash (requeue, resetLane) the per-batch grammar-load budget still bounds new loads, and a retry file refused by takeBatch is not counted as a load.",
+      "description": "Review of M4-12-R1 (2026-11-03): a crash can exceed languages + lanes by up to 6 (662 of 20,000 fuzzed crash runs); next(lane, false) counts a load for a retry file takeBatch then requeues (worker-pool.ts:339, ~525). Documented in the class comment; no acceptance criterion covers crashes.",
+      "outputs": [
+        "src/core/worker-pool.ts",
+        "tests/worker-pool.test.ts",
+        "reports/M4-12-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/worker-pool.ts",
+        "tests/worker-pool.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A seeded fuzz with crashes never exceeds languages + lanes (or a documented crash allowance), and every file is parsed exactly once (test).",
+        "A refused retry file does not count as a grammar load (unit test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/worker-pool.test.ts"
       ]
     },
     {
