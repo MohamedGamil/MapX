@@ -28244,6 +28244,58 @@
       ]
     },
     {
+      "milestone": "M4",
+      "priority": "P2",
+      "estimate": {
+        "min": 0.5,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/DECISIONS.md#D037"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M4-29",
+      "title": "The installer replaces a running mapx binary",
+      "objective": "scripts/templates/install.sh (and the self-extracting installer) install the binary by writing a temp file in the target folder and renaming it over the old one, so an upgrade succeeds while `mapx serve` processes run the old binary.",
+      "description": "Found installing v0.3.9 (2026-11-03): `--local --force` failed with \"cp: cannot create regular file ~/.local/bin/mapx: Text file busy\" because three `mapx serve` MCP servers ran the 0.3.8 binary (install.sh:189 uses cp). Worked around by renaming the old binary aside first.",
+      "outputs": [
+        "scripts/templates/install.sh",
+        "reports/M4-29.md"
+      ],
+      "affectedFiles": [
+        "scripts/templates/install.sh",
+        "scripts/templates/install.ps1",
+        "tests/installer*.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "With a process executing the installed binary, `install.sh --prefix <tmp> --force` exits 0 and the new binary is in place; the running process keeps working (test)."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ]
+    },
+    {
       "milestone": "M2",
       "priority": "P2",
       "estimate": {
@@ -28543,6 +28595,61 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/new-expression-calls.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 6
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-03-R2.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-13",
+      "title": "Calls inside a one-line PHP class are indexed",
+      "objective": "`class User { public function name() { return $this->id(); } private function id() { return 1; } }` on one line gives the call edge User::name → User::id, as the same class over several lines does.",
+      "description": "Found smoke-testing the v0.3.9 binary (2026-11-03): one-line PHP class gives no callee for User::name; the multi-line form gives User::name → id. Same in 0.3.8 (pre-existing). Similar to the one-line C++ case M5-03-R2 fixed.",
+      "outputs": [
+        "src/parsers/languages/php*.ts",
+        "tests/php-one-line.test.ts",
+        "reports/M2-13.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/languages/**",
+        "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
+        "tests/php-one-line.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The one-line class above gives the edge User::name → User::id (e2e test); `npm run eval` holds every floor."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/php-one-line.test.ts",
         "npm run eval"
       ]
     },

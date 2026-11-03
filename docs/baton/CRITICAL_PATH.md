@@ -6,7 +6,7 @@ Remaining longest dependency path: **8h** (full-plan path: 221h).
 
 M5-15-R1
 
-Remaining effort min/expected/max: **34 / 68 / 116h**. Capacity: 1 engineer(s) × 20 h/week → **3.4 weeks**, conditional finish **2026-11-26** (as of 2026-11-03).
+Remaining effort min/expected/max: **35.5 / 72 / 124h**. Capacity: 1 engineer(s) × 20 h/week → **3.6 weeks**, conditional finish **2026-11-28** (as of 2026-11-03).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
@@ -25,7 +25,9 @@ Remaining effort min/expected/max: **34 / 68 / 116h**. Capacity: 1 engineer(s) �
 - M0-02-R13 (BACKLOG): prerequisites satisfied
 - M4-28-R1 (BACKLOG): prerequisites satisfied
 - M4-28-R2 (BACKLOG): prerequisites satisfied
+- M4-29 (BACKLOG): prerequisites satisfied
 - M2-12 (BACKLOG): prerequisites satisfied
+- M2-13 (BACKLOG): prerequisites satisfied
 - M5-25-R3 (BACKLOG): prerequisites satisfied
 - M4-12-R2 (BACKLOG): prerequisites satisfied
 - M5-07-R2 (BACKLOG): prerequisites satisfied
@@ -49,7 +51,9 @@ Remaining effort min/expected/max: **34 / 68 / 116h**. Capacity: 1 engineer(s) �
 | M0-02-R13 | 0 | 4 | 4 | 8 | 4 |
 | M4-28-R1 | 0 | 1 | 7 | 8 | 7 |
 | M4-28-R2 | 0 | 1 | 7 | 8 | 7 |
+| M4-29 | 0 | 1 | 7 | 8 | 7 |
 | M2-12 | 0 | 4 | 4 | 8 | 4 |
+| M2-13 | 0 | 3 | 5 | 8 | 5 |
 | M5-25-R3 | 0 | 2 | 6 | 8 | 6 |
 | M4-12-R2 | 0 | 2 | 6 | 8 | 6 |
 | M5-07-R2 | 0 | 2 | 6 | 8 | 6 |

@@ -366,3 +366,14 @@ The release holds everything since v0.3.8:
   - the documentation refresh (M4-28).
 
 Nothing is published or pushed. M4-13-R1 and M5-98 stay on hold (D035).
+
+Install note (2026-11-03): `./mapx-0.3.9-linux-x64-installer.sh --local --force` first failed with "Text file busy", because three `mapx serve` MCP servers of another session were running the 0.3.8 binary. The old binary was renamed aside, the same installer was run, and the renamed file was then removed; the running servers keep 0.3.8 until they restart. The installer fix is registered as M4-29.
+
+Verified outside the repository with PATH=~/.local/bin:/usr/bin:/bin:
+- `mapx --version` gives 0.3.9, and `lang list` works;
+- `init` and `scan` of TS, Python and PHP files give the expected callers, and `node:path`'s `join` gives no false edge;
+- `mapx check` gives exit 0 when clean and exit 1 on a forbidden Domain → Http import;
+- `mapx ui` serves `/`, `/main.js` and `/api/arch/report` (200);
+- `mapx serve` answers MCP `initialize` as mapx 0.3.9.
+
+A one-line PHP class losing its calls was found; it is pre-existing (0.3.8 does the same) and registered as M2-13.

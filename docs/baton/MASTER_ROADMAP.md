@@ -172,6 +172,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.
 - **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
 - **M2-12** A method called on a new-expression gets a call edge (`new X().m()`) — BACKLOG, P2, 4h; depends on M2-09.
+- **M2-13** Calls inside a one-line PHP class are indexed — BACKLOG, P2, 3h; depends on nothing.
 
 ## M3 — Vue SFC semantics
 
@@ -239,6 +240,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-28** Release documentation for 0.3.9: README, docs and CHANGELOG cover every change since 0.3.5 — DONE, P1, 8h; depends on M5-24, M2-08-R3, M5-15, M5-18.
 - **M4-28-R1** Agent templates do not advertise `mapx explain --reclassify` — BACKLOG, P2, 1h; depends on M4-28.
 - **M4-28-R2** `mapx_status` honours its exclude and include parameters — BACKLOG, P2, 1h; depends on M4-28.
+- **M4-29** The installer replaces a running mapx binary — BACKLOG, P2, 1h; depends on nothing.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — DONE, P2, 3h; depends on M4-12.
 - **M4-12-R2** Worker pool: the grammar-load bound holds across crashes and refused retries — BACKLOG, P3, 2h; depends on M4-12-R1.
 
