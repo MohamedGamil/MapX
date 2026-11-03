@@ -16635,14 +16635,27 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-17",
       "actualHours": null,
       "startedAt": "2026-11-03T03:48:09.808Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T07:39:37.491Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-17.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-init.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-17.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-17.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T03:48:09.212Z",
@@ -16655,9 +16668,32 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T07:39:36.952Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T07:39:37.491Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-init.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-17.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-17.md"
+            }
+          ]
         }
       ],
-      "criticalPath": true,
+      "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the iteration branch.",
