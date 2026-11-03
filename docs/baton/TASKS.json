@@ -21917,14 +21917,27 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-A",
       "actualHours": null,
       "startedAt": "2026-11-03T16:52:32.357Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T18:52:04.727Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-24-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts tests/arch-init.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-24-R4.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-24-R4.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T16:52:31.928Z",
@@ -21937,6 +21950,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:52:04.300Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T18:52:04.727Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts tests/arch-init.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-24-R4.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-24-R4.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

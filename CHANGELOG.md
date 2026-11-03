@@ -66,6 +66,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The README gives an overview of every feature with links to its documentation and a quick start that runs as written; `tests/docs-surface.test.ts` keeps docs/cli-reference.md and docs/mcp-integration.md equal to the CLI and MCP surface (every command, flag, tool and parameter), the stated tool, framework and preset counts equal to the code, and every relative link and anchor in the docs resolving (M4-28).
 
 ### Changed
+- `mapx check` no longer reports packages that no layer covers as uncovered unless the configuration opts in (`policy.uncovered.externals: true`, or a positive `package` selector in a non-overlay layer), so `--fail-on-uncovered` ignores them by default; this reverses 0.3.9 (M5-24-R4).
 
 #### Architecture rules
 

@@ -291,7 +291,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-24-R1** Ambient access is extracted: environment, globals and superglobals — BACKLOG, P2, 8h; depends on M5-24.
 - **M5-24-R2** External elements: multi-layer warning and inherited dependencies — BACKLOG, P2, 4h; depends on M5-24, M5-09.
 - **M5-24-R3** Agent templates describe package and built-in targets for mapx_arch_allowed — BACKLOG, P3, 1h; depends on M5-24.
-- **M5-24-R4** Uncovered packages are opt-in — IN_PROGRESS, P1, 5h; depends on M5-24.
+- **M5-24-R4** Uncovered packages are opt-in — DONE, P1, 5h; depends on M5-24.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — DONE, P2, 3h; depends on M5-05.
 - **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.
