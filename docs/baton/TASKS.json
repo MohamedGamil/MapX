@@ -41,7 +41,7 @@
     {
       "id": "M6",
       "title": "Dashboard graph scale and readability",
-      "goal": "The dashboard's graph views and Architecture screen stay fast on large codebases (tens of thousands of files), lay graphs out readably, and let users browse complex node and edge sets by aggregating, focusing, filtering and drilling down, measured against labelled large fixtures with budgets that hold under machine load."
+      "goal": "The dashboard's graph views and Architecture screen stay fast on large codebases (100,000+ files), lay graphs out readably, and let users browse complex node and edge sets by aggregating, focusing, filtering and drilling down, measured against labelled large fixtures with budgets that hold under machine load."
     }
   ],
   "gates": [
@@ -17250,9 +17250,7 @@
       "optionalDependencies": [
         "M5-12"
       ],
-      "blockingConditions": [
-        "Owner hold (D035, 2026-11-03): start only when the owner explicitly asks."
-      ],
+      "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
       "status": "BACKLOG",
       "owner": "maintainer",
@@ -21847,6 +21845,76 @@
       ],
       "verificationCommands": [
         "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-24-R4",
+      "milestone": "M5",
+      "title": "Uncovered packages are opt-in",
+      "objective": "`mapx check` reports a package that no layer covers as uncovered only when the config opts in (`policy.uncovered.externals: true`, or any layer or rule uses a `package` selector); without that, packages are out of scope and `--fail-on-uncovered` ignores them. `mapx arch init` keeps proposing the Packages layer but no longer needs it for day one.",
+      "description": "Owner decision D039 (2026-11-03): reverse M5-24's default (uncovered by default per AR-08/AR-05, released in v0.3.9). A user-visible change: CHANGELOG \"Changed\" entry required.",
+      "priority": "P1",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-24",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-24.md",
+        "docs/baton/DECISIONS.md#D039"
+      ],
+      "outputs": [
+        "src/arch/evaluate.ts",
+        "src/arch/schema.ts",
+        "tests/external-refs.test.ts",
+        "reports/M5-24-R4.md"
+      ],
+      "affectedFiles": [
+        "src/arch/evaluate.ts",
+        "src/arch/schema.ts",
+        "src/arch/config.ts",
+        "src/arch/introspect.ts",
+        "src/arch/infer.ts",
+        "schemas/**",
+        "tests/external-refs.test.ts",
+        "tests/arch-init.test.ts",
+        "tests/fixtures/arch-rules",
+        "docs/architecture-rules.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "A config with no package selector and no `policy.uncovered.externals`: an import of express gives no uncovered finding and `check --fail-on-uncovered` exits 0 (test); with `externals: true` or a package selector, express is uncovered as today (test).",
+        "score-arch: every kind and ecosystem stays 1/1, with fixture labels updated only where a fixture config opts in, and each change listed in the report; `mapx arch allowed` agrees with check."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/external-refs.test.ts tests/arch-init.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
       "status": "BACKLOG",
@@ -28657,9 +28725,7 @@
       ],
       "dependencies": [],
       "optionalDependencies": [],
-      "blockingConditions": [
-        "Owner decision: the root CLAUDE.md has hand edits; regenerate its block with `mapx agents generate --providers claude --force` (which also writes this checkout's path) or edit it by hand."
-      ],
+      "blockingConditions": [],
       "sources": [
         "docs/baton/reports/M4-28.md"
       ],
@@ -28679,7 +28745,7 @@
       "rollback": "Revert the task commit.",
       "id": "M4-32",
       "title": "Root CLAUDE.md generated block is current",
-      "objective": "The MapxGraph block of the root CLAUDE.md lists the current MCP tools (39) and languages (23) and the right project path, while the BATON section and the owner's edits stay.",
+      "objective": "The MapxGraph block of the root CLAUDE.md is regenerated with `mapx agents generate --providers claude --force` (D039): current MCP tools (39), languages (23) and this checkout's path, the BATON section untouched.",
       "description": "Finding 2026-11-03: CLAUDE.md says \"MCP Tools Available (32 total)\"; the code registers 39. M4-28 found that `mapx agents generate --providers claude --force` regenerates the block and leaves the BATON section alone.",
       "outputs": [
         "CLAUDE.md"
@@ -29796,8 +29862,8 @@
       "rollback": "Revert the task commit.",
       "id": "M6-01",
       "title": "Large-graph fixtures and baseline measurements for the graph and Architecture views",
-      "objective": "Generated synthetic workspaces of 2k, 10k and 50k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap.",
-      "description": "Owner request 2026-11-03: improve dashboard graph and Architecture-view performance and readability on large codebases. Today the Full Codebase graph of 2,000 files takes ~4.5 s (M4-20); nothing measures 10k+ files or large architecture configs. Fixture first: every later M6 task is measured here.",
+      "objective": "Generated synthetic workspaces of 2k, 10k, 50k and 100k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap.",
+      "description": "Owner request 2026-11-03: improve dashboard graph and Architecture-view performance and readability on large codebases. Today the Full Codebase graph of 2,000 files takes ~4.5 s (M4-20); nothing measures 10k+ files or large architecture configs. Fixture first: every later M6 task is measured here. Target scale (D039): 100,000+ files.",
       "outputs": [
         "scripts/ui/gen-large-workspace.ts",
         "tests/ui/perf-scale.spec.ts",
@@ -29809,7 +29875,7 @@
         "tests/fixtures/ui-scale/**"
       ],
       "acceptanceCriteria": [
-        "The generator produces byte-identical workspaces for a seed; 2k/10k/50k sizes scan with `mapx scan` (report records file, symbol and edge counts).",
+        "The generator produces byte-identical workspaces for a seed; 2k/10k/50k/100k sizes scan with `mapx scan` (report records file, symbol and edge counts).",
         "The harness reports the five metrics for the Graph tab (each layout), the Full Codebase view and the Architecture view on each size, 3 runs each, in a JSON artifact; baseline numbers recorded in the report, including where a view fails to load or freezes."
       ],
       "verificationCommands": [
@@ -29860,7 +29926,7 @@
       "id": "M6-02",
       "title": "Graph aggregation API: levels, counts and limits",
       "objective": "/api/graph serves the graph at a chosen level (repo, folder, cluster, layer, file, symbol) with aggregated nodes (member counts) and aggregated edges (counts by type and verifiability), expansion of one aggregate into its children, and hard limits with paging, so the client never receives more than it can draw.",
-      "description": "Large codebases cannot be drawn file by file; the server must aggregate. Stable node ids across levels let the client expand and collapse without re-laying out everything.",
+      "description": "Large codebases cannot be drawn file by file; the server must aggregate. Stable node ids across levels let the client expand and collapse without re-laying out everything. Required, not optional, at the 100k target (D039).",
       "outputs": [
         "src/ui-graph.ts",
         "src/ui-server.ts",
@@ -29876,7 +29942,7 @@
       ],
       "acceptanceCriteria": [
         "On the 10k fixture, folder-level responses stay under a node/edge limit (configurable) and their counts sum to the file-level graph (test against the store).",
-        "Expanding an aggregate returns exactly its children and the edges between them and the rest at the current level (test); responses for 50k files return within the budget M6-01 sets."
+        "Expanding an aggregate returns exactly its children and the edges between them and the rest at the current level (test); responses for 100k files return within the budget M6-01 sets."
       ],
       "verificationCommands": [
         "npx vitest run tests/ui-graph-api.test.ts"
@@ -29924,8 +29990,8 @@
       "kind": "iteration",
       "rollback": "Revert the task commit.",
       "id": "M6-03",
-      "title": "Renderer decision: Cytoscape canvas vs Cytoscape WebGL vs sigma.js/graphology for large graphs",
-      "objective": "A measured decision on the renderer for large graphs: prototype the 10k and 50k fixtures in Cytoscape (canvas), Cytoscape's WebGL renderer and sigma.js (graphology is already a dependency), compare M6-01's metrics, bundle size, licence and feature fit (compound nodes, styling, events, accessibility), and record the choice as a decision.",
+      "title": "Renderer choice for 100k-file graphs: Cytoscape WebGL vs sigma.js/graphology (vs canvas as baseline)",
+      "objective": "A measured decision on the renderer for large graphs: prototype the 10k, 50k and 100k fixtures in Cytoscape (canvas), Cytoscape's WebGL renderer and sigma.js (graphology is already a dependency), compare M6-01's metrics, bundle size, licence and feature fit (compound nodes, styling, events, accessibility), and record the choice as a decision.",
       "description": "The dashboard uses Cytoscape on canvas with fcose, ELK, Dagre and Cola layouts and a layout worker (M4-20). Canvas rendering limits node counts; the choice of renderer constrains M6-04 to M6-07.",
       "outputs": [
         "reports/M6-03.md",
@@ -29936,7 +30002,7 @@
         "docs/baton/reports/M6-03.md"
       ],
       "acceptanceCriteria": [
-        "The report tabulates M6-01 metrics per renderer on 10k and 50k files (3 runs each) and the bundle delta; a DECISIONS entry names the renderer and why; no production code changes."
+        "The report tabulates M6-01 metrics per renderer on 10k, 50k and 100k files (3 runs each) and the bundle delta; a DECISIONS entry names the WebGL-class renderer chosen (D039: required at 100k) and why; no production code changes."
       ],
       "verificationCommands": [
         "npm run check"
@@ -29988,7 +30054,7 @@
       "rollback": "Revert the task commit.",
       "id": "M6-04",
       "title": "Level-of-detail graph rendering for large codebases",
-      "objective": "The Graph tab draws aggregates when zoomed out and expands them on zoom or click, culls what is off screen, thins labels by zoom and importance, and loads detail progressively from /api/graph, so the 50k-file fixture opens and pans smoothly.",
+      "objective": "The Graph tab draws aggregates when zoomed out and expands them on zoom or click, culls what is off screen, thins labels by zoom and importance, and loads detail progressively from /api/graph, so the 100k-file fixture opens and pans smoothly.",
       "description": "Uses the M6-02 API and the M6-03 renderer. Replaces drawing every file node at once.",
       "outputs": [
         "src/ui/graph/**",
@@ -30003,7 +30069,7 @@
         "tests/ui/perf-scale.spec.ts"
       ],
       "acceptanceCriteria": [
-        "On the 50k fixture: interactive within the M6-01 budget, no main-thread task over 200 ms while panning, frame time median under 33 ms (perf-scale spec).",
+        "On the 100k fixture: interactive within the M6-01 budget, no main-thread task over 200 ms while panning, frame time median under 33 ms (perf-scale spec).",
         "Zooming into a folder aggregate shows its files with their edges and the totals stay consistent with the API (functional spec); the 500- and 2,000-file budgets of M4-20 still hold."
       ],
       "verificationCommands": [
@@ -30139,7 +30205,7 @@
       ],
       "acceptanceCriteria": [
         "Each interaction has a functional spec on the 10k fixture (focus, k-hop 1–3, path between two files equal to the store's shortest path, filters, search, pin, breadcrumb, minimap) and passes axe in both themes.",
-        "Each interaction responds within the M6-01 budget on 50k files (perf-scale spec)."
+        "Each interaction responds within the M6-01 budget on 100k files (perf-scale spec)."
       ],
       "verificationCommands": [
         "npx playwright test tests/ui/graph-browse.spec.ts"
@@ -30276,7 +30342,7 @@
         "tests/ui/tables-scale.spec.ts"
       ],
       "acceptanceCriteria": [
-        "On the 50k fixture each table tab renders within budget and scrolls with frame time under 33 ms (spec); repeated API requests with an unchanged index are served from cache (test).",
+        "On the 100k fixture each table tab renders within budget and scrolls with frame time under 33 ms (spec); repeated API requests with an unchanged index are served from cache (test).",
         "check-package enforces per-chunk budgets and passes; the D006 ceiling holds."
       ],
       "verificationCommands": [
@@ -30409,7 +30475,7 @@
       "rollback": "Revert the task commit.",
       "id": "M6-98",
       "title": "M6 acceptance: re-measure graph and Architecture views against the M6-01 baselines",
-      "objective": "Re-run the M6-01 harness on 2k/10k/50k files and the large architecture fixture, record every metric against the baseline, and mark each M6 objective met or open a follow-up.",
+      "objective": "Re-run the M6-01 harness on 2k/10k/50k/100k files and the large architecture fixture, record every metric against the baseline, and mark each M6 objective met or open a follow-up.",
       "description": "Milestone acceptance for M6.",
       "outputs": [
         "reports/M6-98.md"
@@ -30418,7 +30484,7 @@
         "docs/baton/reports/M6-98.md"
       ],
       "acceptanceCriteria": [
-        "Every M6-01 metric is recorded before and after; every budget set by M6-01 is met on 50k files, or a follow-up task exists for each miss."
+        "Every M6-01 metric is recorded before and after; every budget set by M6-01 is met on 100k files, or a follow-up task exists for each miss."
       ],
       "verificationCommands": [
         "npx playwright test tests/ui/perf-scale.spec.ts"

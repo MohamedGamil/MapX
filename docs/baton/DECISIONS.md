@@ -399,3 +399,15 @@ They are registered as milestone **M6**, documented only and not started:
 - **M6-98:** acceptance.
 
 Findings from the 2026-11-03 session not registered before are BACKLOG too: M4-09-R5, M4-30, M4-31, M4-32 (owner decision on CLAUDE.md), M5-22-R1, M5-23-R1, M4-27-R1 and M5-25-R4.
+
+## D039 — Owner answers of 2026-11-03 (Q&A)
+
+- **Next work:** the defect batch, then M5 acceptance and its follow-ups.
+  - **The defect batch:** M4-30, M2-12, M2-13, M4-28-R1, M4-28-R2, M4-29, M4-31, plus M5-24-R4 below and M4-32.
+  - **M5:** M5-98 is no longer held. The M5 follow-ups come after it.
+  - **M4-13-R1** stays held (D035).
+- **Order and concurrency:** M4-30 runs first; it fixes the arch tests that time out under load. After that, at most 3 lanes run at a time, each with an independent review.
+- **v0.3.9 stays local.** Nothing is pushed or published; the owner does that.
+- **Root CLAUDE.md:** regenerate its MapxGraph block with `mapx agents generate --providers claude --force` (M4-32, unblocked).
+- **Uncovered packages become opt-in.** This reverses M5-24's default (AR-08/AR-05), which shipped in v0.3.9. A package that no layer covers is reported as uncovered only when the config opts in, through `policy.uncovered.externals: true` or by using a `package` selector. Registered as M5-24-R4 (P1), with a CHANGELOG "Changed" entry.
+- **M6's target scale is 100,000+ files.** The M6 tasks now include a 100k fixture and set their budgets at 100k. Server-side aggregation (M6-02) is required, and M6-03 chooses a WebGL-class renderer.

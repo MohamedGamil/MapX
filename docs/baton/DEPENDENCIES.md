@@ -225,6 +225,7 @@ flowchart LR
 - M5-24-R1 ← M5-24 (hard)
 - M5-24-R2 ← M5-24 (hard), M5-09 (hard)
 - M5-24-R3 ← M5-24 (hard)
+- M5-24-R4 ← M5-24 (hard)
 - M5-25 ← M0-17-R5 (hard), M5-01 (fixture)
 - M5-26 ← M5-05 (hard)
 - M0-02-R10 ← M4-04 (hard)

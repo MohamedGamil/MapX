@@ -290,6 +290,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-24-R1** Ambient access is extracted: environment, globals and superglobals — BACKLOG, P2, 8h; depends on M5-24.
 - **M5-24-R2** External elements: multi-layer warning and inherited dependencies — BACKLOG, P2, 4h; depends on M5-24, M5-09.
 - **M5-24-R3** Agent templates describe package and built-in targets for mapx_arch_allowed — BACKLOG, P3, 1h; depends on M5-24.
+- **M5-24-R4** Uncovered packages are opt-in — BACKLOG, P1, 5h; depends on M5-24.
 - **M5-25** Go package-qualified composite literals resolve to the type in the imported package — DONE, P1, 3h; depends on M0-17-R5, M5-01.
 - **M5-26** The index records the extractor version that built it; an older index counts as stale — DONE, P2, 3h; depends on M5-05.
 - **M5-03-R1** Qualified names from real scans for every built-in language; not over symbol-level selectors — DONE, P1, 9h; depends on M5-03.
@@ -307,11 +308,11 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 
 ## M6 — Dashboard graph scale and readability
 
-The dashboard's graph views and Architecture screen stay fast on large codebases (tens of thousands of files), lay graphs out readably, and let users browse complex node and edge sets by aggregating, focusing, filtering and drilling down, measured against labelled large fixtures with budgets that hold under machine load.
+The dashboard's graph views and Architecture screen stay fast on large codebases (100,000+ files), lay graphs out readably, and let users browse complex node and edge sets by aggregating, focusing, filtering and drilling down, measured against labelled large fixtures with budgets that hold under machine load.
 
 - **M6-01** Large-graph fixtures and baseline measurements for the graph and Architecture views — BACKLOG, P1, 8h; depends on M4-20, M5-15.
 - **M6-02** Graph aggregation API: levels, counts and limits — BACKLOG, P1, 12h; depends on M6-01.
-- **M6-03** Renderer decision: Cytoscape canvas vs Cytoscape WebGL vs sigma.js/graphology for large graphs — BACKLOG, P2, 6h; depends on M6-01.
+- **M6-03** Renderer choice for 100k-file graphs: Cytoscape WebGL vs sigma.js/graphology (vs canvas as baseline) — BACKLOG, P2, 6h; depends on M6-01.
 - **M6-04** Level-of-detail graph rendering for large codebases — BACKLOG, P1, 16h; depends on M6-02, M6-03.
 - **M6-05** Readable graph layouts: layered direction, compound groups, edge bundling — BACKLOG, P1, 12h; depends on M6-01.
 - **M6-06** Browsing complex graphs: focus, neighbourhoods, paths, filters and search — BACKLOG, P2, 12h; depends on M6-02, M6-04.
