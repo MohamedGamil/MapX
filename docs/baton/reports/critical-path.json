@@ -4952,12 +4952,12 @@
       },
       {
         "id": "M4-32",
-        "duration": 1,
+        "duration": 0,
         "earliestStart": 0,
-        "earliestFinish": 1,
-        "latestStart": 50,
+        "earliestFinish": 0,
+        "latestStart": 51,
         "latestFinish": 51,
-        "slack": 50
+        "slack": 51
       },
       {
         "id": "M2-10",
@@ -5158,13 +5158,13 @@
         "slack": 0
       }
     ],
-    "totalEffort": 198
+    "totalEffort": 197
   },
   "resourceSchedule": {
-    "hours": 198,
-    "weeks": 9.9,
+    "hours": 197,
+    "weeks": 9.85,
     "forecastAsOf": "2026-11-03",
-    "conditionalDate": "2027-01-11",
+    "conditionalDate": "2027-01-10",
     "assignments": [
       {
         "id": "M0-01",
@@ -6736,139 +6736,139 @@
         "id": "M4-32",
         "worker": 0,
         "start": 85,
-        "finish": 86
+        "finish": 85
       },
       {
         "id": "M2-10",
         "worker": 0,
-        "start": 86,
-        "finish": 86
+        "start": 85,
+        "finish": 85
       },
       {
         "id": "M2-11",
         "worker": 0,
-        "start": 86,
-        "finish": 86
+        "start": 85,
+        "finish": 85
       },
       {
         "id": "M2-12",
         "worker": 0,
-        "start": 86,
-        "finish": 90
+        "start": 85,
+        "finish": 89
       },
       {
         "id": "M2-13",
         "worker": 0,
-        "start": 90,
-        "finish": 93
+        "start": 89,
+        "finish": 92
       },
       {
         "id": "M5-25-R2",
         "worker": 0,
-        "start": 93,
-        "finish": 93
+        "start": 92,
+        "finish": 92
       },
       {
         "id": "M5-25-R3",
         "worker": 0,
-        "start": 93,
-        "finish": 95
+        "start": 92,
+        "finish": 94
       },
       {
         "id": "M5-25-R4",
         "worker": 0,
-        "start": 95,
-        "finish": 97
+        "start": 94,
+        "finish": 96
       },
       {
         "id": "M4-12-R1",
         "worker": 0,
-        "start": 97,
-        "finish": 97
+        "start": 96,
+        "finish": 96
       },
       {
         "id": "M4-12-R2",
         "worker": 0,
-        "start": 97,
-        "finish": 99
+        "start": 96,
+        "finish": 98
       },
       {
         "id": "M5-07-R1",
         "worker": 0,
-        "start": 99,
-        "finish": 99
+        "start": 98,
+        "finish": 98
       },
       {
         "id": "M5-07-R2",
         "worker": 0,
-        "start": 99,
-        "finish": 101
+        "start": 98,
+        "finish": 100
       },
       {
         "id": "M5-08-R1",
         "worker": 0,
-        "start": 101,
-        "finish": 101
+        "start": 100,
+        "finish": 100
       },
       {
         "id": "M6-01",
         "worker": 0,
-        "start": 101,
-        "finish": 109
+        "start": 100,
+        "finish": 108
       },
       {
         "id": "M6-02",
         "worker": 0,
-        "start": 109,
-        "finish": 121
+        "start": 108,
+        "finish": 120
       },
       {
         "id": "M6-03",
         "worker": 0,
-        "start": 121,
-        "finish": 127
+        "start": 120,
+        "finish": 126
       },
       {
         "id": "M6-04",
         "worker": 0,
-        "start": 127,
-        "finish": 143
+        "start": 126,
+        "finish": 142
       },
       {
         "id": "M6-05",
         "worker": 0,
-        "start": 143,
-        "finish": 155
+        "start": 142,
+        "finish": 154
       },
       {
         "id": "M6-06",
         "worker": 0,
-        "start": 155,
-        "finish": 167
+        "start": 154,
+        "finish": 166
       },
       {
         "id": "M6-07",
         "worker": 0,
-        "start": 167,
-        "finish": 179
+        "start": 166,
+        "finish": 178
       },
       {
         "id": "M6-08",
         "worker": 0,
-        "start": 179,
-        "finish": 189
+        "start": 178,
+        "finish": 188
       },
       {
         "id": "M6-09",
         "worker": 0,
-        "start": 189,
-        "finish": 195
+        "start": 188,
+        "finish": 194
       },
       {
         "id": "M6-98",
         "worker": 0,
-        "start": 195,
-        "finish": 198
+        "start": 194,
+        "finish": 197
       }
     ]
   }

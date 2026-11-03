@@ -243,9 +243,9 @@ Fixture scoring in CI; optional message edges.
 - **M4-28-R1** Agent templates do not advertise `mapx explain --reclassify` — BACKLOG, P2, 1h; depends on M4-28.
 - **M4-28-R2** `mapx_status` honours its exclude and include parameters — BACKLOG, P2, 1h; depends on M4-28.
 - **M4-29** The installer replaces a running mapx binary — BACKLOG, P2, 1h; depends on nothing.
-- **M4-30** CLI-spawning arch tests stay within their timeouts under load — BACKLOG, P2, 5h; depends on nothing.
+- **M4-30** CLI-spawning arch tests stay within their timeouts under load — IN_PROGRESS, P2, 5h; depends on nothing.
 - **M4-31** Test runs add no more than ten process listeners (MaxListenersExceededWarning) — BACKLOG, P3, 2h; depends on nothing.
-- **M4-32** Root CLAUDE.md generated block is current — BACKLOG, P3, 1h; depends on nothing.
+- **M4-32** Root CLAUDE.md generated block is current — DONE, P3, 1h; depends on nothing.
 - **M4-12-R1** Grammar-load bound and work stealing agree under load — DONE, P2, 3h; depends on M4-12.
 - **M4-12-R2** Worker pool: the grammar-load bound holds across crashes and refused retries — BACKLOG, P3, 2h; depends on M4-12-R1.
 
