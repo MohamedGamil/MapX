@@ -272,23 +272,35 @@ export interface ConcreteDependency {
 export function layerDependencies(ctx: ArchContext, from: string, to?: string): {
   from: string; to: string | null; counts: { allowed: number; violation: number; uncovered: number }; dependencies: ConcreteDependency[];
 } {
-  requireLayer(ctx, from);
-  if (to !== undefined) requireLayer(ctx, to);
-  const deps = ctx.evaluation().dependencies
-    // A pair counts for each other layer of the target, as in the report's layerEdges: an edge into
-    // an element in both Domain and Shared is a Domain → Shared edge, never Domain → Domain.
-    .filter((d) => d.sourceLayer === from && (to === undefined || (to !== from && (d.targetLayers.includes(to) || !!d.violatedLayers?.includes(to)))))
-    .map((d): ConcreteDependency => ({
-      source: { ...elementRef(d.source), ...(d.line !== undefined ? { line: d.line } : {}) },
-      target: d.targetPackage ? { element: d.targetPackage.name, kind: 'file', file: d.targetPackage.dir } : elementRef(d.target),
-      targetLayers: d.targetLayers, edgeType: d.edgeType, verifiability: d.verifiability, kind: d.kind,
-      ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}), ...(d.via ? { via: d.via } : {}),
-    }));
-  const key = (d: ConcreteDependency) => [d.source.file, String(d.source.line ?? 0).padStart(9, '0'), d.source.element, d.target.element, d.edgeType].join('\u0000');
-  deps.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+  const deps = layerDependencyRows(ctx, from, to).map((r) => r.concrete);
   const counts = { allowed: 0, violation: 0, uncovered: 0 };
   for (const d of deps) counts[d.kind]++;
   return { from, to: to ?? null, counts, dependencies: deps };
+}
+
+/** A concrete dependency with the evaluated dependency it shows (a report trace's key, M5-15). */
+export interface LayerDependencyRow { dependency: Dependency; concrete: ConcreteDependency }
+
+/** `layerDependencies`' edges, in its order, each with its evaluated dependency. */
+export function layerDependencyRows(ctx: ArchContext, from: string, to?: string): LayerDependencyRow[] {
+  requireLayer(ctx, from);
+  if (to !== undefined) requireLayer(ctx, to);
+  const rows = ctx.evaluation().dependencies
+    // A pair counts for each other layer of the target, as in the report's layerEdges: an edge into
+    // an element in both Domain and Shared is a Domain → Shared edge, never Domain → Domain.
+    .filter((d) => d.sourceLayer === from && (to === undefined || (to !== from && (d.targetLayers.includes(to) || !!d.violatedLayers?.includes(to)))))
+    .map((d): LayerDependencyRow => ({
+      dependency: d,
+      concrete: {
+        source: { ...elementRef(d.source), ...(d.line !== undefined ? { line: d.line } : {}) },
+        target: d.targetPackage ? { element: d.targetPackage.name, kind: 'file', file: d.targetPackage.dir } : elementRef(d.target),
+        targetLayers: d.targetLayers, edgeType: d.edgeType, verifiability: d.verifiability, kind: d.kind,
+        ...(d.rule ? { rule: d.rule } : {}), severity: d.severity, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}), ...(d.via ? { via: d.via } : {}),
+      },
+    }));
+  const key = (d: ConcreteDependency) => [d.source.file, String(d.source.line ?? 0).padStart(9, '0'), d.source.element, d.target.element, d.edgeType].join('\u0000');
+  rows.sort((a, b) => (key(a.concrete) < key(b.concrete) ? -1 : key(a.concrete) > key(b.concrete) ? 1 : 0));
+  return rows;
 }
 
 // ─── AR-13e: unused allowances ────────────────────────────────────────────────────────────────

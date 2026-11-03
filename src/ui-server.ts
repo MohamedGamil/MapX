@@ -13,6 +13,7 @@ import { indexableChanges } from './core/staleness.js';
 import { MapxGraph } from './core/graph.js';
 import { buildMetricsReport, calculateGraphMetrics, calculateDSM } from './core/metrics.js';
 import { currentSmells } from './core/architecture-analyzer.js';
+import { archApi } from './ui-arch.js';
 import { ContextBuilder } from './core/context-builder.js';
 import { RouteRegistry } from './frameworks/route-registry.js';
 import { loadClientCalls } from './frameworks/http/http-registry.js';
@@ -549,6 +550,27 @@ export function startUiServer(opts: ServerOpts) {
           // With .mapx/architecture.jsonc, layer violations come from the rules (M5-16).
           const smells = currentSmells(store, dir, scope.all ? config.repos.map((r) => r.name) : [scope.name], { primary: config.repo.name, repoPaths: Object.fromEntries(config.repos.map((r) => [r.name, r.path])) });
           json(200, { smells });
+        } finally {
+          try { store.close(); } catch { /* ignore close errors */ }
+        }
+        return;
+      }
+
+      // The architecture view (M5-15): the rules of .mapx/architecture.jsonc, read-only. Over the
+      // whole workspace, as `mapx check`; a repo narrows the lists (src/ui-arch.ts).
+      if (pathname.startsWith('/api/arch/')) {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.setHeader('Allow', 'GET, HEAD');
+          json(405, { error: 'The architecture view is read-only: edit .mapx/architecture.jsonc, or propose one with mapx arch init.' });
+          return;
+        }
+        const store = new Store(resolve(dir, '.mapx', 'mapx.db'));
+        try {
+          const config = await loadConfig(dir, store);
+          const scope = scopeOf(config, 'all');
+          if (!scope) return;
+          const answer = await archApi(pathname.slice('/api/arch/'.length), parsedUrl.searchParams, dir, config, store, scope.all ? null : scope.name);
+          json(answer.status, answer.body);
         } finally {
           try { store.close(); } catch { /* ignore close errors */ }
         }

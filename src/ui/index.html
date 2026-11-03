@@ -225,6 +225,7 @@
                 </svg>
                 <span>Reset</span>
               </button>
+              <button id="btn-arch-overlay" class="btn btn-secondary" type="button" aria-pressed="false" title="Colour files by the layer .mapx/architecture.jsonc declares">Declared layers</button>
               <button id="btn-reset-hidden" class="btn btn-secondary toolbar-icon-btn" style="display: none;">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; color: var(--danger);" aria-hidden="true">
                   <path d="M3 6h18"></path>
@@ -263,6 +264,7 @@
               </div>
             </div>
           </div>
+          <div id="arch-overlay-legend" class="arch-overlay-legend" role="region" aria-label="Declared layers" hidden></div>
           <div id="graph-details" class="details-panel" role="region" aria-label="Selection details">
             <div class="details-panel-header">
               <h3>Selection Details</h3>
@@ -469,6 +471,11 @@
           <p class="subtitle">Smart Archetype Profile, Coupling metrics, and Smell detection</p>
           <p class="scope-note" data-scope-note hidden></p>
         </div>
+        <div class="tabs-sub" role="tablist" aria-label="Architecture views">
+          <button class="tab-sub-btn active" data-subtab="subtab-arch-overview" type="button" role="tab" id="subtab-btn-arch-overview" aria-selected="true" aria-controls="subtab-arch-overview">Overview</button>
+          <button class="tab-sub-btn" data-subtab="subtab-arch-rules" type="button" role="tab" id="subtab-btn-arch-rules" aria-selected="false" aria-controls="subtab-arch-rules" tabindex="-1">Layer rules</button>
+        </div>
+        <div id="subtab-arch-overview" class="subtab-pane active" role="tabpanel" aria-labelledby="subtab-btn-arch-overview">
         <div class="panel-body grid-architecture">
           <div class="arch-card">
             <h3>Codebase Profile & Health</h3>
@@ -510,6 +517,61 @@
             <div class="dsm-legend">
               <span><strong>C1..Cn</strong>: Cluster references</span>
               <span id="dsm-legend-detail">Hover or click cell for details</span>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <!-- Layer rules: .mapx/architecture.jsonc as mapx check evaluates it (M5-15) -->
+        <div id="subtab-arch-rules" class="subtab-pane" role="tabpanel" aria-labelledby="subtab-btn-arch-rules">
+          <div id="arch-rules-state" class="arch-rules-state" aria-live="polite">Loading the architecture rules…</div>
+          <p id="arch-rules-stale" class="config-warnings arch-stale" role="status" hidden></p>
+          <div id="arch-rules-body" class="arch-rules" hidden>
+            <p id="arch-rules-scope" class="scope-note" hidden></p>
+            <div class="arch-card arch-rules-wide">
+              <h3>Health</h3>
+              <div id="arch-rules-health"></div>
+            </div>
+            <div class="arch-card">
+              <h3>Layer diagram</h3>
+              <ul class="arch-legend" aria-label="Edge colours">
+                <li><span class="arch-swatch is-allowed" aria-hidden="true"></span>Allowed</li>
+                <li><span class="arch-swatch is-violation" aria-hidden="true"></span>Violation</li>
+                <li><span class="arch-swatch is-warning" aria-hidden="true"></span>Warn-level</li>
+                <li><span class="arch-swatch is-skipped" aria-hidden="true"></span>Skipped (baseline)</li>
+              </ul>
+              <div id="arch-layer-diagram" class="arch-layer-diagram" role="img" aria-label="Layer diagram: layers and the dependencies between them, by status"></div>
+              <p id="arch-layer-totals" class="config-desc"></p>
+              <p class="config-desc">Select an edge or a layer for its dependencies or members. The DSM below reaches every pair and layer from the keyboard.</p>
+            </div>
+            <div class="arch-card" id="arch-drill">
+              <h3 id="arch-drill-title">Details</h3>
+              <div id="arch-drill-body" class="arch-drill-body" tabindex="0" role="region" aria-label="Layer or dependency details" aria-live="polite">
+                <div class="details-placeholder">Select an edge, a layer or a DSM cell.</div>
+              </div>
+            </div>
+            <div class="arch-card arch-rules-wide">
+              <h3>Layer DSM</h3>
+              <p class="section-desc">Rows depend on columns. Red: a dependency the rules forbid; a faint cell: an allowance no dependency uses.</p>
+              <div class="dsm-scroll-container" tabindex="0" role="region" aria-label="Layer dependency structure matrix">
+                <div class="dsm-matrix-wrapper" id="arch-layer-dsm"></div>
+              </div>
+            </div>
+            <div class="arch-card arch-rules-wide">
+              <h3>Findings</h3>
+              <div class="http-filters" role="group" aria-label="Filter findings">
+                <label>Kind <select id="arch-filter-kind" class="form-select"></select></label>
+                <label>Rule <select id="arch-filter-rule" class="form-select"></select></label>
+                <label>Layer <select id="arch-filter-layer" class="form-select"></select></label>
+                <label>Verifiability <select id="arch-filter-verifiability" class="form-select"></select></label>
+                <span id="arch-findings-count" class="config-desc" aria-live="polite"></span>
+              </div>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Findings">
+                <table class="data-table" id="table-arch-findings">
+                  <thead><tr><th>Kind</th><th>Finding</th><th class="col-optional">Layers</th><th class="col-optional">Edge</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

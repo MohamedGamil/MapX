@@ -157,6 +157,8 @@ function setRepo(repo: string | null, reload = true) {
   loadRoutes();
   loadMetrics();
   if (architectureLoaded) loadArchitecture();
+  if (archRulesLoaded) loadArchRules();
+  if (archOverlay) loadArchOverlay();
   if (httpData) loadHttp();
 }
 
@@ -181,6 +183,7 @@ tabs.forEach(tab => {
       }, 50);
     } else if (currentTab === 'architecture') {
       loadArchitecture();
+      fitArchDiagram();
     } else if (currentTab === 'config') {
       loadConfigView();
     } else if (currentTab === 'http') {
@@ -189,34 +192,39 @@ tabs.forEach(tab => {
   });
 });
 
-// Subtabs inside Routes & Hooks
+// Sub-tabs (Routes & Hooks; Architecture, M5-15): each tab list switches only its own panes.
 const subtabs = document.querySelectorAll('.tab-sub-btn');
 subtabs.forEach(sub => {
   sub.addEventListener('click', () => {
-    subtabs.forEach(s => {
+    const list = sub.closest('.tabs-sub');
+    const own = list ? [...list.querySelectorAll('.tab-sub-btn')] : [sub];
+    own.forEach(s => {
       s.classList.remove('active');
       s.setAttribute('aria-selected', 'false');
       s.setAttribute('tabindex', '-1');
+      const pane = document.getElementById(s.getAttribute('data-subtab') || '');
+      pane?.classList.remove('active');
     });
     sub.classList.add('active');
     sub.setAttribute('aria-selected', 'true');
     sub.removeAttribute('tabindex');
 
     const target = sub.getAttribute('data-subtab') || 'subtab-routes-list';
-    document.querySelectorAll('.subtab-pane').forEach(p => p.classList.remove('active'));
-
     const targetPane = document.getElementById(target);
     if (targetPane) targetPane.classList.add('active');
+    if (target === 'subtab-arch-rules') loadArchRules();
   });
 });
 
-// Arrow keys move between the sub-tabs (the WAI-ARIA tabs pattern: one Tab stop, arrows inside).
-subtabs.forEach((sub, i) => {
+// Arrow keys move between the sub-tabs of one list (the WAI-ARIA tabs pattern: one Tab stop, arrows inside).
+subtabs.forEach((sub) => {
   sub.addEventListener('keydown', (e: Event) => {
     const key = (e as KeyboardEvent).key;
     if (key !== 'ArrowLeft' && key !== 'ArrowRight') return;
     e.preventDefault();
-    const next = subtabs[(i + (key === 'ArrowRight' ? 1 : subtabs.length - 1)) % subtabs.length] as HTMLElement;
+    const own = [...(sub.closest('.tabs-sub')?.querySelectorAll('.tab-sub-btn') ?? [sub])];
+    const i = own.indexOf(sub);
+    const next = own[(i + (key === 'ArrowRight' ? 1 : own.length - 1)) % own.length] as HTMLElement;
     next.click();
     next.focus();
   });
@@ -389,6 +397,9 @@ let symbolSearchQuery = '';
 // New states for Proximity Clusters Mode & Groupings & Modifications
 let rawClustersData: { clusters: any[], memberships: any[] } = { clusters: [], memberships: [] };
 let rawSmellsData: any[] = [];
+/** The declared-layer overlay on the graph (M5-15): on, and each file's colour (file path → colour). */
+let archOverlay = false;
+let archOverlayColors = new Map<string, string>();
 let activeClusterId: string | null = null;
 let groupingStrategy: 'community' | 'directory' | 'language' | 'custom' | 'layer' = 'layer';
 const removedNodes = new Set<string>();
@@ -1856,6 +1867,11 @@ function graphStyle(): any[] {
         }
       }
     },
+    // The declared-layer overlay (M5-15): a file's first declared layer; files in none are grey.
+    ...(archOverlay ? [{
+      selector: 'node[type="file"]',
+      style: { 'background-color': (node: any) => archOverlayColors.get(node.id()) ?? t('--graph-node') },
+    }] : []),
     {
       selector: 'edge',
       style: {
@@ -3585,7 +3601,10 @@ function startPeriodicPolling() {
 // Initialise everything
 document.addEventListener('DOMContentLoaded', () => {
   // The frame (M4-17): theme, navigation drawer, details panel.
-  initTheme(() => { if (cyInstance) cyInstance.style(graphStyle()); });
+  initTheme(() => {
+    if (cyInstance) cyInstance.style(graphStyle());
+    if (archDiagram) archDiagram.style(archDiagramStyle());
+  });
   initNavDrawer();
   initDetailsPanel(
     () => {
@@ -4450,4 +4469,449 @@ function renderDSM(dsm: any) {
       }
     });
   });
+}
+
+// ─── Layer rules (M5-15) ─────────────────────────────────────────────────────────────────────
+// The rules of .mapx/architecture.jsonc as `mapx check` evaluates them, from /api/arch/*: health
+// tiles, the layer diagram (one edge per status of a layer pair; groups as compound nodes), the
+// layer DSM coloured by policy, the findings with filters, and the drill-down from an edge or a
+// cell to its concrete dependencies (file:line), and from a layer to its members with the selector
+// that matched. Read-only: without a configuration the view says how to propose one.
+
+let archRulesLoaded = false;
+let archRules: any = null;
+let archDiagram: any = null;
+
+/** The theme tokens of the diagram's edges: allowed neutral, violation red, warn-level orange, skipped amber (dashed). */
+const ARCH_STATUS_TOKENS: Record<string, string> = { allowed: '--text-muted', violation: '--danger', warning: '--syntax-orange', skipped: '--syntax-yellow' };
+const ARCH_STATUS_ORDER = ['allowed', 'violation', 'warning', 'skipped'];
+/** Colours of declared layers without one of their own, in configuration order (the role palette's hues). */
+const ARCH_PALETTE = ['#61afef', '#c678dd', '#e5c07b', '#98c379', '#e06c75', '#56b6c2', '#d19a66', '#ff7b00', '#ff4a8b', '#2ecc71', '#a29bfe', '#1abc9c'];
+const ARCH_KIND_LABEL: Record<string, string> = { violation: 'Violation', skipped: 'Skipped', uncovered: 'Uncovered', warning: 'Warning', error: 'Error', allowed: 'Allowed' };
+/** Rows the findings table and a drill-down list draw at most; the filters narrow the rest. */
+const ARCH_ROWS_SHOWN = 500;
+
+/** A declared layer's colour: its own (`color`, validated by the server), else the palette's by position. */
+function archLayerColor(layers: any[], name: string): string {
+  const i = layers.findIndex((l) => l.name === name);
+  const own = i >= 0 ? layers[i].color : null;
+  return own || ARCH_PALETTE[Math.max(0, i) % ARCH_PALETTE.length];
+}
+
+/** Shows the no-configuration hint or the configuration's problems; true when the rules can be drawn. */
+function archRulesState(data: any): boolean {
+  const state = document.getElementById('arch-rules-state');
+  const body = document.getElementById('arch-rules-body');
+  if (!state || !body) return false;
+  if (data && data.configured && data.valid) {
+    state.hidden = true;
+    state.innerHTML = '';
+    body.hidden = false;
+    return true;
+  }
+  body.hidden = true;
+  state.hidden = false;
+  if (!data) {
+    state.innerHTML = '<div class="details-placeholder">The architecture rules could not be loaded.</div>';
+  } else if (!data.configured) {
+    state.innerHTML = `<div class="arch-empty">
+        <h3>No architecture rules yet</h3>
+        <p>${escapeHtml(data.hint)}</p>
+        <pre class="arch-command"><code>mapx arch init</code></pre>
+        <p class="config-desc">It proposes layers and rules from the index. The dashboard only reads them.</p>
+      </div>`;
+  } else {
+    state.innerHTML = `<div class="config-warnings" role="alert"><strong>The architecture configuration cannot be evaluated.</strong>
+        <ul>${(data.errors || []).map((e: string) => `<li>${escapeHtml(e)}</li>`).join('')}</ul>
+        <p class="config-desc">Fix it in .mapx/architecture.jsonc; <code>mapx arch validate-config</code> lists every problem.</p></div>`;
+  }
+  return false;
+}
+
+async function loadArchRules() {
+  const gen = repoGeneration;
+  archRulesLoaded = true;
+  try {
+    const res = await fetch(withRepo('/api/arch/report', 'any'));
+    const data = res.ok ? await res.json() : null;
+    if (gen !== repoGeneration) return; // a newer repo choice is loading
+    archRules = data;
+    showArchStale(data);
+    if (!archRulesState(data)) return;
+    const scope = document.getElementById('arch-rules-scope');
+    if (scope) {
+      scope.hidden = !data.repo;
+      scope.textContent = data.repo ? `The rules are evaluated over the whole workspace, so the health tiles (rule smells included), diagram and DSM cover all of it; the findings and details show ${data.repo} only.` : '';
+    }
+    renderArchHealth(data);
+    renderArchDiagram(data);
+    renderArchDsm(data);
+    renderArchFilters(data);
+    renderArchFindings();
+  } catch (err) {
+    console.error('Failed to load the architecture rules:', err);
+  }
+}
+
+/** `mapx check` would refuse this index (exit 4): the figures are the last scan's, and the banner says why. */
+function showArchStale(data: any) {
+  const banner = document.getElementById('arch-rules-stale');
+  if (!banner) return;
+  banner.hidden = !data?.stale;
+  banner.textContent = data?.stale ? `These figures are from the last scan, and mapx check would refuse the index: ${data.staleReason}` : '';
+}
+
+function renderArchHealth(data: any) {
+  const el = document.getElementById('arch-rules-health');
+  if (!el) return;
+  const h = data.health;
+  el.innerHTML = `${statTiles([
+    ['Violations', h.violations], ['Warn-level violations', h.warnLevelViolations], ['Baseline debt', h.baselineDebt], ['Uncovered', h.uncovered],
+    ['Warnings', h.warnings], ['Unassigned', h.unassigned], ['Rule smells', h.ruleSmells], ['Config errors', h.configErrors],
+  ])}<p class="config-desc arch-trend">No trend yet: snapshots do not record architecture counts.</p>`;
+}
+
+/** The layer diagram's cytoscape style, from the current theme's tokens. */
+function archDiagramStyle(): any[] {
+  return [
+    {
+      selector: 'node',
+      style: {
+        shape: 'round-rectangle', width: 'data(w)', height: 44, label: 'data(label)', 'text-wrap': 'wrap',
+        'text-valign': 'center', 'text-halign': 'center', 'font-family': FONT_SANS, 'font-size': '12px', 'font-weight': 600,
+        color: t('--text-white'), 'background-color': t('--bg-raised'), 'border-width': 2, 'border-color': 'data(color)',
+      },
+    },
+    { selector: 'node[?overlay]', style: { 'border-style': 'dashed' } },
+    {
+      selector: ':parent',
+      style: {
+        'background-color': t('--bg-card', 0.5), 'border-width': 1, 'border-style': 'dashed', 'border-color': t('--border-strong'),
+        'text-valign': 'top', 'text-halign': 'center', color: t('--text-muted'), padding: '18px',
+      },
+    },
+    {
+      selector: 'edge',
+      style: {
+        width: 2, 'curve-style': 'unbundled-bezier', 'control-point-distances': 'data(dist)', 'control-point-weights': 0.5,
+        'target-arrow-shape': 'triangle', label: 'data(label)', 'font-family': FONT_SANS, 'font-size': '11px', 'font-weight': 600,
+        color: t('--text-main'), 'text-background-color': t('--bg-card'), 'text-background-opacity': 0.9, 'text-background-padding': '2px',
+      },
+    },
+    ...ARCH_STATUS_ORDER.map((status) => ({
+      selector: `edge[status="${status}"]`,
+      style: { 'line-color': t(ARCH_STATUS_TOKENS[status]), 'target-arrow-color': t(ARCH_STATUS_TOKENS[status]), ...(status === 'skipped' ? { 'line-style': 'dashed' } : {}) },
+    })),
+    { selector: ':selected', style: { 'overlay-color': t('--syntax-blue'), 'overlay-opacity': 0.15, 'overlay-padding': 4 } },
+  ];
+}
+
+/**
+ * Draws the layer graph: a column per group, then one for the ungrouped layers (as the built-in SVG
+ * of `mapx arch graph`), layers in configuration order. Edges within a column bend aside, farther
+ * the more layers they pass, downward ones on one side and upward ones on the other.
+ */
+function renderArchDiagram(data: any) {
+  const container = document.getElementById('arch-layer-diagram');
+  if (!container) return;
+  const graph = data.graph;
+  const layers = graph.layers.filter((l: any) => !l.hidden);
+  const columns: string[][] = [];
+  const columnOf = new Map<string, number>();
+  const place = new Map<string, { col: number; row: number }>();
+  for (const l of layers) {
+    const key = l.group ?? '\u0000';
+    if (!columnOf.has(key)) { columnOf.set(key, columns.length); columns.push([]); }
+    const col = columnOf.get(key)!;
+    place.set(l.name, { col, row: columns[col].length });
+    columns[col].push(l.name);
+  }
+  const elements: any[] = [];
+  for (const g of graph.groups) {
+    if (g.layers.some((name: string) => place.has(name))) elements.push({ data: { id: `g:${g.name}`, label: g.name, color: t('--border-strong'), w: 120 } });
+  }
+  for (const l of layers) {
+    const p = place.get(l.name)!;
+    const label = `${l.name}\n${l.files} file${l.files === 1 ? '' : 's'}`;
+    elements.push({
+      data: {
+        id: `l:${l.name}`, layer: l.name, label, overlay: l.overlay, color: archLayerColor(graph.layers, l.name),
+        w: Math.max(110, Math.min(260, Math.max(l.name.length, 8) * 7.5 + 24)), ...(l.group ? { parent: `g:${l.group}` } : {}),
+      },
+      position: { x: p.col * 300, y: p.row * 110 },
+    });
+  }
+  const perPair = new Map<string, number>();
+  data.drawn.forEach((e: any, i: number) => {
+    const a = place.get(e.from);
+    const b = place.get(e.to);
+    if (!a || !b) return;
+    const pair = `${e.from}\u0000${e.to}`;
+    const k = perPair.get(pair) ?? 0;
+    perPair.set(pair, k + 1);
+    const sameColumn = a.col === b.col;
+    const dist = sameColumn ? 50 + 40 * Math.abs(a.row - b.row) + 22 * k : 22 * k;
+    elements.push({
+      data: {
+        id: `e:${i}`, source: `l:${e.from}`, target: e.toGroup ? `g:${e.toGroup}` : `l:${e.to}`,
+        from: e.from, to: e.to, status: e.status, count: e.count, label: String(e.count), dist,
+      },
+    });
+  });
+  if (archDiagram) archDiagram.destroy();
+  archDiagram = cytoscape({
+    container, elements, style: archDiagramStyle(), layout: { name: 'preset' },
+    wheelSensitivity: 1.33, minZoom: 0.3, maxZoom: 2.5, autoungrabify: true,
+  });
+  archDiagram.on('tap', 'node[layer]', (e: any) => showArchLayer(e.target.data('layer')));
+  archDiagram.on('tap', 'edge', (e: any) => showArchEdge(e.target.data('from'), e.target.data('to')));
+  const totals = document.getElementById('arch-layer-totals');
+  if (totals) {
+    const tt = graph.totals;
+    totals.textContent = `Dependencies: ${tt.allowed} allowed, ${tt.violations} violating (${tt.warnings} at warn), ${tt.skipped} skipped, ${tt.uncovered} uncovered${tt.hiddenLayers ? `; ${tt.hiddenLayers} hidden layer(s) counted, not drawn` : ''}.`;
+  }
+  fitArchDiagram();
+}
+
+/** Fits the diagram to its box once the box is shown (a hidden tab has no size). */
+function fitArchDiagram() {
+  if (!archDiagram) return;
+  requestAnimationFrame(() => {
+    if (!archDiagram) return;
+    archDiagram.resize();
+    archDiagram.fit(undefined, 24);
+  });
+}
+
+/** The layer DSM: counts by worst status; an allowance no dependency uses is a faint 0. */
+function renderArchDsm(data: any) {
+  const el = document.getElementById('arch-layer-dsm');
+  if (!el) return;
+  const names: string[] = data.dsm.layers;
+  if (!names.length) {
+    el.innerHTML = '<div class="details-placeholder">No layer to show.</div>';
+    return;
+  }
+  const unused = new Map<string, string>();
+  for (const a of data.unusedAllowances || []) unused.set(`${a.from}\u0000${a.to}`, a.rule);
+  const head = names.map((n, j) => `<th scope="col" title="${escapeHtml(n)}">L${j + 1}</th>`).join('');
+  const rows = names.map((from, i) => {
+    const cells = names.map((to, j) => {
+      if (i === j) return `<td class="dsm-cell dsm-diagonal" title="${escapeHtml(from)}">—</td>`;
+      const count = Number(data.dsm.matrix[i][j]) || 0;
+      const status = String(data.dsm.status[i][j] || 'none');
+      if (count > 0) {
+        const title = `${from} → ${to}: ${count} dependenc${count === 1 ? 'y' : 'ies'} (${status})`;
+        return `<td class="dsm-cell arch-dsm-cell is-${escapeHtml(status)}"><button type="button" class="arch-dsm-btn" data-arch-from="${escapeHtml(from)}" data-arch-to="${escapeHtml(to)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">${num(count)}</button></td>`;
+      }
+      const rule = unused.get(`${from}\u0000${to}`);
+      if (rule !== undefined) {
+        const title = `${from} may depend on ${to} (${rule}), and nothing does`;
+        return `<td class="dsm-cell arch-dsm-cell is-unused"><button type="button" class="arch-dsm-btn" data-arch-from="${escapeHtml(from)}" data-arch-to="${escapeHtml(to)}" data-arch-unused="${escapeHtml(rule)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">0</button></td>`;
+      }
+      return '<td class="dsm-cell dsm-empty"></td>';
+    }).join('');
+    return `<tr><th class="dsm-row-hdr" scope="row"><button type="button" class="arch-dsm-layer" data-arch-layer="${escapeHtml(from)}" title="${escapeHtml(`Members of ${from}`)}">L${i + 1}: ${escapeHtml(from)}</button></th>${cells}</tr>`;
+  }).join('');
+  el.innerHTML = `<table class="dsm-table arch-dsm-table"><thead><tr><th><span class="visually-hidden">Depends on</span></th>${head}</tr></thead><tbody>${rows}</tbody></table>
+    <ul class="arch-legend arch-dsm-legend">
+      <li><span class="arch-swatch is-violation" aria-hidden="true"></span>Forbidden, used</li>
+      <li><span class="arch-swatch is-warning" aria-hidden="true"></span>Warn-level only</li>
+      <li><span class="arch-swatch is-skipped" aria-hidden="true"></span>Baselined only</li>
+      <li><span class="arch-swatch is-allowed" aria-hidden="true"></span>Allowed</li>
+      <li><span class="arch-swatch is-unused" aria-hidden="true"></span>Allowed, unused</li>
+    </ul>`;
+}
+
+/** The layers a finding concerns, as `mapx check --layer` matches them. */
+function archFindingLayers(f: any): string[] {
+  // The lists, never the joined names: a layer name may contain ", " (review of M5-15).
+  return [...(f.source?.layers ?? []), ...(f.target?.layers ?? []), ...(f.layer ? [f.layer] : [])];
+}
+
+/** Fills a filter's options (All, then the values), keeping the current choice when it is still there. */
+function fillArchFilter(id: string, values: string[]) {
+  const el = document.getElementById(id) as HTMLSelectElement | null;
+  if (!el) return;
+  const keep = el.value;
+  el.innerHTML = `<option value="">All</option>${values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('')}`;
+  el.value = values.includes(keep) ? keep : '';
+}
+
+function renderArchFilters(data: any) {
+  const findings: any[] = data.findings || [];
+  const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))].sort();
+  fillArchFilter('arch-filter-kind', uniq(findings.map((f) => f.kind)));
+  fillArchFilter('arch-filter-rule', uniq(findings.map((f) => f.rule ?? f.kind)));
+  fillArchFilter('arch-filter-layer', data.graph.layers.map((l: any) => l.name));
+  fillArchFilter('arch-filter-verifiability', uniq(findings.map((f) => f.verifiability)));
+}
+
+function renderArchFindings() {
+  const tbody = document.querySelector('#table-arch-findings tbody');
+  if (!tbody || !archRules?.findings) return;
+  const value = (id: string) => (document.getElementById(id) as HTMLSelectElement | null)?.value ?? '';
+  const kind = value('arch-filter-kind');
+  const rule = value('arch-filter-rule');
+  const layer = value('arch-filter-layer');
+  const verifiability = value('arch-filter-verifiability');
+  const all: any[] = archRules.findings;
+  const rows = all.filter((f) => (!kind || f.kind === kind) && (!rule || (f.rule ?? f.kind) === rule)
+    && (!layer || archFindingLayers(f).includes(layer)) && (!verifiability || f.verifiability === verifiability));
+  const count = document.getElementById('arch-findings-count');
+  if (count) count.textContent = `${rows.length} of ${all.length} finding${all.length === 1 ? '' : 's'}${rows.length > ARCH_ROWS_SHOWN ? `; the first ${ARCH_ROWS_SHOWN} shown` : ''}`;
+  const html = rows.slice(0, ARCH_ROWS_SHOWN).map((f) => {
+    const where = f.source
+      ? `<span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(f.source.file)}" title="Open in the graph's details panel">${escapeHtml(f.source.file)}${f.source.line !== undefined ? `:${num(f.source.line)}` : ''}</span>`
+      : f.location ? `<code>${escapeHtml(f.location.file)}</code>` : '';
+    return `<tr>
+        <td><span class="arch-kind is-${escapeHtml(f.kind)}">${escapeHtml(ARCH_KIND_LABEL[f.kind] ?? f.kind)}</span><div class="config-desc">${escapeHtml(f.rule ?? '')}</div></td>
+        <td><div class="arch-finding-message">${escapeHtml(f.message)}</div>${where}</td>
+        <td class="col-optional">${escapeHtml(f.source?.layer ?? f.layer ?? '')}${f.target?.layer ? ` → ${escapeHtml(f.target.layer)}` : ''}</td>
+        <td class="col-optional">${escapeHtml(f.edgeType ?? '')}${f.verifiability ? `<div class="config-desc">${escapeHtml(f.verifiability)}</div>` : ''}</td>
+      </tr>`;
+  }).join('');
+  tbody.innerHTML = html || '<tr><td colspan="4" class="details-placeholder">No finding matches the filters.</td></tr>';
+}
+
+/** Shows `html` in the drill-down panel under `title`. */
+function showArchDrill(title: string, html: string) {
+  const heading = document.getElementById('arch-drill-title');
+  const body = document.getElementById('arch-drill-body');
+  if (heading) heading.textContent = title;
+  if (body) body.innerHTML = html;
+}
+
+/**
+ * An edge or a DSM cell: the pair's findings, counted as the DSM and `mapx check` count them, each
+ * with the concrete dependencies (file:line) it stands for. `unused` names the allowance of a pair
+ * nothing uses.
+ */
+async function showArchEdge(from: string, to: string, unused: string | null = null) {
+  const gen = repoGeneration;
+  showArchDrill(`${from} → ${to}`, '<div class="details-placeholder">Loading…</div>');
+  try {
+    const res = await fetch(withRepo(`/api/arch/edges?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, 'any'));
+    const data = await res.json();
+    if (gen !== repoGeneration) return;
+    if (!res.ok || !data.findings) {
+      showArchDrill(`${from} → ${to}`, `<div class="details-placeholder">${escapeHtml(data.error ?? data.hint ?? 'The dependencies could not be loaded.')}</div>`);
+      return;
+    }
+    const c = data.counts;
+    const items = data.findings.slice(0, ARCH_ROWS_SHOWN).map((f: any) => {
+      const deps = f.dependencies.map((d: any) => `<li>
+          <span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(d.source.file)}" title="Show in the graph">${escapeHtml(d.source.file)}${d.source.line !== undefined ? `:${num(d.source.line)}` : ''}</span>
+          <code>${escapeHtml(d.source.element)} → ${escapeHtml(d.target.element)}</code>
+        </li>`).join('');
+      return `<li class="arch-dep is-${escapeHtml(f.kind)}">
+          <span class="arch-kind is-${escapeHtml(f.kind)}">${escapeHtml(ARCH_KIND_LABEL[f.kind] ?? f.kind)}</span>
+          <code class="arch-dep-elements">${escapeHtml(f.source.element)} → ${escapeHtml(f.target.element)}</code>
+          <span class="config-desc">${escapeHtml(f.edgeType)}, ${escapeHtml(f.verifiability ?? '')}${f.rule ? `; ${escapeHtml(f.rule)} (${escapeHtml(f.pairSeverity)})` : ''}${f.skippedBy ? `; skipped by the ${escapeHtml(f.skippedBy)}` : ''}</span>
+          <ul class="arch-dep-sources" aria-label="${escapeHtml(`${f.dependencies.length} dependencies`)}">${deps}</ul>
+        </li>`;
+    }).join('');
+    const more = data.findings.length > ARCH_ROWS_SHOWN ? `<p class="config-desc">and ${num(data.findings.length - ARCH_ROWS_SHOWN)} more (mapx arch deps lists them all).</p>` : '';
+    const note = unused !== null && !data.findings.length ? `<p class="config-desc">${escapeHtml(`${from} may depend on ${to} (${unused}), and no dependency uses it: a dead allowance.`)}</p>` : '';
+    showArchDrill(`${from} → ${to}`, `<p class="config-desc">${num(c.allowed)} allowed, ${num(c.violations)} violating (${num(c.warnings)} at warn), ${num(c.skipped)} baselined${data.repo ? ` in ${escapeHtml(data.repo)}` : ''}: one per element pair and edge type, as mapx check counts them.</p>${note}
+      <ul class="arch-dep-list">${items || '<li class="details-placeholder">No dependency.</li>'}</ul>${more}`);
+  } catch (err) {
+    console.error('Failed to load the layer dependencies:', err);
+  }
+}
+
+/** A layer: its members (files and top-level symbols) and the selector that put each in it. */
+async function showArchLayer(layer: string) {
+  const gen = repoGeneration;
+  showArchDrill(layer, '<div class="details-placeholder">Loading…</div>');
+  try {
+    const res = await fetch(withRepo(`/api/arch/layers?layer=${encodeURIComponent(layer)}`, 'any'));
+    const data = await res.json();
+    if (gen !== repoGeneration) return;
+    if (!res.ok || !data.layer) {
+      showArchDrill(layer, `<div class="details-placeholder">${escapeHtml(data.error ?? data.hint ?? 'The layer could not be loaded.')}</div>`);
+      return;
+    }
+    const m = data.layer;
+    const items = m.members.slice(0, ARCH_ROWS_SHOWN).map((e: any) => `<li class="arch-member">
+        <span class="involved-file-badge" role="button" tabindex="0" data-go-id="${escapeHtml(e.file)}" title="Show in the graph">${escapeHtml(e.file)}</span>
+        ${e.kind === 'symbol' ? `<code>${escapeHtml(e.element)}</code> <span class="config-desc">${escapeHtml(e.symbolKind ?? 'symbol')}</span>` : ''}
+        <span class="config-desc">matched by <code>${escapeHtml(e.selector ?? '')}</code>${e.via && e.via !== 'self' ? ` via ${escapeHtml(e.via)}` : ''}</span>
+      </li>`).join('');
+    const more = m.members.length > ARCH_ROWS_SHOWN ? `<p class="config-desc">and ${num(m.members.length - ARCH_ROWS_SHOWN)} more (mapx arch layers lists them all).</p>` : '';
+    showArchDrill(layer, `<p class="config-desc">${num(m.files)} file(s), ${num(m.elements)} element(s)${m.overlay ? ', an overlay' : ''}${data.repo ? `; members in ${escapeHtml(data.repo)}` : ''}.</p>
+      <ul class="arch-dep-list">${items || '<li class="details-placeholder">No member.</li>'}</ul>${more}`);
+  } catch (err) {
+    console.error('Failed to load the layer members:', err);
+  }
+}
+
+/** The graph's declared-layer overlay: each file coloured by its first layer, a legend, files in none grey. */
+async function loadArchOverlay() {
+  const gen = repoGeneration;
+  const legend = document.getElementById('arch-overlay-legend');
+  try {
+    const res = await fetch(withRepo('/api/arch/layers', 'any'));
+    const data = res.ok ? await res.json() : null;
+    if (gen !== repoGeneration || !archOverlay) return;
+    if (legend) legend.hidden = false;
+    if (!data || !data.configured || !data.valid) {
+      archOverlayColors = new Map();
+      if (legend) legend.innerHTML = `<p class="config-desc">${data && !data.configured ? 'No architecture rules: run <code>mapx arch init</code> to propose layers.' : 'The architecture configuration cannot be evaluated: see Architecture, Layer rules.'}</p>`;
+    } else {
+      const layers: any[] = data.layers;
+      archOverlayColors = new Map(Object.entries(data.files as Record<string, string[]>).map(([file, names]) => [file, archLayerColor(layers, names[0])]));
+      if (legend) {
+        legend.innerHTML = `<div class="arch-overlay-title">Declared layers</div><ul class="arch-legend arch-overlay-list">${layers.filter((l) => !l.overlay).map((l) => `<li><span class="arch-swatch" style="background: ${escapeHtml(archLayerColor(layers, l.name))};" aria-hidden="true"></span>${escapeHtml(l.name)}</li>`).join('')}<li><span class="arch-swatch is-unassigned" aria-hidden="true"></span>No layer</li></ul>`;
+      }
+    }
+    if (cyInstance) cyInstance.style(graphStyle());
+  } catch (err) {
+    console.error('Failed to load the declared layers:', err);
+  }
+}
+
+{
+  const overlayButton = document.getElementById('btn-arch-overlay');
+  overlayButton?.addEventListener('click', () => {
+    archOverlay = !archOverlay;
+    overlayButton.setAttribute('aria-pressed', String(archOverlay));
+    overlayButton.classList.toggle('active', archOverlay);
+    if (archOverlay) {
+      loadArchOverlay();
+    } else {
+      const legend = document.getElementById('arch-overlay-legend');
+      if (legend) legend.hidden = true;
+      if (cyInstance) cyInstance.style(graphStyle());
+    }
+  });
+  for (const id of ['arch-filter-kind', 'arch-filter-rule', 'arch-filter-layer', 'arch-filter-verifiability']) {
+    document.getElementById(id)?.addEventListener('change', renderArchFindings);
+  }
+  // A DSM cell drills into its pair, a row header into its layer.
+  document.getElementById('arch-layer-dsm')?.addEventListener('click', (e) => {
+    const el = e.target as HTMLElement;
+    const cell = el.closest('[data-arch-from]');
+    if (cell) { showArchEdge(cell.getAttribute('data-arch-from') ?? '', cell.getAttribute('data-arch-to') ?? '', cell.getAttribute('data-arch-unused')); return; }
+    const head = el.closest('[data-arch-layer]');
+    if (head) showArchLayer(head.getAttribute('data-arch-layer') ?? '');
+  });
+
+  // Test hooks (M5-15): the diagram as drawn, a tap on one of its edges or layers, and a graph node's fill.
+  (window as any).__mapxArchDiagram = () => (archDiagram ? {
+    layers: archDiagram.nodes('[layer]').map((n: any) => n.data('layer')),
+    edges: archDiagram.edges().map((e: any) => ({ from: e.data('from'), to: e.data('to'), status: e.data('status'), count: e.data('count'), lineStyle: e.style('line-style'), color: e.style('line-color') })),
+  } : null);
+  (window as any).__mapxArchTap = (from: string, to?: string): boolean => {
+    const el = to === undefined
+      ? archDiagram?.nodes('[layer]').filter((n: any) => n.data('layer') === from)
+      : archDiagram?.edges().filter((e: any) => e.data('from') === from && e.data('to') === to);
+    if (!el || el.empty()) return false;
+    el[0].emit('tap');
+    return true;
+  };
+  (window as any).__mapxNodeColor = (id: string) => {
+    const node = cyInstance?.getElementById(id);
+    return node && !node.empty() ? node.style('background-color') : null;
+  };
 }

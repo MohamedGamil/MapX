@@ -2343,3 +2343,55 @@ body[data-graph="layout"] #cy::after {
 .http-end { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3) 0; border-top: 1px solid var(--border-base); }
 .http-end code { overflow-wrap: anywhere; }
 @media (max-width: 1199px) { .http-split { grid-template-columns: minmax(0, 1fr); } }
+
+/* Architecture: layer rules (M5-15) */
+#tab-architecture > .tabs-sub { margin-top: 0; }
+.arch-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--space-6); }
+.arch-rules[hidden] { display: none; }
+.arch-rules > .scope-note, .arch-rules-wide { grid-column: 1 / -1; }
+.arch-rules-state[hidden] { display: none; }
+.arch-stale[hidden] { display: none; }
+.arch-dep-sources { list-style: none; margin: 0; padding: 0 0 0 var(--space-3); flex: 1 1 100%; display: flex; flex-direction: column; gap: var(--space-1); border-left: 2px solid var(--border-base); }
+.arch-dep-sources li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); min-width: 0; }
+.arch-empty { max-width: 640px; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); padding: var(--space-5); background: var(--bg-panel); }
+.arch-empty h3 { margin: 0 0 var(--space-2); font-size: var(--fs-lg); color: var(--text-white); }
+.arch-command { margin: var(--space-3) 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--bg-raised); color: var(--text-white); overflow-x: auto; }
+.arch-trend { margin-top: var(--space-3); }
+.arch-layer-diagram { height: 380px; width: 100%; border: 1px solid var(--border-base); border-radius: var(--radius-lg); background: var(--bg-main); }
+.arch-legend { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); padding: 0; font-size: var(--fs-sm); color: var(--text-main); }
+.arch-legend li { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+.arch-swatch { flex: none; display: inline-block; width: 14px; height: 10px; border-radius: var(--radius-sm); background: var(--text-muted); }
+.arch-swatch.is-allowed { background: var(--text-muted); }
+.arch-swatch.is-violation { background: var(--danger); }
+.arch-swatch.is-warning { background: var(--syntax-orange); }
+.arch-swatch.is-skipped { background: transparent; border: 2px dashed var(--syntax-yellow); }
+.arch-swatch.is-unused { background: color-mix(in srgb, var(--syntax-green) 18%, transparent); border: 1px solid color-mix(in srgb, var(--syntax-green) 45%, transparent); }
+.arch-swatch.is-unassigned { background: var(--graph-node); }
+.arch-dsm-legend { margin-top: var(--space-3); }
+.arch-dsm-table .dsm-row-hdr { padding: 0; }
+.arch-dsm-layer, .arch-dsm-btn { font: inherit; color: inherit; background: transparent; border: 0; cursor: pointer; width: 100%; padding: 6px 10px; text-align: inherit; }
+.arch-dsm-layer:hover, .arch-dsm-btn:hover { text-decoration: underline; }
+.arch-dsm-cell { padding: 0; }
+.arch-dsm-cell.is-violation { background: color-mix(in srgb, var(--danger) 28%, transparent); color: var(--text-white); font-weight: var(--fw-bold); }
+.arch-dsm-cell.is-warning { background: color-mix(in srgb, var(--syntax-orange) 24%, transparent); color: var(--text-white); font-weight: var(--fw-bold); }
+.arch-dsm-cell.is-skipped { background: color-mix(in srgb, var(--syntax-yellow) 14%, transparent); color: var(--text-white); outline: 1px dashed var(--syntax-yellow); outline-offset: -3px; }
+.arch-dsm-cell.is-allowed { background: color-mix(in srgb, var(--text-muted) 22%, transparent); color: var(--text-white); }
+.arch-dsm-cell.is-unused { background: color-mix(in srgb, var(--syntax-green) 8%, transparent); color: var(--text-muted); }
+.arch-drill-body { max-height: 420px; overflow-y: auto; min-width: 0; }
+.arch-dep-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.arch-dep, .arch-member { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); padding: var(--space-2); border: 1px solid var(--border-base); border-radius: var(--radius-md); background: var(--bg-panel); min-width: 0; }
+.arch-dep code, .arch-member code { overflow-wrap: anywhere; font-size: var(--fs-sm); }
+.arch-dep-elements { flex: 1 1 100%; }
+.arch-dep .involved-file-badge, .arch-member .involved-file-badge, #table-arch-findings .involved-file-badge { margin: 0; overflow-wrap: anywhere; max-width: 100%; }
+.arch-kind { display: inline-block; white-space: nowrap; padding: 1px 6px; border-radius: var(--radius-sm); font-size: var(--fs-xs); font-weight: var(--fw-semibold); background: var(--bg-raised); color: var(--text-main); }
+.arch-kind.is-violation, .arch-kind.is-error { background: var(--danger-surface); color: var(--danger); }
+.arch-kind.is-warning { background: color-mix(in srgb, var(--syntax-orange) 16%, transparent); color: var(--text-white); }
+.arch-kind.is-skipped { background: color-mix(in srgb, var(--syntax-yellow) 16%, transparent); color: var(--text-white); }
+.arch-kind.is-allowed { background: var(--success-surface); color: var(--success); }
+#table-arch-findings td:first-child { min-width: 7.5rem; }
+.arch-finding-message { margin-bottom: var(--space-1); color: var(--text-main); }
+.arch-overlay-legend { position: absolute; left: var(--space-3); bottom: var(--space-3); z-index: 5; max-width: min(320px, calc(100% - 2 * var(--space-3))); max-height: 45%; overflow-y: auto; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-base); border-radius: var(--radius-lg); background: var(--bg-panel); box-shadow: var(--shadow-sm); }
+.arch-overlay-legend[hidden] { display: none; }
+.arch-overlay-title { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-white); margin-bottom: var(--space-1); }
+.arch-overlay-list { flex-direction: column; gap: var(--space-1); margin: 0; }
+.btn.active[aria-pressed="true"] { border-color: var(--accent); color: var(--text-white); background: color-mix(in srgb, var(--accent) 18%, transparent); }

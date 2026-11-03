@@ -10,7 +10,7 @@ import { ConfigError, loadArchitectureConfig, type LoadOptions } from './config.
 import type { ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership } from './membership.js';
 import { expandPolicy } from './policy.js';
-import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Evaluation, type Finding, type FindingKind, type FindingSeverity } from './evaluate.js';
+import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Dependency, type Evaluation, type Finding, type FindingKind, type FindingSeverity } from './evaluate.js';
 import { BaselineMatcher, fingerprint, loadBaseline, repoKey, type Baseline } from './baseline.js';
 
 export type { Finding, FindingKind } from './evaluate.js';
@@ -53,7 +53,22 @@ export interface SkipOptions {
   known?: Set<string>;
   /** Repo name → workspace-relative path, for the repos fingerprints name (`.` is the root repo). */
   repoPaths?: Record<string, string>;
+  /**
+   * Filled with what each finding is made of (M5-15): the finding each evaluated dependency became
+   * (a dependency subsumed by a finer finding maps to a finding the report does not keep), and the
+   * layer pairs each finding counts for in `layerEdges`, with the pair's severity.
+   */
+  trace?: ReportTrace;
 }
+
+/** See `SkipOptions.trace`. Pair keys are `from + "\u0000" + to`. */
+export interface ReportTrace {
+  findingOf: Map<Dependency, Finding>;
+  pairsOf: Map<Finding, Map<string, FindingSeverity>>;
+}
+
+/** A trace to pass to `buildReport`. */
+export const newReportTrace = (): ReportTrace => ({ findingOf: new Map(), pairsOf: new Map() });
 
 /** What an internal-element message says is internal: "it" for the target or its file, else the marked member. */
 const internalName = (marked: Parameters<typeof elementName>[0], target: string) =>
@@ -102,8 +117,8 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
       const targetLayer = d.targetLayers.join(', ') || undefined;
       finding = {
         kind: d.kind, rule: d.rule, severity: d.severity,
-        source: { element: s, file: src.file.path, layer: d.sourceLayer, repo: src.file.repo, ...(d.line !== undefined ? { line: d.line } : {}) },
-        target: { element: t, file: targetFile, ...(targetLayer ? { layer: targetLayer } : {}), repo: tgt.file.repo },
+        source: { element: s, file: src.file.path, layer: d.sourceLayer, layers: [d.sourceLayer], repo: src.file.repo, ...(d.line !== undefined ? { line: d.line } : {}) },
+        target: { element: t, file: targetFile, ...(targetLayer ? { layer: targetLayer, layers: [...d.targetLayers] } : {}), repo: tgt.file.repo },
         edgeType: d.edgeType, verifiability: d.verifiability, edges: 0,
         fingerprint: fingerprint(rule, idS, idT, d.edgeType, sRepo, tRepo), message: '',
         ...(d.via ? { via: d.via } : {}),
@@ -113,6 +128,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
       meta.set(finding, { sourceLayers: new Set(), pairs: new Map(), sourceFiles: new Set(), ...(d.targetPackage ? { packageDir: d.targetPackage.dir } : {}) });
     }
     const m = meta.get(finding)!;
+    skip.trace?.findingOf.set(d, finding);
     m.sourceFiles.add(d.source.file.path); // a type's methods can span files (Go, C# partial classes)
     if (!m.sourceLayers.has(d.sourceLayer)) finding.edges! += 1; // count edges once, not once per source layer
     m.sourceLayers.add(d.sourceLayer);
@@ -141,7 +157,12 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     // An inherited dependency (M5-09) names the inheritance path it comes through.
     if (finding.via) finding.message += `, inherited via ${finding.via.join(' → ')}`;
   }
-  for (const [f, m] of meta) f.source!.layer = [...m.sourceLayers].sort(byOrder).join(', ');
+  for (const [f, m] of meta) {
+    const layers = [...m.sourceLayers].sort(byOrder);
+    f.source!.layer = layers.join(', ');
+    f.source!.layers = layers;
+    skip.trace?.pairsOf.set(f, m.pairs);
+  }
 
   // A package-level finding (a Go import) is subsumed by a finer one of the same kind and rule, from
   // the same source file, on a type of that package: the import is how the type is reached. Without
@@ -201,7 +222,7 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
     const name = elementName(el);
     findings.push({
       kind: config.policy.strictLayers ? 'error' : 'warning', rule: 'multi-layer', severity: config.policy.strictLayers ? 'error' : 'warn',
-      source: { element: name, file: el.file.path, layer: layers.join(', '), repo: el.file.repo },
+      source: { element: name, file: el.file.path, layer: layers.join(', '), layers, repo: el.file.repo },
       fingerprint: fingerprint('multi-layer', name, '', ''), message: `${name} is in ${layers.length} layers: ${layers.join(', ')}`,
     });
   }

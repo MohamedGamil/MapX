@@ -77,6 +77,7 @@
         "element": { "description": "A symbol's qualified name, a file's path, or a Go package's import path.", "type": "string" },
         "file": { "description": "Workspace-relative file (a directory for a package).", "type": "string" },
         "layer": { "description": "Layers, comma-separated.", "type": "string" },
+        "layers": { "description": "The same layers as a list (a layer name may contain a comma).", "type": "array", "items": { "type": "string" } },
         "repo": { "type": "string" },
         "line": { "description": "First line of the dependency in the source file.", "type": "integer", "minimum": 1 }
       }

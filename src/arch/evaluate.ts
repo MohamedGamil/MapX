@@ -37,7 +37,16 @@ import { hierarchyOf, isType, shownPath } from './selectors/hierarchy.js';
 export type FindingKind = 'violation' | 'skipped' | 'uncovered' | 'allowed' | 'warning' | 'error';
 export type FindingSeverity = 'error' | 'warn' | 'info';
 
-export interface FindingEnd { element: string; file: string; layer?: string; repo?: string; line?: number }
+export interface FindingEnd {
+  element: string;
+  file: string;
+  /** The end's layers, joined with ", " for display. */
+  layer?: string;
+  /** The same layers as a list: a layer name may itself contain ", " (M5-15 review), so never split `layer`. */
+  layers?: string[];
+  repo?: string;
+  line?: number;
+}
 
 export interface Finding {
   kind: FindingKind;

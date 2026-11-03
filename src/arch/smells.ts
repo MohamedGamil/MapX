@@ -29,7 +29,7 @@ import type { ArchContext } from './introspect.js';
 import { unusedAllowances } from './introspect.js';
 import type { ArchReport, Finding } from './report.js';
 import type { Allowance } from './schema.js';
-import { CONFIG_RULES } from './check.js';
+import { CONFIG_RULES, endLayers } from './check.js';
 import { elementName, endResolver, reportElement } from './evaluate.js';
 import { hasDocTag } from './selectors/doc-tag.js';
 import type { Element } from './elements.js';
@@ -133,8 +133,6 @@ interface LayerGraph {
   coupling: Map<string, number>;
 }
 
-/** Layers as findings name them (`A, B`), as `mapx check --layer` splits them. */
-const layersOf = (s: string | undefined) => (s ? s.split(', ') : []);
 
 /**
  * The layer graph of the report after its baseline: pairs with an allowed or a reported violating
@@ -149,8 +147,8 @@ function layerGraph(ctx: ArchContext, report: ArchReport): LayerGraph {
   const ce = new Map<string, Set<string>>(names.map((n) => [n, new Set()]));
   for (const f of report.findings) {
     if ((f.kind !== 'allowed' && f.kind !== 'violation') || !f.source || !f.target) continue;
-    for (const s of layersOf(f.source.layer)) {
-      for (const t of layersOf(f.target.layer)) {
+    for (const s of endLayers(f.source)) {
+      for (const t of endLayers(f.target)) {
         if (s === t || !pairs.get(s)?.has(t)) continue;
         ce.get(s)!.add(f.source.file);
         ca.get(t)!.add(f.source.file);

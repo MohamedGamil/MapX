@@ -440,7 +440,7 @@ Options:
 The dashboard:
 - **Themes:** light and dark. It follows the system setting until you pick one with the sun/moon button; your choice is kept in the browser.
 - **Narrow windows:** below 1200 px the sidebar shrinks to icons, and below 640 px it becomes a drawer behind the menu button.
-- **Keyboard:** every control can be reached with Tab and shows a focus ring. Arrow keys switch between Routes and Hooks, and Escape closes the drawer or the graph's details panel.
+- **Keyboard:** every control can be reached with Tab and shows a focus ring. Arrow keys switch between sub-tabs (Routes and Hooks; Overview and Layer rules), and Escape closes the drawer or the graph's details panel.
 - **Graph details:** the details panel opens when you select a node or edge.
 - **Clusters Map grouping:** the map groups files by architecture layer, or by directory when most files have no layer.
 - **Rate limit:** `/api/graph`, `/api/graph/meta` and `/api/context` are rate-limited to 10 requests a minute per client. The dashboard itself and command-line clients on the same machine are exempt. A web page from another site is not, even on the same machine.
@@ -472,6 +472,23 @@ The **Configuration** tab shows the effective settings, read-only:
 - **Warnings:** invalid values, unknown settings, repo folders that don't exist, and incomplete or shadowed user languages.
 
 Edit `.mapx/config.json`, or use `mapx workspaces` and `mapx lang`, to change them. `/api/config` serves the same report, and every method other than GET answers 405.
+
+The **Architecture** tab's **Layer rules** view shows `.mapx/architecture.jsonc` as `mapx check` evaluates it, baseline included (see `docs/architecture-rules.md`):
+- **Health tiles:** violations, warn-level violations, baseline debt (skipped violations), uncovered dependencies, warnings (as `mapx check` counts them), unassigned elements (`mapx arch unassigned`), rule smells and configuration errors. There is no trend yet: snapshots do not record these counts.
+- **Layer diagram:** the layers, with groups as boxes, and one edge per status of each layer pair, labelled with its count: allowed grey, violations red, warn-level orange, skipped dashed amber. Selecting an edge lists the pair's findings, counted as the DSM counts them, each with its dependencies' file and line (`mapx arch deps`); selecting a layer lists its members and the selector that matched each (`mapx arch layers --why`).
+- **Layer DSM:** rows depend on columns. A cell is coloured by its worst status, and an allowance that no dependency uses is a faint 0 (`mapx arch unused`). Cells (unused allowances too) and row headers are buttons that open the same lists, so every pair and layer is reachable from the keyboard.
+- **Findings:** what `mapx check --report-uncovered --report-skipped` shows, filterable by kind, rule, layer and verifiability; allowed dependencies are only counted. A finding's file opens in the graph's details panel.
+- **Graph overlay:** the graph's **Declared layers** button colours each file by its first declared layer, with a legend; files in no layer are grey.
+
+Without `.mapx/architecture.jsonc`, the view suggests `mapx arch init`. The dashboard never writes the configuration.
+
+| Endpoint | Answers |
+| --- | --- |
+| `/api/arch/report` | `graph` (as `mapx arch graph --format json`), `drawn` (its edges per status), `dsm`, `unusedAllowances`, `health` (`warnings` is `mapx check`'s Warnings; `warnLevelViolations` the violations reported at warn), `counts`, `findings` and `smells` (the rule smells of `mapx_smells`) |
+| `/api/arch/layers` | `layers`, `groups`, `files` (each file's non-overlay layers) and `unassigned` (files); with `layer=<name>`, that layer's members with their selector |
+| `/api/arch/edges?from=<layer>&to=<layer>` | the pair's `findings`, counted in `counts` as the DSM and `mapx check` count the pair (one per element pair and edge type), each with its `dependencies` as `mapx arch deps --format json` lists them; without `to`, every finding from `from`, uncovered ones included |
+
+Every answer carries `stale`: when `mapx check` would refuse the index (exit 4: files changed since the scan, an unscanned repo, an older MapX), it is `true` and `staleReason` gives check's message; the view shows it in a banner. One evaluation serves a batch of requests while the index, the configurations and the baseline are unchanged. Without a configuration, each answers 200 with `{ "configured": false, "hint": … }`; with an invalid one, `{ "configured": true, "valid": false, "errors": […] }`. An unknown layer answers 404, `edges` without `from` 400, and methods other than GET 405. The rules cover the whole workspace, as `mapx check` does: `repo=<name>` narrows the findings, members, files and dependencies to that repo, while the graph, DSM and health stay the workspace's.
 
 ## `mapx workspaces`
 
@@ -1007,7 +1024,7 @@ Options:
 - `--report-allowed`: list allowed dependencies too.
 - An inherited dependency (`policy.inheritDependencies`) has `via`, the inheritance path from the source type to the ancestor whose dependency it is, and its message ends `inherited via …`. See [architecture-rules.md](architecture-rules.md#type-hierarchy-and-members).
 - `--fail-on warn`: warn-level violations (advisory rules, inferred edges) and warnings (`multi-layer`, `empty-layer`, `unsupported-selector`) also fail the run.
-- `--layer <name>`: only findings whose source or target layer is `<name>`, or that are about that layer. A name that is not a layer of the configuration is an error (exit 3), so a typo cannot turn the check off.
+- `--layer <name>`: only findings whose source or target layer is `<name>`, or that are about that layer. A name that is not a layer of the configuration is an error (exit 3), so a typo cannot turn the check off. A layer whose name contains ", " is matched whole: findings carry their layers as a list (`source.layers`, `target.layers`) next to the joined `layer`.
 - `--rule <rule>`: only findings of one rule: `disallowed-layer`, `internal-element`, `private-layer`, `uncovered`, `allowed`, `multi-layer`, `empty-layer`, `unsupported-selector`, or the errors `plus-cycle`, `config` and `stale-baseline`. An unknown rule is an error (exit 3).
 - `--sync`: when files changed since the last scan, sync the index first instead of failing.
 - `--baseline <file>`: use this baseline instead of the configuration's `baseline`. The path is relative to the current directory.

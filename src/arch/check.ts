@@ -45,11 +45,15 @@ export const CHECK_RULES = ['disallowed-layer', 'private-layer', 'internal-eleme
 
 const KINDS: FindingKind[] = ['violation', 'skipped', 'uncovered', 'allowed', 'warning', 'error'];
 
-const layersOf = (s: string | undefined) => (s ? s.split(', ') : []);
+/**
+ * An end's layers: the list, since a layer name may contain ", " (M5-15 review). A report read from
+ * a file that predates the list (`--compare`) falls back to splitting the joined names.
+ */
+export const endLayers = (end: Finding['source']): string[] => end?.layers ?? (end?.layer ? end.layer.split(', ') : []);
 
 /** Does a finding concern `layer`? Its source or target layers, or the layer it is about. */
 function inLayer(f: Finding, layer: string): boolean {
-  return [...layersOf(f.source?.layer), ...layersOf(f.target?.layer), ...(f.layer ? [f.layer] : [])].includes(layer);
+  return [...endLayers(f.source), ...endLayers(f.target), ...(f.layer ? [f.layer] : [])].includes(layer);
 }
 
 /**
