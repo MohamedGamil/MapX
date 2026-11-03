@@ -14,7 +14,10 @@ import { builtinModules } from 'node:module';
 import { NODE_BUILTINS, NODE_PREFIX_ONLY_BUILTINS, nodeBuiltin, npmPackageName, parsePackageLock, parsePnpmLock, parseYarnLock } from '../src/core/manifests/npm.js';
 import { ComposerAttributor, composerRoots, lockPackagesOf, packageByConvention, parseComposerLock, phpBuiltin } from '../src/core/manifests/composer.js';
 import { PHP_BUILTINS_SOURCE } from '../src/core/manifests/php-builtins.js';
-import { EXTERNAL_INPUTS_KEY, changedInputFiles, parseExternalInputs } from '../src/core/manifests/inputs.js';
+import { EXTERNAL_INPUTS_KEY, changedInputFiles, matchGlob, parseExternalInputs } from '../src/core/manifests/inputs.js';
+import { IMPORT_DISTRIBUTIONS, normalizeDist, parsePoetryLock, parseRequirement, parseRequirementsTxt, parseUvLock, pyprojectRoots, pythonBuiltin, PYTHON_STDLIB, requirementsFileIsDev } from '../src/core/manifests/pypi.js';
+import { PYTHON_STDLIB_SOURCE } from '../src/core/manifests/python-stdlib.js';
+import { parseToml } from '../src/core/manifests/toml.js';
 import { cleanup, init, mapx, mapxResult, query } from './helpers/e2e';
 
 // M5-19: references to modules, packages, classes and functions outside the workspace are kept apart
@@ -130,10 +133,10 @@ describe('a scan of the arch-rules fixture', () => {
     expect(scanApp(app).map(key).sort()).toEqual(labels.rows.filter((l) => l.app === app).map(key).sort());
   }, 120000);
 
-  // M5-20 (npm), M5-21 (Composer): every row carries the labelled package, origin, direct, dev and attribution.
-  it.each(labels.apps)('attributes every npm and Composer row of %s as labelled: package or built-in, direct or transitive, dev or production', (app) => {
+  // M5-20 (npm), M5-21 (Composer), M5-22 (pypi): every row carries the labelled package, origin, direct, dev and attribution.
+  it.each(labels.apps)('attributes every npm, Composer and pypi row of %s as labelled: package or built-in, direct or transitive, dev or production', (app) => {
     const attributed = (r: Omit<Label, 'app'>) => `${key(r)} | ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`;
-    const ecosystems = new Set(['npm', 'composer']);
+    const ecosystems = new Set(['npm', 'composer', 'pypi']);
     expect(scanApp(app).filter((r) => ecosystems.has(r.ecosystem)).map(attributed).sort())
       .toEqual(labels.rows.filter((l) => l.app === app && ecosystems.has(l.ecosystem)).map(attributed).sort());
   }, 120000);
@@ -1616,6 +1619,618 @@ describe('Composer attribution through the CLI', () => {
       expect(mapx(w, 'status')).toContain('Index is up to date');
     } finally {
       cleanup(parent);
+    }
+  }, 180000);
+});
+
+// ─── pip, Poetry, uv (M5-22) ────────────────────────────────────────────────────────────────
+
+describe('Python standard library and distribution names', () => {
+  it('classifies standard-library modules of 3.10 to 3.15 as built-ins, by their top-level module', () => {
+    expect(PYTHON_STDLIB_SOURCE).toContain('v3.15.0');
+    expect(pythonBuiltin('os.path')).toBe('python:os');
+    expect(pythonBuiltin('tomllib')).toBe('python:tomllib');
+    expect(pythonBuiltin('distutils')).toBe('python:distutils');
+    expect(pythonBuiltin('annotationlib')).toBe('python:annotationlib');
+    expect(pythonBuiltin('_thread')).toBe('python:_thread');
+    for (const name of ['yaml', 'requests', 'typing_extensions', 'test', 'setuptools']) expect(pythonBuiltin(name)).toBeNull();
+  });
+
+  // The generated list against the running Python (3.10+), as M5-21 does for PHP.
+  const py = (() => {
+    try { return JSON.parse(execFileSync('python3', ['-c', 'import sys, json; print(json.dumps(sorted(sys.stdlib_module_names)))'], { stdio: 'pipe' }).toString()) as string[]; } catch { return null; }
+  })();
+  it.skipIf(!py)('lists every module of the running Python\'s sys.stdlib_module_names', () => {
+    expect(py!.filter((m) => !PYTHON_STDLIB.has(m))).toEqual([]);
+  });
+
+  it('normalises names per PEP 503 and reads PEP 508 requirements', () => {
+    expect(normalizeDist('Ruamel.YAML__Clib')).toBe('ruamel-yaml-clib');
+    expect(parseRequirement('Flask[async, dotenv]>=2.0; python_version > "3.8"')).toEqual({ name: 'flask', extras: ['async', 'dotenv'] });
+    expect(parseRequirement('pip @ https://github.com/pypa/pip/archive/1.3.1.zip')).toEqual({ name: 'pip', extras: [] });
+    expect(parseRequirement('https://example.com/x.whl')).toBeNull();
+    // Every well-known distribution is written normalised.
+    for (const dists of Object.values(IMPORT_DISTRIBUTIONS)) for (const d of dists) expect(d).toBe(normalizeDist(d));
+  });
+
+  it('reads requirements files: includes, editables, options, paths and URLs; dev-only by the file name', () => {
+    expect(parseRequirementsTxt([
+      '# tools',
+      'requests>=2.31  # http',
+      'PyYAML==6.0.1 \\',
+      '    --hash=sha256:abc',
+      '-r base.txt',
+      '--requirement=more.txt',
+      '-c constraints.txt',
+      '-e git+https://github.com/pallets/click.git#egg=click',
+      '-e ./local',
+      './wheels/thing-1.0-py3-none-any.whl',
+      'https://example.com/pkg.tar.gz',
+      '--index-url https://pypi.org/simple',
+      'attrs[tests] @ git+https://github.com/python-attrs/attrs',
+      // Review of M5-22 (P1-2): a VCS or URL line names a distribution by #egg= only, never its scheme.
+      'git+https://github.com/acme/tool.git#egg=acme-tool',
+      'hg+https://hg.example.org/repo',
+      'svn+https://svn.example.org/repo',
+      'file:///tmp/pkg',
+      'C:\\pkgs\\x.whl',
+      'local/dir',
+    ].join('\n'))).toEqual({
+      requirements: [{ name: 'requests', extras: [] }, { name: 'pyyaml', extras: [] }, { name: 'click', extras: [] }, { name: 'attrs', extras: ['tests'] }, { name: 'acme-tool', extras: [] }],
+      includes: ['base.txt', 'more.txt'],
+    });
+    for (const spec of ['git+https://x/y.git', 'hg+https://x', 'local/dir', 'name+x']) expect(parseRequirement(spec)).toBeNull();
+    expect(parseRequirement('numpy;sys_platform=="linux"')).toEqual({ name: 'numpy', extras: [] });
+    for (const f of ['requirements-dev.txt', 'dev-requirements.txt', 'requirements_test.txt', 'requirements.docs.txt', 'test-requirements.txt']) expect(requirementsFileIsDev(f)).toBe(true);
+    for (const f of ['requirements.txt', 'requirements-prod.txt', 'requirements-base.txt', 'requirements-py311.txt']) expect(requirementsFileIsDev(f)).toBe(false);
+    expect(matchGlob(['requirements.txt', 'dev-requirements.txt', 'README.md', 'requirements-dev.txt', 'requirements.in'], '*requirements*.txt'))
+      .toEqual(['dev-requirements.txt', 'requirements-dev.txt', 'requirements.txt']);
+  });
+
+  it('reads TOML: tables, arrays of tables, dotted and quoted keys, strings, arrays and inline tables; throws on text that is no TOML', () => {
+    expect(parseToml([
+      'title = "a \\"b\\" \\u00e9" # comment',
+      "lit = 'C:\\path'",
+      'multi = """',
+      'one \\',
+      '   two"""',
+      "raw = '''x'y'''",
+      'n = 1_000',
+      'f = 1.5',
+      'd = 1979-05-27T07:32:00Z',
+      'b = true',
+      'a.b."c.d" = 1',
+      'arr = [',
+      '  1, # one',
+      '  [2, "x"],',
+      ']',
+      '[t]',
+      'inline = { x = 1, y = { z = "w" } }',
+      '[[pkg]]',
+      'name = "p"',
+      '[pkg.sub]',
+      'k = 1',
+      '[[pkg]]',
+      'name = "q"',
+    ].join('\n'))).toEqual({
+      title: 'a "b" é', lit: 'C:\\path', multi: 'one two', raw: "x'y", n: 1000, f: 1.5, d: '1979-05-27T07:32:00Z', b: true,
+      a: { b: { 'c.d': 1 } }, arr: [1, [2, 'x']],
+      t: { inline: { x: 1, y: { z: 'w' } } },
+      pkg: [{ name: 'p', sub: { k: 1 } }, { name: 'q' }],
+    });
+    for (const bad of ['x = ', 'x = "open', '[t', 'x = 1 2', 'x = 1\nx = 2', '{ "lockfileVersion": 3 }', 'a = """x""""""']) expect(() => parseToml(bad)).toThrow();
+    // Review of M5-22: keys named like Object members are keys (P1-1); 1 or 2 quotes may end a multi-line string (P2-7).
+    expect(parseToml('[tool.x]\nconstructor = 1\ntoString = "t"\n__proto__ = 2\nhasOwnProperty = 3\n[tool.constructor]\na = 1\n')).toEqual({
+      tool: { x: { constructor: 1, toString: 't', ['__proto__']: 2, hasOwnProperty: 3 }, constructor: { a: 1 } },
+    });
+    expect(JSON.parse(JSON.stringify(parseToml('a = """x""""\nb = """x"""""\nc = \'\'\'y\'\'\'\'\'\nd = """""x"""\n')))).toEqual({ a: 'x"', b: 'x""', c: "y''", d: '""x' });
+  });
+
+  it('reads pyproject.toml: PEP 621, extras, dependency groups, Poetry and uv; production wins', () => {
+    const roots = pyprojectRoots(parseToml([
+      '[project]',
+      'dependencies = ["Flask>=3", "requests[socks]"]',
+      '[project.optional-dependencies]',
+      'imaging = ["Pillow"]',
+      // Review of M5-22 (P2-4): extras named for development tooling are dev.
+      'test = ["coverage"]',
+      'docs = ["sphinx"]',
+      '[dependency-groups]',
+      'test = ["pytest", { include-group = "lint" }]',
+      'lint = ["ruff", "flask"]',
+      '[tool.poetry.dependencies]',
+      'python = "^3.11"',
+      'celery = { version = "^5", extras = ["redis"] }',
+      '[tool.poetry.dev-dependencies]',
+      'black = "*"',
+      '[tool.poetry.group.main.dependencies]',
+      'kombu = "*"',
+      '[tool.poetry.group.docs.dependencies]',
+      'Sphinx = "*"',
+      '[tool.uv]',
+      'dev-dependencies = ["mypy"]',
+    ].join('\n')));
+    expect([...roots.prod]).toEqual([['flask', []], ['requests', ['socks']], ['pillow', []], ['celery', ['redis']], ['kombu', []]]);
+    expect([...roots.dev.keys()]).toEqual(['coverage', 'sphinx', 'pytest', 'ruff', 'flask', 'black', 'mypy']);
+    expect(roots.poetry).toBe(true);
+  });
+
+  it('uv.lock: the members are the roots; dev-ness by reachability through requested extras, production wins', () => {
+    const lock = parseUvLock([
+      'version = 1',
+      '[[package]]',
+      'name = "app"',
+      'source = { editable = "." }',
+      'dependencies = [{ name = "requests", extra = ["socks"] }, { name = "click" }]',
+      '[package.dev-dependencies]',
+      'dev = [{ name = "pytest" }]',
+      '[package.optional-dependencies]',
+      'test = [{ name = "coverage" }]',
+      '[[package]]',
+      'name = "requests"',
+      'source = { registry = "https://pypi.org/simple" }',
+      'dependencies = [{ name = "urllib3" }]',
+      '[package.optional-dependencies]',
+      'socks = [{ name = "PySocks" }]',
+      'use-chardet-on-py3 = [{ name = "chardet" }]',
+      '[[package]]',
+      'name = "pytest"',
+      'dependencies = [{ name = "colorama" }, { name = "pluggy" }]',
+      '[[package]]',
+      'name = "click"',
+      'dependencies = [{ name = "colorama" }]',
+      ...['urllib3', 'pysocks', 'chardet', 'colorama', 'pluggy', 'orphan', 'coverage'].flatMap((n) => ['[[package]]', `name = "${n}"`]),
+    ].join('\n'));
+    expect(Object.fromEntries(lock.dev)).toEqual({
+      app: null, requests: false, urllib3: false, pysocks: false, chardet: null, click: false, colorama: false, pytest: true, pluggy: true, orphan: null, coverage: true,
+    });
+    expect(() => parseUvLock('[tool.uv]\nx = 1\n')).toThrow();
+  });
+
+  it('poetry.lock: groups (2.1), category (1.x), else reachability from the pyproject', () => {
+    const roots = [pyprojectRoots(parseToml('[tool.poetry.dependencies]\nrequests = "*"\n[tool.poetry.group.dev.dependencies]\npytest = "*"\n'))];
+    const pkg = (name: string, extra: string[] = []) => ['[[package]]', `name = "${name}"`, 'version = "1.0"', ...extra];
+    expect(Object.fromEntries(parsePoetryLock([
+      ...pkg('requests', ['groups = ["main"]']), ...pkg('pytest', ['groups = ["dev"]']), ...pkg('colorama', ['groups = ["main", "dev"]']),
+      '[metadata]', 'lock-version = "2.1"',
+    ].join('\n'), roots).dev)).toEqual({ requests: false, pytest: true, colorama: false });
+    expect(Object.fromEntries(parsePoetryLock([
+      ...pkg('requests', ['category = "main"']), ...pkg('pytest', ['category = "dev"']), '[metadata]', 'lock-version = "1.1"',
+    ].join('\n'), roots).dev)).toEqual({ requests: false, pytest: true });
+    expect(Object.fromEntries(parsePoetryLock([
+      ...pkg('requests', ['[package.dependencies]', 'urllib3 = ">=1"', 'PySocks = { version = "*", optional = true }', '[package.extras]', 'socks = ["PySocks (>=1.5.6,!=1.5.7)"]']),
+      ...pkg('pytest', ['[package.dependencies]', 'pluggy = ">=1"', 'urllib3 = "*"']),
+      ...pkg('urllib3'), ...pkg('pluggy'), ...pkg('pysocks'),
+      '[metadata]', 'lock-version = "2.0"',
+    ].join('\n'), roots).dev)).toEqual({ requests: false, urllib3: false, pytest: true, pluggy: true, pysocks: null });
+    expect(() => parsePoetryLock('version = 1\n', roots)).toThrow();
+  });
+});
+
+const pypiAttribution = (store: Store) => store.getExternalRefs().filter((r) => r.ecosystem === 'pypi')
+  .map((r) => `${r.file_path}:${r.line} ${r.specifier} ${r.symbol} ${r.kind} → ${r.package} ${r.origin} ${r.direct} ${r.dev} ${r.attribution}`).sort();
+
+// `requests` and `PyYAML` dependencies, `pytest` a dev group; `urllib3` reached through requests
+// (production), `pluggy` through pytest (dev); `acme_missing` in nothing.
+const PY_SOURCE = ['import requests', 'import yaml', 'import pytest', 'import urllib3', 'import pluggy', 'import acme_missing', 'import os.path', ''].join('\n');
+const PYPROJECT = '[project]\nname = "app"\nversion = "0.1.0"\ndependencies = ["requests>=2.31", "PyYAML>=6"]\n\n[dependency-groups]\ndev = ["pytest>=8"]\n';
+const UV_LOCK = [
+  'version = 1',
+  'requires-python = ">=3.11"',
+  '',
+  '[[package]]',
+  'name = "app"',
+  'version = "0.1.0"',
+  'source = { virtual = "." }',
+  'dependencies = [',
+  '    { name = "pyyaml" },',
+  '    { name = "requests" },',
+  ']',
+  '',
+  '[package.dev-dependencies]',
+  'dev = [',
+  '    { name = "pytest" },',
+  ']',
+  ...([['requests', ['urllib3']], ['pyyaml', []], ['urllib3', []], ['pytest', ['pluggy']], ['pluggy', []]] as Array<[string, string[]]>).flatMap(([name, deps]) => [
+    '', '[[package]]', `name = "${name}"`, 'version = "1.0.0"', 'source = { registry = "https://pypi.org/simple" }',
+    ...(deps.length ? [`dependencies = [${deps.map((d) => `{ name = "${d}" }`).join(', ')}]`] : []),
+  ]),
+  '',
+].join('\n');
+/** The rows of PY_SOURCE at `file`, attributed with or without a lockfile. */
+const pyAttributed = (file: string, by: 'lock' | 'manifest') => [
+  `${file}:1 requests null import → requests package 1 0 ${by}`,
+  `${file}:2 yaml null import → pyyaml package 1 0 ${by}`,
+  `${file}:3 pytest null import → pytest package 1 1 ${by}`,
+  `${file}:4 urllib3 null import → ${by === 'lock' ? 'urllib3 package 0 0' : 'null package null null'} ${by}`,
+  `${file}:5 pluggy null import → ${by === 'lock' ? 'pluggy package 0 1' : 'null package null null'} ${by}`,
+  `${file}:6 acme_missing null import → null package null null ${by}`,
+  `${file}:7 os.path null import → python:os builtin null null null`,
+];
+
+describe('pypi attribution of a scan', () => {
+  const p = project(false);
+  afterEach(() => p.remove());
+  const scan = async (files: Record<string, string>) => {
+    p.create(files);
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    return pypiAttribution(store);
+  };
+
+  it('a uv.lock: direct, transitive, dev-only, unknown and built-in', async () => {
+    expect(await scan({ 'pyproject.toml': PYPROJECT, 'uv.lock': UV_LOCK, 'src/a.py': PY_SOURCE })).toEqual(pyAttributed('src/a.py', 'lock'));
+  }, 120000);
+
+  // Poetry 2.x (groups), 1.x (category) and lock 2.0 (neither: reachability from the pyproject).
+  const POETRY_PYPROJECT = '[tool.poetry]\nname = "app"\n\n[tool.poetry.dependencies]\npython = "^3.11"\nrequests = "^2.31"\nPyYAML = "^6"\n\n[tool.poetry.group.dev.dependencies]\npytest = "^8"\n';
+  const poetryLock = (field: (group: string) => string, version: string) => [
+    ...([['requests', 'main', ['urllib3']], ['pyyaml', 'main', []], ['urllib3', 'main', []], ['pytest', 'dev', ['pluggy']], ['pluggy', 'dev', []]] as Array<[string, string, string[]]>)
+      .flatMap(([name, group, deps]) => [
+        '[[package]]', `name = "${name}"`, 'version = "1.0.0"', field(group),
+        ...(deps.length ? ['', '[package.dependencies]', ...deps.map((d) => `${d} = ">=1"`)] : []), '',
+      ]),
+    '[metadata]', `lock-version = "${version}"`, 'python-versions = "^3.11"', 'content-hash = "0"', '',
+  ].join('\n');
+  it.each([
+    ['groups', poetryLock((g) => `groups = ["${g}"]`, '2.1')],
+    ['category', poetryLock((g) => `category = "${g}"`, '1.1')],
+    ['neither', poetryLock(() => '', '2.0')],
+  ])('a poetry.lock (%s): direct, transitive, dev-only, unknown and built-in', async (_name, lock) => {
+    expect(await scan({ 'pyproject.toml': POETRY_PYPROJECT, 'poetry.lock': lock, 'src/a.py': PY_SOURCE })).toEqual(pyAttributed('src/a.py', 'lock'));
+  }, 120000);
+
+  it('requirements files, no lockfile: direct from the manifests, includes followed, dev by the file name, flagged manifest', async () => {
+    expect(await scan({
+      'requirements.txt': '-r requirements/base.txt\n',
+      'requirements/base.txt': 'requests>=2.31\nPyYAML==6.0.1 --hash=sha256:abc\n',
+      'requirements-dev.txt': '-r requirements.txt\npytest\n',
+      'src/a.py': PY_SOURCE,
+    })).toEqual(pyAttributed('src/a.py', 'manifest'));
+  }, 120000);
+
+  it('no lockfile: direct from the pyproject only, flagged manifest', async () => {
+    expect(await scan({ 'pyproject.toml': PYPROJECT, 'src/a.py': PY_SOURCE })).toEqual(pyAttributed('src/a.py', 'manifest'));
+  }, 120000);
+
+  it.each([
+    ['a corrupt uv.lock', { 'uv.lock': 'version = 1\n[[package]\nname = "x' }],
+    ['a uv.lock that is TOML but no lock', { 'uv.lock': '[tool.uv]\ndev = true\n' }],
+    ['a uv.lock that is a folder', { 'uv.lock/x.txt': 'x' }],
+    ['a poetry.lock that is no lock', { 'poetry.lock': '{"packages": []}' }],
+  ])('%s: direct from the manifest only, flagged manifest, no crash', async (_name, extra) => {
+    expect(await scan({ 'pyproject.toml': PYPROJECT, 'src/a.py': PY_SOURCE, ...extra })).toEqual(pyAttributed('src/a.py', 'manifest'));
+  }, 120000);
+
+  // As M5-20-R1 and the review of M5-21: an unreadable nested lock ends the walk.
+  const PY_NESTED = { 'pyproject.toml': '[project]\nname = "root"\nversion = "0"\n', 'uv.lock': UV_LOCK, 'svc/pyproject.toml': PYPROJECT, 'svc/a.py': PY_SOURCE };
+  it.each([
+    ['a folder', { 'svc/uv.lock/x.txt': 'x' }],
+    ['a file it cannot read', { 'svc/uv.lock': UV_LOCK }],
+  ])('a nested uv.lock that is %s: the nested pyproject alone, flagged manifest, never the root lock', async (name, extra) => {
+    // Root can read a file without permission: the case holds only for another user.
+    if (name !== 'a folder' && process.getuid?.() === 0) return;
+    p.create({ ...PY_NESTED, ...extra });
+    if (name !== 'a folder') chmodSync(join(p.root, 'svc/uv.lock'), 0o000);
+    try {
+      const store = new Store(':memory:');
+      await (await p.scanner(store)).scanFull();
+      expect(pypiAttribution(store)).toEqual(pyAttributed('svc/a.py', 'manifest'));
+    } finally {
+      if (name !== 'a folder') chmodSync(join(p.root, 'svc/uv.lock'), 0o644);
+    }
+  }, 120000);
+
+  it('a nested pyproject without a lockfile: the root folder\'s lockfile answers', async () => {
+    expect(await scan(PY_NESTED)).toEqual(pyAttributed('svc/a.py', 'lock'));
+  }, 120000);
+
+  it('a stale lock that lacks a required distribution: that one from the manifest, flagged manifest', async () => {
+    expect(await scan({
+      'pyproject.toml': PYPROJECT.replace('"PyYAML>=6"', '"PyYAML>=6", "httpx"'),
+      'uv.lock': UV_LOCK,
+      'src/a.py': 'import httpx\nimport requests\nimport acme_missing\n',
+    })).toEqual([
+      'src/a.py:1 httpx null import → httpx package 1 0 manifest',
+      'src/a.py:2 requests null import → requests package 1 0 lock',
+      'src/a.py:3 acme_missing null import → null package null null manifest',
+    ]);
+  }, 120000);
+
+  // Review of M5-21 (P1-1): distributions sharing an import name are told apart by the manifests, never picked arbitrarily.
+  it('an import name two distributions provide: the one the manifests list (production first), else unknown', async () => {
+    expect(await scan({
+      'a/pyproject.toml': '[project]\nname = "a"\nversion = "0"\ndependencies = ["psycopg2-binary"]\n[dependency-groups]\ndev = ["psycopg2", "opencv-python"]\n',
+      'a/x.py': 'import psycopg2\nimport cv2\n',
+      'b/pyproject.toml': '[project]\nname = "b"\nversion = "0"\ndependencies = ["psycopg2-binary", "psycopg2"]\n',
+      'b/x.py': 'import psycopg2\nimport cv2\n',
+    })).toEqual([
+      'a/x.py:1 psycopg2 null import → psycopg2-binary package 1 0 manifest',
+      'a/x.py:2 cv2 null import → opencv-python package 1 1 manifest',
+      'b/x.py:1 psycopg2 null import → null package null null manifest',
+      // cv2 has four well-known distributions and b lists none: unknown, never a guess.
+      'b/x.py:2 cv2 null import → null package null null manifest',
+    ]);
+  }, 120000);
+
+  it('a namespace package or a submodule imported by name: the longest dotted name a manifest lists', async () => {
+    expect(await scan({
+      'pyproject.toml': '[project]\nname = "app"\nversion = "0"\ndependencies = ["google-cloud-storage", "protobuf", "zope.interface", "PyYAML"]\n',
+      'src/a.py': [
+        'from google.cloud import storage',
+        'import google.cloud.storage',
+        'from google.protobuf import message',
+        'from google import protobuf',
+        'import zope.interface',
+        'import google.auth',
+        'from yaml import safe_load',
+        'import sklearn',
+        '',
+      ].join('\n'),
+    })).toEqual([
+      'src/a.py:1 google.cloud storage import → google-cloud-storage package 1 0 manifest',
+      'src/a.py:2 google.cloud.storage null import → google-cloud-storage package 1 0 manifest',
+      'src/a.py:3 google.protobuf message import → protobuf package 1 0 manifest',
+      'src/a.py:4 google protobuf import → protobuf package 1 0 manifest',
+      'src/a.py:5 zope.interface null import → zope-interface package 1 0 manifest',
+      // google-auth is in no manifest: an import name is no distribution name.
+      'src/a.py:6 google.auth null import → null package null null manifest',
+      'src/a.py:7 yaml safe_load import → pyyaml package 1 0 manifest',
+      // A well-known import name with one distribution, in no manifest: unlisted.
+      'src/a.py:8 sklearn null import → scikit-learn package 0 null manifest',
+    ]);
+  }, 120000);
+
+  it('a namespace whose parent is a distribution too: the longest listed name wins', async () => {
+    expect(await scan({
+      'pyproject.toml': '[project]\nname = "app"\nversion = "0"\ndependencies = ["azure", "azure-storage-blob"]\n',
+      'src/a.py': 'from azure.storage.blob import BlobClient\nimport azure\n',
+    })).toEqual([
+      'src/a.py:1 azure.storage.blob BlobClient import → azure-storage-blob package 1 0 manifest',
+      'src/a.py:2 azure null import → azure package 1 0 manifest',
+    ]);
+  }, 120000);
+
+  it('the nearest manifest that lists a distribution decides whether it is dev-only', async () => {
+    expect(await scan({
+      'pyproject.toml': '[project]\nname = "app"\nversion = "0"\ndependencies = ["requests"]\n[dependency-groups]\ndev = ["pytest"]\n',
+      'svc/requirements.txt': 'pytest\n',
+      'svc/requirements-dev.txt': 'requests\n',
+      'svc/a.py': 'import requests\nimport pytest\n',
+    })).toEqual([
+      'svc/a.py:1 requests null import → requests package 1 1 manifest',
+      'svc/a.py:2 pytest null import → pytest package 1 0 manifest',
+    ]);
+  }, 120000);
+
+  // ─── Review of M5-22 ──────────────────────────────────────────────────────────────────────
+
+  // P1-1: a key named like an Object member is a key; a pyproject that cannot be parsed leaves what it
+  // lists unknown, so the lock alone never makes a package transitive.
+  it('a pyproject with a constructor key reads as any other; one that cannot be parsed gives no lock-only answer', async () => {
+    expect(await scan({
+      'a/pyproject.toml': '[project]\nname = "a"\nversion = "0"\ndependencies = ["requests>=2"]\n[tool.x]\nconstructor = 1\ntoString = 2\n',
+      'a/uv.lock': UV_LOCK,
+      'a/x.py': 'import requests\nimport urllib3\n',
+      'b/pyproject.toml': '[project]\nname = "b"\nversion = "0"\ndependencies = ["requests>=2"\n',
+      'b/uv.lock': UV_LOCK,
+      'b/x.py': 'import requests\nimport urllib3\nimport acme_missing\n',
+    })).toEqual([
+      'a/x.py:1 requests null import → requests package 1 0 lock',
+      'a/x.py:2 urllib3 null import → urllib3 package 0 0 lock',
+      'b/x.py:1 requests null import → requests package null 0 manifest',
+      'b/x.py:2 urllib3 null import → urllib3 package null 0 manifest',
+      'b/x.py:3 acme_missing null import → null package null null manifest',
+    ]);
+  }, 120000);
+
+  // P1-2: a VCS line names its distribution by #egg= only.
+  it('a VCS requirement: its #egg= name, never the VCS scheme', async () => {
+    expect(await scan({
+      'requirements.txt': 'git+https://github.com/acme/tool.git#egg=acme-tool\nhg+https://hg.example.org/x\nrequests\n',
+      'src/a.py': 'import git\nimport acme_tool\nimport requests\n',
+    })).toEqual([
+      // git is GitPython's import name; nothing lists it.
+      'src/a.py:1 git null import → gitpython package 0 null manifest',
+      'src/a.py:2 acme_tool null import → acme-tool package 1 0 manifest',
+      'src/a.py:3 requests null import → requests package 1 0 manifest',
+    ]);
+  }, 120000);
+
+  // P2-1: the imported name is a submodule only when the module itself names no distribution.
+  it('from flask import json is flask, though flask-json is listed', async () => {
+    expect(await scan({ 'requirements.txt': 'flask\nflask-json\n', 'src/a.py': 'from flask import json\nimport flask_json\n' })).toEqual([
+      'src/a.py:1 flask json import → flask package 1 0 manifest',
+      'src/a.py:2 flask_json null import → flask-json package 1 0 manifest',
+    ]);
+  }, 120000);
+
+  // P2-2: a complete lock that lacks a well-known name's distribution: unknown; without a lock, unlisted.
+  it('a well-known import name a complete lock lacks is unknown; with no lock it is unlisted', async () => {
+    expect(await scan({
+      'a/pyproject.toml': PYPROJECT, 'a/uv.lock': UV_LOCK, 'a/x.py': 'import dateutil\n',
+      'b/pyproject.toml': PYPROJECT, 'b/x.py': 'import dateutil\n',
+    })).toEqual([
+      'a/x.py:1 dateutil null import → null package null null lock',
+      'b/x.py:1 dateutil null import → python-dateutil package 0 null manifest',
+    ]);
+  }, 120000);
+
+  // P2-3: a removed standard-library module whose backport a manifest lists is that package.
+  it('a standard-library module whose backport a manifest lists is the backport; else the built-in', async () => {
+    expect(await scan({
+      'requirements.txt': 'legacy-cgi\naudioop-lts\nsetuptools\nstandard-telnetlib\n',
+      'src/a.py': 'import cgi\nimport audioop\nimport distutils.core\nimport telnetlib\nimport os\n',
+      'lib/b.py': 'import cgi\n',
+      'lib/requirements.txt': '',
+    })).toEqual([
+      'lib/b.py:1 cgi null import → legacy-cgi package 1 0 manifest',
+      'src/a.py:1 cgi null import → legacy-cgi package 1 0 manifest',
+      'src/a.py:2 audioop null import → audioop-lts package 1 0 manifest',
+      'src/a.py:3 distutils.core null import → setuptools package 1 0 manifest',
+      'src/a.py:4 telnetlib null import → standard-telnetlib package 1 0 manifest',
+      'src/a.py:5 os null import → python:os builtin null null null',
+    ]);
+    expect(await scan({ 'requirements.txt': 'requests\n', 'src/a.py': 'import cgi\n' })).toEqual(['src/a.py:1 cgi null import → python:cgi builtin null null null']);
+  }, 120000);
+
+  // P2-4: an extra named for development tooling is dev.
+  it('an optional-dependencies extra named test, dev, lint, docs or typing is dev; another is production', async () => {
+    expect(await scan({
+      'pyproject.toml': '[project]\nname = "app"\nversion = "0"\ndependencies = []\n[project.optional-dependencies]\ntest = ["pytest"]\nimaging = ["pillow"]\n',
+      'tests/test_a.py': 'import pytest\nfrom PIL import Image\n',
+    })).toEqual([
+      'tests/test_a.py:1 pytest null import → pytest package 1 1 manifest',
+      'tests/test_a.py:2 PIL Image import → pillow package 1 0 manifest',
+    ]);
+  }, 120000);
+
+  // P2-5: both lockfiles: the one of the project's tool.
+  it('uv.lock and poetry.lock in one folder: poetry.lock for a Poetry project, else uv.lock', async () => {
+    const poetry = '[[package]]\nname = "requests"\nversion = "2"\ngroups = ["main"]\n[package.dependencies]\nurllib3 = "*"\n[[package]]\nname = "urllib3"\nversion = "2"\ngroups = ["main"]\n[metadata]\nlock-version = "2.1"\n';
+    const uv = 'version = 1\n[[package]]\nname = "app"\nversion = "0"\nsource = { virtual = "." }\ndependencies = [{ name = "requests" }]\n[[package]]\nname = "requests"\nversion = "2"\n';
+    expect(await scan({
+      'p/pyproject.toml': '[tool.poetry]\nname = "p"\n[tool.poetry.dependencies]\npython = "^3.11"\nrequests = "^2"\n',
+      'p/uv.lock': uv, 'p/poetry.lock': poetry, 'p/x.py': 'import urllib3\n',
+      'u/pyproject.toml': '[project]\nname = "u"\nversion = "0"\ndependencies = ["requests"]\n',
+      'u/uv.lock': uv, 'u/poetry.lock': poetry, 'u/x.py': 'import urllib3\n',
+    })).toEqual([
+      'p/x.py:1 urllib3 null import → urllib3 package 0 0 lock',
+      'u/x.py:1 urllib3 null import → null package null null lock',
+    ]);
+  }, 120000);
+
+  // P2-6: requirements/*.txt, dev by the file name.
+  it('a requirements/ folder: each file read, dev by its name', async () => {
+    expect(await scan({
+      'requirements/base.txt': 'requests\n',
+      'requirements/dev.txt': '-r base.txt\npytest\n',
+      'requirements/lint.txt': 'ruff\n',
+      'src/a.py': 'import requests\nimport pytest\nimport ruff\n',
+    })).toEqual([
+      'src/a.py:1 requests null import → requests package 1 0 manifest',
+      'src/a.py:2 pytest null import → pytest package 1 1 manifest',
+      'src/a.py:3 ruff null import → ruff package 1 1 manifest',
+    ]);
+  }, 120000);
+});
+
+// Sync = scan --force when pyproject.toml, a requirements file or the lock changes.
+const PY_CHANGES: Array<{ name: string; change: Record<string, string | null>; expect: string }> = [
+  {
+    name: 'a dev dependency moves to the dependencies',
+    change: { 'pyproject.toml': PYPROJECT.replace('"PyYAML>=6"]', '"PyYAML>=6", "pytest>=8"]').replace('dev = ["pytest>=8"]', 'dev = []') },
+    expect: 'src/a.py:3 pytest null import → pytest package 1 0 lock',
+  },
+  { name: 'uv.lock is deleted', change: { 'uv.lock': null }, expect: 'src/a.py:4 urllib3 null import → null package null null manifest' },
+  { name: 'uv.lock is corrupted', change: { 'uv.lock': 'version = [' }, expect: 'src/a.py:5 pluggy null import → null package null null manifest' },
+  {
+    name: 'uv.lock is edited: a transitive package becomes dev-only',
+    change: { 'uv.lock': UV_LOCK.replace('dependencies = [{ name = "urllib3" }]', '').replace('dependencies = [{ name = "pluggy" }]', 'dependencies = [{ name = "pluggy" }, { name = "urllib3" }]') },
+    expect: 'src/a.py:4 urllib3 null import → urllib3 package 0 1 lock',
+  },
+  { name: 'a requirements file appears', change: { 'requirements-dev.txt': 'urllib3\n' }, expect: 'src/a.py:4 urllib3 null import → urllib3 package 1 1 lock' },
+];
+
+describe.each([['git sync', true], ['hash sync', false]] as const)('a %s, when a Python manifest or lockfile changes', (_name, withGit) => {
+  const p = project(withGit);
+  afterEach(() => p.remove());
+  const commit = (message: string) => {
+    if (!withGit) return;
+    git(p.root, 'add', '-A');
+    git(p.root, 'commit', '-qm', message);
+  };
+
+  it.each(PY_CHANGES)('$name: equal to scan --force', async ({ change, expect: expected }) => {
+    p.create({ 'pyproject.toml': PYPROJECT, 'uv.lock': UV_LOCK, 'src/a.py': PY_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    expect(pypiAttribution(store)).toEqual(pyAttributed('src/a.py', 'lock'));
+    write(p.root, change);
+    commit('change');
+    await p.sync(store);
+    const forced = await p.forced();
+    expect(dumpAll(store)).toEqual(dumpAll(forced));
+    expect(pypiAttribution(forced)).toContain(expected);
+  }, 120000);
+
+  it('keeps the stored pypi attribution when nothing it read changed; a new requirements file re-attributes', async () => {
+    p.create({ 'pyproject.toml': PYPROJECT, 'uv.lock': UV_LOCK, 'src/a.py': PY_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    store.raw.exec("UPDATE external_ref_candidates SET attribution = 'kept' WHERE specifier = 'urllib3'");
+    write(p.root, { 'src/b.py': 'import pluggy\n' });
+    commit('add');
+    await p.sync(store);
+    expect(pypiAttribution(store)).toContain('src/a.py:4 urllib3 null import → urllib3 package 0 0 kept');
+    expect(pypiAttribution(store)).toContain('src/b.py:1 pluggy null import → pluggy package 0 1 lock');
+    write(p.root, { 'requirements-test.txt': 'pluggy\n' });
+    commit('requirements');
+    await p.sync(store);
+    expect(pypiAttribution(store)).toEqual(pypiAttribution(await p.forced()));
+    expect(pypiAttribution(store)).toContain('src/a.py:4 urllib3 null import → urllib3 package 0 0 lock');
+    expect(pypiAttribution(store)).toContain('src/b.py:1 pluggy null import → pluggy package 1 1 lock');
+  }, 120000);
+
+  // Review of M5-20-R1 (same mechanism): an unreadable lock is recorded as such, so removing it is a change.
+  it.each(['a folder', 'a file it cannot read'])('a nested uv.lock that is %s is removed: the root lock answers, as scan --force', async (name) => {
+    if (name !== 'a folder' && process.getuid?.() === 0) return;
+    const lock = 'svc/uv.lock';
+    p.create({ 'pyproject.toml': '[project]\nname = "root"\nversion = "0"\n', 'uv.lock': UV_LOCK, 'svc/pyproject.toml': PYPROJECT, 'svc/a.py': PY_SOURCE, ...(name === 'a folder' ? { [`${lock}/x.txt`]: 'x' } : { [lock]: UV_LOCK }) });
+    if (name !== 'a folder') chmodSync(join(p.root, lock), 0o000);
+    const store = new Store(':memory:');
+    try {
+      await (await p.scanner(store)).scanFull();
+      expect(pypiAttribution(store)).toEqual(pyAttributed('svc/a.py', 'manifest'));
+      expect(changedInputFiles(p.root, parseExternalInputs(store.getMeta(EXTERNAL_INPUTS_KEY))!)).toEqual([]);
+    } finally {
+      if (name !== 'a folder') chmodSync(join(p.root, lock), 0o644);
+    }
+    rmSync(join(p.root, lock), { recursive: true, force: true });
+    commit('remove');
+    await p.sync(store);
+    expect(pypiAttribution(store)).toEqual(pyAttributed('svc/a.py', 'lock'));
+    expect(dumpAll(store)).toEqual(dumpAll(await p.forced()));
+  }, 120000);
+
+  it('fills the pypi attribution of an index an earlier MapX built (null columns), without --force', async () => {
+    p.create({ 'pyproject.toml': PYPROJECT, 'uv.lock': UV_LOCK, 'src/a.py': PY_SOURCE });
+    const store = new Store(':memory:');
+    await (await p.scanner(store)).scanFull();
+    store.raw.exec("UPDATE external_ref_candidates SET package = NULL, origin = NULL, direct = NULL, dev = NULL, attribution = NULL WHERE ecosystem = 'pypi'");
+    await p.sync(store);
+    expect(pypiAttribution(store)).toEqual(pyAttributed('src/a.py', 'lock'));
+  }, 120000);
+});
+
+describe('pypi attribution through the CLI', () => {
+  it('a lock-only change or a new requirements file makes the index stale; sync re-attributes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mapx-extrefs-pypi-'));
+    try {
+      write(root, { 'pyproject.toml': PYPROJECT, 'uv.lock': UV_LOCK, 'src/a.py': PY_SOURCE });
+      init(root);
+      mapx(root, 'scan');
+      const rows = () => query<{ specifier: string; package: string | null; direct: number | null; dev: number | null; attribution: string | null }>(
+        root, "SELECT specifier, package, direct, dev, attribution FROM external_refs WHERE ecosystem = 'pypi'")
+        .map((r) => `${r.specifier} → ${r.package} ${r.direct} ${r.dev} ${r.attribution}`).sort();
+      expect(rows()).toContain('urllib3 → urllib3 0 0 lock');
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+      write(root, { 'uv.lock': UV_LOCK.replace('dependencies = [{ name = "urllib3" }]', '') });
+      let status = mapx(root, 'status');
+      expect(status).toContain('Index is stale');
+      expect(status).toContain('uv.lock');
+      mapx(root, 'sync');
+      expect(rows()).toContain('urllib3 → urllib3 0 null lock');
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+      write(root, { 'requirements-dev.txt': 'urllib3\n' });
+      status = mapx(root, 'status');
+      expect(status).toContain('Index is stale');
+      expect(status).toContain('requirements');
+      mapx(root, 'sync');
+      expect(rows()).toContain('urllib3 → urllib3 1 1 lock');
+      expect(mapx(root, 'status')).toContain('Index is up to date');
+    } finally {
+      cleanup(root);
     }
   }, 180000);
 });

@@ -12,6 +12,8 @@ export interface ExternalCandidate {
   id: number;
   file_path: string;
   specifier: string;
+  /** The name used from the specifier (M5-22: `from google.cloud import storage` names `google.cloud.storage`). */
+  symbol: string | null;
   ecosystem: string;
   external: number;
   metadata: string | null;
@@ -23,7 +25,7 @@ export interface ExternalCandidate {
 }
 
 /** A candidate's decision as the end of a run writes it. */
-export type ExternalDecision = Omit<ExternalCandidate, 'file_path' | 'specifier' | 'ecosystem' | 'metadata'>;
+export type ExternalDecision = Omit<ExternalCandidate, 'file_path' | 'specifier' | 'symbol' | 'ecosystem' | 'metadata'>;
 
 const CURRENT_SCHEMA_VERSION = 10;
 
@@ -582,7 +584,7 @@ export class Store {
   /** Every candidate with what decides it and its decision, for the decision at the end of a scan (M5-19, M5-20). */
   getExternalCandidates(): ExternalCandidate[] {
     return this.backend.prepare(
-      'SELECT id, file_path, specifier, ecosystem, external, metadata, package, origin, direct, dev, attribution FROM external_ref_candidates'
+      'SELECT id, file_path, specifier, symbol, ecosystem, external, metadata, package, origin, direct, dev, attribution FROM external_ref_candidates'
     ).all() as unknown as ExternalCandidate[];
   }
 

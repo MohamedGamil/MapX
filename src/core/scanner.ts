@@ -43,9 +43,10 @@ import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONST
 import { NpmAttributor, repoParentDirs, yarnRootDirs } from './manifests/npm.js';
 import { EXTERNAL_INPUTS_KEY, changedInputFiles, contentHash, parseExternalInputs } from './manifests/inputs.js';
 import { ComposerAttributor, type PhpName } from './manifests/composer.js';
+import { PypiAttributor } from './manifests/pypi.js';
 
-/** The ecosystems whose external rows the decision pass attributes (M5-20 npm, M5-21 Composer). */
-const ATTRIBUTED_ECOSYSTEMS = new Set(['npm', 'composer']);
+/** The ecosystems whose external rows the decision pass attributes (M5-20 npm, M5-21 Composer, M5-22 pypi). */
+const ATTRIBUTED_ECOSYSTEMS = new Set(['npm', 'composer', 'pypi']);
 
 /** Languages whose `constant` and `variable` symbols are values: function-valued declarations are `function` symbols (M0-17-R2). */
 const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 'svelte']);
@@ -2410,6 +2411,8 @@ export class Scanner {
       readText: (path: string) => { try { return this.readWorkspaceText(path); } catch { return null; } },
       // Present though unreadable (a folder, no permission): a lock that stops the walk (M5-21 review).
       exists: (path: string) => existsSync(resolve(workspaceRoot, path)),
+      // A folder's names: its requirements*.txt files (M5-22).
+      listDir: (dir: string) => { try { return readdirSync(resolve(workspaceRoot, dir || '.')); } catch { return null; } },
       repoRootOf,
       manifestDirs: () => (manifestDirs ??= this.npmManifestDirs(repoRootOf)),
     };
@@ -2420,12 +2423,21 @@ export class Scanner {
     // Composer (M5-21): composer.json and composer.lock, the same way; a function or a facade's
     // target (the row's metadata) is part of what is asked.
     const composer = new ComposerAttributor(workspace);
+    // pip, Poetry, uv (M5-22): pyproject.toml, requirements files, uv.lock and poetry.lock, the same way.
+    const pypi = new PypiAttributor(workspace);
     const attributions = new Map<string, ExternalAttribution>();
-    const attribute = (ecosystem: string, specifier: string, sourcePath: string, php: PhpName): ExternalAttribution => {
-      if (ecosystem !== 'npm' && ecosystem !== 'composer') return NO_ATTRIBUTION;
-      const key = [ecosystem, dirname(sourcePath), specifier, php.kind ?? '', php.facadeTarget ?? ''].join('\0');
+    const attribute = (ecosystem: string, specifier: string, sourcePath: string, php: PhpName, symbol: string | null): ExternalAttribution => {
+      if (ecosystem !== 'npm' && ecosystem !== 'composer' && ecosystem !== 'pypi') return NO_ATTRIBUTION;
+      // A Python name may be a submodule (`from google.cloud import storage`): its first part is asked too.
+      const sub = ecosystem === 'pypi' ? symbol?.split('.')[0] ?? '' : '';
+      const key = [ecosystem, dirname(sourcePath), specifier, php.kind ?? '', php.facadeTarget ?? '', sub].join('\0');
       let a = attributions.get(key);
-      if (!a) attributions.set(key, (a = ecosystem === 'npm' ? npm.attribute(specifier, sourcePath) : composer.attribute(specifier, sourcePath, php)));
+      if (!a) {
+        a = ecosystem === 'npm' ? npm.attribute(specifier, sourcePath)
+          : ecosystem === 'pypi' ? pypi.attribute(specifier, sourcePath, sub || null)
+          : composer.attribute(specifier, sourcePath, php);
+        attributions.set(key, a);
+      }
       return a;
     };
     const flag = (b: boolean | null) => (b === null ? null : b ? 1 : 0);
@@ -2444,14 +2456,14 @@ export class Scanner {
       }
       const external = this.decideExternal(r.ecosystem as Ecosystem, r.specifier, r.file_path, this.workspaceFileMap, phpCandidates);
       if (unchanged && external && r.external === 1 && (!ATTRIBUTED_ECOSYSTEMS.has(r.ecosystem) || r.origin !== null)) continue;
-      const a = external ? attribute(r.ecosystem, r.specifier, r.file_path, { kind: phpCandidates ? 'function' : phpConst ? 'const' : 'class', facadeTarget }) : NO_ATTRIBUTION;
+      const a = external ? attribute(r.ecosystem, r.specifier, r.file_path, { kind: phpCandidates ? 'function' : phpConst ? 'const' : 'class', facadeTarget }, r.symbol) : NO_ATTRIBUTION;
       const d: ExternalDecision = { id: r.id, external: external ? 1 : 0, package: a.package, origin: a.origin, direct: flag(a.direct), dev: flag(a.dev), attribution: a.attribution };
       if (d.external !== r.external || d.package !== r.package || d.origin !== r.origin || d.direct !== r.direct || d.dev !== r.dev || d.attribution !== r.attribution) changed.push(d);
     }
     if (changed.length) this.store.setExternalDecisions(changed);
     // What this pass read, added to what the last one read when that still stands.
     const files: Record<string, string | null> = unchanged ? { ...recorded!.files } : {};
-    for (const [path, text] of [...npm.reads, ...composer.reads]) files[path] = contentHash(text);
+    for (const [path, text] of [...npm.reads, ...composer.reads, ...pypi.reads]) files[path] = contentHash(text);
     const yarnRoots = unchanged ? [...recorded!.yarnRoots] : [];
     for (const y of npm.yarnRoots) if (!yarnRoots.some((o) => o.repo === y.repo && o.lock === y.lock)) yarnRoots.push(y);
     this.store.setMeta(EXTERNAL_INPUTS_KEY, JSON.stringify({ at, files, yarnRoots }));

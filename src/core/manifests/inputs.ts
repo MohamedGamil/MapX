@@ -3,7 +3,7 @@
 // them to skip re-attribution when nothing changed, and the stale check reports a change to them as
 // a stale index (`mapx status`, `check --sync`).
 import { createHash } from 'node:crypto';
-import { readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { YarnRoots } from './npm.js';
 
@@ -43,10 +43,33 @@ export function parseExternalInputs(value: string | null | undefined): ExternalI
  */
 const SLACK_MS = 2000;
 
-/** The recorded files whose content differs now: changed, created or removed. */
+/** The names that match a basename pattern whose `*` stands for any text (`*requirements*.txt`), sorted. */
+export function matchGlob(names: Iterable<string>, pattern: string): string[] {
+  const re = new RegExp(`^${pattern.split('*').map((p) => p.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
+  return [...names].filter((n) => re.test(n)).sort();
+}
+
+/**
+ * The text a glob input is recorded with (M5-22): the folder's names that match, one per line; null
+ * when the folder cannot be listed. A file created or removed there changes it.
+ */
+export function globInputText(root: string, path: string): string | null {
+  const at = path.lastIndexOf('/');
+  try {
+    return matchGlob(readdirSync(resolve(root, at < 0 ? '.' : path.slice(0, at))), path.slice(at + 1)).join('\n');
+  } catch {
+    return null;
+  }
+}
+
+/** The recorded files whose content differs now: changed, created or removed. A path with `*` is a folder's matching names. */
 export function changedInputFiles(root: string, inputs: ExternalInputs): string[] {
   const changed: string[] = [];
   for (const [path, expected] of Object.entries(inputs.files)) {
+    if (path.includes('*')) {
+      if (contentHash(globInputText(root, path)) !== expected) changed.push(path);
+      continue;
+    }
     const abs = resolve(root, path);
     let exists = false;
     let isFile = false;
