@@ -11,6 +11,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [0.3.9] — 2026-11-03
 
 ### Added
+- `mapx arch init` now ships all 20 AR-15 presets: onion, mvc, mvvm, symfony, express, fastapi, rails, spring, aspnet, flutter, nextjs and vue join the first eight, and `--from framework` picks any of the twelve framework presets. The framework presets place classes by their framework base class or annotation wherever they live. Ancestry is read past annotation lines and through Python import aliases. Code no layer selects goes into an `Unclassified` layer, so `check --fail-on-uncovered` passes on day one (M5-17-R1).
+- The generated agent instructions say that `mapx_arch_allowed` also takes a package (`npm:express`, `express`) or a built-in (`node:fs`) as its target, and `mapx arch allowed` now decides a package the manifest lists or a built-in before any file imports it, with a bare package name taking precedence over a same-named workspace symbol (M5-24-R3).
 - When Composer's vendor/composer metadata is present, PHP classes loaded by classmap (including sibling packages that share a namespace prefix) are attributed to their installed package, and names from PECL extensions such as `Redis` and `apcu_fetch` are classified as ambient (M5-21-R1).
 
 #### Architecture rules

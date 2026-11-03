@@ -17040,14 +17040,27 @@
         "npx tsx scripts/gen-arch-presets.ts --check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-D",
       "actualHours": null,
       "startedAt": "2026-11-03T18:55:32.468Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T23:28:18.727Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-17-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-init.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-17-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/gen-arch-presets.ts --check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-17-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T18:55:30.427Z",
@@ -17060,6 +17073,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:28:18.298Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:28:18.727Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-init.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-17-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/gen-arch-presets.ts --check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-17-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -22100,14 +22136,22 @@
         "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-D2",
       "actualHours": null,
       "startedAt": "2026-11-03T20:39:21.405Z",
-      "completedAt": null,
+      "completedAt": "2026-11-03T23:28:19.670Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-24-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-24-R3.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T18:55:30.830Z",
@@ -22120,6 +22164,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:28:19.179Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-03T23:28:19.670Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-24-R3.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
