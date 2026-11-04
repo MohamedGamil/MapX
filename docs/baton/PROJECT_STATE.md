@@ -2,13 +2,14 @@
 
 Updated 2026-11-04 (P2 defects, D041/D042). `EXTRACTOR_VERSION` is 25. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
 
-- **D041/D042:** the owner started the P2 resolution defects and asked for a commit per item, continuing to the end of the batch. Remaining: M2-08-R6, M2-08-R7, M2-08-R8, M2-08-R9, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13 and M0-07-R7. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
+- **D041/D042:** the owner started the P2 resolution defects and asked for a commit per item, continuing to the end of the batch. Remaining: M2-08-R6, M2-08-R7, M2-08-R8, M2-08-R9, M2-14, M2-16, M2-20-R1, M2-21, M2-23 and M0-02-R13. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
 - **Done in the batch:**
   - **M2-08-R5:** Python and Java package imports never link project symbols.
   - **M2-08-R4:** sync follows a module turned script, and new `declare global` names.
   - **M2-12-R1:** the arch UI spec counts follow M2-12. Bisected; `test:ui` had failed since M2-12 because it is not in `npm run check`.
   - **M4-09-R5:** every test run uses a private TMPDIR, and its teardown names any leftover.
   - **M0-07-R4:** the self-extracting installer removes its unpacked archive, including on HUP, INT or TERM and with stdin closed.
+  - **M0-07-R7:** the installer reads the installed version without `grep -P`, so it works on macOS.
   - **M0-07-R5:** the documented `curl … | sh` install works. Prompts go to /dev/tty; with no terminal, the installer does a `--local` install. The docs' commands are tested verbatim against a curl shim.
 
   Each was independently reviewed, with P1 findings fixed before DONE.
@@ -17,11 +18,11 @@ Updated 2026-11-04 (P2 defects, D041/D042). `EXTRACTOR_VERSION` is 25. Each item
   - M2-08-R9 (P2): sync for new global declarations.
   - M0-07-R4 (P2): the installer leaves its unpacked archive (done).
   - M0-07-R5 (P2): README's `curl … | sh` (done).
-  - M0-07-R7 (P2): `install.sh` uses `grep -P`, which macOS lacks.
+  - M0-07-R7 (P2): macOS `grep -P` (done).
   - M0-07-R6 (P3, held): an empty custom prefix.
   - M2-08-R10 (P3, held).
 - **Latest validation:**
-  - `npm run check` exits 0: 157 files, 3309 passed, 4 skipped.
+  - `npm run check` exits 0: 157 files, 3312 passed, 4 skipped.
   - `npm run test:ui` exits 0: 54 passed on a rerun. The first run missed the perf-large budget by 1% at a load average of 16.
   - `npm run eval` is unchanged, with edges precision 0.9915.
 

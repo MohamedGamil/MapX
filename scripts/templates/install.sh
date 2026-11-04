@@ -99,7 +99,9 @@ check_existing() {
     local target="$PREFIX/mapx"
     if [ -f "$target" ]; then
         local existing_version
-        existing_version="$("$target" --version 2>/dev/null | grep -oP '[\d.]+' || echo "unknown")"
+        # POSIX sed, not GNU grep with Perl regexes, which macOS lacks (M0-07-R7).
+        existing_version="$("$target" --version 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9.]*\).*/\1/p' | head -n 1)" || true
+        [ -n "$existing_version" ] || existing_version="unknown"
         warn "Existing installation found at $target (v$existing_version)"
         if [ "$FORCE" != true ]; then
             # No answer (stdin at EOF: a pipe with no terminal) is a no, not a silent set -e exit (M0-07-R5).

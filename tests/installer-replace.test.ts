@@ -661,3 +661,59 @@ print(json.dumps({'status': os.waitstatus_to_exitcode(st), 'out': seen, 'answere
     }, 60_000);
   });
 });
+
+// M0-07-R7: install.sh read an installed version with `grep -oP`, which macOS (BSD) grep lacks, so
+// the overwrite warning said "(vunknown)". A grep shim that refuses -P stands in for BSD grep.
+describe.skipIf(process.platform === 'win32')('install.sh reads the installed version without grep -P', () => {
+  let tmp = '';
+  beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'mapx-installer-ver-')); });
+  afterEach(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it('names the installed version when grep has no -P', () => {
+    const rel = join(tmp, 'rel');
+    mkdirSync(rel);
+    copyFileSync(join(ROOT, 'scripts/templates/install.sh'), join(rel, 'install.sh'));
+    writeFileSync(join(rel, 'VERSION'), '9.9.9\n');
+    writeFileSync(join(rel, 'mapx'), NEW_BINARY, { mode: 0o755 });
+    const prefix = join(tmp, 'bin');
+    mkdirSync(prefix);
+    writeFileSync(join(prefix, 'mapx'), '#!/bin/sh\necho "mapx 0.3.8"\n', { mode: 0o755 });
+    const shims = join(tmp, 'shims');
+    mkdirSync(shims);
+    const grep = execFileSync('sh', ['-c', 'command -v grep'], { encoding: 'utf8' }).trim();
+    writeFileSync(join(shims, 'grep'), `#!/bin/sh
+for a in "$@"; do case "$a" in --) break ;; -*P*) echo "grep: invalid option -- P" >&2; exit 2 ;; esac; done
+exec ${grep} "$@"
+`, { mode: 0o755 });
+    mkdirSync(join(tmp, 'home'));
+    const r = spawnSync('bash', [join(rel, 'install.sh'), '--prefix', prefix, '--force'], {
+      encoding: 'utf8', input: '',
+      env: { ...process.env, HOME: join(tmp, 'home'), TMPDIR: tmp, PATH: `${shims}:${process.env.PATH}`, NO_COLOR: '1' },
+    });
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toContain(`Existing installation found at ${join(prefix, 'mapx')} (v0.3.8)`);
+    expect(readFileSync(join(prefix, 'mapx'), 'utf8')).toBe(NEW_BINARY);
+  });
+
+  it('an installed binary whose --version fails is reported as unknown and replaced', () => {
+    const rel = join(tmp, 'rel');
+    mkdirSync(rel);
+    copyFileSync(join(ROOT, 'scripts/templates/install.sh'), join(rel, 'install.sh'));
+    writeFileSync(join(rel, 'VERSION'), '9.9.9\n');
+    writeFileSync(join(rel, 'mapx'), NEW_BINARY, { mode: 0o755 });
+    const prefix = join(tmp, 'bin');
+    mkdirSync(prefix);
+    writeFileSync(join(prefix, 'mapx'), '#!/bin/sh\nexit 3\n', { mode: 0o755 });
+    mkdirSync(join(tmp, 'home'));
+    const r = spawnSync('bash', [join(rel, 'install.sh'), '--prefix', prefix, '--force'], {
+      encoding: 'utf8', input: '', env: { ...process.env, HOME: join(tmp, 'home'), TMPDIR: tmp, NO_COLOR: '1' },
+    });
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toContain('(vunknown)');
+    expect(readFileSync(join(prefix, 'mapx'), 'utf8')).toBe(NEW_BINARY);
+  });
+
+  it('install.sh uses no GNU-only grep -P', () => {
+    expect(readFileSync(join(ROOT, 'scripts/templates/install.sh'), 'utf8')).not.toMatch(/grep\s+-\w*P/);
+  });
+});

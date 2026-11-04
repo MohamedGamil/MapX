@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@81ee4d06dd1bbf6c098411753e1801aefb982664 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@e922b9dee8e574f90367e6da5f7fffbe411566a3 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M0-07-R5 — The documented `curl … | sh` install works, or the docs stop documenting it.
-Evidence: `npx vitest run tests/installer-replace.test.ts tests/docs-surface.test.ts` (exit 0) → docs/baton/reports/M0-07-R5.md; `npm run check` (exit 0) → docs/baton/reports/M0-07-R5.md.
+Last completed: M0-07-R7 — install.sh reads the installed version without GNU grep -P (macOS).
+Evidence: `npx vitest run tests/installer-replace.test.ts` (exit 0) → docs/baton/reports/M0-07-R7.md; `npm run check` (exit 0) → docs/baton/reports/M0-07-R7.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M6-01 — Large-graph fixtures and baseline measurements for the graph and Architecture views. Prerequisites: M4-20, M5-15. Read docs/baton/iterations/M6-01.md. Objective: Generated synthetic workspaces of 2k, 10k, 50k and 100k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap. Expected outputs: scripts/ui/gen-large-workspace.ts; tests/ui/perf-scale.spec.ts; reports/M6-01.md. Verify: `npx playwright test tests/ui/perf-scale.spec.ts`.
-Also eligible: M0-02-R13, M0-07-R7, M2-08-R6, M2-08-R7, M2-08-R8.
+Also eligible: M0-02-R13, M2-08-R6, M2-08-R7, M2-08-R8, M2-08-R9.
 Active work: none. One active iteration per owner.
 
 ## Observe

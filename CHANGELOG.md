@@ -12,6 +12,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - `npm test` and `npm run test:ui` give each run a private temp folder and fail, naming each leftover, when a test leaves an entry in it; an interrupted run (Ctrl+C, `kill`) removes its folder, the built-CLI mirror included; `npm run test:skills` does the same (M4-09-R5).
 
 ### Fixed
+- On macOS, the installer's overwrite warning now names the installed version instead of `(vunknown)`; it no longer relies on GNU `grep -P` (M0-07-R7).
 - The documented `curl -fsSL …/mapx-<platform>-installer.sh | sh` install now works instead of failing with `awk: cannot open sh`: the installer reads its payload from the pipe and its prompts from the terminal, and with no terminal (CI, Docker) it installs for the current user and will not overwrite an existing `mapx` unless you pass `--force`; `install.sh` treats a prompt with no answer as a no, and the README shows the options (`sh -s -- --prefix …`) and an uninstall command (M0-07-R5).
 - The self-extracting installer (`mapx-*-installer.sh`) now removes the folder it unpacks into (`tmp.*/mapx-<version>` in `$TMPDIR`), after a successful install, a failing one, or Ctrl+C / `kill`, and exits with `install.sh`'s status (M0-07-R4).
 - `sync` now links the files that use a function or class by name when the file declaring it is edited into a script (its last top-level `import`/`export` removed) or gains a `declare global` name, as `scan --force` does; only files that used that name are re-parsed, and the index re-parses once (M2-08-R4).
