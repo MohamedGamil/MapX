@@ -31913,6 +31913,66 @@
       "rollback": "Revert the task commit."
     },
     {
+      "id": "M2-12-R2",
+      "milestone": "M2",
+      "title": "Sync re-links unchanged callers when a method appears in a class chain they walk (self::, parent::, new X()->m())",
+      "objective": "After a method is added to a class (or a trait it uses) that a caller reaches by walking a class chain — PHP self::/static::/parent::, `new X()->m()` in any language (M2-12) — sync re-parses that caller, so sync equals scan --force in git (committed) and non-git workspaces.",
+      "description": "Found by M2-16 (2026-11-04), pre-existing for M2-12: a child calling self::newm()/parent::newm2() (or (new Mid())->newm()) stays unlinked after newm is added to the parent and synced, while scan --force links it (repros scratchpad M2-16/p8nogit, p8git, p9). A repo with no commit re-parses every file, which hid it in the review.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-16",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-16.md",
+        "docs/baton/reports/M2-12.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/php-self-calls.test.ts",
+        "tests/new-receiver-calls.test.ts",
+        "reports/M2-12-R2.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/php-self-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Add a method to a parent class (one and two levels up) and to a used trait; hash sync and git sync (committed) give the caller edges scan --force gives, for PHP self::/parent::/static:: and for new X()->m() in PHP, JS/TS and Java (e2e); a body edit of the parent re-parses only it."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/php-self-calls.test.ts",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "milestone": "M2",
       "priority": "P2",
       "estimate": {
@@ -32165,15 +32225,74 @@
         "docs/baton/reports/M2-13.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T18:15:56.390Z",
+      "completedAt": "2026-11-04T19:07:33.914Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-16.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/php-self-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-16.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-16.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-16.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T18:15:55.895Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T18:15:56.390Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T19:07:33.430Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T19:07:33.914Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/php-self-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-16.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-16.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-16.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -32181,25 +32300,33 @@
       "id": "M2-16",
       "title": "PHP `self::m()` and `static::m()` calls link the enclosing class's method",
       "objective": "In PHP, `self::m()`, `static::m()` and `parent::m()` link to the enclosing class's (or its parent's) method m on any file layout.",
-      "description": "Found by M2-13 (2026-11-03): PHP `self::m()` gives no edge on any layout.",
+      "description": "Found by M2-13 (2026-11-03): PHP `self::m()` gives no edge on any layout. Cause (probe 2026-11-04): queries/php/references.scm captures a scoped call only for a `name` or `qualified_name` scope; `self`, `static` and `parent` are a `relative_scope` node, so no reference is extracted at all.",
       "outputs": [
+        "queries/php/references.scm",
         "src/parsers/languages/php.ts",
+        "src/core/scanner.ts",
         "tests/php-self-calls.test.ts",
+        "iterations/M2-16.md",
         "reports/M2-16.md"
       ],
       "affectedFiles": [
+        "queries/php/references.scm",
         "src/parsers/languages/php.ts",
-        "queries/php/**",
         "src/core/scanner.ts",
         "src/core/extractor-version.ts",
         "tests/php-self-calls.test.ts"
       ],
       "acceptanceCriteria": [
-        "`self::id()` in User::name links User::id; `parent::boot()` links the parent class's boot (e2e tests, one-line and multi-line); `npm run eval` holds."
+        "`self::id()` in User::name links User::id and `static::tag()` links tag, on several lines and on one (e2e, tests/php-self-calls.test.ts); `parent::boot()` links the parent class's boot, multi-line and one-line, also up the chain and for `parent::__construct()`.",
+        "Constants (`self::K`), static properties, `self::class` and dynamic forms (`self::$f()`) give no call edge, and no call edge reaches a same-named method of another class or a same-named top-level function (e2e).",
+        "Traits (a trait method through self::, the class's own winning), abstract methods, interface constants, closures in a method, enums (`self::from()` links nothing, `self::make()` links make) and namespaces (`parent::` through `use` and the namespace) behave as stated in iterations/M2-16.md (e2e).",
+        "A vendor parent (`parent::boot()`, `static::query()` in a class extending Illuminate\\Database\\Eloquent\\Model) gives no edge and no external-reference row, though the project declares a same-named class with those methods; an anonymous class's self:: links no method of the class around it (e2e).",
+        "Sync drops the edge when the chain loses the method and links it when the caller is re-parsed, as scan --force does (e2e); `npm run eval` holds (numbers as printed, before and after)."
       ],
       "verificationCommands": [
         "npx vitest run tests/php-self-calls.test.ts",
-        "npm run eval"
+        "npm run eval",
+        "npm run check"
       ]
     },
     {
@@ -33109,6 +33236,70 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/java-imports.test.ts tests/import-bound-externals.test.ts",
+        "npm run eval",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M2-28",
+      "milestone": "M2",
+      "title": "A PHP static call Foo::m() links method m of class Foo",
+      "objective": "`Foo::m()`, `\\\\Ns\\\\Foo::m()` and an aliased `Alias::m()` link the method m that class Foo (resolved through use/namespace) or its chain declares, verified; today they link the class Foo only. A vendor class links nothing (external reference as today); facades keep their M1 behaviour.",
+      "description": "Found by M2-16 (2026-11-04): `Base::boot()` gives `K::k -> Base.php#Base` (the class), never the method. Static calls are common in PHP (Model::find, Helper::format).",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-16",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-16.md",
+        "docs/baton/reports/M2-13.md"
+      ],
+      "outputs": [
+        "src/parsers/languages/php.ts",
+        "src/core/scanner.ts",
+        "tests/php-static-calls.test.ts",
+        "reports/M2-28.md"
+      ],
+      "affectedFiles": [
+        "queries/php/references.scm",
+        "src/parsers/languages/php.ts",
+        "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
+        "tests/php-static-calls.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`Helper::format()` links Helper::format (e2e); an inherited static method links the base class method; a vendor class (Illuminate\\\\Support\\\\Facades\\\\DB::table) links no project symbol; Laravel route and facade tests and `npm run eval` hold."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/php-static-calls.test.ts",
         "npm run eval",
         "npm run check"
       ],

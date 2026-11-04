@@ -63,7 +63,11 @@ const VALUE_SYMBOL_LANGUAGES = new Set(['javascript', 'typescript', 'python', 's
  * extends; `namespace`, the namespace a PHP type or function is declared in (M2-13 re-review: a file
  * can declare several).
  */
-type TypeFacts = { bases?: string[]; partial?: string; extensionOf?: string; namespace?: string };
+type TraitRules = {
+  insteadof?: Array<{ method: string; winner: string }>;
+  aliases?: Array<{ alias: string; method: string; trait?: string }>;
+};
+type TypeFacts = { bases?: string[]; traits?: number; traitRules?: TraitRules; partial?: string; extensionOf?: string; namespace?: string };
 type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string; assigned?: boolean } & TypeFacts;
 /**
  * A symbol's type facts from its metadata, or undefined: PHP traits before the base class (a
@@ -73,12 +77,15 @@ function typeFacts(metadata: Record<string, unknown> | undefined): TypeFacts | u
   const names = [metadata?.['mixins'], metadata?.['bases']].flatMap((v) => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string') : []));
   const facts: TypeFacts = {};
   if (names.length) facts.bases = names;
+  // The first `traits` entries of `bases` are the PHP traits the class uses, and their adaptation rules (M2-16 review).
+  if (Array.isArray(metadata?.['mixins']) && metadata['mixins'].length) facts.traits = metadata['mixins'].length;
+  if (metadata?.['traitRules'] && typeof metadata['traitRules'] === 'object') facts.traitRules = metadata['traitRules'] as TraitRules;
   if (metadata?.['partial'] === true) facts.partial = `${metadata['namespace'] ?? ''}`;
   if (typeof metadata?.['extensionOf'] === 'string') facts.extensionOf = metadata['extensionOf'];
   if (typeof metadata?.['namespace'] === 'string') facts.namespace = metadata['namespace'];
   return Object.keys(facts).length ? facts : undefined;
 }
-const TYPE_FACT_KEYS = /"(?:bases|mixins|partial|extensionOf|namespace)"/;
+const TYPE_FACT_KEYS = /"(?:bases|mixins|traitRules|partial|extensionOf|namespace)"/;
 
 /**
  * Per line, the smallest symbol enclosing it (the first of equal spans): a reference's source symbol.
@@ -372,6 +379,13 @@ export class Scanner {
   /** resolveSymbolToFile per name, source language and callableOnly, for the index `nameCandidatesFor` (M4-03). */
   private nameCandidates = new Map<string, NameCandidates | null>();
   private nameCandidatesFor: Map<string, SymbolIndexEntry[]> | null = null;
+  /**
+   * The methods and functions of a class by file and owner, then lowercased name, built from the
+   * index `classMembersFor` on first use (M2-16 review): a new-instance or `self::` walk then reads
+   * one class's members, not every same-named method of the workspace (`__construct`, `get`, `save`).
+   */
+  private classMembers = new Map<string, Map<string, SymbolIndexEntry[]>>();
+  private classMembersFor: Map<string, SymbolIndexEntry[]> | null = null;
   /** Per Lua file, the names it declares `local` at its top level, for one resolution phase (M2-10). */
   private luaLocalsCache = new Map<string, Set<string>>();
   /** Per file, the names it binds by import to project modules, for one resolution phase (M2-08). */
@@ -2005,7 +2019,8 @@ export class Scanner {
         targets ??= targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
       }
 
-      if (!targets.length) noteExternal(ref);
+      // `self::m()` / `parent::m()` names a method, not the class or package that declares it: no row (M2-16).
+      if (!targets.length && !ref.metadata?.selfCall) noteExternal(ref);
       for (const { file: targetFile, symbol: targetSymbol, verifiability, metadata: targetMetadata } of targets) {
         const targetRepoName = fileMap.get(targetFile);
         const sourceSymbol = enclosingSymbol(ref);
@@ -2016,7 +2031,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, fileLevel: _fileLevel, required: _required, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, selfCall: _selfCall, fileLevel: _fileLevel, required: _required, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -2361,19 +2376,38 @@ export class Scanner {
    * unknown base, magic, an extension method of another type) keeps name lookup, inferred, as before
    * M2-12 (null). JS/TS linked no call on a new instance before M2-12, so it links nothing. A class
    * the project does not declare links nothing ([]).
+   *
+   * PHP `self::m()`, `static::m()` and `parent::m()` (M2-16) walk the same chain, from the class around
+   * the call or from its parent, and link nothing when it declares no m, closed or not.
    */
   private resolveNewReceiverCall(
     ref: ExtractedReference, sourcePath: string, language: string | null, isJsOrTs: boolean, fileMap: Map<string, string>,
     symbols?: Parameters<Scanner['resolveImportedCall']>[5],
   ): { file: string; symbol: string; verifiability: 'verified' }[] | null {
-    if (!this.symbolIndex) return null;
+    if (!this.symbolIndex) return ref.metadata?.selfCall ? [] : null;
     const index = this.symbolIndex;
+    if (this.classMembersFor !== index) {
+      this.classMembers.clear();
+      this.classMembersFor = index;
+      for (const entries of index.values()) {
+        for (const e of entries) {
+          if (!e.scope || (e.kind !== 'method' && e.kind !== 'function')) continue;
+          const key = `${e.file}\0${e.scope.split(/\\|\.|::/).pop()!.toLowerCase()}`;
+          let byName = this.classMembers.get(key);
+          if (!byName) this.classMembers.set(key, (byName = new Map()));
+          const lower = e.name.toLowerCase();
+          const list = byName.get(lower);
+          if (list) list.push(e); else byName.set(lower, [e]);
+        }
+      }
+    }
+    const members = this.classMembers;
     const method = ref.targetName;
     const last = (name: string) => name.split(/\\|\.|::/).pop()!;
     const seen = new Set<string>();
     const owners = new Set<string>();
     let open = false;
-    const visit = (cls: { file: string; owner: string } | null, depth: number): { file: string; symbol: string } | undefined => {
+    const visit = (cls: { file: string; owner: string } | null, depth: number, name = method): { file: string; symbol: string } | undefined => {
       if (!cls || depth > 12) { open = true; return undefined; }
       if (seen.has(`${cls.file}#${cls.owner}`)) return undefined;
       seen.add(`${cls.file}#${cls.owner}`);
@@ -2385,23 +2419,54 @@ export class Scanner {
       const files = new Set(type?.partial !== undefined
         ? (index.get(cls.owner.toLowerCase()) ?? []).filter(e => e.partial === type.partial && e.name === cls.owner).map(e => e.file)
         : [cls.file]);
-      const member = (name: string) => (index.get(name.toLowerCase()) ?? []).find(e => files.has(e.file)
-        && (e.kind === 'method' || e.kind === 'function') && same(e.name, name, e.kind ?? '')
-        && !!e.scope && same(last(e.scope), cls.owner, 'class'));
-      const declared = member(method);
+      const member = (m: string) => {
+        for (const file of files) {
+          const found = (members.get(`${file}\0${cls.owner.toLowerCase()}`)?.get(m.toLowerCase()) ?? [])
+            .find(e => same(e.name, m, e.kind ?? '') && same(last(e.scope!), cls.owner, 'class'));
+          if (found) return found;
+        }
+        return undefined;
+      };
+      const declared = member(name);
       if (declared) return { file: declared.file, symbol: declared.name };
       // A name that is no type (a Python factory `Maker()`) or a magic class: the method set is unknown.
       if (!type || ['__call', '__getattr__', '__getattribute__'].some(member)) open = true;
       const isJs = /\.([cm]?[jt]sx?|vue|svelte)$/.test(cls.file) || lang === 'javascript' || lang === 'typescript';
-      for (const base of type?.bases ?? []) {
-        // No line of the class file is the call's: a base is resolved from the file's bindings.
-        const hit = visit(base === '?' ? null : this.resolveClassName(base, { ...ref, startLine: 0 }, cls.file, lang, isJs, fileMap), depth + 1);
+      // No line of the class file is the call's: a base is resolved from the file's bindings.
+      const resolveBase = (base: string) => base === '?' ? null : this.resolveClassName(base, { ...ref, startLine: 0 }, cls.file, lang, isJs, fileMap);
+      let bases = type?.bases ?? [];
+      const rules = type?.traitRules;
+      if (rules) {
+        const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+        // `A::x as ax`: the trait method x under the name ax, before any inherited method of that name.
+        for (const alias of rules.aliases ?? []) {
+          if (!sameName(alias.alias, name)) continue;
+          for (const base of bases.slice(0, type?.traits ?? 0)) {
+            if (alias.trait && !sameName(alias.trait, base)) continue;
+            const hit = visit(resolveBase(base), depth + 1, alias.method);
+            if (hit) return hit;
+          }
+        }
+        // `B::x insteadof A`: B's x first; A's x is never reached (B declares it, or none does).
+        const instead = (rules.insteadof ?? []).find(r => sameName(r.method, name));
+        if (instead) {
+          const traits = (type?.traits ?? 0);
+          const winner = bases.slice(0, traits).find(b => sameName(b, instead.winner));
+          bases = [...(winner ? [winner] : []), ...bases.filter(b => b !== winner)];
+        }
+      }
+      for (const base of bases) {
+        const hit = visit(resolveBase(base), depth + 1, name);
         if (hit) return hit;
       }
       return undefined;
     };
     const hit = visit(this.resolveClassName(ref.metadata!.newClass as string, ref, sourcePath, language, isJsOrTs, fileMap, symbols), 0);
     if (hit) return [{ ...hit, verifiability: 'verified' }];
+    // A method the chain does not declare, on a class the project knows or not: nothing. Unlike
+    // `(new X())->m()`, `self::m()` has no name lookup to fall back to (a library parent's method,
+    // `static::query()`, is never a same-named project function or method).
+    if (ref.metadata!.selfCall) return [];
     // The class itself is not the project's: nothing to link (M2-08-R3, a library class).
     if (!seen.size) return [];
     // C#: an extension method (`static int Spin(this Widget w)`) of a class of the chain.

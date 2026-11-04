@@ -73,8 +73,12 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  * - 29: M2-08-R8 (a Java or Python parse records the imports whose "outside the project" decision
  *   other files make, `jvmDecl`, `jvmImports`, `pyImports`, so a sync that adds, deletes or moves a
  *   project package, class or top-level module re-parses the importers it may flip).
+ * - 30: M2-16 (a PHP `self::m()`, `static::m()` or `parent::m()` call records the class around it, so it
+ *   links the method that class, its traits or its parent declares).
+ * - 31: M2-16 review (a PHP class records the adaptation rules of its `use A, B { B::x insteadof A;
+ *   A::x as ax; }` block, `traitRules`, so a walk takes the winning trait's method and an alias's).
  */
-export const EXTRACTOR_VERSION = 29;
+export const EXTRACTOR_VERSION = 31;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

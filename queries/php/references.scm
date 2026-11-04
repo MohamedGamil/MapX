@@ -35,6 +35,13 @@
 (scoped_call_expression
   scope: [(name) (qualified_name)] @ref.target_call) @ref.type_call
 
+; `self::m()`, `static::m()`, `parent::m()`: the method of the class around the call, or of its
+; parent; php.ts reads the class from the syntax tree (M2-16). `self::$f()`, `self::K` and
+; `self::class` are not calls and do not match.
+(scoped_call_expression
+  scope: (relative_scope)
+  name: (name) @ref.target_self_call) @ref.type_self_call
+
 ; Member calls
 (member_call_expression
   name: (name) @ref.target_call) @ref.type_call

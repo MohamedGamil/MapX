@@ -49,6 +49,35 @@ function phpEnclosingType(node: any): any {
   return null;
 }
 
+/**
+ * The adaptation rules of a `use A, B { … }` block: `B::x insteadof A, C` (`insteadof`: the method,
+ * and its winning trait) and `A::x as [visibility] ax` / `x as ax`
+ * (`aliases`: the new name, the trait method it names, the trait when written). A rule that only
+ * changes visibility (`x as protected`) is dropped; null when there are none.
+ */
+function phpTraitRules(useLists: any[], qualify: (name: string) => string): { insteadof?: Array<{ method: string; winner: string }>; aliases?: Array<{ alias: string; method: string; trait?: string }> } | null {
+  const insteadof: Array<{ method: string; winner: string }> = [];
+  const aliases: Array<{ alias: string; method: string; trait?: string }> = [];
+  for (const list of useLists) {
+    for (const clause of list.namedChildren) {
+      const [first, ...rest] = clause.namedChildren.filter((c: any) => c.type !== 'comment');
+      if (!first) continue;
+      // `Trait::method` or a bare `method`.
+      const qualified = first.type === 'class_constant_access_expression';
+      const method = qualified ? first.namedChildren.at(-1)?.text : first.text;
+      const trait = qualified ? first.namedChildren[0]?.text : undefined;
+      if (!method) continue;
+      if (clause.type === 'use_instead_of_clause' && trait) {
+        insteadof.push({ method, winner: qualify(trait) });
+      } else if (clause.type === 'use_as_clause') {
+        const alias = rest.filter((c: any) => c.type === 'name').at(-1)?.text;
+        if (alias) aliases.push({ alias, method, ...(trait ? { trait: qualify(trait) } : {}) });
+      }
+    }
+  }
+  return insteadof.length || aliases.length ? { ...(insteadof.length ? { insteadof } : {}), ...(aliases.length ? { aliases } : {}) } : null;
+}
+
 export class PhpParser extends GenericWasmParser {
   constructor(langDef: LanguageDefinition) {
     super(langDef);
@@ -256,6 +285,13 @@ export class PhpParser extends GenericWasmParser {
           .filter((c: any) => c.type === 'use_declaration')
           .flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'name' || n.type === 'qualified_name').map((n: any) => resolveToFqn(n.text, node)));
         if (mixins.length) symbol.metadata.mixins = mixins;
+        // `use A, B { B::x insteadof A; A::x as ax; }` (M2-16 review): the winning trait of a method, and
+        // the aliases that give a trait method another name; `as protected` alone changes visibility only.
+        const traitRules = phpTraitRules(
+          (body?.namedChildren ?? []).filter((c: any) => c.type === 'use_declaration').flatMap((u: any) => u.namedChildren.filter((n: any) => n.type === 'use_list')),
+          (n: string) => resolveToFqn(n, node),
+        );
+        if (traitRules) symbol.metadata.traitRules = traitRules;
         // The class it extends, fully qualified: a method called on a new instance may be inherited (M2-12 review).
         const base = node.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name');
         if (base && symbol.kind === 'class') symbol.metadata.bases = [resolveToFqn(base.text, node)];
@@ -272,6 +308,7 @@ export class PhpParser extends GenericWasmParser {
           captureName === 'ref.target_dispatch_static' ||
           captureName === 'ref.target_notify' ||
           captureName === 'ref.target_function_call' ||
+          captureName === 'ref.target_self_call' ||
           captureName === 'ref.target_require'
         ) {
           continue;
@@ -346,6 +383,46 @@ export class PhpParser extends GenericWasmParser {
             });
           }
         }
+      }
+
+      // `self::m()`, `static::m()`, `parent::m()` (M2-16): a call of the method m of the class around
+      // it (self, static: late static binding is not followed, so an override in a subclass is not
+      // linked) or of its parent (parent). The scanner walks the class as for `new self()`: the class,
+      // its traits, then its parent. `selfCall` makes a method the walk does not find link nothing,
+      // where an unresolved `(new X())->m()` falls back to name lookup. A closure or arrow function
+      // binds `self` to the class around it; an anonymous class is not that class (M2-22 owns it), and
+      // outside any class `self` names nothing.
+      for (const capture of refCaptures.get('ref.target_self_call') || []) {
+        const call = capture.node.parent;
+        const written = call?.childForFieldName('scope')?.text.toLowerCase();
+        if (!call || (written !== 'self' && written !== 'static' && written !== 'parent')) continue;
+        let owner: any = null;
+        for (let p = call.parent; p; p = p.parent) {
+          if (p.type === 'anonymous_class') break;
+          if (PHP_TYPE_DECLARATIONS.has(p.type)) { owner = p; break; }
+        }
+        const ownerName = owner?.childForFieldName('name')?.text;
+        if (!owner || !ownerName) continue;
+        // The class the scanner's walk starts at: for self and static the class around the call, which
+        // name lookup finds in this file first; for parent the class `extends` names.
+        let start: string = ownerName;
+        if (written === 'parent') {
+          // Only a class has a parent; `class B` with no `extends` has none.
+          const base = owner.type === 'class_declaration'
+            ? owner.namedChildren.find((c: any) => c.type === 'base_clause')?.namedChildren.find((c: any) => c.type === 'name' || c.type === 'qualified_name')
+            : null;
+          if (!base) continue;
+          start = resolveToFqn(base.text, owner);
+        }
+        const { sourceSymbol, metadata } = sourceOf(capture.node);
+        references.push({
+          sourceSymbol,
+          targetName: capture.node.text,
+          referenceType: 'call',
+          startLine: capture.node.startPosition.row + 1,
+          verifiability: 'verified',
+          metadata: { ...metadata, newClass: start, selfCall: true },
+        });
       }
 
       // Function calls, with the candidate FQNs in PHP's resolution order: `\X\f` is fully

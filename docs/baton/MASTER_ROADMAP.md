@@ -184,10 +184,11 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
 - **M2-12** A method called on a new-expression gets a call edge (`new X().m()`) — DONE, P2, 4h; depends on M2-09.
 - **M2-12-R1** tests/ui/arch.spec.ts counts follow M2-12's call dependencies on new instances — DONE, P1, 1h; depends on M2-12.
+- **M2-12-R2** Sync re-links unchanged callers when a method appears in a class chain they walk (self::, parent::, new X()->m()) — BACKLOG, P2, 5h; depends on M2-16.
 - **M2-13** Calls inside a one-line PHP class are indexed — DONE, P2, 3h; depends on nothing.
 - **M2-14** A method called on a variable holding a new instance links that class's method — BACKLOG, P2, 8h; depends on M2-12.
 - **M2-15** `new ns.X()` gets an instantiation edge — BACKLOG, P3, 2h; depends on M2-12.
-- **M2-16** PHP `self::m()` and `static::m()` calls link the enclosing class's method — BACKLOG, P2, 4h; depends on M2-13.
+- **M2-16** PHP `self::m()` and `static::m()` calls link the enclosing class's method — DONE, P2, 4h; depends on M2-13.
 - **M2-17** PHP functions in several namespace blocks of one file resolve — BACKLOG, P3, 3h; depends on M2-13.
 - **M2-18** PHP `use` imports are scoped to their namespace block — BACKLOG, P3, 3h; depends on M2-13.
 - **M2-19** Java default interface methods are walked as bases — BACKLOG, P3, 3h; depends on M2-12.
@@ -201,6 +202,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-25-R1** A destructured call from a one-segment baseUrl import keeps its edge — BACKLOG, P3, 4h; depends on M2-25, M2-08-R6.
 - **M2-26** A class destructured from a call result never links a same-named class elsewhere — DONE, P1, 4h; depends on M2-08-R3.
 - **M2-27** A Java import of a project class links that class, not a same-named class in another package — BACKLOG, P2, 5h; depends on M2-08-R8.
+- **M2-28** A PHP static call Foo::m() links method m of class Foo — BACKLOG, P2, 5h; depends on M2-16.
 
 ## M3 — Vue SFC semantics
 
