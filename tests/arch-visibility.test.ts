@@ -153,7 +153,8 @@ describe('native markers (visibility.nativeMarkers)', () => {
       const score = scoreApp(app, rowsOf(app, true), on);
       expect(score.misses, app).toEqual([]);
       expect(score.negativeHits, app).toEqual([]);
-      expect(score.kinds.violation.precision, app).toBe(1);
+      // null precision: an app with no violation reports none (python-poetry and python-pip, M5-22-R1).
+      expect(score.kinds.violation.precision ?? 1, app).toBe(1);
     }
     expect(added.sort()).toEqual([
       'go: violation internal-element example.com/shop/application.CloseOrder -> example.com/shop/domain/internal/vault.Vault (call)',

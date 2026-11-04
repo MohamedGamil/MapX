@@ -44,6 +44,18 @@
     "go-vendor": {
       "language": "go",
       "repos": null
+    },
+    "python-poetry": {
+      "language": "python",
+      "repos": null
+    },
+    "python-pip": {
+      "language": "python",
+      "repos": null
+    },
+    "python-poetry-legacy": {
+      "language": "python",
+      "repos": null
     }
   },
   "rows": [
