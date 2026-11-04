@@ -38,9 +38,13 @@ describe('distribution correctness', () => {
   });
 
   it('documents the NPM_TOKEN secret and the scoped package name', () => {
+    // The publishing notes are for maintainers: docs/getting-started.md, not the README (D040).
     const readme = readFileSync(resolve(ROOT, 'README.md'), 'utf8');
-    expect(readme).toContain('NPM_TOKEN');
+    const guide = readFileSync(resolve(ROOT, 'docs/getting-started.md'), 'utf8');
+    expect(guide).toContain('NPM_TOKEN');
+    expect(guide).toContain('@mgamil/mapx');
     expect(readme).toContain('@mgamil/mapx');
+    expect(readme).not.toMatch(/^#+ Publishing to npm/m);
   });
 
   it('builds every native binary through build-all, which embeds VERSION', () => {
