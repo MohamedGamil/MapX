@@ -58,7 +58,7 @@ const TOOL_CACHE = /^(?:node-compile-cache|v8-compile-cache(?:-\d+)?|tsx-[^/\\]+
 const privateTmp = mkdtempSync(join(tmpdir(), 'mapx-check-cwd-tmp-'));
 let run, after, leftInTmp;
 try {
-  run = spawnSync(cmd, cmdArgs, { stdio: 'inherit', env: { ...process.env, TMPDIR: privateTmp, TEMP: privateTmp, TMP: privateTmp } });
+  run = spawnSync(cmd, cmdArgs, { stdio: 'inherit', env: { ...process.env, TMPDIR: privateTmp, TEMP: privateTmp, TMP: privateTmp, MAPX_RUN_TMP_OWNED: privateTmp } });
   after = snapshot();
   leftInTmp = readdirSync(privateTmp).filter((name) => !TOOL_CACHE.test(name)).sort();
 } finally {

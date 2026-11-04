@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Changed
+- `npm test` and `npm run test:ui` give each run a private temp folder and fail, naming each leftover, when a test leaves an entry in it; an interrupted run (Ctrl+C, `kill`) removes its folder, the built-CLI mirror included; `npm run test:skills` does the same (M4-09-R5).
+
 ### Fixed
 - `sync` now links the files that use a function or class by name when the file declaring it is edited into a script (its last top-level `import`/`export` removed) or gains a `declare global` name, as `scan --force` does; only files that used that name are re-parsed, and the index re-parses once (M2-08-R4).
 - In Python and Java, a name imported from a package (`from stripe import Order`, `import os.path as osp`, `import com.vendor.Invoice;`, `import static com.vendor.Util.helper;`) no longer links to a same-named project symbol by any reference kind (bases, instantiations, calls, `Order().total()`, `new Invoice().total()`). Imports that may be the project's keep name lookup: a Python name that is a project folder or module anywhere, a Java class some project file declares in that package whatever its folder, and a Java package folder in the project. The index re-parses once (M2-08-R5).

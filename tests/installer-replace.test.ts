@@ -21,7 +21,10 @@ describe.skipIf(process.platform === 'win32')('install.sh replaces a running map
   let running: ChildProcess | undefined;
   const sleepBin = () => execFileSync('sh', ['-c', 'command -v sleep'], { encoding: 'utf8' }).trim();
 
-  beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'mapx-installer-')); });
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'mapx-installer-'));
+    mkdirSync(join(tmp, 'scratch'));
+  });
   afterEach(() => {
     running?.kill('SIGKILL');
     running = undefined;
@@ -53,8 +56,13 @@ describe.skipIf(process.platform === 'win32')('install.sh replaces a running map
     else child.once('exit', (code, signal) => ok({ code, signal }));
   });
 
-  /** HOME in the temp folder and the prefix on PATH: add_to_path edits no real shell config. */
-  const env = (prefix: string) => ({ ...process.env, HOME: join(tmp, 'home'), PATH: `${prefix}:${process.env.PATH}`, NO_COLOR: '1' });
+  /**
+   * HOME in the temp folder and the prefix on PATH: add_to_path edits no real shell config. TMPDIR is
+   * in the temp folder too (M4-09-R5): the self-extracting installer unpacks its archive into a
+   * `mktemp -d` folder that it never removes, because it `exec`s install.sh and the exec drops its
+   * EXIT trap, so the test removes it with the rest.
+   */
+  const env = (prefix: string) => ({ ...process.env, HOME: join(tmp, 'home'), TMPDIR: join(tmp, 'scratch'), PATH: `${prefix}:${process.env.PATH}`, NO_COLOR: '1' });
 
   async function expectReplaced(cmd: string, args: string[], prefix: string) {
     running = await runOld(prefix, 4);

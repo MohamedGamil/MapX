@@ -23457,6 +23457,68 @@
       "description": "Found 2026-11-01 while verifying the 0.3.7 binary install (D023): mapx serve answered initialize with serverInfo.version 0.1.3, hard-coded in src/mcp.ts buildServer."
     },
     {
+      "id": "M0-07-R4",
+      "milestone": "M0",
+      "title": "The self-extracting installer removes its unpacked archive",
+      "objective": "Running a `mapx-*-installer.sh` leaves nothing in $TMPDIR: the extracted payload is removed after install.sh finishes, whatever its exit status, and the installer exits with install.sh's status.",
+      "description": "Found by M4-09-R5 (2026-11-04): scripts/make-installer.sh unpacks into `mktemp -d` with an EXIT trap, then `exec`s install.sh, which replaces the shell and drops the trap; every real run leaves tmp.*/mapx-<version> behind. tests/installer-replace.test.ts now contains the leak in its own TMPDIR, so the suite no longer shows it.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-07-R3",
+          "type": "hard"
+        },
+        {
+          "id": "M4-09-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M4-09-R5.md"
+      ],
+      "outputs": [
+        "scripts/make-installer.sh",
+        "tests/installer-replace.test.ts",
+        "reports/M0-07-R4.md"
+      ],
+      "affectedFiles": [
+        "scripts/make-installer.sh",
+        "tests/installer-replace.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A built installer run with a private TMPDIR leaves that folder empty after a successful install and after a failing one, and exits with install.sh's status (test in tests/installer-replace.test.ts, without the test's own TMPDIR containment)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/installer-replace.test.ts",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "priority": "P1",
       "estimate": {
         "min": 2,
@@ -29232,14 +29294,32 @@
         "docs/baton/reports/M4-09-R3.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude",
       "actualHours": null,
       "startedAt": "2026-11-04T06:54:54.341Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T08:11:14.807Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M4-09-R5.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09-R5.md"
+        },
+        {
+          "command": "npm run test:ui",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09-R5.md"
+        },
+        {
+          "command": "npx vitest run tests/global-teardown.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M4-09-R5.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T06:54:53.860Z",
@@ -29252,6 +29332,34 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T08:11:13.911Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T08:11:14.807Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09-R5.md"
+            },
+            {
+              "command": "npm run test:ui",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09-R5.md"
+            },
+            {
+              "command": "npx vitest run tests/global-teardown.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M4-09-R5.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

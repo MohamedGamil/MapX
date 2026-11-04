@@ -44,6 +44,11 @@ describe('check-test-cwd', () => {
     expect(check('process.exit(3)').status).toBe(3);
   });
 
+  it('tells the command which temp folder it owns, so a vitest run inside does not nest another (M4-09-R5)', () => {
+    const r = check("process.exit(process.env.MAPX_RUN_TMP_OWNED && process.env.MAPX_RUN_TMP_OWNED === process.env.TMPDIR ? 0 : 7)");
+    expect(r.status, r.stderr).toBe(0);
+  });
+
   it('still reports a leftover the check cannot remove', () => {
     const r = check("const fs = require('fs'), p = require('path'); const d = p.join(require('os').tmpdir(), 'mapx-ro'); fs.mkdirSync(d); fs.writeFileSync(p.join(d, 'y'), 'y'); fs.chmodSync(d, 0o555)");
     expect(r.status).toBe(1);

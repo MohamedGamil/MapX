@@ -110,6 +110,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-17-R6** Heuristic follow-ups: renamed names in comments, router shadowing, module aliases, factory bindings — DONE, P2, 6h; depends on M4-01, M4-03, M4-04, M4-05, M4-08, M0-02-R8, M3-11-R1, M3-09-R1, M0-17-R5.
 - **M0-02-R10** An interrupted sync loses the symbols of the files it started re-indexing — DONE, P1, 4h; depends on M4-04.
 - **M0-07-R3** The MCP server reports the package version; the installer names itself for uninstall — DONE, P2, 1h; depends on M0-07-R2.
+- **M0-07-R4** The self-extracting installer removes its unpacked archive — BACKLOG, P2, 2h; depends on M0-07-R3, M4-09-R5.
 - **M0-10-R5** scan and sync with no repo named cover every registered repo — DONE, P1, 4h; depends on M0-10-R4.
 - **M0-06-R2** The compiled binary parses on worker threads — DONE, P1, 4h; depends on M0-06-R1.
 - **M0-32-R3** Architecture tab data: cycle smells name the real cycle; the profile ignores graph-excluded frameworks — DONE, P1, 4h; depends on M0-32-R2.
@@ -256,7 +257,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
 - **M4-09-R3** external-refs tests remove every temp workspace, including unreadable ones — DONE, P2, 1h; depends on M4-09-R2.
 - **M4-09-R4** store-coverage tests keep their databases out of tests/ — DONE, P2, 0.5h; depends on M4-09-R3.
-- **M4-09-R5** No test leaves temp folders: a suite-wide check — IN_PROGRESS, P2, 3h; depends on M4-09-R3.
+- **M4-09-R5** No test leaves temp folders: a suite-wide check — DONE, P2, 3h; depends on M4-09-R3.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 - **M4-27-R1** Lua grammar: Luau type syntax and string escapes parse without errors — BACKLOG, P3, 6h; depends on M4-27.

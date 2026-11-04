@@ -23,7 +23,9 @@ function cli(): string[] {
 /**
  * Makes this test file's CLI calls run a copy of src/ transpiled once for the file (built-cli.ts)
  * instead of the sources under tsx: ~170 ms a start instead of ~600 ms. For files that spawn the CLI
- * dozens of times (M4-30); the copy is removed after the file.
+ * dozens of times (M4-30); the copy is removed after the file. A run that a signal stops skips that
+ * `afterAll`, but the copy sits in the run's private temp folder, which the global setup removes
+ * (tests/helpers/run-tmp.ts, M4-09-R5).
  */
 export function useBuiltCli(): void {
   beforeAll(() => { built = buildCli(); });

@@ -1,7 +1,7 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,8 +20,12 @@ const task = (id, status, deps = [], patch = {}) => ({
   affectedFiles: [`src/${id}`],
   ...patch,
 });
+// Every temp folder is removed when the file's tests are done (M4-09-R5).
+const made = [];
+after(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
 function scan(plan) {
   const dir = mkdtempSync(join(tmpdir(), 'baton-scan-'));
+  made.push(dir);
   mkdirSync(join(dir, 'iterations'));
   for (const t of plan.tasks) writeFileSync(join(dir, 'iterations', `${t.id}.md`), '# spec\n');
   writeFileSync(join(dir, 'TASKS.json'), JSON.stringify(plan));

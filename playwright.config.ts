@@ -12,6 +12,7 @@ export default defineConfig({
   timeout: 180_000,
   expect: { timeout: 30_000 },
   globalSetup: './tests/ui/global-setup.ts',
+  globalTeardown: './tests/ui/global-teardown.ts',
   reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   outputDir: 'test-results/ui',
   use: { browserName: 'chromium', headless: true, viewport: { width: 1440, height: 900 } },

@@ -1,7 +1,7 @@
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
@@ -27,8 +27,12 @@ const task = (id, status, patch = {}) => ({
   ...patch,
 });
 
+// Every temp repository is removed when the file's tests are done (M4-09-R5).
+const made = [];
+after(() => { for (const d of made) rmSync(d, { recursive: true, force: true }); });
 function repo() {
   const dir = mkdtempSync(join(tmpdir(), 'baton-review-test-'));
+  made.push(dir);
   const git = (...args) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8' }).trim();
   const write = (path, text) => {
     mkdirSync(join(dir, path, '..'), { recursive: true });

@@ -144,3 +144,4 @@
 - D042 (owner): commit each item; continue through the D041 batch. M2-08-R9 joins the batch (a P2 found by it).
 - M2-08-R4 closed: module→script and `declare global` gains followed by sync; review P1 (multi-declarator and member names) fixed before DONE. Registered M2-08-R9 (P2) and M2-08-R10 (P3, held).
 - M2-12-R1 (P1, registered and closed): `tests/ui/arch.spec.ts` had failed since M2-12 (6498e16, found by bisect), because `new X().run()` adds a call dependency per element pair. Its counts now follow the engine. `npm run test:ui` is not in `npm run check`, which is why nobody noticed.
+- M4-09-R5 closed: a private TMPDIR per vitest and Playwright run, teardowns that name leftovers, signal-safe sweeps; review P1 (SIGHUP swallowed) fixed. Registered M0-07-R4 (P2, installer leaves its archive; joins the batch).

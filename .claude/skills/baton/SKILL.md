@@ -76,6 +76,7 @@ An item is ready to start only when all of these hold:
 - **Bounded:** 4–16 h expected. Split anything larger into separately verifiable tasks with explicit dependencies, and log the split in `CHANGELOG.md`.
 - **Fixture first:** parser, detector and resolution work is measured against a labelled synthetic fixture under `tests/fixtures/<area>/`, with a scorer in `scripts/eval/` where recall or precision matters (see `scripts/eval/score-routes.ts` and its floors in `tests/laravel-routes-fixture.test.ts`). Never use private or pilot source code in fixtures.
 - **Prove behaviour end to end:** prefer `tests/helpers/e2e.ts` (temp workspace → real `mapx init`/`scan` → query `.mapx/mapx.db`) over tests that mock the store, since mocked-store tests have hidden real defects here.
+- **Leave no temp folders:** create temp files and folders under `os.tmpdir()` and remove them in `afterEach`/`afterAll`/`finally`. Each run gets a private temp folder (`tests/helpers/run-tmp.ts`) and its global teardown (vitest, and Playwright's for `npm run test:ui`) fails, naming the folder, when one is left.
 - **Concrete scope:** one objective, an explicit out-of-scope list naming the tasks that own the excluded work, and the files touched (`affectedFiles`).
 - **Falsifiable acceptance:** each criterion names an input, an observable output and the test that shows it. Reject vague wording such as "works well", "robust", "properly" or "optimized".
 - **Commands registered before starting:** task-specific `npx vitest run tests/<file>.test.ts` and scorer commands, not just `npm test`.
