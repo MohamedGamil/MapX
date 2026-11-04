@@ -120,7 +120,7 @@ npx @mgamil/mapx scan
 
 ### Pre-built binary
 
-Download the latest release for your platform from the [Releases](../../releases) page and place it on your `PATH`:
+Download the latest release for your platform from the [Releases](../../releases) page and place it on your `PATH`, or run its self-extracting installer straight from the release:
 
 ```bash
 # Linux x86_64
@@ -128,6 +128,16 @@ curl -fsSL https://github.com/MohamedGamil/mapx/releases/latest/download/mapx-li
 
 # macOS Apple Silicon
 curl -fsSL https://github.com/MohamedGamil/mapx/releases/latest/download/mapx-darwin-arm64-installer.sh | sh
+```
+
+The installer asks where to install (user, system or a custom folder) and reads your answers from the terminal, even though the script itself arrives on a pipe. With no terminal (CI, Docker) it asks nothing: it installs for the current user in `~/.local/bin`, and stops rather than overwrite an existing `mapx` unless you pass `--force`. Options go after `sh -s --`; the installer files (`mapx-<platform>-installer.sh`, platforms `linux-x64`, `linux-arm64`, `darwin-arm64`, `darwin-x64`) take the same options when you download one and run it as `sh mapx-<platform>-installer.sh --local`:
+
+```bash
+# A folder of your own, overwriting an older install without asking
+curl -fsSL https://github.com/MohamedGamil/mapx/releases/latest/download/mapx-linux-x64-installer.sh | sh -s -- --prefix "$HOME/bin" --force
+
+# Uninstall: removes the binary and its data without asking
+curl -fsSL https://github.com/MohamedGamil/mapx/releases/latest/download/mapx-linux-x64-installer.sh | sh -s -- --uninstall --force
 ```
 
 Or extract the archive manually:

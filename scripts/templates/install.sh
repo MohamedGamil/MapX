@@ -102,8 +102,9 @@ check_existing() {
         existing_version="$("$target" --version 2>/dev/null | grep -oP '[\d.]+' || echo "unknown")"
         warn "Existing installation found at $target (v$existing_version)"
         if [ "$FORCE" != true ]; then
-            read -rp "Overwrite? [y/N] " confirm
-            [[ "$confirm" =~ ^[Yy]$ ]] || die "Aborted"
+            # No answer (stdin at EOF: a pipe with no terminal) is a no, not a silent set -e exit (M0-07-R5).
+            read -rp "Overwrite? [y/N] " confirm || confirm=""
+            [[ "$confirm" =~ ^[Yy]$ ]] || die "Aborted: not overwriting without a yes (pass --force to overwrite without asking)"
         fi
     fi
 }
@@ -156,7 +157,7 @@ add_to_path() {
             if [ "$FORCE" = true ]; then
                 confirm="y"
             else
-                read -rp "Add $PREFIX to PATH in $shell_rc? [y/N] " confirm
+                read -rp "Add $PREFIX to PATH in $shell_rc? [y/N] " confirm || confirm=""
             fi
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
                 printf '\n# Added by MapxGraph installer\nexport PATH="%s:$PATH"\n' "$PREFIX" >> "$shell_rc"
@@ -250,8 +251,9 @@ do_install() {
     echo "    mapx scan"
     echo "    mapx export"
     echo ""
-    # From a self-extracting installer, $0 is a deleted temp copy: name the installer (M0-07-R3).
-    echo "Uninstall: ${MAPX_INSTALLER:-$0} --uninstall"
+    # From a self-extracting installer, $0 is a deleted temp copy: name the installer (M0-07-R3), or,
+    # when it ran from a pipe and there is no installer file, the command that runs it again (M0-07-R5).
+    echo "Uninstall: ${MAPX_UNINSTALL_HINT:-${MAPX_INSTALLER:-$0} --uninstall}"
 }
 
 do_uninstall() {
@@ -282,7 +284,7 @@ do_uninstall() {
         if [ "$FORCE" = true ]; then
             confirm="y"
         else
-            read -rp "Remove data directory $DATA_DIR? [y/N] " confirm
+            read -rp "Remove data directory $DATA_DIR? [y/N] " confirm || confirm=""
         fi
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
             rm -rf "$DATA_DIR"

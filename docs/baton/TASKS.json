@@ -23574,7 +23574,7 @@
       "milestone": "M0",
       "title": "The documented `curl … | sh` install works, or the docs stop documenting it",
       "objective": "The release install command in README.md (`curl -fsSL …/mapx-<platform>-installer.sh | sh`) installs MapX: either the self-extracting installer works when read from a pipe (it now reads its own payload from $0, so piped it fails with `awk: cannot open sh`), or README.md and docs/getting-started.md show a download-then-run command that does.",
-      "description": "Found by the M0-07-R4 review (2026-11-04): `cat installer.sh | sh -s -- --local` fails with `awk: cannot open sh` before and after M0-07-R4; README.md lines ~127/130 document `curl … | sh`. Pre-existing.",
+      "description": "Found by the M0-07-R4 review (2026-11-04): `cat installer.sh | sh -s -- --local` fails with `awk: cannot open sh` before and after M0-07-R4; README.md lines ~127/130 document `curl … | sh`. Decision: make the installer work piped (the conventional, already documented path) rather than change the docs. The whole logic becomes one function so a shell reading the script from a pipe has parsed it before running; the payload is read from stdin after a 160 KiB comment pad (a shell reads its script ahead); prompts read /dev/tty when piped, and with no terminal the installer asks nothing (user install, no overwrite without --force); install.sh treats a prompt with no answer as a no. Pre-existing.",
       "priority": "P2",
       "estimate": {
         "min": 1,
@@ -23594,27 +23594,206 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
-        "docs/baton/reports/M0-07-R4.md"
+        "docs/baton/reports/M0-07-R4.md",
+        "docs/baton/iterations/M0-07-R5.md"
       ],
       "outputs": [
         "scripts/make-installer.sh",
+        "scripts/templates/install.sh",
         "README.md",
+        "docs/getting-started.md",
         "tests/installer-replace.test.ts",
+        "tests/docs-surface.test.ts",
+        "tests/helpers/installer-docs.ts",
+        "CHANGELOG.md",
+        "docs/baton/iterations/M0-07-R5.md",
         "reports/M0-07-R5.md"
       ],
       "affectedFiles": [
         "scripts/make-installer.sh",
+        "scripts/templates/install.sh",
         "README.md",
         "docs/getting-started.md",
         "tests/installer-replace.test.ts",
-        "tests/docs-surface.test.ts"
+        "tests/docs-surface.test.ts",
+        "tests/helpers/installer-docs.ts",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "Every install command README.md and docs/getting-started.md show for the shell installer, run against a locally built installer (piped where the docs pipe it), installs into a private prefix and leaves $TMPDIR empty (test); the docs and the installer agree (tests/docs-surface.test.ts or the installer test)."
+        "Every `curl … | sh` command README.md and docs/getting-started.md show for the shell installer, run as written with a `curl` that serves a locally built installer, in a private HOME and TMPDIR and with no terminal, exits 0, installs the binary and data into the private prefix and leaves $TMPDIR empty; the uninstall command removes them (test: tests/installer-replace.test.ts).",
+        "The piped installer works under dash, bash and busybox sh and as `sh < file`; with a terminal (pty) it asks the menu, the prefix and install.sh's prompts there; without one it asks nothing, installs for the user, and does not overwrite an existing mapx without --force (test).",
+        "A cut-short download, a script cut before its marker and a corrupted installer file fail with a message and leave $TMPDIR empty; SIGTERM, SIGINT and SIGHUP during a piped extraction remove the folder and exit 143, 130 and 129; all M0-07-R4 tests still pass (test).",
+        "The docs and the installer agree: each doc command names an asset scripts/package.sh publishes, the README lists the published platforms, every option after `sh -s --` is parsed by install.sh and listed in its help, and the hint the piped installer prints is the documented uninstall command (test: tests/docs-surface.test.ts).",
+        "A file named like the shell (`sh`, `bash`, `dash`) in the current folder is never taken for the installer when piped, while `sh installer.sh`, `./installer.sh` and `bash dir/x.sh` stay file runs; `bash <(curl …)` and `sh -c \"$(curl …)\"` on a terminal stop at once with a message; with a terminal the whole script is read before the first prompt (tests)."
       ],
       "verificationCommands": [
         "npx vitest run tests/installer-replace.test.ts tests/docs-surface.test.ts",
         "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-04T08:46:39.495Z",
+      "completedAt": "2026-11-04T09:36:18.180Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-07-R5.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/installer-replace.test.ts tests/docs-surface.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R5.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R5.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T08:46:39.078Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T08:46:39.495Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T09:36:17.719Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T09:36:18.180Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/installer-replace.test.ts tests/docs-surface.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R5.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R5.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-07-R6",
+      "milestone": "M0",
+      "title": "install.sh: an empty custom prefix is refused with a message",
+      "objective": "Choosing the custom-prefix menu option and entering nothing re-asks or stops with a clear message instead of failing on an unbound `$2` under `set -u`.",
+      "description": "Found by M0-07-R5 (2026-11-04), pre-existing: menu option 3 with an empty prefix passes `--prefix` with no value, and scripts/templates/install.sh stops on an unbound `$2`.",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-07-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-07-R5.md"
+      ],
+      "outputs": [
+        "scripts/make-installer.sh",
+        "scripts/templates/install.sh",
+        "tests/installer-replace.test.ts",
+        "reports/M0-07-R6.md"
+      ],
+      "affectedFiles": [
+        "scripts/make-installer.sh",
+        "scripts/templates/install.sh",
+        "tests/installer-replace.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Menu option 3 with an empty answer, and `--prefix` with no value, end with a one-line message and exit 1, leaving $TMPDIR empty (pty and argv tests)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/installer-replace.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-07-R7",
+      "milestone": "M0",
+      "title": "install.sh reads the installed version without GNU grep -P (macOS)",
+      "objective": "On macOS (BSD grep, no -P) the existing-install check reports the installed version instead of `(vunknown)`, using POSIX tools only.",
+      "description": "Found by M0-07-R5 (2026-11-04), pre-existing: scripts/templates/install.sh uses `grep -oP` to read an installed version; macOS grep has no -P, so the overwrite warning says `(vunknown)` (and any logic depending on it misbehaves).",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-07-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-07-R5.md"
+      ],
+      "outputs": [
+        "scripts/templates/install.sh",
+        "tests/installer-replace.test.ts",
+        "reports/M0-07-R7.md"
+      ],
+      "affectedFiles": [
+        "scripts/templates/install.sh",
+        "tests/installer-replace.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "With a PATH whose grep rejects -P (a shim), an existing install of a stub mapx printing `0.3.8` makes the warning name 0.3.8 (test); no `grep -P` remains in install.sh (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/installer-replace.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
       "status": "BACKLOG",

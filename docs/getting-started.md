@@ -26,7 +26,11 @@ npm install --legacy-peer-deps
 
 ### Pre-built binary (no dependencies)
 
-Download from the GitHub Releases page and add to your `PATH`, or use the installer script shown in the [README](../README.md#pre-built-binary).
+Download from the GitHub Releases page and add to your `PATH`, or run the installer for your platform (more options in the [README](../README.md#pre-built-binary)):
+
+```bash
+curl -fsSL https://github.com/MohamedGamil/mapx/releases/latest/download/mapx-linux-x64-installer.sh | sh
+```
 
 ## Quick Start
 

@@ -14,6 +14,7 @@ import { buildCLI } from '../src/cli.js';
 import { FrameworkRegistry } from '../src/frameworks/framework-registry.js';
 import { PRESETS } from '../src/arch/config.js';
 import { FORMATS, GRAPH_FORMATS } from '../src/arch/reporters/index.js';
+import { docInstallerCommands } from './helpers/installer-docs.js';
 
 const ROOT = resolve(__dirname, '..');
 const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
@@ -197,5 +198,52 @@ describe('relative links in README.md and docs/*.md resolve', () => {
       if (anchor && resolved.endsWith('.md') && !anchors(resolved).has(anchor)) broken.push(`${target}: no heading`);
     }
     expect(broken).toEqual([]);
+  });
+});
+
+// M0-07-R5: the `curl ... | sh` commands the docs show name release assets the release script builds,
+// pass only options install.sh accepts, and the installer's own uninstall hint is the documented
+// command. tests/installer-replace.test.ts runs these commands against a locally built installer.
+describe('the shell-installer commands in the docs match the release and the installer', () => {
+  const commands = docInstallerCommands();
+  const packageSh = read('scripts/package.sh');
+  const installSh = read('scripts/templates/install.sh');
+  const makeInstaller = read('scripts/make-installer.sh');
+  // The .sh installers package.sh publishes under a platform name (`cp ... mapx-<platform>-installer.sh`;
+  // the Windows one is a .ps1).
+  const published = [...new Set([...packageSh.matchAll(/"\$DIST_DIR\/mapx-([a-z0-9]+-[a-z0-9]+)-installer\.sh"/g)].map((m) => m[1]!))].filter((p) => !p.startsWith('windows-')).sort();
+
+  it('finds the commands and the published platforms', () => {
+    expect(commands.length).toBeGreaterThanOrEqual(4);
+    expect(published).toEqual(['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']);
+  });
+
+  it('every command downloads an installer the release script publishes', () => {
+    for (const c of commands) expect(published, `${c.file}: ${c.line}`).toContain(c.platform);
+  });
+
+  it('the README lists exactly the platforms the release script publishes', () => {
+    const m = /platforms ((?:`[a-z0-9-]+`(?:, | and )?)+)/.exec(read('README.md'));
+    expect([...(m?.[1] ?? '').matchAll(/`([a-z0-9-]+)`/g)].map((x) => x[1]!).sort()).toEqual(published);
+  });
+
+  it('every option after `sh -s --` is one install.sh parses and its help lists', () => {
+    const parsed = new Set([...installSh.matchAll(/^\s+((?:--[a-z-]+\|?)+)\)/gm)].flatMap((m) => m[1]!.split('|')));
+    const help = installSh.slice(installSh.indexOf('-h|--help)'));
+    for (const c of commands) {
+      for (const a of c.args.filter((x) => x.startsWith('--'))) {
+        expect(parsed.has(a), `${c.line}: install.sh does not parse ${a}`).toBe(true);
+        expect(help, `${c.line}: install.sh --help does not list ${a}`).toContain(a);
+      }
+    }
+  });
+
+  it('the uninstall hint the piped installer prints is the documented uninstall command', () => {
+    const hint = /MAPX_UNINSTALL_HINT="(curl [^"]*)"/.exec(makeInstaller)?.[1];
+    expect(hint).toBeDefined();
+    const doc = commands.find((c) => c.args.includes('--uninstall'));
+    expect(doc, 'the docs show an uninstall command').toBeDefined();
+    // The hint is the documented command without the option that skips the questions.
+    expect(hint!.replace('${_P}', doc!.platform)).toBe(doc!.line.replace(/ --force$/, ''));
   });
 });

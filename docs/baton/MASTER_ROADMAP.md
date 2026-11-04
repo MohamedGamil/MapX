@@ -111,7 +111,9 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-02-R10** An interrupted sync loses the symbols of the files it started re-indexing — DONE, P1, 4h; depends on M4-04.
 - **M0-07-R3** The MCP server reports the package version; the installer names itself for uninstall — DONE, P2, 1h; depends on M0-07-R2.
 - **M0-07-R4** The self-extracting installer removes its unpacked archive — DONE, P2, 2h; depends on M0-07-R3, M4-09-R5.
-- **M0-07-R5** The documented `curl … | sh` install works, or the docs stop documenting it — BACKLOG, P2, 3h; depends on M0-07-R4.
+- **M0-07-R5** The documented `curl … | sh` install works, or the docs stop documenting it — DONE, P2, 3h; depends on M0-07-R4.
+- **M0-07-R6** install.sh: an empty custom prefix is refused with a message — BACKLOG, P3, 1h; depends on M0-07-R5.
+- **M0-07-R7** install.sh reads the installed version without GNU grep -P (macOS) — BACKLOG, P2, 1h; depends on M0-07-R5.
 - **M0-10-R5** scan and sync with no repo named cover every registered repo — DONE, P1, 4h; depends on M0-10-R4.
 - **M0-06-R2** The compiled binary parses on worker threads — DONE, P1, 4h; depends on M0-06-R1.
 - **M0-32-R3** Architecture tab data: cycle smells name the real cycle; the profile ignores graph-excluded frameworks — DONE, P1, 4h; depends on M0-32-R2.
