@@ -28433,15 +28433,74 @@
         "docs/baton/reports/M2-08-R3.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T09:45:30.854Z",
+      "completedAt": "2026-11-04T10:29:28.556Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R6.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R6.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R6.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R6.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T09:45:30.405Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T09:45:30.854Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T10:29:28.027Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T10:29:28.556Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R6.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R6.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R6.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -28449,7 +28508,7 @@
       "id": "M2-08-R6",
       "title": "A bare specifier never resolves to a relative project file",
       "objective": "`import x from 'express'` and `require('express')` never resolve to ./express.js or another relative file; a bare specifier resolves only through a package, tsconfig/jsconfig baseUrl or paths, a bundler alias or a workspace package.",
-      "description": "Review of M2-20 (2026-11-03): with a local express.js, require('express') now links the project file, as ES import already did (pre-existing for ES, new for require). Node never resolves a bare specifier to a relative file. Also (M2-25 limitation): a one-segment import counts as a package, so a tsconfig baseUrl import with no folder (`import … from \"utils\"`) can lose its by-name edge for destructured calls.",
+      "description": "Review of M2-20 (2026-11-03): with a local express.js, require('express') now links the project file, as ES import already did (pre-existing for ES, new for require). Node never resolves a bare specifier to a relative file. Also (M2-25 limitation): a one-segment import counts as a package, so a tsconfig baseUrl import with no folder (`import … from \"utils\"`) can lose its by-name edge for destructured calls. Scope note (M2-08-R6 iteration): the M2-25 destructured-call loss is in the parser (isPackageSpecifier), not in import resolution, so it is scoped out and reported as a follow-up; the baseUrl one-segment import itself is covered.",
       "outputs": [
         "src/core/scanner.ts",
         "tests/import-bound-externals.test.ts",
@@ -28457,15 +28516,16 @@
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "src/core/js-aliases.ts",
+        "src/core/extractor-version.ts",
         "tests/import-bound-externals.test.ts"
       ],
       "acceptanceCriteria": [
-        "With a local express.js and no baseUrl/alias mapping it, both import and require of 'express' give no project edge (test); a baseUrl import of 'components/Button' still resolves (test); `npm run eval` holds."
+        "With a local express.js and no baseUrl/alias mapping it, both import and require of express (JS, TS, Vue and Svelte importers) give no project edge (test); a baseUrl import of components/Button and of the one-segment utils still resolves, as do tsconfig paths (with a * pattern) and a bundler alias (tests); sync equals scan --force when express.js is added later (test); `npm run eval` holds."
       ],
       "verificationCommands": [
         "npx vitest run tests/import-bound-externals.test.ts",
-        "npm run eval"
+        "npm run eval",
+        "npm run check"
       ]
     },
     {
@@ -28685,6 +28745,68 @@
       "verificationCommands": [
         "npx vitest run tests/import-bound-externals.test.ts",
         "npm run eval"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M2-08-R11",
+      "milestone": "M2",
+      "title": "JS/TS bare imports resolve under configured module roots: NODE_PATH, webpack resolve.modules, jest moduleDirectories",
+      "objective": "A bare import resolves under a module root the project configures with positive evidence MapX can read — webpack `resolve.modules` literals, jest `moduleDirectories`/`modulePaths`/`roots` (package.json `jest` or jest.config.*), `NODE_PATH=` in package.json scripts — so `import x from models/user` with the repo root (or `src`) as a module root links its file again; such specifiers are not attributed as npm externals.",
+      "description": "M2-08-R6 removed the root-relative probe for bare specifiers (accidentally right for root-level module folders). Its review (2026-11-04) found: case G (jest moduleDirectories [\"<rootDir>\"]) loses the import edge; case K (require(lib/a), require(models/user)) loses real call edges when names collide; case J loses type-only, constant and side-effect imports; external_ref_candidates mark `models/user`, `lib/util` as npm external=1 (arch `npm:` selectors may misfire); Deno deno.json import maps (niche) are not read.",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R6",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R6.md"
+      ],
+      "outputs": [
+        "src/core/js-aliases.ts",
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R11.md"
+      ],
+      "affectedFiles": [
+        "src/core/js-aliases.ts",
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "tests/external-refs.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "The M2-08-R6 review cases G, J and K (jest moduleDirectories, webpack resolve.modules [__dirname] and path.resolve(__dirname, src), NODE_PATH=. in a script) give the import and call edges HEAD before M2-08-R6 gave, and no npm external candidate for those specifiers (e2e tests); a bare package import with no such config still links no project file; `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts tests/external-refs.test.ts",
+        "npm run eval",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
       "status": "BACKLOG",
@@ -32490,6 +32612,71 @@
         "npx vitest run tests/local-binding-calls.test.ts",
         "npm run eval"
       ]
+    },
+    {
+      "id": "M2-25-R1",
+      "milestone": "M2",
+      "title": "A destructured call from a one-segment baseUrl import keeps its edge",
+      "objective": "`import u from utils; const { helper } = u; helper()` under a tsconfig/jsconfig `baseUrl` that maps utils to a project file links helper; the parser no longer decides a one-segment specifier is a package before the scanner knows the baseUrl.",
+      "description": "M2-25 limitation, confirmed by M2-08-R6 (2026-11-04): `isPackageSpecifier(spec, true)` in src/parsers/generic-wasm-parser.ts drops the call at parse time; the import edge stays, the call edge is lost.",
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-25",
+          "type": "hard"
+        },
+        {
+          "id": "M2-08-R6",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-25.md",
+        "docs/baton/reports/M2-08-R6.md"
+      ],
+      "outputs": [
+        "src/parsers/generic-wasm-parser.ts",
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-25-R1.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/generic-wasm-parser.ts",
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Under {\"baseUrl\":\"src\"} with src/utils.ts exporting a default object holding helper, the destructured call links helper (e2e); the same code importing the package `express` links nothing (e2e); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run eval"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
     },
     {
       "milestone": "M2",

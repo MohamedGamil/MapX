@@ -407,13 +407,14 @@ const DECIDED_ELSEWHERE: Array<{ name: string; before: Record<string, string>; c
     gone: 'main.py:1 null requests.adapters null import pypi',
   },
   {
-    name: 'an indexed module named like a bare specifier is added at the root',
+    // M2-08-R6: a bare specifier is never a path from the repo root, so a root pg.ts is not the package.
+    name: 'an indexed module named like a bare specifier is added at the root (the package stays external)',
     before: {
       'package.json': '{"name":"root"}',
       'src/a.ts': "import { Pool } from 'pg';\nexport const p = () => new Pool();\n",
     },
     change: { 'pg.ts': 'export const other = 1;\n' },
-    gone: 'src/a.ts:1 null pg Pool import npm',
+    stays: 'src/a.ts:1 null pg Pool import npm',
   },
   {
     name: 'a Python package is deleted (its missing module becomes outside)',

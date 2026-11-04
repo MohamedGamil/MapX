@@ -171,11 +171,12 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-06-R4** Route domains are workspace hosts for HTTP pairing — DONE, P2, 2h; depends on M2-06-R2.
 - **M2-08-R2** Sync re-parses importers whose JS/TS import a new file now satisfies or shadows — DONE, P2, 3h; depends on M2-08-R1.
 - **M2-08-R3** Names imported from an external module never link to a same-named project symbol — DONE, P1, 4h; depends on M2-08-R2.
-- **M2-08-R6** A bare specifier never resolves to a relative project file — BACKLOG, P2, 4h; depends on M2-08-R3.
+- **M2-08-R6** A bare specifier never resolves to a relative project file — DONE, P2, 4h; depends on M2-08-R3.
 - **M2-08-R7** Python: an unimported name (a builtin such as open) never links a function in another module — BACKLOG, P2, 4h; depends on M2-08-R3.
 - **M2-08-R8** Sync re-resolves Java and Python importers when an imported project package goes away — BACKLOG, P2, 4h; depends on M2-08-R5.
 - **M2-08-R9** Sync follows new global declarations: a new or renamed script, a new global in a script, `declare global` in a new file — BACKLOG, P2, 4h; depends on M2-08-R4.
 - **M2-08-R10** JS/TS local names: every declarator of a list and `function *gen` count as declared — BACKLOG, P3, 2h; depends on M2-08-R4.
+- **M2-08-R11** JS/TS bare imports resolve under configured module roots: NODE_PATH, webpack resolve.modules, jest moduleDirectories — BACKLOG, P2, 5h; depends on M2-08-R6.
 - **M2-08-R4** Sync follows a file turning from module to script — DONE, P2, 3h; depends on M2-08-R3.
 - **M2-08-R5** Python and Java names imported from packages never link to same-named project symbols — DONE, P2, 6h; depends on M2-08-R3.
 - **M2-09** JS/TS member-assigned functions are symbols — DONE, P2, 4h; depends on M2-08.
@@ -197,6 +198,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-23** Laravel database/ and resources/views/ PHP files get edges — BACKLOG, P2, 4h; depends on nothing.
 - **M2-24** Ruby method calls resolve on the receiver's class — BACKLOG, P3, 6h; depends on M2-12.
 - **M2-25** A called loop variable never links a same-named function elsewhere — DONE, P1, 4h; depends on M2-08-R3.
+- **M2-25-R1** A destructured call from a one-segment baseUrl import keeps its edge — BACKLOG, P3, 4h; depends on M2-25, M2-08-R6.
 - **M2-26** A class destructured from a call result never links a same-named class elsewhere — DONE, P1, 4h; depends on M2-08-R3.
 
 ## M3 — Vue SFC semantics

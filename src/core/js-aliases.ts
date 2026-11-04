@@ -159,7 +159,7 @@ function dirAliases(dir: string, ctx: AliasContext): DirAliases {
   for (const name of TS_CONFIGS) {
     const path = posix.join(dir, name);
     if (ctx.readText(path) === null) continue;
-    if (compiler === null) baseUrl = tsPaths(path, ctx)?.paths.baseUrl ?? null;
+    if (compiler === null) baseUrl = tsBaseUrl(path, ctx);
     compiler = tsConfigRules(path, ctx);
     if (compiler.length) break;
   }
@@ -274,6 +274,25 @@ function tsConfigRules(path: string, ctx: AliasContext, depth = 0): AliasRule[] 
     const target = join(dirOf(path), ref.path.endsWith('.json') ? ref.path : `${ref.path}/tsconfig.json`);
     return target === null ? [] : tsConfigRules(target, ctx, depth + 1);
   });
+}
+
+/**
+ * The `baseUrl` of a config, after its `extends` chain, else of the configs it `references` (a Vite
+ * solution-style tsconfig.json holding `references` to a tsconfig.app.json with the `baseUrl`), the
+ * way `paths` follow them (M2-08-R6).
+ */
+function tsBaseUrl(path: string, ctx: AliasContext, depth = 0): string | null {
+  const config = tsPaths(path, ctx);
+  if (!config) return null;
+  if (config.paths.baseUrl !== undefined) return config.paths.baseUrl;
+  if (depth > 0 || !Array.isArray(config.json.references)) return null;
+  for (const ref of config.json.references) {
+    if (typeof ref?.path !== 'string') continue;
+    const target = join(dirOf(path), ref.path.endsWith('.json') ? ref.path : `${ref.path}/tsconfig.json`);
+    const found = target === null ? null : tsBaseUrl(target, ctx, depth + 1);
+    if (found !== null) return found;
+  }
+  return null;
 }
 
 // ── Bundler configs ─────────────────────────────────────────────────────────────────────────────

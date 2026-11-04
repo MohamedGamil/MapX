@@ -719,3 +719,209 @@ public class UseUnknown {
     ]);
   });
 });
+
+// M2-08-R6: Node never resolves a bare specifier to a relative file. `import 'express'` and
+// `require('express')` beside a project express.js are the package's, not the file's; a bare specifier
+// resolves only through a tsconfig/jsconfig `paths` or `baseUrl`, or a bundler alias.
+function importTargets(root: string, file: string): string[] {
+  return query<{ target_file: string }>(root, `SELECT DISTINCT target_file FROM edges
+    WHERE source_file = ? AND edge_type IN ('import', 'require') AND target_file != source_file ORDER BY 1`, file).map((e) => e.target_file);
+}
+
+describe('a bare specifier never resolves to a relative project file (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', dependencies: { express: '^4.18.0' } }),
+      // Project files a bare specifier would reach if it were read as a path from the repo root.
+      'express.js': 'function Router() { return {}; }\nmodule.exports = function express() { return {}; };\nmodule.exports.Router = Router;\n',
+      'lib/thing.js': 'export function thing() { return 1; }\n',
+      'server.js': "import express from 'express';\nimport { thing } from 'lib/thing';\nexport function a() { express(); thing(); }\n",
+      'legacy.js': "const express = require('express');\nconst t = require('lib/thing');\nfunction b() { return express(); }\nmodule.exports = { b, t };\n",
+      'Page.vue': "<script>\nimport express from 'express';\nexport default { methods: { go() { return express(); } } };\n</script>\n<template><div /></template>\n",
+      'Widget.svelte': "<script>\n  import express from 'express';\n  const app = express();\n</script>\n<div>{app}</div>\n",
+      // A relative specifier to the same file still links.
+      'rel.js': "import express from './express';\nconst r = require('./lib/thing');\nexport function c() { return express(); }\n",
+      // Another language's bare path is no package: C includes and shell `source` keep resolving it.
+      'main.c': '#include "util.h"\nint main(void) { return helper(); }\n',
+      'util.h': 'int helper(void);\n',
+      // A root-relative URL (Vite serves `/lib/thing.js` from the project root) is a path, not a package.
+      'abs.js': "import { thing } from '/lib/thing.js';\nexport function d() { return thing(); }\n",
+      // create-react-app: only `baseUrl`. `utils` is one segment, like a package name.
+      'cra/jsconfig.json': JSON.stringify({ compilerOptions: { baseUrl: 'src' } }),
+      'cra/src/components/Button.jsx': 'export function Button() { return null; }\n',
+      'cra/src/utils.js': 'export function helper() { return 1; }\n',
+      'cra/src/express.js': 'export default function express() { return 0; }\n',
+      'cra/src/App.jsx': "import { Button } from 'components/Button';\nimport { helper } from 'utils';\nimport express from 'express';\nconst legacy = require('components/Button');\nexport function App() { helper(); express(); return Button(); }\n",
+      // tsconfig `paths`, with a `*` pattern and a prefix pattern.
+      'ts/tsconfig.json': JSON.stringify({ compilerOptions: { paths: { '@lib/*': ['./src/lib/*'], '*': ['./shims/*'] } } }),
+      'ts/src/lib/fmt.ts': 'export function fmt() { return 1; }\n',
+      'ts/shims/shimmed.ts': 'export function shimmed() { return 2; }\n',
+      'ts/src/use.ts': "import { fmt } from '@lib/fmt';\nimport { shimmed } from 'shimmed';\nexport function go() { return fmt() + shimmed(); }\n",
+      // A vite alias.
+      'vite/package.json': JSON.stringify({ name: 'v', version: '1.0.0', devDependencies: { vite: '^5.0.0' } }),
+      'vite/vite.config.js': "import path from 'path';\nexport default { resolve: { alias: { shared: path.resolve(__dirname, 'src/shared') } } };\n",
+      'vite/src/shared/money.js': 'export function formatMoney(n) { return String(n); }\n',
+      'vite/src/main.js': "import { formatMoney } from 'shared/money';\nexport function m() { return formatMoney(1); }\n",
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('an import of express gives no project edge, beside a local express.js', () => {
+    expect(importTargets(root, 'server.js')).toEqual([]);
+    // express() is the package's. `thing()` from 'lib/thing', which names a project folder, keeps the
+    // by-name lookup M2-08-R3 gives an import it cannot place; the import itself resolves to nothing.
+    expect(edgesFrom(root, 'server.js')).toEqual(['a call lib/thing.js#thing']);
+  });
+
+  it('a require of express gives no project edge, beside a local express.js', () => {
+    expect(importTargets(root, 'legacy.js')).toEqual([]);
+    expect(edgesFrom(root, 'legacy.js')).toEqual([]);
+  });
+
+  it('a Vue SFC and a Svelte component importing express link no project file', () => {
+    expect(importTargets(root, 'Page.vue')).toEqual([]);
+    expect(edgesFrom(root, 'Page.vue')).toEqual([]);
+    expect(importTargets(root, 'Widget.svelte')).toEqual([]);
+    expect(edgesFrom(root, 'Widget.svelte')).toEqual([]);
+  });
+
+  it('a relative import of the same files still links', () => {
+    expect(importTargets(root, 'rel.js')).toEqual(['express.js', 'lib/thing.js']);
+    expect(edgesFrom(root, 'rel.js')).toEqual(['c call express.js#express']);
+  });
+
+  it('a C include of a bare file name still links the file (the rule is JS/TS/Vue/Svelte only)', () => {
+    expect(importTargets(root, 'main.c')).toEqual(['util.h']);
+  });
+
+  it('a root-relative URL import still resolves to the file', () => {
+    expect(importTargets(root, 'abs.js')).toEqual(['lib/thing.js']);
+  });
+
+  it('a baseUrl import resolves, one segment (`utils`, `express`) as well as a folder (`components/Button`)', () => {
+    expect(importTargets(root, 'cra/src/App.jsx')).toEqual(['cra/src/components/Button.jsx', 'cra/src/express.js', 'cra/src/utils.js']);
+    expect(edgesFrom(root, 'cra/src/App.jsx')).toEqual([
+      'App call cra/src/components/Button.jsx#Button',
+      'App call cra/src/express.js#express',
+      'App call cra/src/utils.js#helper',
+    ]);
+  });
+
+  it('tsconfig `paths`, a `*` pattern included, still resolve', () => {
+    expect(importTargets(root, 'ts/src/use.ts')).toEqual(['ts/shims/shimmed.ts', 'ts/src/lib/fmt.ts']);
+    expect(edgesFrom(root, 'ts/src/use.ts')).toEqual(['go call ts/shims/shimmed.ts#shimmed', 'go call ts/src/lib/fmt.ts#fmt']);
+  });
+
+  it('a bundler alias still resolves', () => {
+    expect(importTargets(root, 'vite/src/main.js')).toEqual(['vite/src/shared/money.js']);
+    expect(edgesFrom(root, 'vite/src/main.js')).toEqual(['m call vite/src/shared/money.js#formatMoney']);
+  });
+});
+
+describe('sync agrees with scan --force on a bare specifier beside a new project file (M2-08-R6)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0', dependencies: { express: '^4.18.0' } }),
+      'app.js': "import express from 'express';\nexport function run() { return express(); }\n",
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('a project express.js added later is not the package, by sync or by scan --force', () => {
+    expect(importTargets(root, 'app.js')).toEqual([]);
+    writeFileSync(join(root, 'express.js'), 'module.exports = function express() { return {}; };\n');
+    mapx(root, 'sync', '.');
+    expect(importTargets(root, 'app.js')).toEqual([]);
+    mapx(root, 'scan', '.', '--force');
+    expect(importTargets(root, 'app.js')).toEqual([]);
+    expect(edgesFrom(root, 'app.js')).toEqual([]);
+  }, 120000);
+});
+
+// M2-08-R6 review: a bare specifier resolves through a workspace package, and a `baseUrl` follows a
+// solution-style tsconfig's `references`.
+describe('workspace packages and referenced baseUrl (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'mono', private: true, workspaces: ['client', 'common', 'packages/*'] }),
+      // A project file a bare `common` or `kernel` must not reach by path.
+      'kernel.js': 'export function kernelDecoy() { return 0; }\n',
+      // A package in a root folder, named like its folder: entry `index`, and a subpath.
+      'common/package.json': JSON.stringify({ name: 'common', version: '1.0.0' }),
+      'common/index.ts': 'export function commonEntry() { return 1; }\n',
+      'common/src/fmt.ts': 'export function commonFmt() { return 2; }\n',
+      // A scoped package in a nested folder with another name; `main` names a build output that is
+      // not indexed, so the source entry `src/index` is the file.
+      'packages/core/package.json': JSON.stringify({ name: '@acme/kernel', version: '1.0.0', main: 'dist/index.js' }),
+      'packages/core/src/index.ts': 'export function kernelEntry() { return 3; }\n',
+      'packages/core/src/deep/thing.ts': 'export function kernelDeep() { return 4; }\n',
+      // `exports`: the `import` condition for the entry, a pattern for subpaths.
+      'packages/ui/package.json': JSON.stringify({
+        name: '@acme/ui', version: '1.0.0',
+        exports: { '.': { import: './src/entry.ts', default: './dist/entry.js' }, './utils/*': './src/helpers/*.ts' },
+      }),
+      'packages/ui/src/entry.ts': 'export function uiEntry() { return 5; }\n',
+      'packages/ui/src/helpers/color.ts': 'export function uiColor() { return 6; }\n',
+      // `module` before `main`; the build output `main` names is not indexed.
+      'packages/legacy/package.json': JSON.stringify({ name: '@acme/legacy', version: '1.0.0', module: './esm/index.ts', main: './cjs/index.js' }),
+      'packages/legacy/esm/index.ts': 'export function legacyEntry() { return 7; }\n',
+      'client/package.json': JSON.stringify({ name: 'client', version: '1.0.0', dependencies: { common: 'workspace:*' } }),
+      'client/src/a.ts': `import { commonEntry } from 'common';
+import { commonFmt } from 'common/src/fmt';
+import { kernelEntry } from '@acme/kernel';
+import { kernelDeep } from '@acme/kernel/src/deep/thing';
+import { uiEntry } from '@acme/ui';
+import { uiColor } from '@acme/ui/utils/color';
+import { legacyEntry } from '@acme/legacy';
+export function go() { return commonEntry() + commonFmt() + kernelEntry() + kernelDeep() + uiEntry() + uiColor() + legacyEntry(); }
+`,
+      // A name that is no workspace package is still no file.
+      'client/src/b.ts': "import { kernelDecoy } from 'kernel';\nexport function b() { return kernelDecoy(); }\n",
+      // Vite's solution-style tsconfig: the `baseUrl` lives in the referenced config.
+      'vite/tsconfig.json': JSON.stringify({ files: [], references: [{ path: './tsconfig.app.json' }] }),
+      'vite/tsconfig.app.json': JSON.stringify({ compilerOptions: { baseUrl: '.' } }),
+      'vite/src/components/Panel.tsx': 'export function Panel() { return null; }\n',
+      'vite/src/main.tsx': "import { Panel } from 'src/components/Panel';\nexport function main() { return Panel(); }\n",
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('a workspace package name and subpath import link its files: root folder, nested scoped, exports', () => {
+    expect(importTargets(root, 'client/src/a.ts')).toEqual([
+      'common/index.ts',
+      'common/src/fmt.ts',
+      'packages/core/src/deep/thing.ts',
+      'packages/core/src/index.ts',
+      'packages/legacy/esm/index.ts',
+      'packages/ui/src/entry.ts',
+      'packages/ui/src/helpers/color.ts',
+    ]);
+    expect(edgesFrom(root, 'client/src/a.ts')).toEqual([
+      'go call common/index.ts#commonEntry',
+      'go call common/src/fmt.ts#commonFmt',
+      'go call packages/core/src/deep/thing.ts#kernelDeep',
+      'go call packages/core/src/index.ts#kernelEntry',
+      'go call packages/legacy/esm/index.ts#legacyEntry',
+      'go call packages/ui/src/entry.ts#uiEntry',
+      'go call packages/ui/src/helpers/color.ts#uiColor',
+    ]);
+  });
+
+  it('a name that is no workspace package still links no file', () => {
+    expect(importTargets(root, 'client/src/b.ts')).toEqual([]);
+  });
+
+  it('a baseUrl in a referenced tsconfig resolves a bare import', () => {
+    expect(importTargets(root, 'vite/src/main.tsx')).toEqual(['vite/src/components/Panel.tsx']);
+    expect(edgesFrom(root, 'vite/src/main.tsx')).toEqual(['main call vite/src/components/Panel.tsx#Panel']);
+  });
+});

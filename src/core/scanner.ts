@@ -2616,9 +2616,18 @@ export class Scanner {
 
   /** The package names declared in the folders holding indexed files (manifests are not indexed) (M0-17-R4). */
   private npmWorkspacePackageNames(): Set<string> {
-    let workspaceNames = this.npmWorkspaceNames;
-    if (!workspaceNames) {
-      workspaceNames = new Set<string>();
+    return new Set(this.npmWorkspacePackages().keys());
+  }
+
+  /**
+   * Package name → its folder, for the folders holding indexed files whose package.json names one (a
+   * workspace package: project code, M0-17-R4). The first folder in path order takes a duplicated name.
+   * Per resolution phase (M2-08-R6).
+   */
+  private npmWorkspacePackages(): Map<string, string> {
+    let packages = this.npmWorkspaceDirs;
+    if (!packages) {
+      packages = new Map<string, string>();
       const dirs = new Set<string>();
       for (const path of this.workspaceFileMap.keys()) {
         for (let dir = path; dir.includes('/');) {
@@ -2627,15 +2636,68 @@ export class Scanner {
           dirs.add(dir);
         }
       }
-      for (const dir of dirs) {
+      for (const dir of [...dirs].sort()) {
         try {
           const declared = JSON.parse(this.readWorkspaceText(`${dir}/package.json`) ?? 'null')?.name;
-          if (typeof declared === 'string') workspaceNames.add(declared);
+          if (typeof declared === 'string' && !packages.has(declared)) packages.set(declared, dir);
         } catch { /* not a manifest */ }
       }
-      this.npmWorkspaceNames = workspaceNames;
+      this.npmWorkspaceDirs = packages;
     }
-    return workspaceNames;
+    return packages;
+  }
+
+  /**
+   * The module paths a bare specifier names in a workspace package (M2-08-R6): `common` is the package
+   * entry, `@acme/common/src/fmt` a path in its folder. The entry is the package.json `exports` (`.`, a
+   * string or the `import` / `default` / `require` condition), `module`, `main`, `types`, then `index`
+   * and `src/index`; a subpath is an `exports` entry or pattern (`./utils/*`), then the same path in the
+   * folder. Paths are workspace-relative, without extension probing, most specific first.
+   */
+  private workspacePackageTargets(specifier: string): string[] {
+    const parts = specifier.split('/');
+    const name = specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0]!;
+    const dir = this.npmWorkspacePackages().get(name);
+    if (dir === undefined) return [];
+    const sub = specifier.slice(name.length + 1);
+    const at = (p: string) => join(dir, p).replace(/\\/g, '/');
+    let manifest: any = null;
+    try { manifest = JSON.parse(this.readWorkspaceText(`${dir}/package.json`) ?? 'null'); } catch { /* unreadable */ }
+    const condition = (v: unknown): string | null => {
+      if (typeof v === 'string') return v;
+      if (Array.isArray(v)) return v.map(condition).find((x) => x !== null) ?? null;
+      if (v && typeof v === 'object') {
+        for (const key of ['import', 'default', 'require', 'node', 'types']) {
+          const hit = condition((v as Record<string, unknown>)[key]);
+          if (hit !== null) return hit;
+        }
+      }
+      return null;
+    };
+    const out: string[] = [];
+    const exp = manifest?.exports;
+    const map = exp && typeof exp === 'object' && !Array.isArray(exp) && Object.keys(exp).some((k) => k.startsWith('.')) ? exp as Record<string, unknown> : null;
+    if (!sub) {
+      for (const v of [map ? map['.'] : exp, manifest?.module, manifest?.main, manifest?.types]) {
+        const c = condition(v);
+        if (c !== null) out.push(at(c));
+      }
+      out.push(at('index'), at('src/index'));
+    } else {
+      for (const [key, value] of Object.entries(map ?? {})) {
+        const star = key.indexOf('*');
+        const exact = star < 0 && key === `./${sub}`;
+        const prefix = key.slice(0, Math.max(star, 0));
+        const suffix = star < 0 ? '' : key.slice(star + 1);
+        const rest = star >= 0 && `./${sub}`.startsWith(prefix) && `./${sub}`.endsWith(suffix)
+          && `./${sub}`.length >= prefix.length + suffix.length
+          ? `./${sub}`.slice(prefix.length, `./${sub}`.length - suffix.length) : null;
+        const c = exact || rest !== null ? condition(value) : null;
+        if (c !== null) out.push(at(rest !== null ? c.replace('*', rest) : c));
+      }
+      out.push(at(sub));
+    }
+    return out;
   }
 
   /**
@@ -2788,7 +2850,7 @@ export class Scanner {
     this.importPresentCache.clear();
     this.goLocalDirCache.clear();
     this.languageCache.clear();
-    this.npmWorkspaceNames = null;
+    this.npmWorkspaceDirs = null;
     this.phpDeclared = null;
     this.externalDecisions.clear();
     // Package attribution (M5-20): manifests and lockfiles as they stand, read once per pass, each
@@ -3742,7 +3804,7 @@ export class Scanner {
   // Repo → its Vue Router route records (M3-06).
   private vueRoutes = new Map<string, ResolvedRoute[]>();
   /** Names declared by the workspace's package.json files, per resolution phase (M0-17-R4). */
-  private npmWorkspaceNames: Set<string> | null = null;
+  private npmWorkspaceDirs: Map<string, string> | null = null;
   /**
    * Per resolution phase (M2-08-R3): JS/TS files with a top-level import or export; each file's
    * `declare global` names, declared names and dynamic-import bindings; folders under a package.json
@@ -4028,7 +4090,14 @@ export class Scanner {
       ? jsBaseUrlTarget(target, sourcePath, this.aliasContext(fileMap))
       : null;
     if (viaBaseUrl !== null) bases.push(viaBaseUrl);
-    bases.push(target.startsWith('.') ? join(dir, target) : target);
+    // The specifier itself, relative to the importing file when it is `./…`. A bare one is never a
+    // path from the repo root: Node does not resolve `express` to ./express.js, only a package, `paths`,
+    // `baseUrl` or a bundler alias (all above) does (M2-08-R6). A file of another language keeps it.
+    if (target.startsWith('.')) bases.push(join(dir, target));
+    else if (target.startsWith('/') || !JS_MODULE_SOURCE.test(sourcePath)) bases.push(target);
+    // A workspace package of the project (`common`, `@acme/common/src/fmt`): its folder and entry
+    // (M2-08-R6). After `paths` and `baseUrl`, as tsc and the bundlers try them before node_modules.
+    else bases.push(...this.workspacePackageTargets(target));
     for (const base of bases) {
       const hit = this.probeModule(base, fileMap);
       if (hit) return hit;
@@ -5239,7 +5308,7 @@ export class Scanner {
     this.vueRoutes.clear();
     this.vueScopes.clear();
     this.vueImporters.clear();
-    this.npmWorkspaceNames = null;
+    this.npmWorkspaceDirs = null;
     this.esModules.clear();
     this.globalDeclarations.clear();
     this.localNames.clear();

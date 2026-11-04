@@ -61,8 +61,11 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  * - 25: M2-08-R4 (an ES module's parse records the bare names it reached under the global rule, so a
  *   sync can re-parse the files a module turning script, or gaining `declare global` names, may now
  *   link; every declarator of a `declare global { var a, b }` list and `function *gen` are global).
+ * - 26: M2-08-R6 (a bare JS/TS specifier, `import 'express'` or `require('express')`, is never read as a
+ *   path from the repo root: it no longer links a project `express.js`; `paths`, `baseUrl` and bundler
+ *   aliases are the only ways a bare specifier resolves to a project file).
  */
-export const EXTRACTOR_VERSION = 25;
+export const EXTRACTOR_VERSION = 26;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided
