@@ -21837,10 +21837,10 @@
         "docs/baton/reports/M5-22.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-J2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T01:00:42.780Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -21850,6 +21850,12 @@
           "at": "2026-11-04T00:11:01.364Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T01:00:42.780Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
