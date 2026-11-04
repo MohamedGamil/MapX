@@ -6,14 +6,15 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **129 / 226 / 336h**. Capacity: 1 engineer(s) × 20 h/week → **11.3 weeks**, conditional finish **2027-01-21** (as of 2026-11-03).
+Remaining effort min/expected/max: **136 / 240 / 361h**. Capacity: 1 engineer(s) × 20 h/week → **12.0 weeks**, conditional finish **2027-01-27** (as of 2026-11-04).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R2 (BACKLOG): prerequisites satisfied
 - M5-18-R2 (BACKLOG): M2-25; M2-26
-- M5-98 (BACKLOG): prerequisites satisfied
+- M5-98-R1 (BACKLOG): prerequisites satisfied
+- M5-98-R2 (BACKLOG): Owner decision: support user plugin selectors/rules (and the trust model for loading project code) or defer REQ-ARCH-023.
 - M5-19-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-22-R1 (BACKLOG): prerequisites satisfied
 - M5-24-R1 (BACKLOG): prerequisites satisfied
@@ -63,7 +64,8 @@ Remaining effort min/expected/max: **129 / 226 / 336h**. Capacity: 1 engineer(s)
 | M2-25 | 0 | 4 | 45 | 49 | 45 |
 | M2-26 | 0 | 4 | 45 | 49 | 45 |
 | M5-18-R2 | 4 | 6 | 49 | 51 | 45 |
-| M5-98 | 0 | 2 | 49 | 51 | 49 |
+| M5-98-R1 | 0 | 8 | 43 | 51 | 43 |
+| M5-98-R2 | 0 | 8 | 43 | 51 | 43 |
 | M5-19-R1 | 0 | 3 | 48 | 51 | 48 |
 | M5-22-R1 | 0 | 3 | 48 | 51 | 48 |
 | M5-24-R1 | 0 | 8 | 43 | 51 | 43 |

@@ -17416,14 +17416,22 @@
       ],
       "blockingConditions": [],
       "verificationPlan": "Run every registered command; each must exit 0.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-M5-98",
       "actualHours": null,
       "startedAt": "2026-11-03T23:37:12.549Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T00:01:27.565Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-98.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-98.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T23:37:12.162Z",
@@ -17436,6 +17444,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:01:27.174Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:01:27.565Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-98.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -17492,6 +17518,130 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "description": "Re-score the M5-01 fixture and record per-kind recall/precision against the 0.0 baseline; mark each REQ-ARCH requirement VERIFIED or open a follow-up."
+    },
+    {
+      "milestone": "M5",
+      "priority": "P2",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 12
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-06",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-98.md",
+        "docs/research/deptrac/05-requirements.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-98-R1",
+      "title": "`mapx check --since <git-ref>`: judge only what changed (ratchet)",
+      "objective": "`mapx check --since <ref>` reports only findings on dependencies added or changed since the git ref (files changed in the diff), so CI can ratchet without a baseline; CLI, MCP (`mapx_arch_check since`) and docs agree.",
+      "description": "M5-98 audit (2026-11-04): REQ-ARCH-021 (`--since` ratchet) has no task.",
+      "outputs": [
+        "src/arch/check.ts",
+        "src/cli.ts",
+        "tests/arch-since.test.ts",
+        "reports/M5-98-R1.md"
+      ],
+      "affectedFiles": [
+        "src/arch/check.ts",
+        "src/arch/mcp-tools.ts",
+        "src/cli.ts",
+        "src/core/git-tracker.ts",
+        "tests/arch-since.test.ts",
+        "docs/architecture-rules.md",
+        "docs/cli-reference.md",
+        "docs/mcp-integration.md"
+      ],
+      "acceptanceCriteria": [
+        "In a git repo with one violation committed before the ref and one added after, `check --since <ref>` reports only the new one and exits 1; with none added it exits 0 (e2e test); git refs never reach a shell (M5-08-R1)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-since.test.ts"
+      ]
+    },
+    {
+      "milestone": "M5",
+      "priority": "P3",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 16
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-04",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [
+        "Owner decision: support user plugin selectors/rules (and the trust model for loading project code) or defer REQ-ARCH-023."
+      ],
+      "sources": [
+        "docs/baton/reports/M5-98.md",
+        "docs/research/deptrac/05-requirements.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M5-98-R2",
+      "title": "User plugin selectors and rules, or a recorded decision to defer them",
+      "objective": "Either a documented extension point for user-defined selectors and rules (loaded from the project, sandboxed, versioned API) or an owner decision recorded in DECISIONS.md deferring REQ-ARCH-023.",
+      "description": "M5-98 audit (2026-11-04): REQ-ARCH-023 (user plugins) has no task. Needs an owner decision first (security and API surface).",
+      "outputs": [
+        "docs/baton/DECISIONS.md",
+        "reports/M5-98-R2.md"
+      ],
+      "affectedFiles": [
+        "src/arch/selectors/**",
+        "docs/architecture-rules.md"
+      ],
+      "acceptanceCriteria": [
+        "Either a plugin selector from the project is loaded and matches (test) with its trust model documented, or DECISIONS.md records the deferral."
+      ],
+      "verificationCommands": [
+        "npm run check"
+      ]
     },
     {
       "priority": "P3",

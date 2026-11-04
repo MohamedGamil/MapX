@@ -294,7 +294,9 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — DONE, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-18-R1** MapX dogfood config judges calls and references, not only imports — DONE, P2, 3h; depends on M5-18, M2-08-R3.
 - **M5-18-R2** MapX's own check covers tests/fixtures again — BACKLOG, P3, 2h; depends on M5-18-R1, M2-25, M2-26.
-- **M5-98** M5 acceptance: re-score architecture-rules fixture — BACKLOG, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
+- **M5-98** M5 acceptance: re-score architecture-rules fixture — DONE, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
+- **M5-98-R1** `mapx check --since <git-ref>`: judge only what changed (ratchet) — BACKLOG, P2, 8h; depends on M5-06.
+- **M5-98-R2** User plugin selectors and rules, or a recorded decision to defer them — BACKLOG, P3, 8h; depends on M5-04.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
 - **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — DONE, P2, 1.5h; depends on M5-20.

@@ -186,6 +186,8 @@ flowchart LR
 - M5-18-R1 ← M5-18 (hard), M2-08-R3 (hard)
 - M5-18-R2 ← M5-18-R1 (hard), M2-25 (hard), M2-26 (hard)
 - M5-98 ← M5-04 (quality), M5-06 (quality), M5-11 (quality), M5-16 (quality)
+- M5-98-R1 ← M5-06 (hard)
+- M5-98-R2 ← M5-04 (hard)
 - M4-08 ← M3-01 (hard), M0-02-R6 (hard), M0-17-R4 (hard), M3-08-R1 (hard), M3-09-R1 (hard), M0-02-R7 (hard), M0-10-R4 (hard), M1-07-R2 (hard), M0-04-R6 (hard), M3-02-R1 (hard), M3-05-R1 (hard), M3-11-R1 (hard), M3-07-R1 (hard), M0-12-R7 (hard), M0-17-R5 (hard), M0-20-R3 (hard), M2-06-R2 (hard), M2-04-R3 (hard), M0-09-R5 (hard), M1-03-R2 (hard), M0-11-R3 (hard), M0-02-R8 (hard), M0-12-R8 (hard), M0-12-R9 (hard)
 - M3-08-R1 ← M3-08 (hard), M3-11 (hard)
 - M3-09-R1 ← M3-09 (hard), M3-12 (hard)
