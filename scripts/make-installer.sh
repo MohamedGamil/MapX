@@ -107,7 +107,20 @@ fi
 # ── Extract embedded archive ───────────────────────────────────────────────
 _TMP="$(mktemp -d)"
 _cleanup() { rm -rf "$_TMP"; }
+# The traps go in right after mktemp: a signal during extraction or install.sh must remove the
+# folder too (dash runs no EXIT trap when a signal kills it). With no child yet, _stop only cleans.
+# install.sh runs as a child (below), not through `exec`, which would drop these traps and leave
+# the unpacked archive in $TMPDIR on every run (M0-07-R4).
+_CHILD=""
+_stop() {
+    if [ -n "$_CHILD" ]; then kill -TERM "$_CHILD" 2>/dev/null || :; wait "$_CHILD" 2>/dev/null || :; fi
+    _cleanup
+    exit "$1"
+}
 trap _cleanup EXIT
+trap '_stop 129' HUP
+trap '_stop 130' INT
+trap '_stop 143' TERM
 
 _PL=$(awk '/^__PAYLOAD__$/{print NR+1; exit}' "$0")
 [ -n "$_PL" ] || _die "Payload marker not found — installer may be corrupted"
@@ -131,14 +144,22 @@ chmod +x "$_INST"
 MAPX_INSTALLER="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"; export MAPX_INSTALLER
 
 # ── Delegate to install.sh ─────────────────────────────────────────────────
+# install.sh runs as a child so the traps above survive. It starts in the background so a signal
+# sent to this shell alone can be forwarded to it; "<&3" hands it the caller's stdin, which a
+# background job would otherwise lose (its prompts read from the terminal). A closed stdin gives
+# it /dev/null instead of aborting the installer. Its status is the installer's status.
 if [ -n "$_SCOPE_VAL" ]; then
-    exec "$_INST" "$_SCOPE_FLAG" "$_SCOPE_VAL" "$@"
+    set -- "$_SCOPE_FLAG" "$_SCOPE_VAL" "$@"
 elif [ -n "$_SCOPE_FLAG" ]; then
-    exec "$_INST" "$_SCOPE_FLAG" "$@"
-else
-    exec "$_INST" "$@"
+    set -- "$_SCOPE_FLAG" "$@"
 fi
-exit 0
+(exec 3<&0) 2>/dev/null && exec 3<&0 || exec 3</dev/null
+"$_INST" "$@" <&3 &
+_CHILD=$!
+_RC=0
+wait "$_CHILD" || _RC=$?
+_CHILD=""
+exit "$_RC"
 __PAYLOAD__
 SH_EOF
 

@@ -58,9 +58,8 @@ describe.skipIf(process.platform === 'win32')('install.sh replaces a running map
 
   /**
    * HOME in the temp folder and the prefix on PATH: add_to_path edits no real shell config. TMPDIR is
-   * in the temp folder too (M4-09-R5): the self-extracting installer unpacks its archive into a
-   * `mktemp -d` folder that it never removes, because it `exec`s install.sh and the exec drops its
-   * EXIT trap, so the test removes it with the rest.
+   * in the temp folder too (M4-09-R5), so a stray file from any run cannot leak into the real one.
+   * The installer removes its own unpacked archive (M0-07-R4); the tests assert the folder is empty.
    */
   const env = (prefix: string) => ({ ...process.env, HOME: join(tmp, 'home'), TMPDIR: join(tmp, 'scratch'), PATH: `${prefix}:${process.env.PATH}`, NO_COLOR: '1' });
 
@@ -74,6 +73,7 @@ describe.skipIf(process.platform === 'win32')('install.sh replaces a running map
     expect(statSync(join(prefix, 'mapx')).mode & 0o111).not.toBe(0);
     expect(execFileSync(join(prefix, 'mapx'), { encoding: 'utf8' })).toContain('mapx 9.9.9 (new)');
     expect(readdirSync(prefix)).toEqual(['mapx']);
+    expect(readdirSync(join(tmp, 'scratch'))).toEqual([]); // M0-07-R4: the installer's unpacked archive is gone
     // The running process kept its binary: still running after the install, then a normal exit.
     expect(running.exitCode).toBeNull();
     expect(await exited(running)).toEqual({ code: 0, signal: null });
@@ -163,5 +163,141 @@ describe.skipIf(process.platform === 'win32')('install.sh replaces a running map
     } finally {
       chmodSync(prefix, 0o755);
     }
+  }, 30_000);
+});
+
+// M0-07-R4: the self-extracting installer unpacked its archive into `mktemp -d` and then `exec`ed
+// install.sh, so its EXIT trap never ran and every real run left tmp.*/mapx-<version> in $TMPDIR.
+// It now runs install.sh as a child, removes the folder whatever the status, and exits with
+// install.sh's status. The release inside is a stub install.sh that records what it was given.
+describe.skipIf(process.platform === 'win32')('the self-extracting installer removes its unpacked archive', () => {
+  let tmp = '';
+  let scratch = '';
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'mapx-installer-clean-'));
+    scratch = join(tmp, 'scratch');
+    mkdirSync(scratch);
+  });
+  afterEach(() => rmSync(tmp, { recursive: true, force: true }));
+
+  /** Builds an installer around a stub install.sh; `body` is its shell body. Returns the installer path. */
+  function build(body: string): string {
+    const rel = join(tmp, 'pkg', 'mapx-9.9.9');
+    mkdirSync(rel, { recursive: true });
+    writeFileSync(join(rel, 'install.sh'), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    const archive = join(tmp, 'mapx-9.9.9-test.tar.gz');
+    execFileSync('tar', ['czf', archive, '-C', join(tmp, 'pkg'), 'mapx-9.9.9']);
+    const installer = join(tmp, 'mapx-9.9.9-test-installer.sh');
+    execFileSync('bash', [join(ROOT, 'scripts/make-installer.sh'), 'sh', archive, installer, '9.9.9', 'test'], { stdio: 'ignore' });
+    return installer;
+  }
+  const run = (installer: string, args: string[], input = '') =>
+    spawnSync('sh', [installer, ...args], { encoding: 'utf8', input, env: { ...process.env, TMPDIR: scratch, NO_COLOR: '1' } });
+
+  it('leaves TMPDIR empty after a successful install and exits 0', () => {
+    const r = run(build('echo "stub ran"'), ['--local']);
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain('stub ran');
+    expect(readdirSync(scratch)).toEqual([]);
+  });
+
+  it('leaves TMPDIR empty after a failing install and exits with install.sh\'s status', () => {
+    const r = run(build('echo "stub failing" >&2; exit 7'), ['--local']);
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(7);
+    expect(r.stderr).toContain('stub failing');
+    expect(readdirSync(scratch)).toEqual([]);
+  });
+
+  it('the real install.sh failing (unknown option) also leaves TMPDIR empty and exits 1', () => {
+    const rel = join(tmp, 'pkg', 'mapx-9.9.9');
+    mkdirSync(rel, { recursive: true });
+    copyFileSync(join(ROOT, 'scripts/templates/install.sh'), join(rel, 'install.sh'));
+    chmodSync(join(rel, 'install.sh'), 0o755);
+    const archive = join(tmp, 'mapx-9.9.9-test.tar.gz');
+    execFileSync('tar', ['czf', archive, '-C', join(tmp, 'pkg'), 'mapx-9.9.9']);
+    const installer = join(tmp, 'real-installer.sh');
+    execFileSync('bash', [join(ROOT, 'scripts/make-installer.sh'), 'sh', archive, installer, '9.9.9', 'test'], { stdio: 'ignore' });
+    const r = run(installer, ['--local', '--bogus']);
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(1);
+    expect(r.stderr).toContain('Unknown option');
+    expect(readdirSync(scratch)).toEqual([]);
+  });
+
+  it('passes arguments through intact, spaces included, after the scope flag', () => {
+    const out = join(tmp, 'args.txt');
+    const installer = build(`for a in "$@"; do printf '[%s]\\n' "$a"; done > '${out}'`);
+    const r = run(installer, ['--prefix', '/a b/c', '--force', 'x  y']);
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(readFileSync(out, 'utf8')).toBe('[--prefix]\n[/a b/c]\n[--force]\n[x  y]\n');
+    expect(readdirSync(scratch)).toEqual([]);
+  });
+
+  it('the menu choice and install.sh\'s own prompt both read the caller\'s stdin', () => {
+    const out = join(tmp, 'stdin.txt');
+    const installer = build(`printf '%s\\n' "$@" > '${out}'; read -r answer; echo "answer=$answer" >> '${out}'`);
+    const r = run(installer, [], '3\n/my prefix\nyes\n');
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(readFileSync(out, 'utf8')).toBe('--prefix\n/my prefix\nanswer=yes\n');
+    expect(readdirSync(scratch)).toEqual([]);
+  });
+
+  it('keeps the installer path for the uninstall hint outside the removed folder', () => {
+    const out = join(tmp, 'env.txt');
+    const installer = build(`printf '%s' "$MAPX_INSTALLER" > '${out}'`);
+    const r = run(installer, ['--local']);
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    const recorded = readFileSync(out, 'utf8');
+    expect(recorded).toBe(installer);
+    expect(existsSync(recorded)).toBe(true);
+  });
+
+  it.each(['sh', 'bash'])('a closed stdin does not abort the installer (%s): install.sh runs and the folder is removed', (shell) => {
+    const out = join(tmp, 'ran.txt');
+    const installer = build(`echo ran > '${out}'`);
+    const r = spawnSync('sh', ['-c', `${shell} "$1" --local <&-`, 'x', installer], { encoding: 'utf8', env: { ...process.env, TMPDIR: scratch, NO_COLOR: '1' } });
+    expect(r.status, `${r.stdout}\n${r.stderr}`).toBe(0);
+    expect(readFileSync(out, 'utf8')).toBe('ran\n');
+    expect(readdirSync(scratch)).toEqual([]);
+  });
+
+  const gone = (pid: number) => { try { process.kill(pid, 0); return false; } catch { return true; } };
+  const spawnInstaller = (installer: string, env: NodeJS.ProcessEnv = {}) => {
+    const child = spawn('sh', [installer, '--local'], { stdio: 'ignore', env: { ...process.env, TMPDIR: scratch, NO_COLOR: '1', ...env } });
+    const done = new Promise<{ code: number | null; signal: string | null }>((ok) => child.once('exit', (c, sg) => ok({ code: c, signal: sg })));
+    return { child, done };
+  };
+  const until = async (cond: () => boolean) => { for (let i = 0; i < 200 && !cond(); i++) await new Promise((r) => setTimeout(r, 25)); };
+
+  // install.sh answers the forwarded TERM slowly: the installer must wait for it before removing the
+  // folder and exiting, so the child is already gone when the installer's exit is seen (no polling).
+  it.each([['SIGTERM', 143], ['SIGINT', 130], ['SIGHUP', 129]] as const)('%s while install.sh runs stops it, waits for it, removes the folder and exits %i', async (signal, code) => {
+    const marker = join(tmp, 'started');
+    const pidFile = join(tmp, 'stub.pid');
+    const installer = build(`echo $$ > '${pidFile}'; trap 'sleep 1; exit 0' TERM; touch '${marker}'; sleep 30 & wait`);
+    const { child, done } = spawnInstaller(installer);
+    await until(() => existsSync(marker));
+    expect(existsSync(marker)).toBe(true);
+    expect(readdirSync(scratch).length).toBe(1); // the unpacked archive exists while install.sh runs
+    child.kill(signal);
+    expect(await done).toEqual({ code, signal: null });
+    expect(gone(Number(readFileSync(pidFile, 'utf8').trim()))).toBe(true);
+    expect(readdirSync(scratch)).toEqual([]);
+  }, 30_000);
+
+  // A `tar` that stalls makes extraction observable; the signal must still remove the folder.
+  it.each([['SIGTERM', 143], ['SIGINT', 130], ['SIGHUP', 129]] as const)('%s during extraction removes the folder and exits %i', async (signal, code) => {
+    const installer = build('echo should not run');
+    const shims = join(tmp, 'shims');
+    mkdirSync(shims);
+    const realTar = execFileSync('sh', ['-c', 'command -v tar'], { encoding: 'utf8' }).trim();
+    const marker = join(tmp, 'at-tar');
+    writeFileSync(join(shims, 'tar'), `#!/bin/sh\ntouch '${marker}'\nsleep 1\nexec '${realTar}' "$@"\n`, { mode: 0o755 });
+    const { child, done } = spawnInstaller(installer, { PATH: `${shims}:${process.env.PATH}` });
+    await until(() => existsSync(marker));
+    expect(existsSync(marker)).toBe(true);
+    expect(readdirSync(scratch).length).toBe(1);
+    child.kill(signal);
+    expect(await done).toEqual({ code, signal: null });
+    expect(readdirSync(scratch)).toEqual([]);
   }, 30_000);
 });

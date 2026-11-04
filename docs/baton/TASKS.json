@@ -23497,10 +23497,123 @@
         "tests/installer-replace.test.ts"
       ],
       "acceptanceCriteria": [
-        "A built installer run with a private TMPDIR leaves that folder empty after a successful install and after a failing one, and exits with install.sh's status (test in tests/installer-replace.test.ts, without the test's own TMPDIR containment)."
+        "A built installer run with a private TMPDIR leaves that folder empty after a successful install and after a failing one (install.sh exit 7, and the real install.sh with an unknown option), and exits with install.sh status (tests in tests/installer-replace.test.ts; the contained TMPDIR is kept and asserted empty).",
+        "SIGTERM or SIGINT sent to the installer stops install.sh, removes the folder and exits 143 / 130.",
+        "Arguments (spaces included, after the menu scope flag) and the caller stdin (menu choice and install.sh prompts) reach install.sh intact, and MAPX_INSTALLER names the installer file, not the removed folder."
       ],
       "verificationCommands": [
         "npx vitest run tests/installer-replace.test.ts",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-04T08:11:51.316Z",
+      "completedAt": "2026-11-04T08:46:21.239Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M0-07-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/installer-replace.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R4.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-07-R4.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T08:11:50.847Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T08:11:51.316Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T08:46:20.785Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T08:46:21.239Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/installer-replace.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R4.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-07-R4.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M0-07-R5",
+      "milestone": "M0",
+      "title": "The documented `curl … | sh` install works, or the docs stop documenting it",
+      "objective": "The release install command in README.md (`curl -fsSL …/mapx-<platform>-installer.sh | sh`) installs MapX: either the self-extracting installer works when read from a pipe (it now reads its own payload from $0, so piped it fails with `awk: cannot open sh`), or README.md and docs/getting-started.md show a download-then-run command that does.",
+      "description": "Found by the M0-07-R4 review (2026-11-04): `cat installer.sh | sh -s -- --local` fails with `awk: cannot open sh` before and after M0-07-R4; README.md lines ~127/130 document `curl … | sh`. Pre-existing.",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M0-07-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M0-07-R4.md"
+      ],
+      "outputs": [
+        "scripts/make-installer.sh",
+        "README.md",
+        "tests/installer-replace.test.ts",
+        "reports/M0-07-R5.md"
+      ],
+      "affectedFiles": [
+        "scripts/make-installer.sh",
+        "README.md",
+        "docs/getting-started.md",
+        "tests/installer-replace.test.ts",
+        "tests/docs-surface.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Every install command README.md and docs/getting-started.md show for the shell installer, run against a locally built installer (piped where the docs pipe it), installs into a private prefix and leaves $TMPDIR empty (test); the docs and the installer agree (tests/docs-surface.test.ts or the installer test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/installer-replace.test.ts tests/docs-surface.test.ts",
         "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
