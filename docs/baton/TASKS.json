@@ -28784,7 +28784,7 @@
       "milestone": "M2",
       "title": "Sync follows new global declarations: a new or renamed script, a new global in a script, `declare global` in a new file",
       "objective": "When a sync adds a global name (a new or renamed script, a declaration added to an existing script, a `declare global` block in a new file), the ES modules whose recorded globalNameRefs name it re-parse, so sync equals scan --force.",
-      "description": "M2-08-R4 limitation, confirmed by its review (2026-11-04): `git mv lib/g.ts lib/h.ts` with the exports removed leaves sync without the edges scan --force gives; a new declaration in any file does not re-parse the files that name it. M2-08-R4 records globalNameRefs per ES module, which this can reuse.",
+      "description": "M2-08-R4 limitation, confirmed by its review (2026-11-04): `git mv lib/g.ts lib/h.ts` with the exports removed leaves sync without the edges scan --force gives; a new declaration in any file does not re-parse the files that name it. Probe on develop@773e2a1: a new script, a renamed module turned script, a function added to an existing script and a new file with `declare global` each left a module that names the new global without its edge. M2-08-R4 records globalNameRefs per ES module; this reuses it. A new file has no recorded global-scope key, and a script that stays a script keeps its key, so globalScopeReferrers skipped both. The fix reads what a new or edited script declares from the parse the sync runs anyway, and re-parses the modules that named one of the new globals in a second batch of the same sync (review: a separate main-thread parse was 2.5x slower and blocked the event loop). Parsing now frees its syntax tree, which leaked WASM memory per parse. Full-scan output is unchanged.",
       "priority": "P2",
       "estimate": {
         "min": 2,
@@ -28808,30 +28808,108 @@
       ],
       "outputs": [
         "src/core/scanner.ts",
+        "src/core/js-source.ts",
+        "src/parsers/wasm-parser.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "src/parsers/languages/php.ts",
+        "src/parsers/parse-worker.ts",
         "tests/import-bound-externals.test.ts",
+        "tests/parser-tree-release.test.ts",
+        "CHANGELOG.md",
+        "iterations/M2-08-R9.md",
         "reports/M2-08-R9.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "tests/import-bound-externals.test.ts"
+        "src/core/js-source.ts",
+        "src/parsers/wasm-parser.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "src/parsers/languages/php.ts",
+        "src/parsers/parse-worker.ts",
+        "tests/import-bound-externals.test.ts",
+        "tests/parser-tree-release.test.ts"
       ],
       "acceptanceCriteria": [
-        "Hash and git sync after: a new script declaring a name a module calls; a module renamed and turned script; a function added to an existing script; a new file with `declare global` — each gives the edges scan --force gives, re-parsing only the files that name the new globals (e2e tests)."
+        "Hash and git sync after (a) a new script declaring a name a module calls, (b) a module renamed and turned script, (c) a function added to an existing script, (d) a new file with `declare global`: each gives the edges scan --force gives, re-parsing only the files whose globalNameRefs name a new global (Updated 2 files each; a bystander recording a word the new file only uses is not re-parsed). Tests: \"%s sync when a new or edited file declares global names (M2-08-R9)\" in tests/import-bound-externals.test.ts.",
+        "A body edit of a script parses it once and nothing else; a declared name adds one second batch of exactly the modules that named it; a module edited in the same sync is parsed once; the recorded names are read once per sync. Tests: the same describe and \"a sync parses each file once, the recorders of a gained name in a second batch\".",
+        "A global removed from a script re-parses the script and the module that had the edge; a removed script re-parses nobody (its edges go with it); both equal scan --force. Tests: the same describe.",
+        "Full-scan output is unchanged: npm run eval prints the same numbers, and scan --force of the repo on HEAD and on the change gives byte-identical edge and symbol dumps.",
+        "Parsing frees its syntax tree (TypeScript, JavaScript, PHP, Python, and when a query throws). Test: tests/parser-tree-release.test.ts."
       ],
       "verificationCommands": [
         "npx vitest run tests/import-bound-externals.test.ts",
+        "npx vitest run tests/parser-tree-release.test.ts",
         "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T15:25:48.648Z",
+      "completedAt": "2026-11-04T18:15:48.093Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R9.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R9.md"
+        },
+        {
+          "command": "npx vitest run tests/parser-tree-release.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R9.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R9.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T15:25:48.121Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T15:25:48.648Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T18:15:47.588Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T18:15:48.093Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R9.md"
+            },
+            {
+              "command": "npx vitest run tests/parser-tree-release.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R9.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R9.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

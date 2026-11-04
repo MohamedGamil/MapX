@@ -68,12 +68,14 @@ export class PhpParser extends GenericWasmParser {
     let fileMetadata: Record<string, any> | undefined = undefined;
     let ambient: ParseResult['ambient'];
 
+    let parsed: Awaited<ReturnType<typeof parseWithQueries>> | undefined;
     try {
-      const { symbols: symCaptures, references: refCaptures, nameByNodeId } = await parseWithQueries(
+      parsed = await parseWithQueries(
         source, this.language, this.symbolsQuery!, this.referencesQuery!,
         // Superglobals and getenv() (M5-24-R1).
         (root) => { ambient = ambientAccesses('php', root, source); },
       );
+      const { symbols: symCaptures, references: refCaptures, nameByNodeId } = parsed;
 
       // Each symbol's declaration node, for its attributes and PHPDoc tags once `use` is read (M5-10).
       const declarations: Array<[ExtractedSymbol, any]> = [];
@@ -927,6 +929,9 @@ export class PhpParser extends GenericWasmParser {
       }
     } catch (e: any) {
       errors.push({ message: e.message, line: 0 });
+    } finally {
+      // The nodes are read; free the tree (M2-08-R9).
+      parsed?.dispose();
     }
 
     // F12: Suppress duplicate instantiation/call references for specific dispatch/notify targets

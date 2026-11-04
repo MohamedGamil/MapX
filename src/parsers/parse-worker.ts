@@ -284,8 +284,10 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
     return { ...empty, errors: [{ message: `Failed to load language for ${job.filePath}` }] };
   }
 
+  // The tree lives in WASM memory with no finalizer: freed on every exit (M2-08-R9).
+  let tree: any;
   try {
-    const tree = langCtx.parser.parse(source);
+    tree = langCtx.parser.parse(source);
     if (!tree) {
       return { ...empty, errors: [{ message: `Parser returned null for ${job.filePath}` }] };
     }
@@ -450,6 +452,8 @@ async function parseFile(job: ParseJob): Promise<ParseResult> {
     return { id: job.id, symbols, references, errors: [] };
   } catch {
     return { ...empty, errors: [{ message: `Failed to parse ${job.filePath}` }] };
+  } finally {
+    tree?.delete();
   }
 }
 

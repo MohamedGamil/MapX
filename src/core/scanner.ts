@@ -763,6 +763,8 @@ export class Scanner {
       // the scan's start, before discovery read them.
       const hashes = new Map<string, { content: string; blob: string | null }>();
       const readAt = new Date(startTime).toISOString();
+      // What the files re-indexed put in the global scope before, for the files that named it (M2-08-R9).
+      const globalBefore = reparseAll ? null : this.globalScopeBefore(toParse.map(f => f.relativePath));
       this.store.inTransaction(() => {
         this.applyDeferredConsumption();
         for (let i = 0; i < toParse.length; i++) {
@@ -881,6 +883,13 @@ export class Scanner {
         const candidatePaths = new Set(movedCandidates.map(f => f.relativePath));
         this.settleMovedNames(repo.name, parseResults.filter((_, i) => candidatePaths.has(toParse[i].relativePath)));
         this.settleVanishedNames(repo.name, parseResults.filter((_, i) => candidatePaths.has(toParse[i].relativePath)));
+      }
+      // The files that named a bare name a file just parsed declares globally (M2-08-R9). They are among
+      // the unchanged files this scan reports, so the counts stay.
+      if (globalBefore) {
+        await this.reindexGlobalRecorders(repo, workspaceRoot, ignoredSymbols, startTime, globalBefore,
+          toParse.map((f, i) => ({ path: f.relativePath, result: parseResults[i] })),
+          (p, bytes) => { const head = gitHashes.get(p); return head && gitBlobId(bytes) === head ? head : null; });
       }
     } else if (unchangedFiles.length > 0) {
       this.onProgress?.({ phase: 'parse', current: unchangedFiles.length, total: discovered.length });
@@ -1205,6 +1214,7 @@ export class Scanner {
       };
     }
 
+    const globalBefore = this.globalScopeBefore(toReindex.map(r => r.path));
     this.store.inTransaction(() => {
       this.applyDeferredConsumption();
       for (const { path: p, fileInfo, contentHash, blobHash } of toReindex) {
@@ -1290,6 +1300,15 @@ export class Scanner {
       }
     });
 
+    // The files that named a bare name a file just parsed declares globally (M2-08-R9).
+    const followUp = await this.reindexGlobalRecorders(repo, workspaceRoot, ignoredSymbols, startTime, globalBefore,
+      toReindex.map((r, i) => ({ path: r.path, result: parseResults[i] })), (_p, bytes) => gitBlobId(bytes));
+    if (followUp) {
+      totalSymbols += followUp.symbols;
+      totalEdges += followUp.edges;
+      for (const [lang, n] of Object.entries(followUp.languages)) langBreakdown[lang] = (langBreakdown[lang] || 0) + n;
+    }
+
     if (!this.aborted) {
       this.settleMovedNames(repo.name, parseResults.filter((_, i) => contents.has(toReindex[i].path)));
       this.settleVanishedNames(repo.name, parseResults.filter((_, i) => contents.has(toReindex[i].path)));
@@ -1309,7 +1328,7 @@ export class Scanner {
 
     return {
       // The files re-indexed, as the hash sync reports, not every path git listed (M0-10-R6).
-      filesScanned: toReindex.length,
+      filesScanned: toReindex.length + (followUp?.files ?? 0),
       symbolsFound: totalSymbols,
       edgesFound: totalEdges,
       durationMs: Date.now() - startTime,
@@ -1757,9 +1776,11 @@ export class Scanner {
     // and what the file puts in the global scope, to decide whether by-name referrers do (M2-08-R3).
     const js = JS_TS_FILE.test(relativePath) ? this.jsText(relativePath) : undefined;
     const exportSig = js ? jsExportSignature(js) : undefined;
+    const scopeKey = js ? globalScopeKey(js) : undefined;
     if (result.fileMetadata || js) {
-      this.store.updateFileMetadata(relativePath, { ...result.fileMetadata, ...(js ? { exportSig, globalScope: globalScopeKey(js) } : {}) });
+      this.store.updateFileMetadata(relativePath, { ...result.fileMetadata, ...(js ? { exportSig, globalScope: scopeKey } : {}) });
     }
+    if (js && this.globalScopeWritten) this.globalScopeWritten.set(relativePath, scopeKey!);
     this.store.deleteSymbolsForFile(relativePath);
 
     for (const sym of result.symbols) {
@@ -2055,11 +2076,12 @@ export class Scanner {
    * (M2-08-R3 review, M2-08-R4):
    * - **Edges into it** (a script that became a module, or a module whose `declare global` names
    *   changed): they may no longer reach what their names reached.
-   * - **Names it gained** (a module that became a script, or gained `declare global` names): the ES
-   *   modules whose parse recorded that name as reached under the global rule (`globalNameRefs`) and
-   *   found it nowhere. They have no edge to follow, so one pass over the files' metadata finds them;
-   *   a changed file that gained no name costs nothing, and no file outside the recorded names is
-   *   re-parsed.
+   * - **Names it gained** (a module that gained `declare global` names): the ES modules whose parse
+   *   recorded that name (`globalNameRefs`: every bare name that reached the global rule, whether or not
+   *   a file declared it). Those that found no declaration have no edge to follow, so one pass over the
+   *   files' metadata finds them; a changed file that gained no name costs nothing, and no file outside
+   *   the recorded names is re-parsed. A file that is new or is a script gains the names it declares,
+   *   which only its parse tells: `reindexGlobalRecorders`, once it is parsed (M2-08-R9).
    */
   private globalScopeReferrers(changed: Array<{ path: string; content?: string }>): Set<string> {
     const referrers = new Set<string>();
@@ -2079,15 +2101,152 @@ export class Scanner {
       for (const name of gainedGlobalNames(recorded, js)) gained.add(name);
     }
     if (gained.size) {
-      for (const file of this.store.filesWithMetadataText('"globalNameRefs"')) {
-        let names: unknown;
-        try { names = JSON.parse(String(file.metadata)).globalNameRefs; } catch { continue; }
-        if (Array.isArray(names) && names.some(n => gained.has(n))) referrers.add(String(file.path));
-      }
+      const records = this.globalNameRecords();
+      for (const n of gained) for (const file of records.get(n) ?? []) referrers.add(file);
     }
     return referrers;
   }
 
+  /**
+   * Each bare name some ES module's parse recorded in `globalNameRefs` (M2-08-R4), with the files that
+   * recorded it: one pass over the metadata of the files holding any record.
+   */
+  private globalNameRecords(): Map<string, string[]> {
+    // Once per sync: `startDeferredConsumption` and `reindexGlobalRecorders` drop it (M2-08-R9).
+    if (this.globalRecords) return this.globalRecords;
+    const records = new Map<string, string[]>();
+    this.globalRecords = records;
+    for (const file of this.store.filesWithMetadataText('"globalNameRefs"')) {
+      let names: unknown;
+      try { names = JSON.parse(String(file.metadata)).globalNameRefs; } catch { continue; }
+      if (!Array.isArray(names)) continue;
+      for (const n of names) {
+        if (typeof n !== 'string') continue;
+        const files = records.get(n);
+        if (files) files.push(String(file.path));
+        else records.set(n, [String(file.path)]);
+      }
+    }
+    return records;
+  }
+
+  private globalRecords: Map<string, string[]> | null = null;
+
+  /**
+   * What each file about to be re-indexed put in the global scope, read before its rows are replaced
+   * (M2-08-R9): its recorded key and, for a script, the symbol names it declared. Starts the capture
+   * of the keys the coming writes compute (`globalScopeWritten`).
+   */
+  private globalScopeBefore(paths: string[]): Map<string, { key?: string; symbols?: Set<string> }> {
+    const before = new Map<string, { key?: string; symbols?: Set<string> }>();
+    this.globalScopeWritten = new Map();
+    for (const path of paths) {
+      if (!JS_TS_FILE.test(path)) continue;
+      const stored = this.store.getFile(path);
+      const key = stored ? this.storedMetadata(stored).globalScope : undefined;
+      if (key === 's') before.set(path, { key, symbols: new Set(this.store.getSymbolsForFile(path).map(sym => String(sym.name))) });
+      else before.set(path, typeof key === 'string' ? { key } : {});
+    }
+    // The recorders are read now, before any write: after the first batch commits, nothing but in-memory
+    // work comes before they are queued, so a killed sync cannot lose them (review of M2-08-R9). The
+    // recorders a batch can need are files outside it, which its writes do not change.
+    if (before.size) this.globalNameRecords();
+    return before;
+  }
+
+  private globalScopeWritten: Map<string, string> | null = null;
+
+  /**
+   * After a sync parsed and wrote its files: the ES modules that named a bare name one of them now
+   * declares globally are parsed in a second batch of the same sync (M2-08-R9), with what
+   * `globalScopeReferrers` cannot know before the parse:
+   * - **A script** (new, edited, or a module turned script): the symbols its parse found that it did not
+   *   declare at its last parse as a script (none declared before when new or a module).
+   * - **A new module:** the names in its `declare global` blocks. (A module already indexed is
+   *   `globalScopeReferrers`', which follows its changed key.)
+   * The files recording one of those names (`globalNameRefs`), which no first batch file is, are
+   * parsed: no other file. The parse that tells the names is the sync's own, so a body edit that adds
+   * no symbol costs nothing more than the comparison, and nothing parses a script twice.
+   * Returns what the second batch parsed and wrote, as the first batch reports it.
+   */
+  private async reindexGlobalRecorders(
+    repo: RepoConfig,
+    workspaceRoot: string,
+    ignoredSymbols: ScopedIgnoredSymbols | undefined,
+    startTime: number,
+    before: Map<string, { key?: string; symbols?: Set<string> }>,
+    parsed: Array<{ path: string; result: ParseResult | undefined }>,
+    blobOf: (path: string, bytes: Buffer) => string | null,
+  ): Promise<{ files: number; symbols: number; edges: number; languages: Record<string, number> }> {
+    const none = { files: 0, symbols: 0, edges: 0, languages: {} as Record<string, number> };
+    const written = this.globalScopeWritten;
+    this.globalScopeWritten = null;
+    // Not skipped on abort: the first batch is written, so its recorders must be queued now or the next
+    // sync would find nothing to do (review of M2-08-R9). Only the second batch's parse is skipped.
+    if (!written?.size) { this.globalRecords = null; return none; }
+    const gained = new Set<string>();
+    for (const { path, result } of parsed) {
+      const key = written.get(path);
+      const was = before.get(path);
+      if (key === undefined || !was || !result) continue;
+      if (key === 's') {
+        for (const sym of result.symbols) if (!was.symbols?.has(sym.name)) gained.add(sym.name);
+      } else if (was.key === undefined) {
+        for (const n of key.slice(2).split(',')) if (n) gained.add(n);
+      }
+    }
+    if (!gained.size) { this.globalRecords = null; return none; }
+    const records = this.globalNameRecords();
+    const done = new Set(parsed.map(p => p.path));
+    const recorders = new Set<string>();
+    for (const n of gained) for (const file of records.get(n) ?? []) if (!done.has(file)) recorders.add(file);
+    this.globalRecords = null;
+    const paths = [...this.ownReferrers(repo.name, recorders)].filter(p => this.store.getFile(p)?.repo === repo.name);
+    if (!paths.length) return none;
+    // Queued until written, as soon as they are known: a sync killed or aborted from here on leaves them
+    // for the next one (M0-02-R11).
+    this.queueReferrers(repo.name, paths);
+    if (this.aborted) return none;
+
+    const files: Array<{ path: string; info: FileInfo; contentHash: string; blobHash: string | null }> = [];
+    for (const path of paths) {
+      const absolutePath = resolve(workspaceRoot, path);
+      const info = existsSync(absolutePath) ? await this.getFileInfo(absolutePath, path) : null;
+      if (!info) continue;
+      const bytes = await readFile(absolutePath);
+      files.push({ path, info, contentHash: createHash('md5').update(bytes.toString('utf-8')).digest('hex'), blobHash: blobOf(path, bytes) });
+    }
+    if (!files.length) return none;
+    this.store.inTransaction(() => {
+      for (const { path, info } of files) {
+        this.store.deleteSymbolsForFile(path);
+        this.store.deleteEdgesForFile(path);
+        this.store.upsertFile({
+          path, repo: repo.name, language: info.language, gitBlobHash: null, contentHash: null, lastScanned: UNSCANNED,
+          sizeBytes: info.sizeBytes, lines: info.lines,
+        });
+        this.graph.addFileNode(path, info.language, info.sizeBytes, info.lines);
+      }
+    });
+    this.noteParsed(repo.name, files.map(f => f.path));
+    const results = await this.parseFilesParallel(files.map(f => f.info), workspaceRoot, ignoredSymbols);
+    this.symbolIndex = this.buildSymbolIndex(repo.name, files.map(f => f.path), results);
+    const out = { ...none, languages: {} as Record<string, number> };
+    this.store.inTransaction(() => {
+      for (let i = 0; i < files.length && !this.aborted; i++) {
+        const { path, info, contentHash, blobHash } = files[i]!;
+        this.writeParseResult(path, results[i]!, repo.name);
+        this.store.setFileHashes(path, contentHash, blobHash, new Date(startTime).toISOString());
+        out.files++;
+        out.symbols += results[i]!.symbols.length;
+        out.edges += results[i]!.references.length;
+        out.languages[info.language] = (out.languages[info.language] ?? 0) + 1;
+      }
+      const left = (JSON.parse(this.store.getMeta('pending_referrers:' + repo.name) ?? '[]') as string[]).filter(p => !paths.includes(p));
+      this.store.setMeta('pending_referrers:' + repo.name, JSON.stringify(left));
+    });
+    return out;
+  }
   /**
    * Whether a module's export signature differs from the one its last parse recorded (D032). Only
    * JS/TS modules record one; any other module, or one never recorded, counts as changed.
@@ -4785,6 +4944,9 @@ export class Scanner {
 
   private startDeferredConsumption(): void {
     this.deferredConsumption = [];
+    // A sync reads the recorded global names once; a long-lived scanner starts each one afresh (M2-08-R9).
+    this.globalRecords = null;
+    this.globalScopeWritten = null;
   }
 
   private consumeLater(consume: () => void): void {
@@ -6069,6 +6231,7 @@ export class Scanner {
       };
     }
 
+    const globalBefore = this.globalScopeBefore(toReindex.map(f => f.relativePath));
     this.store.inTransaction(() => {
       this.applyDeferredConsumption();
       for (const f of toReindex) {
@@ -6156,6 +6319,15 @@ export class Scanner {
     // Release content and index
     for (const f of discovered) { (f as any).content = undefined; }
 
+    // The files that named a bare name a file just parsed declares globally (M2-08-R9).
+    const followUp = await this.reindexGlobalRecorders(repo, workspaceRoot, ignoredSymbols, startTime, globalBefore,
+      toReindex.map((f, i) => ({ path: f.relativePath, result: parseResults[i] })), () => null);
+    if (followUp) {
+      totalSymbols += followUp.symbols;
+      totalEdges += followUp.edges;
+      for (const [lang, n] of Object.entries(followUp.languages)) langBreakdown[lang] = (langBreakdown[lang] || 0) + n;
+    }
+
     if (!this.aborted) {
       this.settleMovedNames(repo.name, parseResults.slice(0, changed.length));
       this.settleVanishedNames(repo.name, parseResults.slice(0, changed.length));
@@ -6171,7 +6343,7 @@ export class Scanner {
     }
 
     return {
-      filesScanned: toReindex.length,
+      filesScanned: toReindex.length + (followUp?.files ?? 0),
       symbolsFound: totalSymbols,
       edgesFound: totalEdges,
       durationMs: Date.now() - startTime,

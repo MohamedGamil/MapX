@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { declaredGlobalNames } from '../src/core/js-source.js';
 import { Config } from '../src/core/config.js';
@@ -443,6 +443,208 @@ describe.each([['git', true], ['hash', false]])('%s sync when a file gains globa
     expect(updated(mapx(root, 'sync', '.'))).toBe('1');
     expect(edgesFrom(root, 'legacy/use.ts')).toEqual(['usePlain call legacy/plain.ts#plainGlobal']);
   }, 120_000);
+});
+
+// M2-08-R9: the same names, gained by a file that is new or by a script that stays a script. A new
+// script, a renamed file turned script, a global function added to a script and a `declare global`
+// in a new file make names global that modules already named and found nowhere. Sync re-parses the
+// modules whose parse recorded one of the names (`globalNameRefs`), and only those: the names are the
+// declarations the file makes, not every word in it.
+describe.each([['git', true], ['hash', false]])('%s sync when a new or edited file declares global names (M2-08-R9)', (_mode, useGit) => {
+  let root: string;
+  beforeEach(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+      // Modules naming a function, a class or a type no file declares yet.
+      'use/a.ts': 'export function a1() { return newScriptFn(); }\n',
+      'use/c.ts': 'export function c1() { return addedFn(); }\n',
+      'use/d.ts': 'export class D {\n  constructor(private d: LateDecl) {}\n}\n',
+      'use/e.ts': 'export function e1() { return movedFn(); }\n',
+      'use/t.ts': 'export class T {\n  constructor(private t: AmbientLate) {}\n}\n',
+      // A module that records another un-imported name, which no file declares.
+      'use/bystander.ts': 'export function other() { return missingName(); }\n',
+      // A script that stays a script, a module that is renamed, and two scripts to shrink or delete.
+      'lib/s.ts': 'function oldFn() { return 1; }\n',
+      // Records `oldFn` too, though the script declares it already: an edit that adds nothing leaves it.
+      'use/o.ts': 'export function o1() { return oldFn(); }\n',
+      'lib/g.ts': 'export var gone = 1;\n',
+      'lib/shrink.ts': 'function keepFn() { return 1; }\nfunction dropFn() { return 2; }\n',
+      'lib/doomed.ts': 'function doomedFn() { return 1; }\n',
+      'use/r.ts': 'export function r1() { return dropFn() + keepFn(); }\n',
+      'use/r2.ts': 'export function r2() { return doomedFn(); }\n',
+      // A module that becomes a script.
+      'legacy/plain.ts': 'export function plainGlobal() { return 1; }\n',
+      'legacy/use.ts': 'export function usePlain() { return plainGlobal(); }\n',
+    });
+    if (useGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    }
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120_000);
+  afterEach(() => cleanup(root));
+
+  const all = () => query<Edge>(root, `SELECT source_file, source_symbol, edge_type, target_file, target_symbol FROM edges
+    WHERE edge_type NOT IN ('import', 'require') ORDER BY 1, 2, 3, 4, 5`);
+  const updated = (output: string) => /Updated (\d+) files/.exec(output)?.[1];
+  const sameAsForce = () => {
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(all()).toEqual(synced);
+  };
+
+  it('a new script declaring a name a module calls links it, re-parsing only the files that name its declarations', () => {
+    expect(edgesFrom(root, 'use/a.ts')).toEqual([]);
+    writeFileSync(join(root, 'lib/new.ts'), 'function newScriptFn() { return missingName(); }\nfunction unrelated() { return missingName; }\n');
+    // The new script and `a.ts`. Not `bystander.ts`: `missingName` is a word of the script, which it uses and does not declare.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'use/a.ts')).toEqual(['a1 call lib/new.ts#newScriptFn']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a new script none of whose declarations a module names re-parses only itself', () => {
+    writeFileSync(join(root, 'lib/quiet.ts'), 'function quietFn() { return missingName(); }\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    sameAsForce();
+  }, 120_000);
+
+  it('a module renamed and turned script links the module that names its function', () => {
+    expect(edgesFrom(root, 'use/e.ts')).toEqual([]);
+    if (useGit) git(root, 'mv', 'lib/g.ts', 'lib/h.ts');
+    else renameSync(join(root, 'lib/g.ts'), join(root, 'lib/h.ts'));
+    writeFileSync(join(root, 'lib/h.ts'), 'function movedFn() { return 1; }\n');
+    // The new `h.ts` and `e.ts`.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'use/e.ts')).toEqual(['e1 call lib/h.ts#movedFn']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a function added to an existing script links the module that names it', () => {
+    expect(edgesFrom(root, 'use/c.ts')).toEqual([]);
+    writeFileSync(join(root, 'lib/s.ts'), 'function oldFn() { return 1; }\nfunction addedFn() { return 2; }\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'use/c.ts')).toEqual(['c1 call lib/s.ts#addedFn']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a body edit of a script, with words other modules recorded, re-parses only the script', () => {
+    writeFileSync(join(root, 'lib/s.ts'), 'function oldFn() { return [missingName, addedFn, 3]; }\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    expect(edgesFrom(root, 'use/c.ts')).toEqual([]);
+    expect(edgesFrom(root, 'use/o.ts')).toEqual(['o1 call lib/s.ts#oldFn']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a new file with `declare global` links the module that names the class', () => {
+    expect(edgesFrom(root, 'use/d.ts')).toEqual([]);
+    mkdirSync(join(root, 'types'), { recursive: true });
+    writeFileSync(join(root, 'types/decl.ts'), 'export {};\ndeclare global {\n  class LateDecl {}\n  class Unwanted {}\n}\nexport function notGlobal() { return missingName(); }\n');
+    // The new file and `d.ts`: `bystander.ts` names a name the file's module code merely uses.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'use/d.ts')).toEqual(['D::constructor param_type types/decl.ts#LateDecl']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a new global .d.ts declaration links the module that names the type', () => {
+    mkdirSync(join(root, 'types'), { recursive: true });
+    writeFileSync(join(root, 'types/globals.d.ts'), 'declare class AmbientLate {}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'use/t.ts')).toEqual(['T::constructor param_type types/globals.d.ts#AmbientLate']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a module edited into a script re-parses only the modules that name what it declares, not what it uses', () => {
+    writeFileSync(join(root, 'legacy/plain.ts'), 'function plainGlobal() { return missingName(); }\n');
+    // The edited file and `use.ts`; `bystander.ts` records `missingName`, which the script only uses.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'legacy/use.ts')).toEqual(['usePlain call legacy/plain.ts#plainGlobal']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a global removed from a script drops the module\'s edge by the edge it had, re-parsing only that module', () => {
+    expect(edgesFrom(root, 'use/r.ts')).toEqual(['r1 call lib/shrink.ts#dropFn', 'r1 call lib/shrink.ts#keepFn']);
+    writeFileSync(join(root, 'lib/shrink.ts'), 'function keepFn() { return 1; }\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'use/r.ts')).toEqual(['r1 call lib/shrink.ts#keepFn']);
+    sameAsForce();
+  }, 120_000);
+
+  it('a script removed drops the module\'s edge with it: nothing is left to re-parse', () => {
+    expect(edgesFrom(root, 'use/r2.ts')).toEqual(['r2 call lib/doomed.ts#doomedFn']);
+    if (useGit) git(root, 'rm', '-q', 'lib/doomed.ts');
+    else rmSync(join(root, 'lib/doomed.ts'));
+    // The edge into the file goes with its rows; `r2.ts` has no other declaration to reach.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('0');
+    expect(edgesFrom(root, 'use/r2.ts')).toEqual([]);
+    sameAsForce();
+  }, 120_000);
+
+  it('a rescan without --force links the module that names a new script\'s function', () => {
+    writeFileSync(join(root, 'lib/new.ts'), 'function newScriptFn() { return 1; }\n');
+    mapx(root, 'scan', '.');
+    expect(edgesFrom(root, 'use/a.ts')).toEqual(['a1 call lib/new.ts#newScriptFn']);
+    sameAsForce();
+  }, 120_000);
+});
+
+// The names a script declares come from the parse the sync runs anyway: no script is parsed twice, and
+// the modules that named a gained name are parsed in a second batch of the same sync.
+describe('a sync parses each file once, the recorders of a gained name in a second batch (M2-08-R9)', () => {
+  let root: string;
+  afterEach(() => cleanup(root));
+
+  it('a body edit parses the script; a new declaration adds the modules that named it', async () => {
+    root = workspace({
+      'use/a.ts': 'export function a1() { return addedFn(); }\nexport function a2() { return oldFn(); }\n',
+      'use/b.ts': 'export function b1() { return missingName(); }\n',
+      'lib/s.ts': 'function oldFn() { return 1; }\n',
+      'lib/mod.ts': 'export {};\ndeclare global {\n  class EarlyT {}\n}\n',
+      'use/t.ts': 'export class T {\n  constructor(private t: LateT) {}\n}\n',
+    });
+    const config = await Config.load(root);
+    const store = new Store(':memory:');
+    const scanner = new Scanner(store, config, new MapxGraph(config.repos[0]!.name));
+    const batches: string[][] = [];
+    const parseFiles = (scanner as unknown as { parseFilesParallel: (files: Array<{ absolutePath: string }>, ...rest: unknown[]) => Promise<unknown> }).parseFilesParallel;
+    vi.spyOn(scanner as unknown as { parseFilesParallel: typeof parseFiles }, 'parseFilesParallel').mockImplementation(function (this: unknown, files, ...rest) {
+      batches.push(files.map((f) => f.absolutePath.slice(root.length + 1)).sort());
+      return parseFiles.call(this, files, ...rest);
+    });
+    const calls = () => store.getAllEdges().filter((e) => e.source_file === 'use/a.ts' && e.edge_type === 'call')
+      .map((e) => `${e.target_file}#${e.target_symbol}`).sort();
+    await scanner.scanFull();
+    expect(calls()).toEqual(['lib/s.ts#oldFn']);
+    // Words nobody declares, and `oldFn`, which the script declared at its last parse: one batch, no recorder.
+    batches.length = 0;
+    writeFileSync(join(root, 'lib/s.ts'), 'function oldFn() { return unrecorded + missingName + 2; }\n');
+    await scanner.scanIncremental();
+    expect(batches).toEqual([['lib/s.ts']]);
+    // `addedFn` is declared: the script, then the one module that named it (not `b.ts`).
+    batches.length = 0;
+    writeFileSync(join(root, 'lib/s.ts'), 'function oldFn() { return 1; }\nfunction addedFn() { return 2; }\n');
+    await scanner.scanIncremental();
+    expect(batches).toEqual([['lib/s.ts'], ['use/a.ts']]);
+    expect(calls()).toEqual(['lib/s.ts#addedFn', 'lib/s.ts#oldFn']);
+    // The queue the second batch used is empty again.
+    expect(store.getMeta('pending_referrers:' + config.repos[0]!.name)).toBe('[]');
+    // A module gaining a `declare global` name and a script gaining a function in one sync: the
+    // recorded names are read from the metadata once, and no second batch (`t.ts` names the module's).
+    const records = vi.spyOn(store, 'filesWithMetadataText');
+    batches.length = 0;
+    writeFileSync(join(root, 'lib/mod.ts'), 'export {};\ndeclare global {\n  class EarlyT {}\n  class LateT {}\n}\n');
+    writeFileSync(join(root, 'lib/s.ts'), 'function oldFn() { return 1; }\nfunction addedFn() { return 2; }\nfunction extraFn() { return 3; }\n');
+    await scanner.scanIncremental();
+    expect(batches).toEqual([['lib/mod.ts', 'lib/s.ts', 'use/t.ts']]);
+    expect(records.mock.calls.filter(([key]) => key === '"globalNameRefs"')).toHaveLength(1);
+    // A module that named the gained name and is edited in the same sync is parsed once, in the first batch.
+    batches.length = 0;
+    writeFileSync(join(root, 'use/b.ts'), 'export function b1() { return missingName(); }\n// edited\n');
+    writeFileSync(join(root, 'lib/s.ts'), 'function oldFn() { return 1; }\nfunction addedFn() { return 2; }\nfunction extraFn() { return 3; }\nfunction missingName() { return 4; }\n');
+    await scanner.scanIncremental();
+    expect(batches).toEqual([['lib/s.ts', 'use/b.ts']]);
+  }, 120000);
 });
 
 describe('auto-imported names (real scan)', () => {

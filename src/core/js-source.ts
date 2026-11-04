@@ -367,16 +367,13 @@ export function globalScopeKey(js: JsText): string {
 }
 
 /**
- * The names a file's global scope gained since the parse that recorded `recorded` (a
- * `globalScopeKey`) (M2-08-R4):
- * - **Now a script:** every identifier in its text. A script's symbols (functions, variables, class
- *   members, object-literal methods, member assignments) are all reachable by bare name, so the
- *   identifiers are a superset of them without parsing the file; a file that shares one of them
- *   with a mere reference is re-parsed for nothing, never linked wrongly.
- * - **A module:** the `declare global` names the recorded key lacks (all of them after a script).
+ * The names a module's global scope gained since the parse that recorded `recorded` (a
+ * `globalScopeKey`) (M2-08-R4): the `declare global` names the recorded key lacks (all of them after
+ * a script). A script gains no name here: what its declarations are is known only by parsing it, so
+ * sync reads them from the parse it runs anyway (`reindexGlobalRecorders`, M2-08-R9).
  */
 export function gainedGlobalNames(recorded: string, js: JsText): string[] {
-  if (!hasModuleSyntax(js)) return [...new Set(js.masked.match(/[A-Za-z_$][\w$]*/g) ?? [])];
+  if (!hasModuleSyntax(js)) return [];
   const before = new Set(recorded.startsWith('m:') ? recorded.slice(2).split(',').filter(Boolean) : []);
   return declaredGlobalNames(js).filter(n => !before.has(n));
 }

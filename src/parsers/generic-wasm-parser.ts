@@ -753,13 +753,15 @@ export class GenericWasmParser implements LanguageParser {
     const symbols: ExtractedSymbol[] = [];
     const references: ExtractedReference[] = [];
     let ambient: ParseResult['ambient'];
+    let parsed: Awaited<ReturnType<typeof parseWithQueries>> | undefined;
 
     try {
-      const { symbols: symCaptures, references: refCaptures, nameByNodeId, scopeByNodeId } = await parseWithQueries(
+      parsed = await parseWithQueries(
         source, this.language, this.symbolsQuery!, this.referencesQuery!,
         // JS/TS, Python and Go files: the ambient accesses (environment, globals), M5-24-R1.
         (root) => { ambient = ambientAccesses(this.languageName, root, source); },
       );
+      const { symbols: symCaptures, references: refCaptures, nameByNodeId, scopeByNodeId } = parsed;
 
       let currentScope: string | null = null;
       const scopeCache = newScopeCache();
@@ -1044,6 +1046,9 @@ export class GenericWasmParser implements LanguageParser {
       }
     } catch (e: any) {
       errors.push({ message: e.message, line: 0 });
+    } finally {
+      // The nodes are read; free the tree (M2-08-R9).
+      parsed?.dispose();
     }
 
     return { symbols, references, errors, ...(ambient ? { ambient } : {}) };

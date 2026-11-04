@@ -61,6 +61,12 @@ export interface ParsedCaptures {
   references: Map<string, QueryCapture[]>;
   nameByNodeId: Map<number, string>;
   scopeByNodeId: Map<number, string>;
+  /**
+   * Frees the syntax tree, which lives in WASM memory and has no finalizer: call it once the captures'
+   * nodes are no longer read. A long-lived process (`mapx serve`, a pooled worker) otherwise grows by a
+   * tree per parse (M2-08-R9).
+   */
+  dispose: () => void;
 }
 
 /**
@@ -114,63 +120,68 @@ export async function parseWithQueries(
   const parser = getPooledParser(language);
   const tree = parser.parse(source);
   if (!tree) {
-    return { symbols: new Map(), references: new Map(), nameByNodeId: new Map(), scopeByNodeId: new Map() };
+    return { symbols: new Map(), references: new Map(), nameByNodeId: new Map(), scopeByNodeId: new Map(), dispose: () => {} };
   }
 
-  const symbolCaptures = new Map<string, QueryCapture[]>();
-  const refCaptures = new Map<string, QueryCapture[]>();
-  const nameByNodeId = new Map<number, string>();
-  const scopeByNodeId = new Map<number, string>();
+  try {
+    const symbolCaptures = new Map<string, QueryCapture[]>();
+    const refCaptures = new Map<string, QueryCapture[]>();
+    const nameByNodeId = new Map<number, string>();
+    const scopeByNodeId = new Map<number, string>();
 
-  const symQuery = compiledQuery(language, symbolsQuery);
-  if (symQuery) {
-    const symMatches = symQuery.captures(tree.rootNode);
-    const kindNodeIds = new Set<number>();
-    for (const capture of symMatches) {
-      const existing = symbolCaptures.get(capture.name) || [];
-      existing.push(capture);
-      symbolCaptures.set(capture.name, existing);
+    const symQuery = compiledQuery(language, symbolsQuery);
+    if (symQuery) {
+      const symMatches = symQuery.captures(tree.rootNode);
+      const kindNodeIds = new Set<number>();
+      for (const capture of symMatches) {
+        const existing = symbolCaptures.get(capture.name) || [];
+        existing.push(capture);
+        symbolCaptures.set(capture.name, existing);
 
-      if (capture.name.startsWith('symbol.kind_')) {
-        kindNodeIds.add(capture.node.id);
-      }
-    }
-    for (const capture of symMatches) {
-      if (capture.name === 'symbol.name') {
-        let node: any = capture.node.parent;
-        while (node) {
-          if (kindNodeIds.has(node.id)) {
-            nameByNodeId.set(node.id, capture.node.text);
-            break;
-          }
-          node = node.parent;
-        }
-      } else if (capture.name === 'symbol.scope') {
-        let node: any = capture.node.parent;
-        while (node) {
-          if (kindNodeIds.has(node.id)) {
-            scopeByNodeId.set(node.id, capture.node.text);
-            break;
-          }
-          node = node.parent;
+        if (capture.name.startsWith('symbol.kind_')) {
+          kindNodeIds.add(capture.node.id);
         }
       }
+      for (const capture of symMatches) {
+        if (capture.name === 'symbol.name') {
+          let node: any = capture.node.parent;
+          while (node) {
+            if (kindNodeIds.has(node.id)) {
+              nameByNodeId.set(node.id, capture.node.text);
+              break;
+            }
+            node = node.parent;
+          }
+        } else if (capture.name === 'symbol.scope') {
+          let node: any = capture.node.parent;
+          while (node) {
+            if (kindNodeIds.has(node.id)) {
+              scopeByNodeId.set(node.id, capture.node.text);
+              break;
+            }
+            node = node.parent;
+          }
+        }
+      }
     }
-  }
 
-  const refQuery = compiledQuery(language, referencesQuery);
-  if (refQuery) {
-    const refMatches = refQuery.captures(tree.rootNode);
-    for (const capture of refMatches) {
-      const existing = refCaptures.get(capture.name) || [];
-      existing.push(capture);
-      refCaptures.set(capture.name, existing);
+    const refQuery = compiledQuery(language, referencesQuery);
+    if (refQuery) {
+      const refMatches = refQuery.captures(tree.rootNode);
+      for (const capture of refMatches) {
+        const existing = refCaptures.get(capture.name) || [];
+        existing.push(capture);
+        refCaptures.set(capture.name, existing);
+      }
     }
+
+    inspect?.(tree.rootNode);
+
+    return { symbols: symbolCaptures, references: refCaptures, nameByNodeId, scopeByNodeId, dispose: () => tree.delete() };
+  } catch (e) {
+    tree.delete();
+    throw e;
   }
-
-  inspect?.(tree.rootNode);
-
-  return { symbols: symbolCaptures, references: refCaptures, nameByNodeId, scopeByNodeId };
 }
 
 export async function loadQueryFile(queryPath: string): Promise<string> {
