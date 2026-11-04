@@ -16798,14 +16798,22 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-I3",
       "actualHours": null,
       "startedAt": "2026-11-04T02:16:42.307Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T04:38:27.844Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-16-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-16-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T00:11:00.594Z",
@@ -16818,6 +16826,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:27.389Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:27.844Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-16-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -16869,14 +16895,22 @@
         "npx vitest run tests/arch-smells.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-I2",
       "actualHours": null,
       "startedAt": "2026-11-04T02:16:41.605Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T04:38:26.916Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-16-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-smells.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-16-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T00:11:00.196Z",
@@ -16889,6 +16923,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:26.457Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:26.916Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-smells.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-16-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -16961,8 +17013,8 @@
     {
       "id": "M5-16-R4",
       "milestone": "M5",
-      "title": "score-arch labels dead-allowance, weak-allowance, unstable-layer-dependency and abstractness-distance",
-      "objective": "The arch-rules fixture labels the four smells M5-16-R1 left unscored (they need per-edge counts), with evidence per row, and score-arch reports them at 1.0.",
+      "title": "score-arch labels the remaining smell kinds and the ambient apps",
+      "objective": "The arch-rules fixture labels the four smells M5-16-R1 left unscored (they need per-edge counts), with evidence per row, and score-arch reports them at 1.0. It also labels the smells of the four ambient apps (go-ambient, php-ambient, python-ambient, ts-ambient), which joined after M5-16-R1 and claim no complete kind.",
       "description": "M5-16-R1 limitation (2026-11-04): four smell kinds are not labelled.",
       "priority": "P3",
       "estimate": {
@@ -16978,6 +17030,10 @@
         {
           "id": "M5-16-R1",
           "type": "hard"
+        },
+        {
+          "id": "M5-24-R1",
+          "type": "fixture"
         }
       ],
       "optionalDependencies": [],
@@ -16994,7 +17050,7 @@
         "scripts/eval/score-arch.ts"
       ],
       "acceptanceCriteria": [
-        "score-arch --json smells section covers all smell kinds at recall and precision 1.0 on labelled rows."
+        "score-arch --json smells section covers all smell kinds at recall and precision 1.0 on labelled rows, and every arch-rules app, the ambient apps included, has a non-empty complete list."
       ],
       "verificationCommands": [
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
@@ -17835,23 +17891,60 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [
-        "Owner decision: support user plugin selectors/rules (and the trust model for loading project code) or defer REQ-ARCH-023."
-      ],
+      "blockingConditions": [],
       "sources": [
         "docs/baton/reports/M5-98.md",
         "docs/research/deptrac/05-requirements.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T04:38:29.762Z",
+      "completedAt": "2026-11-04T04:38:30.706Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M5-98-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-98-R2.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T04:38:29.275Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:29.762Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:30.241Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:30.706Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-98-R2.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -17859,7 +17952,7 @@
       "id": "M5-98-R2",
       "title": "User plugin selectors and rules, or a recorded decision to defer them",
       "objective": "Either a documented extension point for user-defined selectors and rules (loaded from the project, sandboxed, versioned API) or an owner decision recorded in DECISIONS.md deferring REQ-ARCH-023.",
-      "description": "M5-98 audit (2026-11-04): REQ-ARCH-023 (user plugins) has no task. Needs an owner decision first (security and API surface).",
+      "description": "M5-98 audit (2026-11-04): REQ-ARCH-023 (user plugins) has no task. Needs an owner decision first (security and API surface). Owner decision D040 (2026-11-04): defer.",
       "outputs": [
         "docs/baton/DECISIONS.md",
         "reports/M5-98-R2.md"
@@ -22511,14 +22604,27 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-K",
       "actualHours": null,
       "startedAt": "2026-11-04T02:18:18.476Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T04:38:28.789Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-24-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-24-R1.md"
+        },
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-24-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T02:18:18.015Z",
@@ -22531,6 +22637,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:28.307Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:28.789Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-24-R1.md"
+            },
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-24-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -22589,14 +22718,22 @@
         "npx vitest run tests/external-refs.test.ts tests/arch-hierarchy.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-I",
       "actualHours": null,
       "startedAt": "2026-11-04T00:11:02.136Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T04:38:25.991Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-24-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts tests/arch-hierarchy.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-24-R2.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T00:10:59.768Z",
@@ -22609,6 +22746,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:25.523Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T04:38:25.991Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts tests/arch-hierarchy.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-24-R2.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -33071,6 +33226,144 @@
       "verificationCommands": [
         "npx playwright test tests/ui/perf-scale.spec.ts"
       ]
+    },
+    {
+      "id": "M5-24-R5",
+      "milestone": "M5",
+      "title": "Ambient access: the sources M5-24-R1 left out",
+      "objective": "Ambient access is recorded in Vue and Svelte single-file components, and for `process.argv`, `sessionStorage`, PHP `$argv`, `import { env } from \"node:process\"` and Python `global` declarations, with the same shadowing rules as M5-24-R1.",
+      "description": "M5-24-R1 limitation (2026-11-04); owner D040: register as a follow-up.",
+      "priority": "P3",
+      "estimate": {
+        "min": 4,
+        "expected": 6,
+        "max": 10
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-24-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-24-R1.md"
+      ],
+      "outputs": [
+        "src/parsers/ambient.ts",
+        "tests/ambient-access.test.ts",
+        "tests/fixtures/arch-rules/expected-externals.json",
+        "reports/M5-24-R5.md"
+      ],
+      "affectedFiles": [
+        "src/parsers/ambient.ts",
+        "src/parsers/languages/vue.ts",
+        "src/parsers/languages/svelte.ts",
+        "src/parsers/generic-wasm-parser.ts",
+        "src/core/extractor-version.ts",
+        "tests/ambient-access.test.ts",
+        "tests/external-refs.test.ts",
+        "tests/fixtures/arch-rules/**",
+        "docs/architecture-rules.md"
+      ],
+      "acceptanceCriteria": [
+        "Labelled ambient rows for a .vue and a .svelte component, process.argv, sessionStorage, PHP $argv, the named node:process env import and a Python global reach recall and precision 1.0 in score-arch externals; no existing label changes; shadowing negatives give no row (tests/ambient-access.test.ts)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ambient-access.test.ts tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false
+    },
+    {
+      "id": "M5-24-R6",
+      "milestone": "M5",
+      "title": "Ambient access gets its own reference kind",
+      "objective": "Ambient rows are stored with a dedicated `ambient` kind instead of `call`, selectable in `scope.types` and edge-type-scoped allowances, with a store migration and every consumer (arch schema, evaluator, reporters, MCP, dashboard, export) updated.",
+      "description": "M5-24-R1 reused kind `call` to avoid a schema change; owner D040: register a dedicated edge type.",
+      "priority": "P3",
+      "estimate": {
+        "min": 4,
+        "expected": 8,
+        "max": 14
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-24-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [
+        "M5-24-R5"
+      ],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-24-R1.md"
+      ],
+      "outputs": [
+        "src/core/store.ts",
+        "src/arch/schema.ts",
+        "schemas/architecture.schema.json",
+        "reports/M5-24-R6.md"
+      ],
+      "affectedFiles": [
+        "src/core/store.ts",
+        "src/core/extractor-version.ts",
+        "src/arch/schema.ts",
+        "src/arch/config.ts",
+        "src/arch/evaluate.ts",
+        "src/arch/mcp-tools.ts",
+        "src/cli.ts",
+        "schemas/**",
+        "src/parsers/ambient.ts",
+        "tests/ambient-access.test.ts",
+        "tests/external-refs.test.ts",
+        "tests/store-migrations.test.ts",
+        "docs/architecture-rules.md"
+      ],
+      "acceptanceCriteria": [
+        "A scan stores ambient rows with kind `ambient` (test); the default scope.types includes it so default results are unchanged (score-arch byte-identical apart from kind); `scope.types` without `ambient` drops them and an allowance scoped to `ambient` admits them (test); an index of the previous schema migrates or re-parses (test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/ambient-access.test.ts tests/external-refs.test.ts",
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false
     }
   ]
 }

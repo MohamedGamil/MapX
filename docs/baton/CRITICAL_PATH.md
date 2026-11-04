@@ -6,17 +6,12 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **127 / 222 / 334h**. Capacity: 1 engineer(s) × 20 h/week → **11.1 weeks**, conditional finish **2027-01-20** (as of 2026-11-04).
+Remaining effort min/expected/max: **121 / 208 / 312h**. Capacity: 1 engineer(s) × 20 h/week → **10.4 weeks**, conditional finish **2027-01-15** (as of 2026-11-04).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
-- M5-16-R1 (IN_PROGRESS): prerequisites satisfied
-- M5-16-R2 (IN_PROGRESS): prerequisites satisfied
-- M5-16-R3 (BACKLOG): M5-16-R2
-- M5-16-R4 (BACKLOG): M5-16-R1
-- M5-98-R2 (BACKLOG): Owner decision: support user plugin selectors/rules (and the trust model for loading project code) or defer REQ-ARCH-023.
-- M5-24-R1 (BACKLOG): prerequisites satisfied
-- M5-24-R2 (IN_PROGRESS): prerequisites satisfied
+- M5-16-R3 (BACKLOG): prerequisites satisfied
+- M5-16-R4 (BACKLOG): prerequisites satisfied
 - M4-22-R1 (BACKLOG): prerequisites satisfied
 - M4-13-R1 (BACKLOG): Owner hold (D035, 2026-11-03): start only when the owner explicitly asks.
 - M2-08-R6 (BACKLOG): prerequisites satisfied
@@ -49,18 +44,15 @@ Remaining effort min/expected/max: **127 / 222 / 334h**. Capacity: 1 engineer(s)
 - M6-08 (BACKLOG): M6-01
 - M6-09 (BACKLOG): M6-01
 - M6-98 (BACKLOG): M6-04; M6-05; M6-06; M6-07; M6-08; M6-09
+- M5-24-R5 (BACKLOG): prerequisites satisfied
+- M5-24-R6 (BACKLOG): prerequisites satisfied
 
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
 |---|---:|---:|---:|---:|---:|
 | M5-15-R1 | 0 | 8 | 43 | 51 | 43 |
-| M5-16-R1 | 0 | 4 | 44 | 48 | 44 |
-| M5-16-R2 | 0 | 4 | 44 | 48 | 44 |
-| M5-16-R3 | 4 | 7 | 48 | 51 | 44 |
-| M5-16-R4 | 4 | 7 | 48 | 51 | 44 |
-| M5-98-R2 | 0 | 8 | 43 | 51 | 43 |
-| M5-24-R1 | 0 | 8 | 43 | 51 | 43 |
-| M5-24-R2 | 0 | 4 | 47 | 51 | 47 |
+| M5-16-R3 | 0 | 3 | 48 | 51 | 48 |
+| M5-16-R4 | 0 | 3 | 48 | 51 | 48 |
 | M4-22-R1 | 0 | 1 | 50 | 51 | 50 |
 | M4-13-R1 | 0 | 2 | 49 | 51 | 49 |
 | M2-08-R6 | 0 | 4 | 47 | 51 | 47 |
@@ -93,3 +85,5 @@ Remaining effort min/expected/max: **127 / 222 / 334h**. Capacity: 1 engineer(s)
 | M6-08 | 8 | 18 | 38 | 48 | 30 |
 | M6-09 | 8 | 14 | 42 | 48 | 34 |
 | M6-98 | 48 | 51 | 48 | 51 | 0 |
+| M5-24-R5 | 0 | 6 | 45 | 51 | 45 |
+| M5-24-R6 | 0 | 8 | 43 | 51 | 43 |

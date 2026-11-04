@@ -421,3 +421,13 @@ Does not opt in:
 - a package selector only in overlay layers (a dev-only overlay alone, for example), since overlays never cover.
 
 An explicit `policy.uncovered.externals` always wins.
+
+## D040 — Owner answers of 2026-11-04 (Q&A)
+
+- **User plugins (REQ-ARCH-023) are deferred.** Architecture rules keep the built-in selectors, rules and presets only. MapX never loads or executes project code to extend them. M5-98-R2 closes on this decision; REQ-ARCH-023 stays unmet by choice, not by omission.
+- **Ambient access gaps are follow-ups.** The M5-24-R1 limitations are registered, not started:
+  - **M5-24-R5:** the sources M5-24-R1 left out (Vue and Svelte single-file components, `process.argv`, `sessionStorage`, PHP `$argv`, `import { env } from 'node:process'`, Python `global`).
+  - **M5-24-R6:** a dedicated `ambient` reference kind instead of `call`, with a store migration and every consumer updated.
+- **v0.3.9 moves to the latest commit.** The local tag `v0.3.9` is re-pointed at the commit that documents everything since its first tagging (CHANGELOG `[0.3.9]` dated 2026-11-04). The release build in `dist/release/` and the `~/.local/bin/mapx` install are rebuilt from that commit. Nothing is pushed or published (D007, D039).
+- **Next work: none until the owner says.** After the release and cleanup, no lane starts. M4-13-R1 (D035) and M6 (D038) stay held, and the remaining BACKLOG defects and M5 P3 follow-ups wait for an explicit start.
+- **README:** the "Publishing to npm" section is removed (owner request); publishing stays the owner's, outside the README.

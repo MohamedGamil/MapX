@@ -1,6 +1,16 @@
 # MapX project state
 
-Updated 2026-11-03 (release). Version 0.3.9, tagged `v0.3.9` and installed as the Linux binary in `~/.local/bin` (D037); nothing is published or pushed. `EXTRACTOR_VERSION` is 15.
+Updated 2026-11-04 (release refresh). Version 0.3.9: the local tag `v0.3.9` now points at the commit that documents everything since its first tagging, and `~/.local/bin/mapx` is rebuilt from it (D040). Nothing is pushed or published. `EXTRACTOR_VERSION` is 23, `ATTRIBUTION_VERSION` 2.
+
+- **M5:** acceptance (M5-98) is DONE, and so are its follow-ups M5-98-R1 (`check --since`), M5-24-R1 (ambient access), M5-24-R2 (external multi-layer and inherited dependencies), M5-24-R3/R4, M5-16-R1/R2 (smell scoring, orphan-element and baseline-debt), M5-17-R1, M5-18-R1/R2, M5-19-R1, M5-21-R1, M5-22-R1, M5-23-R1, M5-25-R3/R4 and M5-07-R2. M5-98-R2 closed on the owner's deferral of user plugins (D040).
+- **Requirements:** REQ-ARCH 22 VERIFIED, REQ-ARCH-023 DEFERRED by decision (D040).
+- **Defects closed since the first 0.3.9 tag:** M4-30, M4-31, M4-32, M4-28-R1/R2, M4-29, M2-12, M2-13, M2-20, M2-25, M2-26.
+- **Next work: none until the owner says (D040).** Held: M4-13-R1 (D035) and M6 (D038/D039).
+- **Registered BACKLOG, not started:**
+  - M5: M5-15-R1, M5-16-R3, M5-16-R4 (now also the ambient apps' smells), M5-24-R5 (more ambient sources), M5-24-R6 (an `ambient` reference kind);
+  - defects: M2-14..M2-19, M2-20-R1, M2-21..M2-24, M2-08-R4..R7, M0-02-R13, M4-09-R5, M4-12-R2, M4-22-R1, M4-27-R1, M4-28-R3.
+
+Earlier: Updated 2026-11-03 (release). Version 0.3.9, tagged `v0.3.9` and installed as the Linux binary in `~/.local/bin` (D037); nothing is published or pushed. `EXTRACTOR_VERSION` is 15.
 
 - **M5:** every implementation task is DONE (M5-01 to M5-26 and their remediation, M5-15 to M5-24 included). Only M5-98 (acceptance re-score) is left, held by D035.
 - **Defects closed since the morning update:**

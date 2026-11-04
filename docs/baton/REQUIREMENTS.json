@@ -399,13 +399,15 @@
       "M5-22",
       "M5-23",
       "M5-24",
-      "M5-24-R1"
+      "M5-24-R1",
+      "M5-24-R5",
+      "M5-24-R6"
     ],
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PARTIAL",
-    "evidence": "Met: scorer externals 138/138 and externalFindings 12/12 at 1.0 for npm, composer, pypi, go; tests/external-refs.test.ts (296 passed, 2 skipped). Unmet: ambient access (process.env, window, $_GET, os.environ) is not extracted; the ambient selector matches only Go cgo C"
+    "status": "VERIFIED",
+    "evidence": "Met: scorer externals at 1.0 for npm, composer, pypi, go (M5-24-R1: npm 43/43, composer 42/42, pypi 74/74, go 45/45, ambient classes included); ambient access (process.env, window, document, $_GET and the other superglobals, getenv, os.environ, sys.argv, os.Getenv, os.Args) is extracted in JS/TS, PHP, Python and Go and selected by `ambient` (tests/external-refs.test.ts, tests/ambient-access.test.ts). Further sources (Vue/Svelte SFCs, argv, sessionStorage) and a dedicated reference kind are follow-ups M5-24-R5 and M5-24-R6 (D040)."
   },
   {
     "id": "REQ-ARCH-015",
@@ -523,8 +525,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PARTIAL",
-    "evidence": "tests/arch-hierarchy.test.ts 'policy.inheritDependencies (AR-02) on ... via naming the inheritance path' covers workspace dependencies. Unmet: external dependencies are not inherited, and mapx arch allowed names no via"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-hierarchy.test.ts covers workspace inherited dependencies (M5-09) and external ones (M5-24-R2, \"policy.inheritDependencies and external packages\": via [Order, BaseRepo] and [Special, Order, BaseRepo]; none with the policy off); `mapx arch deps` carries via. `mapx arch allowed` judges one hypothetical direct dependency, to which inheritance does not apply, so it names no via by design."
   },
   {
     "id": "REQ-ARCH-023",
@@ -535,8 +537,10 @@
     "taskIds": [
       "M5-98-R2"
     ],
-    "verificationTaskIds": [],
-    "status": "PLANNED",
-    "evidence": "No task and no code. Not met."
+    "verificationTaskIds": [
+      "M5-98-R2"
+    ],
+    "status": "DEFERRED",
+    "evidence": "Deferred by the owner (D040, 2026-11-04): MapX does not load or execute project code to extend the rules. Not met, by decision."
   }
 ]
