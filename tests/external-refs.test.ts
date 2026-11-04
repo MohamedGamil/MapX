@@ -3319,6 +3319,14 @@ describe('the package, builtin and ambient selectors (M5-24)', () => {
     ['builtin /^ext-/', { builtin: '/^ext-/' }, (l) => l.origin === 'builtin' && /^ext-/.test(l.package!)],
     ['ambient', { ambient: true }, (l) => l.origin === 'ambient'],
     ['ambient C', { ambient: 'C' }, (l) => l.origin === 'ambient' && l.package === 'C'],
+    // M5-24-R1: ambient access is named by its element (env, argv, window, $_GET), not by the
+    // expression that reads it, in every language.
+    ['ambient env', { ambient: 'env' }, (l) => l.origin === 'ambient' && l.package === 'env'],
+    ['ambient ENV (case-insensitive)', { ambient: 'ENV' }, (l) => l.origin === 'ambient' && l.package === 'env'],
+    ['ambient argv', { ambient: 'argv' }, (l) => l.origin === 'ambient' && l.package === 'argv'],
+    ['ambient $_* (the superglobals)', { ambient: '$_*' }, (l) => l.origin === 'ambient' && /^\$_/.test(l.package!)],
+    ['ambient /^(window|document)$/', { ambient: '/^(window|document)$/' }, (l) => l.origin === 'ambient' && /^(window|document)$/.test(l.package!)],
+    ['ambient process.env (the access is not the element)', { ambient: 'process.env' }, () => false],
   ];
 
   it.each(labels.apps)('select exactly the labelled external elements of %s, and never a file or symbol', (app) => {
@@ -3483,6 +3491,42 @@ describe('external dependencies in the rules (M5-24)', () => {
     } finally {
       store.close();
     }
+  }, 180000);
+
+  it('ambient access (M5-24-R1): an ambient selector confines the environment; other ambient names are out of scope until uncovered.builtins', () => {
+    const root = scannedApp('ts-ambient');
+    expect(shown(runArchitecture(root)!)).toEqual([
+      'allowed undefined src/infrastructure/Config.ts#port -> env call [Environment] ambient',
+      'violation disallowed-layer src/domain/Order.ts#Order -> env call [Environment] ambient',
+    ]);
+    // Never a package: no uncovered finding for the browser globals while the policy is the default.
+    const config = JSON.parse(readFileSync(join(root, '.mapx/architecture.jsonc'), 'utf8').replace(/^\/\/.*\n/, ''));
+    writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify({ ...config, policy: { uncovered: { builtins: true } } }));
+    expect(shown(runArchitecture(root)).filter((f) => f.startsWith('uncovered'))).toEqual([
+      'uncovered uncovered src/infrastructure/Browser.ts#Browser -> document call [] ambient',
+      'uncovered uncovered src/infrastructure/Browser.ts#Browser -> globalThis call [] ambient',
+      'uncovered uncovered src/infrastructure/Browser.ts#Browser -> localStorage call [] ambient',
+      'uncovered uncovered src/infrastructure/Browser.ts#Browser -> window call [] ambient',
+      'uncovered uncovered src/infrastructure/Config.ts#port -> node:process import [] builtin',
+    ]);
+  }, 180000);
+
+  it('an ambient selector that names no element is reported with a hint, not silently empty (review of M5-24-R1)', () => {
+    const root = scannedApp('ts-ambient', {
+      layers: [
+        { name: 'Infrastructure', selectors: [{ path: 'src/infrastructure/**' }] },
+        { name: 'Wrong', selectors: [{ ambient: 'process.env' }] },
+        { name: 'Nested', selectors: [{ any: [{ ambient: 'Env' }, { not: { ambient: 'sys.argv' } }] }] },
+        { name: 'Globs', selectors: [{ ambient: '$_*' }, { ambient: 'ext-*' }, { ambient: 'C' }, { ambient: '/^win/' }, { ambient: true }] },
+      ],
+      rules: {},
+    });
+    const warnings = runArchitecture(root)!.findings.filter((f) => f.rule === 'unsupported-selector').map((f) => f.message).sort((a, b) => (a.includes('layer Wrong') ? -1 : b.includes('layer Wrong') ? 1 : 0));
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toContain('layer Wrong: selectors[0] uses ambient "process.env", which is not an element name; it matches nothing (did you mean "env"?');
+    expect(warnings[0]).toContain('Element names: env, argv, window, document, globalThis, localStorage, $_GET');
+    expect(warnings[1]).toContain('layer Nested: selectors[0] uses ambient "sys.argv"');
+    expect(warnings[1]).toContain('did you mean "argv"?');
   }, 180000);
 
   // D039 (M5-24-R4): a package in no layer is uncovered only when the configuration opts in, through

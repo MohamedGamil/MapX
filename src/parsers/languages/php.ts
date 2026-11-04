@@ -5,6 +5,7 @@ import { loadLanguage, loadQueryFile, parseWithQueries } from '../wasm-parser.js
 import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
 import { GenericWasmParser } from '../generic-wasm-parser.js';
 import { symbolAnnotations } from '../annotations.js';
+import { ambientAccesses } from '../ambient.js';
 
 export const LARAVEL_FACADE_MAP: Record<string, string> = {
   App:           'Illuminate\\Foundation\\Application',
@@ -65,10 +66,13 @@ export class PhpParser extends GenericWasmParser {
     const symbols: ExtractedSymbol[] = [];
     const references: ExtractedReference[] = [];
     let fileMetadata: Record<string, any> | undefined = undefined;
+    let ambient: ParseResult['ambient'];
 
     try {
       const { symbols: symCaptures, references: refCaptures, nameByNodeId } = await parseWithQueries(
-        source, this.language, this.symbolsQuery!, this.referencesQuery!
+        source, this.language, this.symbolsQuery!, this.referencesQuery!,
+        // Superglobals and getenv() (M5-24-R1).
+        (root) => { ambient = ambientAccesses('php', root, source); },
       );
 
       // Each symbol's declaration node, for its attributes and PHPDoc tags once `use` is read (M5-10).
@@ -978,7 +982,7 @@ export class PhpParser extends GenericWasmParser {
       }
     }
 
-    return { symbols, references: finalReferences, errors, fileMetadata };
+    return { symbols, references: finalReferences, errors, fileMetadata, ...(ambient ? { ambient } : {}) };
   }
 
   protected override extractSignature(source: string, node: any, name: string, kind: string, startLine: number): string {

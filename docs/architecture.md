@@ -194,7 +194,7 @@ Parses files on worker threads when the work repays them: the pool is sized per 
 
 ### External References (`src/core/external-refs.ts`, `src/core/manifests/`)
 
-Records every import, call or type reference to something outside the workspace and attributes it to a package from the npm, Composer, pypi (pip, Poetry, uv) or Go manifests and lockfiles, or classifies it as a built-in or ambient access. See [External dependencies](architecture-rules.md#external-dependencies-packages-built-ins-ambient-access).
+Records every import, call or type reference to something outside the workspace and attributes it to a package from the npm, Composer, pypi (pip, Poetry, uv) or Go manifests and lockfiles, or classifies it as a built-in or ambient access (`process.env`, `window`, `$_GET`, `os.environ`, `os.Getenv`: syntax-tree walks in `src/parsers/ambient.ts`, M5-24-R1). See [External dependencies](architecture-rules.md#external-dependencies-packages-built-ins-ambient-access).
 
 ### Architecture Rules (`src/arch/`)
 

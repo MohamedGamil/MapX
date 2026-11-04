@@ -32,9 +32,12 @@ export interface ExternalRefRow {
   /**
    * What else decides the row or describes it: for a PHP function, the namespaced names PHP tries
    * before the global one (empty when none: a qualified call or a `use function` import); a `use
-   * const` import (`phpConst`, M5-21); a facade's target class.
+   * const` import (`phpConst`, M5-21); a facade's target class; an ambient access's element
+   * (`ambient`: `env`, `window`, `$_GET`, M5-24-R1), which is the attribution: the row is external
+   * whatever the workspace holds, except a PHP `getenv()` a namespace of the workspace declares
+   * itself (`phpFunction`, the namespaced name).
    */
-  metadata?: { phpCandidates?: string[]; phpConst?: boolean; facadeTarget?: string };
+  metadata?: { phpCandidates?: string[]; phpConst?: boolean; facadeTarget?: string; ambient?: string; phpFunction?: string };
 }
 
 /**
@@ -73,6 +76,15 @@ export function jsCandidateSpecifier(specifier: string): boolean {
   if (/^[./#~$]/.test(specifier) || specifier.startsWith('@/')) return false;
   return !/^[a-z][a-z0-9+.-]*:/i.test(specifier) || specifier.startsWith('node:');
 }
+
+/**
+ * The ambient elements a scan records from syntax (M5-24-R1). Cgo's `C` and PHP's PECL extensions
+ * (`ext-redis`) are ambient too, named by their manifests' attribution, not listed here.
+ */
+export const AMBIENT_ELEMENTS = [
+  'env', 'argv', 'window', 'document', 'globalThis', 'localStorage',
+  '$_GET', '$_POST', '$_SERVER', '$_SESSION', '$_COOKIE', '$_FILES', '$_REQUEST', '$GLOBALS',
+] as const;
 
 /** PHP language constructs the parser may report as function calls: never external references. */
 export const PHP_CONSTRUCTS = new Set([

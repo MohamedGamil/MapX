@@ -70,7 +70,7 @@ The features, by the task that delivered them:
 - **Decorators and doc tags** (M5-10): the `decorator` and `docTag` selectors. See [Decorators and doc tags](#decorators-and-doc-tags).
 - **Private parts and internal elements** (M5-11): `private` selectors, `@internal` doc tags and native module visibility. See [Visibility](#visibility).
 
-Not there yet: the dashboard's Architecture view (M5-15), and ambient access other than Go's cgo `C` (see [External dependencies](#external-dependencies-packages-built-ins-ambient-access)).
+Not there yet: the dashboard's Architecture view (M5-15).
 
 Where to look up each part:
 
@@ -412,7 +412,40 @@ Where the attribution comes from, per ecosystem. MapX reads these files even tho
 | --- | --- |
 | `package` (+ `dev`, `direct`) | A package by name: `"pg"`, `"guzzlehttp/*"`, `"@acme/*"`, `"*"`. A package no manifest or lockfile provides is matched by its name as written (`github.com/pkg/errors`), so `"*"` covers every package. With `dev: true`, only dev-only packages; with `dev: false`, only production ones. With `direct: true`, only packages a manifest lists directly; with `direct: false`, only transitive ones and those no manifest lists. A package whose status is unknown (no lockfile says) matches neither value. |
 | `builtin` | A built-in: `true`, or a name such as `"node:*"`, `"ext-pdo"`, `"python:os"`, `"net/http"` |
-| `ambient` | Ambient access: `true`, or a name. Today the scan records Go's cgo `C` and the names of PHP's PECL extensions (`ext-redis`, `ext-imagick`, `ext-apcu`: the runtime provides them, neither PHP nor a package). Process-global access such as `process.env`, `$_GET` or `os.environ` is not extracted yet. |
+| `ambient` | Ambient access: `true`, or an element name (below). Ambient access is never a package. |
+
+**Ambient access** (M5-24-R1) is what a file reads from the process it runs in, with no import: the environment, the command line, browser globals, PHP superglobals. A scan records each access as a reference of origin `ambient`, and there is **one external element per name**, the same in every language where the concept is the same:
+
+| Element | Recorded for |
+| --- | --- |
+| `env` | JS/TS `process.env`; PHP `$_ENV` and `getenv()`; Python `os.environ` and `os.getenv`; Go `os.Getenv`, `os.LookupEnv`, `os.Environ`, `os.Setenv`, `os.Unsetenv`, `os.ExpandEnv` and `os.Clearenv` |
+| `argv` | Python `sys.argv`; Go `os.Args` |
+| `window`, `document`, `globalThis`, `localStorage` | the same JS/TS browser globals |
+| `$_GET`, `$_POST`, `$_SERVER`, `$_SESSION`, `$_COOKIE`, `$_FILES`, `$_REQUEST`, `$GLOBALS` | the PHP superglobals, with their sigil |
+| `C` | Go's cgo pseudo-package (M5-23) |
+| `ext-redis`, `ext-imagick`, `ext-apcu` … | PHP's PECL extensions (M5-21-R1): the runtime provides them, neither PHP nor a package |
+
+A selector names the **element**, not the expression that reads it: `{ "ambient": "env" }` selects `process.env`, `$_ENV`, `getenv()`, `os.environ` and `os.Getenv` alike, `{ "ambient": "$_*" }` the PHP superglobals, `{ "ambient": true }` every ambient element. `{ "ambient": "process.env" }` matches nothing: `mapx check` says so in an `unsupported-selector` warning that names the element you probably meant and lists the element names. The row's `specifier` is the canonical access (`process.env`, `os.environ`, `$_GET`, `getenv`) whatever the import alias, and its kind is `call`, so the default `scope.types` covers it. Ambient access is never uncovered by default; it follows `policy.uncovered.builtins`, as built-ins do.
+
+```jsonc
+// Only Infrastructure may read the environment.
+{
+  "layers": [
+    { "name": "Domain", "selectors": [{ "path": "src/domain/**" }] },
+    { "name": "Infrastructure", "selectors": [{ "path": "src/infrastructure/**" }] },
+    { "name": "Environment", "selectors": [{ "ambient": "env" }] }
+  ],
+  "rules": { "Domain": [], "Infrastructure": ["Domain", "Environment"] }
+}
+```
+
+What counts, and what does not:
+- A name the file binds itself is not the global: a parameter, local, loop or catch variable, import, function or class named `window`, `document`, `process`, `localStorage` or `globalThis` (JS/TS); a Go parameter or local named `os`. Python's `os` and `sys` must be bound by an import of that module (`import os as o` and `from os import environ` count; a parameter named `os` does not).
+- JS/TS `process` imported from `process` or `node:process` is the same ambient as the global. A comment, a string, a property name (`foo.window`) and a type position (`typeof window`) are no access.
+- PHP reads a superglobal in a double-quoted string, a heredoc and a backtick string (`"id=$_GET[id]"`, `"{$_SERVER['HOST']}"`), so those count. A single-quoted string, a nowdoc, an escaped `\$_GET` and a comment only name it and do not.
+- PHP `getenv()` is the global function: a `getenv` the workspace declares in the file's namespace, or a `use function` of another `getenv`, is not the environment. `\getenv()` always is.
+- JS/TS: `process.env`, `process["env"]`, `const { env } = process` and `import { env } from 'node:process'` are the environment (the last two where they are written; later uses of the local `env` are not followed). A parameter name in an overload, abstract method or signature is a declaration.
+- Not extracted yet: Vue and Svelte single-file components, `process.argv`, `sessionStorage`, `$argv`, other languages, and a Python `global` declaration.
 
 - **Names.** In these names `*` matches any run of characters, `/` included, because package names are not paths. `/regex/flags` is a regular expression. Names compare as their ecosystem compares them: npm, Composer, built-ins and ambient names ignore case; a pypi package name is normalised as PEP 503 says (case, and each run of `-`, `_` and `.` as one `-`), so `"Flask_SQLAlchemy"` and `"zope.interface"` match `flask-sqlalchemy` and `zope-interface`; a Go module or package path is exact.
 - **Where they apply.** These selectors match external elements only. On a file or symbol they are inapplicable, like `name` on a file. Conversely, nothing but these selectors and `layer` applies to an external element. So `{ "not": { "path": "src/**" } }` never selects a package, and `{ "not": { "package": "*" } }` never selects a file.

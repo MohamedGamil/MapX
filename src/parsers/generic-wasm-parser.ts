@@ -2,6 +2,7 @@ import type { LanguageParser } from './parser-interface.js';
 import type { ParseResult, ExtractedSymbol, ExtractedReference, SymbolKind } from '../types.js';
 import type { LanguageDefinition } from '../languages/registry.js';
 import { loadLanguage, loadQueryFile, parseWithQueries } from './wasm-parser.js';
+import { ambientAccesses } from './ambient.js';
 import { COMMON_FRAMEWORK_METHODS, JS_BUILTIN_METHODS, JS_BUILTIN_RECEIVERS } from './common-methods.js';
 import { LuaScopes, luaCallTarget } from './languages/lua.js';
 import { symbolAnnotations } from './annotations.js';
@@ -751,10 +752,13 @@ export class GenericWasmParser implements LanguageParser {
     const errors: ParseResult['errors'] = [];
     const symbols: ExtractedSymbol[] = [];
     const references: ExtractedReference[] = [];
+    let ambient: ParseResult['ambient'];
 
     try {
       const { symbols: symCaptures, references: refCaptures, nameByNodeId, scopeByNodeId } = await parseWithQueries(
-        source, this.language, this.symbolsQuery!, this.referencesQuery!
+        source, this.language, this.symbolsQuery!, this.referencesQuery!,
+        // JS/TS, Python and Go files: the ambient accesses (environment, globals), M5-24-R1.
+        (root) => { ambient = ambientAccesses(this.languageName, root, source); },
       );
 
       let currentScope: string | null = null;
@@ -1042,7 +1046,7 @@ export class GenericWasmParser implements LanguageParser {
       errors.push({ message: e.message, line: 0 });
     }
 
-    return { symbols, references, errors };
+    return { symbols, references, errors, ...(ambient ? { ambient } : {}) };
   }
 
   protected isContainerKind(kind: SymbolKind): boolean {

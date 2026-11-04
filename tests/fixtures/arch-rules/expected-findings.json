@@ -56,6 +56,22 @@
     "python-poetry-legacy": {
       "language": "python",
       "repos": null
+    },
+    "ts-ambient": {
+      "language": "typescript",
+      "repos": null
+    },
+    "python-ambient": {
+      "language": "python",
+      "repos": null
+    },
+    "php-ambient": {
+      "language": "php",
+      "repos": null
+    },
+    "go-ambient": {
+      "language": "go",
+      "repos": null
     }
   },
   "rows": [
@@ -3092,6 +3108,216 @@
       },
       "edgeType": "call",
       "note": "a built-in in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "ts-ambient-01",
+      "app": "ts-ambient",
+      "language": "typescript",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "src/domain/Order.ts",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "npm:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "ts-ambient-02",
+      "app": "ts-ambient",
+      "language": "typescript",
+      "kind": "allowed",
+      "from": {
+        "file": "src/infrastructure/Config.ts",
+        "symbol": "port"
+      },
+      "to": {
+        "external": "npm:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "ts-ambient-03",
+      "app": "ts-ambient",
+      "language": "typescript",
+      "kind": "none",
+      "from": {
+        "file": "src/infrastructure/Browser.ts",
+        "symbol": "Browser"
+      },
+      "to": {
+        "external": "npm:window"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "python-ambient-01",
+      "app": "python-ambient",
+      "language": "python",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/domain/order.py",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "pypi:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "python-ambient-02",
+      "app": "python-ambient",
+      "language": "python",
+      "kind": "allowed",
+      "from": {
+        "file": "app/infrastructure/config.py"
+      },
+      "to": {
+        "external": "pypi:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "python-ambient-03",
+      "app": "python-ambient",
+      "language": "python",
+      "kind": "none",
+      "from": {
+        "file": "app/infrastructure/config.py"
+      },
+      "to": {
+        "external": "pypi:argv"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "php-ambient-01",
+      "app": "php-ambient",
+      "language": "php",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "app/Domain/Order.php",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "composer:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "php-ambient-02",
+      "app": "php-ambient",
+      "language": "php",
+      "kind": "allowed",
+      "from": {
+        "file": "app/Infrastructure/Request.php",
+        "symbol": "Request"
+      },
+      "to": {
+        "external": "composer:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "php-ambient-03",
+      "app": "php-ambient",
+      "language": "php",
+      "kind": "none",
+      "from": {
+        "file": "app/Infrastructure/Request.php",
+        "symbol": "Request"
+      },
+      "to": {
+        "external": "composer:$_GET"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
+    },
+    {
+      "id": "go-ambient-01",
+      "app": "go-ambient",
+      "language": "go",
+      "rule": "disallowed-layer",
+      "kind": "violation",
+      "from": {
+        "file": "domain/order.go",
+        "symbol": "Order"
+      },
+      "to": {
+        "external": "go:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "category": "ambient-confinement",
+      "note": "ambient confinement: the environment is the Environment layer (an ambient selector), which only Infrastructure may use"
+    },
+    {
+      "id": "go-ambient-02",
+      "app": "go-ambient",
+      "language": "go",
+      "kind": "allowed",
+      "from": {
+        "file": "infrastructure/config.go",
+        "symbol": "Config"
+      },
+      "to": {
+        "external": "go:env"
+      },
+      "edgeType": "call",
+      "edgeTypes": [
+        "call"
+      ],
+      "note": "Infrastructure may use the Environment layer"
+    },
+    {
+      "id": "go-ambient-03",
+      "app": "go-ambient",
+      "language": "go",
+      "kind": "none",
+      "from": {
+        "file": "infrastructure/config.go",
+        "symbol": "Config"
+      },
+      "to": {
+        "external": "go:argv"
+      },
+      "edgeType": "call",
+      "note": "ambient access in no layer is not reported (policy.uncovered.builtins is false)"
     }
   ]
 }

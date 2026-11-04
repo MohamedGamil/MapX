@@ -53,8 +53,10 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  * - 22: M2-25, M2-26 (a call through a for / for-of / for-in variable, a catch parameter, a comprehension
  *   variable or a local destructured from a call result, not an import or a `require`, links no
  *   same-named function or class elsewhere).
+ * - 23: M5-24-R1 (ambient access, `process.env`, `window`, `$_GET`, `os.environ`, `os.Getenv`, is an
+ *   external reference of origin ambient, in JS/TS, PHP, Python and Go).
  */
-export const EXTRACTOR_VERSION = 22;
+export const EXTRACTOR_VERSION = 23;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

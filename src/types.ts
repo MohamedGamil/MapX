@@ -123,11 +123,28 @@ export type ReferenceType =
    */
   | 'navigate';
 
+/**
+ * Ambient access (M5-24-R1): a file reads process-global state it needs no import for (the
+ * environment, the command line, a browser global, a PHP superglobal). Kept apart from references,
+ * so edge counts ignore it; the scanner stores each as an external reference of origin `ambient`.
+ */
+export interface AmbientAccess {
+  line: number;
+  /** The ambient element it belongs to: `env`, `argv`, `window`, `$_GET`. */
+  name: string;
+  /** The access, canonical whatever the import alias: `process.env`, `os.environ`, `$_GET`, `getenv`. */
+  text: string;
+  /** PHP `getenv()` called unqualified in a namespace: the global function only when the workspace declares none there. */
+  phpNamespace?: string;
+}
+
 export interface ParseResult {
   symbols: ExtractedSymbol[];
   references: ExtractedReference[];
   errors: ParseError[];
   fileMetadata?: Record<string, any>;
+  /** JS/TS, PHP, Python and Go files: the ambient accesses (M5-24-R1). */
+  ambient?: AmbientAccess[];
 }
 
 export interface ParseError {

@@ -107,6 +107,21 @@ const NAMESPACE_KINDS = new Set(['namespace']);
 const TYPE_KINDS = new Set(['class', 'struct', 'interface', 'enum', 'record', 'trait']);
 /** Sources whose imports may use JS/TS path aliases (M3-09). */
 const JS_MODULE_SOURCE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/;
+/**
+ * The ambient element a candidate's stored metadata names (M5-24-R1), with the namespaced function
+ * name a PHP `getenv()` would hide behind; null for any other candidate.
+ */
+function ambientElement(metadata: string | null | undefined): { element: string; phpFunction?: string } | null {
+  if (!metadata || metadata === '{}' || !metadata.includes('"ambient"')) return null;
+  try {
+    const parsed = JSON.parse(metadata);
+    return typeof parsed.ambient === 'string' && parsed.ambient
+      ? { element: parsed.ambient, ...(typeof parsed.phpFunction === 'string' ? { phpFunction: parsed.phpFunction } : {}) } : null;
+  } catch {
+    return null;
+  }
+}
+
 /** References that use a name an import binds: external references when the import is from outside the workspace (M5-19). */
 const BOUND_KINDS = new Set(['call', 'instantiation', 'extends', 'implements', 'param_type', 'return_type']);
 /** Symbol kinds that hold values, which a statement assigns rather than encloses (M5-19). */
@@ -1604,6 +1619,7 @@ export class Scanner {
         references: msg.references || [],
         errors: msg.errors || [],
         ...(msg.fileMetadata ? { fileMetadata: msg.fileMetadata } : {}),
+        ...(msg.ambient ? { ambient: msg.ambient } : {}),
       };
       onFileParsed?.(relPath(files[index]!));
     }, () => this.aborted, lanes);
@@ -1769,9 +1785,30 @@ export class Scanner {
     const unresolved = this.unresolvedImports.get(relativePath)!;
     this.unresolvedImports.delete(relativePath);
     if (unresolved.size) this.store.updateFileMetadata(relativePath, { unresolvedImports: [...unresolved].sort() });
+    this.noteAmbient(relativePath, result);
     // With the edges, in the same transaction: an interrupted write leaves neither (M0-02-R10, M0-02-R12).
     this.store.replaceExternalRefs(relativePath, repoName, uniqueRows(this.externalRows.get(relativePath)!));
     this.externalRows.delete(relativePath);
+  }
+
+  /**
+   * The ambient accesses of a parsed file (M5-24-R1) as external candidates: decided external, with
+   * the element in the metadata, which `decideExternalRefs` turns into the attribution. The source
+   * is the enclosing function, method or class, as for any external reference.
+   */
+  private noteAmbient(relativePath: string, result: ParseResult): void {
+    const rows = this.externalRows.get(relativePath);
+    const ecosystem = /\.([cm]?[jt]sx?|vue|svelte)$/.test(relativePath) ? 'npm' : ecosystemOf(this.languageOf(relativePath));
+    if (!rows || !ecosystem || !result.ambient?.length) return;
+    const code = innermostByLine(result.symbols.filter((s: any) => !VALUE_KINDS.has(s.kind)));
+    for (const a of result.ambient) {
+      const sym = code[a.line];
+      rows.push({
+        line: a.line, sourceSymbol: sym ? (sym.scope ? `${sym.scope}::${sym.name}` : sym.name) : null,
+        specifier: a.text, symbol: null, kind: 'call', ecosystem, external: true,
+        metadata: { ambient: a.name, ...(a.phpNamespace ? { phpFunction: `${a.phpNamespace}\\${a.text}` } : {}) },
+      });
+    }
   }
 
   private resolveReferencesWithMap(
@@ -2757,6 +2794,18 @@ export class Scanner {
     const flag = (b: boolean | null) => (b === null ? null : b ? 1 : 0);
     const changed: ExternalDecision[] = [];
     for (const r of rows) {
+      // An ambient access (M5-24-R1) is external and its own attribution: the element, origin ambient.
+      const ambient = ambientElement(r.metadata);
+      if (ambient !== null) {
+        // An unqualified PHP getenv() is the user's own function when the namespace declares one.
+        const hidden = !!ambient.phpFunction && (this.phpDeclared ??= this.store.getPhpDeclaredNames()).has(ambient.phpFunction.toLowerCase());
+        if (hidden) {
+          if (r.external !== 0 || r.package !== null || r.origin !== null) changed.push({ id: r.id, external: 0, package: null, origin: null, direct: null, dev: null, attribution: null });
+        } else if (r.external !== 1 || r.package !== ambient.element || r.origin !== 'ambient' || r.direct !== null || r.dev !== null || r.attribution !== null) {
+          changed.push({ id: r.id, external: 1, package: ambient.element, origin: 'ambient', direct: null, dev: null, attribution: null });
+        }
+        continue;
+      }
       let phpCandidates: string[] | undefined;
       let facadeTarget: string | undefined;
       let phpConst = false;

@@ -9,6 +9,7 @@ import { Store } from '../core/store.js';
 import { ConfigError, loadArchitectureConfig, reportedUncoveredPolicy, type LoadOptions, type ReportedUncoveredPolicy } from './config.js';
 import type { ArchitectureConfig } from './schema.js';
 import { getMembership, type LayerMembership } from './membership.js';
+import { unknownAmbientNames } from './selectors/external.js';
 import { expandPolicy } from './policy.js';
 import { ENDPOINT_EDGES, elementName, evaluateEdges, reportElement, type Dependency, type Evaluation, type Finding, type FindingKind, type FindingSeverity } from './evaluate.js';
 import { BaselineMatcher, fingerprint, loadBaseline, repoKey, type Baseline } from './baseline.js';
@@ -268,6 +269,22 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
       fingerprint: fingerprint('unsupported-selector', u.layer, u.selector, u.key),
       message: `layer ${u.layer}: ${u.selector} uses "${u.key}", which this version cannot evaluate yet (${u.task}); it matches nothing`,
     });
+  }
+
+  // An ambient selector that names no element matches nothing (`"process.env"` for `"env"`): say so, with the names.
+  for (const layer of config.layers) {
+    for (const [section, list] of [['selectors', layer.selectors], ['private', layer.private ?? []]] as const) {
+      list.forEach((sel, i) => {
+        for (const u of unknownAmbientNames(sel)) {
+          const where = `${section}[${i}]`;
+          findings.push({
+            kind: 'warning', rule: 'unsupported-selector', severity: 'warn', layer: layer.name,
+            fingerprint: fingerprint('unsupported-selector', layer.name, where, `ambient:${u.name}`),
+            message: `layer ${layer.name}: ${where} uses ambient "${u.name}", which is not an element name; it matches nothing (${u.hint})`,
+          });
+        }
+      });
+    }
   }
 
   const filesIn = (layer: string) => new Set(membership.members(layer).filter((e) => e.kind !== 'external').map((e) => e.file.path)).size;

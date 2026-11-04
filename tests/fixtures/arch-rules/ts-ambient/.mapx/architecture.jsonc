@@ -1,0 +1,13 @@
+// M5-24-R1 fixture: ambient access. Only Infrastructure may read the environment (an ambient selector); window, document and the other browser globals are in no layer (not reported: uncovered.builtins is false).
+{
+  "$schema": "../../../../schemas/architecture.schema.json",
+  "layers": [
+    { "name": "Domain", "selectors": [{ "path": "src/domain/**" }] },
+    { "name": "Infrastructure", "selectors": [{ "path": "src/infrastructure/**" }] },
+    { "name": "Environment", "selectors": [{ "ambient": "env" }] }
+  ],
+  "rules": {
+    "Domain": [],
+    "Infrastructure": ["Domain", "Environment"]
+  }
+}

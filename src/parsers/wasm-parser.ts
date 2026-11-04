@@ -104,7 +104,9 @@ export async function parseWithQueries(
   source: string,
   language: Language,
   symbolsQuery: string,
-  referencesQuery: string
+  referencesQuery: string,
+  /** Reads the syntax tree while it is alive: the ambient accesses of a file (M5-24-R1). */
+  inspect?: (root: any) => void,
 ): Promise<ParsedCaptures> {
   await ensureInit();
   // Pool parsers per language to avoid re-creating WASM instances on every parse.
@@ -165,6 +167,8 @@ export async function parseWithQueries(
       refCaptures.set(capture.name, existing);
     }
   }
+
+  inspect?.(tree.rootNode);
 
   return { symbols: symbolCaptures, references: refCaptures, nameByNodeId, scopeByNodeId };
 }
