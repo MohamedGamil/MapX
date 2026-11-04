@@ -35089,6 +35089,125 @@
       "evidence": [],
       "history": [],
       "criticalPath": false
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 4
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-23",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-23.md",
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": "2026-11-04T23:31:16.826Z",
+      "completedAt": "2026-11-04T23:55:23.824Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M2-29.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/legacy-globs.test.ts tests/config.test.ts tests/laravel-dirs.test.ts tests/ui-server-config.test.ts tests/legacy-impact-staleness.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-29.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-29.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T23:31:15.779Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T23:31:16.826Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T23:55:23.239Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T23:55:23.824Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/legacy-globs.test.ts tests/config.test.ts tests/laravel-dirs.test.ts tests/ui-server-config.test.ts tests/legacy-impact-staleness.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-29.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-29.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-29",
+      "title": "Laravel migrations, seeders, factories and views are indexed by default",
+      "objective": "A repo with framework laravel indexes database/migrations, database/seeders, database/factories, resources/views and Blade files without any configuration (D043); storage, bootstrap/cache, public and vendor stay excluded.",
+      "description": "Owner decision D043 (2026-11-05): since M2-23 these files give edges for the laravel preset Database and Views layers, so they should not be excluded by default. LARAVEL_DEFAULT_EXCLUDES drops the five patterns; mapx init no longer suggests them; an index built with the old defaults re-parses once on its next scan or sync (the effective excludes are in the scan_filters signature, M0-02-R1). A config whose excludePatterns lists the patterns explicitly (written by an earlier init) keeps them excluded.",
+      "outputs": [
+        "docs/baton/reports/M2-29.md"
+      ],
+      "affectedFiles": [
+        "src/core/config.ts",
+        "src/core/config-report.ts",
+        "src/cli.ts",
+        "tests/legacy-globs.test.ts",
+        "tests/config.test.ts",
+        "tests/laravel-dirs.test.ts",
+        "docs/configuration.md",
+        "docs/architecture-rules.md",
+        "CHANGELOG.md",
+        "tests/ui-server-config.test.ts",
+        "docs/framework-integration.md",
+        "tests/legacy-impact-staleness.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A framework: laravel repo with no laravelDefaultExcludes setting indexes database/migrations, database/seeders, database/factories, resources/views and .blade.php files, and still excludes storage/, bootstrap/cache/, public/ and vendor/ (tests/legacy-globs.test.ts).",
+        "mapx init on a Laravel app that accepts the suggestion writes none of the five patterns into excludePatterns, and still writes storage/** and bootstrap/cache/** (tests/config.test.ts).",
+        "An index scanned with the old defaults gains the files on its next sync, as scan --force has them (tests/legacy-globs.test.ts).",
+        "A config that lists the five patterns in laravelDefaultExcludes or excludePatterns keeps them out (tests/legacy-globs.test.ts); docs/configuration.md and docs/architecture-rules.md describe the new default."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/legacy-globs.test.ts tests/config.test.ts tests/laravel-dirs.test.ts tests/ui-server-config.test.ts tests/legacy-impact-staleness.test.ts",
+        "npm run check"
+      ]
     }
   ]
 }

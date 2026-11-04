@@ -204,7 +204,9 @@ describe('staleness follows the scanner file rules', () => {
     }
   }, 60000);
 
-  it('framework laravel without globs: a new migration and Blade view are not stale; a new model is', () => {
+  // D043 (M2-29): migrations and views are indexed by default, so they are stale when new; public/
+  // and bootstrap/cache stay in Laravel's default excludes.
+  it('framework laravel without globs: a new public/ or bootstrap/cache file is not stale; a new migration, Blade view or model is', () => {
     const root = workspace({
       artisan: '#!/usr/bin/env php\n<?php\n',
       'app/Models/User.php': '<?php\nnamespace App\\Models;\nclass User {}\n',
@@ -219,17 +221,24 @@ describe('staleness follows the scanner file rules', () => {
       c.repos[0].framework = 'laravel';
     });
     mapx(root, 'scan', root);
-    mkdirSync(join(root, 'database/migrations'), { recursive: true });
-    mkdirSync(join(root, 'resources/views'), { recursive: true });
-    writeFileSync(join(root, 'database/migrations/2024_01_01_000000_create_users.php'), '<?php\nreturn new class {};\n');
-    writeFileSync(join(root, 'resources/views/home.blade.php'), '<div>{{ $x }}</div>\n');
+    mkdirSync(join(root, 'public'), { recursive: true });
+    mkdirSync(join(root, 'bootstrap/cache'), { recursive: true });
+    writeFileSync(join(root, 'public/index.php'), "<?php\nrequire __DIR__.'/../vendor/autoload.php';\n");
+    writeFileSync(join(root, 'bootstrap/cache/packages.php'), '<?php\nreturn [];\n');
     // a dotfile and a directory the scan walk never enters (DEFAULT_IGNORE), with no glob naming them
     writeFileSync(join(root, '.eslintrc.js'), 'module.exports = {};\n');
     mkdirSync(join(root, 'coverage'));
     writeFileSync(join(root, 'coverage/lcov.ts'), 'export const covered = 1;\n');
     expect(staleLines(root)).toBe('');
+    mkdirSync(join(root, 'database/migrations'), { recursive: true });
+    mkdirSync(join(root, 'resources/views'), { recursive: true });
+    writeFileSync(join(root, 'database/migrations/2024_01_01_000000_create_users.php'), '<?php\nreturn new class {};\n');
+    writeFileSync(join(root, 'resources/views/home.blade.php'), '<div>{{ $x }}</div>\n');
     writeFileSync(join(root, 'app/Models/Post.php'), '<?php\nnamespace App\\Models;\nclass Post {}\n');
-    expect(staleLines(root)).toContain('app/Models/Post.php (new)');
+    const stale = staleLines(root);
+    expect(stale).toContain('database/migrations/2024_01_01_000000_create_users.php (new)');
+    expect(stale).toContain('resources/views/home.blade.php (new)');
+    expect(stale).toContain('app/Models/Post.php (new)');
   }, 60000);
 });
 

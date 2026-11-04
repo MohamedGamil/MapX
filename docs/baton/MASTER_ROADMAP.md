@@ -203,6 +203,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-26** A class destructured from a call result never links a same-named class elsewhere — DONE, P1, 4h; depends on M2-08-R3.
 - **M2-27** A Java import of a project class links that class, not a same-named class in another package — BACKLOG, P2, 5h; depends on M2-08-R8.
 - **M2-28** A PHP static call Foo::m() links method m of class Foo — BACKLOG, P2, 5h; depends on M2-16.
+- **M2-29** Laravel migrations, seeders, factories and views are indexed by default — DONE, P2, 2h; depends on M2-23.
 
 ## M3 — Vue SFC semantics
 

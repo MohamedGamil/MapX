@@ -8,8 +8,8 @@ import { cleanup, init, mapx, mapxResult, query, workspace } from './helpers/e2e
 // and Blade) were indexed, when included, with no edges at all: the parser dropped every reference
 // of a migration, seeder or factory, and returned nothing for a .blade.php file. They now give the
 // edges that name a class; a method called by name on a variable (`$table->id()`, `$order->name()`)
-// is still no edge, since it would link every method of that name in the project. Whether the
-// directories are indexed at all stays the documented laravelDefaultExcludes default.
+// is still no edge, since it would link every method of that name in the project. They are indexed
+// by default since D043 (M2-29; tests/legacy-globs.test.ts).
 type Edge = { source_symbol: string | null; edge_type: string; target_file: string; target_symbol: string };
 
 /** `source_symbol -> file#symbol (type)` of every edge from one file, sorted and unique. */

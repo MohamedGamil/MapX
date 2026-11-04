@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@9ea18f458734d66dbbd1b029005781472b2293be (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@6c0fb8405f8711954b4233b3bb1c2c8ebff069d7 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M0-02-R13 — A package.json edit re-parses only the files its change affects.
-Evidence: `npx vitest run tests/scanner-config-referrers.test.ts tests/vue-stores.test.ts tests/legacy-globs.test.ts` (exit 0) → docs/baton/reports/M0-02-R13.md; `npm run check` (exit 0) → docs/baton/reports/M0-02-R13.md.
+Last completed: M2-29 — Laravel migrations, seeders, factories and views are indexed by default.
+Evidence: `npx vitest run tests/legacy-globs.test.ts tests/config.test.ts tests/laravel-dirs.test.ts tests/ui-server-config.test.ts tests/legacy-impact-staleness.test.ts` (exit 0) → docs/baton/reports/M2-29.md; `npm run check` (exit 0) → docs/baton/reports/M2-29.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect

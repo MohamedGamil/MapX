@@ -86,6 +86,25 @@ describe('/api/config', () => {
     // The pool ignores an invalid value and uses the configured one: so does the report.
     expect(bad.settings.find((s) => s.key === 'parseWorkers')).toMatchObject({ value: 'lots', source: 'user' });
   });
+
+  // D043 (M2-29): an earlier `mapx init` wrote Laravel's former defaults into excludePatterns; they
+  // are patterns MapX wrote, not the user's.
+  it("reports Laravel's former default excludes, written by an earlier init, as defaults", async () => {
+    const other = workspace({ 'app/a.php': '<?php\n' });
+    try {
+      init(other);
+      const path = join(other, '.mapx/config.json');
+      const config = JSON.parse(readFileSync(path, 'utf8'));
+      config.settings.excludePatterns.push('database/migrations/**', 'resources/views/**', '**/*.blade.php');
+      writeFileSync(path, JSON.stringify(config, null, 2));
+      const report = describeConfig(other, await Config.load(other));
+      const entries = report.settings.find((s) => s.key === 'excludePatterns')!.entries;
+      expect(entries).toContainEqual({ value: 'database/migrations/**', source: 'default' });
+      expect(entries).toContainEqual({ value: '**/*.blade.php', source: 'default' });
+    } finally {
+      cleanup(other);
+    }
+  });
 });
 
 // Review 2026-11-02 of M4-22.

@@ -4,17 +4,24 @@ import { resolve, join } from 'node:path';
 import type { MapxConfig, RepoConfig, UserLanguageDefinition } from '../types.js';
 import type { LanguageDefinition } from '../languages/registry.js';
 
-/** Laravel noise excluded by default for `framework: laravel` repos (F10), relative to the repo root. */
+/**
+ * Laravel noise excluded by default for `framework: laravel` repos (F10), relative to the repo root.
+ * Migrations, seeders, factories and views are indexed: they give edges for the `laravel` preset's
+ * Database and Views layers (M2-23), so they are no longer excluded by default (D043, M2-29).
+ */
 export const LARAVEL_DEFAULT_EXCLUDES = [
-  'database/migrations/**',
-  'database/seeders/**',
-  'database/factories/**',
   'storage/**',
   'bootstrap/cache/**',
   'public/**',
+  'vendor/**',
+];
+/** The defaults before D043 (M2-29) left out: an earlier `mapx init` may have written them into `excludePatterns`. */
+export const LARAVEL_FORMER_DEFAULT_EXCLUDES = [
+  'database/migrations/**',
+  'database/seeders/**',
+  'database/factories/**',
   'resources/views/**',
   '**/*.blade.php',
-  'vendor/**',
 ];
 import { getBuiltinLanguages } from '../languages/registry.js';
 import { canonicalPath } from './workspace-manager.js';

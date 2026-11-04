@@ -47,7 +47,7 @@ graph TD
 
 | Framework | Language | Heuristic & Scope |
 |-----------|----------|-------------------|
-| **Laravel** | PHP | Composer dependencies (`laravel/framework`), routes files, controller method mappings, event listeners, and hooks. Migrations, seeders, factories and Blade views give their class edges when indexed (they are excluded by default: see [Laravel default excludes](configuration.md#laravel-default-excludes)). |
+| **Laravel** | PHP | Composer dependencies (`laravel/framework`), routes files, controller method mappings, event listeners, and hooks. Migrations, seeders, factories and Blade views are indexed and give their class edges (see [Laravel default excludes](configuration.md#laravel-default-excludes)). |
 | **Express** | JavaScript / TypeScript | Package dependency (`express`), `app.use()` route prefixes, inline controllers, and modular router mappings. |
 | **Django** | Python | Heuristic checks for `manage.py`, `wsgi.py`, pattern matching on `urlpatterns`, class-based and function views. |
 | **Flask** | Python | Heuristic checks on imports, `@app.route()`, and Blueprint registrations. |

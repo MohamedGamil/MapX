@@ -442,3 +442,8 @@ An explicit `policy.uncovered.externals` always wins.
 - **Commit each work item** on `develop` once it is DONE (code, tests, report and state documents together). Nothing is pushed.
 - **Continue to the next item until the D041 batch is complete:** M2-08-R4, M2-08-R6, M2-08-R7, M2-08-R8, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13 and M4-09-R5. The P3 follow-ups stay held (D041) until the owner says otherwise.
 - **Addendum (2026-11-04):** P2 defects registered while working through the batch join it (M2-08-R8, M2-08-R9). P3 ones (M2-08-R10) are held with the other P3 follow-ups.
+
+## D043 — Owner answer of 2026-11-05: Laravel database/ and views are indexed by default
+
+- **Asked:** since M2-23, migrations, seeders, factories and Blade views give edges when indexed, but `LARAVEL_DEFAULT_EXCLUDES` still left them out. Should they be indexed by default?
+- **Answer:** yes, they are included by default. `database/migrations/**`, `database/seeders/**`, `database/factories/**`, `resources/views/**` and `**/*.blade.php` leave the Laravel defaults and `mapx init`'s suggestion; `storage/**`, `bootstrap/cache/**`, `public/**` and `vendor/**` stay. Registered as M2-29 and done in the D042 manner (committed when DONE).

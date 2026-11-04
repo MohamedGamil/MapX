@@ -133,13 +133,12 @@ Patterns match workspace-relative paths with `/` separators. A leading `./` is i
 For a repo with `"framework": "laravel"`, every scan also excludes these patterns:
 
 ```
-database/migrations/**  database/seeders/**  database/factories/**  storage/**
-bootstrap/cache/**  public/**  resources/views/**  **/*.blade.php  vendor/**
+storage/**  bootstrap/cache/**  public/**  vendor/**
 ```
 
 When the repo is not at the workspace root, each pattern is scoped to its path (`api/public/**`). `mapx init` offers to add the same patterns to `excludePatterns`. If you decline, init records `"laravelDefaultExcludes": false`.
 
-The default leaves `database/` and the views out: a migration, a seeder or a factory holds little application logic, and a Blade view is not PHP. Index them to check architecture rules on them (the `laravel` preset's Database and Views layers), by declining the suggestion or listing the defaults to keep. An indexed migration, seeder, factory or view (plain PHP or Blade) then gives the edges that name a class:
+Migrations, seeders, factories and views (`database/migrations/`, `database/seeders/`, `database/factories/`, `resources/views/` and `*.blade.php`) are indexed, so the `laravel` preset's Database and Views layers hold files. Earlier versions excluded them by default, and an earlier `mapx init` may have written them into `excludePatterns`; remove them there to index them. To keep them out, add them to `excludePatterns`, or list them in `laravelDefaultExcludes` together with the defaults to keep. A changed exclude list makes the next `scan` or `sync` re-parse once. An indexed migration, seeder, factory or view (plain PHP or Blade) gives the edges that name a class:
 - `use`, `extends`, `new X`, `X::m()`, `X::class` (`$this->call(UserSeeder::class)`, `$model = User::class`) and type hints;
 - in a Blade file, the PHP of `@php … @endphp` and `@php(…)`, the echoes `{{ … }}`, `{!! … !!}` and `{{{ … }}}`, `@use('Class')` and `@inject('name', 'Class')`. Comments, `@verbatim` and `@{{ … }}` are skipped, and so are the other directives (`@if (…)`, `@foreach (…)`, `@include('view')`, `<x-component>`), which are not complete PHP.
 - A method called on an object links the method of the class the code gives, and nothing else: `$this->m()` (the class around), `$m->m()` for a parameter with a class type that the function never reassigns, `$this->prop->m()` for a typed or promoted property, `(new X())->m()`. A call on a variable of unknown class (`$table->id()`, `{{ $order->name() }}`) gives no edge in these files, since it would link every method of that name in the project; nor does `$this` in a view or an anonymous class (a Volt component, `return new class extends Migration`). `Order::factory()` links `Order`, not its factory.
@@ -153,8 +152,7 @@ To drop a single default, list the ones to keep. Also remove the pattern from `e
 {
   "settings": {
     "laravelDefaultExcludes": [
-      "database/migrations/**", "database/seeders/**", "database/factories/**", "storage/**",
-      "bootstrap/cache/**", "resources/views/**", "**/*.blade.php", "vendor/**"
+      "storage/**", "bootstrap/cache/**", "vendor/**"
     ]
   }
 }

@@ -1,9 +1,11 @@
 # MapX project state
 
-Updated 2026-11-04 (P2 defects, D041/D042). `EXTRACTOR_VERSION` is 32. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
+Updated 2026-11-05 (P2 defects, D041/D042; D043). `EXTRACTOR_VERSION` is 32. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
 
 - **D041/D042:** the owner started the P2 resolution defects and asked for a commit per item, continuing to the end of the batch. Remaining: M2-14, M2-20-R1, M2-21, M2-27, M2-28 and M2-12-R2. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
+- **D043:** Laravel migrations, seeders, factories and views are indexed by default (owner answer of 2026-11-05). Done as M2-29.
 - **Done in the batch:**
+  - **M2-29 (D043):** `LARAVEL_DEFAULT_EXCLUDES` keeps only storage, bootstrap/cache, public and vendor. Existing indexes pick the files up on their next sync; a config an earlier init wrote keeps its explicit patterns.
   - **M0-02-R13:** a package.json edit re-parses only the files a field their resolution reads changed for. A root `version` bump on a 700-file npm tree re-parses 0 files instead of 598. Gaining or losing `vue`/`vue-router` re-parses the files, of any language, that hold a name the vue-router ignore list adds or drops. Full-scan output is byte-identical.
   - **M2-08-R5:** Python and Java package imports never link project symbols.
   - **M2-08-R4:** sync follows a module turned script, and new `declare global` names.
@@ -34,7 +36,7 @@ Updated 2026-11-04 (P2 defects, D041/D042). `EXTRACTOR_VERSION` is 32. Each item
   - M2-12-R2 (P2): sync does not re-link callers when a method appears in a walked class chain.
   - M2-08-R10 and M2-25-R1 (P3, held).
 - **Latest validation:**
-  - `npm run check` exits 0: 161 files, 3535 passed, 4 skipped (M0-02-R13).
+  - `npm run check` exits 0: 161 files, 3539 passed, 4 skipped (M2-29).
   - `npm run test:ui` exits 0: 54 passed on a rerun. The first run missed the perf-large budget by 1% at a load average of 16.
   - `npm run eval` is unchanged, with edges precision 0.9915.
 

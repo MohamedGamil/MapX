@@ -156,3 +156,7 @@
 - M2-16 closed: PHP self::/static::/parent:: calls captured (relative_scope) and resolved through the M2-12 class walk with trait adaptations; per-(file, owner) member map (review P2: superlinear cost). Registered M2-28 (P2, `Foo::m()`) and M2-12-R2 (P2, sync for walked chains); both join the batch.
 - M2-23 closed: Laravel database/ and resources/views/ PHP (Blade converted with lines kept) give class edges; review P2s fixed by a fresh agent (typed receivers, scaffold methods out of name fallback, Blade `@` boundary and inline-form regex, tests). Owner decision open: Laravel default excludes.
 - M0-02-R13 closed: package.json no longer feeds the folder config signature. Per-folder view and package entries are compared per file (gate bits, auto-import, app/package folders, jest, NODE_PATH; package names, dependency kinds, entry fields), and the vue-router ignore list re-parses files holding an added or dropped name, in any language. Review P1s (ignore list, non-JS files) and P2s fixed by a fresh agent. The implementer and the fixer ran out of room or stalled; the integration owner finished verification, re-ran the identity check and measurements on the final code, and wrote the report.
+
+## 2026-11-05 — D043: Laravel database/ and views indexed by default
+
+- D043 (owner): migrations, seeders, factories and views are included by default. Registered M2-29 (P2) and closed it: five patterns leave `LARAVEL_DEFAULT_EXCLUDES` and init's suggestion; one staleness test that asserted the old default was updated; eval unchanged.

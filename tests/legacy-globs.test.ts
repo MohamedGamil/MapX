@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { LARAVEL_DEFAULT_EXCLUDES } from '../src/core/config.js';
+import { LARAVEL_DEFAULT_EXCLUDES, LARAVEL_FORMER_DEFAULT_EXCLUDES } from '../src/core/config.js';
 import { cleanup, init, mapx, mapxWithStderr, query, workspace } from './helpers/e2e.js';
 
 // M0-02-R1: glob filter defects.
@@ -251,48 +251,103 @@ describe('sync after a config filter change', () => {
 });
 
 describe('Laravel default excludes at scan time', () => {
-  // The default settings are scanned once and shared by the tests that need them.
-  let defaults: string[] | undefined;
-  const scanDefaults = () => (defaults ??= scanWith({}));
-  const scanWith = (settings: Record<string, unknown>) => {
-    const root = workspace({ ...files, artisan: '#!/usr/bin/env php\n<?php\n' });
+  // D043 (M2-29): migrations, seeders, factories and views are indexed by default; storage,
+  // bootstrap/cache, public and vendor stay out.
+  const laravelFiles: Record<string, string> = {
+    ...files,
+    artisan: '#!/usr/bin/env php\n<?php\n',
+    'database/migrations/2024_01_01_000000_create_users_table.php': '<?php\nuse App\\Models\\User;\nreturn new class { public function up() { User::query(); } };\n',
+    'database/seeders/DatabaseSeeder.php': php('Database\\Seeders', 'DatabaseSeeder'),
+    'database/factories/UserFactory.php': php('Database\\Factories', 'UserFactory'),
+    'bootstrap/cache/packages.php': '<?php\nreturn [];\n',
+  };
+  const INDEXED_NOW = [
+    'database/migrations/2024_01_01_000000_create_users_table.php',
+    'database/seeders/DatabaseSeeder.php',
+    'database/factories/UserFactory.php',
+    'resources/views/welcome.blade.php',
+  ];
+  const prepare = (root: string, settings: Record<string, unknown>) => {
     init(root);
     const path = join(root, '.mapx', 'config.json');
     const config = JSON.parse(readFileSync(path, 'utf8'));
     config.repos[0].framework = 'laravel';
-    config.settings.excludePatterns = config.settings.excludePatterns.filter((p: string) => !p.includes('blade') && !p.includes('resources/views'));
     // init ran with --no-suggestions on a Laravel app, which records a declined suggestion; the
     // "no globs, not declined" case removes that marker.
     delete config.settings.laravelDefaultExcludes;
     Object.assign(config.settings, settings);
     writeFileSync(path, JSON.stringify(config));
+  };
+  // The default settings are scanned once and shared by the tests that need them.
+  let defaults: string[] | undefined;
+  const scanDefaults = () => (defaults ??= scanWith({}));
+  const scanWith = (settings: Record<string, unknown>) => {
+    const root = workspace(laravelFiles);
+    prepare(root, settings);
     mapx(root, 'scan', root);
     const indexed = query<{ path: string }>(root, 'SELECT path FROM files').map((f) => f.path);
     cleanup(root);
     return indexed;
   };
 
-  it('applies them for framework: laravel even when the config lists no globs', () => {
-    expect(scanDefaults()).not.toContain('resources/views/welcome.blade.php');
+  it('indexes migrations, seeders, factories and views by default, and leaves public and bootstrap/cache out', () => {
+    const indexed = scanDefaults();
+    for (const p of INDEXED_NOW) expect(indexed).toContain(p);
+    expect(indexed).not.toContain('public/index.php');
+    expect(indexed).not.toContain('bootstrap/cache/packages.php');
+    expect(indexed).toContain('app/Models/User.php');
   }, 60000);
 
   it('respects a declined suggestion', () => {
-    expect(scanWith({ laravelDefaultExcludes: false })).toContain('resources/views/welcome.blade.php');
+    const indexed = scanWith({ laravelDefaultExcludes: false });
+    expect(indexed).toContain('public/index.php');
+    expect(indexed).toContain('bootstrap/cache/packages.php');
   }, 60000);
 
-  // M0-02-R2: a list keeps only the defaults it names, so one default can be dropped.
-  it('drops a single default when laravelDefaultExcludes lists the others', () => {
+  // M0-02-R2: a list keeps only the defaults it names, so one default can be dropped; it may also
+  // name the patterns D043 took out of the defaults.
+  it('drops a single default when laravelDefaultExcludes lists the others, and keeps out the former defaults it lists', () => {
     expect(scanDefaults()).not.toContain('public/index.php');
-    const indexed = scanWith({ laravelDefaultExcludes: LARAVEL_DEFAULT_EXCLUDES.filter((p) => p !== 'public/**') });
+    const indexed = scanWith({ laravelDefaultExcludes: [...LARAVEL_DEFAULT_EXCLUDES.filter((p) => p !== 'public/**'), ...LARAVEL_FORMER_DEFAULT_EXCLUDES] });
     expect(indexed).toContain('public/index.php');
-    expect(indexed).not.toContain('resources/views/welcome.blade.php');
+    expect(indexed).not.toContain('bootstrap/cache/packages.php');
+    for (const p of INDEXED_NOW) expect(indexed).not.toContain(p);
   }, 90000);
+
+  // An earlier `mapx init` wrote the former defaults into excludePatterns: that config keeps them out.
+  it('keeps out the former defaults a config lists in excludePatterns', () => {
+    const indexed = scanWith({ excludePatterns: [...LARAVEL_FORMER_DEFAULT_EXCLUDES] });
+    for (const p of INDEXED_NOW) expect(indexed).not.toContain(p);
+    expect(indexed).toContain('app/Models/User.php');
+  }, 60000);
+
+  // An index built with the former defaults gains the files on its next sync, as scan --force has them.
+  it.each([false, true])('adds the files to an index built with the former defaults on the next sync (git: %s)', (withGit) => {
+    const root = workspace(laravelFiles, withGit ? ['.'] : []);
+    try {
+      if (withGit) {
+        writeFileSync(join(root, '.gitignore'), '.mapx/\n');
+        git(root, 'add', '-A');
+        git(root, 'commit', '-qm', 'init');
+      }
+      prepare(root, { laravelDefaultExcludes: [...LARAVEL_DEFAULT_EXCLUDES, ...LARAVEL_FORMER_DEFAULT_EXCLUDES] });
+      mapx(root, 'scan', root);
+      for (const p of INDEXED_NOW) expect(snapshot(root).files).not.toContain(p);
+      prepare(root, {});
+      mapx(root, 'sync', root);
+      const synced = snapshot(root);
+      for (const p of INDEXED_NOW) expect(synced.files).toContain(p);
+      expect(synced.edges.some((e) => e.startsWith('database/migrations/2024_01_01_000000_create_users_table.php|app/Models/User.php|'))).toBe(true);
+      mapx(root, 'scan', root, '--force');
+      expect(synced).toEqual(snapshot(root));
+    } finally {
+      cleanup(root);
+    }
+  }, 120000);
 
   // Review 2026-10-31: the repo-path prefix of a non-root Laravel repo was untested.
   it('scopes the defaults to a non-root repo path', () => {
-    const nested = Object.fromEntries(
-      Object.entries({ ...files, artisan: '#!/usr/bin/env php\n<?php\n' }).map(([p, c]) => [`api/${p}`, c]),
-    );
+    const nested = Object.fromEntries(Object.entries(laravelFiles).map(([p, c]) => [`api/${p}`, c]));
     const root = workspace(nested);
     try {
       init(root);
@@ -300,16 +355,15 @@ describe('Laravel default excludes at scan time', () => {
       const config = JSON.parse(readFileSync(path, 'utf8'));
       config.repos[0].path = 'api';
       config.repos[0].framework = 'laravel';
-      config.settings.excludePatterns = config.settings.excludePatterns.filter(
-        (p: string) => !p.includes('blade') && !p.includes('resources/views') && !p.includes('public'),
-      );
+      config.settings.excludePatterns = config.settings.excludePatterns.filter((p: string) => !p.includes('public') && !p.includes('bootstrap'));
       delete config.settings.laravelDefaultExcludes;
       writeFileSync(path, JSON.stringify(config));
       mapx(root, 'scan', root);
       const indexed = query<{ path: string }>(root, 'SELECT path FROM files').map((f) => f.path);
       expect(indexed).toContain('api/app/Models/User.php');
+      for (const p of INDEXED_NOW) expect(indexed).toContain(`api/${p}`);
       expect(indexed).not.toContain('api/public/index.php');
-      expect(indexed).not.toContain('api/resources/views/welcome.blade.php');
+      expect(indexed).not.toContain('api/bootstrap/cache/packages.php');
     } finally {
       cleanup(root);
     }

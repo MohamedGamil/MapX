@@ -327,15 +327,11 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
   
   console.log('\nDetected Laravel project.');
   console.log('\nSuggested exclusions (recommended):');
-  console.log('  ✓ database/migrations/**   (schema DDL, mostly no app logic)');
-  console.log('  ✓ database/seeders/**      (data fixtures)');
-  console.log('  ✓ database/factories/**    (test data)');
   console.log('  ✓ storage/**               (runtime-generated)');
   console.log('  ✓ bootstrap/cache/**       (artisan-generated cache)');
   console.log('  ✓ public/**                (web assets)');
-  console.log('  ✓ resources/views/**       (views)');
-  console.log('  ✓ **/*.blade.php           (Blade files)');
-  console.log('\nTo index database/ and the views (they give edges for architecture rules), decline, or list the defaults to keep in settings.laravelDefaultExcludes.');
+  console.log('  ✓ vendor/**                (Composer packages)');
+  console.log('\ndatabase/ and resources/views/ (Blade included) are indexed: they give edges for architecture rules (M2-29).');
   
   const answer = await clack.confirm({
     message: 'Add these to .mapx/config.json?',

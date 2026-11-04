@@ -350,3 +350,4 @@ flowchart LR
 - M6-98 ← M6-04 (quality), M6-05 (quality), M6-06 (quality), M6-07 (quality), M6-08 (quality), M6-09 (quality)
 - M5-24-R5 ← M5-24-R1 (hard)
 - M5-24-R6 ← M5-24-R1 (hard)
+- M2-29 ← M2-23 (hard)

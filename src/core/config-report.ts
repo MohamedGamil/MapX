@@ -4,7 +4,7 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { Config } from './config.js';
-import { DEFAULT_CONFIG, JS_INIT_EXCLUDES, LARAVEL_DEFAULT_EXCLUDES, PHP_INIT_EXCLUDES } from './config.js';
+import { DEFAULT_CONFIG, JS_INIT_EXCLUDES, LARAVEL_DEFAULT_EXCLUDES, LARAVEL_FORMER_DEFAULT_EXCLUDES, PHP_INIT_EXCLUDES } from './config.js';
 import { getBuiltinLanguages } from '../languages/registry.js';
 
 /** default: MapX's built-in value (setting absent, or equal to the default); user: set in config.json; env: an environment variable overrides it. */
@@ -29,8 +29,8 @@ export interface ConfigReport {
 }
 
 const DEFAULTS = DEFAULT_CONFIG.settings;
-/** Every pattern MapX itself may write into an exclude list (defaults, init's language extras, Laravel's). */
-const BUILT_IN_EXCLUDES = new Set([...DEFAULTS.excludePatterns, ...PHP_INIT_EXCLUDES, ...JS_INIT_EXCLUDES, ...LARAVEL_DEFAULT_EXCLUDES]);
+/** Every pattern MapX itself may write into an exclude list (defaults, init's language extras, Laravel's, and Laravel's before D043). */
+const BUILT_IN_EXCLUDES = new Set([...DEFAULTS.excludePatterns, ...PHP_INIT_EXCLUDES, ...JS_INIT_EXCLUDES, ...LARAVEL_DEFAULT_EXCLUDES, ...LARAVEL_FORMER_DEFAULT_EXCLUDES]);
 
 const isStringList = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
 const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);

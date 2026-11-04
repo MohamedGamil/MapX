@@ -9,6 +9,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 ## [Unreleased]
 
 ### Changed
+- A Laravel app now indexes its migrations, seeders, factories and views (`database/migrations/`, `database/seeders/`, `database/factories/`, `resources/views/`, `*.blade.php`) by default, so the `laravel` architecture preset's Database and Views layers hold files; `storage/`, `bootstrap/cache/`, `public/` and `vendor/` stay excluded. An existing index picks them up on its next `scan` or `sync`, unless its config lists them in `excludePatterns` (an earlier `mapx init` wrote them there; remove them to index them) (M2-29).
 - On a Laravel app that declines the suggested excludes, `mapx init` no longer adds `**/migrations/**` and `**/seeds/**` to `excludePatterns`, and the suggestion lists no longer call Blade "not yet supported" (M2-23).
 - `npm test` and `npm run test:ui` give each run a private temp folder and fail, naming each leftover, when a test leaves an entry in it; an interrupted run (Ctrl+C, `kill`) removes its folder, the built-CLI mirror included; `npm run test:skills` does the same (M4-09-R5).
 - `sync` now re-parses files after a package.json edit only when a field their resolution reads changed for them (a dependency they import, a workspace package's name or entry fields, the Pinia or Vuex library, a build tool, a `NODE_PATH` script or jest module root); `version`, `scripts`, `description` and the like re-parse nothing, and neither do Python files or a nested package with its own manifest (M0-02-R13).
