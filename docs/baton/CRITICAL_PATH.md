@@ -10,14 +10,14 @@ Remaining effort min/expected/max: **132 / 233 / 349h**. Capacity: 1 engineer(s)
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
-- M5-16-R1 (BACKLOG): prerequisites satisfied
-- M5-16-R2 (BACKLOG): prerequisites satisfied
+- M5-16-R1 (READY): prerequisites satisfied
+- M5-16-R2 (READY): prerequisites satisfied
 - M5-18-R2 (BACKLOG): M2-25; M2-26
-- M5-98-R1 (BACKLOG): prerequisites satisfied
+- M5-98-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-98-R2 (BACKLOG): Owner decision: support user plugin selectors/rules (and the trust model for loading project code) or defer REQ-ARCH-023.
-- M5-22-R1 (BACKLOG): prerequisites satisfied
+- M5-22-R1 (READY): prerequisites satisfied
 - M5-24-R1 (BACKLOG): prerequisites satisfied
-- M5-24-R2 (BACKLOG): prerequisites satisfied
+- M5-24-R2 (IN_PROGRESS): prerequisites satisfied
 - M4-22-R1 (BACKLOG): prerequisites satisfied
 - M4-13-R1 (BACKLOG): Owner hold (D035, 2026-11-03): start only when the owner explicitly asks.
 - M2-08-R6 (BACKLOG): prerequisites satisfied
@@ -38,8 +38,8 @@ Remaining effort min/expected/max: **132 / 233 / 349h**. Capacity: 1 engineer(s)
 - M2-22 (BACKLOG): prerequisites satisfied
 - M2-23 (BACKLOG): prerequisites satisfied
 - M2-24 (BACKLOG): prerequisites satisfied
-- M2-25 (BACKLOG): prerequisites satisfied
-- M2-26 (BACKLOG): prerequisites satisfied
+- M2-25 (IN_PROGRESS): prerequisites satisfied
+- M2-26 (READY): prerequisites satisfied
 - M4-12-R2 (BACKLOG): prerequisites satisfied
 - M6-01 (BACKLOG): prerequisites satisfied
 - M6-02 (BACKLOG): M6-01

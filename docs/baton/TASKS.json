@@ -16798,7 +16798,7 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -16806,7 +16806,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T00:11:00.594Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -16856,7 +16863,7 @@
         "npx vitest run tests/arch-smells.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -16864,7 +16871,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T00:11:00.196Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -17544,15 +17558,28 @@
         "docs/research/deptrac/05-requirements.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-J",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T00:11:02.530Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T00:11:00.984Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:11:02.530Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -21810,7 +21837,7 @@
         "docs/baton/reports/M5-22.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -21818,7 +21845,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T00:11:01.364Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -22305,15 +22339,28 @@
         "npx vitest run tests/external-refs.test.ts tests/arch-hierarchy.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-I",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T00:11:02.136Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T00:10:59.768Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:11:02.136Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -31025,15 +31072,28 @@
         "docs/baton/reports/M5-18-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-H",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T00:11:01.747Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T00:10:58.981Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:11:01.747Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -31084,7 +31144,7 @@
         "docs/baton/reports/M5-18-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
+      "status": "READY",
       "owner": "maintainer",
       "actualHours": null,
       "startedAt": null,
@@ -31092,7 +31152,14 @@
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T00:10:59.368Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
