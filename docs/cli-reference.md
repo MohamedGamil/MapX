@@ -827,7 +827,7 @@ Options:
 - `--violations` — Show only layer dependency flow violations
 - `--json` — Output the architecture report as structured JSON
 
-Without `.mapx/architecture.jsonc`, layer violations come from the file roles. With one, they come from the rules, as `mapx check` reports them (its baseline applied), and the rule-derived smells (`layer-cycle`, `layer-skip`, `dead-allowance`, `weak-allowance`, `unstable-layer-dependency`, `abstractness-distance`, `deprecated-usage`, and M5-24's `vendor-leak`, `undeclared-dependency`, `dev-dependency-in-prod`) join the list. Those smells print a `Source:` line (`rules`, or `inferred-roles` for the role-order violations `policy.alsoInferred` keeps), and layer-level ones a `Layers:` line. See [architecture-rules.md](architecture-rules.md#smells).
+Without `.mapx/architecture.jsonc`, layer violations come from the file roles. With one, they come from the rules, as `mapx check` reports them (its baseline applied), and the rule-derived smells (`layer-cycle`, `layer-skip`, `dead-allowance`, `weak-allowance`, `unstable-layer-dependency`, `abstractness-distance`, `deprecated-usage`, and M5-24's `vendor-leak`, `undeclared-dependency`, `dev-dependency-in-prod`, and M5-16-R2's `orphan-element` and `baseline-debt`) join the list. Those smells print a `Source:` line (`rules`, or `inferred-roles` for the role-order violations `policy.alsoInferred` keeps), and layer-level ones a `Layers:` line. See [architecture-rules.md](architecture-rules.md#smells).
 
 Examples:
 ```bash

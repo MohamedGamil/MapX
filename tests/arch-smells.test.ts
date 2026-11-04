@@ -25,12 +25,14 @@ vi.mock('../src/arch/evaluate.js', async (importOriginal) => {
 // configuration.
 const FIXTURE = resolve(__dirname, 'fixtures/arch-smells/ts');
 const LEGACY = resolve(__dirname, 'fixtures/arch-smells/legacy');
+const EXTRA = resolve(__dirname, 'fixtures/arch-smells/extra'); // files laid over the app for orphan-element and baseline-debt (M5-16-R2)
 const SLOW = { timeout: 180_000 };
 
 let tmp = '';
 let app = ''; // the fixture as it is
 let noconf = ''; // without an architecture configuration
 let also = ''; // with policy.alsoInferred, and a file in no layer
+let extra = ''; // the fixture with the EXTRA files (M5-16-R2)
 let client: Client;
 
 const MONEY_ORDER = ['src/shared/Money.ts', 'src/domain/Order.ts'];
@@ -84,7 +86,9 @@ beforeAll(async () => {
   app = join(tmp, 'app');
   noconf = join(tmp, 'noconf');
   also = join(tmp, 'also');
-  for (const root of [app, noconf, also]) cpSync(FIXTURE, root, { recursive: true });
+  extra = join(tmp, 'extra');
+  for (const root of [app, noconf, also, extra]) cpSync(FIXTURE, root, { recursive: true });
+  cpSync(EXTRA, extra, { recursive: true });
   rmSync(join(noconf, '.mapx/architecture.jsonc'));
   const cfg = join(also, '.mapx/architecture.jsonc');
   writeFileSync(cfg, readFileSync(cfg, 'utf8').replace('"layers": [', '"policy": { "alsoInferred": true },\n  "layers": ['));
@@ -101,7 +105,7 @@ beforeAll(async () => {
     '}',
     '',
   ].join('\n'));
-  for (const root of [app, noconf, also]) {
+  for (const root of [app, noconf, also, extra]) {
     init(root);
     mapx(root, 'scan');
   }
@@ -340,6 +344,97 @@ describe('rule-derived smells: a positive and a negative case each (criterion 3)
     expect(smell('deprecated-usage').flatMap((s) => s.involvedFiles)).not.toContain('src/shared/Money.ts');
     // The fixture does declare it, deprecated, so the negative case is real.
     expect(readFileSync(join(app, 'src/shared/Money.ts'), 'utf8')).toContain('/** @deprecated use forOrder() */\n  legacyAmount()');
+  });
+});
+
+describe('orphan-element and baseline-debt (M5-16-R2, AR-18)', SLOW, () => {
+  const smell = (type: string, root = extra) => smellsOf(root).filter((s) => s.type === type);
+  const edgeTargets = (root: string) => {
+    const store = new Store(join(root, '.mapx', 'mapx.db'));
+    try {
+      return new Set((store.raw.prepare('SELECT target_file FROM edges').all() as Array<{ target_file: string }>).map((r) => r.target_file));
+    } finally {
+      store.close();
+    }
+  };
+
+  it('orphan-element: DeadHelper is in no layer and nothing depends on it; the rest of src/legacy and OrderController are not orphans', () => {
+    expect(smell('orphan-element').map((s) => [s.description, s.involvedFiles, s.severity, s.source])).toEqual([
+      ['Orphan element: go/legacy/dead.go is in no layer and nothing depends on it', ['go/legacy/dead.go'], 'info', 'rules'],
+      ['Orphan element: java/x/DeadService.java is in no layer and nothing depends on it', ['java/x/DeadService.java'], 'info', 'rules'],
+      ['Orphan element: php/DeadPhp.php is in no layer and nothing depends on it', ['php/DeadPhp.php'], 'info', 'rules'],
+      ['Orphan element: py/dead.py is in no layer and nothing depends on it', ['py/dead.py'], 'info', 'rules'],
+      ['Orphan element: src/legacy/DeadHelper.ts is in no layer and nothing depends on it', ['src/legacy/DeadHelper.ts'], 'info', 'rules'],
+    ]);
+    // Go: an import names a package, so main's import of go/shapes clears perimeter.go, which no call reaches
+    // and no edge targets; main.go, which declares `func main`, is not an orphan either.
+    const goTargets = edgeTargets(extra);
+    expect(goTargets.has('go/shapes/area.go')).toBe(true);
+    for (const f of ['go/shapes/perimeter.go', 'go/main.go', 'go/legacy/dead.go']) expect(goTargets.has(f), f).toBe(false);
+    // The negatives are real, by the fixture's own edges: UsedHelper is imported (by DeadHelper, itself in no
+    // layer); OrderController is in a layer (Controller) and imported by nothing; the entry point, the configuration
+    // file and the file without a declaration are imported by nothing either.
+    const targets = edgeTargets(extra);
+    expect(targets.has('src/legacy/UsedHelper.ts')).toBe(true);
+    for (const f of ['src/legacy/DeadHelper.ts', 'src/controller/OrderController.ts', 'src/main.ts', 'src/legacy/vite.config.ts', 'src/legacy/karma.conf.js', 'src/legacy/notes.ts']) expect(targets.has(f), f).toBe(false);
+    expect(readFileSync(join(extra, 'src/legacy/notes.ts'), 'utf8')).not.toMatch(/\b(class|function|const|export)\b/);
+    // Without the extra files the fixture has none; a layer for the folders of the positives takes them out of the smell.
+    expect(smell('orphan-element', app)).toEqual([]);
+    withConfig(extra, (doc) => doc.replace('"layers": [', '"layers": [\n    { "name": "Legacy", "selectors": [{ "path": "src/legacy/**" }, { "path": "go/legacy/**" }, { "path": "py/dead.py" }, { "path": "java/x/DeadService.java" }, { "path": "php/DeadPhp.php" }] },'), () => {
+      expect(smell('orphan-element')).toEqual([]);
+    });
+  });
+
+  // One negative case per class of exemption (review of M5-16-R2): files nothing imports by design. Each is in no
+  // layer, is indexed with a top-level symbol and has no inbound edge, so only the exemption keeps it out.
+  it('orphan-element: entry points, registered folders, runtime files, declarations, tests, `package main` and annotated applications are not orphans', () => {
+    const store = new Store(join(extra, '.mapx', 'mapx.db'));
+    const exempt: Record<string, string[]> = {
+      'a registered folder': ['bin/serve.ts', 'src/routes/users.ts', 'src/controllers/UserController.ts', 'src/migrations/001_init.ts', 'src/plugins/auth.ts', 'scripts/build.ts'],
+      'a runtime or declaration file': ['src/server.ts', 'src/shapes.d.ts', 'py/manage.py', 'py/wsgi.py', 'py/asgi.py', 'py/__main__.py', 'py/__init__.py'],
+      'a test by the classifier\'s own definition': ['e2e/login.ts', 'src/testing/util.ts', 'src/test-utils.ts', 'vitest.setup.ts', 'py/test_helpers.py', 'java/x/OrderIT.java', 'php/OrderTest.php'],
+      'a main method or an application annotation': ['java/x/Application.java', 'java/x/Boot.java'],
+      'a file of a Go package main': ['go/tool/main.go', 'go/tool/util.go'],
+      'an entry role': ['src/main.ts'],
+    };
+    try {
+      const indexed = new Map((store.raw.prepare('SELECT f.path AS path, (SELECT COUNT(*) FROM symbols s WHERE s.file_path = f.path) AS symbols FROM files f').all() as Array<{ path: string; symbols: number }>).map((r) => [r.path, r.symbols]));
+      const targets = edgeTargets(extra);
+      for (const [why, files] of Object.entries(exempt)) {
+        for (const f of files) {
+          expect(indexed.get(f), `${f} (${why}) is indexed with a symbol`).toBeGreaterThan(0);
+          expect(targets.has(f), `${f} (${why}) has no inbound edge`).toBe(false);
+          expect(smell('orphan-element').flatMap((s) => s.involvedFiles), `${f} (${why})`).not.toContain(f);
+        }
+      }
+    } finally {
+      store.close();
+    }
+  });
+
+  it('baseline-debt: the baselined violations of each source layer; none without a baseline, and none for a layer with no baselined violation', () => {
+    expect(smell('baseline-debt')).toEqual([]);
+    withBaseline(extra, null, () => {
+      // The oracle: what `mapx check` skips by the baseline, by source layer.
+      const r = mapxResult(extra, 'check', '--format', 'json', '--report-skipped');
+      const skipped = (JSON.parse(r.stdout).findings as Array<{ kind: string; skippedBy?: string; source: { element: string; layers: string[] } }>).filter((f) => f.kind === 'skipped' && f.skippedBy === 'baseline');
+      expect(skipped.map((f) => `${f.source.layers.join('+')} ${f.source.element}`).sort()).toEqual([
+        'Repository src/repository/AuditTrail.ts#AuditTrail',
+        'Repository src/repository/AuditTrail.ts#AuditTrail',
+        'Shared src/shared/Money.ts#Money',
+      ]);
+      expect(smell('baseline-debt').map((s) => [s.description, s.involvedLayers, s.severity, s.source])).toEqual([
+        ['Baseline debt: layer Repository has 2 baselined violations (disallowed-layer: 2)', ['Repository'], 'info', 'rules'],
+        ['Baseline debt: layer Shared has 1 baselined violation (disallowed-layer: 1)', ['Shared'], 'info', 'rules'],
+      ]);
+      // A baseline of only Shared's entry: Repository has no debt (its violations are reported again).
+      const file = join(extra, '.mapx/architecture.baseline.json');
+      const baseline = JSON.parse(readFileSync(file, 'utf8')) as { entries: Array<{ source: string }> };
+      writeFileSync(file, JSON.stringify({ ...baseline, entries: baseline.entries.filter((e) => e.source.startsWith('src/shared/')) }));
+      expect(smell('baseline-debt').map((s) => s.involvedLayers)).toEqual([['Shared']]);
+      expect(smellsOf(extra).filter((s) => s.type === 'layer-violation').flatMap((s) => s.involvedFiles)).toContain('src/repository/AuditTrail.ts');
+    });
+    expect(smell('baseline-debt')).toEqual([]);
   });
 });
 

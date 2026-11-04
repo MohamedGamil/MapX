@@ -3,6 +3,28 @@ import type { FileRole, CodebaseProfile, ClassificationResult, ClassificationSig
 import picomatch from 'picomatch';
 import * as path from 'node:path';
 
+/**
+ * Is this workspace-relative path a test file or test support, by the conventions of the common
+ * ecosystems? The one definition: the `test` role uses it, and so do the architecture smells that
+ * must not count tests as production code (M5-16-R1 review).
+ *  - folders: tests, test, __tests__, spec, specs, e2e, testing, cypress, __mocks__, __fixtures__;
+ *  - suffixes before the extension: `.test`, `.spec`, `.cy`, `.e2e`, `.e2e-spec` (Jest, Vitest, Cypress,
+ *    NestJS, Vue `.spec.vue`), `_test.go`, `_test.py`, `_test.exs`, `_spec.rb`, `*Test.php`, `*Tests.cs`,
+ *    `*IT.java` (Failsafe), `test_*.py`, `tests.py`, `conftest.py`;
+ *  - support: `test-utils`, `vitest.setup`, `jest.setup`, `setupTests`.
+ */
+export function isTestPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  const parts = lower.split('/');
+  const base = parts[parts.length - 1]!;
+  if (parts.slice(0, -1).some((p) => ['tests', 'test', '__tests__', 'spec', 'specs', 'e2e', 'testing', 'cypress', '__mocks__', '__fixtures__'].includes(p))) return true;
+  if (/\.(test|spec|cy|e2e|e2e-spec)\.[a-z0-9]+$/.test(base)) return true;
+  if (/(_test\.(go|py|exs?)|_spec\.rb|^test_.*\.py|^tests?\.py|^conftest\.py)$/.test(base)) return true;
+  if (/^(vitest|jest)\.setup\./.test(base) || /^setuptests\./.test(base) || /test-utils?\b/.test(base)) return true;
+  // Case matters for these suffixes: `OrderTest.php` and `OrderIT.java`, not `Latest.java` or `Wait.java`.
+  return /[A-Za-z0-9](Tests?\.(php|java|kt|cs|swift|scala)|IT\.java|ITCase\.java)$/.test(filePath);
+}
+
 export class RoleClassifier {
   private configSettings: any;
 
@@ -157,7 +179,7 @@ export class RoleClassifier {
     const parts = lower.split('/');
 
     // Universal high priority
-    if (parts.some(p => p === 'tests' || p === 'test' || p === '__tests__' || p === 'spec' || p === 'specs') || /\.(test|spec)\.[a-z0-9]+$/.test(lower)) {
+    if (isTestPath(filePath)) {
       return { source: 'path', role: 'test', confidence: 0.95, reason: 'Matched test path pattern' };
     }
     if (parts.some(p => p === 'docs' || p === 'documentation') || basename.endsWith('.md') || basename.endsWith('.mdx')) {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RoleClassifier } from '../src/core/role-classifier.js';
+import { RoleClassifier, isTestPath } from '../src/core/role-classifier.js';
 import type { Store } from '../src/core/store.js';
 import type { CodebaseProfile } from '../src/types.js';
 
@@ -51,12 +51,30 @@ const mobileProfile: CodebaseProfile = { ...fullStack, archetype: 'mobile-app', 
 // Universal high-priority path signals
 // ─────────────────────────────────────────────────────────────────
 
+// M5-16-R1 review: the one definition of a test file, used by the `test` role and by the architecture smells.
+describe('isTestPath', () => {
+  it.each([
+    'src/foo.test.ts', 'src/foo.spec.tsx', 'src/comp.spec.vue', 'cypress/e2e/home.cy.ts', 'test/app.e2e-spec.ts', 'src/a.e2e.ts',
+    'tests/helper.ts', 'src/__tests__/a.ts', 'e2e/login.ts', 'src/testing/util.ts', 'src/__mocks__/db.ts', 'src/test/java/x/A.java',
+    'infra/http_gateway_test.go', 'app/test_order.py', 'app/order_test.py', 'app/tests.py', 'app/conftest.py', 'spec/order_spec.rb',
+    'app/Domain/OrderTest.php', 'src/OrderTests.cs', 'src/x/OrderIT.java', 'src/x/OrderITCase.java',
+    'src/test-utils.ts', 'src/utils/test-utils.tsx', 'vitest.setup.ts', 'jest.setup.js', 'src/setupTests.ts',
+  ])('%s is a test', (path) => expect(isTestPath(path)).toBe(true));
+
+  it.each([
+    'src/Latest.java', 'src/Wait.java', 'src/contest.ts', 'src/attest.go', 'src/protest.py', 'src/contests.ts', 'src/testimony.ts',
+    'src/domain/Order.ts', 'app/orders.py', 'src/latest.php', 'src/Greatest.cs', 'src/testing.ts', 'src/spectrum.ts', 'src/inspector.ts',
+  ])('%s is not', (path) => expect(isTestPath(path)).toBe(false));
+});
+
 describe('RoleClassifier — path signals', () => {
   it('classifies test files via path segment', () => {
     const c = new RoleClassifier(makeStore());
     expect(c.classify('tests/foo.test.ts', 'r', fullStack).role).toBe('test');
     expect(c.classify('src/__tests__/foo.ts', 'r', fullStack).role).toBe('test');
     expect(c.classify('src/foo.spec.ts', 'r', fullStack).role).toBe('test');
+    expect(c.classify('infra/http_gateway_test.go', 'r', fullStack).role).toBe('test');
+    expect(c.classify('e2e/login.ts', 'r', fullStack).role).toBe('test');
   });
 
   it('classifies docs via path', () => {

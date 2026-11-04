@@ -23,6 +23,8 @@
 //                              a transitive or unlisted one (package known, direct false)
 //   dev-dependency-in-prod     code in scope that is not a test, configuration or script (file role,
 //                              or a conventional config file name) uses a dev-only package
+//   orphan-element             a file in no layer that declares code and that no other file depends on
+//   baseline-debt              per layer, the violations the baseline skips (M5-16-R2)
 //
 // The observed layer graph is the report's, after the baseline: a baselined violation is
 // acknowledged debt (baseline-debt is its own concern), so it makes no cycle and no coupling.
@@ -52,7 +54,7 @@ export const DISTANCE_THRESHOLD = 0.7;
 export const RULE_SMELL_TYPES = [
   'architecture-config', 'layer-violation', 'layer-cycle', 'layer-skip', 'dead-allowance', 'weak-allowance',
   'unstable-layer-dependency', 'abstractness-distance', 'deprecated-usage', 'vendor-leak', 'undeclared-dependency',
-  'dev-dependency-in-prod',
+  'dev-dependency-in-prod', 'orphan-element', 'baseline-debt',
 ] as const;
 
 const TYPE_KINDS = new Set(['class', 'interface', 'trait', 'struct', 'enum']);
@@ -72,6 +74,8 @@ export function ruleSmells(ctx: ArchContext, report: ArchReport): RuleSmell[] {
     ...allowanceSmells(ctx),
     ...deprecatedUsageSmells(ctx),
     ...packageSmells(ctx),
+    ...orphanSmells(ctx),
+    ...baselineDebtSmells(report),
   ];
   const order = new Map<string, number>(RULE_SMELL_TYPES.map((t, i) => [t, i]));
   return smells.sort((a, b) => (order.get(a.type)! - order.get(b.type)!) || (a.description < b.description ? -1 : a.description > b.description ? 1 : 0));
@@ -441,6 +445,98 @@ function packageSmells(ctx: ArchContext): RuleSmell[] {
     }
   }
   return [...groups.values()];
+}
+
+// ─── orphan-element, baseline-debt ────────────────────────────────────────────────────────────
+
+/**
+ * Roles of files that nothing imports by design: entry points, the CLI, routes and controllers,
+ * middleware and plugins (registered by the framework or the runtime), tests, configuration,
+ * scripts, documentation and assets. The role classifier already knows these (path conventions and
+ * the codebase profile), so they come first; the names below fill the gaps where the profile does
+ * not give the role (a `routes/` folder in a project with no backend profile).
+ */
+const NOT_IMPORTED_ROLES = new Set([...NOT_PRODUCTION_ROLES, 'entry', 'docs', 'styles', 'assets', 'cli', 'api', 'middleware', 'plugins']);
+/** Folders whose files a framework, a runner or a tool loads by convention. */
+const REGISTERED_DIRS = new Set(['bin', 'scripts', 'routes', 'controllers', 'migrations', 'plugins', 'cmd']);
+/** File names the runtime or a server loads: `server.ts`, `manage.py`, `wsgi.py`, `asgi.py`, `__main__.py`, `__init__.py`, `*.d.ts`. */
+const REGISTERED_FILE = /(^|\/)(server\.[cm]?[jt]sx?|manage\.py|wsgi\.py|asgi\.py|__main__\.py|__init__\.py)$|\.d\.[cm]?ts$/;
+/** Annotations that make a class the application's entry point or a registered component. */
+const ENTRY_ANNOTATIONS = new Set(['SpringBootApplication', 'SpringBootConfiguration']);
+
+/**
+ * AR-18 `orphan-element` (dead code inside an uncovered area): a file in no layer, in the scope's
+ * paths, that declares a top-level symbol and that no other file depends on, by any stored edge.
+ * Not orphans: files no one is meant to import. These are: a role in `NOT_IMPORTED_ROLES` (a test is
+ * the `test` role, which `isTestPath` in the role classifier decides: one definition; a file a
+ * framework registers has an inbound route, middleware or listener edge already), a configuration,
+ * registered-folder or runtime file by name, a file that declares `main` (Java, Kotlin, Go, C#, Python …) or a Spring Boot
+ * application, every file of a Go `package main` (a directory with a top-level `main`), and files
+ * that declare nothing. A Go package is judged as a whole, since an import names the package and not
+ * one of its files: one file of it with an inbound edge from outside the package clears all of them.
+ * The unit is the file: a symbol's callers are not always resolved, so a symbol-level orphan would be
+ * mostly noise.
+ */
+function orphanSmells(ctx: ArchContext): RuleSmell[] {
+  const view = ctx.membership.view;
+  const dirOf = (file: string) => file.slice(0, file.lastIndexOf('/') + 1);
+  const unit = (file: string) => (view.files.get(file)?.language === 'go' ? dirOf(file) : file);
+  const reached = new Set<string>();
+  for (const r of edgeRows(ctx)) if (unit(r.source_file) !== unit(r.target_file)) reached.add(unit(r.target_file));
+  // Go directories that are a `package main`: a top-level `func main` in one of their files.
+  const mainDirs = new Set<string>();
+  for (const [path, file] of view.files) {
+    if (file.language === 'go' && view.ofFile(path).some((e) => e.kind === 'symbol' && e.topLevel && e.name === 'main')) mainDirs.add(dirOf(path));
+  }
+  const out: RuleSmell[] = [];
+  for (const [path, file] of view.files) {
+    if (!ctx.scope.path(path) || reached.has(unit(path))) continue;
+    if (NOT_IMPORTED_ROLES.has(file.role ?? '') || CONFIG_FILE_NAME.test(path) || REGISTERED_FILE.test(path)) continue;
+    if (path.split('/').slice(0, -1).some((d) => REGISTERED_DIRS.has(d.toLowerCase()))) continue;
+    const symbols = view.ofFile(path).filter((e) => e.kind === 'symbol');
+    if (!symbols.some((e) => e.topLevel) || ctx.membership.primaryOf(`file:${path}`).length) continue;
+    if (file.language === 'go' && mainDirs.has(dirOf(path))) continue;
+    // Runs itself: a `main` function or method, or an annotation that makes the class the application.
+    if (symbols.some((e) => (e.name === 'main' && (e.symbolKind === 'function' || e.symbolKind === 'method')) || e.decorators?.some((d) => ENTRY_ANNOTATIONS.has(d.name)))) continue;
+    out.push(smell({
+      type: 'orphan-element',
+      severity: 'info',
+      description: `Orphan element: ${path} is in no layer and nothing depends on it`,
+      involvedFiles: [path],
+      suggestion: 'Delete it if it is dead, or give it a layer (`mapx arch which` shows how the selectors see it) and import it from where it is used.',
+      repo: file.repo,
+    }));
+  }
+  return out;
+}
+
+/**
+ * AR-18 `baseline-debt`: per source layer, how many violations the baseline skips, by rule.
+ * A baseline entry records no date, so the debt is not aged. A violation of a source in several
+ * layers counts for each of them.
+ */
+function baselineDebtSmells(report: ArchReport): RuleSmell[] {
+  const debt = new Map<string, Map<string, number>>();
+  for (const f of report.findings) {
+    if (f.kind !== 'skipped' || f.skippedBy !== 'baseline') continue;
+    for (const layer of f.source?.layers ?? (f.source?.layer ? [f.source.layer] : [])) {
+      const rules = debt.get(layer) ?? new Map<string, number>();
+      rules.set(f.rule ?? 'unknown', (rules.get(f.rule ?? 'unknown') ?? 0) + 1);
+      debt.set(layer, rules);
+    }
+  }
+  return [...debt].map(([layer, rules]) => {
+    const total = [...rules.values()].reduce((a, b) => a + b, 0);
+    return smell({
+      type: 'baseline-debt',
+      severity: 'info',
+      description: `Baseline debt: layer ${layer} has ${total} baselined violation${total === 1 ? '' : 's'} (${[...rules].sort(([a], [b]) => (a < b ? -1 : 1)).map(([r, n]) => `${r}: ${n}`).join(', ')})`,
+      involvedFiles: [],
+      involvedLayers: [layer],
+      suggestion: `Fix the violations of ${layer} the baseline lists (\`mapx check --layer ${layer} --report-skipped\`), then regenerate the baseline: it only shrinks.`,
+      repo: null,
+    });
+  });
 }
 
 /** A source → target file pair, as layer-violation smells name an edge. */
