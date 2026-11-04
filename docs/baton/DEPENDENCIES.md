@@ -180,6 +180,8 @@ flowchart LR
 - M5-16 ← M5-04 (hard), M5-08 (hard)
 - M5-16-R1 ← M5-16 (hard), M5-24 (hard)
 - M5-16-R2 ← M5-16 (hard)
+- M5-16-R3 ← M5-16-R2 (hard)
+- M5-16-R4 ← M5-16-R1 (hard)
 - M5-17 ← M5-04 (hard), M5-06 (hard)
 - M5-17-R1 ← M5-17 (hard), M5-09 (hard)
 - M5-18 ← M5-05 (hard), M5-06 (hard), M5-07 (hard), M4-01 (interface)

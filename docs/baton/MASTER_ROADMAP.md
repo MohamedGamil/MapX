@@ -288,15 +288,17 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-15** Dashboard Architecture view and /api/arch endpoints — DONE, P3, 12h; depends on M5-05, M5-13.
 - **M5-15-R1** Dashboard architecture: health trend and repo-narrowed diagram, DSM and tiles — BACKLOG, P3, 8h; depends on M5-15.
 - **M5-16** Rule-derived smells and single-source layer violations — DONE, P2, 8h; depends on M5-04, M5-08.
-- **M5-16-R1** score-arch scores smells — READY, P3, 4h; depends on M5-16, M5-24.
-- **M5-16-R2** Smells: orphan-element and baseline-debt — READY, P3, 4h; depends on M5-16.
+- **M5-16-R1** score-arch scores smells — IN_PROGRESS, P3, 4h; depends on M5-16, M5-24.
+- **M5-16-R2** Smells: orphan-element and baseline-debt — IN_PROGRESS, P3, 4h; depends on M5-16.
+- **M5-16-R3** Baseline entries record their date; baseline-debt reports age — BACKLOG, P3, 3h; depends on M5-16-R2.
+- **M5-16-R4** score-arch labels dead-allowance, weak-allowance, unstable-layer-dependency and abstractness-distance — BACKLOG, P3, 3h; depends on M5-16-R1.
 - **M5-17** `mapx arch init`: inference from roles/clusters/frameworks and first presets — DONE, P2, 12h; depends on M5-04, M5-06.
 - **M5-17-R1** Presets use hierarchy selectors; remaining AR-15 presets — DONE, P3, 8h; depends on M5-17, M5-09.
 - **M5-18** Dogfood: MapX architecture config, CI step and user docs — DONE, P2, 6h; depends on M5-05, M5-06, M5-07, M4-01.
 - **M5-18-R1** MapX dogfood config judges calls and references, not only imports — DONE, P2, 3h; depends on M5-18, M2-08-R3.
 - **M5-18-R2** MapX's own check covers tests/fixtures again — DONE, P3, 2h; depends on M5-18-R1, M2-25, M2-26.
 - **M5-98** M5 acceptance: re-score architecture-rules fixture — DONE, P1, 2h; depends on M5-04, M5-06, M5-11, M5-16.
-- **M5-98-R1** `mapx check --since <git-ref>`: judge only what changed (ratchet) — IN_PROGRESS, P2, 8h; depends on M5-06.
+- **M5-98-R1** `mapx check --since <git-ref>`: judge only what changed (ratchet) — DONE, P2, 8h; depends on M5-06.
 - **M5-98-R2** User plugin selectors and rules, or a recorded decision to defer them — BACKLOG, P3, 8h; depends on M5-04.
 - **M5-19** External references store: capture unresolved out-of-workspace references — DONE, P1, 6h; depends on M5-03, M5-01, M4-03, M5-03-R1.
 - **M5-20** External references: npm package attribution and builtins — DONE, P2, 6h; depends on M5-19, M5-01.
@@ -305,7 +307,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — DONE, P3, 4h; depends on M5-21.
 - **M5-19-R1** An attribution-rules version re-decides external references without a re-parse — DONE, P2, 3h; depends on M5-19.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
-- **M5-22-R1** The architecture fixture scores Poetry and pip attribution, not only uv — IN_PROGRESS, P3, 3h; depends on M5-22.
+- **M5-22-R1** The architecture fixture scores Poetry and pip attribution, not only uv — DONE, P3, 3h; depends on M5-22.
 - **M5-23** External references: Go modules package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
 - **M5-23-R1** An unreadable go.mod keeps the module's own imports internal — DONE, P3, 2h; depends on M5-23.
 - **M5-24** Package, builtin and ambient selectors; uncovered and vendor-confinement reporting — DONE, P2, 6h; depends on M5-20, M5-21, M5-22, M5-23, M5-04.

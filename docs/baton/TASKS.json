@@ -17737,14 +17737,22 @@
         "docs/research/deptrac/05-requirements.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-J",
       "actualHours": null,
       "startedAt": "2026-11-04T00:11:02.530Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T02:18:04.740Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-98-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/arch-since.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-98-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T00:11:00.984Z",
@@ -17757,6 +17765,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:18:04.261Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:18:04.740Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/arch-since.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-98-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -22016,14 +22042,22 @@
         "docs/baton/reports/M5-22.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-J2",
       "actualHours": null,
       "startedAt": "2026-11-04T01:00:42.780Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T02:18:05.617Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-22-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-22-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T00:11:01.364Z",
@@ -22036,6 +22070,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:18:05.187Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:18:05.617Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-22-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
