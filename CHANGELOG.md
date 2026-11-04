@@ -81,6 +81,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 - The terminal logo is half its former size, 32 columns by 12 rows instead of 64 by 23, without losing detail: each cell is split into two half-blocks, so every row of the art survives and its shading becomes `#ff02fe` mixed toward the terminal's background (dark or light when `COLORFGBG` says so, else a mid grey that reads on both); 256-colour terminals get one colour per shade. It shows in terminals from 32 columns, and no longer when `CI` is set or on `TERM=dumb` (M4-25, D031).
 
 ### Fixed
+- A call through a loop variable, a catch parameter or a local destructured from a literal or a package no longer links a same-named function or class in another file (M2-25).
+- A class or function destructured from `load('bun:sqlite')` or a similar package call no longer links a same-named project class or function (M2-26).
 - A Go method whose receiver type is written in parentheses (`func (b (*Box)) M()`, `func (b (Box[T])) Get()`) is indexed as a method of its type (M5-25-R4).
 - A Go `replace` whose local target folder is outside the MapX workspace and its registered repos (`replace X => ../../outside/y`, with or without a version, symlinks resolved) makes imports of X external references attributed to X, not workspace packages (M5-25-R3).
 - A change to MapX's external-reference attribution rules now reaches an existing index on the next sync, which attributes the stored references again without re-parsing any file (M5-19-R1).

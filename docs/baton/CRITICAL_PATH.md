@@ -6,21 +6,21 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **132 / 233 / 349h**. Capacity: 1 engineer(s) × 20 h/week → **11.7 weeks**, conditional finish **2027-01-24** (as of 2026-11-04).
+Remaining effort min/expected/max: **129 / 227 / 340h**. Capacity: 1 engineer(s) × 20 h/week → **11.3 weeks**, conditional finish **2027-01-22** (as of 2026-11-04).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
 - M5-16-R1 (READY): prerequisites satisfied
 - M5-16-R2 (READY): prerequisites satisfied
-- M5-18-R2 (BACKLOG): M2-25; M2-26
 - M5-98-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-98-R2 (BACKLOG): Owner decision: support user plugin selectors/rules (and the trust model for loading project code) or defer REQ-ARCH-023.
-- M5-22-R1 (READY): prerequisites satisfied
+- M5-22-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-24-R1 (BACKLOG): prerequisites satisfied
 - M5-24-R2 (IN_PROGRESS): prerequisites satisfied
 - M4-22-R1 (BACKLOG): prerequisites satisfied
 - M4-13-R1 (BACKLOG): Owner hold (D035, 2026-11-03): start only when the owner explicitly asks.
 - M2-08-R6 (BACKLOG): prerequisites satisfied
+- M2-08-R7 (BACKLOG): prerequisites satisfied
 - M2-08-R4 (BACKLOG): prerequisites satisfied
 - M2-08-R5 (BACKLOG): prerequisites satisfied
 - M4-09-R5 (BACKLOG): prerequisites satisfied
@@ -38,8 +38,6 @@ Remaining effort min/expected/max: **132 / 233 / 349h**. Capacity: 1 engineer(s)
 - M2-22 (BACKLOG): prerequisites satisfied
 - M2-23 (BACKLOG): prerequisites satisfied
 - M2-24 (BACKLOG): prerequisites satisfied
-- M2-25 (IN_PROGRESS): prerequisites satisfied
-- M2-26 (READY): prerequisites satisfied
 - M4-12-R2 (BACKLOG): prerequisites satisfied
 - M6-01 (BACKLOG): prerequisites satisfied
 - M6-02 (BACKLOG): M6-01
@@ -58,9 +56,6 @@ Remaining effort min/expected/max: **132 / 233 / 349h**. Capacity: 1 engineer(s)
 | M5-15-R1 | 0 | 8 | 43 | 51 | 43 |
 | M5-16-R1 | 0 | 4 | 47 | 51 | 47 |
 | M5-16-R2 | 0 | 4 | 47 | 51 | 47 |
-| M2-25 | 0 | 4 | 45 | 49 | 45 |
-| M2-26 | 0 | 4 | 45 | 49 | 45 |
-| M5-18-R2 | 4 | 6 | 49 | 51 | 45 |
 | M5-98-R1 | 0 | 8 | 43 | 51 | 43 |
 | M5-98-R2 | 0 | 8 | 43 | 51 | 43 |
 | M5-22-R1 | 0 | 3 | 48 | 51 | 48 |
@@ -69,6 +64,7 @@ Remaining effort min/expected/max: **132 / 233 / 349h**. Capacity: 1 engineer(s)
 | M4-22-R1 | 0 | 1 | 50 | 51 | 50 |
 | M4-13-R1 | 0 | 2 | 49 | 51 | 49 |
 | M2-08-R6 | 0 | 4 | 47 | 51 | 47 |
+| M2-08-R7 | 0 | 4 | 47 | 51 | 47 |
 | M2-08-R4 | 0 | 3 | 48 | 51 | 48 |
 | M2-08-R5 | 0 | 6 | 45 | 51 | 45 |
 | M4-09-R5 | 0 | 3 | 48 | 51 | 48 |

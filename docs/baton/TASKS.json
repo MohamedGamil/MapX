@@ -17390,15 +17390,64 @@
         "docs/baton/reports/M5-18-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-ff-lane-H3",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T02:04:41.790Z",
+      "completedAt": "2026-11-04T02:04:45.122Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M5-18-R2.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/dogfood-architecture.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-18-R2.md"
+        },
+        {
+          "command": "npm run build:npm",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-18-R2.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T02:04:40.224Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:04:41.790Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:04:43.417Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:04:45.122Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/dogfood-architecture.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-18-R2.md"
+            },
+            {
+              "command": "npm run build:npm",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-18-R2.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -27647,7 +27696,7 @@
       "id": "M2-08-R6",
       "title": "A bare specifier never resolves to a relative project file",
       "objective": "`import x from 'express'` and `require('express')` never resolve to ./express.js or another relative file; a bare specifier resolves only through a package, tsconfig/jsconfig baseUrl or paths, a bundler alias or a workspace package.",
-      "description": "Review of M2-20 (2026-11-03): with a local express.js, require('express') now links the project file, as ES import already did (pre-existing for ES, new for require). Node never resolves a bare specifier to a relative file.",
+      "description": "Review of M2-20 (2026-11-03): with a local express.js, require('express') now links the project file, as ES import already did (pre-existing for ES, new for require). Node never resolves a bare specifier to a relative file. Also (M2-25 limitation): a one-segment import counts as a package, so a tsconfig baseUrl import with no folder (`import … from \"utils\"`) can lose its by-name edge for destructured calls.",
       "outputs": [
         "src/core/scanner.ts",
         "tests/import-bound-externals.test.ts",
@@ -31138,14 +31187,27 @@
         "docs/baton/reports/M5-18-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-H",
       "actualHours": null,
       "startedAt": "2026-11-04T00:11:01.747Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T02:04:35.307Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-25.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/local-binding-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-25.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-25.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T00:10:58.981Z",
@@ -31158,6 +31220,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:04:33.406Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:04:35.307Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/local-binding-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-25.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-25.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -31210,14 +31295,27 @@
         "docs/baton/reports/M5-18-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-H2",
       "actualHours": null,
       "startedAt": "2026-11-04T00:56:53.658Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T02:04:38.632Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M2-26.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/local-binding-calls.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-26.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-26.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-04T00:10:59.368Z",
@@ -31230,6 +31328,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:04:37.118Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:04:38.632Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/local-binding-calls.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-26.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-26.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
