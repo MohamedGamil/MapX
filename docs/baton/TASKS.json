@@ -31144,10 +31144,10 @@
         "docs/baton/reports/M5-18-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-H2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T00:56:53.658Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -31157,6 +31157,12 @@
           "at": "2026-11-04T00:10:59.368Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:56:53.658Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
