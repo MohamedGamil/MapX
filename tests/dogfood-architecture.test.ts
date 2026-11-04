@@ -25,8 +25,8 @@ describe("MapX's own architecture configuration", () => {
     // Tests and scripts are in scope only as targets: an overlay every layer denies, so production code
     // may not import them, while their own imports (sources in no layer) are never judged.
     expect(config!.scope.include).toEqual(['src/**', 'tests/**', 'scripts/**']);
-    // Fixtures are sample projects whose symbols name lookup can reach by homonym (M5-18-R1).
-    expect(config!.scope.exclude).toEqual(['tests/fixtures/**']);
+    // Fixtures are in scope again (M5-18-R2): M2-25 and M2-26 removed the false edges that kept them out.
+    expect(config!.scope.exclude).toEqual([]);
     const outside = config!.layers.find((l) => l.name === 'Outside')!;
     expect(outside.overlay).toBe(true);
     expect(outside.selectors).toEqual([{ path: '{tests,scripts}/**' }]);
@@ -73,6 +73,30 @@ describe("MapX's own configuration judges calls (real scan)", () => {
     const r = mapxResult(root, 'check', '--fail-on-uncovered');
     expect(r.status).toBe(1);
     expect(r.stdout).toMatch(/src\/frameworks\/probe\.ts#use → src\/parsers\/helper\.ts#helper \(call\)/);
+  });
+});
+
+// M5-18-R2: tests/fixtures/** is in scope, so production code importing a fixture is judged (Outside).
+describe("MapX's own configuration judges imports of fixtures (real scan)", () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      '.mapx/architecture.jsonc': readFileSync(join(ROOT, '.mapx/architecture.jsonc'), 'utf8'),
+      'tests/fixtures/sample/thing.ts': 'export function thing(): number { return 1; }\n',
+      'src/core/probe.ts': 'export function use(): number { return 0; }\n',
+    });
+    init(root);
+    mapx(root, 'scan', root);
+  }, 120_000);
+  afterAll(() => cleanup(root));
+
+  it('fails on a src module importing a fixture, and passes without the import', () => {
+    expect(mapxResult(root, 'check', '--fail-on-uncovered').status).toBe(0);
+    writeFileSync(join(root, 'src/core/probe.ts'), "import { thing } from '../../tests/fixtures/sample/thing.js';\nexport function use(): number { return thing(); }\n");
+    mapx(root, 'scan', root);
+    const r = mapxResult(root, 'check', '--fail-on-uncovered');
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/src\/core\/probe\.ts#use → tests\/fixtures\/sample\/thing\.ts#thing \(import\)[\s\S]*\(Core on Outside\)/);
   });
 });
 

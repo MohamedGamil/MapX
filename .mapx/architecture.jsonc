@@ -19,11 +19,10 @@
   // references behind them (M5-18-R1). M5-18 judged imports only, while names imported from node:path or
   // the DOM resolved to project symbols; M2-08-R3, M2-12 and M2-13 removed those edges.
   //
-  // tests/fixtures/** is out of scope. It holds sample projects (thousands of classes and functions such
-  // as `Database`, `Order` or `step`) that no production module imports, and that a call resolved by name
-  // can still reach by homonym: a destructured local and a for-of loop variable did (M5-18-R1, reported
-  // as resolver bugs, not baselined).
-  "scope": { "include": ["src/**", "tests/**", "scripts/**"], "exclude": ["tests/fixtures/**"] },
+  // tests/fixtures/** is in scope again (M5-18-R2): M5-18-R1 excluded it while a destructured local and a
+  // for-of loop variable linked homonyms in its sample projects (`Database`, `step`), which M2-25 and M2-26
+  // fixed in the resolver. An import of a fixture from src/ is judged through Outside.
+  "scope": { "include": ["src/**", "tests/**", "scripts/**"] },
 
   // Only verified edges are judged: an inferred edge is matched by name alone. Under the default ("warn")
   // its violations would be warnings, and generating the baseline would freeze them too, so a change in
