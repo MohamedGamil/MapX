@@ -42,6 +42,12 @@
   scope: (relative_scope)
   name: (name) @ref.target_self_call) @ref.type_self_call
 
+; `X::class`: php.ts reads it in migrations, seeders, factories and Blade views, where a class named
+; by its constant is the dependency (`$this->call(UserSeeder::class)`, `$model = User::class`) (M2-23).
+(class_constant_access_expression
+  . [(name) (qualified_name)] @ref.target_class_constant
+  . (name) @_class_const (#eq? @_class_const "class")) @ref.type_class_constant
+
 ; Member calls
 (member_call_expression
   name: (name) @ref.target_call) @ref.type_call

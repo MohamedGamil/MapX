@@ -139,6 +139,14 @@ bootstrap/cache/**  public/**  resources/views/**  **/*.blade.php  vendor/**
 
 When the repo is not at the workspace root, each pattern is scoped to its path (`api/public/**`). `mapx init` offers to add the same patterns to `excludePatterns`. If you decline, init records `"laravelDefaultExcludes": false`.
 
+The default leaves `database/` and the views out: a migration, a seeder or a factory holds little application logic, and a Blade view is not PHP. Index them to check architecture rules on them (the `laravel` preset's Database and Views layers), by declining the suggestion or listing the defaults to keep. An indexed migration, seeder, factory or view (plain PHP or Blade) then gives the edges that name a class:
+- `use`, `extends`, `new X`, `X::m()`, `X::class` (`$this->call(UserSeeder::class)`, `$model = User::class`) and type hints;
+- in a Blade file, the PHP of `@php … @endphp` and `@php(…)`, the echoes `{{ … }}`, `{!! … !!}` and `{{{ … }}}`, `@use('Class')` and `@inject('name', 'Class')`. Comments, `@verbatim` and `@{{ … }}` are skipped, and so are the other directives (`@if (…)`, `@foreach (…)`, `@include('view')`, `<x-component>`), which are not complete PHP.
+- A method called on an object links the method of the class the code gives, and nothing else: `$this->m()` (the class around), `$m->m()` for a parameter with a class type that the function never reassigns, `$this->prop->m()` for a typed or promoted property, `(new X())->m()`. A call on a variable of unknown class (`$table->id()`, `{{ $order->name() }}`) gives no edge in these files, since it would link every method of that name in the project; nor does `$this` in a view or an anonymous class (a Volt component, `return new class extends Migration`). `Order::factory()` links `Order`, not its factory.
+- A method of a migration, seeder or factory (`up`, `down`, `run`, `definition`) is never the target of a call by name from another file.
+
+`mapx init` on a Laravel app that declined the suggestion also keeps `**/migrations/**` and `**/seeds/**` out of `excludePatterns`; only `**/storage/**` is added.
+
 To drop a single default, list the ones to keep. Also remove the pattern from `excludePatterns` if init added it there. For example, to index `public/`:
 
 ```json

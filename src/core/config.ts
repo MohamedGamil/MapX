@@ -223,7 +223,9 @@ export class Config {
       }
 
       if (isPHP) {
-        defaultExclude.push(...PHP_INIT_EXCLUDES);
+        // A Laravel app that declined the suggested excludes keeps its migrations and seeders: they
+        // are indexed with their edges (M2-23). Only runtime storage is left out.
+        defaultExclude.push(...(isLaravel ? PHP_INIT_EXCLUDES.filter(p => p === '**/storage/**') : PHP_INIT_EXCLUDES));
       }
       if (isJSTS) {
         defaultExclude.push(...JS_INIT_EXCLUDES);

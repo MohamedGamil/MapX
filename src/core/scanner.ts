@@ -68,7 +68,7 @@ type TraitRules = {
   aliases?: Array<{ alias: string; method: string; trait?: string }>;
 };
 type TypeFacts = { bases?: string[]; traits?: number; traitRules?: TraitRules; partial?: string; extensionOf?: string; namespace?: string };
-type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string; assigned?: boolean } & TypeFacts;
+type SymbolIndexEntry = { name: string; file: string; scope: string | null; kind?: string; assigned?: boolean; scaffold?: boolean } & TypeFacts;
 /**
  * A symbol's type facts from its metadata, or undefined: PHP traits before the base class (a
  * trait's method overrides an inherited one), C# partial classes and extension methods.
@@ -85,6 +85,7 @@ function typeFacts(metadata: Record<string, unknown> | undefined): TypeFacts | u
   if (typeof metadata?.['namespace'] === 'string') facts.namespace = metadata['namespace'];
   return Object.keys(facts).length ? facts : undefined;
 }
+const SCAFFOLD_ROLE = /"laravelRole":"(?:migration|seeder|factory)"/;
 const TYPE_FACT_KEYS = /"(?:bases|mixins|traitRules|partial|extensionOf|namespace)"/;
 
 /**
@@ -101,6 +102,11 @@ function innermostByLine<T extends { startLine: number; endLine: number }>(symbo
 
 /** `exports.f = function` (M2-09): the module's export `f`, reached through the module, never by its bare name. */
 const exportOnly = (e: { scope?: string | null; assigned?: boolean }) => !!e.assigned && e.scope === 'exports';
+/**
+ * A method of a migration, seeder or factory (`up`, `down`, `run`, `definition`: the framework calls
+ * them): no call in another file names it, so name lookup never lands on it (M2-23 review).
+ */
+const scaffoldMethod = (e: { kind?: string; scaffold?: boolean }) => !!e.scaffold && e.kind === 'method';
 
 /** Names a Lua file declares `local` at its top level (column 0): `local M = {}`, `local A, B = …` (M2-10). */
 function luaTopLevelLocals(text: string): Set<string> {
@@ -2020,7 +2026,7 @@ export class Scanner {
       }
 
       // `self::m()` / `parent::m()` names a method, not the class or package that declares it: no row (M2-16).
-      if (!targets.length && !ref.metadata?.selfCall) noteExternal(ref);
+      if (!targets.length && !ref.metadata?.selfCall && !ref.metadata?.noFallback) noteExternal(ref);
       for (const { file: targetFile, symbol: targetSymbol, verifiability, metadata: targetMetadata } of targets) {
         const targetRepoName = fileMap.get(targetFile);
         const sourceSymbol = enclosingSymbol(ref);
@@ -2031,7 +2037,7 @@ export class Scanner {
           ? this.csharpBaseEdgeType(ref, targetFile, symbols)
           : ref.referenceType;
         // The Vue resolution hint has served its purpose; the edge keeps the rest.
-        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, selfCall: _selfCall, fileLevel: _fileLevel, required: _required, ...metadata } = ref.metadata ?? {};
+        const { vue: _vueHint, receiver: _receiver, goPackage: _goPackage, goType: _goType, goReceiver: _goReceiver, goMaybePackage: _goMaybePackage, luaTable: _luaTable, newClass: _newClass, selfCall: _selfCall, noFallback: _noFallback, fileLevel: _fileLevel, required: _required, ...metadata } = ref.metadata ?? {};
 
         edges.push({
           sourceFile: sourcePath,
@@ -2384,7 +2390,7 @@ export class Scanner {
     ref: ExtractedReference, sourcePath: string, language: string | null, isJsOrTs: boolean, fileMap: Map<string, string>,
     symbols?: Parameters<Scanner['resolveImportedCall']>[5],
   ): { file: string; symbol: string; verifiability: 'verified' }[] | null {
-    if (!this.symbolIndex) return ref.metadata?.selfCall ? [] : null;
+    if (!this.symbolIndex) return ref.metadata?.selfCall || ref.metadata?.noFallback ? [] : null;
     const index = this.symbolIndex;
     if (this.classMembersFor !== index) {
       this.classMembers.clear();
@@ -2466,7 +2472,9 @@ export class Scanner {
     // A method the chain does not declare, on a class the project knows or not: nothing. Unlike
     // `(new X())->m()`, `self::m()` has no name lookup to fall back to (a library parent's method,
     // `static::query()`, is never a same-named project function or method).
-    if (ref.metadata!.selfCall) return [];
+    // A member call whose class the syntax gives, in a migration, seeder, factory or view, falls back
+    // to no name either (`noFallback`, M2-23 review).
+    if (ref.metadata!.selfCall || ref.metadata!.noFallback) return [];
     // The class itself is not the project's: nothing to link (M2-08-R3, a library class).
     if (!seen.size) return [];
     // C#: an extension method (`static int Spin(this Widget w)`) of a class of the chain.
@@ -4783,7 +4791,7 @@ export class Scanner {
         found = null;
         // The lowercased key holds every case variant of a name.
         // `exports.f = function` is reached through its module (findExport), never by name (M2-09).
-        const lookup = (name: string) => named(name, (this.symbolIndex!.get(name.toLowerCase()) ?? []).filter(e => !exportOnly(e)));
+        const lookup = (name: string) => named(name, (this.symbolIndex!.get(name.toLowerCase()) ?? []).filter(e => !exportOnly(e) && !scaffoldMethod(e)));
         let key = symbolName;
         let indexed = lookup(key);
         if (!indexed.length) {
@@ -5784,8 +5792,9 @@ export class Scanner {
     const index = new Map<string, SymbolIndexEntry[]>();
     const excludeSet = new Set(parsedPaths || []);
 
-    const addEntry = (name: string, file: string, scope: string | null, kind?: string, assigned?: boolean, facts?: TypeFacts) => {
+    const addEntry = (name: string, file: string, scope: string | null, kind?: string, assigned?: boolean, facts?: TypeFacts, scaffold?: boolean) => {
       const entry: SymbolIndexEntry = assigned ? { name, file, scope, kind, assigned } : { name, file, scope, kind };
+      if (scaffold) entry.scaffold = true;
       if (facts) Object.assign(entry, facts);
       const key = name.toLowerCase();
       const existing = index.get(key);
@@ -5813,7 +5822,7 @@ export class Scanner {
       if (symRepo === repoName && excludeSet.has(filePath)) continue;
       const meta = typeof sym.metadata === 'string' ? sym.metadata : '';
       addEntry(sym.name as string, filePath, (sym.scope as string) || null, sym.kind as string,
-        meta.includes('"assigned":true'), TYPE_FACT_KEYS.test(meta) ? typeFacts(JSON.parse(meta)) : undefined);
+        meta.includes('"assigned":true'), TYPE_FACT_KEYS.test(meta) ? typeFacts(JSON.parse(meta)) : undefined, SCAFFOLD_ROLE.test(meta));
     }
 
     // PHP namespaces: stored ones, replaced by this phase's parse results.
@@ -5829,7 +5838,8 @@ export class Scanner {
         const res = results[i];
         if (!res) continue;
         for (const sym of res.symbols) {
-          addEntry(sym.name, filePath, sym.scope, sym.kind, sym.metadata?.['assigned'] === true, typeFacts(sym.metadata));
+          addEntry(sym.name, filePath, sym.scope, sym.kind, sym.metadata?.['assigned'] === true, typeFacts(sym.metadata),
+            ['migration', 'seeder', 'factory'].includes(sym.metadata?.['laravelRole'] as string));
         }
         if (this.languageOf(filePath) === 'php') this.phpNamespaces.set(filePath, res.fileMetadata?.namespace ?? '');
       }

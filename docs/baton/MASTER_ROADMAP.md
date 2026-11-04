@@ -196,7 +196,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-20-R1** CommonJS edge cases: renamed exports, extends, scoped requires, a local require, TS import = require — BACKLOG, P2, 5h; depends on M2-20.
 - **M2-21** C# method calls resolve on the receiver's type, not by bare name — BACKLOG, P2, 6h; depends on M2-12.
 - **M2-22** A one-line PHP anonymous class does not take over its enclosing method's calls — BACKLOG, P3, 3h; depends on M2-13.
-- **M2-23** Laravel database/ and resources/views/ PHP files get edges — BACKLOG, P2, 4h; depends on nothing.
+- **M2-23** Laravel database/ and resources/views/ PHP files get edges — DONE, P2, 4h; depends on nothing.
 - **M2-24** Ruby method calls resolve on the receiver's class — BACKLOG, P3, 6h; depends on M2-12.
 - **M2-25** A called loop variable never links a same-named function elsewhere — DONE, P1, 4h; depends on M2-08-R3.
 - **M2-25-R1** A destructured call from a one-segment baseUrl import keeps its edge — BACKLOG, P3, 4h; depends on M2-25, M2-08-R6.

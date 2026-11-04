@@ -6,6 +6,7 @@ import { COMMON_FRAMEWORK_METHODS } from '../common-methods.js';
 import { GenericWasmParser } from '../generic-wasm-parser.js';
 import { symbolAnnotations } from '../annotations.js';
 import { ambientAccesses } from '../ambient.js';
+import { bladeToPhp } from './blade.js';
 
 export const LARAVEL_FACADE_MAP: Record<string, string> = {
   App:           'Illuminate\\Foundation\\Application',
@@ -83,11 +84,17 @@ export class PhpParser extends GenericWasmParser {
     super(langDef);
   }
 
-  async parse(filePath: string, source: string, options?: any): Promise<ParseResult> {
+  async parse(filePath: string, rawSource: string, options?: any): Promise<ParseResult> {
     // F10: Noise Reduction / Exclusions
-    if (filePath.includes('bootstrap/cache/') || filePath.endsWith('.blade.php')) {
+    if (filePath.includes('bootstrap/cache/')) {
       return { symbols: [], references: [], errors: [] };
     }
+    // A Blade view is read through its PHP: `@php` blocks, echoes, `@use` and `@inject`, with the
+    // lines of the file (M2-23).
+    const isBlade = filePath.endsWith('.blade.php');
+    const source = isBlade ? bladeToPhp(rawSource) : rawSource;
+    // Any view, Blade or plain PHP, names classes but not the type of the variables it is handed.
+    const isView = isBlade || /(^|[\\/])resources[\\/]views[\\/]/.test(filePath);
 
     await this.ensureLoaded();
     const errors: ParseResult['errors'] = [];
@@ -268,6 +275,91 @@ export class PhpParser extends GenericWasmParser {
         return namespace ? `${namespace}\\${name}` : name;
       };
 
+      /** The class a type node names, as `Mailer`, `?Mailer` or `\\App\\Mailer`; null for a built-in, a union or `self`. */
+      const classOfType = (type: any, at: any): string | null => {
+        const named = type?.type === 'optional_type' ? type.namedChildren[0] : type;
+        const name = named?.type === 'named_type' ? named.namedChildren[0] : null;
+        if (!name || (name.type !== 'name' && name.type !== 'qualified_name') || /^(self|static|parent)$/i.test(name.text)) return null;
+        return resolveToFqn(name.text, at);
+      };
+      /** Whether a function writes the variable `$name`: assigned, iterated into, caught, referenced or global. */
+      const writesVariable = (fn: any, name: string): boolean => fn.descendantsOfType('variable_name').some((v: any) => {
+        if (v.text !== name) return false;
+        const p = v.parent;
+        if (!p || p.type === 'simple_parameter' || p.type === 'property_promotion_parameter') return false;
+        if (['reference_assignment_expression', 'catch_clause', 'global_declaration', 'static_variable_declaration', 'by_ref'].includes(p.type)) return true;
+        if (p.type === 'foreach_statement') return p.namedChildren[0]?.id !== v.id;
+        if (p.type === 'pair' && p.parent?.type === 'foreach_statement') return true;
+        for (let a = v, q = p; q; a = q, q = q.parent) {
+          if (q.type === 'assignment_expression' || q.type === 'augmented_assignment_expression') return q.childForFieldName('left')?.id === a.id;
+          if (!['list_literal', 'array_creation_expression', 'array_element_initializer'].includes(q.type)) return false;
+        }
+        return false;
+      });
+      /** The class around a node, or null in an anonymous class (M2-22 owns it) or none. */
+      const namedOwnerOf = (node: any): any => {
+        for (let p = node.parent; p; p = p.parent) {
+          if (p.type === 'anonymous_class') return null;
+          if (PHP_TYPE_DECLARATIONS.has(p.type)) return p.childForFieldName('name') ? p : null;
+        }
+        return null;
+      };
+      /**
+       * The class a member call's receiver has, when the syntax gives it (M2-23 review): `$this` (the
+       * class around; `own`, walked as `self::`), a parameter with a class type that the function never
+       * writes (a closure or arrow function reads the one around it), and `$this->prop` declared with
+       * a class type or promoted from the constructor.
+       */
+      const typedReceiver = (call: any): { cls: string; own?: boolean } | null => {
+        const asClass = (type: any): { cls: string } | null => {
+          const name = classOfType(type, call);
+          return name ? { cls: name } : null;
+        };
+        let object = call?.childForFieldName('object');
+        while (object?.type === 'parenthesized_expression') object = object.namedChildren[0];
+        if (!object) return null;
+        if (object.type === 'variable_name' && object.text === '$this') {
+          const owner = namedOwnerOf(call);
+          return owner ? { cls: owner.childForFieldName('name').text, own: true } : null;
+        }
+        if (object.type === 'variable_name') {
+          for (let p = call.parent; p; p = p.parent) {
+            if (!['method_declaration', 'function_definition', 'anonymous_function', 'arrow_function'].includes(p.type)) continue;
+            const param = (p.childForFieldName('parameters')?.namedChildren ?? [])
+              .find((c: any) => (c.type === 'simple_parameter' || c.type === 'property_promotion_parameter') && c.childForFieldName('name')?.text === object.text);
+            if (param) {
+              if (param.namedChildren.some((c: any) => c.type === 'reference_modifier') || writesVariable(p, object.text)) return null;
+              const cls = classOfType(param.childForFieldName('type'), call);
+              return cls ? { cls } : null;
+            }
+            // A closure reads a variable it takes `use`, an arrow function every one around it.
+            const uses = p.namedChildren.find((c: any) => c.type === 'anonymous_function_use_clause');
+            const captured = p.type === 'arrow_function'
+              || (uses?.namedChildren ?? []).some((c: any) => c.type === 'variable_name' && c.text === object.text);
+            if (!captured || p.type === 'method_declaration' || p.type === 'function_definition') return null;
+          }
+          return null;
+        }
+        if (object.type === 'member_access_expression' && object.childForFieldName('object')?.text === '$this') {
+          const owner = namedOwnerOf(call);
+          const prop = object.childForFieldName('name')?.text;
+          if (!owner || !prop) return null;
+          for (const member of owner.childForFieldName('body')?.namedChildren ?? []) {
+            if (member.type === 'property_declaration'
+              && member.namedChildren.some((c: any) => c.type === 'property_element' && c.namedChildren[0]?.text === `$${prop}`)) {
+              return asClass(member.childForFieldName('type'));
+            }
+            if (member.type === 'method_declaration' && member.childForFieldName('name')?.text.toLowerCase() === '__construct') {
+              const promoted = (member.childForFieldName('parameters')?.namedChildren ?? [])
+                .find((c: any) => c.type === 'property_promotion_parameter' && c.childForFieldName('name')?.text === `$${prop}`);
+              if (promoted) return asClass(promoted.childForFieldName('type'));
+            }
+          }
+          return null;
+        }
+        return null;
+      };
+
       // Attributes, named like classes, and PHPDoc tags (M5-10).
       for (const [symbol, node] of declarations) Object.assign(symbol.metadata, symbolAnnotations('php', node, (n: string) => resolveToFqn(n, node)));
       // A type or function's own namespace (M2-13 re-review): a file of several blocks or statements
@@ -297,6 +389,10 @@ export class PhpParser extends GenericWasmParser {
         if (base && symbol.kind === 'class') symbol.metadata.bases = [resolveToFqn(base.text, node)];
       }
 
+      // The calls of `$x->name()`, with the node of the method's name (M2-23: in migrations, seeders,
+      // factories and views, only those whose class the syntax gives link a method).
+      const memberCalls = new Map<ExtractedReference, any>();
+
       // Process standard captures (extends, implements, calls, instantiations)
       for (const [captureName, captures] of refCaptures) {
         if (captureName === 'ref.target_use_clause') continue;
@@ -309,6 +405,7 @@ export class PhpParser extends GenericWasmParser {
           captureName === 'ref.target_notify' ||
           captureName === 'ref.target_function_call' ||
           captureName === 'ref.target_self_call' ||
+          captureName === 'ref.target_class_constant' ||
           captureName === 'ref.target_require'
         ) {
           continue;
@@ -373,14 +470,16 @@ export class PhpParser extends GenericWasmParser {
             }
 
             const source = sourceOf(capture.node);
-            references.push({
+            const reference: ExtractedReference = {
               sourceSymbol: source.sourceSymbol,
               targetName: resolvedTarget,
               referenceType,
               startLine,
               verifiability,
               ...(newClass || source.metadata ? { metadata: { ...source.metadata, ...(newClass ? { newClass } : {}) } } : {}),
-            });
+            };
+            references.push(reference);
+            if (referenceType === 'call' && capture.node.parent?.type === 'member_call_expression') memberCalls.set(reference, capture.node);
           }
         }
       }
@@ -1002,7 +1101,43 @@ export class PhpParser extends GenericWasmParser {
         for (const sym of symbols) {
           sym.metadata.laravelRole = laravelRole;
         }
-        references.length = 0;
+      }
+
+      // F10 dropped every reference of a migration, seeder or factory, and returned none for a Blade
+      // view; M2-23 keeps the ones that name a class (use, extends, new, `X::m()`, type hints, a
+      // function call) and adds `X::class`, so a seeder reaches the seeders it calls and a factory
+      // its model. A method called on an object (`$table->id()`, `$order->name()`) links the method
+      // of the class the syntax gives and nothing else: `$this->m()`, `$typed->m()` for a parameter
+      // with a class type, `$this->typed->m()` for a typed or promoted property, `(new X())->m()`.
+      // Such a call has no name lookup to fall back to (`noFallback`): the schema builder's and the
+      // view helpers' names would link every method of that name in the project, and `(new Order())->save()`
+      // past Eloquent's vendor base would link an unrelated `save`.
+      if (laravelRole || isView) {
+        for (const capture of refCaptures.get('ref.target_class_constant') || []) {
+          const { sourceSymbol, metadata } = sourceOf(capture.node);
+          references.push({
+            sourceSymbol,
+            targetName: resolveToFqn(capture.node.text, capture.node),
+            referenceType: 'import',
+            startLine: capture.node.startPosition.row + 1,
+            verifiability: 'verified',
+            metadata: { ...metadata, classConstant: true },
+          });
+        }
+        for (let i = references.length - 1; i >= 0; i--) {
+          const nameNode = memberCalls.get(references[i]!);
+          if (!nameNode) continue;
+          const ref = references[i]!;
+          const typed = typedReceiver(nameNode.parent);
+          if (typed) {
+            ref.verifiability = 'verified';
+            ref.metadata = { ...ref.metadata, newClass: typed.cls, ...(typed.own ? { selfCall: true } : { noFallback: true }) };
+          } else if (typeof ref.metadata?.newClass === 'string') {
+            ref.metadata = { ...ref.metadata, noFallback: true };
+          } else {
+            references.splice(i, 1);
+          }
+        }
       }
     } catch (e: any) {
       errors.push({ message: e.message, line: 0 });

@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@cf39a4bc8dc583dddb6ab32aa6ac61dc69b83734 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@41a94edb979006bb36562cdb071a3891d97a28da (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M2-16 — PHP `self::m()` and `static::m()` calls link the enclosing class's method.
-Evidence: `npx vitest run tests/php-self-calls.test.ts` (exit 0) → docs/baton/reports/M2-16.md; `npm run eval` (exit 0) → docs/baton/reports/M2-16.md; `npm run check` (exit 0) → docs/baton/reports/M2-16.md.
+Last completed: M2-23 — Laravel database/ and resources/views/ PHP files get edges.
+Evidence: `npx vitest run tests/laravel-dirs.test.ts` (exit 0) → docs/baton/reports/M2-23.md; `npm run eval` (exit 0) → docs/baton/reports/M2-23.md; `npm run check` (exit 0) → docs/baton/reports/M2-23.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect

@@ -131,7 +131,7 @@ const CASES: Array<{ name?: string; preset: string; fixture: string; layers: Rec
     // app/Billing (M5-17-R1) is in no folder the preset names: its model, queued job and controller
     // are placed by ancestry alone (Models, Jobs and Http each count one of its files).
     name: 'laravel (a Laravel 11 app filling every layer)', preset: 'laravel', fixture: join(FIXTURES, 'laravel11'), parameters: { root: '' },
-    layers: { Routes: 3, Http: 5, Console: 2, Providers: 1, Jobs: 2, Events: 1, Listeners: 1, Services: 2, Models: 5, Views: 1, Database: 2 },
+    layers: { Routes: 3, Http: 5, Console: 2, Providers: 1, Jobs: 2, Events: 1, Listeners: 1, Services: 2, Models: 5, Views: 1, Database: 3 },
     unclassified: ['app/Enums/**', 'artisan', 'bootstrap/**'],
     violations: ['app/Models/OrderItem.php → app/Http/Requests/StoreOrderRequest.php'],
   },

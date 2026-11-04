@@ -77,8 +77,12 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  *   links the method that class, its traits or its parent declares).
  * - 31: M2-16 review (a PHP class records the adaptation rules of its `use A, B { B::x insteadof A;
  *   A::x as ax; }` block, `traitRules`, so a walk takes the winning trait's method and an alias's).
+ * - 32: M2-23 (a PHP migration, seeder or factory keeps its references and gains `X::class` ones, a view keeps
+ *   them too, with a member call kept only when its class is typed (`$this`, a typed parameter or property,
+ *   `new X`), and a `.blade.php` file is read through its `@php` blocks, echoes, `@use` and `@inject`, where
+ *   all three used to give none).
  */
-export const EXTRACTOR_VERSION = 31;
+export const EXTRACTOR_VERSION = 32;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

@@ -32814,40 +32814,114 @@
         "docs/baton/reports/M5-17-R1.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T19:07:42.885Z",
+      "completedAt": "2026-11-04T20:20:51.704Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-23.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/laravel-dirs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-23.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-23.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-23.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T19:07:42.410Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T19:07:42.885Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T20:20:51.174Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T20:20:51.704Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/laravel-dirs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-23.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-23.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-23.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
       "rollback": "Revert the task commit.",
       "id": "M2-23",
       "title": "Laravel database/ and resources/views/ PHP files get edges",
-      "objective": "PHP files under database/ (migrations, seeders, factories) and resources/views/ (plain PHP and Blade-compiled PHP blocks) are indexed with their symbols and edges, or their exclusion is a documented, configurable default.",
-      "description": "Found by M5-17-R1 (2026-11-03): PHP files under database/ and resources/views/ get no edges at all, so the laravel preset's Database and Views rules cannot be exercised.",
+      "objective": "PHP files under database/ (migrations, seeders, factories) and resources/views/ (plain PHP and Blade) give the edges that name a class when indexed, and their exclusion stays a documented, configurable default (`laravelDefaultExcludes`).",
+      "description": "Found by M5-17-R1 (2026-11-03): PHP files under database/ and resources/views/ get no edges at all, so the laravel preset's Database and Views rules cannot be exercised. Cause (M2-23 probe): the PHP parser dropped every reference of a migration, seeder or factory (F10, `references.length = 0`) and returned nothing for a `.blade.php` file; `mapx init` also added `**/migrations/**` to a Laravel app that declined the suggested excludes. The directories stay in the documented, configurable Laravel default excludes.",
       "outputs": [
-        "src/core/scanner.ts",
+        "src/parsers/languages/blade.ts",
         "tests/laravel-dirs.test.ts",
-        "reports/M2-23.md"
+        "docs/baton/iterations/M2-23.md",
+        "docs/baton/reports/M2-23.md"
       ],
       "affectedFiles": [
-        "src/core/scanner.ts",
-        "src/core/file-rules.ts",
         "src/parsers/languages/php.ts",
-        "tests/laravel-dirs.test.ts"
+        "src/parsers/languages/blade.ts",
+        "queries/php/references.scm",
+        "src/core/config.ts",
+        "src/cli.ts",
+        "src/core/extractor-version.ts",
+        "tests/laravel-dirs.test.ts",
+        "tests/arch-init.test.ts",
+        "docs/configuration.md",
+        "docs/architecture-rules.md",
+        "docs/framework-integration.md",
+        "CHANGELOG.md"
       ],
       "acceptanceCriteria": [
-        "A migration calling a model and a seeder calling a factory give their edges (e2e test); a Blade view is either parsed for its PHP blocks or documented as excluded."
+        "A migration (anonymous and named class) calling a model, a seeder calling a factory by class, a seeder calling other seeders by `X::class` (same namespace, no `use`) and a factory naming its model by `X::class` each give their edges (e2e test, tests/laravel-dirs.test.ts).",
+        "A method called on an object whose class the code does not give (`$table->id()`, `$order->name()`, an untyped `$x->m()`, `(new Order())->save()` past a vendor base) links no same-named project method from a migration, seeder, factory or view, while `$this->m()`, a typed parameter's or property's method and `(new X())->m()` link theirs, verified; a method of a migration, seeder or factory is no by-name target of a call in another file.",
+        "A Blade view is parsed for its PHP: `@php … @endphp`, `@php(…)`, `{{ }}`, `{!! !!}`, `@use`, `@inject` give edges on the file; comments, `@verbatim`, `@{{ }}` and other directives give none; a plain PHP view under resources/views gives its class edges.",
+        "The laravel preset checks Database and Views: a seeder, a migration and a Blade view using a controller are violations (e2e test).",
+        "The default exclusion is documented and configurable (docs/configuration.md, docs/architecture-rules.md); `mapx init` on a Laravel app that declined the excludes no longer adds `**/migrations/**`.",
+        "`npm run eval` floors hold and its numbers do not change; `score-arch` on tests/fixtures/arch-rules is unchanged."
       ],
       "verificationCommands": [
         "npx vitest run tests/laravel-dirs.test.ts",
-        "npm run eval"
+        "npm run eval",
+        "npm run check"
       ]
     },
     {
