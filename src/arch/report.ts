@@ -235,6 +235,26 @@ export function buildReport(store: Store, config: ArchitectureConfig, membership
       fingerprint: fingerprint('multi-layer', name, '', ''), message: `${name} is in ${layers.length} layers: ${layers.join(', ')}`,
     });
   }
+  // The same for an external element (M5-24-R2): a package, built-in or ambient access that several
+  // layers select, once per element and layer set (two references are one warning), when a source in
+  // a layer depends on it, as an internal symbol-less file is reported only when it is a dependency end.
+  const externalTargets = new Set<string>();
+  for (const d of deps) if (d.target.external) externalTargets.add(d.target.id);
+  const externalWarned = new Set<string>();
+  for (const el of membership.multiLayerExternal) {
+    if (!externalTargets.has(el.id)) continue;
+    const layers = membership.primaryOf(el);
+    const x = el.external!;
+    const identity = `external:${x.ecosystem}:${x.origin}:${x.name}`;
+    const key = `${identity}\u0000${layers.join('\u0000')}`;
+    if (externalWarned.has(key)) continue;
+    externalWarned.add(key);
+    findings.push({
+      kind: config.policy.strictLayers ? 'error' : 'warning', rule: 'multi-layer', severity: config.policy.strictLayers ? 'error' : 'warn',
+      source: { element: x.name, file: '', layer: layers.join(', '), layers, external: { ecosystem: x.ecosystem, origin: x.origin, package: x.package, direct: x.direct, dev: x.dev } },
+      fingerprint: fingerprint('multi-layer', identity, layers.join(', '), ''), message: `${x.name} is in ${layers.length} layers: ${layers.join(', ')}`,
+    });
+  }
   for (const layer of membership.emptyLayers) {
     findings.push({ kind: 'warning', rule: 'empty-layer', severity: 'warn', layer, fingerprint: fingerprint('empty-layer', layer, '', ''), message: `layer ${layer} matches no element` });
   }

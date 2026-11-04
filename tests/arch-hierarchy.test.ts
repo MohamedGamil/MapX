@@ -415,6 +415,73 @@ describe('review P1-2 and P1-3: ancestry stays linear on deep chains and cycles'
   });
 });
 
+// M5-24-R2: under policy.inheritDependencies a type also answers for the packages its workspace
+// ancestors use. tests/fixtures/arch-hierarchy/external: Domain may use Support, Support may use pg,
+// Domain may not; BaseRepo (Support) imports and instantiates pg.
+describe('policy.inheritDependencies and external packages (M5-24-R2)', CLI, () => {
+  type F = { kind: string; rule?: string; source?: { element: string; layer?: string; line?: number }; target?: { element: string; external?: { origin: string } }; edgeType?: string; via?: string[]; message: string };
+  let root = '';
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'mapx-arch-hierarchy-external-'));
+    cpSync(join(FIXTURE, 'external'), root, { recursive: true });
+    init(root);
+    mapx(root, 'scan');
+  }, 300_000);
+  afterAll(() => { if (root) rmSync(root, { recursive: true, force: true }); });
+
+  const check = () => {
+    const r = mapxResult(root, 'check', '--format', 'json', '--report-allowed');
+    return { status: r.status, findings: (JSON.parse(r.stdout).findings as F[]).filter((f) => f.target?.external) };
+  };
+  const pg = (findings: F[], from: string) => findings.filter((f) => f.source?.element === from).map((f) => `${f.kind} ${f.rule ?? ''} ${f.edgeType} via=${f.via?.join(' > ') ?? '-'}`).sort();
+  const configure = (inheritDependencies: boolean) => {
+    const file = join(root, '.mapx/architecture.jsonc');
+    const config = JSON.parse(readFileSync(file, 'utf8').replace(/^\/\/.*\n/gm, ''));
+    writeFileSync(file, JSON.stringify({ ...config, policy: { inheritDependencies } }));
+  };
+
+  it('on: a subclass of a base that uses pg violates, `via` naming the inheritance path', () => {
+    configure(true);
+    const { status, findings } = check();
+    expect(status).toBe(1);
+    // Order extends BaseRepo; Special extends Order extends BaseRepo (a longer path).
+    expect(pg(findings, 'src/domain/Order.ts#Order')).toEqual([
+      'violation disallowed-layer import via=src/domain/Order.ts#Order > src/support/BaseRepo.ts#BaseRepo',
+      'violation disallowed-layer instantiation via=src/domain/Order.ts#Order > src/support/BaseRepo.ts#BaseRepo',
+    ]);
+    expect(pg(findings, 'src/domain/Special.ts#Special')).toEqual([
+      'violation disallowed-layer import via=src/domain/Special.ts#Special > src/domain/Order.ts#Order > src/support/BaseRepo.ts#BaseRepo',
+      'violation disallowed-layer instantiation via=src/domain/Special.ts#Special > src/domain/Order.ts#Order > src/support/BaseRepo.ts#BaseRepo',
+    ]);
+    const order = findings.find((f) => f.source?.element === 'src/domain/Order.ts#Order' && f.edgeType === 'import')!;
+    expect(order.message).toBe('src/domain/Order.ts#Order must not depend on pg (Domain on Database), inherited via src/domain/Order.ts#Order → src/support/BaseRepo.ts#BaseRepo');
+    expect(order.source!.line).toBeUndefined(); // the dependency is in the base's file
+    // The base's own dependencies are allowed and have no `via`. Its `extends pg.Client` is the
+    // inheritance itself: Order and Special do not answer for it again (no `extends` finding above).
+    expect(pg(findings, 'src/support/BaseRepo.ts#BaseRepo')).toEqual(['allowed  extends via=-', 'allowed  import via=-', 'allowed  instantiation via=-']);
+    // Invoice uses pg itself: its own dependency is reported once, with no `via`; nothing is derived on top.
+    expect(pg(findings, 'src/domain/Invoice.ts#Invoice')).toEqual(['violation disallowed-layer import via=-', 'violation disallowed-layer instantiation via=-']);
+    // Plain extends nothing and uses nothing.
+    expect(pg(findings, 'src/domain/Plain.ts#Plain')).toEqual([]);
+    // A base in no layer still has its dependency: Thing (Domain) answers for CommonBase's pg (review). The base
+    // itself, in no layer, has no finding.
+    expect(pg(findings, 'src/domain/Thing.ts#Thing')).toEqual([
+      'violation disallowed-layer import via=src/domain/Thing.ts#Thing > src/common/CommonBase.ts#CommonBase',
+      'violation disallowed-layer instantiation via=src/domain/Thing.ts#Thing > src/common/CommonBase.ts#CommonBase',
+    ]);
+    expect(pg(findings, 'src/common/CommonBase.ts#CommonBase')).toEqual([]);
+  });
+
+  it('off: no inherited finding for Order or Special; only the dependencies the code states', () => {
+    configure(false);
+    const { findings } = check();
+    expect(findings.filter((f) => f.via)).toEqual([]);
+    expect(pg(findings, 'src/domain/Order.ts#Order')).toEqual([]);
+    expect(pg(findings, 'src/domain/Special.ts#Special')).toEqual([]);
+    expect(pg(findings, 'src/domain/Invoice.ts#Invoice')).toEqual(['violation disallowed-layer import via=-', 'violation disallowed-layer instantiation via=-']);
+  });
+});
+
 describe('review P1-2: inheritDependencies on a 1,000-class chain, end to end in bounded memory', CLI, () => {
   it('each subclass inherits the root base\'s dependency once, with a shortened `via`, under a 512 MB heap', () => {
     const n = 1000;

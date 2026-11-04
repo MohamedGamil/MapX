@@ -1,0 +1,12 @@
+// Synthetic fixture (M5-24-R2): Domain may use Support, Support may use the pg package; Domain may not.
+// With inheritDependencies, a Domain subclass of a Support base answers for the base's pg dependency.
+{
+  "$schema": "../../../../../schemas/architecture.schema.json",
+  "policy": { "inheritDependencies": true },
+  "layers": [
+    { "name": "Domain", "selectors": [{ "path": "src/domain/**" }] },
+    { "name": "Support", "selectors": [{ "path": "src/support/**" }] },
+    { "name": "Database", "selectors": [{ "package": "pg" }] }
+  ],
+  "rules": { "Domain": ["Support"], "Support": ["Database"], "Database": [] }
+}

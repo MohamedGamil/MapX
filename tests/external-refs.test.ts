@@ -3415,6 +3415,54 @@ describe('external dependencies in the rules (M5-24)', () => {
     }
   }, 180000);
 
+  // M5-24-R2: an external element in several non-overlay layers is the multi-layer warning (AR-12),
+  // as for a symbol; a layer set of one, and an overlay, are not.
+  it('a package or built-in several layers select gets one multi-layer warning naming them (an error under strictLayers)', () => {
+    const layers = [
+      { name: 'Domain', selectors: [{ path: 'src/domain/**' }] },
+      { name: 'Infrastructure', selectors: [{ path: 'src/infrastructure/**' }] },
+      { name: 'Database', selectors: [{ package: 'pg' }] },
+      { name: 'Drivers', selectors: [{ package: 'p*' }] },
+      { name: 'Web', selectors: [{ package: 'express' }] },
+      { name: 'Runtime', selectors: [{ builtin: 'node:*' }] },
+      { name: 'Files', selectors: [{ builtin: 'node:fs' }] },
+      { name: 'DevOnly', overlay: true, selectors: [{ package: 'express' }, { package: 'pg' }] },
+      { name: 'Tools', selectors: [{ path: 'tools/**' }] },
+    ];
+    const rules = { Tools: ['Database', 'Drivers'], Domain: ['Infrastructure', 'Database', 'Drivers'], Infrastructure: ['Domain', 'Database', 'Drivers', 'Web', 'Runtime', 'Files'] };
+    // tools/ has its own manifest that lists pg as a dev dependency: a second pg element (dev), selected by
+    // the same two layers. Both are one warning (one fingerprint), not one per element.
+    const root = scannedApp('ts-vendor', { layers, rules }, {
+      'tools/package.json': JSON.stringify({ name: 'tools', private: true, devDependencies: { pg: '^8.11.0' } }),
+      'tools/seed.ts': "import { Client } from 'pg';\nexport const client = new Client();\n",
+    });
+    const multi = (r: ReturnType<typeof runArchitecture>) => r!.findings.filter((f) => f.rule === 'multi-layer' && f.source!.external)
+      .map((f) => `${f.kind} ${f.severity} ${f.source!.element} [${f.source!.layers!.join(' + ')}] ${f.source!.external!.origin} ${f.message}`);
+    const warned = multi(runArchitecture(root));
+    // pg is used from two manifests, as production and as dev, by imports and a `new`, and still warns once. express (one layer,
+    // and an overlay, which never counts) and the other built-ins do not.
+    expect(warned).toEqual([
+      'warning warn node:fs [Runtime + Files] builtin node:fs is in 2 layers: Runtime, Files',
+      'warning warn pg [Database + Drivers] package pg is in 2 layers: Database, Drivers',
+    ]);
+    const finding = runArchitecture(root)!.findings.find((f) => f.rule === 'multi-layer' && f.source!.element === 'pg')!;
+    expect(finding.source).toEqual({ element: 'pg', file: '', layer: 'Database, Drivers', layers: ['Database', 'Drivers'], external: { ecosystem: 'npm', origin: 'package', package: 'pg', direct: true, dev: false } });
+    // `mapx check` reports it and exits 0 (a warning); it is in the JSON report, and the schema accepts it.
+    const r = mapxResult(root, 'check', '--format', 'json');
+    expect(r.status, r.stderr + r.stdout).toBe(0);
+    expect((JSON.parse(r.stdout).findings as Array<{ rule?: string; source?: { element: string } }>).filter((f) => f.rule === 'multi-layer').map((f) => f.source!.element).sort()).toEqual(['node:fs', 'pg']);
+    // With no layer for the sources, no source in a layer depends on the packages: nothing is reported.
+    writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify({ layers: layers.filter((l) => !['Infrastructure', 'Domain', 'Tools'].includes(l.name)), rules: {} }));
+    expect(multi(runArchitecture(root))).toEqual([]);
+    // Under strictLayers it is an error.
+    writeFileSync(join(root, '.mapx/architecture.jsonc'), JSON.stringify({ layers, rules, policy: { strictLayers: true } }));
+    expect(multi(runArchitecture(root))).toEqual([
+      'error error node:fs [Runtime + Files] builtin node:fs is in 2 layers: Runtime, Files',
+      'error error pg [Database + Drivers] package pg is in 2 layers: Database, Drivers',
+    ]);
+    expect(mapxResult(root, 'check').status).toBe(1);
+  }, 180000);
+
   it('mapx arch allowed answers for an external by name, or by ecosystem and name', () => {
     const root = scannedApp('ts-vendor');
     const store = new Store(join(root, '.mapx/mapx.db'));

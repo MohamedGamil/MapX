@@ -9,7 +9,7 @@ function line(f: Finding): string {
   const severity = f.kind === 'violation' ? ` [${f.severity}]` : f.skippedBy ? ` [${f.skippedBy}]` : '';
   const head = `  ${MARK[f.kind] ?? '·'} ${f.rule ?? f.kind}${severity}`;
   if (!f.source) return `${head}  ${f.message}`;
-  if (!f.target) return `${head}  ${f.message}\n      ${f.source.file}`; // multi-layer: where the element is
+  if (!f.target) return `${head}  ${f.message}${f.source.file ? `\n      ${f.source.file}` : ''}`; // multi-layer: where the element is (an external has no file)
   const where = `${f.source.file}${f.source.line !== undefined ? `:${f.source.line}` : ''}`;
   const via = f.edgeType ? ` (${f.edgeType}${f.verifiability === 'inferred' ? ', inferred' : ''})` : '';
   return `${head}  ${f.source.element} → ${f.target.element}${via}\n      ${where}  ${f.message}`;

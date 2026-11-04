@@ -30,7 +30,7 @@
 import { posix } from 'node:path';
 import type { Store } from '../core/store.js';
 import type { ArchitectureConfig } from './schema.js';
-import type { Element, ElementView } from './elements.js';
+import type { Element, ElementView, ExternalRef } from './elements.js';
 import type { LayerMembership } from './membership.js';
 import { globOrRegex } from './selectors/index.js';
 import { decide, type ExpandedPolicy } from './policy.js';
@@ -311,24 +311,38 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
   // from a source in scope is decided like an edge whose target is the external element, its kind
   // as the edge type. A target in no layer is uncovered only as `policy.uncovered` says (AR-08):
   // packages under `externals`, built-ins and ambient access under `builtins`.
-  for (const ref of view.externalRefs ?? []) {
-    if (!scope.types.has(ref.kind) || !inScopePath(ref.file)) continue;
-    const source = resolve(ref.file, ref.sourceSymbol);
-    if (!source) continue;
+  const ownExternal = new Set<string>();
+  const externalKey = (source: Element, target: Element, kind: string) => `${reportElement(view, source).id}\u0000${target.id}\u0000${kind}`;
+  const externalOfType = new Map<string, ExternalRef[]>();
+  const evaluateExternal = (ref: ExternalRef, source: Element, line: number | undefined, via?: string[]) => {
     const sourceLayers = membership.primaryOf(source);
-    if (!sourceLayers.length) continue;
+    if (!sourceLayers.length) return;
     const target = ref.target;
     const reportUncovered = target.external!.origin === 'package' ? config.policy.uncovered.externals : config.policy.uncovered.builtins;
     const targetLayers = membership.primaryOf(target);
     const targetSide: TargetLayers = { layers: targetLayers, overlays: membership.of(target).filter((l) => overlays.has(l)), privateIn: membership.privateIn(target) };
-    endFiles.add(source.file.path);
     for (const d of decideEdge(config, policy, sourceLayers, targetSide, ref.kind, 'verified')) {
       if (d.kind === 'same-layer' || (d.kind === 'uncovered' && !reportUncovered)) continue;
       out.push({
-        source, target, targetLayers, edgeType: ref.kind, verifiability: 'verified', line: ref.line, kind: d.kind, ...(d.rule ? { rule: d.rule } : {}),
-        severity: d.severity, sourceLayer: d.sourceLayer, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}),
+        source, target, targetLayers, edgeType: ref.kind, verifiability: 'verified', ...(line !== undefined ? { line } : {}), kind: d.kind, ...(d.rule ? { rule: d.rule } : {}),
+        severity: d.severity, sourceLayer: d.sourceLayer, ...(d.violatedLayers ? { violatedLayers: d.violatedLayers } : {}), ...(via ? { via } : {}),
       });
     }
+  };
+  for (const ref of view.externalRefs ?? []) {
+    if (!scope.types.has(ref.kind) || !inScopePath(ref.file)) continue;
+    const source = resolve(ref.file, ref.sourceSymbol);
+    if (!source) continue;
+    // Recorded before the layer check, as for edges: a base in no layer still has the dependency a
+    // subclass in a layer answers for (review of M5-24-R2).
+    if (inherit) {
+      ownExternal.add(externalKey(source, ref.target, ref.kind));
+      const owner = reportElement(view, source);
+      if (isType(owner)) externalOfType.set(owner.id, [...(externalOfType.get(owner.id) ?? []), ref]);
+    }
+    if (!membership.primaryOf(source).length) continue;
+    endFiles.add(source.file.path);
+    evaluateExternal(ref, source, ref.line);
   }
 
   // Inherited dependencies (AR-02): each type with workspace ancestors answers for theirs, once per
@@ -357,6 +371,16 @@ export function evaluateEdges(store: Store, config: ArchitectureConfig, membersh
           if (own.has(key) || derived.has(key) || (fileEl && own.has(ownKey(fileEl, target, r.edge_type)))) continue;
           derived.add(key);
           evaluate(r, type, target, verifiability, shownPath(reaches.path(i).map((a) => a.name)));
+        }
+        // The ancestor's references outside the workspace (M5-24-R2), once per (external, kind). A base
+        // class outside the workspace (`extends`, `implements`) is the inheritance itself, decided where
+        // it is declared, and not derived.
+        for (const ref of externalOfType.get(ancestorId) ?? []) {
+          if (ref.kind === 'extends' || ref.kind === 'implements') continue;
+          const key = externalKey(type, ref.target, ref.kind);
+          if (ownExternal.has(key) || derived.has(key) || (fileEl && ownExternal.has(externalKey(fileEl, ref.target, ref.kind)))) continue;
+          derived.add(key);
+          evaluateExternal(ref, type, undefined, shownPath(reaches.path(i).map((a) => a.name)));
         }
       }
     }

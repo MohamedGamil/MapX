@@ -37,6 +37,8 @@ export interface LayerMembership {
   emptyLayers: string[];
   /** Elements of the workspace (files and symbols, not externals) in more than one non-overlay layer. */
   multiLayer: Element[];
+  /** External elements (packages, built-ins, ambient access) in more than one non-overlay layer (M5-24-R2). */
+  multiLayerExternal: Element[];
   /** Selectors this version cannot evaluate, by layer and position: they match nothing. */
   unsupported: Array<{ layer: string; selector: string; key: string; task: string }>;
   view: ElementView;
@@ -150,6 +152,7 @@ export function computeMembership(view: ElementView, config: Pick<ArchitectureCo
     explain: (e) => traces.get(idOf(e)) ?? [],
     emptyLayers: layers.filter((l) => !l.overlay && members.get(l.name)!.length === 0).map((l) => l.name),
     multiLayer: view.elements.filter((e) => primaryOf(e).length > 1),
+    multiLayerExternal: (view.externals ?? []).filter((e) => primaryOf(e).length > 1),
     unsupported,
     view,
   };
