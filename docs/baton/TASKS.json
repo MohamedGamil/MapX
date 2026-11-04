@@ -30369,7 +30369,7 @@
       "milestone": "M0",
       "title": "A package.json edit re-parses only the files its change affects",
       "objective": "Sync re-parses files below a changed package.json only when a field that affects their resolution changed (dependencies relevant to gates, exports, imports, workspaces, type), and not nested packages that have their own manifest.",
-      "description": "M3-05-R3 finding: the configReferrers tracking (M0-02-R8) re-parses the whole subtree, nested packages included, on every package.json edit; and an outer-root edit re-parses every source.",
+      "description": "M3-05-R3 finding: the configReferrers tracking (M0-02-R8) re-parses the whole subtree, nested packages and Python files included, on every package.json edit; and an outer-root edit re-parses every source. Sync now signs what resolution reads of each package.json, per field and per folder: the store-library gate (M3-05), auto-import tools (M2-08-R3), alias roots (M3-09-R1), module roots from a jest key or NODE_PATH script (M2-08-R11), dependencies by name (isNpmPackage, M0-17-R4), and the name and entry fields of workspace packages (M2-08-R6).",
       "priority": "P2",
       "estimate": {
         "min": 2,
@@ -30393,31 +30393,92 @@
       ],
       "outputs": [
         "src/core/scanner.ts",
+        "src/core/js-aliases.ts",
+        "src/parsers/languages/vue-stores.ts",
+        "src/frameworks/framework-registry.ts",
         "tests/scanner-config-referrers.test.ts",
+        "iterations/M0-02-R13.md",
         "reports/M0-02-R13.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
+        "src/core/js-aliases.ts",
+        "src/parsers/languages/vue-stores.ts",
+        "src/frameworks/framework-registry.ts",
+        "tests/scanner-config-referrers.test.ts",
         "tests/vue-stores.test.ts",
         "tests/legacy-globs.test.ts"
       ],
       "acceptanceCriteria": [
-        "Editing only package.json `version` or `scripts` re-parses 0 files (test); adding pinia re-parses the governed modules and gives the same edges as scan --force (test).",
-        "A nested package with its own package.json is not re-parsed by its parent's edit (test)."
+        "Editing only package.json `version` or `scripts` (no NODE_PATH change) re-parses 0 files, the nested package and the Python file included; so do `description`, a dependency range bump and a dependency moved between sections (e2e, tests/scanner-config-referrers.test.ts, git and hash sync). Adding pinia re-parses the governed modules (a module calling a project hook, the store module importing pinia) and gives the same edges as scan --force (tests/scanner-config-referrers.test.ts, tests/vue-stores.test.ts).",
+        "A nested package with its own package.json is not re-parsed by its parent's edit when what it reads is its own: a dependency it lists itself, its own store-library gate (unless the root lists it as a workspace), its own NODE_PATH, its own build tool (tests/scanner-config-referrers.test.ts).",
+        "A change of a field that affects resolution re-parses what it affects, wherever the files are, and sync gives scan --force's index: a dependency a file imports gaining, losing or becoming a workspace link; a workspace package's name or entry fields (exports, module, main, types) re-parse the importers in other packages; a NODE_PATH script or jest moduleDirectories key; a build tool among the dependencies.",
+        "A manifest that gains or loses the vue-router detector (a vue or vue-router dependency) re-parses the files of any language whose text holds a name its ignore list adds or drops (ref, watch, t, d, useStore, ...), the nested manifest covering its folder only, and sync gives scan --force's index; an index recorded by an older MapX still follows a tsconfig or bundler edit made before its first sync (tests/scanner-config-referrers.test.ts).",
+        "A full scan's output is unchanged (edges, symbols, external-reference candidates, files: byte-identical dumps from develop and from the change over MapX's own tree and a tree of npm packages)."
       ],
       "verificationCommands": [
-        "npx vitest run tests/vue-stores.test.ts tests/legacy-globs.test.ts"
+        "npx vitest run tests/scanner-config-referrers.test.ts tests/vue-stores.test.ts tests/legacy-globs.test.ts",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T20:21:10.358Z",
+      "completedAt": "2026-11-04T23:27:31.683Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M0-02-R13.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/scanner-config-referrers.test.ts tests/vue-stores.test.ts tests/legacy-globs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R13.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M0-02-R13.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T20:21:09.870Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T20:21:10.358Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T23:27:31.086Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T23:27:31.683Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/scanner-config-referrers.test.ts tests/vue-stores.test.ts tests/legacy-globs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R13.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M0-02-R13.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

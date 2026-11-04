@@ -29,14 +29,14 @@ import { pairCall, routeDomainHosts, urlHost } from '../frameworks/http/pairing.
 import { addImportDecisionKeys, closest, emptyImportDecisionKeys, ImportDecisionBaseline, goImportInWorkspaceModule, goImportOutsideProject, goLayoutModule, importResolverFor, javaImportOutsideProject, javaImportStatements, JVM_SOURCE, jvmDeclarationSignature, jvmImportAffected, jvmPackageIn, jvmSignatureTypes, pythonNameInProject, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportDecisionKeys, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
-import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
+import { buildScopedIgnoredSymbols, getIgnoredSymbolsRegistry, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
 import { BUILTIN_GLOBALS, JS_GLOBAL_FUNCTIONS } from '../parsers/common-methods.js';
 import { resolveThisMember } from '../parsers/languages/vue-options.js';
-import { collectVuexFiles, resolveStoreTarget, storeCallOrPlain, workspaceSearchEnd, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
+import { collectVuexFiles, resolveStoreTarget, storeCallOrPlain, storeDependencies, storeGateMatters, workspaceSearchEnd, type VueResolveContext, type VuexModuleInfo } from '../parsers/languages/vue-stores.js';
 import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vueGlobFiles, type GlobalRegistrations, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
-import { BUILD_TOOLS, BUNDLER_CONFIGS, MODULE_ROOT_CONFIGS, jsAliasTargets, jsBaseUrlTarget, jsModuleRootTargets, type AliasContext } from './js-aliases.js';
+import { BUILD_TOOLS, BUNDLER_CONFIGS, MODULE_ROOT_CONFIGS, jsAliasTargets, jsBaseUrlTarget, jsModuleRootTargets, manifestRootKind, packageModuleRoots, parseJsonc, type AliasContext } from './js-aliases.js';
 import { declaredGlobalNames, exportSkeleton, gainedGlobalNames, globalScopeKey, hasCommonJsExports, hasModuleSyntax, jsExportSignature, scanModule, type JsText } from './js-source.js';
 import { ATTRIBUTION_VERSION, EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
 import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalAttribution, type ExternalRefRow, type JsImport } from './external-refs.js';
@@ -175,6 +175,25 @@ const readable = (path: string) => {
 };
 /** The scan time of a file whose re-indexing has not written its result yet (M0-02-R10). */
 const UNSCANNED = new Date(0).toISOString();
+/**
+ * What sync signs of one package.json (M0-02-R13): `n` its package name, `d` the registry (`r`) or local
+ * (`l`) version of every dependency it lists with a string version (what `isNpmPackage` reads), `e` its
+ * entry fields as JSON (what a workspace package's importers resolve through).
+ */
+interface PackageFacts { n?: string; d?: Array<[string, 'r' | 'l']>; e?: string }
+/** The package.json signatures of one run: record entries, facts and views by folder, and the folders holding a manifest. */
+interface ManifestInputs { entries: Record<string, string>; facts: Map<string, PackageFacts>; views: Map<string, string>; holders: Set<string> }
+/** The nearest folder of `set` at or above a folder ('' when the root is in it), memoised. */
+function nearestFolder(set: Set<string>): (dir: string) => string | undefined {
+  const memo = new Map<string, string | undefined>();
+  const find = (dir: string): string | undefined => {
+    if (memo.has(dir)) return memo.get(dir);
+    const found = set.has(dir) ? dir : dir === '' ? undefined : find(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '');
+    memo.set(dir, found);
+    return found;
+  };
+  return find;
+}
 /** Manifests whose content decides how a language's imports resolve, tracked by sync (M0-02-R9). */
 const MANIFEST_FAMILIES = [
   { prefix: '\0go:', manifest: 'go.mod', source: /\.go$/ },
@@ -651,7 +670,7 @@ export class Scanner {
       // Re-resolves files the counts above already include.
       if (reposToScan.length > 1 && !this.aborted) this.queueEarlyParsed(reposToScan);
       // The resolution configs as this run left them, for the next run to compare with (M0-02-R8).
-      if (!this.aborted) for (const name of reposToScan) this.configReferrers(name);
+      if (!this.aborted) for (const name of reposToScan) await this.configReferrers(name, [], false, [], false);
       this.parsedInRun = null;
       for (const repoName of reposToScan.length > 1 && !this.aborted ? reposToScan : []) {
         const repo = this.config.repos.find(r => r.name === repoName);
@@ -747,7 +766,7 @@ export class Scanner {
         ...this.movedReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.removedSymbolReferrers(repo.name, changedFiles.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.vanishedNameReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
-        ...this.configReferrers(repo.name, deletedPaths, false, [...newFiles, ...changedFiles].map(f => ({ path: f.relativePath, content: f.content }))),
+        ...await this.configReferrers(repo.name, deletedPaths, false, [...newFiles, ...changedFiles].map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.vueRegistryReferrers(repo.name, candidateTexts, deletedPaths),
       ]),
     ]);
@@ -1003,7 +1022,7 @@ export class Scanner {
       // Re-resolves files the counts above already include.
       if (reposToScan.length > 1 && !this.aborted) this.queueEarlyParsed(reposToScan);
       // The resolution configs as this run left them, for the next run to compare with (M0-02-R8).
-      if (!this.aborted) for (const name of reposToScan) this.configReferrers(name);
+      if (!this.aborted) for (const name of reposToScan) await this.configReferrers(name, [], false, [], false);
       this.parsedInRun = null;
       for (const repoName of reposToScan.length > 1 && !this.aborted ? reposToScan : []) {
         const repo = this.config.repos.find(r => r.name === repoName);
@@ -1120,7 +1139,7 @@ export class Scanner {
     // A package.json git does not list (untracked, then deleted) can still move Vue scopes (M3-08-R1).
     const facts = () => JSON.parse(this.store.getMeta('vue_registry:' + repo.name) ?? '{}');
     if (changes.length === 0 && pending.length === 0 && this.vueScopeMoves(repo.name, [], [], {}, facts(), true).size === 0
-      && this.configReferrers(repo.name, [], true).size === 0 && !this.analysisInputsChanged(repo.name)) {
+      && (await this.configReferrers(repo.name, [], true)).size === 0 && !this.analysisInputsChanged(repo.name)) {
       this.applyDeferredConsumption();
       await this.refreshHttpIfInputsChanged(repo, repoRoot);
       return {
@@ -1201,7 +1220,7 @@ export class Scanner {
     // holds (M0-02-R4), and those using a Vue tag whose global registration changed (M3-08).
     const reindexed = new Set(toReindex.map(r => r.path));
     const listedTexts = [...contents].map(([path, content]) => ({ path, content }));
-    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove, false, listedTexts), ...this.importerReferrers(listedTexts), ...this.newModuleReferrers(listedTexts.map(t => t.path)), ...this.importDecisionReferrers(listedTexts)];
+    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...await this.configReferrers(repo.name, toRemove, false, listedTexts), ...this.importerReferrers(listedTexts), ...this.newModuleReferrers(listedTexts.map(t => t.path)), ...this.importDecisionReferrers(listedTexts)];
     const vueUsers = this.vueRegistryReferrers(repo.name, listedTexts, toRemove);
     // Taken again: removeFiles queued the importers of the removed modules (M2-08-R1).
     const queued = toRemove.length ? this.takePendingReferrers(repo.name) : [];
@@ -5193,27 +5212,35 @@ export class Scanner {
 
   /**
    * JS/TS/Vue/Python files below a folder whose resolution configs changed since the last scan: a
-   * package.json (npm packages, app roots: M0-17-R4, M3-09-R1; the Pinia/Vuex gate, M3-05-R3) or
-   * pnpm-workspace.yaml (the workspace globs that gate reads), tsconfig/jsconfig (with the configs
-   * their relative `extends` / `references` reach) or bundler config added, removed or edited, or an
-   * `__init__.py` added or removed (Python import roots, M0-12-R9). Folders up to the workspace root
-   * count, as alias lookup walks that far. No scan parses those files, so the files they govern are re-parsed,
-   * as `scan --force` would resolve them (M0-02-R8). Likewise Go files below a changed go.mod (the
-   * module path) and PHP files below a changed composer.json (PSR-4 roots) (M0-02-R9). Signatures
-   * live in `meta js_configs:<repo>`: folder keys for JS/TS/Python, NUL-prefixed `go:`/`php:` folder
-   * keys for the others, and `#families`, the families the record holds. A go.mod that is there but
-   * cannot be read is signed by the module path its folder layout gives, over the Go files as they
-   * stand (`texts`: the new and changed ones), so an import that changes it re-parses the module's
-   * files as `scan --force` would (review of M5-23-R1).
+   * tsconfig/jsconfig (with the configs their relative `extends` / `references` reach) or bundler
+   * config added, removed or edited, or an `__init__.py` added or removed (Python import roots,
+   * M0-12-R9). Folders up to the workspace root count, as alias lookup walks that far. No scan parses
+   * those files, so the files they govern are re-parsed, as `scan --force` would resolve them
+   * (M0-02-R8). Likewise Go files below a changed go.mod (the module path) and PHP files below a changed
+   * composer.json (PSR-4 roots) (M0-02-R9). Signatures live in `meta js_configs:<repo>`: folder keys
+   * for JS/TS/Python, NUL-prefixed `go:`/`php:` folder keys for the others, and `#families`, the
+   * families the record holds. A go.mod that is there but cannot be read is signed by the module path
+   * its folder layout gives, over the Go files as they stand (`texts`: the new and changed ones), so
+   * an import that changes it re-parses the module's files as `scan --force` would (review of M5-23-R1).
+   *
+   * package.json and pnpm-workspace.yaml are not in those folder signatures: what resolution reads
+   * of them is signed per field (`manifestInputs`), so an edit re-parses only the files it affects
+   * (M0-02-R13, after M0-17-R4, M3-09-R1, M3-05-R3, M2-08-R6, M2-08-R11).
    */
-  private configReferrers(repoName: string, deleted: string[] = [], dryRun = false, texts: Array<{ path: string; content?: string }> = []): Set<string> {
+  private async configReferrers(repoName: string, deleted: string[] = [], dryRun = false, texts: Array<{ path: string; content?: string }> = [], compare = true): Promise<Set<string>> {
     const key = 'js_configs:' + repoName;
     const gone = new Set(deleted);
     const indexed = this.store.getAllFiles(repoName).map(f => f.path as string).filter(p => !gone.has(p));
     const sources = indexed.filter(p => JS_TS_FILE.test(p) || /\.(vue|svelte|py)$/.test(p));
     const families = MANIFEST_FAMILIES.map(f => ({ ...f, sources: indexed.filter(p => f.source.test(p)) }));
-    if (sources.length === 0 && families.every(f => f.sources.length === 0)) return new Set();
+    // Every language parses with the ignore lists of the active frameworks, so any file counts (M0-02-R13).
+    if (indexed.length === 0) return new Set();
+    // A file this sync adds is not in the index yet; its folders count (a workspace package that arrives with its files).
+    const present = new Set(indexed);
+    const arriving = texts.map(t => t.path).filter(p => !present.has(p) && !gone.has(p));
+    const folderFiles = [...indexed, ...arriving];
     const workspaceRoot = this.config.getWorkspaceRoot();
+    const ignored = await this.ignoreActivation(repoName, folderFiles);
     // Every folder above a source, up to the workspace root: alias lookup walks that far (review).
     const dirs = new Set<string>(['']);
     for (const p of sources) {
@@ -5223,7 +5250,7 @@ export class Scanner {
         dirs.add(dir);
       }
     }
-    const names = [...new Set(['package.json', 'pnpm-workspace.yaml', ...BUNDLER_CONFIGS, ...MODULE_ROOT_CONFIGS])];
+    const names = [...new Set([...BUNDLER_CONFIGS, ...MODULE_ROOT_CONFIGS])];
     // A tsconfig/jsconfig and every config its relative `extends` / `references` reach, recursively
     // (`.svelte-kit/tsconfig.json`, `tsconfig.app.json`, `tsconfig.base.json`): a missing one counts.
     const tsConfigTree = (file: string, hash: ReturnType<typeof createHash>, seen: Set<string>) => {
@@ -5241,11 +5268,11 @@ export class Scanner {
         tsConfigTree(next, hash, seen);
       }
     };
-    const signatures: Record<string, string> = {};
-    for (const dir of dirs) {
+    // The signature of one folder's resolution configs; `names` are the files it hashes by name.
+    const folderSignature = (dir: string, byName: string[]): string | null => {
       const hash = createHash('md5');
       let any = false;
-      for (const name of names) {
+      for (const name of byName) {
         const abs = resolve(workspaceRoot, dir, name);
         if (!existsSync(abs)) continue;
         any = true;
@@ -5263,26 +5290,17 @@ export class Scanner {
         any = true;
         hash.update('__init__.py');
       }
-      if (any) signatures[dir] = hash.digest('hex');
+      return any ? hash.digest('hex') : null;
+    };
+    const signatures: Record<string, string> = {};
+    for (const dir of dirs) {
+      const signature = folderSignature(dir, names);
+      if (signature) signatures[dir] = signature;
     }
-    // Folders above the workspace root, up to its repository's root: the Pinia/Vuex gate reads their
-    // package.json and pnpm-workspace.yaml for a monorepo root (M3-05-R3). Keyed `^<relative path>`;
-    // a change re-parses every source.
-    if (sources.length > 0) {
-      const end = workspaceSearchEnd(workspaceRoot);
-      for (let dir = workspaceRoot; dir !== end;) {
-        dir = dirname(dir);
-        const hash = createHash('md5');
-        let any = false;
-        for (const name of ['package.json', 'pnpm-workspace.yaml']) {
-          const abs = join(dir, name);
-          if (!existsSync(abs)) continue;
-          any = true;
-          hash.update(name).update('\0').update(readFileSync(abs));
-        }
-        if (any) signatures['^' + relative(workspaceRoot, dir).replace(/\\/g, '/')] = hash.digest('hex');
-      }
-    }
+    // package.json (and pnpm-workspace.yaml), read for what resolution reads of them (M0-02-R13).
+    const jsSources = sources.filter(p => JS_MODULE_FILE.test(p));
+    const manifests = this.manifestInputs(workspaceRoot, jsSources.length ? folderFiles : []);
+    Object.assign(signatures, manifests.entries, ignored);
     // The module path an unreadable go.mod's folder layout gives, over the Go files as they stand.
     let layoutCtx: ImportContext | null = null;
     const goLayout = (dir: string) => {
@@ -5325,19 +5343,319 @@ export class Scanner {
     // Recorded with the sync's upserts, so a sync killed before them sees the change again (M0-02-R11).
     const recordNow = JSON.stringify(signatures);
     if (!dryRun) this.consumeLater(() => this.store.setMeta(key, recordNow));
-    // No record yet: nothing to compare with.
-    if (!before) return new Set();
+    // No record yet, or only the record is wanted (the end of a run): nothing to compare with.
+    if (!before || !compare) return new Set();
     // A family the record does not hold yet (an index from before it) is only recorded: nothing to compare.
     const recorded = new Set((before['#families'] ?? '').split(','));
-    const changed = [...new Set([...Object.keys(before), ...Object.keys(signatures)])]
-      .filter(k => k !== '#families' && before![k] !== signatures[k]
+    // A record from before the manifest fields were signed (M0-02-R13) has package.json and
+    // pnpm-workspace.yaml in its folder hashes, and the folders above the workspace root under `^` keys.
+    // Those cannot be compared with the folder hashes above, so for that one sync the folders are signed
+    // the way the record was, and a change is followed as it was then: everything below the folder.
+    const legacy = before['#manifests'] === undefined;
+    const compared: Record<string, string> = { ...signatures };
+    if (legacy) {
+      for (const k of Object.keys(compared)) if (!isFamilyKey(k)) delete compared[k];
+      const oldNames = [...new Set(['package.json', 'pnpm-workspace.yaml', ...BUNDLER_CONFIGS, ...MODULE_ROOT_CONFIGS])];
+      for (const dir of dirs) {
+        const signature = folderSignature(dir, oldNames);
+        if (signature) compared[dir] = signature;
+      }
+      if (sources.length > 0) {
+        const end = workspaceSearchEnd(workspaceRoot);
+        for (let dir = workspaceRoot; dir !== end;) {
+          dir = dirname(dir);
+          const hash = createHash('md5');
+          let any = false;
+          for (const name of ['package.json', 'pnpm-workspace.yaml']) {
+            const abs = join(dir, name);
+            if (!existsSync(abs)) continue;
+            any = true;
+            hash.update(name).update('\0').update(readFileSync(abs));
+          }
+          if (any) compared['^' + relative(workspaceRoot, dir).replace(/\\/g, '/')] = hash.digest('hex');
+        }
+      }
+    }
+    const changed = [...new Set([...Object.keys(before), ...Object.keys(compared)])]
+      .filter(k => k !== '#families' && k !== '#manifests' && before![k] !== compared[k]
         && (!isFamilyKey(k) || MANIFEST_FAMILIES.some(f => k.startsWith(f.prefix) && recorded.has(f.prefix))));
-    if (changed.length === 0) return new Set();
     const under = (p: string, dir: string) => dir === '' || p.startsWith(`${dir}/`);
     const referrers = new Set(sources.filter(p => changed.some(dir => !isFamilyKey(dir) && (dir.startsWith('^') || under(p, dir)))));
     for (const family of families) {
       const dirs = changed.filter(k => k.startsWith(family.prefix)).map(k => k.slice(family.prefix.length));
       for (const p of family.sources) if (dirs.some(dir => under(p, dir))) referrers.add(p);
+    }
+    if (!legacy) {
+      for (const p of this.manifestReferrers(workspaceRoot, before, manifests, jsSources)) referrers.add(p);
+      for (const p of this.ignoreReferrers(workspaceRoot, before, ignored, indexed, texts)) referrers.add(p);
+    }
+    return referrers;
+  }
+
+  /**
+   * The frameworks with an ignore list that are active for a repo, with the folders they cover, as
+   * signature entries (`\0ign:<framework>`: the folders as JSON, `['']` for the whole repo). Asked of the
+   * detectors themselves, with the files the parse will see, so the entries are what the parse uses
+   * (M0-02-R13): `buildScopedIgnoredSymbols` takes the same activation and scopes.
+   */
+  private async ignoreActivation(repoName: string, files: string[]): Promise<Record<string, string>> {
+    const repo = this.config.repos.find(r => r.name === repoName);
+    if (!repo) return {};
+    const workspaceRoot = this.config.getWorkspaceRoot();
+    const scopes = new Map<string, string[]>();
+    const active = await FrameworkRegistry.getInstance().detectActiveFrameworks(
+      resolve(workspaceRoot, repo.path), files, { workspaceRoot, scopes, only: Object.keys(getIgnoredSymbolsRegistry()) });
+    const entries: Record<string, string> = {};
+    for (const detector of active) entries['\0ign:' + detector.name] = JSON.stringify([...(scopes.get(detector.name) ?? [''])].sort());
+    return entries;
+  }
+
+  /**
+   * The files whose ignored-symbol set changed with the frameworks a package.json activates (M0-02-R13):
+   * every parse drops the calls of the names an active framework ignores (`ref`, `watch`, `t`, `useStore`
+   * for vue-router, which a `vue` or `vue-router` dependency activates), in every language, so a manifest
+   * that gains or loses the dependency moves the set of each file in the folders it covers. A file is
+   * re-parsed when its set changed and its text holds a name that was added to it or removed from it.
+   * Each file is read once for that and not kept; nothing is read when the activation did not move.
+   */
+  private ignoreReferrers(workspaceRoot: string, before: Record<string, string>, now: Record<string, string>, indexed: string[], texts: Array<{ path: string; content?: string }>): Set<string> {
+    const referrers = new Set<string>();
+    const prefix = '\0ign:';
+    const was: Record<string, string> = {};
+    for (const [k, v] of Object.entries(before)) if (k.startsWith(prefix)) was[k] = v;
+    const frameworks = new Set([...Object.keys(was), ...Object.keys(now)].filter(k => was[k] !== now[k]).map(k => k.slice(prefix.length)));
+    if (frameworks.size === 0) return referrers;
+    const registry = getIgnoredSymbolsRegistry();
+    const scopesOf = (record: Record<string, string>, name: string): string[] | null => {
+      const raw = record[prefix + name];
+      if (raw === undefined) return null;
+      try { return JSON.parse(raw) as string[]; } catch { return ['']; }
+    };
+    const covers = (scopes: string[] | null, p: string) => scopes !== null && scopes.some(scope => scope === '' || p.startsWith(`${scope}/`));
+    const setOf = (record: Record<string, string>, p: string) => {
+      const set = new Set<string>();
+      for (const name of Object.keys(registry)) if (covers(scopesOf(record, name), p)) for (const symbol of registry[name]!) set.add(symbol);
+      return set;
+    };
+    const given = new Map(texts.filter(t => t.content !== undefined).map(t => [t.path, t.content!]));
+    const patterns = new Map<string, RegExp | null>();
+    const fixed = (symbol: string) => symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    for (const p of indexed) {
+      const oldSet = setOf(was, p);
+      const newSet = setOf(now, p);
+      const diff = [...oldSet].filter(x => !newSet.has(x)).concat([...newSet].filter(x => !oldSet.has(x))).sort();
+      if (diff.length === 0) continue;
+      const key = diff.join(',');
+      if (!patterns.has(key)) patterns.set(key, new RegExp(`(?<![\\w$])(?:${diff.map(fixed).join('|')})(?![\\w$])`));
+      let text = given.get(p);
+      if (text === undefined) {
+        try { text = readFileSync(resolve(workspaceRoot, p), 'utf-8'); } catch { text = undefined; }
+      }
+      if (text === undefined || patterns.get(key)!.test(text)) referrers.add(p);
+    }
+    return referrers;
+  }
+
+  /**
+   * What the resolution of JS/TS/Vue/Svelte files reads of package.json and pnpm-workspace.yaml, as
+   * signature entries of the config record (M0-02-R13). Two kinds, for every folder holding a
+   * package.json (the workspace root always counts):
+   * - `\0view:<dir>`: what files in the folder (and below it, down to the next manifest) see through
+   *   walk-ups that do not depend on the specifier: the store libraries the package gets (the gate,
+   *   M3-05: its own, or its workspace root's), an auto-import tool among the manifests above
+   *   (M2-08-R3), the nearest app and package folders for alias lookup (M3-09-R1: `BUILD_TOOLS`,
+   *   name, dependencies), and the nearest module roots a `jest` key or a `NODE_PATH=` script declares
+   *   (M2-08-R11). Held as `<gate>|<hash of the rest>`. `version`, `scripts` and the like are in none.
+   * - `\0pkg:<dir>`: what depends on the specifier an import names: `n` the package name, `d` the
+   *   registry (`r`) or local (`l`) version of each dependency it lists (`isNpmPackage`, M0-17-R4), `e`
+   *   its entry fields `exports`, `module`, `main` and `types` (workspace packages, M2-08-R6).
+   * The Vue scope of a folder is tracked on its own (`vueScopeMoves`, M3-08-R1).
+   */
+  private manifestInputs(workspaceRoot: string, indexed: string[]): ManifestInputs {
+    const dirSet = new Set<string>(['']);
+    for (const p of indexed) {
+      for (let dir = p; dir.includes('/');) {
+        dir = dir.slice(0, dir.lastIndexOf('/'));
+        if (dirSet.has(dir)) break;
+        dirSet.add(dir);
+      }
+    }
+    const read = new Map<string, { strict: any; lenient: any }>();
+    // Parents sort before their children, so a walk-up finds its answer already made.
+    const dirs: string[] = [];
+    for (const dir of [...dirSet].sort()) {
+      let text: string | null = null;
+      try {
+        const abs = resolve(workspaceRoot, dir, 'package.json');
+        text = existsSync(abs) ? readFileSync(abs, 'utf-8') : null;
+      } catch { /* unreadable: absent */ }
+      if (text === null && dir !== '') continue;
+      let strict: any = null;
+      try { strict = text === null ? null : JSON.parse(text); } catch { /* not JSON: the scanner reads none */ }
+      read.set(dir, { strict, lenient: parseJsonc(text) });
+      dirs.push(dir);
+    }
+    const holders = new Set(dirs);
+    const nearest = nearestFolder(holders);
+    const above = (dir: string) => (dir === '' ? undefined : nearest(dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : ''));
+    const facts = new Map<string, PackageFacts>();
+    const views = new Map<string, string>();
+    const entries: Record<string, string> = { '#manifests': '1' };
+    interface Seen { auto: boolean; app: string | null; pkg: string | null; jest: string | null; nodePath: string | null }
+    const seen = new Map<string, Seen>();
+    for (const dir of dirs) {
+      const { strict, lenient } = read.get(dir)!;
+      const own: PackageFacts = {};
+      if (strict && typeof strict === 'object') {
+        if (typeof strict.name === 'string') own.n = strict.name;
+        const listed = { ...strict.dependencies, ...strict.devDependencies, ...strict.peerDependencies, ...strict.optionalDependencies };
+        const d = Object.entries(listed).filter(([, v]) => typeof v === 'string')
+          .map(([name, v]): [string, 'r' | 'l'] => [name, /^(workspace:|file:|link:|portal:|\.|\/)/.test(v as string) ? 'l' : 'r'])
+          .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        if (d.length) own.d = d;
+        const entry = [strict.exports ?? null, strict.module ?? null, strict.main ?? null, strict.types ?? null];
+        if (entry.some(v => v !== null)) own.e = JSON.stringify(entry);
+      }
+      if (Object.keys(own).length) {
+        facts.set(dir, own);
+        entries['\0pkg:' + dir] = JSON.stringify(own);
+      }
+      const parent = above(dir);
+      const up: Seen = (parent !== undefined && seen.get(parent)) || { auto: false, app: null, pkg: null, jest: null, nodePath: null };
+      const kind = manifestRootKind(lenient);
+      const roots = packageModuleRoots(lenient, dir);
+      const listedByTool = strict && typeof strict === 'object'
+        ? (() => { const deps = { ...strict.dependencies, ...strict.devDependencies, ...strict.peerDependencies }; return AUTO_IMPORT_PACKAGES.some(p => p in deps); })()
+        : false;
+      const here: Seen = {
+        auto: up.auto || listedByTool,
+        app: kind === 'app' ? dir : up.app,
+        pkg: kind !== 'none' ? dir : up.pkg,
+        // A `jest` key that declares no root only matters as a shadow of an enclosing one.
+        jest: roots.jest && (roots.jest.early.length || roots.jest.late.length || up.jest) ? JSON.stringify([dir, roots.jest]) : up.jest,
+        nodePath: roots.nodePath ? JSON.stringify([dir, roots.nodePath]) : up.nodePath,
+      };
+      seen.set(dir, here);
+      // The gate walks the real folders, above the workspace root too (M3-05-R3).
+      const gate = storeDependencies(join(workspaceRoot, dir, 'x'));
+      const rest = createHash('md5').update(JSON.stringify([here.auto, here.app, here.pkg, here.jest, here.nodePath])).digest('hex').slice(0, 12);
+      const view = `${gate.vuex ? 1 : 0}${gate.pinia ? 1 : 0}|${rest}`;
+      views.set(dir, view);
+      entries['\0view:' + dir] = view;
+    }
+    return { entries, facts, views, holders };
+  }
+
+  /**
+   * The JS/TS/Vue/Svelte files whose resolution a change of the package.json files since the last run
+   * affects (M0-02-R13), from the record `manifestInputs` wrote and the one it writes now:
+   * - **A folder's view moved** (the walk-ups that do not depend on a specifier): the files whose
+   *   nearest manifest folder's view differs from what they saw. A gate-only move (the store
+   *   libraries) re-parses those whose text holds the hint the changed library is read for (`storeGateMatters`); any other
+   *   move all of them. A nested package with its own manifest has its own view, which an outer change
+   *   moves only when it reaches it (a workspace root lending its store library, a build tool above it).
+   * - **A name an import may name changed meaning**: a dependency a manifest lists, gains or loses (or
+   *   changes between a registry version and a local one) where the file's nearest listing changes; a
+   *   package name gained, lost or moved; a workspace package whose entry fields changed. The files
+   *   anywhere in the repo whose text quotes the name (`'pkg'`, `'pkg/sub'`) are re-parsed, those a
+   *   nested manifest listing the name keeps out of an outer listing's change.
+   * Version, scripts without a `NODE_PATH`, description and the like change none of them.
+   */
+  private manifestReferrers(workspaceRoot: string, before: Record<string, string>, now: ManifestInputs, sources: string[]): Set<string> {
+    const referrers = new Set<string>();
+    if (sources.length === 0) return referrers;
+    const oldViews = new Map<string, string>();
+    const oldFacts = new Map<string, PackageFacts>();
+    for (const [k, v] of Object.entries(before)) {
+      if (k.startsWith('\0view:')) oldViews.set(k.slice('\0view:'.length), v);
+      else if (k.startsWith('\0pkg:')) {
+        try { oldFacts.set(k.slice('\0pkg:'.length), JSON.parse(v)); } catch { /* read as none */ }
+      }
+    }
+    const oldNear = nearestFolder(new Set(oldViews.keys()));
+    const newNear = nearestFolder(now.holders);
+    const dirOf = (p: string) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+    const viewMoves = new Map<string, 'all' | { vuex: boolean; pinia: boolean } | null>();
+    const moveOf = (dir: string) => {
+      let move = viewMoves.get(dir);
+      if (move === undefined) {
+        const was = oldViews.get(oldNear(dir) ?? '\0');
+        const is = now.views.get(newNear(dir) ?? '\0');
+        const [wasGate, wasRest] = (was ?? '').split('|');
+        const [isGate, isRest] = (is ?? '').split('|');
+        move = was === undefined || is === undefined || wasRest !== isRest ? 'all'
+          : wasGate === isGate ? null : { vuex: wasGate![0] !== isGate![0], pinia: wasGate![1] !== isGate![1] };
+        viewMoves.set(dir, move);
+      }
+      return move;
+    };
+    // Packages by name, as `npmWorkspacePackages` reads them: folders below the root, first in path order.
+    const tableOf = (factsOf: Map<string, PackageFacts>) => {
+      const table = new Map<string, string>();
+      for (const dir of [...factsOf.keys()].sort()) {
+        const f = factsOf.get(dir)!;
+        if (dir !== '' && f.n !== undefined && !table.has(f.n)) table.set(f.n, `${dir}\0${f.e ?? ''}`);
+      }
+      return table;
+    };
+    const wasTable = tableOf(oldFacts);
+    const isTable = tableOf(now.facts);
+    const moved = new Set<string>();
+    for (const name of new Set([...wasTable.keys(), ...isTable.keys()])) if (wasTable.get(name) !== isTable.get(name)) moved.add(name);
+    const listed = new Set<string>();
+    for (const dir of new Set([...oldFacts.keys(), ...now.facts.keys()])) {
+      const was = oldFacts.get(dir);
+      const is = now.facts.get(dir);
+      const wasD = new Map(was?.d ?? []);
+      const isD = new Map(is?.d ?? []);
+      for (const name of new Set([...wasD.keys(), ...isD.keys()])) if (wasD.get(name) !== isD.get(name)) listed.add(name);
+      for (const name of [was?.n, is?.n]) if (name !== undefined && was?.n !== is?.n) listed.add(name);
+    }
+    const names = new Set([...moved, ...listed]);
+    // What a file's nearest manifest says of a name: its package name, or the kind of version it lists.
+    const meaning = (name: string, dir: string, factsOf: Map<string, PackageFacts>, near: (d: string) => string | undefined) => {
+      for (let d = near(dir); d !== undefined; d = d === '' ? undefined : near(dirOf(d))) {
+        const f = factsOf.get(d);
+        if (f?.n === name) return 'name';
+        const kind = f?.d?.find(([n]) => n === name)?.[1];
+        if (kind) return kind;
+      }
+      return null;
+    };
+    // A file's text, read once for the file being tested and not kept.
+    const readText = (p: string) => {
+      try { return readFileSync(resolve(workspaceRoot, p), 'utf-8'); } catch { return null; /* read as changed */ }
+    };
+    const plain = /^(?:@[\w.~-]+\/)?[\w.~-]+$/;
+    const odd = [...names].filter(n => !plain.test(n));
+    const quoted = /['"`]((?:@[\w.~-]+\/)?[\w.~-]+)(?:\/[^'"`\n]*)?['"`]/g;
+    for (const p of sources) {
+      const dir = dirOf(p);
+      const move = moveOf(dir);
+      if (move === 'all') {
+        referrers.add(p);
+        continue;
+      }
+      if (move === null && names.size === 0) continue;
+      const t = readText(p);
+      if (move !== null && (t === null || storeGateMatters(p, t, move))) {
+        referrers.add(p);
+        continue;
+      }
+      if (names.size === 0) continue;
+      if (t === null) {
+        referrers.add(p);
+        continue;
+      }
+      const mentioned = new Set<string>([...t.matchAll(quoted)].map(m => m[1]!));
+      for (const name of odd) if (t.includes(name)) mentioned.add(name);
+      for (const name of mentioned) {
+        if (!names.has(name)) continue;
+        if (moved.has(name) || meaning(name, dir, oldFacts, oldNear) !== meaning(name, dir, now.facts, newNear)) {
+          referrers.add(p);
+          break;
+        }
+      }
     }
     return referrers;
   }
@@ -6286,7 +6604,7 @@ export class Scanner {
         ...this.movedReferrers(repo.name, changedTexts),
         ...this.removedSymbolReferrers(repo.name, changedTexts),
         ...this.vanishedNameReferrers(repo.name, changedTexts),
-        ...this.configReferrers(repo.name, toRemove, false, changedTexts),
+        ...await this.configReferrers(repo.name, toRemove, false, changedTexts),
         ...this.vueRegistryReferrers(repo.name, changedTexts, toRemove),
       ]),
     ]);

@@ -323,8 +323,9 @@ function nearestHolding(name: string, dir: string): string | null {
 
 /**
  * The folder the search for a package's workspace root ends at: its repository's root (a folder
- * holding `.git`), else the MapX workspace's (`.mapx`), else the package itself. The scanner tracks
- * the manifests above its workspace root up to the same repository root (`configReferrers`).
+ * holding `.git`), else the MapX workspace's (`.mapx`), else the package itself. The scanner signs
+ * what the gate answers for each package folder (`manifestInputs`), so manifests above its workspace
+ * root, up to this end, are followed.
  */
 export function workspaceSearchEnd(packageDir: string): string {
   return nearestHolding('.git', packageDir) ?? nearestHolding('.mapx', packageDir) ?? packageDir;
@@ -336,8 +337,8 @@ export function workspaceSearchEnd(packageDir: string): string {
  * counts when its workspace root declares it: the first folder above the package whose package.json
  * `workspaces` or pnpm-workspace.yaml `packages` globs list the package's folder (a monorepo hoists
  * it there, M3-05-R3). Roots that do not list it are passed; the search ends at `workspaceSearchEnd`.
- * Unknown without a path. Sync re-parses the files below a changed package.json or
- * pnpm-workspace.yaml (the scanner's `configReferrers`), so a changed gate is followed.
+ * Unknown without a path. Sync records the answer for each package folder and re-parses the files it
+ * changed for (the scanner's `manifestInputs`), so a changed gate is followed (M0-02-R13).
  */
 export function storeDependencies(absolutePath: string | undefined): StoreDeps {
   if (!absolutePath) return NO_STORES;
@@ -381,13 +382,31 @@ export async function annotateStoreRefs(filePath: string, code: string, result: 
 
 /** Whether the store pass parses a file, and whether its package lists vuex. The manifest is read only when it decides. */
 export function storePass(filePath: string, code: string, absolutePath?: string): { run: boolean; vuex: boolean } {
+  const { known, plainHooks, memberParams } = storeHints(filePath, code);
+  if (!known && !plainHooks && !memberParams) return { run: false, vuex: false };
+  const deps = storeDependencies(absolutePath);
+  return { run: known || (plainHooks && deps.pinia) || (memberParams && deps.vuex), vuex: deps.vuex };
+}
+
+/** What the file's text suggests about store code, before any manifest is read. */
+function storeHints(filePath: string, code: string): { known: boolean; plainHooks: boolean; memberParams: boolean } {
   const hookCalls = HOOK_CALL.test(code) && (filePath.endsWith('.vue') || VUE_IMPORT.test(code));
   const known = STORE_HINT.test(code) || hookCalls || KIND_FILE.test(filePath);
   const plainHooks = !known && HOOK_CALL.test(code) && PROJECT_HOOK_IMPORT.test(code);
   const memberParams = MEMBER_PARAM_HINT.test(code);
-  if (!known && !plainHooks && !memberParams) return { run: false, vuex: false };
-  const deps = storeDependencies(absolutePath);
-  return { run: known || (plainHooks && deps.pinia) || (memberParams && deps.vuex), vuex: deps.vuex };
+  return { known, plainHooks, memberParams };
+}
+
+/**
+ * Whether a change of the store libraries a package lists can change how the file parses: its text holds
+ * a hint of the kind `storePass` reads them for. A file of known store code reads `vuex` only (it runs
+ * whatever the libraries are), a module calling a project hook reads `pinia`, a file of Vuex members
+ * reads `vuex`; a file without a hint parses the same whatever the package.json says. Monotone in the
+ * text, so a `.vue` file's whole text answers for its script (M0-02-R13).
+ */
+export function storeGateMatters(filePath: string, code: string, changed: Partial<StoreDeps>): boolean {
+  const { known, plainHooks, memberParams } = storeHints(filePath, code);
+  return !!changed.vuex && (known || memberParams) || !!changed.pinia && plainHooks;
 }
 
 class StorePass {

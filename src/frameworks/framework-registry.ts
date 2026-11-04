@@ -73,19 +73,21 @@ export class FrameworkRegistry {
    * repo; failing that, a manifest below the repo root listing one of its `manifestDependencies`
    * activates it for that folder only, and `options.scopes` receives those folders
    * (workspace-relative, like `files`, which are relative to `options.workspaceRoot`). A detector
-   * missing from `scopes` is active for the whole repo (M3-07). The manifest helpers `detect()`
+   * missing from `scopes` is active for the whole repo (M3-07). `only` limits the question to the named
+   * detectors (sync asks it of the ones with an ignore list, M0-02-R13). The manifest helpers `detect()`
    * uses read only the repo root's manifest, even when `files` holds nested ones (M3-07-R1).
    */
   async detectActiveFrameworks(
     projectRoot: string,
     files: string[],
-    options: { workspaceRoot?: string; scopes?: Map<string, string[]> } = {},
+    options: { workspaceRoot?: string; scopes?: Map<string, string[]>; only?: string[] } = {},
   ): Promise<FrameworkDetector[]> {
     const active: FrameworkDetector[] = [];
     const workspaceRoot = options.workspaceRoot ?? projectRoot;
     const repoPrefix = relative(workspaceRoot, projectRoot).replace(/\\/g, '/');
     const manifests: ManifestCache = new Map();
     for (const detector of this.detectors) {
+      if (options.only && !options.only.includes(detector.name)) continue;
       try {
         const isDetected = await detector.detect(projectRoot, files);
         if (isDetected) {

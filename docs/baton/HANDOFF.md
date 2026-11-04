@@ -1,10 +1,10 @@
 # MapX BATON handoff
 
-Revision: develop@41a94edb979006bb36562cdb071a3891d97a28da (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@9ea18f458734d66dbbd1b029005781472b2293be (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
-Last completed: M2-23 — Laravel database/ and resources/views/ PHP files get edges.
-Evidence: `npx vitest run tests/laravel-dirs.test.ts` (exit 0) → docs/baton/reports/M2-23.md; `npm run eval` (exit 0) → docs/baton/reports/M2-23.md; `npm run check` (exit 0) → docs/baton/reports/M2-23.md.
+Last completed: M0-02-R13 — A package.json edit re-parses only the files its change affects.
+Evidence: `npx vitest run tests/scanner-config-referrers.test.ts tests/vue-stores.test.ts tests/legacy-globs.test.ts` (exit 0) → docs/baton/reports/M0-02-R13.md; `npm run check` (exit 0) → docs/baton/reports/M0-02-R13.md.
 Actual engineering effort is unknown unless recorded in TASKS.json.
 
 ## Architect
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M6-01 — Large-graph fixtures and baseline measurements for the graph and Architecture views. Prerequisites: M4-20, M5-15. Read docs/baton/iterations/M6-01.md. Objective: Generated synthetic workspaces of 2k, 10k, 50k and 100k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap. Expected outputs: scripts/ui/gen-large-workspace.ts; tests/ui/perf-scale.spec.ts; reports/M6-01.md. Verify: `npx playwright test tests/ui/perf-scale.spec.ts`.
-Also eligible: M0-02-R13, M2-12-R2, M2-14, M2-20-R1, M2-21.
+Also eligible: M2-12-R2, M2-14, M2-20-R1, M2-21, M2-27.
 Active work: none. One active iteration per owner.
 
 ## Observe

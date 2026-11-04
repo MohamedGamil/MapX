@@ -121,7 +121,7 @@ Legacy iterations I01–I22 imported as delivered, plus remediation for what the
 - **M0-10-R6** Unknown --repo is an error; git sync counts indexed files — DONE, P2, 2h; depends on M0-10-R5.
 - **M0-12-R11** Svelte template names scoped per block; quoted handlers — DONE, P2, 2h; depends on M0-12-R10.
 - **M0-02-R12** A full scan killed after its index transaction keeps referrers and changed files — DONE, P2, 4h; depends on M0-02-R11.
-- **M0-02-R13** A package.json edit re-parses only the files its change affects — BACKLOG, P2, 4h; depends on M3-05-R3.
+- **M0-02-R13** A package.json edit re-parses only the files its change affects — DONE, P2, 4h; depends on M3-05-R3.
 
 ## M1 — Laravel route correctness
 

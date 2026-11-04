@@ -153,6 +153,19 @@ function match(rules: AliasRule[], target: string): string[] | null {
   return best ? best.rule.targets.map((t) => t.replace('*', best!.star)) : null;
 }
 
+/**
+ * What a package.json makes of its folder for alias lookup (before any bundler config): 'app' when a
+ * build tool is among its dependencies, 'package' for any other manifest naming a package or listing
+ * dependencies, 'none' otherwise. Exported for the scanner's sync tracking (M0-02-R13).
+ */
+export function manifestRootKind(manifest: any): DirAliases['root'] {
+  const deps = manifest && typeof manifest === 'object'
+    ? { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies }
+    : null;
+  const root: DirAliases['root'] = deps && (manifest.name || Object.keys(deps).length) ? 'package' : 'none';
+  return root === 'package' && BUILD_TOOLS.some(t => t in deps!) ? 'app' : root;
+}
+
 function dirAliases(dir: string, ctx: AliasContext): DirAliases {
   let compiler: AliasRule[] | null = null;
   let baseUrl: string | null = null;
@@ -163,12 +176,7 @@ function dirAliases(dir: string, ctx: AliasContext): DirAliases {
     compiler = tsConfigRules(path, ctx);
     if (compiler.length) break;
   }
-  const manifest = parseJsonc(ctx.readText(posix.join(dir, 'package.json')));
-  const deps = manifest && typeof manifest === 'object'
-    ? { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies }
-    : null;
-  let root: DirAliases['root'] = deps && (manifest.name || Object.keys(deps).length) ? 'package' : 'none';
-  if (root === 'package' && BUILD_TOOLS.some(t => t in deps!)) root = 'app';
+  let root = manifestRootKind(parseJsonc(ctx.readText(posix.join(dir, 'package.json'))));
   let bundler: AliasRule[] | null = root === 'none' ? null : [];
   for (const name of BUNDLER_CONFIGS) {
     const text = ctx.readText(posix.join(dir, name));
@@ -424,7 +432,7 @@ interface ModuleRoot { dir: string; walk: boolean }
  * `node_modules` (webpack lists them first), `late` ones after it (NODE_PATH, jest's `modulePaths`,
  * the entries after `'node_modules'`).
  */
-interface RootDecl { scope: string; early: ModuleRoot[]; late: ModuleRoot[] }
+export interface RootDecl { scope: string; early: ModuleRoot[]; late: ModuleRoot[] }
 interface DirRoots { webpack: RootDecl | null; jest: RootDecl | null; nodePath: RootDecl | null }
 
 interface RootCache {
@@ -516,12 +524,23 @@ function readDirRoots(dir: string, ctx: AliasContext): DirRoots {
     const text = ctx.readText(posix.join(dir, name));
     if (text !== null) { roots.jest ??= jestModuleRoots(name.endsWith('.json') ? parseJsonc(text) : text, dir); }
   }
-  const manifest = parseJsonc(ctx.readText(posix.join(dir, 'package.json')));
-  if (manifest && typeof manifest === 'object') {
-    if (!roots.jest && manifest.jest && typeof manifest.jest === 'object') roots.jest = jestModuleRoots(manifest.jest, dir);
-    roots.nodePath = nodePathRoots(manifest.scripts, dir);
-  }
+  const fromManifest = packageModuleRoots(parseJsonc(ctx.readText(posix.join(dir, 'package.json'))), dir);
+  roots.jest ??= fromManifest.jest;
+  roots.nodePath = fromManifest.nodePath;
   return roots;
+}
+
+/**
+ * The module roots a package.json declares for its folder: its `jest` key (jest's `moduleDirectories`
+ * and `modulePaths`) and a `NODE_PATH=` set in a script. Exported for the scanner's sync tracking, so
+ * a package.json edit that changes neither re-parses nothing (M0-02-R13).
+ */
+export function packageModuleRoots(manifest: any, dir: string): { jest: RootDecl | null; nodePath: RootDecl | null } {
+  if (!manifest || typeof manifest !== 'object') return { jest: null, nodePath: null };
+  return {
+    jest: manifest.jest && typeof manifest.jest === 'object' ? jestModuleRoots(manifest.jest, dir) : null,
+    nodePath: nodePathRoots(manifest.scripts, dir),
+  };
 }
 
 /** The entry of a roots list that stands for `node_modules`: what comes before it is searched first. */
