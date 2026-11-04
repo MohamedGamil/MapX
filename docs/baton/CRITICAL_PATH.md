@@ -19,7 +19,7 @@ Remaining effort min/expected/max: **121 / 209 / 311h**. Capacity: 1 engineer(s)
 - M2-08-R8 (BACKLOG): prerequisites satisfied
 - M2-08-R9 (BACKLOG): prerequisites satisfied
 - M2-08-R10 (BACKLOG): prerequisites satisfied
-- M4-09-R5 (BACKLOG): prerequisites satisfied
+- M4-09-R5 (IN_PROGRESS): prerequisites satisfied
 - M0-02-R13 (BACKLOG): prerequisites satisfied
 - M4-27-R1 (BACKLOG): prerequisites satisfied
 - M4-28-R3 (BACKLOG): prerequisites satisfied

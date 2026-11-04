@@ -143,3 +143,4 @@
 - Registered M2-08-R8 (P2, BACKLOG; hard dependency on M2-08-R5): from the M2-08-R5 review, Java sync keeps edges after an imported project package is deleted.
 - D042 (owner): commit each item; continue through the D041 batch. M2-08-R9 joins the batch (a P2 found by it).
 - M2-08-R4 closed: module→script and `declare global` gains followed by sync; review P1 (multi-declarator and member names) fixed before DONE. Registered M2-08-R9 (P2) and M2-08-R10 (P3, held).
+- M2-12-R1 (P1, registered and closed): `tests/ui/arch.spec.ts` had failed since M2-12 (6498e16, found by bisect), because `new X().run()` adds a call dependency per element pair. Its counts now follow the engine. `npm run test:ui` is not in `npm run check`, which is why nobody noticed.

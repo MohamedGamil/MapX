@@ -305,6 +305,7 @@ flowchart LR
 - M2-10 ← M4-27 (hard)
 - M2-11 ← M2-10 (hard)
 - M2-12 ← M2-09 (hard)
+- M2-12-R1 ← M2-12 (hard)
 - M2-13 ← none
 - M2-14 ← M2-12 (hard)
 - M2-15 ← M2-12 (hard)

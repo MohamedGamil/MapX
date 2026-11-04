@@ -85,9 +85,9 @@ async function shot(page: Page, selector: string, name: string, theme: string) {
 test('health tiles, the layer diagram with drill-down, the layer DSM and the findings', async ({ page }) => {
   const { dialogs, errors } = await open(page);
   await openRules(page);
-  await expect(tile(page, 'Violations')).toHaveText('16');
-  await expect(tile(page, 'Baseline debt')).toHaveText('2');
-  await expect(tile(page, 'Uncovered')).toHaveText('4'); // M5-24-R4 (D039): packages in no layer are out of scope without a package selector
+  await expect(tile(page, 'Violations')).toHaveText('23'); // M2-12-R1: `new X().run()` adds a call dependency per pair (M2-12)
+  await expect(tile(page, 'Baseline debt')).toHaveText('3');
+  await expect(tile(page, 'Uncovered')).toHaveText('6'); // M5-24-R4 (D039): packages in no layer are out of scope without a package selector; M2-12-R1: Clock and Uuid calls
   await expect(tile(page, 'Unassigned')).toHaveText('4');
   await expect(tile(page, 'Warnings')).toHaveText('1'); // mapx check's Warnings: the multi-layer OrderId (review of M5-15)
   await expect(tile(page, 'Warn-level violations')).toHaveText('0');
@@ -96,8 +96,8 @@ test('health tiles, the layer diagram with drill-down, the layer DSM and the fin
   const diagram = await page.evaluate(() => window.__mapxArchDiagram());
   expect(diagram.layers).toEqual(['Controller', 'Application', 'Domain', 'Shared', INFRA, PLUGINS]);
   const edge = (from: string, to: string, status: string) => diagram.edges.find((e: any) => e.from === from && e.to === to && e.status === status);
-  expect(edge('Shared', 'Domain', 'skipped')).toMatchObject({ count: 2, lineStyle: 'dashed' });
-  expect(edge('Controller', 'Application', 'violation')).toMatchObject({ count: 4, lineStyle: 'solid' });
+  expect(edge('Shared', 'Domain', 'skipped')).toMatchObject({ count: 3, lineStyle: 'dashed' });
+  expect(edge('Controller', 'Application', 'violation')).toMatchObject({ count: 6, lineStyle: 'solid' });
   expect(edge('Controller', 'Application', 'allowed').color).not.toBe(edge('Controller', 'Application', 'violation').color);
 
   // Edge → its concrete dependencies with file:line.
@@ -106,10 +106,10 @@ test('health tiles, the layer diagram with drill-down, the layer DSM and the fin
   await expect(page.locator('#arch-drill-title')).toHaveText('Controller → Application');
   await expect(drill).toContainText('src/controller/OrderController.ts:4');
   await expect(drill).toContainText('private-layer (error)');
-  await expect(drill).toContainText('4 allowed, 4 violating (0 at warn), 0 baselined');
+  await expect(drill).toContainText('6 allowed, 6 violating (0 at warn), 0 baselined');
   // Baselined dependencies say so.
   expect(await page.evaluate(() => window.__mapxArchTap('Shared', 'Domain'))).toBe(true);
-  await expect(drill.locator('.arch-dep > .arch-kind')).toHaveText(['Skipped', 'Skipped']);
+  await expect(drill.locator('.arch-dep > .arch-kind')).toHaveText(['Skipped', 'Skipped', 'Skipped']);
   // Layer → its members and the selector that matched.
   expect(await page.evaluate(() => window.__mapxArchTap('Shared'))).toBe(true);
   await expect(drill).toContainText('src/domain/ids/OrderId.ts');
@@ -117,7 +117,7 @@ test('health tiles, the layer diagram with drill-down, the layer DSM and the fin
 
   // The DSM: coloured by policy, a faint 0 for an unused allowance; a cell drills like an edge.
   const dsm = page.locator('#arch-layer-dsm');
-  await expect(dsm.locator('.arch-dsm-cell.is-skipped button')).toHaveText(['2']);
+  await expect(dsm.locator('.arch-dsm-cell.is-skipped button')).toHaveText(['3']);
   await expect(dsm.locator('.arch-dsm-cell.is-unused button').first()).toHaveAttribute('title', /and nothing does/);
   await dsm.locator('button[data-arch-from="Controller"][data-arch-to="Domain"]').focus();
   await page.keyboard.press('Enter');
@@ -140,18 +140,18 @@ test('health tiles, the layer diagram with drill-down, the layer DSM and the fin
   const rows = page.locator('#table-arch-findings tbody tr:has(.arch-kind)');
   const total = await rows.count();
   await page.selectOption('#arch-filter-kind', 'uncovered');
-  await expect(rows).toHaveCount(4); // M5-24-R4: the 19 package findings of M5-24 are out of scope
-  await expect(page.locator('#arch-findings-count')).toContainText(`4 of ${total} findings`);
+  await expect(rows).toHaveCount(6); // M5-24-R4: the 19 package findings of M5-24 are out of scope; M2-12-R1: Clock and Uuid calls
+  await expect(page.locator('#arch-findings-count')).toContainText(`6 of ${total} findings`);
   await page.selectOption('#arch-filter-kind', '');
   await page.selectOption('#arch-filter-rule', 'private-layer');
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(6);
   await page.selectOption('#arch-filter-layer', 'Domain');
   await expect(rows).toHaveCount(0);
   await expect(page.locator('#table-arch-findings tbody')).toContainText('No finding matches the filters.');
   await page.selectOption('#arch-filter-rule', '');
   await page.selectOption('#arch-filter-verifiability', 'verified');
   await page.selectOption('#arch-filter-layer', INFRA); // a name with ", " (review of M5-15)
-  await expect(rows).toHaveCount(6); // M5-24-R4: without the 19 package findings M5-24 added
+  await expect(rows).toHaveCount(9); // M5-24-R4: without the 19 package findings M5-24 added; M2-12-R1: a call per pair
   await page.selectOption('#arch-filter-layer', PLUGINS);
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText(`(${PLUGINS} on Domain)`);

@@ -178,6 +178,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.
 - **M2-11** Lua locals and self fields are not module constants — DONE, P2, 2h; depends on M2-10.
 - **M2-12** A method called on a new-expression gets a call edge (`new X().m()`) — DONE, P2, 4h; depends on M2-09.
+- **M2-12-R1** tests/ui/arch.spec.ts counts follow M2-12's call dependencies on new instances — DONE, P1, 1h; depends on M2-12.
 - **M2-13** Calls inside a one-line PHP class are indexed — DONE, P2, 3h; depends on nothing.
 - **M2-14** A method called on a variable holding a new instance links that class's method — BACKLOG, P2, 8h; depends on M2-12.
 - **M2-15** `new ns.X()` gets an instantiation edge — BACKLOG, P3, 2h; depends on M2-12.
@@ -255,7 +256,7 @@ Fixture scoring in CI; optional message edges.
 - **M4-09-R2** Tests remove the temp directories they create — DONE, P2, 1h; depends on M4-09-R1.
 - **M4-09-R3** external-refs tests remove every temp workspace, including unreadable ones — DONE, P2, 1h; depends on M4-09-R2.
 - **M4-09-R4** store-coverage tests keep their databases out of tests/ — DONE, P2, 0.5h; depends on M4-09-R3.
-- **M4-09-R5** No test leaves temp folders: a suite-wide check — BACKLOG, P2, 3h; depends on M4-09-R3.
+- **M4-09-R5** No test leaves temp folders: a suite-wide check — IN_PROGRESS, P2, 3h; depends on M4-09-R3.
 - **M4-26** A symbol whose name contains a dot opens by its exact name — DONE, P2, 2h; depends on M4-24.
 - **M4-27** Lua files parse correctly after the first one in a process — DONE, P1, 4h; depends on M4-26.
 - **M4-27-R1** Lua grammar: Luau type syntax and string escapes parse without errors — BACKLOG, P3, 6h; depends on M4-27.

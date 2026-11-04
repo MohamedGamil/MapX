@@ -29232,15 +29232,28 @@
         "docs/baton/reports/M4-09-R3.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T06:54:54.341Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
       "evidence": [],
-      "history": [],
+      "history": [
+        {
+          "at": "2026-11-04T06:54:53.860Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T06:54:54.341Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -29251,19 +29264,34 @@
       "description": "Finding 2026-11-03: after M4-09-R3 fixed external-refs, 437 mapx-* folders (mapx-arch-*, mapx-e2e-*, mapx-extrefs-* from older runs) and 123 playwright-artifacts-* folders had accumulated in /tmp. Review of M4-30: an interrupted run (SIGINT/SIGTERM) also leaks the built-CLI mirror /tmp/mapx-cli-* (tests/helpers/e2e.ts afterAll); cover it here.",
       "outputs": [
         "tests/global-teardown.ts",
-        "reports/M4-09-R5.md"
+        "tests/ui/global-teardown.ts",
+        "tests/helpers/run-tmp.ts",
+        "tests/global-teardown.test.ts",
+        "docs/baton/reports/M4-09-R5.md"
       ],
       "affectedFiles": [
         "vitest.config.ts",
         "playwright.config.ts",
-        "tests/**"
+        "tests/global-teardown.ts",
+        "tests/ui/global-setup.ts",
+        "tests/ui/global-teardown.ts",
+        "tests/helpers/run-tmp.ts",
+        "tests/helpers/e2e.ts",
+        "tests/installer-replace.test.ts",
+        "tests/global-teardown.test.ts",
+        "package.json",
+        ".claude/skills/baton/scripts/baton-scan.test.mjs",
+        ".claude/skills/baton-review/scripts/review-scope.test.mjs"
       ],
       "acceptanceCriteria": [
-        "After `npm run check` and `npm run test:ui` in a private TMPDIR, no entry remains (asserted by the teardowns); removing one test's cleanup fails the teardown naming that folder."
+        "After `npm run check` and `npm run test:ui` in a private TMPDIR, no entry remains (asserted by the teardowns); removing one test's cleanup fails the teardown naming that folder.",
+        "Each vitest and Playwright run works in its own private temp folder (os.tmpdir() in workers and spawned CLIs resolves to it), so other processes' mapx-* folders in the shared /tmp never fail a run, and a single-file run is no different.",
+        "A run stopped by SIGINT, SIGTERM or SIGHUP leaves no entry in the temp directory it was started with beyond the runner's own, the built-CLI mirror (mapx-cli-*) included, and is not reported as a leak (tests/global-teardown.test.ts)."
       ],
       "verificationCommands": [
         "npm run check",
-        "npm run test:ui"
+        "npm run test:ui",
+        "npx vitest run tests/global-teardown.test.ts"
       ]
     },
     {
@@ -30938,6 +30966,101 @@
         "npx vitest run tests/new-expression-calls.test.ts",
         "npm run eval"
       ]
+    },
+    {
+      "id": "M2-12-R1",
+      "milestone": "M2",
+      "title": "tests/ui/arch.spec.ts counts follow M2-12's call dependencies on new instances",
+      "objective": "The Architecture view spec expects the counts the engine gives since M2-12: `new X().run()` adds a `call` dependency per element pair, so Violations 23, Baseline debt 3, Uncovered 6 and the per-pair counts change accordingly; `npm run test:ui` passes again.",
+      "description": "Found by M4-09-R5 (2026-11-04): `npm run test:ui` failed at tests/ui/arch.spec.ts:88 (Violations 23, expected 16) on develop@08aab1c. Bisected (git bisect run, the real spec) to 6498e16 (M2-12). The tile counts one dependency per element pair and edge type, as mapx check does; M2-12 adds a call edge beside the import and instantiation of each `new X().run()` in tests/fixtures/arch-rules/ts. test:ui is not part of npm run check, so it went unnoticed.",
+      "priority": "P1",
+      "estimate": {
+        "min": 1,
+        "expected": 1,
+        "max": 2
+      },
+      "risk": "low",
+      "area": [
+        "tests"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-12",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-12.md",
+        "docs/baton/reports/M4-09-R5.md"
+      ],
+      "outputs": [
+        "tests/ui/arch.spec.ts",
+        "reports/M2-12-R1.md"
+      ],
+      "affectedFiles": [
+        "tests/ui/arch.spec.ts"
+      ],
+      "acceptanceCriteria": [
+        "`npx playwright test tests/ui/arch.spec.ts` passes (7 tests); each changed count is the pre-M2-12 count plus the new call dependencies, checked against the view state and `mapx check --format json` at 0b4eeb1 and 6498e16 (report)."
+      ],
+      "verificationCommands": [
+        "npx playwright test tests/ui/arch.spec.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "DONE",
+      "owner": "claude-integration",
+      "actualHours": null,
+      "startedAt": "2026-11-04T07:45:23.710Z",
+      "completedAt": "2026-11-04T07:46:53.477Z",
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M2-12-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx playwright test tests/ui/arch.spec.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-12-R1.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T07:45:15.186Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T07:45:23.710Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T07:46:53.079Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T07:46:53.477Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx playwright test tests/ui/arch.spec.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-12-R1.md"
+            }
+          ]
+        }
+      ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
     },
     {
       "milestone": "M2",

@@ -2553,6 +2553,15 @@
         "slack": 98
       },
       {
+        "id": "M2-12-R1",
+        "duration": 1,
+        "earliestStart": 151,
+        "earliestFinish": 152,
+        "latestStart": 256,
+        "latestFinish": 257,
+        "slack": 105
+      },
+      {
         "id": "M2-13",
         "duration": 3,
         "earliestStart": 0,
@@ -2850,7 +2859,7 @@
         "slack": 49
       }
     ],
-    "totalEffort": 1647
+    "totalEffort": 1648
   },
   "remaining": {
     "duration": 51,
@@ -5383,6 +5392,15 @@
         "slack": 43
       },
       {
+        "id": "M2-12-R1",
+        "duration": 0,
+        "earliestStart": 0,
+        "earliestFinish": 0,
+        "latestStart": 51,
+        "latestFinish": 51,
+        "slack": 51
+      },
+      {
         "id": "M2-13",
         "duration": 0,
         "earliestStart": 0,
@@ -7364,6 +7382,12 @@
       },
       {
         "id": "M2-12",
+        "worker": 0,
+        "start": 49,
+        "finish": 49
+      },
+      {
+        "id": "M2-12-R1",
         "worker": 0,
         "start": 49,
         "finish": 49
