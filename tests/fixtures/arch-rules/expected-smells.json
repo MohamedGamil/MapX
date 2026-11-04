@@ -1,6 +1,6 @@
 {
  "version": 2,
- "description": "Labelled smells of the arch-rules apps (M5-16-R1), apart from expected-findings.json. `complete[app]` lists the smell kinds whose labels are complete for the app: every rule-derived smell of that kind is a row, or the app has none. Only those kinds are scored. `apps` lists apps used only for smells (they are not in expected-findings.json). dead-allowance, weak-allowance, unstable-layer-dependency and abstractness-distance need per-edge counts and metric values and are not labelled. Rows were derived from the fixture sources, the configurations and the labels of expected-findings.json and expected-externals.json, never from the tool output; `evidence` cites the source or configuration line that makes each row true.",
+ "description": "Labelled smells of the arch-rules apps (M5-16-R1), apart from expected-findings.json. `complete[app]` lists the smell kinds whose labels are complete for the app: every rule-derived smell of that kind is a row, or the app has none. Only those kinds are scored. The ambient apps (M5-24-R1) were added after the labels and have no complete kind yet (M5-16-R4). `apps` lists apps used only for smells (they are not in expected-findings.json). dead-allowance, weak-allowance, unstable-layer-dependency and abstractness-distance need per-edge counts and metric values and are not labelled. Rows were derived from the fixture sources, the configurations and the labels of expected-findings.json and expected-externals.json, never from the tool output; `evidence` cites the source or configuration line that makes each row true.",
  "apps": {
   "ts-smells": {
    "language": "typescript",
@@ -175,7 +175,11 @@
    "baseline-debt",
    "architecture-config",
    "orphan-element"
-  ]
+  ],
+  "go-ambient": [],
+  "php-ambient": [],
+  "python-ambient": [],
+  "ts-ambient": []
  },
  "rows": [
   {
