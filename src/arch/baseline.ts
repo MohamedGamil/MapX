@@ -339,6 +339,8 @@ export function loadCompareReport(path: string, display = path, head?: Selection
   if (head && isObject(base)) {
     const name = (v: unknown) => (typeof v === 'string' ? `"${v}"` : 'none');
     if ((base.view ?? null) !== head.view) fail(`the base report checked view ${name(base.view)}, this check view ${name(head.view)}; compare like with like`);
+    // A base made with --since lacks the findings of files that had not changed then (M5-98-R1).
+    if (base.since != null) fail(`the base report was narrowed by --since ${name(base.since)}, so it lacks findings this check has; make it without --since`);
     for (const k of ['layer', 'rule'] as const) {
       if (base[k] != null && base[k] !== head[k]) fail(`the base report was narrowed by --${k} ${name(base[k])}, so it lacks findings this check has; make it without --${k}, or pass the same --${k}`);
     }

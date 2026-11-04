@@ -11,9 +11,8 @@
 //
 // Each returns a plain JSON-ready object: `mapx arch <subcommand> --format json` prints it as is,
 // and the MCP tools (M5-14) and rule-derived smells (M5-16) call the same functions.
-import { execFileSync } from 'node:child_process';
 import { isAbsolute, join, posix, relative, resolve } from 'node:path';
-import { getChangedFiles, isGitRepo } from '../core/git-tracker.js';
+import { getChangedFiles, getChangedFilesSinceBranchPoint, isGitRepo, resolveCommit } from '../core/git-tracker.js';
 import type { Store } from '../core/store.js';
 import { describeUncoveredExternals, loadArchitectureConfig, reportedUncoveredPolicy, type LoadOptions } from './config.js';
 import { SYMBOL_KINDS, type ArchitectureConfig } from './schema.js';
@@ -419,21 +418,34 @@ export function changedLayers(ctx: ArchContext, files: string[], options: { with
 }
 
 /**
+ * Why `ref` cannot be a git revision argument, else undefined: never an option (`-…`), and without
+ * whitespace, quotes, shell metacharacters or control characters, whatever reaches git later (review
+ * of M5-14; git runs through argument arrays since M5-08-R1). `mapx check --since` and the MCP
+ * tools' `since` share it.
+ */
+export function revisionProblem(ref: string): string | undefined {
+  if (!ref.trim() || ref.startsWith('-') || /[\s$`;&|<>()'"\\\x00-\x1f\x7f]/.test(ref)) {
+    return `since "${ref}" is not a git revision: it must not start with "-" or contain whitespace, quotes or shell characters`;
+  }
+  return undefined;
+}
+
+/**
  * The files changed since `ref` (AR-13f `--since`): committed since it, staged, unstaged and
  * untracked, from git alone (no re-scan), as workspace-relative paths. A rename counts both paths.
  * Git is asked in the workspace folder and in every registered repo inside it, each that is a git
  * repository with `ref`; a workspace whose root is no repository works through its repos. It is an
  * IntrospectError only when none of them is a git repository, or none has `ref`.
+ *
+ * With `branchPoint` (`mapx check --since`, M5-98-R1) the base is the merge base of `ref` and HEAD
+ * (`ref` itself when the histories are unrelated), so commits `ref` gained after this branch left
+ * it are not this branch's changes; a git failure after `ref` resolved is an IntrospectError, never
+ * a shorter list. Without it, `ref` is the base as is (`git diff <ref>`, which `mapx arch changed`
+ * documents) and a git failure leaves the list as git-tracker returns it.
  */
-export function changedSince(dir: string, ref: string, repoPaths: Record<string, string> = {}): string[] {
-  const hasRef = (root: string) => {
-    try {
-      execFileSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: root, stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
-    }
-  };
+export function changedSince(dir: string, ref: string, repoPaths: Record<string, string> = {}, options: { branchPoint?: boolean } = {}): string[] {
+  // Git runs through argument arrays; a ref that is an option is refused here for every caller.
+  if (!ref.trim() || ref.startsWith('-')) throw new IntrospectError(`since "${ref}" is not a git revision: it must not be empty or start with "-"`);
   const out = new Set<string>();
   // '' is the workspace folder; a peer repo outside the workspace (`../x`) has no workspace paths.
   const roots = [...new Set(['', ...Object.values(repoPaths).map((p) => workspacePath(dir, resolve(dir, p)))])].filter((p) => !p.startsWith('..'));
@@ -443,9 +455,16 @@ export function changedSince(dir: string, ref: string, repoPaths: Record<string,
     const root = resolve(dir, prefix);
     if (!isGitRepo(root)) continue;
     repos++;
-    if (!hasRef(root)) continue;
+    const commit = resolveCommit(root, ref);
+    if (!commit) continue;
     withRef++;
-    for (const c of getChangedFiles(root, ref)) {
+    let changes;
+    try {
+      changes = options.branchPoint ? getChangedFilesSinceBranchPoint(root, commit) : getChangedFiles(root, commit);
+    } catch (err) {
+      throw new IntrospectError(`--since: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    for (const c of changes) {
       for (const p of [c.path, c.oldPath]) if (p && !p.endsWith('/')) out.add(prefix ? `${prefix}/${p}` : p);
     }
   }

@@ -42,7 +42,8 @@ export interface ArchReport {
 
 export interface LayerEdge { from: string; to: string; allowed: number; violations: number; warnings: number; skipped: number }
 
-export interface Selection { view: string | null; layer: string | null; rule: string | null }
+/** `since` (M5-98-R1): the ref of `mapx check --since`; absent when the check was not narrowed by it. */
+export interface Selection { view: string | null; layer: string | null; rule: string | null; since?: string | null }
 
 // The fingerprint is the baseline's identity: it lives in baseline.ts, where it is documented.
 export { fingerprint };

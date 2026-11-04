@@ -64,7 +64,8 @@
       "properties": {
         "view": { "type": ["string", "null"] },
         "layer": { "type": ["string", "null"] },
-        "rule": { "type": ["string", "null"] }
+        "rule": { "type": ["string", "null"] },
+        "since": { "description": "The ref of --since (M5-98-R1): only dependencies written in files changed since it. Absent when not given. --compare refuses a base report that has it.", "type": ["string", "null"] }
       }
     },
     "policy": {

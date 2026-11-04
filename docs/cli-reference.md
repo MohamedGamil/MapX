@@ -1009,7 +1009,7 @@ Checks the architecture rules in `.mapx/architecture.jsonc` against the index: l
 mapx check [path] [--view <name>] [--format table|json|sarif|github|codeclimate|junit] [--output <file>]
            [--report-uncovered] [--fail-on-uncovered] [--report-skipped] [--report-allowed]
            [--fail-on error|warn] [--layer <name>] [--rule <rule>] [--sync]
-           [--baseline <file>] [--generate-baseline [file]] [--compare <report.json>]
+           [--baseline <file>] [--generate-baseline [file]] [--compare <report.json>] [--since <ref>]
 ```
 
 Options:
@@ -1035,11 +1035,13 @@ Options:
 - `--generate-baseline [file]`: write every current violation to the baseline and exit 0.
   - Without `<file>`, it writes the baseline the check reads: `--baseline`, else the configuration's `baseline`, else `.mapx/architecture.baseline.json` (`.mapx/architecture/<view>.baseline.json` for a view).
   - It ignores the baseline in force, so a regenerated baseline lists every violation and drops stale entries.
-  - It takes no `--compare`, `--layer` or `--rule` (exit 3), and writes no report, so `--format` and `--output` have no effect.
+  - It takes no `--compare`, `--since`, `--layer` or `--rule` (exit 3), and writes no report, so `--format` and `--output` have no effect.
   - `<file>` must end in `.json` and must not be a directory (exit 3). The option takes the word after it, so put the workspace path first: `mapx check <path> --generate-baseline`.
   - A view writes `.mapx/architecture/<view>.baseline.json` unless the view's own document sets `baseline`.
   - A file in the workspace outside `.mapx/` gets a warning with a `.mapx/` path to use instead: it would make the index stale (exit 4).
 - `--compare <report.json>`: the ratchet without a committed baseline. A violation whose fingerprint is in this report (`mapx check --format json` on the base revision) is skipped. Only new violations fail. Warnings under `--fail-on warn`, uncovered dependencies under `--fail-on-uncovered` and strict `multi-layer` errors whose fingerprints the report has do not fail either. Configuration errors and stale baseline entries always fail. A base report of another `--view`, or narrowed by a `--layer` or `--rule` the check does not share, is refused (exit 3): each report records them as `selection`.
+
+- `--since <ref>`: the ratchet without a baseline or a base report. Only findings on dependencies whose source file changed on this branch since the git ref are reported and judged: the files that differ between the working tree and the merge base of `<ref>` and HEAD (committed, staged, unstaged, renames by both paths) plus untracked files, so commits `<ref>` gained after the branch left it do not count. Without a merge base, `<ref>` itself is the base. Any revision git resolves to a commit works (`main`, a tag, `HEAD~3`, `:/text`). A changed target alone does not count. It composes with `--baseline`, `--compare` (a base report made with `--since` is refused), `--layer`, `--rule`, `--fail-on`, `--fail-on-uncovered` and every `--format`, and the exit codes are unchanged. The index must be current (exit 4, or `--sync`). A ref that is empty, starts with `-` or has whitespace, quotes or shell characters, an unknown ref, a git command that fails, or a workspace outside a git repository is exit 3; refs never reach a shell. See the `--since` section of [architecture-rules.md](architecture-rules.md#baselines-and-the-ratchet).
 
 Baselines are described in [architecture-rules.md](architecture-rules.md#baselines-and-the-ratchet). Keep baselines and base reports under `.mapx/` or outside the workspace. MapX indexes JSON files, so a new one anywhere else makes the index stale (exit 4) until the next scan. The same holds for a report written into the workspace (`-o`) when another `mapx` command runs after it in the same CI job, whatever its format, if MapX indexes its file type: `-o report.json` and `-o report.md` (a table) make the index stale, while `.sarif`, `.xml` and `.txt` files are not indexed.
 
@@ -1067,6 +1069,7 @@ mapx check --generate-baseline               # freeze today's violations in .map
 # CI ratchet: check a scanned checkout of the merge base, then compare the head with it
 mapx check ../base --format json --report-skipped --report-uncovered -o /tmp/base.json
 mapx check --compare /tmp/base.json          # exit 1 only on violations new since the base
+mapx check --since origin/main               # exit 1 only on violations in files changed since origin/main
 mapx check --format sarif -o mapx.sarif      # for github/codeql-action/upload-sarif
 mapx check --format codeclimate -o gl-code-quality.json
 mapx check --format junit -o mapx-junit.xml

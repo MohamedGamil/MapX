@@ -127,6 +127,61 @@ export function getChangedFiles(repoRoot: string, since?: string): GitFileStatus
 }
 
 /**
+ * The commit `ref` names in `repoRoot` (any revision git parses: a branch, a tag, `HEAD~2`,
+ * `:/text`, an abbreviated id), as a full object id, or null when it names no commit. A ref that
+ * starts with `-` is refused. The ref is one argument after `--end-of-options`, and only the id git
+ * printed (hex) is extended with `^{commit}`, so no string built from the ref reaches git (M5-98-R1).
+ */
+export function resolveCommit(repoRoot: string, ref: string): string | null {
+  if (!ref.trim() || ref.startsWith('-')) throw new Error(`Invalid revision: ${ref}`);
+  try {
+    const id = execFileSync('git', ['rev-parse', '--verify', '--quiet', '--end-of-options', ref], { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim();
+    if (!/^[0-9a-f]{40,64}$/.test(id)) return null;
+    return execFileSync('git', ['rev-parse', '--verify', '--quiet', `${id}^{commit}`], { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Runs git and returns its output; a failure throws an Error carrying git's own message. */
+function gitStrict(repoRoot: string, args: string[]): string {
+  try {
+    return execFileSync('git', [...GIT_RAW_PATHS, ...args], { cwd: repoRoot, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 50 * 1024 * 1024 });
+  } catch (err) {
+    const stderr = String((err as { stderr?: Buffer | string }).stderr ?? '').trim();
+    throw new Error(`git ${args[0]} failed: ${stderr || (err instanceof Error ? err.message : String(err))}`);
+  }
+}
+
+/**
+ * The files changed on this branch since `ref` (`mapx check --since`, M5-98-R1): the working tree
+ * (committed, staged and unstaged edits) against the merge base of `ref` and HEAD, plus untracked
+ * files. That is `git diff <ref>...HEAD` plus the working tree, not `git diff <ref>`: commits that
+ * `ref` gained after this branch left it are not this branch's changes. With no merge base
+ * (unrelated histories) the base is `ref` itself. Paths are relative to `repoRoot`; a rename keeps
+ * its old path. `commit` is a commit id from `resolveCommit`. Unlike `getChangedFiles`, a git
+ * failure throws: a partial list would read as "nothing changed".
+ */
+export function getChangedFilesSinceBranchPoint(repoRoot: string, commit: string): GitFileStatus[] {
+  let base = commit;
+  try {
+    base = execFileSync('git', ['merge-base', commit, 'HEAD'], { cwd: repoRoot, encoding: 'utf-8', stdio: QUIET }).trim() || commit;
+  } catch (err) {
+    // Exit 1: the histories are unrelated. Anything else (no HEAD, a broken repository) is a failure.
+    if ((err as { status?: number }).status !== 1) {
+      const stderr = String((err as { stderr?: Buffer | string }).stderr ?? '').trim();
+      throw new Error(`git merge-base failed: ${stderr || (err instanceof Error ? err.message : String(err))}`);
+    }
+  }
+  const changes = parseNameStatus(gitStrict(repoRoot, ['diff', '--name-status', '--relative', base, '--']));
+  const listed = new Set(changes.map((c) => c.path));
+  for (const path of gitStrict(repoRoot, ['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)) {
+    if (!listed.has(path)) changes.push({ path, status: 'added' });
+  }
+  return changes;
+}
+
+/**
  * Gitignored entries under the repo root, repo-relative; a wholly ignored folder is one entry ending
  * in `/` (`--directory`). The scan walk does not read .gitignore, so git sync needs them (M0-02-R7).
  * Null when git cannot list them: below an ignored folder it fails ("directory entry not superset of

@@ -39,14 +39,14 @@ import { architectureConfigPath, ConfigError, formatValidation, loadArchitecture
 import { InitError, INIT_SOURCES, initOptionsProblem, runInit, type InitSource } from './arch/infer.js';
 import { EDGE_TYPES, type ArchitectureConfig } from './arch/schema.js';
 import { buildReport, configErrorReport, runArchitecture, type ArchReport } from './arch/report.js';
-import { CHECK_RULES, EXIT, exitCode, shownReport, type CheckOptions } from './arch/check.js';
+import { CHECK_RULES, EXIT, exitCode, shownReport, sinceFindings, type CheckOptions } from './arch/check.js';
 import { baselineLocation, displayPath, loadBaseline, loadCompareReport, renderBaseline } from './arch/baseline.js';
 import { defaultFormat, FORMATS, GRAPH_FORMATS, layerGraph, renderLayerGraph, renderReport, reportPathPrefix, type GraphFormat, type ReportContext, type ReportFormat } from './arch/reporters/index.js';
 import { keyLine } from './arch/reporters/context.js';
 
 /** The line of a configuration file naming `key`, or undefined (an unreadable file, or none). */
 const configKeyLine = (file: string, key: string) => { try { return keyLine(readFileSync(file, 'utf8'), key); } catch { return undefined; } };
-import { changedLayers, changedSince, IntrospectError, isAllowed, layerDependencies, layerMembers, layerSummaries, openArchitecture, unassignedElements, unusedAllowances, whichLayers, type ArchContext } from './arch/introspect.js';
+import { changedLayers, changedSince, IntrospectError, isAllowed, layerDependencies, layerMembers, layerSummaries, openArchitecture, revisionProblem, unassignedElements, unusedAllowances, whichLayers, type ArchContext } from './arch/introspect.js';
 import { findSimilarSymbols, globToLike } from './core/fuzzy-matcher.js';
 import * as clack from '@clack/prompts';
 
@@ -2892,6 +2892,7 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
     .option('--baseline <file>', "Use this baseline instead of the configuration's (relative to the current directory)")
     .option('--generate-baseline [file]', 'Write every current violation to the baseline (or to <file>) and exit 0')
     .option('--compare <report>', 'Fail only on violations absent from this JSON report of the base revision')
+    .option('--since <ref>', 'Judge only dependencies written in files changed since this git ref (committed, staged, unstaged, untracked): a ratchet without a baseline')
     // A usage error (unknown option, missing value) is a configuration error, exit 3 (AR-17), not
     // commander's exit 1, which the contract keeps for violations.
     .exitOverride((err) => { process.exit(err.exitCode === 0 ? 0 : EXIT.config); })
@@ -2921,12 +2922,25 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           return;
         }
       }
+      // A ref is never an option or a shell command: refused before anything is read (M5-98-R1).
+      const since = opts.since as string | undefined;
+      const sinceProblem = since === undefined ? undefined : revisionProblem(since);
+      if (sinceProblem) {
+        console.error(`Error: --${sinceProblem}`);
+        process.exitCode = EXIT.config;
+        return;
+      }
+      if (since !== undefined && opts.generateBaseline !== undefined) {
+        console.error('Error: --generate-baseline writes every violation; it takes no --since.');
+        process.exitCode = EXIT.config;
+        return;
+      }
       const options: CheckOptions = {
         reportUncovered: !!opts.reportUncovered, failOnUncovered: !!opts.failOnUncovered,
         reportSkipped: !!opts.reportSkipped, reportAllowed: !!opts.reportAllowed,
         failOn: failOn as CheckOptions['failOn'], layer: opts.layer as string | undefined, rule: opts.rule as string | undefined,
       };
-      const selection = { view: (opts.view as string | undefined) ?? null, layer: options.layer ?? null, rule: options.rule ?? null };
+      const selection = { view: (opts.view as string | undefined) ?? null, layer: options.layer ?? null, rule: options.rule ?? null, ...(since !== undefined ? { since } : {}) };
       // What the CI formats need besides the report (M5-07): set once the configuration is loaded.
       const reportContext: ReportContext = {
         configFile: relative(dir, architectureConfigPath(dir, selection.view)).split(sep).join('/'),
@@ -2989,6 +3003,20 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
           return;
         }
         const repoPaths = Object.fromEntries(config.repos.map((r) => [r.name, r.path]));
+        // --since (M5-98-R1): the files changed since the ref, from git alone. An unknown ref or a
+        // workspace that is no repository is a usage error, exit 3, with a report for CI formats.
+        let changed: Set<string> | undefined;
+        if (since !== undefined) {
+          try {
+            changed = new Set(changedSince(dir, since, repoPaths, { branchPoint: true }));
+          } catch (err) {
+            if (!(err instanceof IntrospectError)) throw err;
+            console.error(`Error: ${err.message}`);
+            if (format !== 'table' || opts.output) emit(configErrorReport(new ConfigError([{ file: '--since', pointer: '', message: err.message }])));
+            process.exitCode = EXIT.config;
+            return;
+          }
+        }
         // Baselines and the ratchet (M5-06, AR-10). Paths given on the command line are relative to
         // the current directory, like --output; the configuration's `baseline` is relative to the workspace.
         const baselineFile = opts.baseline ? resolve(String(opts.baseline)) : undefined;
@@ -3036,7 +3064,9 @@ async function confirmLaravelExcludes(noSuggestions: boolean): Promise<boolean> 
             return;
           }
         }
-        const report = runArchitecture(dir, { store, repoPaths, view, baseline: baselineFile, known })!;
+        const evaluated = runArchitecture(dir, { store, repoPaths, view, baseline: baselineFile, known })!;
+        // After the baseline and --compare skipped what they know: errors about them stay (exit 3).
+        const report = changed ? sinceFindings(evaluated, changed) : evaluated;
         reportContext.check = { ...options, known };
         emit(report);
         process.exitCode = exitCode(report, { ...options, known });

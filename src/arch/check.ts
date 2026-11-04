@@ -70,6 +70,18 @@ export function selectFindings(report: ArchReport, options: CheckOptions): ArchR
   return withCounts({ ...report, findings });
 }
 
+/**
+ * The findings of dependencies written in a file that changed (`--since`, M5-98-R1): a finding is
+ * kept when its source file is in `changed`, since a dependency lives in its source file, and a
+ * changed target alone does not make an existing dependency new. Findings without a source (an
+ * empty layer, a selector problem) concern the configuration, not changed code, and are dropped;
+ * configuration and baseline errors always stay. Counts are recomputed.
+ */
+export function sinceFindings(report: ArchReport, changed: ReadonlySet<string>): ArchReport {
+  const findings = report.findings.filter((f) => isConfigError(f) || (f.source?.file !== undefined && f.source.file !== '' && changed.has(f.source.file)));
+  return withCounts({ ...report, findings });
+}
+
 /** The report a reporter prints: the selection, without the kinds that are not shown. */
 export function shownReport(report: ArchReport, options: CheckOptions): ArchReport {
   const selected = selectFindings(report, options);

@@ -6,14 +6,14 @@
 import type { Config } from '../core/config.js';
 import type { Store } from '../core/store.js';
 import { ConfigError, loadArchitectureConfig, PRESETS } from './config.js';
-import { CHECK_RULES, EXIT, exitCode, shownReport, CONFIG_RULES, type CheckOptions } from './check.js';
+import { CHECK_RULES, EXIT, exitCode, shownReport, sinceFindings, CONFIG_RULES, type CheckOptions } from './check.js';
 import { configErrorReport, runArchitecture, type ArchReport, type Finding } from './report.js';
 import { renderTable } from './reporters/table.js';
 import { EDGE_TYPES } from './schema.js';
 import { globOrRegex } from './selectors/index.js';
 import { indexGate } from './index-gate.js';
 import {
-  changedSince, IntrospectError, isAllowed, layerMembers, layerSummaries, openArchitecture, unassignedElements, whichLayers, workspacePath,
+  changedSince, IntrospectError, isAllowed, layerMembers, revisionProblem, layerSummaries, openArchitecture, unassignedElements, whichLayers, workspacePath,
   type ArchContext,
 } from './introspect.js';
 import { InitError, INIT_SOURCES, initOptionsProblem, runInit } from './infer.js';
@@ -41,7 +41,7 @@ export const ARCH_TOOLS = [
         layer: { type: 'string', description: 'Only findings about this layer' },
         rule: { type: 'string', description: `Only findings of this rule (${CHECK_RULES.join(', ')})` },
         file: { type: 'string', description: 'Only findings whose source or target file is under this path prefix or matches this glob' },
-        since: { type: 'string', description: 'Only findings whose source or target file changed since this git revision (committed, staged, unstaged, untracked); refused (exitCode 3) when unknown, starting with "-", or containing whitespace, quotes or shell characters' },
+        since: { type: 'string', description: 'The ratchet of `mapx check --since`: only findings on dependencies whose source file changed on this branch since this git revision, against the merge base of the revision and HEAD (committed, staged, unstaged, untracked; a changed target alone does not count); refused (exitCode 3) when unknown, starting with "-", or containing whitespace, quotes or shell characters' },
         failOn: { type: 'string', enum: ['error', 'warn'], description: 'Lowest severity that makes exitCode 1', default: 'error' },
         reportUncovered: { type: 'boolean', description: 'Show dependencies on elements in no layer', default: false },
         failOnUncovered: { type: 'boolean', description: 'exitCode 2 when a dependency targets an element in no layer', default: false },
@@ -208,9 +208,8 @@ function edgeType(args: Record<string, unknown>): string | undefined {
  */
 function sinceRef(args: Record<string, unknown>): string | undefined {
   const since = str(args, 'since');
-  if (since !== undefined && (!since.trim() || since.startsWith('-') || /[\s$`;&|<>()'"\\\x00-\x1f\x7f]/.test(since))) {
-    throw new UsageError(`since "${since}" is not a git revision: it must not start with "-" or contain whitespace, quotes or shell characters`);
-  }
+  const problem = since === undefined ? undefined : revisionProblem(since);
+  if (problem) throw new UsageError(problem);
   return since;
 }
 
@@ -281,14 +280,13 @@ function check(args: Record<string, unknown>, workspace: string, store: Store, r
     if (!store.getAllFiles().some((f) => match(f.path as string))) throw new UsageError(`file "${fileArg}" matches no indexed file`);
     keeps.push(match);
   }
-  if (since !== undefined) {
-    const changed = new Set(changedSince(workspace, since, repoPaths));
-    keeps.push((path) => changed.has(path));
-  }
+  // `since` is `mapx check --since`: the dependencies written in a changed file (their source), M5-98-R1.
+  const changed = since === undefined ? undefined : new Set(changedSince(workspace, since, repoPaths, { branchPoint: true }));
   const full = runArchitecture(workspace, { store, repoPaths, view: v })!;
-  const filtered: ArchReport = keeps.length ? withFindings(full, full.findings.filter((f) => isConfigError(f) || keeps.every((keep) => [f.source?.file, f.target?.file].some((p) => p !== undefined && keep(p))))) : full;
+  const byFile: ArchReport = keeps.length ? withFindings(full, full.findings.filter((f) => isConfigError(f) || keeps.every((keep) => [f.source?.file, f.target?.file].some((p) => p !== undefined && keep(p))))) : full;
+  const filtered = changed ? sinceFindings(byFile, changed) : byFile;
   const code = exitCode(filtered, options);
-  const shown = { ...shownReport(filtered, options), selection };
+  const shown = { ...shownReport(filtered, options), selection: since === undefined ? selection : { ...selection, since } };
   const { list, truncated } = capped(shown.findings, limit);
   const out = { ...shown, findings: list };
   if (code === EXIT.config) return { ...json({ error: 'Invalid architecture configuration or baseline', ...out, exitCode: code, total: shown.findings.length, limit: Number.isFinite(limit) ? limit : 0, truncated }), isError: true };

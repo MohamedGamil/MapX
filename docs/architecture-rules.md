@@ -59,7 +59,7 @@ The features, by the task that delivered them:
 - **Rule evaluation and the report** (M5-04): policy expansion, the evaluation chain, findings with fingerprints, and the layer matrix.
 - **`mapx check`** (M5-05): the table and JSON reporters, and the exit contract. See [cli-reference.md](cli-reference.md#mapx-check).
 - **`mapx arch validate-config`** and the MCP tool `mapx_arch_validate_config` (M5-02-R1): validate the configuration alone, without an index.
-- **Baselines and the `--compare` ratchet** (M5-06): see [Baselines and the ratchet](#baselines-and-the-ratchet). They are CLI only: `mapx_arch_check` applies the configuration's baseline but cannot generate one or compare.
+- **Baselines and the `--compare` ratchet** (M5-06): see [Baselines and the ratchet](#baselines-and-the-ratchet). They are CLI only: `mapx_arch_check` applies the configuration's baseline but cannot generate one or compare. `--since <ref>`, the ratchet without a base report, is in both (see [`--since`](#--since-the-ratchet-over-the-files-changed)).
 - **Introspection** (M5-08): `mapx arch layers`, `which`, `unassigned`, `deps`, `unused`, `changed` and `allowed`. See [Introspection](#introspection).
 - **CI reports** (M5-07): `--format sarif`, `github` (automatic inside GitHub Actions), `codeclimate` and `junit`. See [CI reports](#ci-reports).
 - **MCP tools** (M5-14, AR-19): `mapx_arch_check`, `mapx_arch_layers`, `mapx_arch_allowed`, `mapx_arch_explain` and `mapx_arch_init` wrap `mapx check` and the introspection functions. See [mcp-integration.md](mcp-integration.md#architecture-rules-ar-19).
@@ -691,7 +691,7 @@ Domain
 - **`layers`:** elements and files per layer, and `uncovered`: the uncovered dependencies whose source is in the layer.
 - **`layerEdges`:** allowed, violating and skipped dependencies per layer pair, and `warnings`: how many of the violations are reported at `warn` (an advisory allowance, or an inferred edge under `policy.inferred: "warn"`). A pair keeps its own severity, so a source in two layers can be advisory on one pair and an error on the other.
 - **`counts`:** per kind.
-- **`selection`** (from `mapx check`): the `view`, `layer` and `rule` the run evaluated and kept, `null` when not given.
+- **`selection`** (from `mapx check`): the `view`, `layer` and `rule` the run evaluated and kept, `null` when not given, and `since` (the ref of `--since`) only when given.
 - **`policy`** (M5-24-R4): `policy: { uncovered: { externals: { value, source, file?, layer? }, builtins } }`, the resolved uncovered policy. `externals.source` says why packages in no layer are or are not uncovered: `explicit` (set in `file`), `package-selector` (`layer` opts in) or `default` (out of scope). Absent when the configuration cannot be loaded.
 
 A workspace with a configuration but no index is an error (`run mapx scan first`), never an empty report.
@@ -1071,7 +1071,24 @@ mapx check --compare /tmp/base.json
 - **What always fails:** configuration errors and stale baseline entries.
 - **Fixed violations** are not errors: paying debt off is the point.
 - **Producing the base report:** produce it with `--report-skipped` and `--report-uncovered`, because hidden findings are not in the report and so cannot be recognised. A baseline still applies under `--compare`.
-- **Like with like:** the report records its `selection`. A base report of another view, or one narrowed by a `--layer` or `--rule` that the head does not share, is refused (exit 3). Its missing findings would look new, or one view's findings would excuse another's. A narrower head against a whole base is fine.
+- **Like with like:** the report records its `selection`. A base report of another view, or one narrowed by a `--layer` or `--rule` that the head does not share, is refused (exit 3). Its missing findings would look new, or one view's findings would excuse another's. A base report made with `--since` is refused too: it lacks the findings of the files that had not changed then. A narrower head against a whole base is fine.
+
+### `--since`: the ratchet over the files changed
+
+`mapx check --since <ref>` judges only the dependencies written in files that changed since the git ref, so CI can ratchet without a baseline and without a base report. Old violations in files nobody touched are not reported and do not fail the run.
+
+```bash
+mapx check --since origin/main            # exit 1 only on a violation in a file this branch changed
+mapx check --since HEAD~1 --format sarif -o mapx.sarif
+```
+
+- **"Changed"** is what this branch changed since it left `<ref>`: the files in `git diff --name-status <base>` where `<base>` is `git merge-base <ref> HEAD` (committed since the branch point, staged and unstaged, with both paths of a rename), plus untracked files git does not ignore. That is three-dot semantics plus the working tree, so `--since main` on a feature branch ignores what `main` gained after the branch left it (a two-dot `git diff main` would call those files changed). When `<ref>` and HEAD share no history, there is no merge base and `<ref>` itself is the base. `<ref>` may be any revision git parses to a commit: a branch, a tag, `HEAD~3`, an abbreviated id or `:/text`. `.mapx/` is never source. A workspace whose root is no repository works through its registered repos.
+- **A finding counts when its source file changed.** A dependency is written in its source file, so a changed target alone does not make an existing dependency new: editing a class does not re-judge everyone who imports it. The source of a new import is always a changed file, so the ratchet cannot miss one. Deleting a target breaks its importers' files, which then change.
+- **Findings without a source** (`empty-layer`, an unsupported selector) concern the configuration, not changed code, and are not reported under `--since`. Configuration and baseline errors always are (exit 3).
+- **Combinations:** the filter runs after the baseline and `--compare` skipped what they know, then `--layer`, `--rule`, `--fail-on` and `--fail-on-uncovered` apply to what is left. Every `--format` renders the filtered report, and the exit code follows the exit contract on it. `--report-skipped` lists only skipped violations in changed files. The JSON report's `selection.since` names the ref.
+- **Limits:** the index is the working tree's, not the ref's: it must be current (exit 4, or `--sync`), and the check does not re-scan the ref. A change to the configuration or to the layers' membership is not a changed file: it does not re-judge old code, so combine `--since` with a full `mapx check` on the default branch. `--generate-baseline` takes no `--since` (exit 3).
+- **Refs are never a shell command or an option.** MapX runs git with an argument list. A ref that is empty, starts with `-`, or contains whitespace, quotes or shell characters is refused (exit 3). So is a ref that is no commit of the repository, and a workspace in no git repository. A git command that fails after the ref resolved (a damaged repository, say) is exit 3 with git's message, never an empty list of changes that would pass the gate.
+- **MCP:** `mapx_arch_check` takes `since` with the same meaning (source file changed).
 
 On the shop, the base report holds the two baselined Controller violations; the head adds `Audit`, a Domain class that uses `SqlOrderRepository`:
 
