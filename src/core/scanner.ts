@@ -26,7 +26,7 @@ import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isSc
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, routeDomainHosts, urlHost } from '../frameworks/http/pairing.js';
-import { closest, goImportInWorkspaceModule, goImportOutsideProject, goLayoutModule, importResolverFor, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportHit } from './import-resolvers.js';
+import { closest, goImportInWorkspaceModule, goImportOutsideProject, goLayoutModule, importResolverFor, javaImportOutsideProject, pythonNameInProject, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -388,6 +388,8 @@ export class Scanner {
   /** Per file, its JS/TS import statements and the names it binds from outside the workspace, for one resolution phase (M5-19). */
   private jsImportsCache = new Map<string, JsImport[]>();
   private externalBindingsCache = new Map<string, Map<string, ExternalBinding>>();
+  /** The `package` a JVM source declares, per file (M2-08-R5). */
+  private jvmPackages = new Map<string, string>();
   /** The workspace's PHP classes and functions by lower-case qualified name, for one resolution phase (M5-19). */
   private phpDeclared: Set<string> | null = null;
   /** External-reference decisions by ecosystem, folder and specifier, for one resolution phase (M5-19). */
@@ -1884,6 +1886,25 @@ export class Scanner {
         noteExternal(ref);
         continue;
       }
+      // The same for Python and Java (M2-08-R5): `from stripe import Order`, `import os.path as osp;
+      // osp.join()`, `import com.vendor.Invoice; Invoice.helper()`. A call's receiver is read from its
+      // line; a call on a new instance (`Order().total()`, `new Invoice().total()`) is left to
+      // resolveNewReceiverCall.
+      if ((sourceLanguage === 'python' || sourceLanguage === 'java') && !navigate && ref.referenceType !== 'import') {
+        let qualified: string | null = ref.targetName;
+        if (ref.referenceType === 'call' || (sourceLanguage === 'python' && ref.referenceType === 'instantiation')) {
+          const receiver = this.lineReceiver(sourcePath, ref.startLine, ref.targetName);
+          // `stripe.Order().total()`: a method of an instance of the callee, which the parser names
+          // only when bare (M2-12); the callee decides.
+          qualified = receiver === null
+            ? (sourceLanguage === 'python' && ref.referenceType === 'call' ? this.pythonInstanceCallee(sourcePath, ref.startLine, ref.targetName) : null)
+            : receiver ? `${receiver}.${ref.targetName}` : ref.targetName;
+        }
+        if (qualified && this.importBoundOutside(qualified, sourcePath, sourceLanguage, fileMap, symbols)) {
+          noteExternal(ref);
+          continue;
+        }
+      }
       // Module-style imports (Java, Rust, Go, Python, Ruby, C#, PHP): one edge per resolved file,
       // named by the module/namespace rather than the raw statement (M0-12-R4).
       let targets: { file: string; symbol: string; verifiability?: 'verified' | 'inferred'; metadata?: Record<string, unknown> }[] | undefined;
@@ -2111,7 +2132,7 @@ export class Scanner {
     }
     // A Python base of a class (M2-12 review) is resolved from no line: a bare name's binding.
     if (python && !receiver && ref.startLine > 0) {
-      const found = this.pythonReceiver(sourcePath, ref.startLine, name);
+      const found = this.lineReceiver(sourcePath, ref.startLine, name);
       if (found === null) return null;
       receiver = found;
     }
@@ -2218,6 +2239,7 @@ export class Scanner {
       ...ref, referenceType: 'instantiation', targetName: written.slice(dot + 1), metadata: dot < 0 ? {} : { receiver: written.slice(0, dot) },
     };
     if (isJsOrTs && this.boundOutside(instantiation, sourcePath, fileMap)) return null;
+    if ((language === 'python' || language === 'java') && this.importBoundOutside(written, sourcePath, language, fileMap, symbols)) return null;
     const imported = this.resolveImportedCall(instantiation, sourcePath, language, isJsOrTs, fileMap, symbols);
     if (imported === false) return null;
     const file = imported ? imported.file : this.resolveSymbolToFile(instantiation.targetName, fileMap, sourcePath, true,
@@ -2226,10 +2248,10 @@ export class Scanner {
   }
 
   /**
-   * The dotted receiver of a Python call of `name` on its line (`utils.create(` → `utils`), undefined
-   * for a bare call, or null when the line has neither form or both (`utils.create(create())`).
+   * The dotted receiver of a Python or Java call of `name` on its line (`utils.create(` → `utils`),
+   * undefined for a bare call, or null when the line has neither form or both (`utils.create(create())`).
    */
-  private pythonReceiver(sourcePath: string, lineNumber: number, name: string): string | undefined | null {
+  private lineReceiver(sourcePath: string, lineNumber: number, name: string): string | undefined | null {
     let lines = this.lineCache.get(sourcePath);
     if (!lines) this.lineCache.set(sourcePath, (lines = (this.readWorkspaceText(sourcePath) ?? '').split('\n')));
     const line = lines[lineNumber - 1] ?? '';
@@ -2237,14 +2259,28 @@ export class Scanner {
     let patterns = this.callPatterns.get(name);
     if (!patterns) {
       const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      patterns = { attribute: new RegExp(`([A-Za-z_][\\w.]*)\\.${escaped}\\s*\\(`), bare: new RegExp(`(^|[^\\w.])${escaped}\\s*\\(`) };
+      patterns = { attribute: new RegExp(`([A-Za-z_][\\w.]*)\\.${escaped}\\s*\\(`, 'g'), bare: new RegExp(`(^|[^\\w.])${escaped}\\s*\\(`) };
       this.callPatterns.set(name, patterns);
     }
-    const attribute = patterns.attribute.exec(line)?.[1];
+    const receivers = new Set([...line.matchAll(patterns.attribute)].map(m => m[1]!));
     const bare = patterns.bare.test(line);
-    // Both forms on one line (`utils.create(create())`): which reference is which is unknown.
-    if ((attribute && bare) || (!attribute && !bare)) return null;
-    return attribute;
+    // Both forms on one line (`utils.create(create())`), or two receivers (`osp.join() + util.join()`):
+    // which reference is which is unknown (M2-08-R5 review).
+    if ((receivers.size && bare) || (!receivers.size && !bare) || receivers.size > 1) return null;
+    return receivers.size ? [...receivers][0] : undefined;
+  }
+
+  /**
+   * The dotted callee whose result a Python call of `name` is made on (`stripe.Order(1).total(` →
+   * `stripe.Order`), when the line has exactly one such call and no other use of `name` (M2-08-R5);
+   * else null.
+   */
+  private pythonInstanceCallee(sourcePath: string, lineNumber: number, name: string): string | null {
+    const line = this.lineCache.get(sourcePath)?.[lineNumber - 1] ?? '';
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const uses = [...line.matchAll(new RegExp(`(^|[^\\w])${escaped}\\s*\\(`, 'g'))].length;
+    const calls = [...line.matchAll(new RegExp(`(?:^|[^\\w.])([A-Za-z_][\\w.]*)\\s*\\([^()]*\\)\\s*\\.${escaped}\\s*\\(`, 'g'))];
+    return uses === 1 && calls.length === 1 ? calls[0]![1]! : null;
   }
 
   /** A declaration is visible at a line: anywhere at module level, else within its enclosing symbol. */
@@ -2634,7 +2670,7 @@ export class Scanner {
       // A call's receiver is read from its line, as for project imports (M2-08); a base or a type is named whole.
       let qualified = name;
       if (kind === 'call' || kind === 'instantiation') {
-        const receiver = this.pythonReceiver(sourcePath, ref.startLine, name);
+        const receiver = this.lineReceiver(sourcePath, ref.startLine, name);
         if (receiver === null) return [];
         if (receiver) qualified = `${receiver}.${name}`;
       }
@@ -3108,6 +3144,106 @@ export class Scanner {
       }
     }
     return bindings;
+  }
+
+  /**
+   * The names a Java file binds by imports certainly outside the project (M2-08-R5): a single-type
+   * import binds the class (`import com.vendor.Invoice;` → Invoice), a single static import the member
+   * (`import static com.vendor.Util.helper;` → helper). An on-demand import (`.*`) binds no known name.
+   */
+  private javaExternalBindings(sourcePath: string, fileMap: Map<string, string>): Map<string, ExternalBinding> {
+    const key = `java\0${sourcePath}`;
+    let bindings = this.externalBindingsCache.get(key);
+    if (bindings) return bindings;
+    bindings = new Map();
+    this.externalBindingsCache.set(key, bindings);
+    const text = (this.readWorkspaceText(sourcePath) ?? '').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
+    const ctx = this.importContext(fileMap);
+    for (const m of text.matchAll(/^[ \t]*import\s+(static\s+)?([\w$]+(?:\s*\.\s*[\w$]+)+)\s*;/gm)) {
+      const name = m[2]!.replace(/\s+/g, '');
+      if (javaImportOutsideProject(name, !!m[1], sourcePath, ctx) && !this.jvmProjectDeclares(name.split('.'))) bindings.set(name.slice(name.lastIndexOf('.') + 1), { specifier: name, imported: null });
+    }
+    return bindings;
+  }
+
+  /**
+   * Whether a project JVM file declares the type a dotted name denotes, whatever its folder: a class
+   * `C` (or `C` holding a nested `D` of `a.b.C.D`, or a static member of `a.b.C.m`) in a file whose
+   * `package` is `a.b`. Java ties a package to no folder, so `core/Registry.java` may declare
+   * `acme.core.Registry` (M2-08-R5). Without a symbol index, any name may be the project's.
+   */
+  private jvmProjectDeclares(parts: string[]): boolean {
+    const index = this.symbolIndex;
+    if (!index) return true;
+    for (let i = 1; i < parts.length; i++) {
+      const pkg = parts.slice(0, i).join('.');
+      const cls = parts[i]!;
+      if ((index.get(cls.toLowerCase()) ?? []).some(e => e.name === cls && TYPE_KINDS.has(e.kind ?? '')
+        && /\.(java|kt|kts|scala)$/.test(e.file) && this.jvmPackageOf(e.file) === pkg)) return true;
+    }
+    return false;
+  }
+
+  /** The `package` a JVM source declares, '' for none. */
+  private jvmPackageOf(file: string): string {
+    let pkg = this.jvmPackages.get(file);
+    if (pkg === undefined) {
+      const text = (this.readWorkspaceText(file) ?? '').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
+      this.jvmPackages.set(file, (pkg = text.match(/^[ \t]*package\s+([\w.]+)/m)?.[1] ?? ''));
+    }
+    return pkg;
+  }
+
+  /**
+   * A Python or Java name, dotted by its receiver (`stripe.Order`, `osp.join`, `Invoice.helper`), that
+   * an import from outside the project binds (M2-08-R5, M2-08-R3's rule for JS/TS). Python: the module
+   * resolves to no indexed file and its top-level name is no module or Python folder of the project
+   * (`decideExternal`). Java: see `javaImportOutsideProject`. A name the file declares itself (a later
+   * `class Order`, a Java method shadowing a static import) is not bound.
+   */
+  private importBoundOutside(
+    qualified: string, sourcePath: string, language: string | null, fileMap: Map<string, string>,
+    symbols?: Array<{ name: string; scope?: string | null }>,
+  ): boolean {
+    const head = qualified.split('.')[0]!;
+    let hit: { specifier: string } | null = null;
+    if (language === 'java') hit = this.boundExternal(this.javaExternalBindings(sourcePath, fileMap), qualified);
+    else if (language === 'python') {
+      hit = this.boundExternal(this.pythonExternalBindings(sourcePath, fileMap), qualified);
+      // The bindings hold modules no indexed file satisfies. Not certainly outside (review of M2-08-R5):
+      // a top-level name that is a Python folder or module anywhere in the project (a src/ layout seen
+      // from tests/, a second source root; wider than decideExternal's searched roots), or a local
+      // name another import of the file binds from the project (`try: from stripe import Order /
+      // except ImportError: from .local import Order`).
+      if (hit && (pythonNameInProject(hit.specifier.split('.')[0]!, this.importContext(fileMap))
+        || this.pythonProjectBound(sourcePath, fileMap).has(head))) hit = null;
+    }
+    if (!hit) return false;
+    // A Python module-level declaration rebinds the name; a Java member shadows a static import.
+    return !(symbols ?? []).some(s => s.name === head && (language === 'java' || !s.scope));
+  }
+
+  /** The local names a Python file's imports bind from the project, relative ones included (M2-08-R5 review). */
+  private pythonProjectBound(sourcePath: string, fileMap: Map<string, string>): Set<string> {
+    const key = `py-project\0${sourcePath}`;
+    const cached = this.externalBindingsCache.get(key);
+    if (cached) return new Set(cached.keys());
+    const bound = new Map<string, ExternalBinding>();
+    this.externalBindingsCache.set(key, bound);
+    const text = stripPythonComments(this.readWorkspaceText(sourcePath) ?? '');
+    for (const statement of pythonImports(text)) {
+      for (const n of statement.names) {
+        if (!this.pythonModuleCandidate(n.module, sourcePath, fileMap)) bound.set(n.local, { specifier: n.module, imported: n.imported });
+      }
+    }
+    // pythonImports leaves relative imports out: `from .local import Order as O`.
+    for (const m of text.matchAll(/^[ \t]*from\s+(\.[\w.]*)\s+import\s+\(?([^)#\n]+)/gm)) {
+      for (const part of m[2]!.split(',')) {
+        const [imported, alias] = part.trim().split(/\s+as\s+/).map(x => x.trim());
+        if (imported && /^\w+$/.test(imported)) bound.set(alias ?? imported, { specifier: m[1]!, imported });
+      }
+    }
+    return new Set(bound.keys());
   }
 
   /** An absolute Python module no indexed file satisfies (M5-19). */
@@ -5085,6 +5221,7 @@ export class Scanner {
     this.autoImportDirs.clear();
     this.jsImportsCache.clear();
     this.externalBindingsCache.clear();
+    this.jvmPackages.clear();
     this.phpDeclared = null;
     this.externalDecisions.clear();
     const index = new Map<string, SymbolIndexEntry[]>();

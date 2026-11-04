@@ -55,8 +55,11 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  *   same-named function or class elsewhere).
  * - 23: M5-24-R1 (ambient access, `process.env`, `window`, `$_GET`, `os.environ`, `os.Getenv`, is an
  *   external reference of origin ambient, in JS/TS, PHP, Python and Go).
+ * - 24: M2-08-R5 (a Python or Java name bound by an import from outside the project, `from stripe
+ *   import Order`, `import os.path as osp`, `import com.vendor.Invoice;`, links no same-named project
+ *   symbol).
  */
-export const EXTRACTOR_VERSION = 23;
+export const EXTRACTOR_VERSION = 24;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

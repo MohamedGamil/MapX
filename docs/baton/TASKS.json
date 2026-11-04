@@ -28126,6 +28126,63 @@
       ]
     },
     {
+      "id": "M2-08-R8",
+      "milestone": "M2",
+      "title": "Sync re-resolves Java and Python importers when an imported project package goes away",
+      "objective": "When the project files a Java or Python import named are deleted (the import is now outside the project), sync re-resolves the importing files, so sync equals scan --force.",
+      "description": "Review of M2-08-R5 (2026-11-04): Use.java imports com.thirdp.Invoice, which the project declares; after deleting the thirdp folder, `mapx sync` keeps Use::run → acme/Invoice.java (call total, instantiation Invoice), and scan --force gives none. Adding the folder back syncs correctly; Python add/delete matched in the review.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R5",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R5.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R8.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Java and Python: delete the project package a file imports, run hash sync and git sync; the importer’s edges equal those of scan --force (e2e test)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "id": "M2-08-R4",
       "milestone": "M2",
       "title": "Sync follows a file turning from module to script",
@@ -28212,7 +28269,9 @@
       ],
       "outputs": [
         "src/core/scanner.ts",
+        "src/core/import-resolvers.ts",
         "tests/import-bound-externals.test.ts",
+        "iterations/M2-08-R5.md",
         "reports/M2-08-R5.md"
       ],
       "affectedFiles": [
@@ -28222,22 +28281,85 @@
         "tests/import-bound-externals.test.ts"
       ],
       "acceptanceCriteria": [
-        "Python and Java e2e tests: a package import gives no edge to a same-named project symbol; a project import still links; `npm run eval` holds and edges precision does not drop."
+        "Python (e2e, tests/import-bound-externals.test.ts): with `from stripe import Order`, `import stripe`, `import os.path as osp`, the class base, `Order()`, `Order().total()`, `stripe.Order().total()` and `osp.join()` give no edge to app/order.py or app/util.py; the stripe uses are external_refs rows; `from app.order import Order` still links Order and total.",
+        "Java (e2e, same file): with `import com.vendor.Invoice;` and `import static com.vendor.Util.helper;`, `extends Invoice`, `new Invoice()`, `new Invoice().total()` and `helper()` give no edge to the project com/acme/Invoice.java; `import com.acme.Invoice;` still links.",
+        "Unknown keeps name lookup (e2e): a Python import whose top-level name is a project package folder, and a Java import whose package folder is in the project, keep their edges.",
+        "`npm run eval` exits 0 and edges precision does not drop (numbers as printed, before and after)."
       ],
       "verificationCommands": [
         "npx vitest run tests/import-bound-externals.test.ts",
-        "npm run eval"
+        "npm run eval",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T05:16:49.839Z",
+      "completedAt": "2026-11-04T05:50:10.674Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R5.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R5.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R5.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R5.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T05:16:49.314Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T05:16:49.839Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T05:50:10.195Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T05:50:10.674Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R5.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R5.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R5.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

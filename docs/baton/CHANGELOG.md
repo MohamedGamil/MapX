@@ -135,3 +135,9 @@
 - REQ-ARCH-014 and REQ-ARCH-022 are VERIFIED; REQ-ARCH-023 is DEFERRED (D040).
 - D040: user plugins deferred, so M5-98-R2 closed on the decision; registered M5-24-R5 (more ambient sources) and M5-24-R6 (an `ambient` reference kind); widened M5-16-R4 to the ambient apps' smells; no next work until the owner says.
 - Root CHANGELOG `[0.3.9]` now covers every change since the first tagging (dated 2026-11-04); the README covers ambient access, `check --since`, opt-in uncovered packages and the new smells, and no longer has the "Publishing to npm" section. The local tag `v0.3.9` moves to the commit that records this.
+
+## 2026-11-04 — D041: P2 resolution defects started; M2-08-R5 closed
+
+- D041 (owner): start the P2 resolution defects one at a time; M6, M4-13-R1 and the P3 follow-ups stay held.
+- M2-08-R5: acceptance criteria and verification commands sharpened before the start (task-specific Python and Java cases; `npm run check` added). Closed with evidence; the review's four P1 findings fixed before DONE.
+- Registered M2-08-R8 (P2, BACKLOG; hard dependency on M2-08-R5): from the M2-08-R5 review, Java sync keeps edges after an imported project package is deleted.

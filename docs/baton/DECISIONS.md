@@ -431,3 +431,8 @@ An explicit `policy.uncovered.externals` always wins.
 - **v0.3.9 moves to the latest commit.** The local tag `v0.3.9` is re-pointed at the commit that documents everything since its first tagging (CHANGELOG `[0.3.9]` dated 2026-11-04). The release build in `dist/release/` and the `~/.local/bin/mapx` install are rebuilt from that commit. Nothing is pushed or published (D007, D039).
 - **Next work: none until the owner says.** After the release and cleanup, no lane starts. M4-13-R1 (D035) and M6 (D038) stay held, and the remaining BACKLOG defects and M5 P3 follow-ups wait for an explicit start.
 - **README:** the "Publishing to npm" section is removed (owner request). The maintainer notes (the `NPM_TOKEN` secret, the publish workflow) move to docs/getting-started.md, which tests/legacy-distribution.test.ts now checks.
+
+## D041 — Owner answer of 2026-11-04: start the P2 resolution defects
+
+- **Next work: the P2 resolution defects**, one bounded iteration at a time: M2-08-R4..R7, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13 and M4-09-R5. This lifts the D040 hold for these items only. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
+- **Order:** none of them has dependents and all are P2, so lower risk ranks first. M2-08-R5 starts (low risk; false edges users see).

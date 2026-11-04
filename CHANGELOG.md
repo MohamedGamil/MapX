@@ -8,6 +8,9 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+### Fixed
+- In Python and Java, a name imported from a package (`from stripe import Order`, `import os.path as osp`, `import com.vendor.Invoice;`, `import static com.vendor.Util.helper;`) no longer links to a same-named project symbol by any reference kind (bases, instantiations, calls, `Order().total()`, `new Invoice().total()`). Imports that may be the project's keep name lookup: a Python name that is a project folder or module anywhere, a Java class some project file declares in that package whatever its folder, and a Java package folder in the project. The index re-parses once (M2-08-R5).
+
 ## [0.3.9] — 2026-11-04
 
 ### Added

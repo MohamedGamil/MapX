@@ -331,3 +331,263 @@ describe('auto-imported names (real scan)', () => {
     expect(edgesFrom(root, 'web/composables/useA.ts')).toEqual(['useA call web/composables/useB.ts#useB']);
   });
 });
+
+// M2-08-R5: M2-08-R3's rule for Python and Java. A name an import from a package binds is that
+// package's, never a same-named project symbol; an import that may be the project's keeps name lookup.
+function allEdgesFrom(root: string, file: string): string[] {
+  return query<Edge>(root, `SELECT source_symbol, edge_type, target_file, target_symbol FROM edges
+    WHERE source_file = ? AND edge_type NOT IN ('import', 'require') ORDER BY 1, 2, 3, 4`, file)
+    .map((e) => `${e.source_symbol} ${e.edge_type} ${e.target_file}#${e.target_symbol}`);
+}
+/** Cross-file edges, each once (a name used twice in a function gives two rows). */
+const distinctEdgesFrom = (root: string, file: string) => [...new Set(edgesFrom(root, file))];
+
+describe('Python names imported from a package (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      // Name lookup would pick these.
+      'app/order.py': 'class Order:\n    def total(self):\n        return 1\n',
+      'app/util.py': 'def join(a, b):\n    return a + b\n',
+      'app/use_pkg.py': `from stripe import Order
+import stripe
+import os.path as osp
+
+
+def charge():
+    Order().total()
+    stripe.Order().total()
+    o = Order()
+    return osp.join('a', 'b')
+
+
+def twice():
+    # Two calls of total on one line: the line cannot say which is which; the class decides.
+    return Order().total() + Order().total()
+
+
+class Sub(Order):
+    pass
+`,
+      'app/use_proj.py': `from app.order import Order
+
+
+def run():
+    Order().total()
+    return Order()
+`,
+      // `lib` is a project package: `lib.missing` may be the project's (generated, not indexed).
+      'lib/__init__.py': '',
+      'lib/real.py': 'X = 1\n',
+      'app/use_unknown.py': 'from lib.missing import Order\n\n\ndef maybe():\n    return Order()\n',
+      // Review of M2-08-R5. A src/ layout seen from tests/: mypkg is on no root the import searches.
+      'src/mypkg/__init__.py': '',
+      'src/mypkg/models.py': 'class Model:\n    def save(self):\n        return 1\n\n\ndef build():\n    return Model()\n',
+      'tests/test_models.py': 'from mypkg.models import Model, build\n\n\ndef test_save():\n    Model().save()\n    build()\n',
+      // A package import with a project fallback.
+      'app/cond.py': 'try:\n    from stripe import Order\nexcept ImportError:\n    from app.order import Order\n\n\ndef pay():\n    return Order().total()\n',
+      // One name called on two receivers on one line: the line cannot say which is which.
+      'app/two.py': "import os.path as osp\nfrom app import util\n\n\ndef both():\n    return osp.join('a', 'b') + util.join('a', 'b')\n",
+      // The file binds Order from a package, then declares its own: the declaration wins.
+      'app/own.py': `from stripe import Order
+
+
+class Order:
+    def total(self):
+        return 2
+
+
+def mine():
+    return Order().total()
+`,
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('Python: names imported from a package link no project symbol', () => {
+    expect(distinctEdgesFrom(root, 'app/use_pkg.py')).toEqual([]);
+  });
+
+  it('Python: the package uses are recorded as external references instead', () => {
+    const rows = query<{ specifier: string; symbol: string }>(root,
+      `SELECT DISTINCT specifier, symbol FROM external_ref_candidates WHERE file_path = 'app/use_pkg.py' AND kind != 'import' ORDER BY 1, 2`);
+    expect(rows.map((r) => `${r.specifier}#${r.symbol}`)).toEqual(expect.arrayContaining(['os.path#join', 'stripe#Order']));
+  });
+
+  it('Python: the same names imported from the project still link', () => {
+    expect(distinctEdgesFrom(root, 'app/use_proj.py')).toEqual([
+      'run call app/order.py#total',
+      'run instantiation app/order.py#Order',
+    ]);
+  });
+
+  it('Python: an import from a project package folder keeps name lookup', () => {
+    expect(distinctEdgesFrom(root, 'app/use_unknown.py')).toContain('maybe instantiation app/order.py#Order');
+  });
+
+  it('Python: a src/ layout package imported from tests/ still links (review)', () => {
+    expect(distinctEdgesFrom(root, 'tests/test_models.py')).toEqual([
+      'test_save call src/mypkg/models.py#build',
+      'test_save call src/mypkg/models.py#save',
+      'test_save instantiation src/mypkg/models.py#Model',
+    ]);
+  });
+
+  it('Python: a name also imported from the project is not taken for the package\'s (review)', () => {
+    expect(distinctEdgesFrom(root, 'app/cond.py')).toEqual(['pay call app/order.py#total', 'pay instantiation app/order.py#Order']);
+  });
+
+  it('Python: a name called on two receivers on one line keeps the project call (review)', () => {
+    expect(distinctEdgesFrom(root, 'app/two.py')).toContain('both call app/util.py#join');
+  });
+
+  it('Python: a name the file declares after importing it from a package is the file\'s own', () => {
+    expect(allEdgesFrom(root, 'app/own.py')).toEqual(expect.arrayContaining(['mine call app/own.py#total']));
+  });
+});
+
+describe('Java names imported from a package (real scan)', () => {
+  let root: string;
+  const src = 'src/main/java/com';
+  beforeAll(() => {
+    root = workspace({
+      // Name lookup would pick these.
+      [`${src}/acme/Invoice.java`]: `package com.acme;
+
+public class Invoice {
+    public int total() { return 1; }
+    public static int helper() { return 2; }
+}
+`,
+      [`${src}/other/Missing.java`]: 'package com.other;\n\npublic class Missing {\n    public int go() { return 1; }\n}\n',
+      [`${src}/acme2/UsePkg.java`]: `package com.acme2;
+
+import com.vendor.Invoice;
+import static com.vendor.Util.helper;
+import java.util.List;
+
+public class UsePkg extends Invoice {
+    public int run(Invoice i) {
+        Invoice x = new Invoice();
+        helper();
+        Invoice.helper();
+        int a = new Invoice().total();
+        return a + i.total();
+    }
+}
+`,
+      [`${src}/acme2/UseProj.java`]: `package com.acme2;
+
+import com.acme.Invoice;
+
+public class UseProj {
+    public int run() {
+        Invoice x = new Invoice();
+        return new Invoice().total();
+    }
+}
+`,
+      // Java ties a package to no folder: misc/Ledger.java declares com.books.Ledger (found by the
+      // arch-visibility fixture's core/Registry.java in package acme.core).
+      'misc/Ledger.java': 'package com.books;\n\npublic class Ledger {\n    public void post() {}\n}\n',
+      [`${src}/acme2/UseLedger.java`]: `package com.acme2;
+
+import com.books.Ledger;
+
+public class UseLedger {
+    public void run() {
+        new Ledger().post();
+    }
+}
+`,
+      // Review of M2-08-R5: doubly nested project classes, imported by type and by static member.
+      [`${src}/acme/Outer.java`]: `package com.acme;
+
+public class Outer {
+    public static class Inner {
+        public static int nestedHelper() { return 1; }
+        public static class Deep {
+            public int deepGo() { return 2; }
+        }
+    }
+}
+`,
+      [`${src}/acme2/UseNested.java`]: `package com.acme2;
+
+import static com.acme.Outer.Inner.nestedHelper;
+import com.acme.Outer.Inner.Deep;
+
+public class UseNested {
+    public int run() {
+        return nestedHelper() + new Deep().deepGo();
+    }
+}
+`,
+      // A static call on a class imported from a package: the receiver is bound, not the name.
+      [`${src}/acme2/UseStatic.java`]: `package com.acme2;
+
+import com.vendor.Invoice;
+
+public class UseStatic {
+    public int run() {
+        return Invoice.helper();
+    }
+}
+`,
+      // com/acme is a project package: com.acme.Missing may be the project's (generated, not indexed).
+      [`${src}/acme2/UseUnknown.java`]: `package com.acme2;
+
+import com.acme.Missing;
+
+public class UseUnknown {
+    public int maybe() {
+        return new Missing().go();
+    }
+}
+`,
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('Java: names imported from a package link no project symbol', () => {
+    // `i.total()` is a call on a parameter: its type is not tracked, so name lookup stays (limitation).
+    // Not deduplicated: `new Invoice().total()` must not add a second row.
+    expect(edgesFrom(root, `${src}/acme2/UsePkg.java`)).toEqual([`UsePkg::run call ${src}/acme/Invoice.java#total`]);
+  });
+
+  it('Java: a static call on a class imported from a package links no project symbol', () => {
+    expect(distinctEdgesFrom(root, `${src}/acme2/UseStatic.java`)).toEqual([]);
+  });
+
+  it('Java: the same names imported from the project still link', () => {
+    expect(distinctEdgesFrom(root, `${src}/acme2/UseProj.java`)).toEqual([
+      `UseProj::run call ${src}/acme/Invoice.java#total`,
+      `UseProj::run instantiation ${src}/acme/Invoice.java#Invoice`,
+    ]);
+  });
+
+  it('Java: an import of a project class whose folder is not its package still links', () => {
+    expect(distinctEdgesFrom(root, `${src}/acme2/UseLedger.java`)).toEqual([
+      'UseLedger::run call misc/Ledger.java#post',
+      'UseLedger::run instantiation misc/Ledger.java#Ledger',
+    ]);
+  });
+
+  it('Java: doubly nested project classes imported by type or static member still link (review)', () => {
+    expect(distinctEdgesFrom(root, `${src}/acme2/UseNested.java`)).toEqual(expect.arrayContaining([
+      `UseNested::run call ${src}/acme/Outer.java#deepGo`,
+      `UseNested::run call ${src}/acme/Outer.java#nestedHelper`,
+    ]));
+  });
+
+  it('Java: an import naming a project package folder keeps name lookup', () => {
+    expect(distinctEdgesFrom(root, `${src}/acme2/UseUnknown.java`)).toEqual([
+      `UseUnknown::maybe call ${src}/other/Missing.java#go`,
+      `UseUnknown::maybe instantiation ${src}/other/Missing.java#Missing`,
+    ]);
+  });
+});

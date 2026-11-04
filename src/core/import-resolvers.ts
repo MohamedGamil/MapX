@@ -106,6 +106,35 @@ export function resolveJvmImport(target: string, sourcePath: string, ctx: Import
   return null;
 }
 
+/** Every trailing run of folders (`com/acme`, `java/com/acme`, …) of a folder holding JVM sources. */
+const jvmPackageSets = new WeakMap<Set<string>, Set<string>>();
+function jvmPackagePathsOf(files: Set<string>): Set<string> {
+  let paths = jvmPackageSets.get(files);
+  if (paths) return paths;
+  paths = new Set<string>();
+  for (const f of files) {
+    if (!/\.(java|kt|kts|scala)$/.test(f)) continue;
+    const dirs = dirOf(f).split('/').filter(Boolean);
+    for (let i = 0; i < dirs.length; i++) paths.add(dirs.slice(i).join('/'));
+  }
+  jvmPackageSets.set(files, paths);
+  return paths;
+}
+
+/**
+ * True when a Java import is certainly outside the workspace (M2-08-R5): the class resolves to no
+ * indexed file, and its package (`com.vendor` of `com.vendor.Invoice`, of `com.vendor.Util.helper`
+ * for a static import) is no folder of JVM sources at any depth. `java.util.List` is outside; an
+ * import of a missing class in a project package (`com.acme.Missing` beside `com/acme/`) may be
+ * generated or unindexed, so it is not.
+ */
+export function javaImportOutsideProject(name: string, isStatic: boolean, sourcePath: string, ctx: ImportContext): boolean {
+  const parts = name.split('.').filter(Boolean);
+  const cls = isStatic ? parts.slice(0, -1) : parts;
+  if (cls.length < 2 || resolveJvmImport(name, sourcePath, ctx, ['.java', '.kt'])) return false;
+  return !jvmPackagePathsOf(ctx.files).has(cls.slice(0, -1).join('/'));
+}
+
 /** Number of leading directories two paths share. */
 function sharedDirs(a: string, b: string): number {
   const x = a.split('/'), y = b.split('/');
@@ -407,6 +436,25 @@ export function pythonImportOutsideProject(module: string, sourcePath: string, c
   if (!top) return false;
   const folders = pythonFoldersOf(ctx.files);
   return !pythonRoots(sourcePath, ctx).some((root) => ctx.files.has(join(root, `${top}.py`)) || folders.has(join(root, top)));
+}
+
+/** The last segments of every Python folder and the stems of every Python module, at any depth. */
+const pythonNameSets = new WeakMap<Set<string>, Set<string>>();
+
+/**
+ * True when a top-level Python name is a folder holding Python files or a module (`x.py`) anywhere in
+ * the workspace, on a searched root or not: `mypkg` of a src/ layout seen from tests/ (review of
+ * M2-08-R5). Such an import may be the project's.
+ */
+export function pythonNameInProject(top: string, ctx: ImportContext): boolean {
+  let names = pythonNameSets.get(ctx.files);
+  if (!names) {
+    names = new Set<string>();
+    for (const dir of pythonFoldersOf(ctx.files)) names.add(dir.slice(dir.lastIndexOf('/') + 1));
+    for (const f of ctx.files) if (f.endsWith('.py')) names.add(f.slice(f.lastIndexOf('/') + 1, -3));
+    pythonNameSets.set(ctx.files, names);
+  }
+  return names.has(top);
 }
 
 /**

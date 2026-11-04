@@ -1,6 +1,14 @@
 # MapX project state
 
-Updated 2026-11-04 (release refresh). Version 0.3.9: the local tag `v0.3.9` now points at the commit that documents everything since its first tagging, and `~/.local/bin/mapx` is rebuilt from it (D040). Nothing is pushed or published. `EXTRACTOR_VERSION` is 23, `ATTRIBUTION_VERSION` 2.
+Updated 2026-11-04 (P2 defects, D041). `EXTRACTOR_VERSION` is 24. Nothing is committed, pushed or published.
+
+- **D041:** the owner started the P2 resolution defects (M2-08-R4..R8, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13, M4-09-R5), one iteration at a time. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
+- **Done:** M2-08-R5. A Python or Java name imported from a package no longer links to a same-named project symbol. It was independently reviewed, and its 4 P1 findings were fixed. MapX's self-scan lost 10 false edges and gained none; `npm run eval` is unchanged (edges precision 0.9915).
+- **Registered:** M2-08-R8 (Java sync after an imported project package is deleted), BACKLOG.
+- **Next in the D041 batch (lower risk first):** M2-08-R4 and M4-09-R5 (low risk), then the medium-risk items.
+- **Latest validation:** `npm run check`, exit 0: 156 files, 3218 passed, 4 skipped.
+
+Earlier: Updated 2026-11-04 (release refresh). Version 0.3.9: the local tag `v0.3.9` now points at the commit that documents everything since its first tagging, and `~/.local/bin/mapx` is rebuilt from it (D040). Nothing is pushed or published. `EXTRACTOR_VERSION` is 23, `ATTRIBUTION_VERSION` 2.
 
 - **M5:** acceptance (M5-98) is DONE, and so are its follow-ups M5-98-R1 (`check --since`), M5-24-R1 (ambient access), M5-24-R2 (external multi-layer and inherited dependencies), M5-24-R3/R4, M5-16-R1/R2 (smell scoring, orphan-element and baseline-debt), M5-17-R1, M5-18-R1/R2, M5-19-R1, M5-21-R1, M5-22-R1, M5-23-R1, M5-25-R3/R4 and M5-07-R2. M5-98-R2 closed on the owner's deferral of user plugins (D040).
 - **Requirements:** REQ-ARCH 22 VERIFIED, REQ-ARCH-023 DEFERRED by decision (D040).
