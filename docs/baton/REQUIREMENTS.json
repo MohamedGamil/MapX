@@ -507,8 +507,8 @@
       "M5-98-R1"
     ],
     "verificationTaskIds": [],
-    "status": "PLANNED",
-    "evidence": "No task and no code; M5-06 deferred it. Not met."
+    "status": "VERIFIED",
+    "evidence": "M5-98-R1: tests/arch-since.test.ts (12 tests: stale base via merge-base, no merge base, :/text refs, git failure exit 3, MCP since); docs/baton/reports/M5-98-R1.md"
   },
   {
     "id": "REQ-ARCH-022",
