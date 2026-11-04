@@ -16798,10 +16798,10 @@
         "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-I3",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T02:16:42.307Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -16811,6 +16811,12 @@
           "at": "2026-11-04T00:11:00.594Z",
           "from": "BACKLOG",
           "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:16:42.307Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
           "evidence": []
         }
       ],
@@ -16863,10 +16869,10 @@
         "npx vitest run tests/arch-smells.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "READY",
-      "owner": "maintainer",
+      "status": "IN_PROGRESS",
+      "owner": "claude-ff-lane-I2",
       "actualHours": null,
-      "startedAt": null,
+      "startedAt": "2026-11-04T02:16:41.605Z",
       "completedAt": null,
       "commits": [],
       "artifacts": [],
@@ -16877,8 +16883,132 @@
           "from": "BACKLOG",
           "to": "READY",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T02:16:41.605Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
         }
       ],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-16-R3",
+      "milestone": "M5",
+      "title": "Baseline entries record their date; baseline-debt reports age",
+      "objective": "`--generate-baseline` records when each entry was added (kept on regeneration for unchanged entries), and the baseline-debt smell reports debt by layer and by age bucket.",
+      "description": "M5-16-R2 limitation (2026-11-04): baseline entries record no date, so baseline-debt counts only by layer.",
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-16-R2",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-16-R2.md"
+      ],
+      "outputs": [
+        "src/arch/baseline.ts",
+        "src/arch/smells.ts",
+        "tests/arch-baseline.test.ts",
+        "reports/M5-16-R3.md"
+      ],
+      "affectedFiles": [
+        "src/arch/baseline.ts",
+        "src/arch/check.ts",
+        "src/arch/smells.ts",
+        "schemas/**",
+        "tests/arch-baseline.test.ts",
+        "tests/arch-smells.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A regenerated baseline keeps the original date of unchanged entries and dates new ones (test); baseline-debt groups by age (test); older baselines without dates still load."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/arch-baseline.test.ts tests/arch-smells.test.ts"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M5-16-R4",
+      "milestone": "M5",
+      "title": "score-arch labels dead-allowance, weak-allowance, unstable-layer-dependency and abstractness-distance",
+      "objective": "The arch-rules fixture labels the four smells M5-16-R1 left unscored (they need per-edge counts), with evidence per row, and score-arch reports them at 1.0.",
+      "description": "M5-16-R1 limitation (2026-11-04): four smell kinds are not labelled.",
+      "priority": "P3",
+      "estimate": {
+        "min": 2,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M5-16-R1",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M5-16-R1.md"
+      ],
+      "outputs": [
+        "tests/fixtures/arch-rules/expected-smells.json",
+        "reports/M5-16-R4.md"
+      ],
+      "affectedFiles": [
+        "tests/fixtures/arch-rules",
+        "scripts/eval/score-arch.ts"
+      ],
+      "acceptanceCriteria": [
+        "score-arch --json smells section covers all smell kinds at recall and precision 1.0 on labelled rows."
+      ],
+      "verificationCommands": [
+        "npx tsx scripts/eval/score-arch.ts tests/fixtures/arch-rules --json"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
