@@ -27667,6 +27667,66 @@
       ]
     },
     {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R3",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-25.md",
+        "docs/baton/reports/M2-08-R3.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-08-R7",
+      "title": "Python: an unimported name (a builtin such as open) never links a function in another module",
+      "objective": "In Python, a call to a name the module neither defines nor imports (a builtin such as `open`, `print`, `len`) gets no edge to a same-named function in another module; imported names still link.",
+      "description": "Review of M2-25 (2026-11-04): `open()` in scripts/gen-python-stdlib.py links the fixture database.py#open, verified. Python resolves names per module; an unimported name is a builtin or an error, never another module's function.",
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R7.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/parsers/**",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "`open()` with a project module defining open (not imported) gives no edge; `from db import open; open()` links (e2e tests); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run eval"
+      ]
+    },
+    {
       "id": "M2-08-R4",
       "milestone": "M2",
       "title": "Sync follows a file turning from module to script",
