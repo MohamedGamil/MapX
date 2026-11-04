@@ -36,7 +36,7 @@ import { collectVuexFiles, resolveStoreTarget, storeCallOrPlain, workspaceSearch
 import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vueGlobFiles, type GlobalRegistrations, type VueResolveHint } from '../parsers/languages/vue-template.js';
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
-import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, jsBaseUrlTarget, type AliasContext } from './js-aliases.js';
+import { BUILD_TOOLS, BUNDLER_CONFIGS, MODULE_ROOT_CONFIGS, jsAliasTargets, jsBaseUrlTarget, jsModuleRootTargets, type AliasContext } from './js-aliases.js';
 import { declaredGlobalNames, exportSkeleton, gainedGlobalNames, globalScopeKey, hasCommonJsExports, hasModuleSyntax, jsExportSignature, scanModule, type JsText } from './js-source.js';
 import { ATTRIBUTION_VERSION, EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
 import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalAttribution, type ExternalRefRow, type JsImport } from './external-refs.js';
@@ -192,6 +192,7 @@ const moduleKey = (path: string) => path.replace(/\\/g, '/').replace(/^\.\//, ''
 const JS_MODULE_FILE = /\.(?:[cm]?[jt]sx?|vue|svelte)$/;
 const MODULE_EXTENSIONS = ['js', 'ts', 'tsx', 'jsx', 'mjs', 'cjs', 'mts', 'cts', 'vue', 'svelte'];
 /** Imports of assets, which no module satisfies: not recorded (M2-08-R2 review). */
+const NO_MODULE_ROOTS: { early: string[]; late: string[] } = { early: [], late: [] };
 const ASSET_IMPORT = /\.(?:css|scss|sass|less|styl|svg|png|jpe?g|gif|webp|avif|ico|bmp|json|html?|md|txt|woff2?|ttf|otf|eot|mp[34]|wav|webm|wasm|graphql|gql)$/i;
 
 /** Modules whose calls resolve through import bindings (M2-08). */
@@ -2599,19 +2600,37 @@ export class Scanner {
     const name = specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0]!;
     if (!name || name === '@') return false;
     if (this.npmWorkspacePackageNames().has(name)) return false;
-    const workspaceRoot = this.config.getWorkspaceRoot();
-    for (let dir = sourcePath.includes('/') ? sourcePath.slice(0, sourcePath.lastIndexOf('/')) : ''; ; dir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '') {
-      let manifest: any = null;
-      try { manifest = JSON.parse(this.readWorkspaceText(dir ? `${dir}/package.json` : 'package.json') ?? 'null'); } catch { /* unreadable */ }
+    // Per folder and package, for the resolution phase: every import of `react` asks it (M2-08-R11).
+    const start = sourcePath.includes('/') ? sourcePath.slice(0, sourcePath.lastIndexOf('/')) : '';
+    const memo = `${start}\0${name}`;
+    let answer = this.npmPackageMemo.get(memo);
+    if (answer === undefined) this.npmPackageMemo.set(memo, (answer = this.npmPackageAt(start, name)));
+    return answer;
+  }
+
+  private npmPackageAt(start: string, name: string): boolean {
+    for (let dir = start; ; dir = dir.includes('/') ? dir.slice(0, dir.lastIndexOf('/')) : '') {
+      const manifest = this.manifestAt(dir);
       if (manifest && typeof manifest === 'object') {
         if (manifest.name === name) return false;
         const version = { ...manifest.dependencies, ...manifest.devDependencies, ...manifest.peerDependencies, ...manifest.optionalDependencies }[name];
         if (typeof version === 'string') return !/^(workspace:|file:|link:|portal:|\.|\/)/.test(version);
       }
       // Installed although no manifest lists it.
-      if (existsSync(resolve(workspaceRoot, dir, 'node_modules', name))) return true;
+      if (this.workspaceExists(dir ? `${dir}/node_modules/${name}` : `node_modules/${name}`)) return true;
       if (!dir) return false;
     }
+  }
+
+  /** The parsed package.json of a folder (null when absent or unreadable), per resolution phase. */
+  private manifestAt(dir: string): any {
+    let manifest = this.manifestCache.get(dir);
+    if (manifest === undefined) {
+      manifest = null;
+      try { manifest = JSON.parse(this.readWorkspaceText(dir ? `${dir}/package.json` : 'package.json') ?? 'null'); } catch { /* unreadable */ }
+      this.manifestCache.set(dir, manifest);
+    }
+    return manifest;
   }
 
   /** The package names declared in the folders holding indexed files (manifests are not indexed) (M0-17-R4). */
@@ -2848,6 +2867,8 @@ export class Scanner {
     this.importFiles = null;
     this.importTextCache.clear();
     this.importPresentCache.clear();
+    this.manifestCache.clear();
+    this.npmPackageMemo.clear();
     this.goLocalDirCache.clear();
     this.languageCache.clear();
     this.npmWorkspaceDirs = null;
@@ -3694,6 +3715,8 @@ export class Scanner {
     this.vueImporters.clear();
     this.importTextCache.clear();
     this.importPresentCache.clear();
+    this.manifestCache.clear();
+    this.npmPackageMemo.clear();
     this.goLocalDirCache.clear();
     const key = 'vue_dir_scopes:' + repoName;
     const gone = new Set(deleted);
@@ -3793,6 +3816,8 @@ export class Scanner {
   private importFiles: { map: Map<string, string>; files: Set<string> } | null = null;
   private importTextCache = new Map<string, string | null>();
   private importPresentCache = new Map<string, boolean>();
+  private manifestCache = new Map<string, any>();
+  private npmPackageMemo = new Map<string, boolean>();
   private goLocalDirCache = new Map<string, string | null>();
   private languageCache = new Map<string, string | null>();
   // PHP file → the namespace it declares ('' for none), built with the symbol index (M0-04-R2).
@@ -4093,19 +4118,34 @@ export class Scanner {
     // The specifier itself, relative to the importing file when it is `./…`. A bare one is never a
     // path from the repo root: Node does not resolve `express` to ./express.js, only a package, `paths`,
     // `baseUrl` or a bundler alias (all above) does (M2-08-R6). A file of another language keeps it.
+    const rootBases: string[] = [];
     if (target.startsWith('.')) bases.push(join(dir, target));
     else if (target.startsWith('/') || !JS_MODULE_SOURCE.test(sourcePath)) bases.push(target);
-    // A workspace package of the project (`common`, `@acme/common/src/fmt`): its folder and entry
-    // (M2-08-R6). After `paths` and `baseUrl`, as tsc and the bundlers try them before node_modules.
-    else bases.push(...this.workspacePackageTargets(target));
+    else {
+      // The module roots the project configures (webpack `resolve.modules`, jest `moduleDirectories` and
+      // `modulePaths`, a `NODE_PATH=` script; M2-08-R11). A root listed before `node_modules` comes first;
+      // the others are searched after it, so a listed package or a workspace package wins. Node's
+      // built-ins are no module.
+      const roots = nodeBuiltin(target) ? NO_MODULE_ROOTS : jsModuleRootTargets(target, sourcePath, this.aliasContext(fileMap));
+      // A workspace package of the project (`common`, `@acme/common/src/fmt`): its folder and entry
+      // (M2-08-R6). After `paths` and `baseUrl`, as tsc and the bundlers try them before node_modules.
+      bases.push(...roots.early, ...this.workspacePackageTargets(target));
+      rootBases.push(...roots.early);
+      // The roots searched after node_modules never see a name it supplies, so no file added later
+      // can change that import: they are neither probed nor recorded for it.
+      if (roots.late.length && !this.isNpmPackage(target, sourcePath)) {
+        bases.push(...roots.late);
+        rootBases.push(...roots.late);
+      }
+    }
     for (const base of bases) {
       const hit = this.probeModule(base, fileMap);
       if (hit) return hit;
     }
     // A project module that is not there (yet): recorded for the file being resolved (M2-08-R2).
     const pending = this.unresolvedImports.get(sourcePath);
-    if (pending && (aliases.length || target.startsWith('.')) && !ASSET_IMPORT.test(target)) {
-      for (const base of aliases.length ? aliases : bases) pending.add(moduleKey(base));
+    if (pending && (aliases.length || rootBases.length || target.startsWith('.')) && !ASSET_IMPORT.test(target)) {
+      for (const base of aliases.length ? [...aliases, ...rootBases] : rootBases.length ? rootBases : bases) pending.add(moduleKey(base));
     }
     return null;
   }
@@ -4757,7 +4797,7 @@ export class Scanner {
         dirs.add(dir);
       }
     }
-    const names = ['package.json', 'pnpm-workspace.yaml', ...BUNDLER_CONFIGS];
+    const names = [...new Set(['package.json', 'pnpm-workspace.yaml', ...BUNDLER_CONFIGS, ...MODULE_ROOT_CONFIGS])];
     // A tsconfig/jsconfig and every config its relative `extends` / `references` reach, recursively
     // (`.svelte-kit/tsconfig.json`, `tsconfig.app.json`, `tsconfig.base.json`): a missing one counts.
     const tsConfigTree = (file: string, hash: ReturnType<typeof createHash>, seen: Set<string>) => {
@@ -5296,6 +5336,8 @@ export class Scanner {
     this.importFiles = null;
     this.importTextCache.clear();
     this.importPresentCache.clear();
+    this.manifestCache.clear();
+    this.npmPackageMemo.clear();
     this.goLocalDirCache.clear();
     this.importBindingsCache.clear();
     this.exportCache.clear();

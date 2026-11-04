@@ -176,7 +176,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-08-R8** Sync re-resolves Java and Python importers when an imported project package goes away — BACKLOG, P2, 4h; depends on M2-08-R5.
 - **M2-08-R9** Sync follows new global declarations: a new or renamed script, a new global in a script, `declare global` in a new file — BACKLOG, P2, 4h; depends on M2-08-R4.
 - **M2-08-R10** JS/TS local names: every declarator of a list and `function *gen` count as declared — BACKLOG, P3, 2h; depends on M2-08-R4.
-- **M2-08-R11** JS/TS bare imports resolve under configured module roots: NODE_PATH, webpack resolve.modules, jest moduleDirectories — BACKLOG, P2, 5h; depends on M2-08-R6.
+- **M2-08-R11** JS/TS bare imports resolve under configured module roots: NODE_PATH, webpack resolve.modules, jest moduleDirectories — DONE, P2, 5h; depends on M2-08-R6.
 - **M2-08-R4** Sync follows a file turning from module to script — DONE, P2, 3h; depends on M2-08-R3.
 - **M2-08-R5** Python and Java names imported from packages never link to same-named project symbols — DONE, P2, 6h; depends on M2-08-R3.
 - **M2-09** JS/TS member-assigned functions are symbols — DONE, P2, 4h; depends on M2-08.

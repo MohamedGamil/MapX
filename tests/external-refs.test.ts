@@ -436,6 +436,47 @@ const DECIDED_ELSEWHERE: Array<{ name: string; before: Record<string, string>; c
     change: { 'tsconfig.json': '{"compilerOptions":{"baseUrl":".","paths":{"lib/*":["src/lib/*"]}}}' },
     gone: 'src/a.ts:1 null lib/helpers h import npm',
   },
+  // M2-08-R11: a module root the project configures turns the bare specifier into a project module.
+  {
+    name: 'a jest moduleDirectories entry naming <rootDir> is added to package.json',
+    before: {
+      'package.json': '{"name":"root"}',
+      'lib/helpers.ts': 'export const h = 1;\n',
+      'src/a.ts': "import { h } from 'lib/helpers';\nexport const p = () => h;\n",
+    },
+    change: { 'package.json': '{"name":"root","jest":{"moduleDirectories":["node_modules","<rootDir>"]}}' },
+    gone: 'src/a.ts:1 null lib/helpers h import npm',
+  },
+  {
+    name: 'a webpack config with resolve.modules naming __dirname is added',
+    before: {
+      'package.json': '{"name":"root"}',
+      'lib/helpers.ts': 'export const h = 1;\n',
+      'src/a.ts': "import { h } from 'lib/helpers';\nexport const p = () => h;\n",
+    },
+    change: { 'webpack.config.js': "module.exports = { resolve: { modules: [__dirname, 'node_modules'] } };\n" },
+    gone: 'src/a.ts:1 null lib/helpers h import npm',
+  },
+  {
+    name: 'a package.json script setting NODE_PATH is added',
+    before: {
+      'package.json': '{"name":"root"}',
+      'lib/helpers.js': 'exports.h = 1;\n',
+      'src/a.js': "const { h } = require('lib/helpers');\nexports.p = () => h;\n",
+    },
+    change: { 'package.json': '{"name":"root","scripts":{"start":"NODE_PATH=. node src/a.js"}}' },
+    gone: 'src/a.js:1 null lib/helpers h require npm',
+  },
+  {
+    name: 'the NODE_PATH script is removed again (the specifier is outside once more)',
+    before: {
+      'package.json': '{"name":"root","scripts":{"start":"NODE_PATH=. node src/a.ts"}}',
+      'lib/helpers.ts': 'export const h = 1;\n',
+      'src/a.ts': "import { h } from 'lib/helpers';\nexport const p = () => h;\n",
+    },
+    change: { 'package.json': '{"name":"root"}' },
+    appears: 'src/a.ts:1 null lib/helpers h import npm',
+  },
   {
     name: 'a go.mod is added',
     before: { 'svc/main.go': 'package main\n\nimport (\n\t"fmt"\n\t"github.com/x/y"\n)\n\nfunc main() { fmt.Println(); y.Do() }\n' },

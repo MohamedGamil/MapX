@@ -64,8 +64,11 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  * - 26: M2-08-R6 (a bare JS/TS specifier, `import 'express'` or `require('express')`, is never read as a
  *   path from the repo root: it no longer links a project `express.js`; `paths`, `baseUrl` and bundler
  *   aliases are the only ways a bare specifier resolves to a project file).
+ * - 27: M2-08-R11 (a bare JS/TS specifier resolves under a module root the project configures: webpack
+ *   `resolve.modules`, jest `moduleDirectories` / `modulePaths`, `NODE_PATH=` in a package.json script;
+ *   such an import links its file again and is no npm external candidate).
  */
-export const EXTRACTOR_VERSION = 26;
+export const EXTRACTOR_VERSION = 27;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

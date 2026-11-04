@@ -28766,7 +28766,7 @@
       "milestone": "M2",
       "title": "JS/TS bare imports resolve under configured module roots: NODE_PATH, webpack resolve.modules, jest moduleDirectories",
       "objective": "A bare import resolves under a module root the project configures with positive evidence MapX can read — webpack `resolve.modules` literals, jest `moduleDirectories`/`modulePaths`/`roots` (package.json `jest` or jest.config.*), `NODE_PATH=` in package.json scripts — so `import x from models/user` with the repo root (or `src`) as a module root links its file again; such specifiers are not attributed as npm externals.",
-      "description": "M2-08-R6 removed the root-relative probe for bare specifiers (accidentally right for root-level module folders). Its review (2026-11-04) found: case G (jest moduleDirectories [\"<rootDir>\"]) loses the import edge; case K (require(lib/a), require(models/user)) loses real call edges when names collide; case J loses type-only, constant and side-effect imports; external_ref_candidates mark `models/user`, `lib/util` as npm external=1 (arch `npm:` selectors may misfire); Deno deno.json import maps (niche) are not read.",
+      "description": "M2-08-R6 removed the root-relative probe for bare specifiers (accidentally right for root-level module folders). Its review (2026-11-04) found: case G (jest moduleDirectories [\"<rootDir>\"]) loses the import edge; case K (require(lib/a), require(models/user)) loses real call edges when names collide; case J loses type-only, constant and side-effect imports; external_ref_candidates mark `models/user`, `lib/util` as npm external=1 (arch `npm:` selectors may misfire). Roots are read from webpack `resolve.modules`, jest `moduleDirectories`/`modulePaths` (jest `roots` only locate tests and are not read) and `NODE_PATH=` in package.json scripts, each scoped to the folder that declares it; Deno deno.json import maps are out of scope.",
       "priority": "P2",
       "estimate": {
         "min": 3,
@@ -28786,22 +28786,30 @@
       "optionalDependencies": [],
       "blockingConditions": [],
       "sources": [
-        "docs/baton/reports/M2-08-R6.md"
+        "docs/baton/reports/M2-08-R6.md",
+        "docs/baton/iterations/M2-08-R6.md"
       ],
       "outputs": [
         "src/core/js-aliases.ts",
         "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
         "tests/import-bound-externals.test.ts",
+        "tests/external-refs.test.ts",
+        "iterations/M2-08-R11.md",
         "reports/M2-08-R11.md"
       ],
       "affectedFiles": [
         "src/core/js-aliases.ts",
         "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
         "tests/import-bound-externals.test.ts",
         "tests/external-refs.test.ts"
       ],
       "acceptanceCriteria": [
-        "The M2-08-R6 review cases G, J and K (jest moduleDirectories, webpack resolve.modules [__dirname] and path.resolve(__dirname, src), NODE_PATH=. in a script) give the import and call edges HEAD before M2-08-R6 gave, and no npm external candidate for those specifiers (e2e tests); a bare package import with no such config still links no project file; `npm run eval` holds."
+        "The M2-08-R6 review cases G, J and K resolve under a jest moduleDirectories [\"<rootDir>\"] (package.json key, jest.config.js/json/ts, modulePaths, rootDir), a webpack resolve.modules ([__dirname], path.resolve(__dirname, src), a relative name, config.resolve.modules.push) and NODE_PATH=. / NODE_PATH=src:shared in a package.json script, and give the import (type-only, constant and side-effect imports included) and call edges that 3afa180, the commit before M2-08-R6, gave; e2e tests.",
+        "Order and scope: tsconfig paths, aliases and baseUrl first; a root listed before node_modules, then a workspace package, then a root searched after node_modules (NODE_PATH, jest, webpack after node_modules) that loses to a listed npm package and to a Node built-in; a root governs only the files under the folder that declares it; jest roots, the default moduleDirectories, resolveLoader.modules and a jest projects config give no root; e2e tests.",
+        "A specifier a module root resolves is not an npm external candidate (external_ref_candidates external=0, none external=1), a bare package import with no such configuration still links no project file, a change to a jest/webpack config or a NODE_PATH script and a module added under a root later give sync the edges scan --force gives (tests/external-refs.test.ts and tests/import-bound-externals.test.ts); npm run eval holds, and the self-scan changes only by the edges of the new code.",
+        "Review fixes: a spread, call, variable or concat module-directories list never lets a root beat a listed package (an unreadable element stands for node_modules); the nearest jest or webpack config decides even when it declares no root; jest globals/projects and webpack externals are not read; a root searched after node_modules is not probed or recorded as unresolved for a name node_modules supplies, and the scan time and index size with an unmatched jest config equal HEAD (measured on a generated repo); e2e tests."
       ],
       "verificationCommands": [
         "npx vitest run tests/import-bound-externals.test.ts tests/external-refs.test.ts",
@@ -28809,15 +28817,74 @@
         "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T10:29:50.268Z",
+      "completedAt": "2026-11-04T12:05:45.319Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R11.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R11.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R11.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R11.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T10:29:49.756Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T10:29:50.268Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T12:05:44.836Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T12:05:45.319Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R11.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R11.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R11.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

@@ -394,3 +394,333 @@ function splitTopLevel(masked: string, from: number, to: number): { start: numbe
   parts.push({ start, end: to });
   return parts.filter((p) => masked.slice(p.start, p.end).trim() !== '');
 }
+
+// ── Module roots (M2-08-R11) ────────────────────────────────────────────────────────────────────
+
+/**
+ * Configs that can declare webpack's `resolve.modules`: webpack, Vue CLI (`configureWebpack`), Laravel
+ * Mix, CRACO and Next.js (`webpack(config)` hook) configs. A literal list is read; nothing is run.
+ */
+const WEBPACK_CONFIGS = [
+  'webpack.config.js', 'webpack.config.cjs', 'webpack.config.mjs', 'webpack.config.ts', 'webpack.config.mts', 'webpack.config.cts',
+  'webpack.common.js', 'webpack.dev.js', 'webpack.prod.js', 'vue.config.js', 'vue.config.cjs', 'webpack.mix.js',
+  'craco.config.js', 'craco.config.cjs', 'craco.config.ts',
+  'next.config.js', 'next.config.mjs', 'next.config.cjs', 'next.config.ts',
+];
+const JEST_CONFIGS = ['jest.config.js', 'jest.config.ts', 'jest.config.mjs', 'jest.config.cjs', 'jest.config.mts', 'jest.config.cts', 'jest.config.json'];
+
+/** Every file name a module root is read from besides package.json; a change to one re-parses the files it governs. */
+export const MODULE_ROOT_CONFIGS = [...WEBPACK_CONFIGS, ...JEST_CONFIGS];
+
+/**
+ * A folder a bare import is looked up in: `dir` is workspace-relative. With `walk` it is a folder NAME
+ * (`src`, jest's `moduleDirectories: ['src']`, webpack's `modules: ['src']`) searched under every
+ * ancestor of the importing file, as `node_modules` is; otherwise one fixed folder.
+ */
+interface ModuleRoot { dir: string; walk: boolean }
+
+/**
+ * The roots one config declares for the files under `scope`. `early` ones are searched before
+ * `node_modules` (webpack lists them first), `late` ones after it (NODE_PATH, jest's `modulePaths`,
+ * the entries after `'node_modules'`).
+ */
+interface RootDecl { scope: string; early: ModuleRoot[]; late: ModuleRoot[] }
+interface DirRoots { webpack: RootDecl | null; jest: RootDecl | null; nodePath: RootDecl | null }
+
+interface RootCache {
+  dirs: Map<string, DirRoots>;
+  /** Per folder, the nearest declaration of each kind (webpack, jest, NODE_PATH) at or above it. */
+  nearest: Map<string, Array<RootDecl | null>>;
+  targets: Map<string, { early: string[]; late: string[] }>;
+}
+const rootCaches = new WeakMap<Set<string>, RootCache>();
+const NO_ROOTS: { early: string[]; late: string[] } = { early: [], late: [] };
+const inside = (dir: string, scope: string) => !scope || dir === scope || dir.startsWith(`${scope}/`);
+
+/**
+ * The module paths (without extension probing) a bare import may name under the module roots the
+ * project configures, in search order (M2-08-R11). Three sources of positive evidence, each for the
+ * files under the folder that declares it:
+ * - webpack `resolve.modules` of a webpack-family config in an ancestor folder;
+ * - jest `moduleDirectories` and `modulePaths` of the package.json `jest` key or jest.config.* (jest
+ *   `roots` only say where tests are found);
+ * - `NODE_PATH=` in a package.json script, relative to that package.
+ * The nearest webpack config and the nearest jest config decide, even when they declare no root (a
+ * package with its own jest config does not get an enclosing one's roots); NODE_PATH comes from the
+ * nearest script that sets it. `early` roots come before a workspace package, `late` ones after it, and
+ * the caller leaves them out for a name `node_modules` would supply (a listed package, a built-in).
+ * Empty for relative imports. The result is shared: callers must not change it.
+ */
+export function jsModuleRootTargets(target: string, sourcePath: string, ctx: AliasContext): { early: string[]; late: string[] } {
+  if (target.startsWith('.') || target.startsWith('/')) return NO_ROOTS;
+  let cache = rootCaches.get(ctx.files);
+  if (!cache) rootCaches.set(ctx.files, (cache = { dirs: new Map(), nearest: new Map(), targets: new Map() }));
+  const caches = cache;
+  const dirRoots = (dir: string) => {
+    let roots = caches.dirs.get(dir);
+    if (roots === undefined) caches.dirs.set(dir, (roots = readDirRoots(dir, ctx)));
+    return roots;
+  };
+  const nearest = (dir: string): Array<RootDecl | null> => {
+    let found = caches.nearest.get(dir);
+    if (found === undefined) {
+      const own = dirRoots(dir);
+      const above = dir ? nearest(dirOf(dir)) : [null, null, null];
+      found = [own.webpack ?? above[0]!, own.jest ?? above[1]!, own.nodePath ?? above[2]!];
+      caches.nearest.set(dir, found);
+    }
+    return found;
+  };
+  const dir = dirOf(sourcePath);
+  const key = `${dir}\0${target}`;
+  const known = caches.targets.get(key);
+  if (known) return known;
+  const decls = nearest(dir).filter((d): d is RootDecl => !!d && (d.early.length > 0 || d.late.length > 0) && inside(dir, d.scope));
+  if (!decls.length) {
+    caches.targets.set(key, NO_ROOTS);
+    return NO_ROOTS;
+  }
+  const out = { early: [] as string[], late: [] as string[] };
+  const ancestors: string[] = [];
+  for (let d = dir; ; d = dirOf(d)) {
+    ancestors.push(d);
+    if (!d) break;
+  }
+  for (const decl of decls) {
+    for (const when of ['early', 'late'] as const) {
+      for (const root of decl[when]) {
+        // A folder name is searched in the ancestors that are inside the declaring folder.
+        const bases = root.walk ? ancestors.filter((a) => inside(a, decl.scope)).map((a) => join(a, root.dir)) : [root.dir];
+        for (const base of bases) {
+          const path = base === null ? null : join(base, target);
+          if (path !== null && !out[when].includes(path)) out[when].push(path);
+        }
+      }
+    }
+  }
+  caches.targets.set(key, out);
+  return out;
+}
+
+const emptyDecl = (scope: string): RootDecl => ({ scope, early: [], late: [] });
+
+function readDirRoots(dir: string, ctx: AliasContext): DirRoots {
+  const roots: DirRoots = { webpack: null, jest: null, nodePath: null };
+  for (const name of WEBPACK_CONFIGS) {
+    const text = ctx.readText(posix.join(dir, name));
+    if (text === null) continue;
+    const decl = webpackModuleRoots(text, dir);
+    roots.webpack = roots.webpack ? { ...roots.webpack, early: [...roots.webpack.early, ...decl.early], late: [...roots.webpack.late, ...decl.late] } : decl;
+  }
+  for (const name of JEST_CONFIGS) {
+    const text = ctx.readText(posix.join(dir, name));
+    if (text !== null) { roots.jest ??= jestModuleRoots(name.endsWith('.json') ? parseJsonc(text) : text, dir); }
+  }
+  const manifest = parseJsonc(ctx.readText(posix.join(dir, 'package.json')));
+  if (manifest && typeof manifest === 'object') {
+    if (!roots.jest && manifest.jest && typeof manifest.jest === 'object') roots.jest = jestModuleRoots(manifest.jest, dir);
+    roots.nodePath = nodePathRoots(manifest.scripts, dir);
+  }
+  return roots;
+}
+
+/** The entry of a roots list that stands for `node_modules`: what comes before it is searched first. */
+const NODE_MODULES = Symbol('node_modules');
+type RootEntry = ModuleRoot | typeof NODE_MODULES;
+
+function splitEntries(entries: RootEntry[]): { early: ModuleRoot[]; late: ModuleRoot[] } {
+  const at = entries.indexOf(NODE_MODULES);
+  const roots = (list: RootEntry[]) => list.filter((e): e is ModuleRoot => e !== NODE_MODULES);
+  return at < 0 ? { early: roots(entries), late: [] } : { early: roots(entries.slice(0, at)), late: roots(entries.slice(at + 1)) };
+}
+
+/** A folder name in a modules list: a path under the config's folder is a fixed root, a bare name is searched in every ancestor. */
+function nameRoot(name: string): RootEntry | null {
+  if (name.startsWith('/') || /^[A-Za-z]:[\\/]/.test(name) || name.includes('\\')) return null;
+  const n = norm(name);
+  if (n === null) return null;
+  return n === 'node_modules' ? NODE_MODULES : { dir: n, walk: true };
+}
+
+/** `__dirname` (and its relatives) alone, or a `path.resolve` / `path.join` of literals, as a workspace-relative folder. */
+function folderExpression(value: string, dir: string): RootEntry | null {
+  const v = value.trim();
+  const base = /^(?:__dirname|process\s*\.\s*cwd\s*\(\s*\)|import\s*\.\s*meta\s*\.\s*dirname)$/.test(v) ? dir : aliasPath(v, dir);
+  if (base === null) return null;
+  return /(?:^|\/)node_modules$/.test(base) ? NODE_MODULES : { dir: base, walk: false };
+}
+
+/**
+ * The key an object literal at `index` is the value of (`externals` in `externals: { resolve: … }`),
+ * or null when the object stands alone (`module.exports = {`, an array element, a returned object).
+ * Works on masked code.
+ */
+function enclosingKey(masked: string, index: number): string | null {
+  const open: number[] = [];
+  for (let i = 0; i < index; i++) {
+    if (masked[i] === '{') open.push(i);
+    else if (masked[i] === '}') open.pop();
+  }
+  const start = open[open.length - 1];
+  if (start === undefined) return null;
+  return /([\w$]+)\s*:\s*$/.exec(masked.slice(Math.max(0, start - 80), start))?.[1] ?? null;
+}
+
+/** Whether the bracket closing at `close` ends the whole value: no `.concat(…)`, `+ […]` or `[0]` follows. */
+function listEndsHere(masked: string, close: number): boolean {
+  const next = /^\s*(.)/.exec(masked.slice(close + 1))?.[1];
+  return next === undefined || next === ',' || next === '}' || next === ';' || next === ')' || next === ']';
+}
+
+/**
+ * The `resolve.modules` entries of a webpack-family config: literals, `path.resolve(__dirname, …)`,
+ * `__dirname`. An element that is not readable (a variable, a call, a spread) stands for what it may
+ * hold, `node_modules` among it: roots after it are searched after `node_modules`. A `resolve` object
+ * that is the value of another key (`externals: { resolve: … }`) is not webpack's.
+ */
+function webpackModuleRoots(text: string, dir: string): RootDecl {
+  if (!/\bmodules\b/.test(text)) return emptyDecl(dir);
+  const masked = maskCode(text);
+  const elements = (open: number, close: number): RootEntry[] => {
+    const out: RootEntry[] = [];
+    for (const part of splitTopLevel(masked, open + 1, close)) {
+      const source = text.slice(part.start, part.end);
+      const name = literal(source);
+      out.push((name !== null ? nameRoot(name) : folderExpression(source, dir)) ?? NODE_MODULES);
+    }
+    return out;
+  };
+  let base: RootEntry[] | null = null;
+  const front: RootEntry[] = [];
+  const back: RootEntry[] = [];
+  // resolve: { modules: [ … ] }
+  for (const m of masked.matchAll(/\bresolve\s*:\s*\{/g)) {
+    const open = m.index! + m[0].length - 1;
+    const close = matchBracket(masked, open);
+    const key = enclosingKey(masked, m.index!);
+    if (close < 0 || (key !== null && key !== 'configureWebpack' && key !== 'configure')) continue;
+    for (const part of splitTopLevel(masked, open + 1, close)) {
+      const field = /^\s*modules\s*:\s*\[/.exec(masked.slice(part.start, part.end));
+      if (!field) continue;
+      const bracket = part.start + field[0].length - 1;
+      const end = matchBracket(masked, bracket);
+      if (end > 0 && listEndsHere(masked, end)) base = [...(base ?? []), ...elements(bracket, end)];
+    }
+  }
+  // config.resolve.modules = [ … ]
+  for (const m of masked.matchAll(/\bresolve\s*\.\s*modules\s*=\s*\[/g)) {
+    const bracket = m.index! + m[0].length - 1;
+    const end = matchBracket(masked, bracket);
+    if (end > 0 && listEndsHere(masked, end)) base = [...(base ?? []), ...elements(bracket, end)];
+  }
+  // config.resolve.modules.push(…) / .unshift(…): around webpack's default ['node_modules'].
+  for (const m of masked.matchAll(/\bresolve\s*\.\s*modules\s*\.\s*(push|unshift)\s*\(/g)) {
+    const open = m.index! + m[0].length - 1;
+    const close = matchBracket(masked, open);
+    if (close < 0) continue;
+    (m[1] === 'push' ? back : front).push(...elements(open, close));
+  }
+  if (base === null && !front.length && !back.length) return emptyDecl(dir);
+  return { scope: dir, ...splitEntries([...front, ...(base ?? [NODE_MODULES]), ...back]) };
+}
+
+/**
+ * Jest's module resolution roots: `moduleDirectories` (names searched in every ancestor, like
+ * `node_modules`; an entry with `<rootDir>` is one fixed folder) and `modulePaths` (fixed folders,
+ * searched after them). `config` is a parsed object (package.json `jest`, jest.config.json) or the
+ * source text of a jest.config.{js,ts,…}, where the literal top-level values are read (not those of
+ * `globals`, say). An element that is not a literal (a spread of the defaults, a variable) stands for
+ * what it may hold, `node_modules` among it. A config with `projects` declares its options per
+ * project, which are not followed, and one MapX cannot read declares none. The roots apply to the
+ * files under `rootDir`.
+ */
+function jestModuleRoots(config: unknown, dir: string): RootDecl {
+  let directories: Array<string | null> | undefined;
+  let paths: Array<string | null> | undefined;
+  let rootDirValue: string | RootEntry | null = '';
+  if (typeof config === 'string') {
+    if (!/\bmoduleDirectories\b|\bmodulePaths\b/.test(config) || /\bprojects\s*:/.test(config)) return emptyDecl(dir);
+    const masked = maskCode(config);
+    // The one top-level occurrence of the key (not `globals: { moduleDirectories: … }`, and not a file that
+    // sets it in two objects: which one is exported is not known).
+    const find = (key: string) => {
+      const found = [...masked.matchAll(new RegExp(`\\b${key}\\s*:`, 'g'))].filter((m) => enclosingKey(masked, m.index!) === null);
+      return found.length === 1 ? found[0] : undefined;
+    };
+    const list = (key: string): Array<string | null> | undefined => {
+      const m = find(key);
+      if (!m) return undefined;
+      const open = masked.indexOf('[', m.index! + m[0].length);
+      if (open < 0 || masked.slice(m.index! + m[0].length, open).trim() !== '') return undefined;
+      const close = matchBracket(masked, open);
+      if (close < 0 || !listEndsHere(masked, close)) return undefined;
+      return splitTopLevel(masked, open + 1, close).map((p) => literal(config.slice(p.start, p.end)));
+    };
+    directories = list('moduleDirectories');
+    paths = list('modulePaths');
+    const rd = find('rootDir');
+    if (rd) {
+      const start = rd.index! + rd[0].length;
+      const end = splitTopLevel(masked, start, masked.length)[0]?.end ?? start;
+      const value = config.slice(start, end).trim();
+      const name = literal(value);
+      rootDirValue = name !== null ? name : folderExpression(value, dir);
+      if (rootDirValue === null) return emptyDecl(dir);
+    }
+  } else if (config && typeof config === 'object') {
+    const c = config as Record<string, unknown>;
+    if (c['projects'] !== undefined) return emptyDecl(dir);
+    const strings = (v: unknown) => (Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : null)) : undefined);
+    directories = strings(c['moduleDirectories']);
+    paths = strings(c['modulePaths']);
+    if (typeof c['rootDir'] === 'string') rootDirValue = c['rootDir'];
+    else if (c['rootDir'] !== undefined) return emptyDecl(dir);
+  } else return emptyDecl(dir);
+  // The folder <rootDir> stands for, relative to the config's folder unless absolute.
+  const rootDir = typeof rootDirValue === 'string' ? (rootDirValue.startsWith('/') ? null : join(dir, rootDirValue)) : rootDirValue && rootDirValue !== NODE_MODULES ? rootDirValue.dir : null;
+  if (rootDir === null) return emptyDecl(dir);
+  const fixed = (entry: string): ModuleRoot | null => {
+    const path = entry.startsWith('<rootDir>') ? entry.slice('<rootDir>'.length) : entry;
+    if (!entry.startsWith('<rootDir>') && entry.startsWith('/')) return null;
+    if (path.includes('<') || path.includes('\\')) return null;
+    const folder = join(rootDir, path);
+    return folder === null ? null : { dir: folder, walk: false };
+  };
+  const entries: RootEntry[] = [];
+  for (const name of directories ?? []) {
+    if (name === null || name === 'node_modules') entries.push(NODE_MODULES);
+    else if (name.startsWith('<rootDir>')) { const root = fixed(name); if (root) entries.push(root); }
+    else { const root = nameRoot(name); if (root) entries.push(root); }
+  }
+  // Without 'node_modules' among them, jest does not search it at all: those roots come first.
+  const { early, late } = splitEntries(entries);
+  for (const name of paths ?? []) { const root = name === null ? null : fixed(name); if (root) late.push(root); }
+  // The roots are searched below the rootDir only; a folder name is walked within it.
+  return { scope: rootDir, early, late };
+}
+
+/**
+ * `NODE_PATH=src:lib` set in a package.json script (`NODE_PATH=. node main.js`, `cross-env
+ * NODE_PATH=src jest`, `export NODE_PATH=…`): folders relative to the package, searched after
+ * `node_modules`. Entries with a variable or absolute path are skipped. The whole package is
+ * governed, though a `cd sub && NODE_PATH=. …` script means `sub`.
+ */
+function nodePathRoots(scripts: unknown, dir: string): RootDecl | null {
+  if (!scripts || typeof scripts !== 'object') return null;
+  const late: ModuleRoot[] = [];
+  for (const script of Object.values(scripts as Record<string, unknown>)) {
+    if (typeof script !== 'string') continue;
+    for (const m of script.matchAll(/(?:^|[\s;&|(])NODE_PATH=(?:"([^"]*)"|'([^']*)'|([^\s;&|]*))/g)) {
+      const parts = (m[1] ?? m[2] ?? m[3] ?? '').split(':');
+      for (let i = 0; i < parts.length; i++) {
+        // A Windows drive (`C:\lib`) is not two entries.
+        if (/^[A-Za-z]$/.test(parts[i]!) && /^[\\/]/.test(parts[i + 1] ?? '')) { i++; continue; }
+        const entry = parts[i]!.replace(/^(?:\$PWD|\$\{PWD\}|\$\(pwd\))\/?/, './');
+        if (!entry || /[$`~\\]/.test(entry) || entry.startsWith('/')) continue;
+        const folder = join(dir, entry);
+        if (folder !== null && !late.some((r) => r.dir === folder)) late.push({ dir: folder, walk: false });
+      }
+    }
+  }
+  return late.length ? { scope: dir, early: [], late } : null;
+}
