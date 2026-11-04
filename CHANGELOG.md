@@ -8,9 +8,12 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
-## [0.3.9] — 2026-11-03
+## [0.3.9] — 2026-11-04
 
 ### Added
+- Scans now record ambient access (`process.env`, `window`, `document`, `$_GET`, `getenv()`, `os.environ`, `sys.argv`, `os.Getenv`, `os.Args`) as external references, so `{ "ambient": "env" }` and the other `ambient` selectors match them in JS/TS, PHP, Python and Go (M5-24-R1).
+- An external element (package, built-in or ambient access) that several layers select gets the `multi-layer` warning, and `policy.inheritDependencies` makes a subclass answer for the packages its base classes use, with the inheritance path in `via` (M5-24-R2).
+- `mapx arch --smells` and `mapx_smells` report `orphan-element` (code in no layer that nothing depends on) and `baseline-debt` (violations the baseline skips, by layer) when `.mapx/architecture.jsonc` exists (M5-16-R2).
 - `mapx check --since <git-ref>` reports and judges only the dependencies written in files changed since the ref, so CI can ratchet without a baseline (M5-98-R1).
 - `mapx arch init` now ships all 20 AR-15 presets: onion, mvc, mvvm, symfony, express, fastapi, rails, spring, aspnet, flutter, nextjs and vue join the first eight, and `--from framework` picks any of the twelve framework presets. The framework presets place classes by their framework base class or annotation wherever they live. Ancestry is read past annotation lines and through Python import aliases. Code no layer selects goes into an `Unclassified` layer, so `check --fail-on-uncovered` passes on day one (M5-17-R1).
 - The generated agent instructions say that `mapx_arch_allowed` also takes a package (`npm:express`, `express`) or a built-in (`node:fs`) as its target, and `mapx arch allowed` now decides a package the manifest lists or a built-in before any file imports it, with a bare package name taking precedence over a same-named workspace symbol (M5-24-R3).
@@ -71,11 +74,10 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ### Changed
 - MapX's own architecture check now judges calls, instantiations, inheritance and type references as well as imports (M5-18-R1).
-- `mapx check` no longer reports packages that no layer covers as uncovered unless the configuration opts in (`policy.uncovered.externals: true`, or a positive `package` selector in a non-overlay layer), so `--fail-on-uncovered` ignores them by default; this reverses 0.3.9 (M5-24-R4).
 
 #### Architecture rules
 
-- `mapx check` now reports packages that no layer covers as uncovered, and `--fail-on-uncovered` fails on them (`policy.uncovered.externals: false` turns that off); `mapx arch init` adds a `Packages` layer every layer may use (M5-24).
+- `mapx check` reports packages that no layer covers as uncovered, and `--fail-on-uncovered` fails on them, only when the configuration opts in: `policy.uncovered.externals: true`, or a positive `package` selector in a non-overlay layer. `mapx arch init` adds a `Packages` layer every layer may use (M5-24, M5-24-R4).
 
 #### CLI
 
@@ -98,6 +100,7 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 #### Architecture rules
 
+- The `dev-dependency-in-prod` smell no longer reports test files such as Go `_test.go` and Python `test_*.py` (M5-16-R1).
 - In a monorepo whose MapX workspace is a subfolder, `mapx check --format sarif|github|codeclimate|junit` names files from the git repository root (`services/api/app/…`), so code scanning, PR annotations and GitLab reports point at the right files (M5-07-R1).
 - Architecture layer membership is recomputed after every scan and sync; a sync that kept the numbers of files, symbols and edges served the previous membership (M5-03, review 2026-11-02).
 - Architecture qualified names match the documented form on real scans (M5-03-R1):
