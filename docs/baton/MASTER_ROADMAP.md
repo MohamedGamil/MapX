@@ -302,7 +302,7 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-20-R1** npm attribution: a nested lockfile that cannot be read gives manifest-only attribution — DONE, P2, 1.5h; depends on M5-20.
 - **M5-21** External references: Composer package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
 - **M5-21-R1** Composer: classmap and files autoload attribution from vendor/ when present — DONE, P3, 4h; depends on M5-21.
-- **M5-19-R1** An attribution-rules version re-decides external references without a re-parse — IN_PROGRESS, P2, 3h; depends on M5-19.
+- **M5-19-R1** An attribution-rules version re-decides external references without a re-parse — DONE, P2, 3h; depends on M5-19.
 - **M5-22** External references: pip/Poetry/uv package attribution and builtins — DONE, P2, 5h; depends on M5-19, M5-01.
 - **M5-22-R1** The architecture fixture scores Poetry and pip attribution, not only uv — BACKLOG, P3, 3h; depends on M5-22.
 - **M5-23** External references: Go modules package attribution and builtins — DONE, P2, 4h; depends on M5-19, M5-01.
@@ -321,8 +321,8 @@ Declared layers, selectors and allow-rules over the MapX graph in every supporte
 - **M5-03-R2** Qualified names: C++ in .h headers, several C# namespace blocks, one-line C++ namespaces — DONE, P2, 4h; depends on M5-03-R1.
 - **M5-05-R1** Staleness in status, MCP and the other commands finds new files as check does — DONE, P2, 3h; depends on M5-05.
 - **M5-25-R2** Go methods with a generic receiver are indexed — DONE, P2, 2h; depends on M5-25-R1.
-- **M5-25-R3** Go: an unversioned local replace outside the workspace is external — IN_PROGRESS, P2, 2h; depends on M5-25-R1, M5-23.
-- **M5-25-R4** Go: a parenthesised receiver type is indexed — IN_PROGRESS, P3, 2h; depends on M5-25-R2.
+- **M5-25-R3** Go: an unversioned local replace outside the workspace is external — DONE, P2, 2h; depends on M5-25-R1, M5-23.
+- **M5-25-R4** Go: a parenthesised receiver type is indexed — DONE, P3, 2h; depends on M5-25-R2.
 - **M5-07-R1** CI reporters locate files from the repository root when the workspace is a subfolder — DONE, P2, 2h; depends on M5-07.
 - **M5-07-R2** CI reporters: baselines outside the repository and submodule workspaces — DONE, P3, 2h; depends on M5-07-R1.
 - **M5-08-R1** Git refs and paths never reach a shell — DONE, P0, 1h; depends on M5-08.

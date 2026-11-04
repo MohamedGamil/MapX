@@ -21593,14 +21593,22 @@
         "docs/baton/reports/M5-19.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-G3",
       "actualHours": null,
       "startedAt": "2026-11-03T23:22:51.574Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T00:10:41.591Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-19-R1.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-19-R1.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T22:42:30.592Z",
@@ -21613,6 +21621,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:10:41.192Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:10:41.591Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-19-R1.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -31262,14 +31288,22 @@
         "npx vitest run tests/external-refs.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-G2",
       "actualHours": null,
       "startedAt": "2026-11-03T23:22:49.953Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T00:10:40.807Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-25-R3.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/external-refs.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R3.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T22:42:27.772Z",
@@ -31282,6 +31316,24 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:10:40.426Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:10:40.807Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/external-refs.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R3.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,
@@ -31313,14 +31365,27 @@
         "docs/baton/reports/M5-25-R2.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "owner": "claude-ff-lane-G",
       "actualHours": null,
       "startedAt": "2026-11-03T22:42:32.788Z",
-      "completedAt": null,
+      "completedAt": "2026-11-04T00:10:40.043Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
+      "artifacts": [
+        "docs/baton/reports/M5-25-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R4.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M5-25-R4.md"
+        }
+      ],
       "history": [
         {
           "at": "2026-11-03T22:42:22.777Z",
@@ -31333,6 +31398,29 @@
           "from": "READY",
           "to": "IN_PROGRESS",
           "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:10:39.652Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T00:10:40.043Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/go-qualified-instantiation.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R4.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M5-25-R4.md"
+            }
+          ]
         }
       ],
       "criticalPath": false,

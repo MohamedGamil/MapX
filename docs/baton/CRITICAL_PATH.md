@@ -6,7 +6,7 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **136 / 240 / 361h**. Capacity: 1 engineer(s) × 20 h/week → **12.0 weeks**, conditional finish **2027-01-27** (as of 2026-11-04).
+Remaining effort min/expected/max: **132 / 233 / 349h**. Capacity: 1 engineer(s) × 20 h/week → **11.7 weeks**, conditional finish **2027-01-24** (as of 2026-11-04).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
@@ -15,7 +15,6 @@ Remaining effort min/expected/max: **136 / 240 / 361h**. Capacity: 1 engineer(s)
 - M5-18-R2 (BACKLOG): M2-25; M2-26
 - M5-98-R1 (BACKLOG): prerequisites satisfied
 - M5-98-R2 (BACKLOG): Owner decision: support user plugin selectors/rules (and the trust model for loading project code) or defer REQ-ARCH-023.
-- M5-19-R1 (IN_PROGRESS): prerequisites satisfied
 - M5-22-R1 (BACKLOG): prerequisites satisfied
 - M5-24-R1 (BACKLOG): prerequisites satisfied
 - M5-24-R2 (BACKLOG): prerequisites satisfied
@@ -41,8 +40,6 @@ Remaining effort min/expected/max: **136 / 240 / 361h**. Capacity: 1 engineer(s)
 - M2-24 (BACKLOG): prerequisites satisfied
 - M2-25 (BACKLOG): prerequisites satisfied
 - M2-26 (BACKLOG): prerequisites satisfied
-- M5-25-R3 (IN_PROGRESS): prerequisites satisfied
-- M5-25-R4 (IN_PROGRESS): prerequisites satisfied
 - M4-12-R2 (BACKLOG): prerequisites satisfied
 - M6-01 (BACKLOG): prerequisites satisfied
 - M6-02 (BACKLOG): M6-01
@@ -66,7 +63,6 @@ Remaining effort min/expected/max: **136 / 240 / 361h**. Capacity: 1 engineer(s)
 | M5-18-R2 | 4 | 6 | 49 | 51 | 45 |
 | M5-98-R1 | 0 | 8 | 43 | 51 | 43 |
 | M5-98-R2 | 0 | 8 | 43 | 51 | 43 |
-| M5-19-R1 | 0 | 3 | 48 | 51 | 48 |
 | M5-22-R1 | 0 | 3 | 48 | 51 | 48 |
 | M5-24-R1 | 0 | 8 | 43 | 51 | 43 |
 | M5-24-R2 | 0 | 4 | 47 | 51 | 47 |
@@ -90,8 +86,6 @@ Remaining effort min/expected/max: **136 / 240 / 361h**. Capacity: 1 engineer(s)
 | M2-22 | 0 | 3 | 48 | 51 | 48 |
 | M2-23 | 0 | 4 | 47 | 51 | 47 |
 | M2-24 | 0 | 6 | 45 | 51 | 45 |
-| M5-25-R3 | 0 | 2 | 49 | 51 | 49 |
-| M5-25-R4 | 0 | 2 | 49 | 51 | 49 |
 | M4-12-R2 | 0 | 2 | 49 | 51 | 49 |
 | M6-01 | 0 | 8 | 0 | 8 | 0 |
 | M6-02 | 8 | 20 | 8 | 20 | 0 |
