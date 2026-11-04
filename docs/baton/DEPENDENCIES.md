@@ -277,6 +277,8 @@ flowchart LR
 - M2-08-R6 ← M2-08-R3 (hard)
 - M2-08-R7 ← M2-08-R3 (hard)
 - M2-08-R8 ← M2-08-R5 (hard)
+- M2-08-R9 ← M2-08-R4 (hard)
+- M2-08-R10 ← M2-08-R4 (hard)
 - M2-08-R4 ← M2-08-R3 (hard)
 - M2-08-R5 ← M2-08-R3 (hard)
 - M5-25-R1 ← M5-25 (hard)

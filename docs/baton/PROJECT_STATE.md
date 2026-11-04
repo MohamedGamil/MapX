@@ -1,12 +1,15 @@
 # MapX project state
 
-Updated 2026-11-04 (P2 defects, D041). `EXTRACTOR_VERSION` is 24. Nothing is committed, pushed or published.
+Updated 2026-11-04 (P2 defects, D041/D042). `EXTRACTOR_VERSION` is 25. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
 
-- **D041:** the owner started the P2 resolution defects (M2-08-R4..R8, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13, M4-09-R5), one iteration at a time. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
-- **Done:** M2-08-R5. A Python or Java name imported from a package no longer links to a same-named project symbol. It was independently reviewed, and its 4 P1 findings were fixed. MapX's self-scan lost 10 false edges and gained none; `npm run eval` is unchanged (edges precision 0.9915).
-- **Registered:** M2-08-R8 (Java sync after an imported project package is deleted), BACKLOG.
-- **Next in the D041 batch (lower risk first):** M2-08-R4 and M4-09-R5 (low risk), then the medium-risk items.
-- **Latest validation:** `npm run check`, exit 0: 156 files, 3218 passed, 4 skipped.
+- **D041/D042:** the owner started the P2 resolution defects and asked for a commit per item, continuing to the end of the batch. Remaining: M2-08-R6, M2-08-R7, M2-08-R8, M2-08-R9, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13 and M4-09-R5. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
+- **Done in the batch:**
+  - **M2-08-R5:** Python and Java package imports never link project symbols.
+  - **M2-08-R4:** sync follows a module turned script, and new `declare global` names, through `globalNameRefs`.
+
+  Each was independently reviewed, with P1 findings fixed before DONE.
+- **Registered from the batch:** M2-08-R8 (P2, Java sync after an imported package is deleted), M2-08-R9 (P2, sync for new global declarations) and M2-08-R10 (P3, held: `localNamesOf` declarator lists).
+- **Latest validation:** after M2-08-R4, `npm run check` exits 0: 156 files, 3235 passed, 4 skipped. `npm run eval` is unchanged, with edges precision 0.9915.
 
 Earlier: Updated 2026-11-04 (release refresh). Version 0.3.9: the local tag `v0.3.9` now points at the commit that documents everything since its first tagging, and `~/.local/bin/mapx` is rebuilt from it (D040). Nothing is pushed or published. `EXTRACTOR_VERSION` is 23, `ATTRIBUTION_VERSION` 2.
 

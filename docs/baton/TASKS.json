@@ -28183,11 +28183,127 @@
       "rollback": "Revert the task commit."
     },
     {
+      "id": "M2-08-R9",
+      "milestone": "M2",
+      "title": "Sync follows new global declarations: a new or renamed script, a new global in a script, `declare global` in a new file",
+      "objective": "When a sync adds a global name (a new or renamed script, a declaration added to an existing script, a `declare global` block in a new file), the ES modules whose recorded globalNameRefs name it re-parse, so sync equals scan --force.",
+      "description": "M2-08-R4 limitation, confirmed by its review (2026-11-04): `git mv lib/g.ts lib/h.ts` with the exports removed leaves sync without the edges scan --force gives; a new declaration in any file does not re-parse the files that name it. M2-08-R4 records globalNameRefs per ES module, which this can reuse.",
+      "priority": "P2",
+      "estimate": {
+        "min": 2,
+        "expected": 4,
+        "max": 6
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R4.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R9.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Hash and git sync after: a new script declaring a name a module calls; a module renamed and turned script; a function added to an existing script; a new file with `declare global` — each gives the edges scan --force gives, re-parsing only the files that name the new globals (e2e tests)."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
+      "id": "M2-08-R10",
+      "milestone": "M2",
+      "title": "JS/TS local names: every declarator of a list and `function *gen` count as declared",
+      "objective": "`localNamesOf` (M2-08-R3) counts every declarator of `const a = 1, b = 2` / `let a, b` and a `function *gen` as declared, so a global-scope or import-bound decision treats them as the file’s own.",
+      "description": "Found by M2-08-R4 (2026-11-04): localNamesOf captures only the first declarator of a list and misses `function *gen` (space before the star); a name declared that way is taken for an undeclared global by globalScopeFilter.",
+      "priority": "P3",
+      "estimate": {
+        "min": 1,
+        "expected": 2,
+        "max": 3
+      },
+      "risk": "low",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R4",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R4.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts",
+        "reports/M2-08-R10.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "tests/import-bound-externals.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "A module declaring `const x = 1, join = (a) => a` and calling join links its own join, never another file’s (e2e test); `function *gen` likewise; `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run eval"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
+    },
+    {
       "id": "M2-08-R4",
       "milestone": "M2",
       "title": "Sync follows a file turning from module to script",
       "objective": "When a file loses its last top-level import/export (becomes a script) its declarations become globals; sync re-parses the files that may now link to them, so sync equals scan --force.",
-      "description": "M2-08-R3 limitation: the script→module direction is handled; the reverse (newly global names) is not.",
+      "description": "M2-08-R3 limitation: the script→module direction is handled; the reverse (newly global names) is not. A parse records the bare names an ES module reached under the global rule (files.metadata.globalNameRefs); when a changed JS/TS file gains global names (turns script, or gains declare global names), sync re-parses the files recording one of them. A new declaration in any other file stays out of scope.",
       "priority": "P2",
       "estimate": {
         "min": 2,
@@ -28211,29 +28327,89 @@
       ],
       "outputs": [
         "src/core/scanner.ts",
+        "src/core/js-source.ts",
+        "src/core/extractor-version.ts",
         "tests/import-bound-externals.test.ts",
-        "reports/M2-08-R4.md"
+        "CHANGELOG.md",
+        "docs/baton/iterations/M2-08-R4.md",
+        "docs/baton/reports/M2-08-R4.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
+        "src/core/js-source.ts",
+        "src/core/extractor-version.ts",
         "tests/import-bound-externals.test.ts"
       ],
       "acceptanceCriteria": [
-        "A module file edited into a script: after sync, a user of its now-global function has the same edge as after scan --force (test, git and hash sync)."
+        "A module file edited into a script: after sync, a user of its now-global function has the same edge as after scan --force, with git sync and hash sync, and only the edited file and that user are re-parsed (tests/import-bound-externals.test.ts, \"a module edited into a script …\").",
+        "A module whose declare global block gains a class: after sync, the file that names the class links it, equal to scan --force, with git sync and hash sync (\"a `declare global` block gaining a class …\").",
+        "A module edited into a script links its users of a second declarator (var a, b) and of a class member after sync as scan --force does; a script edited into a module with declare global names links the file that names one (git and hash sync, tests/import-bound-externals.test.ts).",
+        "A module edit that gains no global name re-parses only the edited file; a file that stopped naming the gained name is not re-parsed; a script that stays a script keeps its referrers' edges (the last three tests of the same describe).",
+        "npm run eval keeps every floor with unchanged numbers, and the MapX self-scan cross-file edge dump is unchanged."
       ],
       "verificationCommands": [
-        "npx vitest run tests/import-bound-externals.test.ts"
+        "npx vitest run tests/import-bound-externals.test.ts",
+        "npm run check"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T06:00:27.470Z",
+      "completedAt": "2026-11-04T06:54:31.231Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R4.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R4.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R4.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T06:00:26.941Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T06:00:27.470Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T06:54:30.731Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T06:54:31.231Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R4.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R4.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",

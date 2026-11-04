@@ -436,3 +436,9 @@ An explicit `policy.uncovered.externals` always wins.
 
 - **Next work: the P2 resolution defects**, one bounded iteration at a time: M2-08-R4..R7, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13 and M4-09-R5. This lifts the D040 hold for these items only. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
 - **Order:** none of them has dependents and all are P2, so lower risk ranks first. M2-08-R5 starts (low risk; false edges users see).
+
+## D042 — Owner instruction of 2026-11-04: commit each item, finish the batch
+
+- **Commit each work item** on `develop` once it is DONE (code, tests, report and state documents together). Nothing is pushed.
+- **Continue to the next item until the D041 batch is complete:** M2-08-R4, M2-08-R6, M2-08-R7, M2-08-R8, M2-14, M2-16, M2-20-R1, M2-21, M2-23, M0-02-R13 and M4-09-R5. The P3 follow-ups stay held (D041) until the owner says otherwise.
+- **Addendum (2026-11-04):** P2 defects registered while working through the batch join it (M2-08-R8, M2-08-R9). P3 ones (M2-08-R10) are held with the other P3 follow-ups.

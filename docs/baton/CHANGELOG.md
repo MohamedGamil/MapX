@@ -141,3 +141,5 @@
 - D041 (owner): start the P2 resolution defects one at a time; M6, M4-13-R1 and the P3 follow-ups stay held.
 - M2-08-R5: acceptance criteria and verification commands sharpened before the start (task-specific Python and Java cases; `npm run check` added). Closed with evidence; the review's four P1 findings fixed before DONE.
 - Registered M2-08-R8 (P2, BACKLOG; hard dependency on M2-08-R5): from the M2-08-R5 review, Java sync keeps edges after an imported project package is deleted.
+- D042 (owner): commit each item; continue through the D041 batch. M2-08-R9 joins the batch (a P2 found by it).
+- M2-08-R4 closed: module→script and `declare global` gains followed by sync; review P1 (multi-declarator and member names) fixed before DONE. Registered M2-08-R9 (P2) and M2-08-R10 (P3, held).

@@ -1,6 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
+import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { declaredGlobalNames } from '../src/core/js-source.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M2-08-R3: a name bound by an import from a package or builtin module is that module's, never a
@@ -311,6 +313,132 @@ describe('sync when a file switches between script and module (hash sync)', () =
     mapx(root, 'scan', '.', '--force');
     expect(edgesFrom(root, 'legacy/use.ts')).toEqual([]);
   }, 120000);
+});
+
+// M2-08-R4 review: every declarator of a `declare global` list is global.
+describe('names a `declare global` block declares', () => {
+  const names = (code: string) => declaredGlobalNames({ code, masked: code, balanced: true });
+  it('includes every declarator of a variable list and a spaced generator', () => {
+    expect(names('declare global {\n  var a: number, b: string;\n  let { c } = x, d;\n  function *gen(): void;\n  const m: Map<string, number>, n: number;\n}\n'))
+      .toEqual(['a', 'b', 'd', 'gen', 'm', 'n']);
+  });
+});
+
+// M2-08-R4: the other direction. A module edited into a script, or gaining `declare global` names,
+// makes names global that files already referenced by name and found nowhere. Those files have no
+// edge into it to follow, so sync finds them by the names each parse recorded (`globalNameRefs`).
+const git = (root: string, ...args: string[]) =>
+  execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd: root, stdio: 'pipe' });
+
+describe.each([['git', true], ['hash', false]])('%s sync when a file gains global names', (_mode, useGit) => {
+  let root: string;
+  beforeEach(() => {
+    root = workspace({
+      'package.json': JSON.stringify({ name: 'app', version: '1.0.0' }),
+      // A module: its function is not global. `use.ts` calls it without an import.
+      'legacy/plain.ts': 'export function plainGlobal() { return 1; }\n',
+      'legacy/use.ts': 'export function usePlain() { return plainGlobal(); }\n',
+      // Names another file declares, but no changed file makes global: never re-parsed.
+      'legacy/bystander.ts': 'export function other() { return missingName(); }\n',
+      'legacy/other.ts': 'export function missingNameElsewhere() { return 2; }\n',
+      // A module whose `declare global` block gains a class `uses-bus.ts` names.
+      'types/bus.ts': 'export {};\ndeclare global {\n  class EventBus {}\n}\n',
+      'types/uses-bus.ts': 'export class Bus {\n  constructor(private bus: LateBus) {}\n}\n',
+      // Several declarators in one statement, and a class member: both reachable by bare name in a script.
+      'lib/g.ts': 'export var helperA = function () {}, helperB = function () {};\n',
+      'use/b.ts': 'export function w() { helperB(); }\n',
+      'lib/m.ts': 'export class Shape {\n  area() { return 1; }\n}\n',
+      'use/m.ts': 'export function measure() { return area(); }\n',
+      // A script that becomes a module gaining `declare global` names.
+      'old/script.ts': 'function sGlobal() { return 1; }\n',
+      'old/use-s.ts': 'export function useS() { return sGlobal(); }\n',
+      'old/wants.ts': 'export class Wants {\n  constructor(private x: LateGlobal) {}\n}\n',
+    });
+    if (useGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    }
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120_000);
+  afterEach(() => cleanup(root));
+
+  const all = () => query<Edge>(root, `SELECT source_file, source_symbol, edge_type, target_file, target_symbol FROM edges
+    WHERE edge_type NOT IN ('import', 'require') ORDER BY 1, 2, 3, 4, 5`);
+  const updated = (output: string) => /Updated (\d+) files/.exec(output)?.[1];
+
+  it('a module edited into a script gives its now-global function the edge scan --force gives', () => {
+    expect(edgesFrom(root, 'legacy/use.ts')).toEqual([]);
+    writeFileSync(join(root, 'legacy/plain.ts'), 'function plainGlobal() { return 1; }\n');
+    // The edited file and `use.ts` only: the bystander names no gained name.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'legacy/use.ts')).toEqual(['usePlain call legacy/plain.ts#plainGlobal']);
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(all()).toEqual(synced);
+  }, 120_000);
+
+  it('a `declare global` block gaining a class links the file that names it, as scan --force does', () => {
+    expect(edgesFrom(root, 'types/uses-bus.ts')).toEqual([]);
+    writeFileSync(join(root, 'types/bus.ts'), 'export {};\ndeclare global {\n  class EventBus {}\n  class LateBus {}\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'types/uses-bus.ts')).toEqual(['Bus::constructor param_type types/bus.ts#LateBus']);
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(all()).toEqual(synced);
+  }, 120_000);
+
+  it('a script\'s second declarator is global too, as scan --force has it', () => {
+    expect(edgesFrom(root, 'use/b.ts')).toEqual([]);
+    writeFileSync(join(root, 'lib/g.ts'), 'var helperA = function () {}, helperB = function () {};\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(edgesFrom(root, 'use/b.ts')).toEqual(['w call lib/g.ts#helperB']);
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(all()).toEqual(synced);
+  }, 120_000);
+
+  it('a script\'s class member is reachable by bare name, as scan --force has it', () => {
+    expect(edgesFrom(root, 'use/m.ts')).toEqual([]);
+    writeFileSync(join(root, 'lib/m.ts'), 'class Shape {\n  area() { return 1; }\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    const synced = all();
+    expect(edgesFrom(root, 'use/m.ts')).toEqual(['measure call lib/m.ts#area']);
+    mapx(root, 'scan', '.', '--force');
+    expect(all()).toEqual(synced);
+  }, 120_000);
+
+  it('a script edited into a module with `declare global` names links the file that names one, as scan --force does', () => {
+    expect(edgesFrom(root, 'old/wants.ts')).toEqual([]);
+    writeFileSync(join(root, 'old/script.ts'), 'export {};\ndeclare global {\n  class LateGlobal {}\n}\nfunction sGlobal() { return 1; }\n');
+    // The edited file, its former referrer (an edge into it) and the file naming the new class.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('3');
+    expect(edgesFrom(root, 'old/wants.ts')).toEqual(['Wants::constructor param_type old/script.ts#LateGlobal']);
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(all()).toEqual(synced);
+  }, 120_000);
+
+  it('a module edit that gains no global name re-parses nobody else', () => {
+    writeFileSync(join(root, 'legacy/plain.ts'), 'export function plainGlobal() { return 2; }\nexport function more() { return 3; }\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+  }, 120_000);
+
+  it('a file that no longer names the gained name is not re-parsed for it', () => {
+    writeFileSync(join(root, 'legacy/use.ts'), 'export function usePlain() { return 1; }\n');
+    mapx(root, 'sync', '.');
+    writeFileSync(join(root, 'legacy/plain.ts'), 'function plainGlobal() { return 1; }\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+  }, 120_000);
+
+  it('a script that stays a script keeps its referrers\' edges', () => {
+    writeFileSync(join(root, 'legacy/plain.ts'), 'function plainGlobal() { return 1; }\n');
+    mapx(root, 'sync', '.');
+    writeFileSync(join(root, 'legacy/plain.ts'), 'function plainGlobal() { return 2; }\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    expect(edgesFrom(root, 'legacy/use.ts')).toEqual(['usePlain call legacy/plain.ts#plainGlobal']);
+  }, 120_000);
 });
 
 describe('auto-imported names (real scan)', () => {

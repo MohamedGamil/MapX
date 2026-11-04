@@ -170,7 +170,9 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-08-R6** A bare specifier never resolves to a relative project file — BACKLOG, P2, 4h; depends on M2-08-R3.
 - **M2-08-R7** Python: an unimported name (a builtin such as open) never links a function in another module — BACKLOG, P2, 4h; depends on M2-08-R3.
 - **M2-08-R8** Sync re-resolves Java and Python importers when an imported project package goes away — BACKLOG, P2, 4h; depends on M2-08-R5.
-- **M2-08-R4** Sync follows a file turning from module to script — BACKLOG, P2, 3h; depends on M2-08-R3.
+- **M2-08-R9** Sync follows new global declarations: a new or renamed script, a new global in a script, `declare global` in a new file — BACKLOG, P2, 4h; depends on M2-08-R4.
+- **M2-08-R10** JS/TS local names: every declarator of a list and `function *gen` count as declared — BACKLOG, P3, 2h; depends on M2-08-R4.
+- **M2-08-R4** Sync follows a file turning from module to script — DONE, P2, 3h; depends on M2-08-R3.
 - **M2-08-R5** Python and Java names imported from packages never link to same-named project symbols — DONE, P2, 6h; depends on M2-08-R3.
 - **M2-09** JS/TS member-assigned functions are symbols — DONE, P2, 4h; depends on M2-08.
 - **M2-10** Lua method calls with `:` and `self` give call edges — DONE, P2, 3h; depends on M4-27.

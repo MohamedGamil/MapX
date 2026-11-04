@@ -324,7 +324,11 @@ export function hasModuleSyntax(js: JsText): boolean {
   return false;
 }
 
-/** The names `declare global { … }` blocks declare (M2-08-R3). */
+/**
+ * The names `declare global { … }` blocks declare (M2-08-R3): functions (`function* gen`), classes,
+ * types and namespaces, and every declarator of a `const`/`let`/`var` list (`var a: A, b: B`)
+ * (M2-08-R4 review).
+ */
 export function declaredGlobalNames(js: JsText): string[] {
   const { masked } = js;
   const names = new Set<string>();
@@ -333,7 +337,23 @@ export function declaredGlobalNames(js: JsText): string[] {
     let end = m.index! + m[0].length;
     for (; end < masked.length && depth; end++) depth += masked[end] === '{' ? 1 : masked[end] === '}' ? -1 : 0;
     const block = masked.slice(m.index! + m[0].length, end);
-    for (const d of block.matchAll(/\b(?:function|class|interface|type|enum|namespace|const|let|var)\s+([\w$]+)/g)) names.add(d[1]!);
+    for (const d of block.matchAll(/\b(?:function(?:\s*\*\s*|\s+)|(?:class|interface|type|enum|namespace)\s+)([\w$]+)/g)) names.add(d[1]!);
+    for (const d of block.matchAll(/\b(?:const|let|var)\s+([^;\n]*)/g)) {
+      // The declarators, split at commas outside brackets, braces and generics.
+      let nest = 0;
+      let part = '';
+      const parts: string[] = [];
+      for (const ch of d[1]!) {
+        if ('{[(<'.includes(ch)) nest++;
+        else if ('}])>'.includes(ch)) nest = Math.max(0, nest - 1);
+        if (ch === ',' && nest === 0) { parts.push(part); part = ''; } else part += ch;
+      }
+      parts.push(part);
+      for (const p of parts) {
+        const id = /^\s*([A-Za-z_$][\w$]*)/.exec(p);
+        if (id) names.add(id[1]!);
+      }
+    }
   }
   return [...names].sort();
 }
@@ -344,4 +364,19 @@ export function declaredGlobalNames(js: JsText): string[] {
  */
 export function globalScopeKey(js: JsText): string {
   return hasModuleSyntax(js) ? `m:${declaredGlobalNames(js).join(',')}` : 's';
+}
+
+/**
+ * The names a file's global scope gained since the parse that recorded `recorded` (a
+ * `globalScopeKey`) (M2-08-R4):
+ * - **Now a script:** every identifier in its text. A script's symbols (functions, variables, class
+ *   members, object-literal methods, member assignments) are all reachable by bare name, so the
+ *   identifiers are a superset of them without parsing the file; a file that shares one of them
+ *   with a mere reference is re-parsed for nothing, never linked wrongly.
+ * - **A module:** the `declare global` names the recorded key lacks (all of them after a script).
+ */
+export function gainedGlobalNames(recorded: string, js: JsText): string[] {
+  if (!hasModuleSyntax(js)) return [...new Set(js.masked.match(/[A-Za-z_$][\w$]*/g) ?? [])];
+  const before = new Set(recorded.startsWith('m:') ? recorded.slice(2).split(',').filter(Boolean) : []);
+  return declaredGlobalNames(js).filter(n => !before.has(n));
 }

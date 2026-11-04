@@ -58,8 +58,11 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  * - 24: M2-08-R5 (a Python or Java name bound by an import from outside the project, `from stripe
  *   import Order`, `import os.path as osp`, `import com.vendor.Invoice;`, links no same-named project
  *   symbol).
+ * - 25: M2-08-R4 (an ES module's parse records the bare names it reached under the global rule, so a
+ *   sync can re-parse the files a module turning script, or gaining `declare global` names, may now
+ *   link; every declarator of a `declare global { var a, b }` list and `function *gen` are global).
  */
-export const EXTRACTOR_VERSION = 24;
+export const EXTRACTOR_VERSION = 25;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

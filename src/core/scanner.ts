@@ -37,7 +37,7 @@ import { changedGlobalNames, globalRegistrations, usesTag, vueComponentName, vue
 import { reExportsOf } from '../parsers/languages/vue-script-setup.js';
 import { buildRouteTable, changedRoutes, matchRoute, mayDefineRoutes, mayNavigate, navigatesTo, routeRecords, type NavTarget, type ResolvedRoute, type StoredRoute } from '../parsers/languages/vue-navigation.js';
 import { BUILD_TOOLS, BUNDLER_CONFIGS, jsAliasTargets, jsBaseUrlTarget, type AliasContext } from './js-aliases.js';
-import { declaredGlobalNames, exportSkeleton, globalScopeKey, hasCommonJsExports, hasModuleSyntax, jsExportSignature, scanModule, type JsText } from './js-source.js';
+import { declaredGlobalNames, exportSkeleton, gainedGlobalNames, globalScopeKey, hasCommonJsExports, hasModuleSyntax, jsExportSignature, scanModule, type JsText } from './js-source.js';
 import { ATTRIBUTION_VERSION, EXTRACTOR_VERSION, extractorVersionKey, outdatedRepos } from './extractor-version.js';
 import { ecosystemOf, jsCandidateSpecifier, jsImports, NO_ATTRIBUTION, PHP_CONSTRUCTS, pythonImports, uniqueRows, type Ecosystem, type ExternalAttribution, type ExternalRefRow, type JsImport } from './external-refs.js';
 import { NpmAttributor, nodeBuiltin, npmPackageName, repoParentDirs, yarnRootDirs } from './manifests/npm.js';
@@ -1779,6 +1779,7 @@ export class Scanner {
 
     this.unresolvedImports.set(relativePath, new Set());
     this.externalRows.set(relativePath, []);
+    if (js) this.globalNameRefs.set(relativePath, new Set());
     const resolvedRefs = this.resolveReferencesWithMap(result.references, relativePath, repoName, fileMap, result.symbols);
     for (const edge of resolvedRefs) {
       this.graph.addDependencyEdge(edge);
@@ -1787,6 +1788,10 @@ export class Scanner {
     const unresolved = this.unresolvedImports.get(relativePath)!;
     this.unresolvedImports.delete(relativePath);
     if (unresolved.size) this.store.updateFileMetadata(relativePath, { unresolvedImports: [...unresolved].sort() });
+    // The file row was replaced for this parse, so a name the file no longer reaches is gone.
+    const globalRefs = this.globalNameRefs.get(relativePath);
+    this.globalNameRefs.delete(relativePath);
+    if (globalRefs?.size) this.store.updateFileMetadata(relativePath, { globalNameRefs: [...globalRefs].sort() });
     this.noteAmbient(relativePath, result);
     // With the edges, in the same transaction: an interrupted write leaves neither (M0-02-R10, M0-02-R12).
     this.store.replaceExternalRefs(relativePath, repoName, uniqueRows(this.externalRows.get(relativePath)!));
@@ -2035,13 +2040,19 @@ export class Scanner {
   }
 
   /**
-   * The files with edges into a changed JS/TS file whose global scope changed since its last parse
-   * (M2-08-R3 review): a script that became a module, or a module whose `declare global` names
-   * changed, may no longer be what their names reach. As with any new declaration, files that may
-   * now reach a newly global name are not looked for.
+   * The files a changed JS/TS file's global scope may change the links of since its last parse
+   * (M2-08-R3 review, M2-08-R4):
+   * - **Edges into it** (a script that became a module, or a module whose `declare global` names
+   *   changed): they may no longer reach what their names reached.
+   * - **Names it gained** (a module that became a script, or gained `declare global` names): the ES
+   *   modules whose parse recorded that name as reached under the global rule (`globalNameRefs`) and
+   *   found it nowhere. They have no edge to follow, so one pass over the files' metadata finds them;
+   *   a changed file that gained no name costs nothing, and no file outside the recorded names is
+   *   re-parsed.
    */
   private globalScopeReferrers(changed: Array<{ path: string; content?: string }>): Set<string> {
     const referrers = new Set<string>();
+    const gained = new Set<string>();
     for (const { path, content } of changed) {
       if (content === undefined || !JS_TS_FILE.test(path)) continue;
       let recorded: unknown;
@@ -2051,8 +2062,17 @@ export class Scanner {
       } catch {
         continue;
       }
-      if (typeof recorded !== 'string' || recorded === globalScopeKey(scanModule(path, content))) continue;
+      const js = scanModule(path, content);
+      if (typeof recorded !== 'string' || recorded === globalScopeKey(js)) continue;
       for (const e of this.store.getReverseEdges(path)) if (e.source_file !== path) referrers.add(e.source_file as string);
+      for (const name of gainedGlobalNames(recorded, js)) gained.add(name);
+    }
+    if (gained.size) {
+      for (const file of this.store.filesWithMetadataText('"globalNameRefs"')) {
+        let names: unknown;
+        try { names = JSON.parse(String(file.metadata)).globalNameRefs; } catch { continue; }
+        if (Array.isArray(names) && names.some(n => gained.has(n))) referrers.add(String(file.path));
+      }
     }
     return referrers;
   }
@@ -3048,6 +3068,7 @@ export class Scanner {
     if (specifiers.some(s => !this.outsideProject(s, sourcePath, fileMap))) return undefined;
     if (specifiers.length) return (file) => file === sourcePath;
     if (!this.isEsModule(sourcePath) || this.autoImports(sourcePath) || this.localNamesOf(sourcePath).has(name)) return undefined;
+    this.globalNameRefs.get(sourcePath)?.add(name);
     return (file) => file === sourcePath || !JS_MODULE_FILE.test(file)
       || (JS_TS_FILE.test(file) && !this.isEsModule(file)) || this.globalNamesOf(file).has(name);
   }
@@ -3731,6 +3752,12 @@ export class Scanner {
   private globalDeclarations = new Map<string, Set<string>>();
   private localNames = new Map<string, Set<string>>();
   private dynamicImports = new Map<string, Map<string, string[]>>();
+  /**
+   * The bare names each JS/TS file being parsed reached under the global rule: an ES module's names
+   * it neither imports nor declares. Kept in `files.metadata.globalNameRefs`, so sync finds the files
+   * a name turning global may now link (M2-08-R4).
+   */
+  private globalNameRefs = new Map<string, Set<string>>();
   private projectNames: Set<string> | null = null;
   private autoImportDirs = new Map<string, boolean>();
   /** Folder listings for exact-case checks, per sync. */
