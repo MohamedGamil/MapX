@@ -28553,15 +28553,74 @@
         "docs/baton/reports/M2-08-R3.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T12:06:05.759Z",
+      "completedAt": "2026-11-04T13:09:52.915Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R7.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R7.md"
+        },
+        {
+          "command": "npm run eval",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R7.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R7.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T12:06:05.253Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T12:06:05.759Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T13:09:52.326Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T13:09:52.915Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R7.md"
+            },
+            {
+              "command": "npm run eval",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R7.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R7.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -28569,23 +28628,32 @@
       "id": "M2-08-R7",
       "title": "Python: an unimported name (a builtin such as open) never links a function in another module",
       "objective": "In Python, a call to a name the module neither defines nor imports (a builtin such as `open`, `print`, `len`) gets no edge to a same-named function in another module; imported names still link.",
-      "description": "Review of M2-25 (2026-11-04): `open()` in scripts/gen-python-stdlib.py links the fixture database.py#open, verified. Python resolves names per module; an unimported name is a builtin or an error, never another module's function.",
+      "description": "Review of M2-25 (2026-11-04): `open()` in scripts/gen-python-stdlib.py links the fixture database.py#open, verified. Python resolves names per module; an unimported name is a builtin or an error, never another module's function. Rule: a bare Python name (call, instantiation, base, decorator, annotation) resolves by name only in the module itself, a module it imports the name from (resolveImportedCall), or a module it star-imports (with what that module passes on); a star import that may be the project's but is not indexed keeps name lookup. A receiver call (`obj.open()`) is not decided here.",
       "outputs": [
         "src/core/scanner.ts",
+        "src/core/extractor-version.ts",
         "tests/import-bound-externals.test.ts",
-        "reports/M2-08-R7.md"
+        "tests/legacy-languages.test.ts",
+        "docs/baton/iterations/M2-08-R7.md",
+        "docs/baton/reports/M2-08-R7.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
-        "src/parsers/**",
-        "tests/import-bound-externals.test.ts"
+        "src/core/extractor-version.ts",
+        "tests/import-bound-externals.test.ts",
+        "tests/legacy-languages.test.ts"
       ],
       "acceptanceCriteria": [
-        "`open()` with a project module defining open (not imported) gives no edge; `from db import open; open()` links (e2e tests); `npm run eval` holds."
+        "`open()`, `print()`, a decorator `@helper`, a class `Model` instantiated, annotated, extended or called on (`Model().save()`) that a module neither defines nor imports gives no edge to a same-named function or class of another module, though project modules define them (e2e tests in tests/import-bound-externals.test.ts, \"Python names a module neither defines nor imports\").",
+        "`from db.database import open; open()` links db/database.py#open, also from TYPE_CHECKING, a function, try/except, a parenthesised list, after a semicolon, and relative imports (same tests).",
+        "A star import of a project module makes its names visible, through a package __init__ too; a star import of a module outside the project makes none; one that may be the project's keeps name lookup (same tests).",
+        "A receiver call (`conn.open()`) is unchanged; sync agrees with scan --force after a starred module gains a name (same tests).",
+        "`npm run eval` holds, its numbers unchanged; the MapX self-scan removes only the false `open` edges of scripts/gen-python-stdlib.py."
       ],
       "verificationCommands": [
         "npx vitest run tests/import-bound-externals.test.ts",
-        "npm run eval"
+        "npm run eval",
+        "npm run check"
       ]
     },
     {

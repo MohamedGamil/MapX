@@ -67,8 +67,11 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  * - 27: M2-08-R11 (a bare JS/TS specifier resolves under a module root the project configures: webpack
  *   `resolve.modules`, jest `moduleDirectories` / `modulePaths`, `NODE_PATH=` in a package.json script;
  *   such an import links its file again and is no npm external candidate).
+ * - 28: M2-08-R7 (a bare Python name the module neither defines nor imports, such as the builtin
+ *   `open`, no longer links a same-named function of another module; a star import of a project
+ *   module still makes its names visible).
  */
-export const EXTRACTOR_VERSION = 27;
+export const EXTRACTOR_VERSION = 28;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

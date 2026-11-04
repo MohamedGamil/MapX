@@ -3,6 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { declaredGlobalNames } from '../src/core/js-source.js';
+import { Config } from '../src/core/config.js';
+import { MapxGraph } from '../src/core/graph.js';
+import { Scanner } from '../src/core/scanner.js';
+import { Store } from '../src/core/store.js';
 import { cleanup, init, mapx, query, workspace } from './helpers/e2e.js';
 
 // M2-08-R3: a name bound by an import from a package or builtin module is that module's, never a
@@ -574,6 +578,275 @@ def mine():
   it('Python: a name the file declares after importing it from a package is the file\'s own', () => {
     expect(allEdgesFrom(root, 'app/own.py')).toEqual(expect.arrayContaining(['mine call app/own.py#total']));
   });
+});
+
+// M2-08-R7: a bare Python name the module neither defines nor imports is a builtin (or an error), never
+// another module's function: name lookup reaches only the module itself, the modules it imports the
+// name from, and the modules it star-imports. A receiver call (`obj.open()`) is not decided here.
+describe('Python names a module neither defines nor imports (real scan)', () => {
+  let root: string;
+  beforeAll(() => {
+    root = workspace({
+      // Name lookup would pick these for a bare `open`, `Model` or `helper`.
+      'db/__init__.py': '',
+      'db/database.py': 'def open(path):\n    return path\n\n\ndef helper():\n    return 1\n\n\nclass Model:\n    def save(self):\n        return 1\n',
+      'db/other.py': 'def open(path):\n    return path\n\n\ndef reader():\n    return 2\n\n\ndef later():\n    return 4\n\n\ndef spare():\n    return 5\n',
+      // A builtin called, never imported.
+      'app/__init__.py': '',
+      'app/script.py': `import sys
+
+
+@helper
+def load(path, cb):
+    with open(path) as f:
+        print(len(f.read()), sys.argv)
+    cb()
+    return open(path)
+
+
+def typed(m: Model) -> Model:
+    return Model()
+
+
+def saved():
+    return Model().save()
+
+
+class Child(Model):
+    pass
+`,
+      // The same names imported: they link.
+      'app/imported.py': `from db.database import open, helper
+from db.database import Model as M
+
+
+def load(path):
+    return open(path), helper()
+
+
+def build():
+    return M()
+`,
+      // Imports the scan must still see: TYPE_CHECKING, inside a function, try/except, a parenthesised
+      // list over lines, a semicolon after another statement, a relative import.
+      'app/forms.py': `from typing import TYPE_CHECKING
+import os; from db.other import reader
+from db.database import (
+    helper,
+    Model,
+)
+
+if TYPE_CHECKING:
+    from db.other import open as other_open
+
+
+def fn(path):
+    from db.database import open
+    return open(path), helper(), Model(), reader(), os.sep
+
+
+def guarded(path):
+    try:
+        from db.other import open as maybe
+    except ImportError:
+        maybe = None
+    return maybe(path), other_open(path)
+`,
+      'app/rel/__init__.py': '',
+      'app/rel/sibling.py': 'def sibling_fn():\n    return 1\n\n\ndef open(path):\n    return path\n',
+      'app/rel/user.py': 'from .sibling import (\n    sibling_fn,\n    open,\n)\n\n\ndef go():\n    return sibling_fn(), open("p")\n',
+      'app/rel/package_user.py': 'from . import sibling\nfrom .sibling import sibling_fn as sf\n\n\ndef go():\n    sf()\n    return sibling.open("p")\n',
+      // A star import of a project module makes its public names visible, and so do the names that
+      // module's package passes on.
+      'app/star.py': 'from db.database import *\n\n\ndef go():\n    helper()\n    return open("p"), Model(), reader()\n',
+      'app/chain/__init__.py': 'from .impl import *\n',
+      'app/chain/impl.py': 'def build():\n    return 1\n\n\nclass Widget:\n    pass\n',
+      'app/use_chain.py': 'from app.chain import *\n\n\ndef go():\n    Widget()\n    return build()\n',
+      // A star import of a package whose __init__ passes a name on by a named import.
+      'app/chain2/__init__.py': 'from .impl2 import passed_on\n',
+      'app/chain2/impl2.py': 'def passed_on():\n    return 1\n',
+      'app/use_chain2.py': 'from app.chain2 import *\n\n\ndef go():\n    return passed_on()\n',
+      // An import of a module no file satisfies (generated, not indexed), over lines: name lookup stays.
+      'db/generated_names.py': 'def gen_fn():\n    return 1\n',
+      'app/gen_user.py': 'from .gen import (\n    gen_fn,\n    other_fn,\n)\n\n\ndef go():\n    return gen_fn()\n',
+      // Names a starred module imports, through a chain of re-exports (`from pkg import name` in a module).
+      'app/re/__init__.py': 'from .impl3 import deep_fn\n',
+      'app/re/impl3.py': 'def deep_fn():\n    return 1\n',
+      'app/re/mod.py': 'from app.re import deep_fn\n',
+      'app/use_re.py': 'from app.re.mod import *\n\n\ndef go():\n    return deep_fn()\n',
+      'app/re2/__init__.py': 'from .mid import deep2\n',
+      'app/re2/mid.py': 'from .leaf import deep2\n',
+      'app/re2/leaf.py': 'def deep2():\n    return 2\n',
+      'app/use_re2.py': 'from app.re2 import *\n\n\ndef go():\n    return deep2()\n',
+      // Whitespace after the dots of a relative import.
+      'app/sp/__init__.py': '',
+      'app/sp/impl.py': 'def spaced_fn():\n    return 1\n\n\ndef spaced_named():\n    return 2\n',
+      'app/sp/star_user.py': 'from . impl import *\n\n\ndef go():\n    return spaced_fn()\n',
+      'app/sp/named_user.py': 'from . impl import spaced_named\n\n\ndef go():\n    return spaced_named()\n',
+      // An import in a comment or a docstring binds nothing.
+      'app/commented.py': '# from db.database import *\n# import helper\n"""\nfrom db.database import *\n"""\n\n\ndef go():\n    return helper()\n',
+      // A star import of a package outside the project binds nothing of the project's.
+      'app/star_pkg.py': 'from os.path import *\n\n\ndef go():\n    return join("a", "b"), open("p")\n',
+      // One that may be the project's (generated, not indexed) keeps name lookup.
+      'app/star_unknown.py': 'from .generated import *\n\n\ndef go():\n    return open("p")\n',
+      // A star import of a module named like a project package, with no such file: may be the project's.
+      'lib/__init__.py': '',
+      'app/star_lib.py': 'from lib.missing import *\n\n\ndef go():\n    return open("p")\n',
+      // The module declares the name itself, after calling it; a local def in a function.
+      'app/own.py': 'def first():\n    return later()\n\n\ndef later():\n    return 3\n\n\ndef outer():\n    def spare():\n        return 2\n    return spare()\n',
+      // A receiver call is not decided by this rule: name lookup stays.
+      'app/receiver.py': 'def go(conn):\n    return conn.open("p")\n',
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterAll(() => cleanup(root));
+
+  it('Python: a builtin the module neither defines nor imports links no project function', () => {
+    expect(distinctEdgesFrom(root, 'app/script.py').filter((e) => !e.includes('Model'))).toEqual([]);
+  });
+
+  it('Python: an unimported class instantiated, annotated, extended or called on links no project class or method', () => {
+    expect(allEdgesFrom(root, 'app/script.py')).toEqual([]);
+  });
+
+  it('Python: the same names imported from a project module still link', () => {
+    expect(distinctEdgesFrom(root, 'app/imported.py')).toEqual([
+      'build instantiation db/database.py#Model',
+      'load call db/database.py#helper',
+      'load call db/database.py#open',
+    ]);
+  });
+
+  it('Python: an import under TYPE_CHECKING, in a function, in try/except, over lines or after a semicolon is an import', () => {
+    expect(distinctEdgesFrom(root, 'app/forms.py')).toEqual(expect.arrayContaining([
+      'fn call db/database.py#helper',
+      'fn call db/database.py#open',
+      'fn call db/other.py#reader',
+      'fn instantiation db/database.py#Model',
+      'guarded call db/other.py#open',
+    ]));
+  });
+
+  it('Python: a relative import, over lines too, still links', () => {
+    expect(distinctEdgesFrom(root, 'app/rel/user.py')).toEqual(['go call app/rel/sibling.py#open', 'go call app/rel/sibling.py#sibling_fn']);
+    expect(distinctEdgesFrom(root, 'app/rel/package_user.py')).toEqual(['go call app/rel/sibling.py#open', 'go call app/rel/sibling.py#sibling_fn']);
+  });
+
+  it('Python: a star import of a project module makes its names visible', () => {
+    expect(distinctEdgesFrom(root, 'app/star.py')).toEqual([
+      'go call db/database.py#helper',
+      'go call db/database.py#open',
+      'go instantiation db/database.py#Model',
+    ]);
+  });
+
+  it('Python: a star import of a package, through its __init__, reaches the module that declares the name', () => {
+    expect(distinctEdgesFrom(root, 'app/use_chain.py')).toEqual(['go call app/chain/impl.py#build', 'go instantiation app/chain/impl.py#Widget']);
+  });
+
+  it('Python: a star import of a package reaches a name its __init__ imports by name', () => {
+    expect(distinctEdgesFrom(root, 'app/use_chain2.py')).toEqual(['go call app/chain2/impl2.py#passed_on']);
+  });
+
+  it('Python: a name imported over lines from a module no file satisfies keeps name lookup', () => {
+    expect(distinctEdgesFrom(root, 'app/gen_user.py')).toEqual(['go call db/generated_names.py#gen_fn']);
+  });
+
+  it('Python: a star import reaches a name its module imports through a chain of re-exports', () => {
+    expect(distinctEdgesFrom(root, 'app/use_re.py')).toEqual(['go call app/re/impl3.py#deep_fn']);
+    expect(distinctEdgesFrom(root, 'app/use_re2.py')).toEqual(['go call app/re2/leaf.py#deep2']);
+  });
+
+  it('Python: whitespace after the dots of a relative import changes nothing', () => {
+    expect(distinctEdgesFrom(root, 'app/sp/star_user.py')).toEqual(['go call app/sp/impl.py#spaced_fn']);
+    expect(distinctEdgesFrom(root, 'app/sp/named_user.py')).toEqual(['go call app/sp/impl.py#spaced_named']);
+  });
+
+  it('Python: an import in a comment or a docstring makes no name visible', () => {
+    expect(distinctEdgesFrom(root, 'app/commented.py')).toEqual([]);
+  });
+
+  it('Python: a star import of a module outside the project makes no project function visible', () => {
+    expect(distinctEdgesFrom(root, 'app/star_pkg.py')).toEqual([]);
+  });
+
+  it('Python: a star import that may be the project\'s keeps name lookup', () => {
+    expect(distinctEdgesFrom(root, 'app/star_unknown.py')).not.toEqual([]);
+  });
+
+  it('Python: a star import of a project-named module no file satisfies keeps name lookup', () => {
+    expect(distinctEdgesFrom(root, 'app/star_lib.py')).not.toEqual([]);
+  });
+
+  it('Python: the module\'s own definition, later or nested, is not another module\'s', () => {
+    expect(allEdgesFrom(root, 'app/own.py')).toEqual(['first call app/own.py#later', 'outer call app/own.py#spare']);
+  });
+
+  it('Python: a call on a receiver keeps name lookup (not this rule)', () => {
+    expect(distinctEdgesFrom(root, 'app/receiver.py').length).toBeGreaterThan(0);
+  });
+});
+
+describe('sync agrees with scan --force for a star import (M2-08-R7)', () => {
+  let root: string;
+  beforeEach(() => {
+    root = workspace({
+      'pkg/__init__.py': '',
+      'pkg/core.py': 'def alpha():\n    return 1\n',
+      'pkg/more.py': 'def gamma():\n    return 2\n',
+      'pkg/user.py': 'from .core import *\n\n\ndef go():\n    return alpha(), beta(), gamma()\n',
+      'pkg/elsewhere.py': 'def gamma():\n    return 3\n\n\ndef beta():\n    return 4\n',
+    });
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120000);
+  afterEach(() => cleanup(root));
+
+  const edges = () => distinctEdgesFrom(root, 'pkg/user.py');
+
+  it('the starred module gains a name, then the importer gains a star import', () => {
+    // Only what pkg.core brings is visible: elsewhere.py's beta and gamma are not.
+    expect(edges()).toEqual(['go call pkg/core.py#alpha']);
+    writeFileSync(join(root, 'pkg/core.py'), 'def alpha():\n    return 1\n\n\ndef beta():\n    return 6\n');
+    mapx(root, 'sync', '.');
+    expect(edges()).toEqual(['go call pkg/core.py#alpha', 'go call pkg/core.py#beta']);
+    writeFileSync(join(root, 'pkg/user.py'), 'from .core import *\nfrom .more import *\n\n\ndef go():\n    return alpha(), beta(), gamma()\n');
+    mapx(root, 'sync', '.');
+    const synced = edges();
+    expect(synced).toEqual(['go call pkg/core.py#alpha', 'go call pkg/core.py#beta', 'go call pkg/more.py#gamma']);
+    mapx(root, 'scan', '.', '--force');
+    expect(edges()).toEqual(synced);
+  }, 120000);
+});
+
+// One long-lived scanner (watch, MCP) syncs twice: what the first sync learned of a file's imports must
+// not outlive its edit (the per-phase scope cache is cleared with the others).
+describe('a long-lived scanner re-reads the imports of an edited Python file (M2-08-R7)', () => {
+  let root: string;
+  afterEach(() => cleanup(root));
+
+  it('a star import added between two syncs of one scanner', async () => {
+    root = workspace({
+      'pkg/__init__.py': '',
+      'pkg/core.py': 'def alpha():\n    return 1\n',
+      'pkg/more.py': 'def gamma():\n    return 2\n',
+      'pkg/user.py': 'from .core import *\n\n\ndef go():\n    return alpha(), gamma()\n',
+    });
+    const config = await Config.load(root);
+    const store = new Store(':memory:');
+    const scanner = new Scanner(store, config, new MapxGraph(config.repos[0]!.name));
+    const calls = () => store.getAllEdges().filter((e) => e.source_file === 'pkg/user.py' && e.edge_type === 'call')
+      .map((e) => `${e.target_file}#${e.target_symbol}`).sort();
+    await scanner.scanFull();
+    expect(calls()).toEqual(['pkg/core.py#alpha']);
+    writeFileSync(join(root, 'pkg/core.py'), 'def alpha():\n    return 1\n\n\ndef beta():\n    return 3\n');
+    await scanner.scanIncremental();
+    expect(calls()).toEqual(['pkg/core.py#alpha']);
+    writeFileSync(join(root, 'pkg/user.py'), 'from .core import *\nfrom .more import *\n\n\ndef go():\n    return alpha(), gamma()\n');
+    await scanner.scanIncremental();
+    expect(calls()).toEqual(['pkg/core.py#alpha', 'pkg/more.py#gamma']);
+  }, 120000);
 });
 
 describe('Java names imported from a package (real scan)', () => {

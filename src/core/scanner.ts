@@ -203,7 +203,9 @@ const MODULE_FILE = /\.([cm]?[jt]sx?|vue|svelte|py)$/;
  * binds nothing (M2-08). JS/TS text goes through `scanModule` (M2-08-R1).
  */
 function stripPythonComments(text: string): string {
-  return text.replace(/("""|''')[\s\S]*?\1/g, '').replace(/#.*$/gm, '');
+  // `from . transform import x` is `from .transform import x`: whitespace may follow the dots (M2-08-R7).
+  return text.replace(/("""|''')[\s\S]*?\1/g, '').replace(/#.*$/gm, '')
+    .replace(/^([ \t]*from[ \t]+\.+)[ \t]+(?=[A-Za-z_])(?!import\b)/gm, '$1');
 }
 
 /** A name a file binds by import to a project module: `imported` is the export, null for the module itself (M2-08). */
@@ -389,6 +391,8 @@ export class Scanner {
   /** Per file, its JS/TS import statements and the names it binds from outside the workspace, for one resolution phase (M5-19). */
   private jsImportsCache = new Map<string, JsImport[]>();
   private externalBindingsCache = new Map<string, Map<string, ExternalBinding>>();
+  /** Per Python file, the names its imports bind and the files its star imports reach, for one resolution phase (M2-08-R7). */
+  private pythonScopeCache = new Map<string, { imported: Set<string>; stars: Set<string> | null }>();
   /** The `package` a JVM source declares, per file (M2-08-R5). */
   private jvmPackages = new Map<string, string>();
   /** The workspace's PHP classes and functions by lower-case qualified name, for one resolution phase (M5-19). */
@@ -1967,8 +1971,11 @@ export class Scanner {
             targets = viaImport ? [viaImport] : [];
             targetFile = null;
           } else {
+            // A bare Python name is visible by import, star import or declaration only (M2-08-R7).
             targetFile = this.resolveSymbolToFile(ref.targetName, fileMap, sourcePath, callable,
-              ref.vueThis || ref.vueStore ? undefined : this.globalScopeFilter(ref, sourcePath, fileMap));
+              ref.vueThis || ref.vueStore ? undefined : this.globalScopeFilter(ref, sourcePath, fileMap)
+                ?? (sourceLanguage === 'python' && this.bareOnLine(sourcePath, ref.startLine, ref.targetName)
+                  ? this.pythonScopeFilter(ref.targetName, sourcePath, fileMap) : undefined));
           }
         }
         targets ??= targetFile ? [{ file: targetFile, symbol: ref.targetName }] : [];
@@ -2264,8 +2271,34 @@ export class Scanner {
     const imported = this.resolveImportedCall(instantiation, sourcePath, language, isJsOrTs, fileMap, symbols);
     if (imported === false) return null;
     const file = imported ? imported.file : this.resolveSymbolToFile(instantiation.targetName, fileMap, sourcePath, true,
-      isJsOrTs ? this.globalScopeFilter(instantiation, sourcePath, fileMap) : undefined);
+      isJsOrTs ? this.globalScopeFilter(instantiation, sourcePath, fileMap)
+        : language === 'python' && dot < 0 ? this.pythonScopeFilter(written, sourcePath, fileMap) : undefined);
     return file ? { file, owner: (imported ? imported.symbol : instantiation.targetName).split(/\\|\.|::/).pop()! } : null;
+  }
+
+  /** One line of a workspace source (1-based), '' when there is none. */
+  private sourceLine(sourcePath: string, lineNumber: number): string {
+    let lines = this.lineCache.get(sourcePath);
+    if (!lines) this.lineCache.set(sourcePath, (lines = (this.readWorkspaceText(sourcePath) ?? '').split('\n')));
+    return lines[lineNumber - 1] ?? '';
+  }
+
+  /**
+   * Whether `name` is on the line and every use of it there is bare, none an attribute (`.name`): the
+   * reference is then a name looked up in the module's scope, not a member of a receiver. False when
+   * the line does not show the name (a call spread over lines) or shows it as an attribute too, so
+   * name lookup stays as it was (M2-08-R7).
+   */
+  private bareOnLine(sourcePath: string, lineNumber: number, name: string): boolean {
+    const line = this.sourceLine(sourcePath, lineNumber);
+    if (!line.includes(name)) return false;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let bare = false;
+    for (const m of line.matchAll(new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'g'))) {
+      if (/\.\s*$/.test(line.slice(0, m.index))) return false;
+      bare = true;
+    }
+    return bare;
   }
 
   /**
@@ -2273,9 +2306,7 @@ export class Scanner {
    * undefined for a bare call, or null when the line has neither form or both (`utils.create(create())`).
    */
   private lineReceiver(sourcePath: string, lineNumber: number, name: string): string | undefined | null {
-    let lines = this.lineCache.get(sourcePath);
-    if (!lines) this.lineCache.set(sourcePath, (lines = (this.readWorkspaceText(sourcePath) ?? '').split('\n')));
-    const line = lines[lineNumber - 1] ?? '';
+    const line = this.sourceLine(sourcePath, lineNumber);
     if (!line.includes(name)) return null;
     let patterns = this.callPatterns.get(name);
     if (!patterns) {
@@ -3325,6 +3356,72 @@ export class Scanner {
     if (!hit) return false;
     // A Python module-level declaration rebinds the name; a Java member shadows a static import.
     return !(symbols ?? []).some(s => s.name === head && (language === 'java' || !s.scope));
+  }
+
+  /**
+   * The files name lookup may pick for a bare Python name, or undefined for no restriction (M2-08-R7).
+   * Python resolves a bare name in the module itself: what it defines, what it imports, what a star
+   * import brings, else a builtin or an error, never another module's function. So the candidates are
+   * the caller's own file and the modules it star-imports (`stars`, with what those pass on). A name
+   * any import of the file binds is unrestricted (the import resolves it, as before); so is a file
+   * with a star import that may be the project's but is not indexed (`from .generated import *`).
+   */
+  private pythonScopeFilter(name: string, sourcePath: string, fileMap: Map<string, string>): ((file: string) => boolean) | undefined {
+    const scope = this.pythonScope(sourcePath, fileMap);
+    if (!scope.stars || scope.imported.has(name)) return undefined;
+    // The starred modules, and where each passes the name on from: a name it imports is visible
+    // through it, whatever chain of re-exports leads to its declaration (`findExport`).
+    const visible = new Set(scope.stars);
+    for (const star of scope.stars) {
+      const bound = this.importBindings(star, true, fileMap).get(name);
+      if (!bound) continue;
+      const found = bound.imported === null ? null : this.findExport(bound.file, bound.imported, fileMap);
+      if (found && found !== 'absent') visible.add(found.file);
+    }
+    return (file) => file === sourcePath || visible.has(file);
+  }
+
+  /**
+   * What a Python file's imports bind, over-inclusively: every name any `import` or `from … import`
+   * statement of its text names (a name under `TYPE_CHECKING`, in a function or in `try`, over lines,
+   * after a `;`, relative or not), and the files its star imports reach. `stars` is null when one may
+   * bring names the index cannot see: a relative or project-named module no file satisfies (M2-08-R7).
+   */
+  private pythonScope(file: string, fileMap: Map<string, string>, seen?: Set<string>): { imported: Set<string>; stars: Set<string> | null } {
+    const cached = this.pythonScopeCache.get(file);
+    if (cached) return cached;
+    const nested = seen ?? new Set<string>();
+    nested.add(file);
+    const imported = new Set<string>();
+    const stars = new Set<string>();
+    let unknown = false;
+    const text = stripPythonComments(this.readWorkspaceText(file) ?? '');
+    for (const m of text.matchAll(/\bimport\b[ \t]*(\([^)]*\)|(?:[^\n;\\]|\\\r?\n)*)/g)) {
+      for (const id of m[1]!.matchAll(/[A-Za-z_]\w*/g)) imported.add(id[0]);
+    }
+    const resolver = importResolverFor('python');
+    // `from . transform import *` reads as `from .transform import *` (stripPythonComments).
+    for (const m of text.matchAll(/\bfrom\s+([\w.]+)\s+import\s*\*/g)) {
+      const module = m[1]!;
+      const hits = resolver ? this.resolveModuleImport(resolver, module, file, fileMap, () => new Set()) : [];
+      if (!hits.length) {
+        // Outside the project, a star import brings no project name; one that may be the project's does.
+        if (module.startsWith('.') || pythonNameInProject(module.split('.')[0]!, this.importContext(fileMap))) unknown = true;
+        continue;
+      }
+      for (const hit of hits) {
+        stars.add(hit.file);
+        // What the module's own star imports reach (what it imports by name is added per name).
+        if (nested.has(hit.file)) continue;
+        const inner = this.pythonScope(hit.file, fileMap, nested).stars;
+        if (inner) for (const f of inner) stars.add(f);
+        else unknown = true;
+      }
+    }
+    const scope = { imported, stars: unknown ? null : stars };
+    // A scope built inside another file's walk may stop at a cycle: only a top-level one is kept.
+    if (!seen) this.pythonScopeCache.set(file, scope);
+    return scope;
   }
 
   /** The local names a Python file's imports bind from the project, relative ones included (M2-08-R5 review). */
@@ -5359,6 +5456,7 @@ export class Scanner {
     this.autoImportDirs.clear();
     this.jsImportsCache.clear();
     this.externalBindingsCache.clear();
+    this.pythonScopeCache.clear();
     this.jvmPackages.clear();
     this.phpDeclared = null;
     this.externalDecisions.clear();

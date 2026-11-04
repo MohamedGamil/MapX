@@ -117,7 +117,7 @@ describe('shebang scripts in the graph, F20 file names (M0-12-R3)', () => {
   let root: string;
   beforeAll(() => {
     const files: Record<string, string> = {
-      'bin/tool': '#!/usr/bin/env python3\ndef helper():\n    return 1\n\ndef main():\n    return helper() + shared_util()\n',
+      'bin/tool': '#!/usr/bin/env python3\nfrom lib.util import shared_util\n\ndef helper():\n    return 1\n\ndef main():\n    return helper() + shared_util()\n',
       'bin/ops': '#!/usr/bin/env python3\ndef ops_entry():\n    return 2\n',
       'lib/util.py': 'def shared_util():\n    return 2\n',
       'app.py': 'def run():\n    return ops_entry()\n',
@@ -144,8 +144,10 @@ describe('shebang scripts in the graph, F20 file names (M0-12-R3)', () => {
     ]);
   });
 
-  it('a shebang script is a call target too', () => {
-    expect(calls('app.py')).toEqual([{ source_symbol: 'run', target_symbol: 'ops_entry', target_file: 'bin/ops' }]);
+  // M2-08-R7: app.py calls ops_entry without importing it, and a script with no `.py` cannot be imported:
+  // Python would raise a NameError, so the call links nothing (it linked bin/ops by name before).
+  it('a shebang script is no call target of a module that cannot import it', () => {
+    expect(calls('app.py')).toEqual([]);
   });
 
   it('indexes Rakefile and Gemfile as Ruby and .fish files (with their functions, M0-12-R5), through the workers', () => {
