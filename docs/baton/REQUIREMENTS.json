@@ -202,7 +202,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-selectors.test.ts (30 passed): 'all, any and not compose selectors', 'explains a membership: the selector, and the top-level symbol that put a file in a layer'; tests/arch-introspect.test.ts 'layers --why', 'which'; scorer: 41/41 violations at recall and precision 1"
   },
   {
     "id": "REQ-ARCH-002",
@@ -216,7 +217,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-evaluate.test.ts (23): '+' transitive, '*', '!', types-scoped allowance, severity warn; tests/arch-config.test.ts '+' cycle named once; scorer error row 2/2 (plus-cycle, stale-baseline)"
   },
   {
     "id": "REQ-ARCH-003",
@@ -230,7 +232,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "scorer: all five kinds recall 1 / precision 1 on 10 apps; tests/arch-evaluate.test.ts fingerprints carry no line number and survive line shifts; tests/arch-cli.test.ts report validates against schemas/arch-report.schema.json"
   },
   {
     "id": "REQ-ARCH-004",
@@ -244,7 +247,8 @@
     "verificationTaskIds": [
       "M5-18"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-cli.test.ts (16): exit 0, 1, 2, 3 and 4 each tested, incl. stale index and '4 before 3'; M5-05-R1 and M5-26 DONE"
   },
   {
     "id": "REQ-ARCH-005",
@@ -258,7 +262,8 @@
     "verificationTaskIds": [
       "M5-18"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-baseline.test.ts (22): generate/re-run, stale entry exit 3, --compare ratchet fails only on new fingerprints; scorer skipped 1/1"
   },
   {
     "id": "REQ-ARCH-006",
@@ -272,7 +277,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-fixture.test.ts (11); docs/baton/reports/M5-01.md records the 0.0 baseline; M5-98 re-score: every kind 1.0 recall and precision"
   },
   {
     "id": "REQ-ARCH-007",
@@ -286,7 +292,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-evaluate.test.ts 'verifiability policy (AR-05)': warn by default, error under policy.inferred 'error', ignored under 'ignore'; tests/arch-cli.test.ts '--fail-on warn'"
   },
   {
     "id": "REQ-ARCH-008",
@@ -301,7 +308,8 @@
     "verificationTaskIds": [
       "M5-16"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-smells.test.ts 'without an architecture configuration nothing changes (criterion 2)' (2 tests); tests/external-refs.test.ts 'no edge leaves the workspace' (8 apps); tests/ui-arch-api.test.ts no-config state; npm run check"
   },
   {
     "id": "REQ-ARCH-009",
@@ -315,7 +323,8 @@
     "verificationTaskIds": [
       "M5-18"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-reporters.test.ts (32): SARIF 2.1.0 schema, GITHUB_ACTIONS auto-select, CodeClimate severity map, JUnit XSD, golden files"
   },
   {
     "id": "REQ-ARCH-010",
@@ -329,7 +338,8 @@
     "verificationTaskIds": [
       "M5-08"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-introspect.test.ts (27): layers --why, which, unassigned (exit 2), deps, unused, changed, allowed with JSON. Doc discrepancy: docs/cli-reference.md documents 'mapx arch --json', see M5-98-R3"
   },
   {
     "id": "REQ-ARCH-011",
@@ -343,7 +353,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-hierarchy.test.ts (49): implements, inherits, mixes, inheritanceDepth, member, cycles, 2,000-class chain"
   },
   {
     "id": "REQ-ARCH-012",
@@ -357,7 +368,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/symbol-annotations.test.ts (32): capture for PHP, TS, JS, Python, Java, Kotlin, C#; decorator and docTag selectors; layer membership by decorator/docTag"
   },
   {
     "id": "REQ-ARCH-013",
@@ -371,7 +383,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-visibility.test.ts (20): private-layer and internal-element rows found, native markers off by default and exact when on"
   },
   {
     "id": "REQ-ARCH-014",
@@ -385,12 +398,14 @@
       "M5-21",
       "M5-22",
       "M5-23",
-      "M5-24"
+      "M5-24",
+      "M5-24-R1"
     ],
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "PARTIAL",
+    "evidence": "Met: scorer externals 138/138 and externalFindings 12/12 at 1.0 for npm, composer, pypi, go; tests/external-refs.test.ts (296 passed, 2 skipped). Unmet: ambient access (process.env, window, $_GET, os.environ) is not extracted; the ambient selector matches only Go cgo C"
   },
   {
     "id": "REQ-ARCH-015",
@@ -404,7 +419,8 @@
     "verificationTaskIds": [
       "M5-14"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/mcp-arch.test.ts (21): five arch tools, capped output with totals, mapx_arch_allowed alternatives; tests/agents-arch-allowed.test.ts (11); CLAUDE.md instructs the pre-flight call"
   },
   {
     "id": "REQ-ARCH-016",
@@ -418,7 +434,8 @@
     "verificationTaskIds": [
       "M5-13"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-graph.test.ts (13): golden DOT, Mermaid, layer DSM, built-in SVG, groups and hidden layers"
   },
   {
     "id": "REQ-ARCH-017",
@@ -432,7 +449,8 @@
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-smells.test.ts (22): single source of layer violations and one positive and one negative case for layer-cycle, layer-skip, dead/weak allowance, unstable-layer-dependency, abstractness-distance, deprecated-usage; tests/external-refs.test.ts vendor-leak, undeclared-dependency, dev-dependency-in-prod"
   },
   {
     "id": "REQ-ARCH-018",
@@ -446,7 +464,8 @@
     "verificationTaskIds": [
       "M5-17"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/arch-init.test.ts (43): dry run by default, twenty presets, --from framework/clusters, --baseline day-one green"
   },
   {
     "id": "REQ-ARCH-019",
@@ -460,7 +479,8 @@
     "verificationTaskIds": [
       "M5-18"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/dogfood-architecture.test.ts (5): valid config, CI Architecture job, calls judged on a real scan; .github/workflows/ci.yml runs mapx check; docs/architecture-rules.md names all 23 selector keys, four CI formats and exit codes"
   },
   {
     "id": "REQ-ARCH-020",
@@ -474,7 +494,8 @@
     "verificationTaskIds": [
       "M5-15"
     ],
-    "status": "PLANNED"
+    "status": "VERIFIED",
+    "evidence": "tests/ui-arch-api.test.ts (15) run and passing; rendered view per tests/ui/arch.spec.ts (7 passed per docs/baton/reports/M5-15.md, not re-run in M5-98)"
   },
   {
     "id": "REQ-ARCH-021",
@@ -482,9 +503,12 @@
     "priority": "P3",
     "requirement": "`--since <git-ref>` ratchet without a base report (second scan at the ref)",
     "source": "docs/research/deptrac/05-requirements.md COULD, AR-10; no task yet",
-    "taskIds": [],
+    "taskIds": [
+      "M5-98-R1"
+    ],
     "verificationTaskIds": [],
-    "status": "PLANNED"
+    "status": "PLANNED",
+    "evidence": "No task and no code; M5-06 deferred it. Not met."
   },
   {
     "id": "REQ-ARCH-022",
@@ -493,12 +517,14 @@
     "requirement": "Inherited-dependency derivation (subclass inherits its ancestors' dependencies, reported with `via`)",
     "source": "docs/research/deptrac/05-requirements.md COULD, AR-02",
     "taskIds": [
-      "M5-09"
+      "M5-09",
+      "M5-24-R2"
     ],
     "verificationTaskIds": [
       "M5-98"
     ],
-    "status": "PLANNED"
+    "status": "PARTIAL",
+    "evidence": "tests/arch-hierarchy.test.ts 'policy.inheritDependencies (AR-02) on ... via naming the inheritance path' covers workspace dependencies. Unmet: external dependencies are not inherited, and mapx arch allowed names no via"
   },
   {
     "id": "REQ-ARCH-023",
@@ -506,8 +532,11 @@
     "priority": "P3",
     "requirement": "Custom selectors and rules as user plugins",
     "source": "docs/research/deptrac/05-requirements.md COULD, AR-04; no task yet",
-    "taskIds": [],
+    "taskIds": [
+      "M5-98-R2"
+    ],
     "verificationTaskIds": [],
-    "status": "PLANNED"
+    "status": "PLANNED",
+    "evidence": "No task and no code. Not met."
   }
 ]
