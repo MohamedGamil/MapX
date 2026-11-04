@@ -419,7 +419,7 @@ const CONFIG_FILE_NAME = /(^|\/)([^/]*[.\-_](config|conf)\.[cm]?[jt]sx?|\.[^/]*r
  *   input names (package null) is never one, since there is no name the manifest could lack (review
  *   of M5-24: Go stored `direct` false for those, pypi and Composer null).
  * - Dev dependency in production: a dev-only package (`dev` true) used by a file that is not a test,
- *   configuration, script or tooling file (role, or a conventional config file name).
+ *   configuration, script or tooling file (role, or a conventional config file name; tests are the `test` role).
  * A package whose direct or dev status is unknown is neither.
  */
 function packageSmells(ctx: ArchContext): RuleSmell[] {

@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { ConfigError, loadArchitectureConfig } from '../src/arch/config.js';
-import { combine, elementMatches, loadExpected, loadExpectedExternals, rowMatches, scoreApp, type ExpectedRow, type ReportedFinding } from '../scripts/eval/score-arch.js';
+import { combine, elementMatches, loadExpected, loadExpectedExternals, loadExpectedSmells, rowMatches, scoreApp, scoreSmells, type ReportedSmell, type ExpectedRow, type ReportedFinding } from '../scripts/eval/score-arch.js';
 
 // M5-01: the labelled architecture-rules fixture and its scorer (AR-08 chain, AR-09 kinds, AR-10 baseline).
 const FIXTURE = resolve(__dirname, 'fixtures/arch-rules');
 const expected = loadExpected(FIXTURE);
 const rows = expected.rows;
 const externals = loadExpectedExternals(FIXTURE);
+const smellLabels = loadExpectedSmells(FIXTURE)!;
 const LANGUAGES = { php: 'php', ts: 'typescript', python: 'python', go: 'go' } as const;
 
 describe('the fixture', () => {
@@ -162,12 +164,93 @@ describe('the scorer', () => {
   });
 });
 
+// M5-16-R1: the smells block (expected-smells.json), labelled apart from the findings.
+describe('the smell labels', () => {
+  it('have unique ids, known apps, and files that exist; every complete kind is a known rule smell', () => {
+    expect(new Set(smellLabels.rows.map((r) => r.id)).size).toBe(smellLabels.rows.length);
+    // Every app of the findings, and the apps that only label smells (scanned by the scorer too).
+    expect(Object.keys(smellLabels.complete).sort()).toEqual([...Object.keys(expected.apps), ...Object.keys(smellLabels.apps ?? {})].sort());
+    expect(Object.keys(smellLabels.apps ?? {}).every((a) => !(a in expected.apps) && existsSync(join(FIXTURE, a)))).toBe(true);
+    for (const r of smellLabels.rows) {
+      expect(smellLabels.complete[r.app], r.id).toContain(r.type);
+      expect(r.evidence.length, r.id).toBeGreaterThan(10);
+      for (const f of r.files ?? []) expect(existsSync(join(FIXTURE, r.app, f)), `${r.id}: ${f}`).toBe(true);
+    }
+    // Every scored kind has at least one positive row (no kind is scored on its absence alone), and each row
+    // cites the line (`path:N`) of the source or configuration that makes it true.
+    expect([...new Set(smellLabels.rows.map((r) => r.type))].sort()).toEqual([
+      'architecture-config', 'baseline-debt', 'deprecated-usage', 'dev-dependency-in-prod', 'layer-cycle', 'layer-skip', 'layer-violation', 'orphan-element', 'undeclared-dependency', 'vendor-leak',
+    ]);
+    for (const r of smellLabels.rows) {
+      const cited = [...r.evidence.matchAll(/([\w.\-]+\/[^\s`]+?):(\d+) `/g)];
+      expect(cited.length, `${r.id}: evidence cites no source line`).toBeGreaterThan(0);
+      for (const [, file, n] of cited) {
+        const lines = readFileSync(join(FIXTURE, file!), 'utf8').split('\n');
+        expect(lines[Number(n) - 1]?.trim().length, `${r.id}: ${file}:${n} is a line of the fixture`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('are scored per kind over the apps that label the kind as complete: a miss lowers recall, an extra lowers precision', () => {
+    const labels = { version: 1, complete: { a: ['layer-cycle', 'orphan-element'], b: ['layer-cycle'] }, rows: [
+      { id: 'a2', app: 'a', type: 'layer-cycle', layers: ['P', 'Q'], evidence: 'x' },
+      { id: 'a1', app: 'a', type: 'layer-cycle', layers: ['X', 'Y'], evidence: 'x' },
+      { id: 'a3', app: 'a', type: 'dead-allowance', layers: ['P', 'Q'], evidence: 'x' }, // not complete for a: not scored
+    ] };
+    const smell = (type: string, layers: string[], source = 'rules'): ReportedSmell => ({ type, source, description: type, involvedLayers: layers });
+    const score = scoreSmells(labels, new Map([
+      ['a', [smell('layer-cycle', ['Y', 'X']), smell('orphan-element', []), smell('dead-allowance', ['P', 'Q'])]],
+      ['b', [smell('layer-cycle', ['M', 'N']), smell('layer-cycle', ['M', 'N'], 'inferred-roles')]],
+    ]));
+    expect(score.kinds['layer-cycle']).toEqual({ expected: 2, reported: 2, matched: 1, recall: 0.5, precision: 0.5 });
+    expect(score.kinds['orphan-element']).toMatchObject({ expected: 0, reported: 1, matched: 0, recall: 1, precision: 0 });
+    expect(score.kinds['dead-allowance']).toBeUndefined();
+    expect(score.misses).toEqual(['a: a2']);
+    expect(score.extras).toEqual(['a: orphan-element orphan-element', 'b: layer-cycle layer-cycle']);
+  });
+});
+
+// M5-16-R1 review: the smells' floor is 1.0 on the labelled rows, and the registered command enforces it.
+describe('the smell floor', () => {
+  const score = (fixture: string) => {
+    const r = spawnSync(process.execPath, ['--import', 'tsx', resolve(__dirname, '../scripts/eval/score-arch.ts'), fixture, '--app', 'ts-smells', '--json'], { encoding: 'utf8', cwd: resolve(__dirname, '..') });
+    return { status: r.status, out: JSON.parse(r.stdout) };
+  };
+
+  it('a missed row and an unlabelled smell each fail the run; the labelled fixture passes', () => {
+    const copy = mkdtempSync(join(tmpdir(), 'mapx-smell-floor-'));
+    try {
+      cpSync(FIXTURE, copy, { recursive: true });
+      const ok = score(copy);
+      expect(ok.status).toBe(0);
+      expect(ok.out.failures).toEqual([]);
+      expect(ok.out.smells.kinds['layer-skip']).toMatchObject({ expected: 1, matched: 1, recall: 1, precision: 1 });
+      // A smell with no row (precision < 1 on a complete kind): the skip row is removed.
+      const file = join(copy, 'expected-smells.json');
+      const labels = JSON.parse(readFileSync(file, 'utf8')) as { rows: Array<{ id: string; layers?: string[] }> };
+      const skip = labels.rows.find((r) => r.id === 'ts-smells-skip')!;
+      writeFileSync(file, JSON.stringify({ ...labels, rows: labels.rows.filter((r) => r !== skip) }));
+      const extra = score(copy);
+      expect(extra.status).toBe(1);
+      expect(extra.out.failures.join('\n')).toContain('smell not labelled ts-smells: layer-skip');
+      // A row no smell matches (recall < 1): the skip row names layers the scan does not report.
+      writeFileSync(file, JSON.stringify({ ...labels, rows: labels.rows.map((r) => (r === skip ? { ...r, layers: ['Controller', 'Repository'] } : r)) }));
+      const missed = score(copy);
+      expect(missed.status).toBe(1);
+      expect(missed.out.failures.join('\n')).toContain('smell missed ts-smells: ts-smells-skip');
+      expect(missed.out.smells.kinds['layer-skip']).toMatchObject({ expected: 1, matched: 0, recall: 0 });
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+    }
+  }, 300_000);
+});
+
 describe('the real-scan score (`mapx check`, M5-04 evaluator, M5-06 baseline, M5-11 internal markers)', () => {
   // Every labelled row is found, and nothing else is (M5-11 found the last ones: internal-element).
   it('score-arch.ts finds every row, and nothing else', () => {
     const out = execFileSync(process.execPath, ['--import', 'tsx', resolve(__dirname, '../scripts/eval/score-arch.ts'), FIXTURE, '--json'], { encoding: 'utf8', cwd: resolve(__dirname, '..'), stdio: ['ignore', 'pipe', 'pipe'] });
     const score = JSON.parse(out);
-    expect(score.apps).toHaveLength(Object.keys(expected.apps).length);
+    expect(score.apps).toHaveLength(Object.keys(expected.apps).length); // the smell-only app has no findings to score
     expect(score.apps.every((a: any) => a.report)).toBe(true);
     expect(score.apps.flatMap((a: any) => a.misses)).toEqual([]);
     expect(score.apps.flatMap((a: any) => a.negativeHits)).toEqual([]);
@@ -187,6 +270,16 @@ describe('the real-scan score (`mapx check`, M5-04 evaluator, M5-06 baseline, M5
         expect(k.categories[category].expected, `${eco} ${category}`).toBeGreaterThan(0);
         expect(k.categories[category].matched, `${eco} ${category}`).toBe(k.categories[category].expected);
       }
+    }
+    // M5-16-R1: the smells, per kind. Every labelled row is found and no other smell of a complete kind is
+    // reported: recall and precision 1 for each of the ten kinds, each with at least one labelled row.
+    expect(score.smells.misses).toEqual([]);
+    expect(score.smells.extras).toEqual([]);
+    expect(Object.keys(score.smells.kinds).sort()).toEqual([...new Set(smellLabels.rows.map((r) => r.type))].sort());
+    for (const kind of Object.keys(score.smells.kinds)) {
+      expect(score.smells.kinds[kind], kind).toMatchObject({ recall: 1, precision: 1 });
+      expect(score.smells.kinds[kind].expected, kind).toBe(smellLabels.rows.filter((r) => r.type === kind).length);
+      expect(score.smells.kinds[kind].expected, kind).toBeGreaterThan(0);
     }
     expect(score.failures).toEqual([]);
   }, 300_000);

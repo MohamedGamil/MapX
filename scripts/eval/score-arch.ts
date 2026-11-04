@@ -6,7 +6,10 @@
 //   npx tsx scripts/eval/score-arch.ts <fixture> [--json] [--app <name>] [--min-recall R] [--min-precision P]
 // Findings on targets outside the workspace (M5-24) are also scored per ecosystem (`externalFindings`):
 // uncovered, vendor-confinement and dev-dependency rows.
-// Exit code 1 when a threshold is missed; 2 on usage or scan errors.
+// Smells (M5-16-R1) are scored from expected-smells.json, a separate block of labels: per smell kind,
+// recall and precision over the apps whose labels are complete for that kind (`smells` in --json).
+// The smells' floor is 1.0 on the labelled rows: any missed row or unlabelled smell of a complete kind is a
+// failure (exit 1) with or without thresholds. Exit code 1 when a threshold is missed; 2 on usage or scan errors.
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +18,7 @@ import { pathToFileURL } from 'node:url';
 import { parseScorerArgs } from './args.ts';
 import { runArchitecture } from '../../src/arch/report.ts';
 import { Store } from '../../src/core/store.ts';
+import { currentSmells } from '../../src/core/architecture-analyzer.ts';
 
 /** The finding kinds scored (AR-09). `allowed` and `none` label negatives. */
 export const SCORED_KINDS = ['violation', 'skipped', 'uncovered', 'warning', 'error'] as const;
@@ -167,6 +171,93 @@ export function scoreApp(app: string, rows: ExpectedRow[], report: ArchReport | 
   return { app, report: !!report, kinds, external, negativeHits, misses };
 }
 
+// ─── Smells (M5-16-R1) ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * A labelled smell (expected-smells.json). `files` and `layers` are the smell's involved files and
+ * layers (compared as sets, when given); `contains` is a text its description must contain (it names
+ * a package or an edge). `evidence` says why the label holds, from the fixture's source.
+ */
+export interface ExpectedSmell {
+  id: string;
+  app: string;
+  type: string;
+  files?: string[];
+  layers?: string[];
+  contains?: string;
+  evidence: string;
+}
+export interface ExpectedSmells {
+  version: number;
+  /** Apps used only for smells: scanned like the others, but with no rows in expected-findings.json. */
+  apps?: Record<string, { language: string; repos: string[] | null }>;
+  /** Per app, the smell kinds whose labels are complete: every smell of the kind is a row, or none exists. Only these are scored. */
+  complete: Record<string, string[]>;
+  rows: ExpectedSmell[];
+}
+/** The parts of a computed smell the scorer reads. */
+export interface ReportedSmell { type: string; source?: string; description: string; involvedFiles?: string[]; involvedLayers?: string[] }
+export interface SmellKindScore { expected: number; reported: number; matched: number; recall: number; precision: number | null }
+export interface SmellScore { kinds: Record<string, SmellKindScore>; misses: string[]; extras: string[] }
+
+const sameSet = (a: string[], b: string[]) => a.length === b.length && [...a].sort().join('\0') === [...b].sort().join('\0');
+
+/** Does a computed smell match a labelled one? Type, then every given identity part. */
+export function smellMatches(row: ExpectedSmell, s: ReportedSmell): boolean {
+  return s.type === row.type
+    && (!row.files || sameSet(row.files, s.involvedFiles ?? []))
+    && (!row.layers || sameSet(row.layers, s.involvedLayers ?? []))
+    && (!row.contains || s.description.includes(row.contains));
+}
+
+/**
+ * Recall and precision per smell kind. For each app, only the kinds it labels as complete count:
+ * its labelled rows are the expected smells, and its rule-derived smells of those kinds the reported
+ * ones. A row and a smell pair off one to one.
+ */
+export function scoreSmells(labels: ExpectedSmells, reported: Map<string, ReportedSmell[]>): SmellScore {
+  const kinds: Record<string, SmellKindScore> = {};
+  const kind = (t: string) => (kinds[t] ??= { expected: 0, reported: 0, matched: 0, recall: 1, precision: null });
+  const misses: string[] = [];
+  const extras: string[] = [];
+  for (const [app, complete] of Object.entries(labels.complete)) {
+    const smells = (reported.get(app) ?? []).filter((s) => s.source === 'rules' && complete.includes(s.type));
+    const used = new Set<ReportedSmell>();
+    for (const t of complete) kind(t);
+    for (const row of labels.rows.filter((r) => r.app === app && complete.includes(r.type))) {
+      kind(row.type).expected++;
+      const hit = smells.find((s) => !used.has(s) && smellMatches(row, s));
+      if (hit) { used.add(hit); kind(row.type).matched++; } else misses.push(`${app}: ${row.id}`);
+    }
+    for (const s of smells) {
+      kind(s.type).reported++;
+      if (!used.has(s)) extras.push(`${app}: ${s.type} ${s.description}`);
+    }
+  }
+  for (const k of Object.values(kinds)) {
+    k.recall = k.expected ? k.matched / k.expected : 1;
+    k.precision = k.reported ? k.matched / k.reported : null;
+  }
+  return { kinds, misses, extras };
+}
+
+export function loadExpectedSmells(fixture: string): ExpectedSmells | null {
+  const path = join(fixture, 'expected-smells.json');
+  return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) as ExpectedSmells : null;
+}
+
+/** The smells of a scanned copy, as `mapx arch --smells` lists them (the configuration and baseline applied). */
+function readSmells(root: string, repos: string[] | null): ReportedSmell[] {
+  const store = new Store(join(root, '.mapx/mapx.db'));
+  try {
+    const primary = root.split(/[\\/]/).pop()!;
+    const names = [primary, ...(repos ?? [])];
+    return currentSmells(store, root, names, { primary, repoPaths: Object.fromEntries((repos ?? []).map((r) => [r, r])) }) as ReportedSmell[];
+  } finally {
+    store.close();
+  }
+}
+
 export interface ArchScore {
   apps: AppScore[];
   kinds: Record<ScoredKind, KindScore>;
@@ -304,7 +395,7 @@ function hasCheck(cwd: string): boolean {
  * Scans one fixture app in a temp copy and returns its report, or null when none was written; its
  * external_refs rows go to `externals` when given (M5-20).
  */
-export function scanApp(fixture: string, app: string, repos: string[] | null, externals?: Map<string, ScannedExternal[]>): ArchReport | null {
+export function scanApp(fixture: string, app: string, repos: string[] | null, externals?: Map<string, ScannedExternal[]>, smells?: Map<string, ReportedSmell[]>): ArchReport | null {
   const root = mkdtempSync(join(tmpdir(), `mapx-arch-${app}-`));
   try {
     cpSync(join(fixture, app), root, { recursive: true });
@@ -315,6 +406,7 @@ export function scanApp(fixture: string, app: string, repos: string[] | null, ex
     }
     cli(root, 'scan');
     externals?.set(app, readExternals(root));
+    // The smells read the baseline and the configuration as `check` does, so after it has run.
     const reportPath = join(root, '.mapx/architecture-report.json');
     if (hasCheck(root)) {
       try {
@@ -330,6 +422,7 @@ export function scanApp(fixture: string, app: string, repos: string[] | null, ex
       const report = runArchitecture(root, { repoPaths });
       if (report) writeFileSync(reportPath, JSON.stringify(report, null, 2));
     }
+    smells?.set(app, readSmells(root, repos));
     return existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) as ArchReport : null;
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -356,11 +449,19 @@ async function main() {
   const fixture = resolve(args.fixture);
   const expected = loadExpected(fixture);
   const apps = Object.entries(expected.apps).filter(([name]) => !only || name === only);
-  if (only && !apps.length) throw new Error(`unknown app ${only}; expected one of ${Object.keys(expected.apps).join(', ')}`);
+  const smellOnly = Object.keys(loadExpectedSmells(fixture)?.apps ?? {});
+  if (only && !apps.length && !smellOnly.includes(only)) throw new Error(`unknown app ${only}; expected one of ${[...Object.keys(expected.apps), ...smellOnly].join(', ')}`);
   const scanned = new Map<string, ScannedExternal[]>();
-  const scores = apps.map(([name, meta]) => scoreApp(name, expected.rows.filter((r) => r.app === name), scanApp(fixture, name, meta.repos, scanned)));
+  const computed = new Map<string, ReportedSmell[]>();
+  const scores = apps.map(([name, meta]) => scoreApp(name, expected.rows.filter((r) => r.app === name), scanApp(fixture, name, meta.repos, scanned, computed)));
   const score = combine(scores);
   const externals = scoreExternals(loadExpectedExternals(fixture), scanned);
+  // Smells (M5-16-R1): the apps that only label smells are scanned too. Only the apps scanned in this run are scored (--app).
+  const smellLabels = loadExpectedSmells(fixture);
+  for (const [name, meta] of Object.entries(smellLabels?.apps ?? {})) {
+    if ((!only || name === only) && !computed.has(name)) scanApp(fixture, name, meta.repos, undefined, computed);
+  }
+  const smells = smellLabels && scoreSmells({ ...smellLabels, complete: Object.fromEntries(Object.entries(smellLabels.complete).filter(([a]) => computed.has(a))) }, computed);
 
   const minRecall = args.thresholds['min-recall'];
   const minPrecision = args.thresholds['min-precision'];
@@ -373,13 +474,21 @@ async function main() {
     if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`findings on externals ${eco} recall ${k.recall.toFixed(3)} < ${minRecall}`);
     if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`findings on externals ${eco} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
   }
+  // The floor of the smells is 1.0 on the labelled rows: a missed row or a smell of a complete kind that no row
+  // labels fails the run, whatever thresholds are given (M5-16-R1 review).
+  for (const m of smells?.misses ?? []) failures.push(`smell missed ${m}`);
+  for (const x of smells?.extras ?? []) failures.push(`smell not labelled ${x}`);
+  for (const [kind, k] of Object.entries(smells?.kinds ?? {})) {
+    if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`smell ${kind} recall ${k.recall.toFixed(3)} < ${minRecall}`);
+    if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`smell ${kind} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
+  }
   for (const [eco, k] of Object.entries(externals)) {
     if (minRecall !== undefined && k.expected && k.recall < minRecall) failures.push(`externals ${eco} recall ${k.recall.toFixed(3)} < ${minRecall}`);
     if (minPrecision !== undefined && k.precision !== null && k.precision < minPrecision) failures.push(`externals ${eco} precision ${k.precision.toFixed(3)} < ${minPrecision}`);
   }
 
   if (args.flags.has('json')) {
-    console.log(JSON.stringify({ ...score, externals, failures }, null, 2));
+    console.log(JSON.stringify({ ...score, externals, ...(smells ? { smells } : {}), failures }, null, 2));
   } else {
     console.log(`Architecture findings (${fixture}): ${scores.filter((s) => s.report).length} of ${scores.length} apps wrote a report`);
     console.log('  kind        expected  reported  matched  recall  precision');
@@ -397,6 +506,11 @@ async function main() {
       for (const m of k.misses) console.log(`    missed ${m}`);
       for (const x of k.extras) console.log(`    extra  ${x}`);
     }
+    for (const [kind, k] of Object.entries(smells?.kinds ?? {})) {
+      console.log(`  smell ${kind.padEnd(26)} ${String(k.expected).padStart(4)}  ${String(k.reported).padStart(8)}  ${String(k.matched).padStart(7)}  ${pct(k.recall).padStart(6)}  ${pct(k.precision).padStart(9)}`);
+    }
+    for (const m of smells?.misses ?? []) console.log(`    smell missed ${m}`);
+    for (const x of smells?.extras ?? []) console.log(`    smell extra  ${x}`);
     for (const f of failures) console.log(`  FAIL ${f}`);
   }
   process.exitCode = failures.length ? 1 : 0;

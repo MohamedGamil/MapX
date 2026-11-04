@@ -999,7 +999,7 @@ Package smells (M5-24), also marked `Source: rules`:
 | --- | --- |
 | `vendor-leak` | A `private-layer` violation on an external package: a package a layer's `private` selectors confine to it is used from another layer. It replaces the `layer-violation` smell for that pair. |
 | `undeclared-dependency` | Code in scope (any layer, or none) uses a known package that a readable manifest positively does not list directly: a transitive one, or one in no manifest (`direct` false). The rule is the same for npm, Composer, pypi and Go: a package no input provides is never one, since there is no name the manifest could lack. One per source file and package. |
-| `dev-dependency-in-prod` | Code in scope uses a dev-only package from a file that is not a test, configuration, script or tooling file: by its role (`test`, `config`, `scripts`), or by a conventional name (`*.config.ts`, `*.conf.js`, `.eslintrc.cjs`, `conftest.py`, `setup.py`, `noxfile.py`, `gulpfile.js` …). One per source file and package. |
+| `dev-dependency-in-prod` | Code in scope uses a dev-only package from a file that is not a test, configuration, script or tooling file: by its role (`test`, `config`, `scripts`), or by a conventional name (`*_test.go`, `test_*.py`, `*.spec.ts`, `OrderTest.php`, `*.config.ts`, `*.conf.js`, `.eslintrc.cjs`, `conftest.py`, `setup.py`, `noxfile.py`, `gulpfile.js` …). One per source file and package. |
 
 A package whose direct or dev status is unknown gives neither of the last two.
 

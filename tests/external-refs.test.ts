@@ -3594,6 +3594,24 @@ describe('external dependencies in the rules (M5-24)', () => {
     })).toEqual([dev('src/domain/Order.ts', 'lodash')]);
   }, 180000);
 
+  // M5-16-R1 (found by labelling the smells): a test file is not production code by its conventional name,
+  // whatever its role: Go `_test.go`, Python `test_*.py` and `*_test.py`, `*.test.ts` / `*.spec.ts`, PHP `*Test.php`.
+  it('dev-dependency-in-prod: test files, by their conventional names, are not production code (M5-16-R1)', () => {
+    expect(smellsOf('go-vendor').filter((d) => d.startsWith('Dev'))).toEqual([]); // domain/order_test.go uses testify
+    // The classifier's own definition (isTestPath): e2e and testing folders, Cypress, NestJS e2e, test utilities and setup files.
+    const get = "import get from 'lodash/get';\nexport default get({}, 'a');\n";
+    expect(smellsOf('ts-vendor', {
+      'e2e/login.ts': get, 'cypress/e2e/home.cy.ts': get, 'test/app.e2e-spec.ts': get, 'src/testing/util.ts': get, 'src/test-utils.ts': get, 'vitest.setup.ts': get,
+    }).filter((d) => d.startsWith('Dev'))).toEqual([dev('src/domain/Order.ts', 'lodash')]);
+    expect(smellsOf('python-vendor', {
+      'app/domain/test_order.py': 'import pytest\n\n\ndef test_x():\n    assert pytest\n',
+      'app/domain/order_test.py': 'import pytest\n\n\ndef check_y():\n    assert pytest\n',
+    }).filter((d) => d.startsWith('Dev'))).toEqual([dev('app/domain/order.py', 'pytest', 'pypi')]);
+    expect(smellsOf('php-vendor', {
+      'app/Domain/OrderTest.php': '<?php\nnamespace App\\Domain;\n\nclass OrderTest\n{\n    public function run() { return (new \\Faker\\Generator())->name(); }\n}\n',
+    }).filter((d) => d.startsWith('Dev'))).toEqual([dev('app/Domain/Order.php', 'fakerphp/faker', 'composer')]);
+  }, 180000);
+
   // Review of M5-24: one rule for the four ecosystems. The smell fires only for a named package a
   // readable manifest positively does not list directly (package known, direct false): never for one
   // no input provides, though Go stores direct false for those and pypi and Composer null.
