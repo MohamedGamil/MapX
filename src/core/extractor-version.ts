@@ -50,8 +50,11 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  *   `= class C` declare f and C).
  * - 21: M5-25-R4 (a Go method whose receiver type is in parentheses, `func (b (*Box)) M()`, is a symbol
  *   scoped to the type).
+ * - 22: M2-25, M2-26 (a call through a for / for-of / for-in variable, a catch parameter, a comprehension
+ *   variable or a local destructured from a call result, not an import or a `require`, links no
+ *   same-named function or class elsewhere).
  */
-export const EXTRACTOR_VERSION = 21;
+export const EXTRACTOR_VERSION = 22;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

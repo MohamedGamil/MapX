@@ -5,6 +5,7 @@ import { loadLanguage, loadQueryFile, parseWithQueries } from './wasm-parser.js'
 import { COMMON_FRAMEWORK_METHODS, JS_BUILTIN_METHODS, JS_BUILTIN_RECEIVERS } from './common-methods.js';
 import { LuaScopes, luaCallTarget } from './languages/lua.js';
 import { symbolAnnotations } from './annotations.js';
+import { builtinModules } from 'node:module';
 
 /** `import a.b.C` → [a.b.C]; `import a.b.{C, D => E}` → [a.b.C, a.b.D]; `import a.b._` → [a.b._]. */
 function scalaImportTargets(node: any): string[] {
@@ -295,29 +296,216 @@ function bindsName(n: any, name: string): boolean {
   }
 }
 
+/** Adds the names a JS/TS or Python binding pattern declares: `a`, `{ a, b: c }`, `[d, ...e]`, `f, g`. */
+function patternNames(n: any, out: Set<string>): Set<string> {
+  switch (n?.type) {
+    case 'identifier': case 'shorthand_property_identifier_pattern': out.add(n.text); break;
+    case 'pair_pattern': patternNames(n.childForFieldName('value'), out); break;
+    case 'object_assignment_pattern': case 'assignment_pattern': patternNames(n.childForFieldName('left'), out); break;
+    case 'object_pattern': case 'array_pattern': case 'rest_pattern':
+    case 'pattern_list': case 'tuple_pattern': case 'list_pattern': case 'list_splat_pattern':
+      for (const c of n.namedChildren) patternNames(c, out);
+      break;
+  }
+  return out;
+}
+
+/** True when `inner` lies within `outer`. */
+function within(outer: any, inner: any): boolean {
+  return !!outer && outer.startIndex <= inner.startIndex && inner.endIndex <= outer.endIndex;
+}
+
 /**
- * True when `name()` at `node` calls a parameter or a plain local variable of an enclosing JS/TS
- * function or block, or Python function (M0-17-R5). Such a call never reaches a module symbol of
- * that name, which is now often a function (`const useAppSelector = useSelector`): the guard
- * M0-17-R2 had from skipping constants. Destructured locals (`const { reset } = useStore()`) are
- * left to the Vue store and composable passes.
+ * What a call through a local binding of a JS/TS or Python name is: `local` (the binding is the name's
+ * and links nothing), `unproven` (a destructured name whose source may be a project symbol: it keeps
+ * the by-name link, marked inferred), or null (not bound here).
  */
-function boundLocally(node: any, name: string): boolean {
-  for (let curr = node.parent; curr && curr.type !== 'program' && curr.type !== 'module'; curr = curr.parent) {
+type LocalBinding = 'local' | 'unproven' | null;
+
+/** Per-parse caches for `boundLocally`: the file's imports (name → specifier) and each declarator's, function body's bindings. */
+interface ScopeCache {
+  imports?: Map<string, string>;
+  declarators: Map<number, { names: Set<string>; source: LocalBinding } | null>;
+  hoisted: Map<number, Map<string, LocalBinding>>;
+}
+
+const newScopeCache = (): ScopeCache => ({ declarators: new Map(), hoisted: new Map() });
+
+/** The names a JS/TS file's top-level import statements bind, with their module specifiers. */
+function importsOf(node: any, cache: ScopeCache): Map<string, string> {
+  if (cache.imports) return cache.imports;
+  const imports = new Map<string, string>();
+  let root = node;
+  while (root.parent) root = root.parent;
+  for (const s of root.namedChildren) {
+    if (s.type !== 'import_statement') continue;
+    const spec = s.childForFieldName('source')?.text.slice(1, -1) ?? '';
+    const walk = (n: any) => {
+      if (n.type === 'identifier') { imports.set(n.text, spec); return; }
+      if (n.type === 'import_specifier') {
+        const bound = n.childForFieldName('alias') ?? n.childForFieldName('name');
+        if (bound) imports.set(bound.text, spec);
+        return;
+      }
+      for (const c of n.namedChildren) walk(c);
+    };
+    for (const c of s.namedChildren) if (c.type === 'import_clause') walk(c);
+  }
+  return (cache.imports = imports);
+}
+
+const NODE_BUILTINS = new Set(builtinModules);
+
+/**
+ * True when a module specifier names a package or a runtime builtin, never a project file: a
+ * `node:`/`bun:` style scheme, a Node builtin, a scoped package. `loose` also takes a bare one-segment
+ * name (`lodash`, `pinia`), which an import statement or `require` makes certain enough: a tsconfig
+ * `baseUrl` path has a folder (`stores/user`), but is not known here and stays unproven.
+ */
+function isPackageSpecifier(spec: string, loose: boolean): boolean {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(spec) || NODE_BUILTINS.has(spec) || /^@[\w.-]+\/[\w.-]+/.test(spec)) return true;
+  return loose && /^[\w.-]+$/.test(spec) && !spec.startsWith('.');
+}
+
+/**
+ * Whether what a destructuring reads from provably holds no project symbol (`local`: an object or
+ * array literal, a name imported from a package or a call of one, a call given a package specifier
+ * such as `load('bun:sqlite')`), is an import (null: the scanner resolves the names a `require`,
+ * `import()` or project import binds, M2-20, M2-08-R3), or may be anything (`unproven`: `this.service`, a local variable, a new instance, the
+ * result of a function of this project).
+ */
+function sourceBinding(value: any, cache: ScopeCache, at: any): LocalBinding {
+  for (let step = 0; value && step < 20; step++) {
+    switch (value.type) {
+      case 'object': case 'array': return 'local';
+      case 'await_expression': case 'parenthesized_expression': case 'non_null_expression':
+      case 'as_expression': case 'satisfies_expression':
+        value = value.namedChildren[0];
+        continue;
+      case 'call_expression': {
+        const callee = value.childForFieldName('function');
+        const first = value.childForFieldName('arguments')?.namedChildren[0];
+        const spec = first?.type === 'string' ? first.text.slice(1, -1) : null;
+        // The names a `require` or `import()` binds belong to the scanner: the project module's
+        // exports (M2-20), or a package's, kept as external references (M2-08-R3, M5-19).
+        if (callee?.type === 'import' || (callee?.type === 'identifier' && callee.text === 'require')) return null;
+        if (spec !== null && isPackageSpecifier(spec, false)) return 'local';
+        value = callee;
+        continue;
+      }
+      case 'new_expression': value = value.childForFieldName('constructor'); continue;
+      case 'member_expression': value = value.childForFieldName('object'); continue;
+      case 'identifier': {
+        const spec = importsOf(at, cache).get(value.text);
+        return spec === undefined ? 'unproven' : isPackageSpecifier(spec, true) ? 'local' : null;
+      }
+      default: return 'unproven';
+    }
+  }
+  return 'unproven';
+}
+
+/** What a `const`/`let`/`var` declaration makes of `name`: a plain variable, a destructured local, or nothing. */
+function declarationBinding(declaration: any, name: string, cache: ScopeCache): LocalBinding {
+  if (declaration?.type !== 'lexical_declaration' && declaration?.type !== 'variable_declaration') return null;
+  for (const d of declaration.namedChildren) {
+    if (d.type !== 'variable_declarator') continue;
+    const target = d.childForFieldName('name');
+    if (target?.type === 'identifier') {
+      if (target.text === name) return 'local';
+      continue;
+    }
+    if (target?.type !== 'object_pattern' && target?.type !== 'array_pattern') continue;
+    let info = cache.declarators.get(d.id);
+    if (info === undefined) {
+      info = { names: patternNames(target, new Set()), source: sourceBinding(d.childForFieldName('value'), cache, d) };
+      cache.declarators.set(d.id, info);
+    }
+    if (info && info.source && info.names.has(name)) return info.source;
+  }
+  return null;
+}
+
+/** The `var` names declared anywhere in a function body outside nested functions: they are hoisted to it. */
+function hoistedVars(body: any, cache: ScopeCache): Map<string, LocalBinding> {
+  let vars = cache.hoisted.get(body.id);
+  if (vars) return vars;
+  vars = new Map();
+  const walk = (n: any) => {
+    for (const c of n.namedChildren) {
+      if (JS_FUNCTION_NODES.has(c.type) || c.type === 'class_declaration' || c.type === 'class') continue;
+      if (c.type === 'variable_declaration') {
+        for (const d of c.namedChildren) {
+          const target = d.type === 'variable_declarator' ? d.childForFieldName('name') : null;
+          if (target?.type === 'identifier') vars!.set(target.text, 'local');
+          else if (target) {
+            const source = sourceBinding(d.childForFieldName('value'), cache, d);
+            if (source) for (const n2 of patternNames(target, new Set())) if (vars!.get(n2) !== 'local') vars!.set(n2, source);
+          }
+        }
+      }
+      walk(c);
+    }
+  };
+  walk(body);
+  cache.hoisted.set(body.id, vars);
+  return vars;
+}
+
+/**
+ * Whether `name()` at `node` calls a parameter or a local variable of an enclosing JS/TS function or
+ * block, or Python function (M0-17-R5): a plain declaration (a `var` hoisted from a nested block
+ * too), a for / for-of / for-in variable, a catch parameter, a comprehension variable
+ * (M2-25). Such a call never reaches a module symbol of that name, which is now often a function
+ * (`const useAppSelector = useSelector`): the guard M0-17-R2 had from skipping constants.
+ *
+ * A destructured local (`const { f } = load('bun:sqlite')`) is local when its source provably holds no
+ * project symbol (`sourceBinding`, M2-26); when it may (`const { find } = this.users`), it is
+ * `unproven`, and the call keeps its by-name link marked inferred.
+ */
+function boundLocally(node: any, name: string, cache: ScopeCache): LocalBinding {
+  let curr = node.parent;
+  for (; curr && curr.type !== 'program' && curr.type !== 'module'; curr = curr.parent) {
     const params = curr.type === 'arrow_function' && !curr.childForFieldName('parameters')
       ? curr.childForFieldName('parameter') : curr.childForFieldName('parameters');
-    if ((JS_FUNCTION_NODES.has(curr.type) || curr.type === 'function_definition' || curr.type === 'lambda') && bindsName(params, name)) return true;
+    if ((JS_FUNCTION_NODES.has(curr.type) || curr.type === 'function_definition' || curr.type === 'lambda') && bindsName(params, name)) return 'local';
+    // `for (const step of STEPS) step()`, `catch (cb) { cb() }`: bound in the body, not in the iterable.
+    const loopVar = curr.type === 'for_in_statement' || curr.type === 'for_statement' ? curr.childForFieldName('left')
+      : curr.type === 'catch_clause' ? curr.childForFieldName('parameter') : null;
+    if (loopVar && !within(curr.childForFieldName('right'), node) && patternNames(loopVar, new Set()).has(name)) return 'local';
+    // `for (let run = …; ; ) run()`.
+    if (curr.type === 'for_statement') {
+      const declared = declarationBinding(curr.childForFieldName('initializer'), name, cache);
+      if (declared) return declared;
+    }
+    if (curr.type === 'list_comprehension' || curr.type === 'set_comprehension' || curr.type === 'dictionary_comprehension' || curr.type === 'generator_expression') {
+      if (curr.namedChildren.some((c: any) => c.type === 'for_in_clause' && !within(c.childForFieldName('right'), node)
+        && patternNames(c.childForFieldName('left'), new Set()).has(name))) return 'local';
+    }
     const jsBlock = curr.type === 'statement_block' && curr.parent?.type !== 'internal_module' && curr.parent?.type !== 'module';
     const pyBody = curr.type === 'block' && curr.parent?.type === 'function_definition';
     if (!jsBlock && !pyBody) continue;
     for (const s of curr.namedChildren) {
-      if ((s.type === 'lexical_declaration' || s.type === 'variable_declaration')
-        && s.namedChildren.some((d: any) => d.type === 'variable_declarator' && d.childForFieldName('name')?.type === 'identifier' && d.childForFieldName('name').text === name)) return true;
+      const declared = declarationBinding(s, name, cache);
+      if (declared) return declared;
       const assignment = s.type === 'expression_statement' ? s.namedChildren[0] : null;
-      if (pyBody && assignment?.type === 'assignment' && assignment.childForFieldName('left')?.type === 'identifier' && assignment.childForFieldName('left').text === name) return true;
+      if (pyBody && assignment?.type === 'assignment' && assignment.childForFieldName('left')?.type === 'identifier' && assignment.childForFieldName('left').text === name) return 'local';
+    }
+    if (jsBlock && JS_FUNCTION_NODES.has(curr.parent?.type)) {
+      const hoisted = hoistedVars(curr, cache).get(name);
+      if (hoisted) return hoisted;
     }
   }
-  return false;
+  // A module-level destructuring holds no symbol of its own; a plain module-level `const x` does,
+  // and the scanner knows it.
+  if (curr?.type !== 'program') return null;
+  for (const s of curr.namedChildren) {
+    if (s.type !== 'lexical_declaration' && s.type !== 'variable_declaration') continue;
+    if (s.namedChildren.some((d: any) => d.type === 'variable_declarator' && d.childForFieldName('name')?.type === 'identifier' && d.childForFieldName('name').text === name)) continue;
+    const declared = declarationBinding(s, name, cache);
+    if (declared) return declared;
+  }
+  return null;
 }
 
 /**
@@ -570,6 +758,7 @@ export class GenericWasmParser implements LanguageParser {
       );
 
       let currentScope: string | null = null;
+      const scopeCache = newScopeCache();
       const seenNodeIds = new Set<number>();
       // Each stored symbol by its node, labelled as the scanner names a source symbol (M5-03-R2).
       const symbolByNodeId = new Map<number, { kind: SymbolKind; label: string; oneLine: boolean }>();
@@ -802,7 +991,12 @@ export class GenericWasmParser implements LanguageParser {
             // `fetchUser()` on a parameter or local variable is not the module's `fetchUser` (M0-17-R5).
             if ((referenceType === 'call' || referenceType === 'instantiation') && LOCAL_SCOPE_LANGUAGES.has(this.languageName)
               && !filePath.endsWith('.vue') && capture.node.type === 'identifier'
-              && CALL_NODES.has(capture.node.parent?.type ?? '') && boundLocally(capture.node, targetName)) continue;
+              && CALL_NODES.has(capture.node.parent?.type ?? '')) {
+              const bound = boundLocally(capture.node, targetName, scopeCache);
+              if (bound === 'local') continue;
+              // A destructured name whose source may be a project symbol (`const { find } = this.users`).
+              if (bound === 'unproven') verifiability = 'inferred';
+            }
 
             // Go `struct { log.Logger }`, `domain.Order{}`, `domain.NewOrder()` and `domain.Order{}.Run()`:
             // the declaration lives in the imported package, which the scanner resolves; a library
