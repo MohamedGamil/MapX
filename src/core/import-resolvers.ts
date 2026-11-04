@@ -135,6 +135,150 @@ export function javaImportOutsideProject(name: string, isStatic: boolean, source
   return !jvmPackagePathsOf(ctx.files).has(cls.slice(0, -1).join('/'));
 }
 
+/** A JVM source's text without block and line comments. */
+export function stripJvmComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
+}
+
+/** The `package` a JVM source's text declares, '' for none. */
+export function jvmPackageIn(text: string): string {
+  return stripJvmComments(text).match(/^[ \t]*package\s+([\w.]+)/m)?.[1] ?? '';
+}
+
+/** The single-type and single static imports of Java text, as dotted names; `.*` imports name nothing (M2-08-R5). */
+export function javaImportStatements(text: string): Array<{ name: string; isStatic: boolean }> {
+  const out: Array<{ name: string; isStatic: boolean }> = [];
+  for (const m of stripJvmComments(text).matchAll(/^[ \t]*import\s+(static\s+)?([\w$]+(?:\s*\.\s*[\w$]+)+)\s*;/gm)) {
+    out.push({ name: m[2]!.replace(/\s+/g, ''), isStatic: !!m[1] });
+  }
+  return out;
+}
+
+/** What decides whether a project JVM file is a package's declaration: its `package` and the type names it declares (M2-08-R8). */
+export function jvmDeclarationSignature(text: string): string {
+  const code = stripJvmComments(text);
+  const types = new Set<string>();
+  for (const m of code.matchAll(/\b(?:class|interface|enum|record|object|trait)\s+([A-Za-z_$][\w$]*)/g)) types.add(m[1]!);
+  return `${jvmPackageIn(text)}|${[...types].sort().join(',')}`;
+}
+
+/** The qualified names (`a.b.C`) of the types a `jvmDeclarationSignature` declares; none without a package. */
+export function jvmSignatureTypes(signature: string): string[] {
+  const cut = signature.indexOf('|');
+  const pkg = signature.slice(0, Math.max(0, cut));
+  return pkg ? signature.slice(cut + 1).split(',').filter(Boolean).map(t => `${pkg}.${t}`) : [];
+}
+
+export const JVM_SOURCE = /\.(?:java|kt|kts|scala)$/;
+
+/**
+ * What changed files add to or take from the decisions on the imports of others (M2-08-R8):
+ * - `stems`: dotted trailing runs of a JVM file's path without extension (the file of a class);
+ * - `folders`: dotted trailing runs of a JVM file's folder that no other JVM file has (a package folder
+ *   appearing or going), not those of a file added beside others;
+ * - `types`: qualified names of the types a JVM file declares, gained or lost;
+ * - `pyNames`: folder and module names of a Python file that no other Python file has (a top-level
+ *   name `pythonNameInProject` finds appearing or going).
+ */
+export interface ImportDecisionKeys {
+  stems: Set<string>;
+  folders: Set<string>;
+  types: Set<string>;
+  pyNames: Set<string>;
+}
+
+export const emptyImportDecisionKeys = (): ImportDecisionKeys => ({ stems: new Set(), folders: new Set(), types: new Set(), pyNames: new Set() });
+
+/** The dotted trailing runs of a JVM file's folder (`a.b.c`, `b.c`, `c`). */
+function jvmFolderRuns(path: string): string[] {
+  const dirs = dirOf(path).split('/').filter(Boolean);
+  return dirs.map((_, i) => dirs.slice(i).join('.'));
+}
+
+/** The dotted trailing runs of a JVM file's path without extension (`a.b.C`, `b.C`, `C`). */
+function jvmStemRuns(path: string): string[] {
+  const dirs = dirOf(path).split('/').filter(Boolean);
+  const stem = posix.basename(path).replace(/\.[^.]+$/, '');
+  return [...dirs.map((_, i) => [...dirs.slice(i), stem].join('.')), stem];
+}
+
+/** The folder and module names a Python file's path gives (`pythonNameInProject`). */
+function pythonNamesOf(path: string): string[] {
+  const names = dirOf(path).split('/').filter(Boolean);
+  const stem = posix.basename(path, '.py');
+  if (stem !== '__init__') names.push(stem);
+  return names;
+}
+
+/**
+ * The indexed JVM and Python files left once a change is made, to tell whether a folder or a name a
+ * changed file carries is new or lost with it. Built lazily and once: a change that touches no JVM or
+ * Python file never reads the paths (M2-08-R8).
+ */
+export class ImportDecisionBaseline {
+  private dirs?: Set<string>;
+  private runs?: Set<string>;
+  private names?: Set<string>;
+  constructor(private readonly paths: () => string[]) {}
+
+  private load(): void {
+    if (this.dirs) return;
+    this.dirs = new Set();
+    this.runs = new Set();
+    this.names = new Set();
+    for (const p of this.paths()) {
+      if (JVM_SOURCE.test(p)) {
+        const dir = dirOf(p);
+        if (!this.dirs.has(dir)) {
+          this.dirs.add(dir);
+          for (const r of jvmFolderRuns(p)) this.runs.add(r);
+        }
+      } else if (p.endsWith('.py')) {
+        for (const n of pythonNamesOf(p)) this.names.add(n);
+      }
+    }
+  }
+
+  /** The folder runs of a JVM file that no remaining JVM file has. */
+  newFolderRuns(path: string): string[] {
+    this.load();
+    return this.dirs!.has(dirOf(path)) ? [] : jvmFolderRuns(path).filter(r => !this.runs!.has(r));
+  }
+
+  /** The names of a Python file that no remaining Python file has. */
+  newPythonNames(path: string): string[] {
+    this.load();
+    return pythonNamesOf(path).filter(n => !this.names!.has(n));
+  }
+}
+
+/** Adds what a file at `path` brings or takes; `types` are the qualified type names whose declaration comes or goes. */
+export function addImportDecisionKeys(keys: ImportDecisionKeys, path: string, types: string[], baseline: ImportDecisionBaseline): void {
+  if (JVM_SOURCE.test(path)) {
+    for (const r of jvmStemRuns(path)) keys.stems.add(r);
+    for (const r of baseline.newFolderRuns(path)) keys.folders.add(r);
+    for (const t of types) keys.types.add(t);
+  } else if (path.endsWith('.py')) {
+    for (const n of baseline.newPythonNames(path)) keys.pyNames.add(n);
+  }
+}
+
+/**
+ * Whether the decision on a Java import `a.b.C` (or `a.b.C.m`) reads what the keys name: a file at
+ * `a/b/C.java`, or the class of a static member (`resolveJvmImport`: `a.b.C` and, one segment up,
+ * `a.b.C.m`'s `a.b.C`); the folder of its package (`javaImportOutsideProject`: `a.b`, or `a.b` of a
+ * static member's `a.b.C.m`); a file declaring a type `a.b.C`, or the outer class of a nested one
+ * (`jvmProjectDeclares`).
+ */
+export function jvmImportAffected(name: string, keys: ImportDecisionKeys): boolean {
+  const parts = name.split('.');
+  const head = (drop: number) => (parts.length > drop ? parts.slice(0, parts.length - drop).join('.') : null);
+  for (const drop of [0, 1]) { const k = head(drop); if (k && keys.stems.has(k)) return true; }
+  for (const drop of [1, 2]) { const k = head(drop); if (k && keys.folders.has(k)) return true; }
+  for (let i = 2; i <= parts.length; i++) if (keys.types.has(parts.slice(0, i).join('.'))) return true;
+  return false;
+}
+
 /** Number of leading directories two paths share. */
 function sharedDirs(a: string, b: string): number {
   const x = a.split('/'), y = b.split('/');

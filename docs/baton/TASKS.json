@@ -28661,7 +28661,7 @@
       "milestone": "M2",
       "title": "Sync re-resolves Java and Python importers when an imported project package goes away",
       "objective": "When the project files a Java or Python import named are deleted (the import is now outside the project), sync re-resolves the importing files, so sync equals scan --force.",
-      "description": "Review of M2-08-R5 (2026-11-04): Use.java imports com.thirdp.Invoice, which the project declares; after deleting the thirdp folder, `mapx sync` keeps Use::run → acme/Invoice.java (call total, instantiation Invoice), and scan --force gives none. Adding the folder back syncs correctly; Python add/delete matched in the review.",
+      "description": "Review of M2-08-R5 (2026-11-04): Use.java imports com.thirdp.Invoice, which the project declares (com/thirdp holds another class, so the import of the missing Invoice is unknown and links by name); after deleting the thirdp folder, `mapx sync` keeps Use::run → acme/Invoice.java (call total, instantiation Invoice), and scan --force gives none. Whether a Java or Python import is outside the project depends on other files (a project package folder, a declaring file whatever its folder, a top-level module or folder name), and no sync mechanism re-parsed the importer for them. Adding the folder back synced correctly (the removed-file record); Python add/delete matched in the review only when the module itself resolved. Fix: each parse records the imports it decided (jvmDecl, jvmImports, pyImports in files.metadata); sync re-parses the importers whose recorded imports name a package, class or top-level name that an added, deleted, moved or edited file brings or takes.",
       "priority": "P2",
       "estimate": {
         "min": 2,
@@ -28685,29 +28685,95 @@
       ],
       "outputs": [
         "src/core/scanner.ts",
+        "src/core/import-resolvers.ts",
+        "src/core/store.ts",
+        "src/core/extractor-version.ts",
+        "src/exporters/graph-exporter.ts",
         "tests/import-bound-externals.test.ts",
+        "CHANGELOG.md",
+        "iterations/M2-08-R8.md",
         "reports/M2-08-R8.md"
       ],
       "affectedFiles": [
         "src/core/scanner.ts",
+        "src/core/import-resolvers.ts",
+        "src/core/store.ts",
+        "src/core/extractor-version.ts",
+        "src/exporters/graph-exporter.ts",
         "tests/import-bound-externals.test.ts"
       ],
       "acceptanceCriteria": [
-        "Java and Python: delete the project package a file imports, run hash sync and git sync; the importer’s edges equal those of scan --force (e2e test)."
+        "Java and Python: delete the project package a file imports, run hash sync and git sync; the importer’s edges equal those of scan --force, and only the importer is re-parsed (e2e test, tests/import-bound-externals.test.ts).",
+        "Java: add a project package (a folder file, or a file elsewhere declaring the package with the class, or a class added to a file of that package) that a previously-outside import names; sync links the importer as scan --force does (e2e).",
+        "Java: editing a declaring file’s package away from the imported class unlinks it, and back links it; deleting a declaring file whose folder is not its package unlinks it; moving it out of its package folder keeps the link; each equal to scan --force (e2e).",
+        "Python: deleting a project folder that carries the top-level name of an unresolved import unlinks the importer, re-creating it links again; adding a folder or module of the name an outside import uses links it; each equal to scan --force (e2e).",
+        "A body edit of an imported class, a new file in a package no importer names, and an unrelated new Python file re-parse no importer; a plain scan without --force agrees with sync (e2e).",
+        "Star imports, static imports, nested classes, Kotlin and Scala: `from nslib.models import *` links once `nslib/models.py` is added and `from vendorlib.models import *` unlinks when `vendorlib/` is deleted; a static import of a member links when its package gains a folder or its class file is added; an import through an outer class a file elsewhere declares links; a Kotlin file added and a Scala file deleted flip a Java import; each equal to scan --force (e2e).",
+        "Cost: a body edit re-parses 1 file; a file added beside others in an imported package re-parses none of the importers of its other classes; a file deleted or a class added re-parses the importers of that class; a package folder deleted, the importers of that package (hash and git sync, 3000 Java files; measured in the report).",
+        "The JSON graph export leaves the sync records jvmDecl, jvmImports and pyImports out of a file’s metadata (e2e)."
       ],
       "verificationCommands": [
         "npx vitest run tests/import-bound-externals.test.ts"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-04T13:10:11.467Z",
+      "completedAt": "2026-11-04T15:25:37.435Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M2-08-R8.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/import-bound-externals.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R8.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M2-08-R8.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-04T13:10:10.878Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T13:10:11.467Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T15:25:36.889Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-04T15:25:37.435Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/import-bound-externals.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R8.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M2-08-R8.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -32919,6 +32985,69 @@
         "npx vitest run tests/local-binding-calls.test.ts",
         "npm run eval"
       ]
+    },
+    {
+      "id": "M2-27",
+      "milestone": "M2",
+      "title": "A Java import of a project class links that class, not a same-named class in another package",
+      "objective": "`import com.thirdp.Invoice;` in a Java file makes `Invoice`, `new Invoice()`, `Invoice.helper()` and `new Invoice().total()` link com/thirdp/Invoice.java (the imported class, found by its package declaration), never a same-named class in another package; a same-package class without an import keeps linking.",
+      "description": "Found by M2-08-R8 (2026-11-04), pre-existing: with com/thirdp/Invoice.java present, Use.java importing com.thirdp.Invoice links com/acme/Invoice.java — Java name lookup does not follow a single-type import to its file (resolveImportedCall returns null for Java; resolveSymbolToFile picks by name). Two same-named classes in different packages are common (Order, User, Config).",
+      "priority": "P2",
+      "estimate": {
+        "min": 3,
+        "expected": 5,
+        "max": 8
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-08-R8",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [],
+      "sources": [
+        "docs/baton/reports/M2-08-R8.md",
+        "docs/baton/reports/M2-08-R5.md",
+        "docs/baton/reports/M2-12.md"
+      ],
+      "outputs": [
+        "src/core/scanner.ts",
+        "tests/java-imports.test.ts",
+        "reports/M2-27.md"
+      ],
+      "affectedFiles": [
+        "src/core/scanner.ts",
+        "src/core/import-resolvers.ts",
+        "src/core/extractor-version.ts",
+        "tests/java-imports.test.ts"
+      ],
+      "acceptanceCriteria": [
+        "Two classes named Invoice in com.acme and com.thirdp; a file importing com.thirdp.Invoice links only com/thirdp/Invoice.java for the type, the instantiation, a static call and `new Invoice().total()` (e2e); a file in package com.acme using Invoice without an import links com/acme/Invoice.java (e2e); a folder layout that differs from the package declaration still resolves by package (e2e); `npm run eval` holds."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/java-imports.test.ts tests/import-bound-externals.test.ts",
+        "npm run eval",
+        "npm run check"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "maintainer",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit."
     },
     {
       "milestone": "M5",

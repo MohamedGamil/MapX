@@ -1625,3 +1625,293 @@ describe('sync agrees with scan --force when a module root is configured later (
     expect(edgesFrom(root, 'main.js')).toEqual(synced);
   }, 120000);
 });
+
+// M2-08-R8: whether a Java or Python import is "outside" the project depends on other files (does a
+// project file declare that package or class? does a folder of that package exist? does a module or
+// folder carry the top-level name?), so adding, deleting or moving those files changes the importer's
+// links without changing the importer. Each parse records the imports it decided (`jvmImports`,
+// `pyImports`), and sync re-parses the importers the changed files' names or packages may flip.
+describe.each([['git', true], ['hash', false]])('%s sync when the project package an import names changes (M2-08-R8)', (_mode, useGit) => {
+  let root: string;
+  const jv = 'src/main/java';
+  const invoice = `package com.acme;\n\npublic class Invoice {\n    public int total() { return 1; }\n}\n`;
+  const user = (pkg: string, cls: string, imp: string) =>
+    `package com.use;\n\nimport ${imp};\n\npublic class ${cls} {\n    public int run() {\n        ${pkg} x = new ${pkg}();\n        return new ${pkg}().total();\n    }\n}\n`;
+  const ledger = (pkg: string) => `package ${pkg};\n\npublic class Ledger {\n    public void post() {}\n}\n`;
+  const useLedger = `package com.use;\n\nimport com.books.Ledger;\n\npublic class UseLedger {\n    public void run() {\n        new Ledger().post();\n    }\n}\n`;
+  const order = 'class Order:\n    def total(self):\n        return 1\n';
+  const pyUse = (module: string) => `from ${module} import Order\n\n\ndef charge():\n    return Order().total()\n`;
+
+  beforeEach(() => {
+    root = workspace({
+      [`${jv}/com/acme/Invoice.java`]: invoice,
+      // The package com.thirdp is the project's (one class), so the import of Invoice from it is unknown: name lookup.
+      [`${jv}/com/thirdp/Marker.java`]: 'package com.thirdp;\n\npublic class Marker {}\n',
+      [`${jv}/com/use/Use.java`]: user('Invoice', 'Use', 'com.thirdp.Invoice'),
+      // No project package com.extlib: certainly outside.
+      [`${jv}/com/use/UseVendor.java`]: user('Invoice', 'UseVendor', 'com.extlib.Invoice'),
+      // A class whose folder is not its package: the project's by its package declaration.
+      'misc/Ledger.java': ledger('com.books'),
+      [`${jv}/com/use/UseLedger.java`]: useLedger,
+      // The project's Stamp is declared by a file outside its package folder; another Stamp is name lookup's pick.
+      'misc/Stamp.java': 'package com.stamps;\n\npublic class Stamp {\n    public int total() { return 1; }\n}\n',
+      [`${jv}/com/other/Stamp.java`]: 'package com.other;\n\npublic class Stamp {\n    public int total() { return 2; }\n}\n',
+      [`${jv}/com/use/UseStamp.java`]: user('Stamp', 'UseStamp', 'com.stamps.Stamp'),
+      // A static import, a nested class, and a Kotlin and a Scala file that declare a package.
+      [`${jv}/com/acme/Helper.java`]: 'package com.acme;\n\npublic class Helper {\n    public static int helper() { return 1; }\n}\n',
+      [`${jv}/com/use/UseStatic.java`]: 'package com.use;\n\nimport static com.statlib.Util.helper;\n\npublic class UseStatic {\n    public int run() { return helper(); }\n}\n',
+      [`${jv}/com/acme/Inner.java`]: 'package com.acme;\n\npublic class Inner {\n    public int total() { return 1; }\n}\n',
+      [`${jv}/com/use/UseNested2.java`]: 'package com.use;\n\nimport com.nested.Outer.Inner;\n\npublic class UseNested2 {\n    public int run() { return new Inner().total(); }\n}\n',
+      [`${jv}/com/acme/Gadget.java`]: 'package com.acme;\n\npublic class Gadget {\n    public int spin() { return 1; }\n}\n',
+      [`${jv}/com/acme/Widget.java`]: 'package com.acme;\n\npublic class Widget {\n    public int spin() { return 2; }\n}\n',
+      [`${jv}/com/use/UseGadget.java`]: 'package com.use;\n\nimport com.ktlib.Gadget;\n\npublic class UseGadget {\n    public int run() { return new Gadget().spin(); }\n}\n',
+      // A static import of a member of a class: the class's file, added with no package line, is the one it resolves to.
+      [`${jv}/com/use/UseLater.java`]: 'package com.use;\n\nimport static com.acme.Later.later;\n\npublic class UseLater {\n    public int run() { return later(); }\n}\n',
+      [`${jv}/com/use/UseWidget.java`]: 'package com.use;\n\nimport com.sclib.Widget;\n\npublic class UseWidget {\n    public int run() { return new Widget().spin(); }\n}\n',
+      'scala/Widget.scala': 'package com.sclib\n\nclass Widget {\n  def spin(): Int = 1\n}\n',
+      // A package com.extlib class that is not Invoice, and a class an importer names: edits to them that add or drop no class name re-parse nobody.
+      'misc/Holder.java': 'package com.extlib;\n\npublic class Holder {}\n',
+      [`${jv}/com/acme/Lonely.java`]: 'package com.acme;\n\npublic class Lonely {\n    public int one() { return 1; }\n}\n',
+      [`${jv}/com/use/UseLonely.java`]: 'package com.use;\n\nimport com.acme.Lonely;\n\npublic class UseLonely {\n    public int run() { return new Lonely().one(); }\n}\n',
+      'app/order.py': order,
+      // An unresolved import of a name the project has: only a lost or new `app` re-parses it, not a file added in it.
+      'app/use_missing.py': pyUse('app.missing'),
+      // Star imports are decided the same way (`pythonScope`): no project nslib, and a project vendorlib.
+      'app/use_star_new.py': 'from nslib.models import *\n\n\ndef make():\n    return Order()\n',
+      'app/use_star_vendor.py': 'from vendorlib.models import *\n\n\ndef make():\n    return Order()\n',
+      // vendorlib is a project package (one file), so a module it lacks may be the project's: name lookup.
+      'vendorlib/other.py': 'X = 1\n',
+      'app/use_vendor.py': pyUse('vendorlib.models'),
+      // No project newlib: certainly outside.
+      'app/use_new.py': pyUse('newlib.models'),
+    });
+    if (useGit) {
+      git(root, 'init', '-q');
+      git(root, 'add', '-A');
+      git(root, 'commit', '-qm', 'init');
+    }
+    init(root);
+    mapx(root, 'scan', '.');
+  }, 120_000);
+  afterEach(() => cleanup(root));
+
+  const all = () => query<Edge>(root, `SELECT source_file, source_symbol, edge_type, target_file, target_symbol FROM edges
+    WHERE edge_type NOT IN ('import', 'require') ORDER BY 1, 2, 3, 4, 5`);
+  const updated = (output: string) => /Updated (\d+) files/.exec(output)?.[1];
+  const links = (file: string) => [...new Set(edgesFrom(root, file))];
+  const inv = `${jv}/com/acme/Invoice.java`;
+  const sameAsForce = () => {
+    const synced = all();
+    mapx(root, 'scan', '.', '--force');
+    expect(all()).toEqual(synced);
+  };
+
+  it('Java: deleting the project package an import names drops the importer\'s links, as scan --force does', () => {
+    expect(links(`${jv}/com/use/Use.java`)).toEqual([`Use::run call ${inv}#total`, `Use::run instantiation ${inv}#Invoice`]);
+    rmSync(join(root, `${jv}/com/thirdp`), { recursive: true });
+    // The importer is re-parsed; the file nothing imports and the other importers are not.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    expect(links(`${jv}/com/use/Use.java`)).toEqual([]);
+    sameAsForce();
+    expect(links(`${jv}/com/use/Use.java`)).toEqual([]);
+  }, 120_000);
+
+  it('Java: adding a project package an outside import names links the importer, as scan --force does', () => {
+    expect(links(`${jv}/com/use/UseVendor.java`)).toEqual([]);
+    mkdirSync(join(root, `${jv}/com/extlib`), { recursive: true });
+    writeFileSync(join(root, `${jv}/com/extlib/Marker.java`), 'package com.extlib;\n\npublic class Marker {}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseVendor.java`)).toEqual([`UseVendor::run call ${inv}#total`, `UseVendor::run instantiation ${inv}#Invoice`]);
+    sameAsForce();
+    expect(links(`${jv}/com/use/UseVendor.java`)).toHaveLength(2);
+  }, 120_000);
+
+  it('Java: a file added in the package by another folder, declaring it, links the importer too', () => {
+    // `com.extlib.Invoice` declared by a file under misc/: its folder is no com/extlib.
+    writeFileSync(join(root, 'misc/Invoice.java'), 'package com.extlib;\n\npublic class Invoice {\n    public int total() { return 3; }\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseVendor.java`).length).toBeGreaterThan(0);
+    sameAsForce();
+    expect(links(`${jv}/com/use/UseVendor.java`).length).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('Java: a package declaration edited away from the imported class unlinks it, and back links it again', () => {
+    expect(links(`${jv}/com/use/UseLedger.java`)).toEqual(['UseLedger::run call misc/Ledger.java#post', 'UseLedger::run instantiation misc/Ledger.java#Ledger']);
+    writeFileSync(join(root, 'misc/Ledger.java'), ledger('com.other'));
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseLedger.java`)).toEqual([]);
+    sameAsForce();
+    writeFileSync(join(root, 'misc/Ledger.java'), ledger('com.books'));
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseLedger.java`)).toEqual(['UseLedger::run call misc/Ledger.java#post', 'UseLedger::run instantiation misc/Ledger.java#Ledger']);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: moving the declaring file out of its package folder keeps the importer\'s links', () => {
+    mkdirSync(join(root, `${jv}/com/books`), { recursive: true });
+    writeFileSync(join(root, `${jv}/com/books/Ledger.java`), ledger('com.books'));
+    rmSync(join(root, 'misc/Ledger.java'));
+    mapx(root, 'sync', '.');
+    expect(links(`${jv}/com/use/UseLedger.java`)).toHaveLength(2);
+    // The folder no longer matches the package; the declaration still does.
+    mkdirSync(join(root, 'elsewhere'), { recursive: true });
+    writeFileSync(join(root, 'elsewhere/Ledger.java'), ledger('com.books'));
+    rmSync(join(root, `${jv}/com/books`), { recursive: true });
+    mapx(root, 'sync', '.');
+    expect(links(`${jv}/com/use/UseLedger.java`)).toEqual(['UseLedger::run call elsewhere/Ledger.java#post', 'UseLedger::run instantiation elsewhere/Ledger.java#Ledger']);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: deleting the file that declares the imported package from another folder drops the importer\'s links', () => {
+    expect(links(`${jv}/com/use/UseStamp.java`)).not.toEqual([]);
+    rmSync(join(root, 'misc/Stamp.java'));
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    expect(links(`${jv}/com/use/UseStamp.java`)).toEqual([]);
+    sameAsForce();
+    expect(links(`${jv}/com/use/UseStamp.java`)).toEqual([]);
+  }, 120_000);
+
+  it('a rescan without --force re-parses the same importers, for an added package and a deleted one', () => {
+    mkdirSync(join(root, 'newlib'));
+    writeFileSync(join(root, 'newlib/other.py'), 'X = 1\n');
+    mkdirSync(join(root, `${jv}/com/extlib`), { recursive: true });
+    writeFileSync(join(root, `${jv}/com/extlib/Marker.java`), 'package com.extlib;\n\npublic class Marker {}\n');
+    rmSync(join(root, `${jv}/com/thirdp`), { recursive: true });
+    mapx(root, 'scan', '.');
+    expect(links('app/use_new.py')).toHaveLength(2);
+    expect(links(`${jv}/com/use/UseVendor.java`)).toHaveLength(2);
+    expect(links(`${jv}/com/use/Use.java`)).toEqual([]);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: a class added to a file in the imported package links the importer', () => {
+    expect(links(`${jv}/com/use/UseVendor.java`)).toEqual([]);
+    writeFileSync(join(root, 'misc/Holder.java'), 'package com.extlib;\n\npublic class Holder {}\n\nclass Invoice {\n    int total() { return 4; }\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseVendor.java`).length).toBeGreaterThan(0);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: a file added beside others in a package, or one of them deleted, re-parses only the importers of that class', () => {
+    // UseLonely imports com.acme.Lonely; com/acme keeps its other files, so no folder is new or lost.
+    writeFileSync(join(root, `${jv}/com/acme/Extra2.java`), 'package com.acme;\n\npublic class Extra2 {}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    rmSync(join(root, `${jv}/com/acme/Extra2.java`));
+    expect(updated(mapx(root, 'sync', '.'))).toBe('0');
+    rmSync(join(root, `${jv}/com/acme/Lonely.java`));
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: a static import of a member of a class in a package that gains a folder links the importer', () => {
+    expect(links(`${jv}/com/use/UseStatic.java`)).toEqual([]);
+    mkdirSync(join(root, `${jv}/com/statlib`), { recursive: true });
+    writeFileSync(join(root, `${jv}/com/statlib/Marker.java`), 'package com.statlib;\n\npublic class Marker {}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseStatic.java`)).toEqual([`UseStatic::run call ${jv}/com/acme/Helper.java#helper`]);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: a nested class imported through an outer class a file elsewhere declares links the importer', () => {
+    expect(links(`${jv}/com/use/UseNested2.java`)).toEqual([]);
+    writeFileSync(join(root, 'misc/Outer.java'), 'package com.nested;\n\npublic class Outer {\n    public static class Inner {\n        public int total() { return 3; }\n    }\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseNested2.java`).length).toBeGreaterThan(0);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: a static import of a member of a class links the importer once the class\'s file is added', () => {
+    expect(links(`${jv}/com/use/UseLater.java`)).toEqual([]);
+    // No package line and a folder com/acme that already exists: only the path `com/acme/Later` ties the file to the import.
+    writeFileSync(join(root, `${jv}/com/acme/Later.java`), 'public class Later {\n    public static int later() { return 1; }\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseLater.java`)).toEqual([`UseLater::run call ${jv}/com/acme/Later.java#later`]);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: a Kotlin file declaring the imported package links the importer', () => {
+    expect(links(`${jv}/com/use/UseGadget.java`)).toEqual([]);
+    mkdirSync(join(root, 'kt'), { recursive: true });
+    writeFileSync(join(root, 'kt/Gadget.kt'), 'package com.ktlib\n\nclass Gadget {\n    fun spin(): Int = 1\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links(`${jv}/com/use/UseGadget.java`).length).toBeGreaterThan(0);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: deleting a Scala file declaring the imported package unlinks the importer', () => {
+    expect(links(`${jv}/com/use/UseWidget.java`).length).toBeGreaterThan(0);
+    rmSync(join(root, 'scala/Widget.scala'));
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    expect(links(`${jv}/com/use/UseWidget.java`)).toEqual([]);
+    sameAsForce();
+  }, 120_000);
+
+  it('Java: edits that change no package or class name re-parse no importer', () => {
+    // A body edit of a class an importer names, and a new file in a package nobody imports from.
+    writeFileSync(join(root, `${jv}/com/acme/Lonely.java`), 'package com.acme;\n\npublic class Lonely {\n    public int one() { return 2; }\n}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    mkdirSync(join(root, `${jv}/com/unused`), { recursive: true });
+    writeFileSync(join(root, `${jv}/com/unused/Extra.java`), 'package com.unused;\n\npublic class Extra {}\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+  }, 120_000);
+
+  it('Python: deleting the project package a module path names drops the importer\'s links, as scan --force does', () => {
+    expect(links('app/use_vendor.py')).toEqual(['charge call app/order.py#total', 'charge instantiation app/order.py#Order']);
+    expect(links('app/use_star_vendor.py')).toEqual(['make instantiation app/order.py#Order']);
+    rmSync(join(root, 'vendorlib'), { recursive: true });
+    // Both importers: the one naming a module of it and the one star-importing a module of it.
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links('app/use_vendor.py')).toEqual([]);
+    expect(links('app/use_star_vendor.py')).toEqual([]);
+    sameAsForce();
+    // And back: the package returns, and its importers link again.
+    mkdirSync(join(root, 'vendorlib'));
+    writeFileSync(join(root, 'vendorlib/other.py'), 'X = 1\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('3');
+    expect(links('app/use_star_vendor.py')).toEqual(['make instantiation app/order.py#Order']);
+    expect(links('app/use_vendor.py')).toEqual(['charge call app/order.py#total', 'charge instantiation app/order.py#Order']);
+    sameAsForce();
+  }, 120_000);
+
+  it('Python: adding a project module whose top-level name an outside import uses links the importer', () => {
+    expect(links('app/use_new.py')).toEqual([]);
+    mkdirSync(join(root, 'newlib'));
+    writeFileSync(join(root, 'newlib/other.py'), 'X = 1\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links('app/use_new.py')).toEqual(['charge call app/order.py#total', 'charge instantiation app/order.py#Order']);
+    sameAsForce();
+  }, 120_000);
+
+  it('Python: a star import of a module the project lacks links once the project has it', () => {
+    expect(links('app/use_star_new.py')).toEqual([]);
+    mkdirSync(join(root, 'nslib'));
+    writeFileSync(join(root, 'nslib/models.py'), 'class Order:\n    pass\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links('app/use_star_new.py')).toEqual(['make instantiation nslib/models.py#Order']);
+    sameAsForce();
+  }, 120_000);
+
+  it('the JSON export leaves the records a parse keeps for sync out of the file metadata', () => {
+    const stored = query<{ metadata: string }>(root, `SELECT metadata FROM files WHERE path IN ('${inv}', 'app/use_vendor.py', '${jv}/com/use/UseVendor.java')`).map(r => JSON.parse(r.metadata ?? '{}'));
+    // The records are kept (the sync below relies on them) ...
+    expect(stored.some(m => 'jvmDecl' in m)).toBe(true);
+    expect(stored.some(m => 'jvmImports' in m)).toBe(true);
+    expect(stored.some(m => 'pyImports' in m)).toBe(true);
+    // ... and not exported.
+    const exported = JSON.parse(mapx(root, 'export', '-d', root, '--format', 'json')) as { files: Array<{ path: string; metadata?: Record<string, unknown> }> };
+    expect(exported.files.length).toBeGreaterThan(10);
+    for (const file of exported.files) {
+      for (const key of ['jvmDecl', 'jvmImports', 'pyImports']) expect(file.metadata ?? {}).not.toHaveProperty(key);
+    }
+  }, 120_000);
+
+  it('Python: a module file of that name, beside no folder, counts too; an unrelated file re-parses nobody', () => {
+    // app already exists: a file added in it flips no name, so the importer of `app.missing` stays.
+    writeFileSync(join(root, 'app/unrelated.py'), 'Y = 2\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('1');
+    writeFileSync(join(root, 'newlib.py'), 'Z = 3\n');
+    expect(updated(mapx(root, 'sync', '.'))).toBe('2');
+    expect(links('app/use_new.py')).toEqual(['charge call app/order.py#total', 'charge instantiation app/order.py#Order']);
+    sameAsForce();
+  }, 120_000);
+});

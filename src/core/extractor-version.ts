@@ -70,8 +70,11 @@ import { EXTERNAL_INPUTS_KEY, parseExternalInputs } from './manifests/inputs.js'
  * - 28: M2-08-R7 (a bare Python name the module neither defines nor imports, such as the builtin
  *   `open`, no longer links a same-named function of another module; a star import of a project
  *   module still makes its names visible).
+ * - 29: M2-08-R8 (a Java or Python parse records the imports whose "outside the project" decision
+ *   other files make, `jvmDecl`, `jvmImports`, `pyImports`, so a sync that adds, deletes or moves a
+ *   project package, class or top-level module re-parses the importers it may flip).
  */
-export const EXTRACTOR_VERSION = 28;
+export const EXTRACTOR_VERSION = 29;
 
 /**
  * The version of the external-reference attribution rules (M5-19-R1): how a candidate decided

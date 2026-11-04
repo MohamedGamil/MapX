@@ -173,7 +173,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-08-R3** Names imported from an external module never link to a same-named project symbol — DONE, P1, 4h; depends on M2-08-R2.
 - **M2-08-R6** A bare specifier never resolves to a relative project file — DONE, P2, 4h; depends on M2-08-R3.
 - **M2-08-R7** Python: an unimported name (a builtin such as open) never links a function in another module — DONE, P2, 4h; depends on M2-08-R3.
-- **M2-08-R8** Sync re-resolves Java and Python importers when an imported project package goes away — BACKLOG, P2, 4h; depends on M2-08-R5.
+- **M2-08-R8** Sync re-resolves Java and Python importers when an imported project package goes away — DONE, P2, 4h; depends on M2-08-R5.
 - **M2-08-R9** Sync follows new global declarations: a new or renamed script, a new global in a script, `declare global` in a new file — BACKLOG, P2, 4h; depends on M2-08-R4.
 - **M2-08-R10** JS/TS local names: every declarator of a list and `function *gen` count as declared — BACKLOG, P3, 2h; depends on M2-08-R4.
 - **M2-08-R11** JS/TS bare imports resolve under configured module roots: NODE_PATH, webpack resolve.modules, jest moduleDirectories — DONE, P2, 5h; depends on M2-08-R6.
@@ -200,6 +200,7 @@ No name-only cross-language edges; frontend HTTP calls pair with backend routes.
 - **M2-25** A called loop variable never links a same-named function elsewhere — DONE, P1, 4h; depends on M2-08-R3.
 - **M2-25-R1** A destructured call from a one-segment baseUrl import keeps its edge — BACKLOG, P3, 4h; depends on M2-25, M2-08-R6.
 - **M2-26** A class destructured from a call result never links a same-named class elsewhere — DONE, P1, 4h; depends on M2-08-R3.
+- **M2-27** A Java import of a project class links that class, not a same-named class in another package — BACKLOG, P2, 5h; depends on M2-08-R8.
 
 ## M3 — Vue SFC semantics
 

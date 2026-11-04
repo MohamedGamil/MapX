@@ -26,7 +26,7 @@ import { DEFAULT_IGNORE, buildMatcher, effectiveExcludesFor, isExcludedDir, isSc
 import { collectProviders, extractHttpCalls, HTTP_SOURCE, isHttpSkipped, type HttpClientConfig } from '../frameworks/http/client-calls.js';
 import { HttpCallRegistry, type HttpCallRecord } from '../frameworks/http/http-registry.js';
 import { pairCall, routeDomainHosts, urlHost } from '../frameworks/http/pairing.js';
-import { closest, goImportInWorkspaceModule, goImportOutsideProject, goLayoutModule, importResolverFor, javaImportOutsideProject, pythonNameInProject, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportHit } from './import-resolvers.js';
+import { addImportDecisionKeys, closest, emptyImportDecisionKeys, ImportDecisionBaseline, goImportInWorkspaceModule, goImportOutsideProject, goLayoutModule, importResolverFor, javaImportOutsideProject, javaImportStatements, JVM_SOURCE, jvmDeclarationSignature, jvmImportAffected, jvmPackageIn, jvmSignatureTypes, pythonNameInProject, nearestIndex, phpNameOutsideProject, pythonImportOutsideProject, type ImportContext, type ImportDecisionKeys, type ImportHit } from './import-resolvers.js';
 import { collectConstants, constantsAnywhere, constantsAt, envCandidates, evaluate, expandDotenv, importedConstants, joinURL, parseDotenv } from '../frameworks/http/url-resolver.js';
 import { RouteRegistry } from '../frameworks/route-registry.js';
 import { buildScopedIgnoredSymbols, ignoredSymbolsForFile, type ScopedIgnoredSymbols } from '../parsers/ignored-symbols.js';
@@ -722,6 +722,7 @@ export class Scanner {
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, newFiles.map(f => f.relativePath)),
         ...this.newModuleReferrers(newFiles.map(f => f.relativePath)),
+        ...this.importDecisionReferrers([...newFiles, ...changedFiles].map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.importerReferrers([...newFiles, ...changedFiles].map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.movedReferrers(repo.name, movedCandidates.map(f => ({ path: f.relativePath, content: f.content }))),
         ...this.removedSymbolReferrers(repo.name, changedFiles.map(f => ({ path: f.relativePath, content: f.content }))),
@@ -1171,7 +1172,7 @@ export class Scanner {
     // holds (M0-02-R4), and those using a Vue tag whose global registration changed (M3-08).
     const reindexed = new Set(toReindex.map(r => r.path));
     const listedTexts = [...contents].map(([path, content]) => ({ path, content }));
-    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove, false, listedTexts), ...this.importerReferrers(listedTexts), ...this.newModuleReferrers(listedTexts.map(t => t.path))];
+    const moved = [...this.movedReferrers(repo.name, listedTexts), ...this.removedSymbolReferrers(repo.name, listedTexts), ...this.vanishedNameReferrers(repo.name, listedTexts), ...this.configReferrers(repo.name, toRemove, false, listedTexts), ...this.importerReferrers(listedTexts), ...this.newModuleReferrers(listedTexts.map(t => t.path)), ...this.importDecisionReferrers(listedTexts)];
     const vueUsers = this.vueRegistryReferrers(repo.name, listedTexts, toRemove);
     // Taken again: removeFiles queued the importers of the removed modules (M2-08-R1).
     const queued = toRemove.length ? this.takePendingReferrers(repo.name) : [];
@@ -1793,6 +1794,8 @@ export class Scanner {
     const unresolved = this.unresolvedImports.get(relativePath)!;
     this.unresolvedImports.delete(relativePath);
     if (unresolved.size) this.store.updateFileMetadata(relativePath, { unresolvedImports: [...unresolved].sort() });
+    const decided = this.importDecisionMetadata(relativePath, fileMap);
+    if (decided) this.store.updateFileMetadata(relativePath, decided);
     // The file row was replaced for this parse, so a name the file no longer reaches is gone.
     const globalRefs = this.globalNameRefs.get(relativePath);
     this.globalNameRefs.delete(relativePath);
@@ -3292,11 +3295,9 @@ export class Scanner {
     if (bindings) return bindings;
     bindings = new Map();
     this.externalBindingsCache.set(key, bindings);
-    const text = (this.readWorkspaceText(sourcePath) ?? '').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
     const ctx = this.importContext(fileMap);
-    for (const m of text.matchAll(/^[ \t]*import\s+(static\s+)?([\w$]+(?:\s*\.\s*[\w$]+)+)\s*;/gm)) {
-      const name = m[2]!.replace(/\s+/g, '');
-      if (javaImportOutsideProject(name, !!m[1], sourcePath, ctx) && !this.jvmProjectDeclares(name.split('.'))) bindings.set(name.slice(name.lastIndexOf('.') + 1), { specifier: name, imported: null });
+    for (const { name, isStatic } of javaImportStatements(this.readWorkspaceText(sourcePath) ?? '')) {
+      if (javaImportOutsideProject(name, isStatic, sourcePath, ctx) && !this.jvmProjectDeclares(name.split('.'))) bindings.set(name.slice(name.lastIndexOf('.') + 1), { specifier: name, imported: null });
     }
     return bindings;
   }
@@ -3323,8 +3324,7 @@ export class Scanner {
   private jvmPackageOf(file: string): string {
     let pkg = this.jvmPackages.get(file);
     if (pkg === undefined) {
-      const text = (this.readWorkspaceText(file) ?? '').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, '');
-      this.jvmPackages.set(file, (pkg = text.match(/^[ \t]*package\s+([\w.]+)/m)?.[1] ?? ''));
+      this.jvmPackages.set(file, (pkg = jvmPackageIn(this.readWorkspaceText(file) ?? '')));
     }
     return pkg;
   }
@@ -4248,6 +4248,92 @@ export class Scanner {
   }
 
   /**
+   * What a Java or Python parse records for sync (M2-08-R8): whether an import is outside the project
+   * depends on other files (a project package, class or top-level name), so a sync that adds, deletes
+   * or moves them re-parses the files whose imports they may flip (`importDecisionReferrers`).
+   * - a JVM file: `jvmDecl`, its package and the type names it declares (what makes it a package's
+   *   declaration); a Java file also `jvmImports`, the dotted names of its single-type and static imports;
+   * - a Python file: `pyImports`, the top-level names of its absolute imports no indexed file satisfies.
+   */
+  private importDecisionMetadata(relativePath: string, fileMap: Map<string, string>): Record<string, unknown> | null {
+    if (JVM_SOURCE.test(relativePath)) {
+      const text = this.readWorkspaceText(relativePath) ?? '';
+      const meta: Record<string, unknown> = { jvmDecl: jvmDeclarationSignature(text) };
+      if (relativePath.endsWith('.java')) {
+        const imports = [...new Set(javaImportStatements(text).map(i => i.name))].sort();
+        if (imports.length) meta.jvmImports = imports;
+      }
+      return meta;
+    }
+    if (!relativePath.endsWith('.py')) return null;
+    const tops = new Set<string>();
+    for (const binding of this.pythonExternalBindings(relativePath, fileMap).values()) tops.add(binding.specifier.split('.')[0]!);
+    // A star import names no binding, but its module's decision is the same: `pythonScope` reads it (M2-08-R7).
+    for (const m of stripPythonComments(this.readWorkspaceText(relativePath) ?? '').matchAll(/\bfrom\s+([\w.]+)\s+import\s*\*/g)) {
+      if (this.pythonModuleCandidate(m[1]!, relativePath, fileMap)) tops.add(m[1]!.split('.')[0]!);
+    }
+    return tops.size ? { pyImports: [...tops].sort() } : null;
+  }
+
+  /**
+   * The Java and Python files whose imports the decision "outside the project" may flip, for files
+   * added to the index or edited (M2-08-R8): an added file brings its folders, class path and declared
+   * types (Java) or its folder and module names (Python); an edited Java file brings the types its
+   * package or declarations gained or lost. A file whose parse recorded no import naming
+   * them is not re-parsed, and a body edit changes nothing.
+   */
+  private importDecisionReferrers(files: Array<{ path: string; content?: string }>): Set<string> {
+    const keys = emptyImportDecisionKeys();
+    const baseline = new ImportDecisionBaseline(() => this.store.getJvmAndPythonPaths());
+    for (const { path, content } of files) {
+      if (!JVM_SOURCE.test(path) && !path.endsWith('.py')) continue;
+      const stored = this.store.getFile(path);
+      if (!JVM_SOURCE.test(path)) {
+        if (!stored) addImportDecisionKeys(keys, path, [], baseline);
+        continue;
+      }
+      const signature = jvmDeclarationSignature(content ?? this.readWorkspaceText(path) ?? '');
+      if (!stored) {
+        addImportDecisionKeys(keys, path, jvmSignatureTypes(signature), baseline);
+        continue;
+      }
+      // An edit: the types gained or lost, or all of both when the package changed. A body edit changes none.
+      const before = this.storedMetadata(stored).jvmDecl;
+      const old = typeof before === 'string' ? jvmSignatureTypes(before) : [];
+      const now = jvmSignatureTypes(signature);
+      for (const t of [...old.filter(t => !now.includes(t)), ...now.filter(t => !old.includes(t))]) keys.types.add(t);
+    }
+    return this.importDecisionReferrersOf(keys, files.map(f => f.path));
+  }
+
+  /** The files recorded as importing a name the keys name, but those in `except`. */
+  private importDecisionReferrersOf(keys: ImportDecisionKeys, except: string[]): Set<string> {
+    const referrers = new Set<string>();
+    const recorded = (key: string) => this.store.filesWithMetadataText(`"${key}"`).map(f => ({ path: String(f.path), names: this.storedMetadata(f)[key] }));
+    if (keys.stems.size || keys.folders.size || keys.types.size) {
+      for (const { path, names } of recorded('jvmImports')) {
+        if (Array.isArray(names) && names.some(n => typeof n === 'string' && jvmImportAffected(n, keys))) referrers.add(path);
+      }
+    }
+    if (keys.pyNames.size) {
+      for (const { path, names } of recorded('pyImports')) {
+        if (Array.isArray(names) && names.some(n => keys.pyNames.has(n))) referrers.add(path);
+      }
+    }
+    for (const p of except) referrers.delete(p);
+    return referrers;
+  }
+
+  private storedMetadata(file: { metadata?: unknown }): Record<string, unknown> {
+    try {
+      const parsed = typeof file.metadata === 'string' ? JSON.parse(file.metadata) : null;
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  /**
    * Indexed files whose resolution a new module changes (M2-08-R2):
    * - those that recorded its path as an unresolved import (for an `index` file, its folder's too);
    * - the importers of an indexed module of the same path it now takes precedence over: another
@@ -4778,10 +4864,17 @@ export class Scanner {
     const removed = this.removedFiles(repoName);
     const names = this.removedNames(repoName);
     let changed = false;
+    const decisionKeys = emptyImportDecisionKeys();
+    const gone = new Set(paths);
+    const baseline = new ImportDecisionBaseline(() => this.store.getJvmAndPythonPaths().filter(p => !gone.has(p)));
     for (const p of paths) {
       // References parsed later in this scan must not resolve to a removed file (M0-02-R3).
       this.workspaceFileMap.delete(p);
-      if (!this.store.getFile(p)) continue;
+      const stored = this.store.getFile(p);
+      if (!stored) continue;
+      // A project package, class or top-level name may go with it: imports that named it are decided again (M2-08-R8).
+      const decl = this.storedMetadata(stored).jvmDecl;
+      addImportDecisionKeys(decisionKeys, p, typeof decl === 'string' ? jvmSignatureTypes(decl) : [], baseline);
       removed[p] = [...new Set([...(removed[p] ?? []), ...this.store.getReferrers(p)])];
       // The trailing identifier of each target symbol: `App\Services\UserService` is declared as
       // `UserService` wherever the class moves.
@@ -4797,6 +4890,7 @@ export class Scanner {
       for (const [owner, queued] of this.byRepo(importers)) this.queueReferrers(owner, queued);
       this.store.deleteFile(p);
     }
+    for (const [owner, queued] of this.byRepo(this.importDecisionReferrersOf(decisionKeys, paths))) this.queueReferrers(owner, queued);
     if (changed) {
       this.store.setMeta('removed_files:' + repoName, JSON.stringify(removed));
       this.store.setMeta('removed_names:' + repoName, JSON.stringify(names));
@@ -5950,6 +6044,7 @@ export class Scanner {
       ...this.ownReferrers(repo.name, [
         ...this.takeReferrers(repo.name, discovered.filter(f => f.isNew).map(f => f.relativePath)),
         ...this.newModuleReferrers(discovered.filter(f => f.isNew).map(f => f.relativePath)),
+        ...this.importDecisionReferrers(changedTexts),
         ...this.importerReferrers(changedTexts),
         ...this.movedReferrers(repo.name, changedTexts),
         ...this.removedSymbolReferrers(repo.name, changedTexts),

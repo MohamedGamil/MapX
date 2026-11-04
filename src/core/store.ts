@@ -444,6 +444,12 @@ export class Store {
       .all(`%${text.replace(/[\\%_]/g, (c) => '\\' + c)}%`) as Array<{ path: unknown; metadata: unknown }>;
   }
 
+  /** The paths of indexed JVM and Python files, to tell which folders and names the project has (M2-08-R8). */
+  getJvmAndPythonPaths(): string[] {
+    return this.backend.prepare("SELECT path FROM files WHERE path LIKE '%.java' OR path LIKE '%.kt' OR path LIKE '%.kts' OR path LIKE '%.scala' OR path LIKE '%.py'")
+      .all().map(r => r.path as string);
+  }
+
   getReferrers(filePath: string): string[] {
     return this.backend.prepare('SELECT DISTINCT source_file FROM edges WHERE target_file = ? AND source_file != ?')
       .all(filePath, filePath).map(r => r.source_file as string);
