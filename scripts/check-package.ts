@@ -35,9 +35,16 @@ const maxAt = args.indexOf('--max-ui-gzip');
 const DEFAULT_MAX_UI_GZIP = 720 * 1024;
 const maxUiGzip = maxAt >= 0 ? Number(args[maxAt + 1]) : DEFAULT_MAX_UI_GZIP;
 
-const [pack] = JSON.parse(
-  execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { encoding: 'utf8' }),
-) as { files: { path: string; size: number }[]; size: number; unpackedSize: number }[];
+// Some npm versions run `prepare` (tsup) despite --ignore-scripts and print its output on stdout before
+// the JSON, so parsing starts at the JSON array (the same rule as scripts/check-pack-ui.mjs).
+const packOut = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { encoding: 'utf8' });
+const packStart = packOut.search(/^\[\s*\{/m);
+if (packStart < 0) throw new Error(`no npm pack JSON in the output:\n${packOut}`);
+const [pack] = JSON.parse(packOut.slice(packStart)) as {
+  files: { path: string; size: number }[];
+  size: number;
+  unpackedSize: number;
+}[];
 const problems: string[] = [];
 for (const file of pack.files) {
   if (file.path.endsWith('.map')) problems.push(`source map packed: ${file.path}`);
