@@ -1,6 +1,6 @@
 # MapX BATON handoff
 
-Revision: develop@6c0fb8405f8711954b4233b3bb1c2c8ebff069d7 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
+Revision: develop@0cf7cab8a26f014ffb0b04fbf99cc3627901ac95 (uncommitted changes); plan baseline: develop@7e5aa19. Current milestone: M6 — Dashboard graph scale and readability.
 
 ## Baseline
 Last completed: M2-29 — Laravel migrations, seeders, factories and views are indexed by default.
@@ -12,7 +12,7 @@ Read docs/baton/PROJECT_STATE.md, docs/baton/DECISIONS.md and docs/baton/RISKS.m
 
 ## Task
 Next READY: M6-01 — Large-graph fixtures and baseline measurements for the graph and Architecture views. Prerequisites: M4-20, M5-15. Read docs/baton/iterations/M6-01.md. Objective: Generated synthetic workspaces of 2k, 10k, 50k and 100k files (realistic folder depth, fan-in/fan-out and cross-folder edges) plus an architecture config with 40+ layers and thousands of findings, and a Playwright measurement harness that records, per view: time to first render, time to interactive, longest main-thread task, pan/zoom frame time and JS heap. Expected outputs: scripts/ui/gen-large-workspace.ts; tests/ui/perf-scale.spec.ts; reports/M6-01.md. Verify: `npx playwright test tests/ui/perf-scale.spec.ts`.
-Also eligible: M2-12-R2, M2-14, M2-20-R1, M2-21, M2-27.
+Also eligible: M0-07-R6, M2-08-R10, M2-15, M2-17, M2-18.
 Active work: none. One active iteration per owner.
 
 ## Observe
@@ -21,4 +21,4 @@ Run `npm run plan:validate`, inspect `git status`, then `npm run check`. Never r
 ## Next
 Remaining critical path: M6-01 → M6-02 → M6-04 → M6-06 → M6-98 (51h). Recompute with `npm run plan:report` after every completion.
 Pending gates: none; request approval only with reviewable evidence. Owner-initiated (never request): G-RELEASE.
-External blockers: M4-13-R1: Owner hold (D035, 2026-11-03): start only when the owner explicitly asks..
+External blockers: M4-13-R1: Owner hold (D035, 2026-11-03): start only when the owner explicitly asks.; M2-12-R2: Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.; M2-14: Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.; M2-20-R1: Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.; M2-21: Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.; M2-27: Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.; M2-28: Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.; M2-29-R1: Owner hold (D044, 2026-11-05): decided, not started; start only when the owner asks..

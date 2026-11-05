@@ -31996,7 +31996,9 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it."
+      ],
       "sources": [
         "docs/baton/reports/M2-16.md",
         "docs/baton/reports/M2-12.md"
@@ -32156,7 +32158,9 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it."
+      ],
       "sources": [
         "docs/baton/reports/M2-12.md",
         "docs/baton/reports/M2-13.md"
@@ -32696,7 +32700,9 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it."
+      ],
       "sources": [
         "docs/baton/reports/M2-20.md"
       ],
@@ -32757,7 +32763,9 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it."
+      ],
       "sources": [
         "docs/baton/reports/M5-17-R1.md"
       ],
@@ -33349,7 +33357,9 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it."
+      ],
       "sources": [
         "docs/baton/reports/M2-08-R8.md",
         "docs/baton/reports/M2-08-R5.md",
@@ -33412,7 +33422,9 @@
         }
       ],
       "optionalDependencies": [],
-      "blockingConditions": [],
+      "blockingConditions": [
+        "Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it."
+      ],
       "sources": [
         "docs/baton/reports/M2-16.md",
         "docs/baton/reports/M2-13.md"
@@ -35206,6 +35218,74 @@
       ],
       "verificationCommands": [
         "npx vitest run tests/legacy-globs.test.ts tests/config.test.ts tests/laravel-dirs.test.ts tests/ui-server-config.test.ts tests/legacy-impact-staleness.test.ts",
+        "npm run check"
+      ]
+    },
+    {
+      "milestone": "M2",
+      "priority": "P2",
+      "estimate": {
+        "min": 1,
+        "expected": 3,
+        "max": 5
+      },
+      "risk": "medium",
+      "area": [
+        "remediation"
+      ],
+      "dependencies": [
+        {
+          "id": "M2-29",
+          "type": "hard"
+        }
+      ],
+      "optionalDependencies": [],
+      "blockingConditions": [
+        "Owner hold (D044, 2026-11-05): decided, not started; start only when the owner asks."
+      ],
+      "sources": [
+        "docs/baton/reports/M2-29.md",
+        "docs/baton/DECISIONS.md"
+      ],
+      "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
+      "status": "BACKLOG",
+      "owner": "claude",
+      "actualHours": null,
+      "startedAt": null,
+      "completedAt": null,
+      "commits": [],
+      "artifacts": [
+        "docs/baton/reports/M2-29-R1.md"
+      ],
+      "evidence": [],
+      "history": [],
+      "criticalPath": false,
+      "approvalGate": null,
+      "kind": "iteration",
+      "rollback": "Revert the task commit.",
+      "id": "M2-29-R1",
+      "title": "Existing Laravel configs drop the former default excludes an earlier mapx init wrote",
+      "objective": "Re-running mapx init on a Laravel repo removes the former default excludes an earlier init wrote into excludePatterns, so database/ and the views are indexed (D044); scans never ignore a configured pattern.",
+      "description": "Found by M2-29 (2026-11-05): before D043, mapx init copied the Laravel default excludes into excludePatterns when the suggestion was accepted (the default answer, and the answer without a terminal). Those configs keep database/ and the views excluded after M2-29, so most existing Laravel users do not get the new default. MapX never rewrote a user config before; the docs and CHANGELOG tell users to remove the lines. Blocked on an owner decision.",
+      "outputs": [
+        "docs/baton/reports/M2-29-R1.md"
+      ],
+      "affectedFiles": [
+        "src/core/config.ts",
+        "src/cli.ts",
+        "tests/config.test.ts",
+        "tests/legacy-globs.test.ts",
+        "docs/configuration.md",
+        "CHANGELOG.md"
+      ],
+      "acceptanceCriteria": [
+        "mapx init on a Laravel repo whose excludePatterns holds the five former defaults (database/migrations/**, database/seeders/**, database/factories/**, resources/views/**, **/*.blade.php) removes them and keeps every other pattern, user-added ones included; the next scan indexes the five folders (tests/config.test.ts, tests/legacy-globs.test.ts).",
+        "A config that holds only some of the five, or holds them in a non-Laravel repo, is left unchanged: they are the user's, not init's (tests/config.test.ts).",
+        "A declined suggestion (laravelDefaultExcludes: false) and a laravelDefaultExcludes list are left unchanged; scan and sync never skip a configured pattern (tests/config.test.ts, tests/legacy-globs.test.ts).",
+        "mapx init says which patterns it removed, and docs/configuration.md and the CHANGELOG describe it."
+      ],
+      "verificationCommands": [
+        "npx vitest run tests/config.test.ts tests/legacy-globs.test.ts",
         "npm run check"
       ]
     }

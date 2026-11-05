@@ -447,3 +447,10 @@ An explicit `policy.uncovered.externals` always wins.
 
 - **Asked:** since M2-23, migrations, seeders, factories and Blade views give edges when indexed, but `LARAVEL_DEFAULT_EXCLUDES` still left them out. Should they be indexed by default?
 - **Answer:** yes, they are included by default. `database/migrations/**`, `database/seeders/**`, `database/factories/**`, `resources/views/**` and `**/*.blade.php` leave the Laravel defaults and `mapx init`'s suggestion; `storage/**`, `bootstrap/cache/**`, `public/**` and `vendor/**` stay. Registered as M2-29 and done in the D042 manner (committed when DONE).
+
+## D044 — Owner answers of 2026-11-05 (Q&A)
+
+- **Existing Laravel configs (M2-29-R1):** re-running `mapx init` removes the former Laravel default excludes (`database/migrations/**`, `database/seeders/**`, `database/factories/**`, `resources/views/**`, `**/*.blade.php`) from `excludePatterns`. It does so only when they appear as an earlier init wrote them. A pattern the user added is never removed, and scans never ignore a configured pattern. The blocking condition is cleared; the task is not started (see below).
+- **`npm run test:ui` stays outside `npm run check`.** It runs in CI's UI job, and when a task registers it. Any task that changes edges or the dashboard should register it (the lesson of M2-12-R1), but this is not a gate.
+- **The D041/D042 P2 batch is paused.** M2-20-R1, M2-21, M2-27, M2-28, M2-12-R2 and M2-14 stay BACKLOG, each with an owner-hold blocking condition, until the owner resumes them. D042's commit-per-item instruction applies again when work resumes.
+- **Next work: none.** The P3 follow-ups, M6 (D038) and M4-13-R1 (D035) stay held, and so does M2-29-R1, until the owner asks.

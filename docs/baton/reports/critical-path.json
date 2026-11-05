@@ -2719,9 +2719,9 @@
         "duration": 4,
         "earliestStart": 0,
         "earliestFinish": 4,
-        "latestStart": 251,
-        "latestFinish": 255,
-        "slack": 251
+        "latestStart": 248,
+        "latestFinish": 252,
+        "slack": 248
       },
       {
         "id": "M2-24",
@@ -2944,12 +2944,21 @@
         "duration": 2,
         "earliestStart": 4,
         "earliestFinish": 6,
-        "latestStart": 255,
+        "latestStart": 252,
+        "latestFinish": 254,
+        "slack": 248
+      },
+      {
+        "id": "M2-29-R1",
+        "duration": 3,
+        "earliestStart": 6,
+        "earliestFinish": 9,
+        "latestStart": 254,
         "latestFinish": 257,
-        "slack": 251
+        "slack": 248
       }
     ],
-    "totalEffort": 1681
+    "totalEffort": 1684
   },
   "remaining": {
     "duration": 51,
@@ -5648,9 +5657,9 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 51,
-        "latestFinish": 51,
-        "slack": 51
+        "latestStart": 48,
+        "latestFinish": 48,
+        "slack": 48
       },
       {
         "id": "M2-24",
@@ -5873,18 +5882,27 @@
         "duration": 0,
         "earliestStart": 0,
         "earliestFinish": 0,
-        "latestStart": 51,
+        "latestStart": 48,
+        "latestFinish": 48,
+        "slack": 48
+      },
+      {
+        "id": "M2-29-R1",
+        "duration": 3,
+        "earliestStart": 0,
+        "earliestFinish": 3,
+        "latestStart": 48,
         "latestFinish": 51,
-        "slack": 51
+        "slack": 48
       }
     ],
-    "totalEffort": 198
+    "totalEffort": 201
   },
   "resourceSchedule": {
-    "hours": 198,
-    "weeks": 9.9,
-    "forecastAsOf": "2026-11-04",
-    "conditionalDate": "2027-01-12",
+    "hours": 201,
+    "weeks": 10.05,
+    "forecastAsOf": "2026-11-05",
+    "conditionalDate": "2027-01-14",
     "assignments": [
       {
         "id": "M0-01",
@@ -7829,6 +7847,12 @@
         "worker": 0,
         "start": 198,
         "finish": 198
+      },
+      {
+        "id": "M2-29-R1",
+        "worker": 0,
+        "start": 198,
+        "finish": 201
       }
     ]
   }

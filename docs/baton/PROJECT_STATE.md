@@ -1,11 +1,12 @@
 # MapX project state
 
-Updated 2026-11-05 (P2 defects, D041/D042; D043). `EXTRACTOR_VERSION` is 32. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
+Updated 2026-11-05 (P2 defects, D041/D042; D043; D044: batch paused). `EXTRACTOR_VERSION` is 32. Each item is committed on `develop` when DONE (D042); nothing is pushed or published.
 
-- **D041/D042:** the owner started the P2 resolution defects and asked for a commit per item, continuing to the end of the batch. Remaining: M2-14, M2-20-R1, M2-21, M2-27, M2-28 and M2-12-R2. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held.
+- **D044 (2026-11-05): no work is active.** The P2 batch is paused, with M2-14, M2-20-R1, M2-21, M2-27, M2-28 and M2-12-R2 left. M2-29-R1 is decided (re-running `mapx init` removes the former Laravel defaults) but not started. M6 (D038), M4-13-R1 (D035) and the P3 follow-ups stay held. `npm run test:ui` stays outside `npm run check`.
+- **D041/D042:** the owner started the P2 resolution defects and asked for a commit per item.
 - **D043:** Laravel migrations, seeders, factories and views are indexed by default (owner answer of 2026-11-05). Done as M2-29.
 - **Done in the batch:**
-  - **M2-29 (D043):** `LARAVEL_DEFAULT_EXCLUDES` keeps only storage, bootstrap/cache, public and vendor. Existing indexes pick the files up on their next sync; a config an earlier init wrote keeps its explicit patterns.
+  - **M2-29 (D043):** `LARAVEL_DEFAULT_EXCLUDES` keeps only storage, bootstrap/cache, public and vendor. Existing indexes pick the files up on their next sync. A config an earlier init wrote keeps its explicit patterns: M2-29-R1 (P2) is registered; D044 decided it (re-running init removes them), not started.
   - **M0-02-R13:** a package.json edit re-parses only the files a field their resolution reads changed for. A root `version` bump on a 700-file npm tree re-parses 0 files instead of 598. Gaining or losing `vue`/`vue-router` re-parses the files, of any language, that hold a name the vue-router ignore list adds or drops. Full-scan output is byte-identical.
   - **M2-08-R5:** Python and Java package imports never link project symbols.
   - **M2-08-R4:** sync follows a module turned script, and new `declare global` names.
@@ -59,7 +60,7 @@ Earlier: Updated 2026-11-03 (release). Version 0.3.9, tagged `v0.3.9` and instal
   - M4-24-R1 (closed on a quiet machine);
   - M3-05-R3, M5-20-R1, M5-25-R2, M5-07-R1 and M4-09-R3/R4.
 - **Documentation:** refreshed for the release by M4-28 (D036), and guarded by tests/docs-surface.test.ts.
-- **Held:** M4-13-R1 and M5-98 (D035).
+- **Held:** M4-13-R1 (D035). M5-98 is DONE (released from the hold by D039).
 - **Follow-ups registered as BACKLOG, not started:**
   - M5: M5-18-R1, M5-24-R1/R2/R3, M5-17-R1, M5-15-R1, M5-25-R3, M5-07-R2, M5-16-R1/R2 and M5-21-R1;
   - defects: M0-02-R13, M2-08-R4, M4-12-R2, M4-28-R1/R2, M4-22-R1 and M2-12.

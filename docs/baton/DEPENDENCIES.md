@@ -351,3 +351,4 @@ flowchart LR
 - M5-24-R5 ← M5-24-R1 (hard)
 - M5-24-R6 ← M5-24-R1 (hard)
 - M2-29 ← M2-23 (hard)
+- M2-29-R1 ← M2-29 (hard)

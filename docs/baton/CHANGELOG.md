@@ -160,3 +160,9 @@
 ## 2026-11-05 — D043: Laravel database/ and views indexed by default
 
 - D043 (owner): migrations, seeders, factories and views are included by default. Registered M2-29 (P2) and closed it: five patterns leave `LARAVEL_DEFAULT_EXCLUDES` and init's suggestion; one staleness test that asserted the old default was updated; eval unchanged.
+- Registered M2-29-R1 (P2): configs written by an earlier init keep the former Laravel defaults in excludePatterns.
+
+## 2026-11-05 — D044: owner Q&A
+
+- M2-29-R1 decided: re-running `mapx init` removes the former Laravel defaults it wrote; it is held, not started. `test:ui` stays outside `npm run check`. The D041/D042 P2 batch is paused (6 items left). Nothing else starts until the owner asks.
+- Reconciled PROJECT_STATE: M5-98 is DONE, not held (D039).

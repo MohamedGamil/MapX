@@ -6,7 +6,7 @@ Remaining longest dependency path: **51h** (full-plan path: 257h).
 
 M6-01 → M6-02 → M6-04 → M6-06 → M6-98
 
-Remaining effort min/expected/max: **117 / 198 / 293h**. Capacity: 1 engineer(s) × 20 h/week → **9.9 weeks**, conditional finish **2027-01-12** (as of 2026-11-04).
+Remaining effort min/expected/max: **118 / 201 / 298h**. Capacity: 1 engineer(s) × 20 h/week → **10.1 weeks**, conditional finish **2027-01-14** (as of 2026-11-05).
 
 ## Open items and blockers
 - M5-15-R1 (BACKLOG): prerequisites satisfied
@@ -18,19 +18,19 @@ Remaining effort min/expected/max: **117 / 198 / 293h**. Capacity: 1 engineer(s)
 - M2-08-R10 (BACKLOG): prerequisites satisfied
 - M4-27-R1 (BACKLOG): prerequisites satisfied
 - M4-28-R3 (BACKLOG): prerequisites satisfied
-- M2-12-R2 (BACKLOG): prerequisites satisfied
-- M2-14 (BACKLOG): prerequisites satisfied
+- M2-12-R2 (BACKLOG): Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.
+- M2-14 (BACKLOG): Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.
 - M2-15 (BACKLOG): prerequisites satisfied
 - M2-17 (BACKLOG): prerequisites satisfied
 - M2-18 (BACKLOG): prerequisites satisfied
 - M2-19 (BACKLOG): prerequisites satisfied
-- M2-20-R1 (BACKLOG): prerequisites satisfied
-- M2-21 (BACKLOG): prerequisites satisfied
+- M2-20-R1 (BACKLOG): Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.
+- M2-21 (BACKLOG): Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.
 - M2-22 (BACKLOG): prerequisites satisfied
 - M2-24 (BACKLOG): prerequisites satisfied
 - M2-25-R1 (BACKLOG): prerequisites satisfied
-- M2-27 (BACKLOG): prerequisites satisfied
-- M2-28 (BACKLOG): prerequisites satisfied
+- M2-27 (BACKLOG): Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.
+- M2-28 (BACKLOG): Owner hold (D044, 2026-11-05): the P2 batch is paused; start only when the owner resumes it.
 - M4-12-R2 (BACKLOG): prerequisites satisfied
 - M6-01 (BACKLOG): prerequisites satisfied
 - M6-02 (BACKLOG): M6-01
@@ -44,6 +44,7 @@ Remaining effort min/expected/max: **117 / 198 / 293h**. Capacity: 1 engineer(s)
 - M6-98 (BACKLOG): M6-04; M6-05; M6-06; M6-07; M6-08; M6-09
 - M5-24-R5 (BACKLOG): prerequisites satisfied
 - M5-24-R6 (BACKLOG): prerequisites satisfied
+- M2-29-R1 (BACKLOG): Owner hold (D044, 2026-11-05): decided, not started; start only when the owner asks.
 
 ## Remaining CPM timings (hours)
 | Task | ES | EF | LS | LF | Slack |
@@ -83,3 +84,4 @@ Remaining effort min/expected/max: **117 / 198 / 293h**. Capacity: 1 engineer(s)
 | M6-98 | 48 | 51 | 48 | 51 | 0 |
 | M5-24-R5 | 0 | 6 | 45 | 51 | 45 |
 | M5-24-R6 | 0 | 8 | 43 | 51 | 43 |
+| M2-29-R1 | 0 | 3 | 48 | 51 | 48 |
