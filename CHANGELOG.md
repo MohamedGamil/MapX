@@ -8,6 +8,8 @@ Unreleased work is tracked under **[Unreleased]**. When a version is released, m
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-05
+
 ### Changed
 - A Laravel app now indexes its migrations, seeders, factories and views (`database/migrations/`, `database/seeders/`, `database/factories/`, `resources/views/`, `*.blade.php`) by default, so the `laravel` architecture preset's Database and Views layers hold files; `storage/`, `bootstrap/cache/`, `public/` and `vendor/` stay excluded. An existing index picks them up on its next `scan` or `sync`, unless its config lists them in `excludePatterns` (an earlier `mapx init` wrote them there; remove them to index them) (M2-29).
 - On a Laravel app that declines the suggested excludes, `mapx init` no longer adds `**/migrations/**` and `**/seeds/**` to `excludePatterns`, and the suggestion lists no longer call Blade "not yet supported" (M2-23).
@@ -1008,7 +1010,8 @@ _Changelog entries not yet backfilled. See git log for history._
 ---
 
 <!-- Links (keep at the bottom) -->
-[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.3.9...HEAD
+[Unreleased]: https://github.com/MohamedGamil/mapx/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/MohamedGamil/mapx/compare/v0.3.9...v0.4.0
 [0.3.9]: https://github.com/MohamedGamil/mapx/compare/v0.3.8...v0.3.9
 [0.3.8]: https://github.com/MohamedGamil/mapx/compare/v0.3.7...v0.3.8
 [0.3.7]: https://github.com/MohamedGamil/mapx/compare/v0.3.6...v0.3.7
