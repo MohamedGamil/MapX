@@ -1,10 +1,10 @@
-<!-- mapx v0.3.5 -->
 ---
 trigger: model_decided
 ---
+<!-- mapx v0.4.0 #5cdf90f1a3e1 -->
 # MapxGraph Rules for Windsurf
 
-This project utilizes MapxGraph to maintain local code indexes across **22 languages** with **32 MCP tools**.
+This project utilizes MapxGraph to maintain local code indexes across **23 languages** with **39 MCP tools**.
 
 Use the MapxGraph MCP tools or CLI commands to navigate:
 - `mapx_export` / `mapx export` on startup.
@@ -19,5 +19,7 @@ Use the MapxGraph MCP tools or CLI commands to navigate:
 - `mapx_batch` to execute multiple operations in one call.
 - `mapx_profile` / `mapx profile` to inspect codebase profile.
 - `mapx_smells` / `mapx arch` to analyze smells and design health.
+- `mapx_arch_allowed` / `mapx arch allowed` before adding an import across modules: the architecture rules' answer, with alternatives.
+- `mapx_arch_check` / `mapx check` to check the architecture rules after edits (MCP: pass `sync: true`).
 - `mapx_sync` / `mapx sync` after edits.
 <!-- /mapx -->

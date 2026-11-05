@@ -1,0 +1,13 @@
+{
+  "context_servers": {
+    "mapx": {
+      "source": "custom",
+      "command": "mapx",
+      "args": [
+        "serve",
+        "--dir",
+        "/home/mgamil/mapx"
+      ]
+    }
+  }
+}

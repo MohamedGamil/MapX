@@ -1,7 +1,12 @@
-<!-- mapx v0.3.5 -->
+<!-- mapx v0.4.0 #944c6ae2af97 -->
 # MapxGraph Aider Integration
 
-Use MapxGraph commands in this repository to analyze code across **22 languages**.
+Use MapxGraph commands in this repository to analyze code across **23 languages**.
+
+## Loading this file
+
+`.aider.conf.yml` lists this file under `read:`, so Aider loads it as read-only context on startup.
+To load it by hand instead, run `aider --read AIDER.md` (or `/read-only AIDER.md` inside a session).
 
 ## Key CLI Commands
 

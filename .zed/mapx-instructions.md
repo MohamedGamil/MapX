@@ -1,7 +1,8 @@
-<!-- mapx v0.3.5 -->
+<!-- mapx v0.4.0 #964787871522 -->
 # Zed Assistant MapxGraph Instructions
 
-This project uses MapxGraph (22 languages, 32 MCP tools).
+This project uses MapxGraph (23 languages, 39 MCP tools).
+`mapx agents generate --providers zed` also registers the mapx MCP server under `context_servers` in `.zed/settings.json`, keeping your other settings.
 
 ## Key Commands
 - Run `mapx export` to retrieve a token-budgeted codebase summary.

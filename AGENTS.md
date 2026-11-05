@@ -1,11 +1,11 @@
-<!-- mapx v0.3.5 -->
+<!-- mapx v0.4.0 #4fe0c7933788 -->
 # MapxGraph - LLM Integration Guide
 
 This project uses **MapxGraph** — a local code graph memory system that provides persistent, structured understanding of the codebase across LLM sessions.
 
 ## What MapxGraph Does
 
-MapxGraph scans source files across **22 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to `.mapx/`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
+MapxGraph scans source files across **23 languages**, extracts symbols (classes, functions, methods, interfaces, traits, enums, structs, modules, constants, properties, variables, namespaces) and dependencies (imports, requires, extends, implements, calls, instantiation), builds a weighted graph with PageRank importance scoring, and persists everything to `.mapx/`. It also indexes static files (Markdown, HTML, CSS/SCSS, JSON/JSONC/JSON5) for dependency tracking without symbol extraction.
 
 This means you (the LLM) can quickly understand the codebase structure without reading every file.
 
@@ -18,7 +18,7 @@ All commands accept a target directory. Three ways to specify:
 mapx scan /path/to/project
 
 # 2. --dir / -d flag
-mapx scan --dir /path/to/project
+mapx export --dir /path/to/project
 mapx query "MyClass" -d /path/to/project
 
 # 3. Global flag (works with any subcommand)
@@ -51,15 +51,16 @@ mapx -d /path/to/project scan
 - `mapx routes [path] [--framework name] [--method verb] [--json]` - Show framework routes
 - `mapx hooks [path] [--framework name] [--type type] [--json]` - Show framework hooks
 - `mapx profile [path]` - Show codebase profile (archetype, frameworks, active taxonomy)
-- `mapx arch [path] [--smells] [--dsm] [--violations] [--json]` - Full architecture and health report
-- `mapx explain <file> [--reclassify]` - Explain file role classification signals and weights
+- `mapx arch [path] [--smells] [--dsm] [--violations]` - Full architecture and health report
+- `mapx explain <file>` - Explain file role classification signals and weights
 - `mapx layers [path] [--json]` - List files grouped by architectural roles/layers
+- `mapx check [path] [--layer name] [--rule rule] [--format json]` - Check the architecture rules in `.mapx/architecture.jsonc` (exit 1 on violations)
+- `mapx arch allowed <from> <to> [--json]` - Would a dependency between two files, symbols or layers be allowed? (also `mapx arch layers|which|unassigned|deps|unused|changed`)
 - `mapx impact <symbol> [--dir path] [--depth depth]` - Change impact analysis with fuzzy pre-check
 - `mapx node <symbol> [--dir path] [--source] [--format text|json] [--include-members]` - Inspect a symbol node with optional source code and member listing
 - `mapx files [--dir path] [--path prefix_or_glob] [--lang language] [--sort sort] [--limit limit]` - List and filter files (--path accepts globs: src/core/*.ts, **/*.json)
-- `mapx lang list` - List supported languages and status
-- `mapx lang install <lang>` - Install dynamic language support
-- `mapx lang uninstall <lang>` - Uninstall dynamic language support
+- `mapx lang list` - List supported languages, extensions and tiers (all grammars are bundled)
+- `mapx lang info <lang>` - Show a language's extensions, file names and grammar files
 - `mapx serve --dir /path` - Start stdio MCP server
 - `mapx serve --sse --port <port>` - Start SSE (HTTP) MCP server
 - `mapx ui [--port <port>]` - Open web dashboard for interactive visualization
@@ -95,12 +96,18 @@ When running as an MCP server, MapxGraph exposes these tools:
 - `mapx_smells` - Detect design smells and architectural violations
 - `mapx_dsm` - Generate cluster Dependency Structure Matrix (DSM)
 - `mapx_layers` - List files grouped by architectural roles/layers
+- `mapx_arch_validate_config` - Validate the architecture rules configuration (.mapx/architecture.jsonc): every problem with its JSON pointer
+- `mapx_arch_check` - Check the architecture rules against the index (as `mapx check`; filters `layer`, `rule`, `file`, `since`)
+- `mapx_arch_layers` - The rule layers, a layer's members and the selector that matched, or the elements in no layer
+- `mapx_arch_allowed` - Pre-flight: may this file or symbol depend on that one? Rule, reason and alternatives
+- `mapx_arch_explain` - Why an element is in a layer, and why a dependency is allowed or a violation
+- `mapx_arch_init` - Propose an architecture configuration from the index (writes only with `write: true`)
 - `mapx_export` - Export compact graph summary (formats: llm, json, dot, svg, toon)
 - `mapx_context` - Intelligent, token-budgeted workspace context builder
 - `mapx_workspaces` - Retrieve workspace configuration and repositories (list/discover)
-- `mapx_lang_list` - List supported languages and status
-- `mapx_lang_install` - Install dynamic language support
-- `mapx_lang_uninstall` - Uninstall dynamic language support
+- `mapx_lang_list` - List supported languages, extensions and tiers (all grammars are bundled)
+- `mapx_lang_info` - Show a language's extensions, file names and grammar files
+- `mapx_lang_install` / `mapx_lang_uninstall` - Compatibility no-ops: grammars are bundled, nothing is installed or removed
 - `mapx_batch` - Execute multiple operations in a single call (search, node, callers, callees, deps)
 - `mapx_agents_generate` - Generate/update agent integration instructions and rules
 
@@ -116,6 +123,15 @@ When running as an MCP server, MapxGraph exposes these tools:
 8. **Planning a modification**: Run `mapx impact` to determine the blast radius.
 9. **Building custom prompts / context**: Run `mapx context` to generate optimal context within a token budget.
 10. **Batch operations**: Use `mapx_batch` (MCP) to execute multiple operations in a single round-trip.
+11. **Adding an import across modules**: Call `mapx_arch_allowed` first (see below).
+
+## Architecture Rules
+
+When the project has `.mapx/architecture.jsonc` (`mapx_arch_init` proposes one, and writes it only with `write: true`):
+
+1. **Before adding an import across modules, call `mapx_arch_allowed`** with `from` (the file or symbol you are editing) and `to` (what you want to use: a layer `Domain`, a file `src/domain/Order.ts`, a symbol `Order::total`, a package `npm:express` or `express`, or a built-in `node:fs`). If `allowed` is false, read `reason`. `alternatives` lists matching symbols (a supertype, or a similar name) that the rules let `from` use; check that one fits before switching to it.
+2. Call `mapx_arch_explain` to see why an element is in a layer, or why a dependency is refused.
+3. After editing, call `mapx_arch_check` with `sync: true` (narrow it with `file` or `since`): `exitCode` 1 means a violation to fix. Without `sync: true`, every architecture tool refuses an index older than your edits (`exitCode` 4); pass it to `mapx_arch_allowed` too once you have edited files.
 <!-- /mapx -->
 
 ## MapX development: BATON
