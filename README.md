@@ -92,7 +92,7 @@
 | **Workspaces and multi-repo** | Register submodules, nested repos, monorepo packages, VS Code workspace folders and sibling repos. Scans cover every registered repo, cross-repo edges (HTTP calls included) are tracked, and `status --all`, `export --all`, `deps --cross-repo` and the dashboard's repo switcher work across them. | [`mapx workspaces`](docs/cli-reference.md#mapx-workspaces), [Multi-repo setup](docs/configuration.md#multi-repo-setup) |
 | **Agent integration** | `mapx init` writes `AGENTS.md` and the MCP configuration of the agent tools it detects; `mapx agents generate` writes instructions for Claude, Cursor, Copilot, Windsurf, Cline, Aider, Gemini, Continue and Zed. | [Agentic integration](#agentic-integration), [Agent best practices](docs/agent-best-practices.md) |
 | **Exports** | Token-budgeted LLM summary, JSON, GraphViz DOT (cluster view), SVG (no Graphviz needed) and TOON. | [`mapx export`](docs/cli-reference.md#mapx-export) |
-| **CLI logo** | `mapx init`, `scan` and `sync` open with the MapX logo in a terminal; never in pipes, CI or MCP, and `MAPX_NO_BANNER=1` turns it off. | [CLI reference](docs/cli-reference.md#mapx-init) |
+<!-- | **CLI logo** | `mapx init`, `scan` and `sync` open with the MapX logo in a terminal; never in pipes, CI or MCP, and `MAPX_NO_BANNER=1` turns it off. | [CLI reference](docs/cli-reference.md#mapx-init) | -->
 
 ---
 
