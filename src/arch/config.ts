@@ -398,11 +398,16 @@ class Loader {
           return;
         } else {
           target = resolve(dirname(file), entry);
-          // ELOOP, EACCES and ENOTDIR throw even with throwIfNoEntry: each is a problem at this entry.
+          // ELOOP and EACCES throw even with throwIfNoEntry: each is a problem at this entry. ENOTDIR (a parent
+          // is a file) is swallowed by throwIfNoEntry on some Node versions and thrown on others; both mean not found.
           let stat;
           try {
             stat = statSync(target, { throwIfNoEntry: false });
           } catch (err) {
+            if ((err as NodeJS.ErrnoException).code === 'ENOTDIR') {
+              this.issues.push({ file: shown, pointer, message: `extended file ${quote(entry)} not found (${this.display(target)})` });
+              return;
+            }
             this.issues.push({ file: shown, pointer, message: `extended path ${quote(entry)} cannot be read: ${fsReason(err)} (${this.display(target)})` });
             return;
           }
