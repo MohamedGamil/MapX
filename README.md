@@ -19,6 +19,10 @@
 </a>
 </p>
 
+<p align="center">
+<a href="https://www.producthunt.com/products/mapx-2?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-mapx-2" target="_blank" rel="noopener noreferrer"><img alt="MapX - Local code graph memory for LLMs | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1307281&amp;theme=neutral&amp;t=1794023730150"></a>
+</p>
+
 <br>
 <br>
 
