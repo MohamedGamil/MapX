@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import { defineConfig } from 'vitepress';
 import { githubSlug, normaliseBase, siteOrigin } from './base';
 import { docsSidebar } from './sidebar';
@@ -35,6 +35,14 @@ export default defineConfig({
   cleanUrls: true,
   outDir,
   lastUpdated: false,
+  // Absolute page URLs under the configured origin and base (the 404 page is left out by VitePress).
+  sitemap: { hostname: `${origin}${base}` },
+  // robots.txt names the sitemap by its absolute URL. Crawlers read it only at a host root, so under a
+  // project-page address it has no effect; it is right for a custom domain or SITE_BASE=/.
+  buildEnd(siteConfig) {
+    mkdirSync(siteConfig.outDir, { recursive: true });
+    writeFileSync(join(siteConfig.outDir, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${origin}${base}sitemap.xml\n`);
+  },
   markdown: {
     anchor: { slugify: githubSlug },
     config(md) {
@@ -49,22 +57,25 @@ export default defineConfig({
       };
     },
   },
-  // The theme's Inter font is never used (brand.css puts the system stack first), so its preload is a
-  // wasted request and a console warning. The site makes no web-font requests.
-  // Open Graph tags for every page; the image is the logo until M7-06 generates a card.
+  // Canonical URL and Open Graph tags for every page; the card is site/public/og-card.png (M7-06).
   transformHead({ pageData }) {
     const title = pageData.frontmatter.title || pageData.title || 'MapX';
     const description = pageData.frontmatter.description || pageData.description || siteDescription;
+    const url = `${origin}${base}${pageUrl(pageData.relativePath)}`;
     return [
       ['meta', { property: 'og:type', content: 'website' }],
-      ['meta', { property: 'og:url', content: `${origin}${base}${pageUrl(pageData.relativePath)}` }],
+      // The 404 page has no address of its own: no og:url and no canonical link for it.
+      ...(pageData.isNotFound ? [] : [['meta', { property: 'og:url', content: url }] as [string, Record<string, string>]]),
       ['meta', { property: 'og:title', content: `${title}` }],
       ['meta', { property: 'og:description', content: description }],
-      ['meta', { property: 'og:image', content: `${origin}${base}mapx-logo.png` }],
-      ['meta', { name: 'twitter:card', content: 'summary' }],
+      ['meta', { property: 'og:image', content: `${origin}${base}og-card.png` }],
+      ['meta', { property: 'og:image:width', content: '1200' }],
+      ['meta', { property: 'og:image:height', content: '630' }],
+      ['meta', { property: 'og:image:alt', content: 'MapX: local code graph memory for LLMs' }],
+      ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+      ...(pageData.isNotFound ? [] : [['link', { rel: 'canonical', href: url }] as [string, Record<string, string>]]),
     ];
   },
-  transformHtml: (code) => code.replace(/<link rel="preload" href="[^"]*\.woff2"[^>]*>/g, ''),
   head: [
     ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}favicon-32.png` }],
     ['link', { rel: 'apple-touch-icon', href: `${base}apple-touch-icon.png` }],
@@ -79,6 +90,8 @@ export default defineConfig({
       { text: 'npm', link: 'https://www.npmjs.com/package/@mgamil/mapx' },
       { text: `v${version}`, link: 'https://github.com/MohamedGamil/mapx/blob/main/CHANGELOG.md' },
     ],
+    // The home link's aria-label defaults to "go to home", which does not contain its visible text.
+    notFound: { linkLabel: 'Take me home' },
     sidebar: { '/docs/': docsSidebar() },
     search: { provider: 'local' },
     editLink: {

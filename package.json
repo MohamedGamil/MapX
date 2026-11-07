@@ -119,7 +119,8 @@
     "test:ui": "playwright test",
     "site:sync": "tsx scripts/site/sync-docs.ts && tsx scripts/site/site-facts.ts",
     "site:build": "npm run site:sync && npm --prefix site run build",
-    "site:dev": "npm run site:sync && npm --prefix site run dev"
+    "site:dev": "npm run site:sync && npm --prefix site run dev",
+    "site:og": "tsx scripts/site/gen-og-card.ts"
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",

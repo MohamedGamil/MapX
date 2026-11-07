@@ -126,7 +126,33 @@ describe('syncDocs (M7-02)', () => {
   it('stops with the file and line of a bad link before any build', () => {
     const s = scratch({ 'docs/only.md': '# Only\n\n[x](../missing.md)\n' });
     try {
-      expect(() => syncDocs(s.root, [{ name: 'only', label: 'Only', group: 'G' }])).toThrow(/docs\/only\.md:3/);
+      expect(() => syncDocs(s.root, [{ name: 'only', label: 'Only', group: 'G', description: 'A guide used by a test, with a description that is long enough.' }])).toThrow(/docs\/only\.md:3/);
+    } finally {
+      s.done();
+    }
+  });
+
+  it('gives every guide its own description of 50 to 160 characters, with no typed counts', () => {
+    const seen = new Set<string>();
+    for (const g of GUIDE_META) {
+      expect(g.description.length, g.name).toBeGreaterThanOrEqual(50);
+      expect(g.description.length, g.name).toBeLessThanOrEqual(160);
+      expect(seen.has(g.description), `${g.name} repeats a description`).toBe(false);
+      seen.add(g.description);
+      // Counts on the site come from the code (M7-03); a number typed here would go stale.
+      expect(g.description, g.name).not.toMatch(/\d+ (tools|languages|frameworks|presets)/);
+    }
+  });
+
+  it('writes each description into the guide it belongs to, and refuses a guide with front matter of its own', () => {
+    const s = scratch({ 'docs/only.md': '# Only\n\nBody.\n', 'docs/own.md': '---\ntitle: x\n---\n\n# Own\n' });
+    try {
+      const desc = 'A guide used by a test, with a description that is long enough.';
+      syncDocs(s.root, [{ name: 'only', label: 'Only', group: 'G', description: desc }]);
+      const text = readFileSync(join(s.root, 'site', 'docs', 'only.md'), 'utf8');
+      expect(text.startsWith(`---\ndescription: ${JSON.stringify(desc)}\n---\n`)).toBe(true);
+      expect(text).toContain('# Only');
+      expect(() => syncDocs(s.root, [{ name: 'own', label: 'Own', group: 'G', description: desc }])).toThrow(/front matter of its own/);
     } finally {
       s.done();
     }

@@ -1,5 +1,7 @@
 import { h } from 'vue';
-import DefaultTheme from 'vitepress/theme';
+// The default theme without its Inter font: the site uses the system font stack (brand.css), so the
+// font files would only add 640 KB to the published site.
+import DefaultTheme from 'vitepress/theme-without-fonts';
 import Landing from './Landing.vue';
 import './brand.css';
 

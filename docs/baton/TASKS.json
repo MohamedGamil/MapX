@@ -35932,15 +35932,84 @@
         "docs/baton/PROJECT_STATE.md"
       ],
       "verificationPlan": "Run every registered command; each must exit 0. Mutation-check each new test against the code it protects.",
-      "status": "BACKLOG",
-      "owner": "maintainer",
+      "status": "DONE",
+      "owner": "claude-site",
       "actualHours": null,
-      "startedAt": null,
-      "completedAt": null,
+      "startedAt": "2026-11-07T01:55:53.786Z",
+      "completedAt": "2026-11-07T02:47:12.271Z",
       "commits": [],
-      "artifacts": [],
-      "evidence": [],
-      "history": [],
+      "artifacts": [
+        "docs/baton/reports/M7-06.md"
+      ],
+      "evidence": [
+        {
+          "command": "npx vitest run tests/site-links.test.ts tests/site-seo.test.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-06.md"
+        },
+        {
+          "command": "npx playwright test -c playwright.site.config.ts",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-06.md"
+        },
+        {
+          "command": "npm run site:build",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-06.md"
+        },
+        {
+          "command": "npm run check",
+          "exitCode": 0,
+          "artifact": "docs/baton/reports/M7-06.md"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-11-07T01:55:52.348Z",
+          "from": "BACKLOG",
+          "to": "READY",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T01:55:53.786Z",
+          "from": "READY",
+          "to": "IN_PROGRESS",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T02:47:11.825Z",
+          "from": "IN_PROGRESS",
+          "to": "VERIFYING",
+          "evidence": []
+        },
+        {
+          "at": "2026-11-07T02:47:12.271Z",
+          "from": "VERIFYING",
+          "to": "DONE",
+          "evidence": [
+            {
+              "command": "npx vitest run tests/site-links.test.ts tests/site-seo.test.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-06.md"
+            },
+            {
+              "command": "npx playwright test -c playwright.site.config.ts",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-06.md"
+            },
+            {
+              "command": "npm run site:build",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-06.md"
+            },
+            {
+              "command": "npm run check",
+              "exitCode": 0,
+              "artifact": "docs/baton/reports/M7-06.md"
+            }
+          ]
+        }
+      ],
       "criticalPath": false,
       "approvalGate": null,
       "kind": "iteration",
@@ -35948,7 +36017,7 @@
       "id": "M7-06",
       "title": "Site quality: SEO, accessibility, links and size budgets",
       "objective": "The built site ships a sitemap, robots.txt, canonical URLs, favicon, Open Graph image and a 404 page; it has no dead internal links, no axe violations on the landing, docs and about pages, and stays inside a size budget.",
-      "description": "axe-core and Playwright are already dev dependencies (M4-19). The site gets its own Playwright config (created by M7-02) so `npm run test:ui` (dashboard) is unchanged. The canonical origin comes from `SITE_URL` (default https://mohamedgamil.github.io). Budgets are set from the measured M7-03 build and recorded in the report, never loosened to pass.",
+      "description": "axe-core and Playwright are already dev dependencies (M4-19). The site gets its own Playwright config (created by M7-02) so `npm run test:ui` (dashboard) is unchanged. The canonical origin comes from `SITE_URL` (default https://mohamedgamil.github.io). Budgets are set from the measured build and recorded in the report, never loosened to pass. robots.txt only has effect at a host root: under the default project-page address it is harmless but ignored by crawlers (recorded as a limitation).",
       "estimate": {
         "min": 4,
         "expected": 6,
@@ -35970,26 +36039,39 @@
         }
       ],
       "outputs": [
-        "tests/site/quality.spec.ts",
+        "site/.vitepress/config.ts",
+        "scripts/site/gen-og-card.ts",
+        "site/public/og-card.png",
+        "tests/helpers/site-crawl.ts",
         "tests/site-links.test.ts",
+        "tests/site-seo.test.ts",
+        "tests/site/budgets.json",
+        "tests/site/quality.spec.ts",
         "reports/M7-06.md"
       ],
       "affectedFiles": [
-        "tests/site/**",
+        "site/.vitepress/**",
+        "site/public/**",
+        "scripts/site/**",
+        "tests/helpers/site-crawl.ts",
         "tests/site-links.test.ts",
-        "site/.vitepress/config.ts",
-        "site/public/**"
+        "tests/site-seo.test.ts",
+        "tests/site/**",
+        "docs/baton/reports/M7-06.md"
       ],
       "acceptanceCriteria": [
-        "sitemap.xml lists every built page with absolute URLs under SITE_URL + base; robots.txt references it; each page has a canonical link equal to its sitemap entry (test).",
-        "A crawl of the built site from index.html follows every internal link and finds no 404 (tests/site-links.test.ts); a deliberately broken link fails it.",
-        "axe-core reports 0 serious or critical violations on / and /docs/getting-started, in light and dark (Playwright spec).",
-        "Total built size and the home page transfer size stay at or under the budgets in the report (test reads the budgets from one constant).",
-        "The 404 page, loaded in a browser, shows the footer credit and a link back to the home page under the site base (Playwright spec)."
+        "sitemap.xml lists every built page except 404 with an absolute URL under SITE_URL + SITE_BASE, and each such page has one canonical link equal to its sitemap entry; robots.txt names the sitemap by the same absolute URL; with SITE_BASE=/x/ and SITE_URL=https://example.org they all use that origin and base (tests/site-seo.test.ts).",
+        "Every built page has a title, a meta description and Open Graph title, description, url, image (absolute), image width and height and alt text; the Open Graph image is site/public/og-card.png, 1200 x 630 pixels and at most 150 KiB, generated by scripts/site/gen-og-card.ts (test reads the PNG header).",
+        "A crawl of the built site from index.html follows every internal link and image, finds no missing file or #fragment id, and finds no built page that no link reaches (tests/site-links.test.ts); the crawler reports a deliberately broken link and an orphan page in a fixture folder (unit test).",
+        "axe-core reports 0 serious or critical violations on /, /docs/getting-started and the docs index, in light and dark (Playwright spec).",
+        "The 404 page, loaded in a browser under the base path, answers with status 404, shows the footer credit and a link that returns to the home page (Playwright spec).",
+        "The total built size and the home page transfer size (its HTML plus the scripts and styles it loads, gzipped) stay at or under the budgets in tests/site/budgets.json, which hold the measured value of this task plus a margin recorded in the report; the test reads the budgets from that one file."
       ],
       "verificationCommands": [
-        "npx vitest run tests/site-links.test.ts",
-        "npx playwright test -c playwright.site.config.ts"
+        "npx vitest run tests/site-links.test.ts tests/site-seo.test.ts",
+        "npx playwright test -c playwright.site.config.ts",
+        "npm run site:build",
+        "npm run check"
       ]
     },
     {

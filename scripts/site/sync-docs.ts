@@ -22,27 +22,32 @@ export interface GuideMeta {
   label: string;
   /** The sidebar group; guides of one group are listed together, in this order. */
   group: string;
+  /** The page's meta and Open Graph description: 50 to 160 characters, different for every page. */
+  description: string;
 }
 
 /** The user-facing guides, in sidebar order. */
 export const GUIDE_META: readonly GuideMeta[] = [
-  { name: 'getting-started', label: 'Getting started', group: 'Start' },
-  { name: 'cli-reference', label: 'CLI reference', group: 'Reference' },
-  { name: 'mcp-integration', label: 'MCP integration', group: 'Reference' },
-  { name: 'configuration', label: 'Configuration', group: 'Reference' },
-  { name: 'architecture-rules', label: 'Architecture rules', group: 'Architecture rules' },
-  { name: 'framework-integration', label: 'Framework integration', group: 'Guides' },
-  { name: 'agent-best-practices', label: 'Agent best practices', group: 'Guides' },
-  { name: 'programmatic-usage', label: 'Programmatic usage', group: 'Guides' },
-  { name: 'adding-languages', label: 'Adding languages', group: 'Guides' },
-  { name: 'architecture', label: 'How MapX works', group: 'Internals' },
-  { name: 'benchmarking', label: 'Benchmarking', group: 'Internals' },
+  { name: 'getting-started', label: 'Getting started', group: 'Start', description: 'Install MapX, index your first project and ask the graph about symbols, callers, dependencies and impact, from the CLI or an MCP client.' },
+  { name: 'cli-reference', label: 'CLI reference', group: 'Reference', description: 'Every MapX command and flag: scan, sync, query, deps, impact, routes, export, architecture rules, the dashboard and more.' },
+  { name: 'mcp-integration', label: 'MCP integration', group: 'Reference', description: 'Run MapX as an MCP server over stdio or SSE, connect Claude, Cursor or VS Code, and see every tool with its parameters.' },
+  { name: 'configuration', label: 'Configuration', group: 'Reference', description: 'Configure MapX: config.json, include and exclude patterns, parallel parsing, gitignored files, workspaces and multi-repo setups.' },
+  { name: 'architecture-rules', label: 'Architecture rules', group: 'Architecture rules', description: 'Declare layers and allow rules in .mapx/architecture.jsonc, enforce them in CI with mapx check, and read the reports, baselines and presets.' },
+  { name: 'framework-integration', label: 'Framework integration', group: 'Guides', description: 'How MapX detects frameworks, extracts routes, hooks and HTTP calls, and pairs frontend calls with the backend routes they reach.' },
+  { name: 'agent-best-practices', label: 'Agent best practices', group: 'Guides', description: 'Instruct coding agents such as Claude, Cursor, Cline and Aider to use MapX for fewer tokens and more precise code search.' },
+  { name: 'programmatic-usage', label: 'Programmatic usage', group: 'Guides', description: 'Embed MapX in your own tools: scan a codebase, query symbols, trace data flow and analyse change impact through its TypeScript API.' },
+  { name: 'adding-languages', label: 'Adding languages', group: 'Guides', description: 'Add a language to MapX with a tree-sitter grammar and query files, or write a dedicated parser for it.' },
+  { name: 'architecture', label: 'How MapX works', group: 'Internals', description: 'How MapX works inside: the scanner, the SQLite graph, the parsers, name resolution, clusters and architecture classification.' },
+  { name: 'benchmarking', label: 'Benchmarking', group: 'Internals', description: 'Measure how many tokens MapX saves compared with reading files, using the built-in benchmark suite and its recorded results.' },
 ];
 
 /** The guide names, in sidebar order. */
 export const GUIDES: readonly string[] = GUIDE_META.map((g) => g.name);
 
 /** The repository's files on GitHub: where a link to an unpublished file goes. */
+/** The description of the generated docs index page. */
+export const DOCS_INDEX_DESCRIPTION = 'Guides for installing, configuring and using MapX: the CLI and MCP reference, architecture rules and integrations.';
+
 export const REPO_BLOB = 'https://github.com/MohamedGamil/mapx/blob/main/';
 export const REPO_TREE = 'https://github.com/MohamedGamil/mapx/tree/main/';
 
@@ -178,10 +183,13 @@ export function syncDocs(root: string = ROOT, guides: readonly GuideMeta[] = GUI
   mkdirSync(out, { recursive: true });
 
   const names = guides.map((g) => g.name);
-  for (const { name } of guides) {
+  for (const { name, description } of guides) {
     const from = join(src, `${name}.md`);
     if (!existsSync(from)) throw new Error(`docs/${name}.md is listed in GUIDE_META but does not exist`);
-    writeFileSync(join(out, `${name}.md`), rewriteLinks(readFileSync(from, 'utf8'), name, root, names));
+    const text = rewriteLinks(readFileSync(from, 'utf8'), name, root, names);
+    if (text.startsWith('---\n')) throw new Error(`docs/${name}.md has front matter of its own; the sync writes the description`);
+    // JSON strings are valid YAML double-quoted scalars.
+    writeFileSync(join(out, `${name}.md`), `---\ndescription: ${JSON.stringify(description)}\n---\n\n${text}`);
   }
   for (const dir of ASSET_DIRS) {
     const from = join(src, dir);
@@ -199,7 +207,7 @@ export function syncDocs(root: string = ROOT, guides: readonly GuideMeta[] = GUI
     .join('\n\n');
   writeFileSync(
     join(out, 'index.md'),
-    `---\ntitle: Documentation\neditLink: false\n---\n\n# Documentation\n\nGuides for installing, configuring and using MapX.\n\n${list}\n`,
+    `---\ntitle: Documentation\ndescription: ${JSON.stringify(DOCS_INDEX_DESCRIPTION)}\neditLink: false\n---\n\n# Documentation\n\nGuides for installing, configuring and using MapX.\n\n${list}\n`,
   );
   return names;
 }

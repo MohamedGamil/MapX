@@ -42,8 +42,10 @@ function withLock<T>(fn: () => T, timeoutMs = 300_000): T {
 }
 
 /** Builds the site into `out` (an absolute path). `base` unset means the default base. Throws on failure. */
-export function buildSite(out: string, base?: string): void {
-  const env = { ...process.env, SITE_OUT: out } as NodeJS.ProcessEnv;
+export function buildSite(out: string, base?: string, extraEnv: Record<string, string> = {}): void {
+  // A SITE_URL or SITE_BASE exported on the developer's machine must not change what a test builds.
+  const env = { ...process.env, SITE_OUT: out, ...extraEnv } as NodeJS.ProcessEnv;
+  if (!('SITE_URL' in extraEnv)) delete env.SITE_URL;
   if (base === undefined) delete env.SITE_BASE;
   else env.SITE_BASE = base;
   withLock(() => {
@@ -66,6 +68,7 @@ export function buildSiteDefaultOutput(): string {
   const env = { ...process.env } as NodeJS.ProcessEnv;
   delete env.SITE_OUT;
   delete env.SITE_BASE;
+  delete env.SITE_URL;
   withLock(() => {
     const r = spawnSync('npm', ['run', 'site:build', '--silent'], { cwd: REPO, env, encoding: 'utf8' });
     if (r.status !== 0) throw new Error(`site:build exited ${r.status}\n${r.stdout}\n${r.stderr}`);

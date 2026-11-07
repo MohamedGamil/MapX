@@ -8,6 +8,8 @@
   --vp-font-family-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --vp-font-family-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
+  /* The default light grey (#929295) is 2.9:1 on the code-block background; this is above 4.5:1. */
+  --vp-c-text-3: #66666d;
   --vp-c-brand-1: var(--mapx-brand-text);
   --vp-c-brand-2: #8a008a;
   --vp-c-brand-3: var(--mapx-brand);
@@ -43,4 +45,21 @@
   .VPFooter.has-sidebar {
     padding-left: calc(var(--vp-sidebar-width) + 32px);
   }
+}
+
+/* Code highlighting: the default token colours of VitePress's GitHub themes are below 4.5:1 on the code
+   background in places (found by axe on every guide, M7-06). Each rule darkens or lightens one token
+   colour just enough; the code itself is untouched. Matched on the inline style Shiki writes. */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#D73A49' i] { color: #b31d28 !important; } /* 4.2 -> 6.2 */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#E36209' i] { color: #b24700 !important; } /* 3.2 -> 5.1 */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#6A737D' i] { color: #586069 !important; } /* 4.45 -> 5.9 */
+html:not(.dark) .vp-adaptive-theme span[style*='--shiki-light:#22863A' i] { color: #1b6e2e !important; } /* 4.3 -> 5.9 */
+html.dark .vp-adaptive-theme span[style*='--shiki-dark:#6A737D' i] { color: #8b949e !important; } /* 3.5 -> 5.5 */
+
+/* The search button's aria-label is "Search". Its visible text must be part of that name (WCAG 2.5.3),
+   but the theme adds a key hint ("Ctrl K", or the Command key on a Mac) when the page loads, which the
+   label cannot know. The hint is hidden, so the visible text is exactly "Search" at every width (below
+   768 px it is only the icon, and the label names it). Ctrl+K and Cmd+K still open the search. */
+.DocSearch-Button-Keys {
+  display: none !important;
 }

@@ -201,9 +201,9 @@ run('built landing page (M7-03)', () => {
   });
 
   it('gives Open Graph an absolute image and this page its own url', () => {
-    expect(html).toMatch(/<meta property="og:image" content="https:\/\/mohamedgamil\.github\.io\/mapx\/mapx-logo\.png"/);
+    expect(html).toMatch(/<meta property="og:image" content="https:\/\/mohamedgamil\.github\.io\/mapx\/og-card\.png"/);
     expect(html).toMatch(/<meta property="og:url" content="https:\/\/mohamedgamil\.github\.io\/mapx\/"/);
-    expect(existsSync(join(tmp, 'out', 'mapx-logo.png'))).toBe(true);
+    expect(existsSync(join(tmp, 'out', 'og-card.png'))).toBe(true);
   });
 
   it('links the primary button to the getting-started guide under the base path', () => {

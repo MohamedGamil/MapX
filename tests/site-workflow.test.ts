@@ -163,7 +163,14 @@ describe('the Site job of ci.yml (M7-05)', () => {
     const walk = (dir: string): string[] =>
       readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]));
     const selected = walk('tests').filter((f) => f.endsWith('.test.ts') && f.includes(filter)).sort();
-    expect(selected).toEqual(['tests/site-build.test.ts', 'tests/site-docs.test.ts', 'tests/site-landing.test.ts', 'tests/site-workflow.test.ts']);
+    expect(selected).toEqual([
+      'tests/site-build.test.ts',
+      'tests/site-docs.test.ts',
+      'tests/site-landing.test.ts',
+      'tests/site-links.test.ts',
+      'tests/site-seo.test.ts',
+      'tests/site-workflow.test.ts',
+    ]);
   });
 });
 

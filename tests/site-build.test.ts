@@ -26,12 +26,12 @@ function rootRelativeUrls(html: string): string[] {
 }
 
 /** Every file under a folder, as forward-slash paths relative to it. */
-function walk(dir: string): string[] {
+function walk(dir: string, root = dir): string[] {
   const out: string[] = [];
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, e.name);
-    if (e.isDirectory()) out.push(...walk(full));
-    else out.push(relative(dir, full).split('\\').join('/'));
+    if (e.isDirectory()) out.push(...walk(full, root));
+    else out.push(relative(root, full).split('\\').join('/'));
   }
   return out;
 }
@@ -76,9 +76,16 @@ run('site build (M7-01)', () => {
     }
   });
 
-  it('makes no web-font request: no font preload, and no font file linked from the page', () => {
+  it('makes no web-font request: no font preload, no @font-face rule and no font file in the output', () => {
     const html = readFileSync(join(outDefault, 'index.html'), 'utf8');
     expect(html).not.toMatch(/rel="preload"[^>]*\.woff2|\.woff2[^>]*rel="preload"/);
+    const all = walk(outDefault);
+    expect(all.filter((f) => /\.(woff2?|ttf|otf|eot)$/i.test(f))).toEqual([]);
+    for (const css of all.filter((f) => f.endsWith('.css'))) {
+      const text = readFileSync(join(outDefault, css), 'utf8');
+      expect(text, css).not.toContain('@font-face');
+      expect(text, css).not.toMatch(/\.woff2?\b/);
+    }
   });
 
   // 404.html is an empty shell that VitePress fills in the browser, so its footer is checked by M7-06's browser spec.
